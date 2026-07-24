@@ -41,6 +41,16 @@ pub struct LoggingConfig {
     /// Default `false` keeps production-style quiet logs. Set `true` while
     /// debugging freezes, generation, or reconnect issues.
     pub development: bool,
+    /// Server console language / 服务端控制台语言.
+    ///
+    /// Supported values:
+    /// - `en_us` — English (default)
+    /// - `zh_cn` — 简体中文
+    /// - `zh_en` / `bilingual` — 中英双语 (Chinese / English side-by-side in console)
+    ///
+    /// Player chat/UI still follows each client's own language setting.
+    /// 玩家客户端界面仍跟随各自客户端语言设置。
+    pub locale: String,
 }
 
 impl Default for LoggingConfig {
@@ -52,6 +62,7 @@ impl Default for LoggingConfig {
             timestamp: true,
             file: "latest.log".to_string(),
             development: false,
+            locale: "en_us".to_string(),
         }
     }
 }

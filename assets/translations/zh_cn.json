@@ -8,5 +8,24 @@
     "commands.pumpkin.description.hover": "点击复制描述",
     "commands.pumpkin.minecraft_version.hover": "点击复制 Minecraft 版本",
     "commands.pumpkin.github.hover": "点击打开仓库。",
-    "commands.pumpkin.website.hover": "点击打开网站。"
+    "commands.pumpkin.website.hover": "点击打开网站。",
+
+    "server.starting": "正在启动 %s %s Minecraft（协议 %s）",
+    "server.started": "服务器已启动；耗时 %s",
+    "server.running": "服务器已运行。连接端口：%s",
+    "server.stopped": "服务器已停止。",
+    "server.stopping.interrupt": "收到中断信号；正在停止服务器…",
+    "server.development.warning": "Pumpkin 目前仍在积极开发中！",
+    "server.report_issues": "请在 %s 反馈问题",
+    "server.join_discord": "加入我们的 %s 获取社区支持：%s",
+    "server.discord": "Discord",
+    "server.java_edition": "Java 版：",
+    "server.bedrock_edition": "基岩版：",
+    "server.locale.active": "服务端控制台语言：%s",
+    "server.locale.bilingual": "服务端控制台语言：中英双语（zh_cn / en_us）",
+    "server.locale.invalid": "未知 logging.locale「%s」；已回退为 en_us",
+    "server.performance.backends": "性能后端：分配器=%s（配置=%s），压缩=%s（配置=%s）",
+    "server.panic.main_abort": "主线程 panic，正在中止。",
+    "server.panic.main_while_stop": "停止服务器时主线程 panic；正在中止。",
+    "server.panic.while_shutdown": "关闭过程中发生 panic"
 }

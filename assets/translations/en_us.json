@@ -8,5 +8,24 @@
     "commands.pumpkin.description.hover": "Click to Copy Description",
     "commands.pumpkin.minecraft_version.hover": "Click to Copy Minecraft Version",
     "commands.pumpkin.github.hover": "Click to open repository.",
-    "commands.pumpkin.website.hover": "Click to open website."
+    "commands.pumpkin.website.hover": "Click to open website.",
+
+    "server.starting": "Starting %s %s Minecraft (Protocol %s)",
+    "server.started": "Started server; took %s",
+    "server.running": "Server is now running. Connect using port: %s",
+    "server.stopped": "The server has stopped.",
+    "server.stopping.interrupt": "Received interrupt signal; stopping server...",
+    "server.development.warning": "Pumpkin is currently under heavy development!",
+    "server.report_issues": "Report issues on %s",
+    "server.join_discord": "Join our %s for community support: %s",
+    "server.discord": "Discord",
+    "server.java_edition": "Java Edition:",
+    "server.bedrock_edition": "Bedrock Edition:",
+    "server.locale.active": "Server console language: %s",
+    "server.locale.bilingual": "Server console language: bilingual (zh_cn / en_us)",
+    "server.locale.invalid": "Unknown logging.locale '%s'; falling back to en_us",
+    "server.performance.backends": "Performance backends: allocator=%s (config=%s), compression=%s (config=%s)",
+    "server.panic.main_abort": "Aborting due to the main thread panicking.",
+    "server.panic.main_while_stop": "The main thread panicked while stopping the server; aborting.",
+    "server.panic.while_shutdown": "Encountered panic while shutting down"
 }

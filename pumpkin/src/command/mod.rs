@@ -23,7 +23,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::translation::Locale;
+use pumpkin_util::translation::{Locale, server_locale};
 
 pub mod args;
 pub mod argument_builder;
@@ -233,9 +233,10 @@ impl CommandSender {
     #[must_use]
     pub fn get_locale(&self) -> Locale {
         match self {
-            Self::CommandBlock(..) | Self::Console | Self::Rcon(..) | Self::Dummy => Locale::EnUs, // Default locale for console and RCON
+            // Console / RCON / command blocks follow server console language.
+            Self::CommandBlock(..) | Self::Console | Self::Rcon(..) | Self::Dummy => server_locale(),
             Self::Player(player) => {
-                Locale::from_str(&player.config.load().locale).unwrap_or(Locale::EnUs)
+                Locale::from_str(&player.config.load().locale).unwrap_or_else(|_| server_locale())
             }
         }
     }

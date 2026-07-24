@@ -2,17 +2,184 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     str::FromStr,
-    sync::{LazyLock, Mutex},
+    sync::{
+        LazyLock, Mutex,
+        atomic::{AtomicBool, AtomicU8, Ordering},
+    },
 };
 
 /// TODO List
-/// - Add server locale support
-/// - Use translations in the logs
 /// - Open a public translation system, maybe a Crowdin like Minecraft?
 /// - Add support for translations on commands descriptions
 /// - Integrate custom translations with the plugins API
 /// - Try to optimize code of '`to_translated`'
 use crate::text::{TextComponentBase, TextContent, style::Style};
+
+/// Server console / log locale (`Locale` discriminant). Defaults to `en_us`.
+static SERVER_LOCALE: AtomicU8 = AtomicU8::new(Locale::EnUs as u8);
+/// When true, console output prefers Chinese with English side-by-side
+/// (`中文 / English`) for keys that differ between locales.
+static BILINGUAL_CONSOLE: AtomicBool = AtomicBool::new(false);
+
+/// Configure the server console language from a config string.
+///
+/// Accepted values (case-insensitive):
+/// - `en_us` / `en` / `english` — English (default)
+/// - `zh_cn` / `zh` / `chinese` / `cn` — Simplified Chinese
+/// - `zh_en` / `bilingual` / `zh_cn+en_us` — Chinese + English dual display
+///
+/// Unknown values fall back to `en_us` and return `false`.
+pub fn configure_server_locale(value: &str) -> bool {
+    let v = value.trim().to_lowercase().replace('-', "_");
+    match v.as_str() {
+        "en_us" | "en" | "english" => {
+            set_server_locale(Locale::EnUs);
+            set_bilingual_console(false);
+            true
+        }
+        "zh_cn" | "zh" | "chinese" | "cn" | "简体中文" | "中文" => {
+            set_server_locale(Locale::ZhCn);
+            set_bilingual_console(false);
+            true
+        }
+        "zh_tw" | "zh_hk" | "traditional" => {
+            // Prefer zh_cn for traditional codes if specific packs are incomplete;
+            // still select matching locale when available.
+            let locale = Locale::from_str(&v).unwrap_or(Locale::ZhCn);
+            set_server_locale(locale);
+            set_bilingual_console(false);
+            true
+        }
+        "zh_en" | "en_zh" | "bilingual" | "zh_cn+en_us" | "zh+en" | "中英" | "双语" => {
+            set_server_locale(Locale::ZhCn);
+            set_bilingual_console(true);
+            true
+        }
+        // Other locales that ship pumpkin translation packs (see assets/translations/).
+        // Note: `Locale::from_str` falls back to EnUs for unknowns, so we only
+        // accept an explicit allow-list here.
+        other if matches!(
+            other,
+            "brb"
+                | "de_de"
+                | "es_es"
+                | "fr_fr"
+                | "it_it"
+                | "ja_jp"
+                | "ka_ge"
+                | "ko_kr"
+                | "lzh"
+                | "nds_de"
+                | "nl_be"
+                | "nl_nl"
+                | "pl_pl"
+                | "pt_br"
+                | "ro_ro"
+                | "ru_ru"
+                | "sq_al"
+                | "tr_tr"
+                | "uk_ua"
+                | "vi_vn"
+        ) =>
+        {
+            set_server_locale(Locale::from_str(other).unwrap_or(Locale::EnUs));
+            set_bilingual_console(false);
+            true
+        }
+        _ => {
+            set_server_locale(Locale::EnUs);
+            set_bilingual_console(false);
+            false
+        }
+    }
+}
+
+/// Set the server console locale used for logs and console command feedback.
+pub fn set_server_locale(locale: Locale) {
+    SERVER_LOCALE.store(locale as u8, Ordering::Relaxed);
+}
+
+/// Current server console locale.
+#[must_use]
+pub fn server_locale() -> Locale {
+    let raw = SERVER_LOCALE.load(Ordering::Relaxed);
+    // SAFETY: only written via `set_server_locale` with valid `Locale` values.
+    // Fall back to EnUs if somehow invalid.
+    if raw as usize >= Locale::COUNT {
+        return Locale::EnUs;
+    }
+    // Reconstruct via known set; FromStr is safer than transmute.
+    Locale::from_discriminant(raw).unwrap_or(Locale::EnUs)
+}
+
+/// Enable or disable Chinese/English dual console display.
+pub fn set_bilingual_console(enabled: bool) {
+    BILINGUAL_CONSOLE.store(enabled, Ordering::Relaxed);
+}
+
+/// Whether console should show Chinese and English together.
+#[must_use]
+pub fn bilingual_console() -> bool {
+    BILINGUAL_CONSOLE.load(Ordering::Relaxed)
+}
+
+/// Resolve a namespaced key for console/logs using the server locale.
+///
+/// In bilingual mode, returns `中文 / English` when the two strings differ.
+#[must_use]
+pub fn get_console_translation(key: &str) -> String {
+    if bilingual_console() {
+        let zh = get_translation(key, Locale::ZhCn);
+        let en = get_translation(key, Locale::EnUs);
+        if zh == en {
+            zh
+        } else {
+            format!("{zh} / {en}")
+        }
+    } else {
+        get_translation(key, server_locale())
+    }
+}
+
+/// Resolve a translation with substitutions for console/logs.
+#[must_use]
+pub fn translation_to_pretty_console<P: Into<Cow<'static, str>>>(
+    namespaced_key: P,
+    with: Vec<TextComponentBase>,
+) -> String {
+    let key = namespaced_key.into();
+    if bilingual_console() {
+        let zh = translation_to_pretty(key.clone(), Locale::ZhCn, with.clone());
+        let en = translation_to_pretty(key, Locale::EnUs, with);
+        if zh == en {
+            zh
+        } else {
+            format!("{zh} / {en}")
+        }
+    } else {
+        translation_to_pretty(key, server_locale(), with)
+    }
+}
+
+/// Resolve plain text for console/logs (server locale / bilingual).
+#[must_use]
+pub fn get_console_translation_text<P: Into<Cow<'static, str>>>(
+    namespaced_key: P,
+    with: Vec<TextComponentBase>,
+) -> String {
+    let key = namespaced_key.into();
+    if bilingual_console() {
+        let zh = get_translation_text(key.clone(), Locale::ZhCn, with.clone());
+        let en = get_translation_text(key, Locale::EnUs, with);
+        if zh == en {
+            zh
+        } else {
+            format!("{zh} / {en}")
+        }
+    } else {
+        get_translation_text(key, server_locale(), with)
+    }
+}
 
 static VANILLA_EN_US_JSON: &str = include_str!("../../assets/en_us_java.json");
 static PUMPKIN_EN_US_JSON: &str = include_str!("../../assets/translations/en_us.json");
@@ -417,6 +584,7 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
     });
 
 /// Supported locales for translations.
+#[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Locale {
     AfZa,
@@ -551,6 +719,43 @@ pub enum Locale {
 
 impl Locale {
     pub const COUNT: usize = Self::ZlmArab as usize + 1;
+
+    /// Rebuild a `Locale` from its discriminant (`as u8` value).
+    #[must_use]
+    pub fn from_discriminant(value: u8) -> Option<Self> {
+        if value as usize >= Self::COUNT {
+            return None;
+        }
+        // Locale is a contiguous C-like enum from 0..COUNT.
+        Some(unsafe { std::mem::transmute::<u8, Self>(value) })
+    }
+
+    /// Minecraft-style locale code (`en_us`, `zh_cn`, …).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::EnUs => "en_us",
+            Self::ZhCn => "zh_cn",
+            Self::ZhHk => "zh_hk",
+            Self::ZhTw => "zh_tw",
+            Self::Lzh => "lzh",
+            Self::DeDe => "de_de",
+            Self::FrFr => "fr_fr",
+            Self::EsEs => "es_es",
+            Self::JaJp => "ja_jp",
+            Self::KoKr => "ko_kr",
+            Self::RuRu => "ru_ru",
+            Self::PtBr => "pt_br",
+            Self::PlPl => "pl_pl",
+            Self::TrTr => "tr_tr",
+            Self::UkUa => "uk_ua",
+            Self::ViVn => "vi_vn",
+            Self::ItIt => "it_it",
+            Self::NlNl => "nl_nl",
+            Self::NlBe => "nl_be",
+            _ => "en_us",
+        }
+    }
 }
 
 impl FromStr for Locale {
@@ -688,5 +893,41 @@ impl FromStr for Locale {
             "zlm_arab" => Ok(Self::ZlmArab), // Malay (Jawi)
             _ => Ok(Self::EnUs),             // Default to English (US) if not found
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configure_locale_en_zh_bilingual() {
+        assert!(configure_server_locale("en_us"));
+        assert_eq!(server_locale(), Locale::EnUs);
+        assert!(!bilingual_console());
+
+        assert!(configure_server_locale("zh_cn"));
+        assert_eq!(server_locale(), Locale::ZhCn);
+        assert!(!bilingual_console());
+
+        assert!(configure_server_locale("zh_en"));
+        assert_eq!(server_locale(), Locale::ZhCn);
+        assert!(bilingual_console());
+
+        assert!(configure_server_locale("bilingual"));
+        assert!(bilingual_console());
+
+        assert!(!configure_server_locale("not_a_locale"));
+        assert_eq!(server_locale(), Locale::EnUs);
+        assert!(!bilingual_console());
+    }
+
+    #[test]
+    fn bilingual_console_translation_joins_when_different() {
+        configure_server_locale("zh_en");
+        let key = "pumpkin:server.stopped";
+        let text = get_console_translation(key);
+        assert!(text.contains('/'), "expected bilingual join: {text}");
+        assert!(text.contains("服务器") || text.contains("stopped") || text.contains("停止"), "{text}");
     }
 }

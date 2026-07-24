@@ -10,11 +10,36 @@
 
 [Pumpkin](https://pumpkinmc.org/) is a Minecraft server built entirely in Rust, offering a fast, efficient,
 and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.
+
+[Pumpkin](https://pumpkinmc.org/) 是一个完全用 Rust 编写的 Minecraft 服务端，追求高性能、可配置，并尽量贴近原版机制。
+
 <div align="center">
 
 ![Pumpkin Chunk Loading](./assets/pumpkin_chunk_loading.webp)
 
 </div>
+
+## Language / 语言
+
+Console language is configured in `pumpkin.toml`:
+
+控制台语言在 `pumpkin.toml` 中配置：
+
+```toml
+[logging]
+# en_us | zh_cn | zh_en (bilingual 中英双语)
+locale = "en_us"
+```
+
+| Value / 取值 | Console / 控制台 |
+|---|---|
+| `en_us` | English |
+| `zh_cn` | 简体中文 |
+| `zh_en` / `bilingual` | 中文 / English side-by-side |
+
+Player clients still use their own game language. Vanilla death messages, items, etc. follow the client locale.
+
+玩家客户端界面仍使用各自客户端语言；原版死亡消息、物品名等由客户端语言决定。
 
 ## Goals
 

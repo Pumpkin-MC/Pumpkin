@@ -39,6 +39,9 @@ use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
 };
+use pumpkin_util::translation::{
+    bilingual_console, configure_server_locale, server_locale,
+};
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
@@ -71,20 +74,52 @@ async fn main() {
 
     pumpkin::init_logger(&config.advanced);
 
+    // Console language: en_us / zh_cn / zh_en (bilingual). Players keep client locale.
+    let locale_cfg = config.advanced.logging.locale.as_str();
+    if !configure_server_locale(locale_cfg) {
+        warn!(
+            "{}",
+            TextComponent::custom(
+                "pumpkin",
+                "server.locale.invalid",
+                server_locale(),
+                vec![TextComponent::text(locale_cfg.to_string())],
+            )
+            .to_pretty_console()
+        );
+    }
+    if bilingual_console() {
+        info!(
+            "{}",
+            TextComponent::custom("pumpkin", "server.locale.bilingual", server_locale(), vec![])
+                .to_pretty_console()
+        );
+    } else {
+        info!(
+            "{}",
+            TextComponent::custom(
+                "pumpkin",
+                "server.locale.active",
+                server_locale(),
+                vec![TextComponent::text(server_locale().as_str())],
+            )
+            .to_pretty_console()
+        );
+    }
+
     info!(
         "{}",
-        TextComponent::text(format!(
-            "Starting {} {} Minecraft (Protocol {})",
-            TextComponent::text("Pumpkin")
-                .color_named(NamedColor::Gold)
-                .to_pretty_console(),
-            TextComponent::text(CARGO_PKG_VERSION.to_string())
-                .color_named(NamedColor::Green)
-                .to_pretty_console(),
-            TextComponent::text(CURRENT_MC_VERSION.protocol_version().to_string())
-                .color_named(NamedColor::DarkBlue)
-                .to_pretty_console()
-        ))
+        TextComponent::custom(
+            "pumpkin",
+            "server.starting",
+            server_locale(),
+            vec![
+                TextComponent::text("Pumpkin").color_named(NamedColor::Gold),
+                TextComponent::text(CARGO_PKG_VERSION.to_string()).color_named(NamedColor::Green),
+                TextComponent::text(CURRENT_MC_VERSION.protocol_version().to_string())
+                    .color_named(NamedColor::DarkBlue),
+            ],
+        )
         .to_pretty_console(),
     );
 
@@ -114,52 +149,80 @@ async fn main() {
     let time_elapsed = time.elapsed().saturating_sub(plugin_wait_time);
 
     info!(
-        "Started server; took {}",
-        TextComponent::text(format!("{}ms", time_elapsed.as_millis()))
-            .color_named(NamedColor::Gold)
-            .to_pretty_console()
+        "{}",
+        TextComponent::custom(
+            "pumpkin",
+            "server.started",
+            server_locale(),
+            vec![
+                TextComponent::text(format!("{}ms", time_elapsed.as_millis()))
+                    .color_named(NamedColor::Gold),
+            ],
+        )
+        .to_pretty_console()
     );
     let advanced_config = &pumpkin_server.server.advanced_config;
+    let java_part = if advanced_config.networking.java.enabled {
+        format!(
+            "{} {}",
+            TextComponent::custom(
+                "pumpkin",
+                "server.java_edition",
+                server_locale(),
+                vec![],
+            )
+            .color_named(NamedColor::Yellow)
+            .to_pretty_console(),
+            TextComponent::text(format!("{}", advanced_config.networking.java.address))
+                .color_named(NamedColor::DarkBlue)
+                .to_pretty_console()
+        )
+    } else {
+        String::new()
+    };
+    let bedrock_part = if advanced_config.networking.bedrock.enabled {
+        format!(
+            "{} {}",
+            TextComponent::custom(
+                "pumpkin",
+                "server.bedrock_edition",
+                server_locale(),
+                vec![],
+            )
+            .color_named(NamedColor::Gold)
+            .to_pretty_console(),
+            TextComponent::text(format!("{}", advanced_config.networking.bedrock.address))
+                .color_named(NamedColor::DarkBlue)
+                .to_pretty_console()
+        )
+    } else {
+        String::new()
+    };
+    let ports = match (
+        advanced_config.networking.java.enabled,
+        advanced_config.networking.bedrock.enabled,
+    ) {
+        (true, true) => format!("{java_part} | {bedrock_part}"),
+        (true, false) => java_part,
+        (false, true) => bedrock_part,
+        (false, false) => String::new(),
+    };
     info!(
-        "Server is now running. Connect using port: {}{}{}",
-        if advanced_config.networking.java.enabled {
-            format!(
-                "{} {}",
-                TextComponent::text("Java Edition:")
-                    .color_named(NamedColor::Yellow)
-                    .to_pretty_console(),
-                TextComponent::text(format!("{}", advanced_config.networking.java.address))
-                    .color_named(NamedColor::DarkBlue)
-                    .to_pretty_console()
-            )
-        } else {
-            TextComponent::text(String::new()).to_pretty_console()
-        },
-        if advanced_config.networking.java.enabled && advanced_config.networking.bedrock.enabled {
-            " | " // Separator if both are enabled
-        } else {
-            ""
-        },
-        if advanced_config.networking.bedrock.enabled {
-            format!(
-                "{} {}",
-                TextComponent::text("Bedrock Edition:")
-                    .color_named(NamedColor::Gold)
-                    .to_pretty_console(),
-                TextComponent::text(format!("{}", advanced_config.networking.bedrock.address))
-                    .color_named(NamedColor::DarkBlue)
-                    .to_pretty_console()
-            )
-        } else {
-            TextComponent::text(String::new()).to_pretty_console()
-        }
+        "{}",
+        TextComponent::custom(
+            "pumpkin",
+            "server.running",
+            server_locale(),
+            vec![TextComponent::text(ports)],
+        )
+        .to_pretty_console()
     );
 
     pumpkin_server.start().await;
 
     info!(
         "{}",
-        TextComponent::text("The server has stopped.")
+        TextComponent::custom("pumpkin", "server.stopped", server_locale(), vec![])
             .color_named(NamedColor::Red)
             .to_pretty_console()
     );
@@ -169,33 +232,55 @@ async fn main() {
 fn print_support_links_and_warning() {
     warn!(
         "{}",
-        TextComponent::text("Pumpkin is currently under heavy development!")
-            .color_named(NamedColor::DarkRed)
-            .to_pretty_console(),
+        TextComponent::custom(
+            "pumpkin",
+            "server.development.warning",
+            server_locale(),
+            vec![],
+        )
+        .color_named(NamedColor::DarkRed)
+        .to_pretty_console(),
     );
     info!(
-        "Report issues on {}",
-        TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues")
-            .color_named(NamedColor::DarkAqua)
-            .to_pretty_console()
+        "{}",
+        TextComponent::custom(
+            "pumpkin",
+            "server.report_issues",
+            server_locale(),
+            vec![
+                TextComponent::text("https://github.com/Pumpkin-MC/Pumpkin/issues")
+                    .color_named(NamedColor::DarkAqua),
+            ],
+        )
+        .to_pretty_console()
     );
     info!(
-        "Join our {} for community support: {}",
-        TextComponent::text("Discord")
-            .color_named(NamedColor::DarkBlue)
-            .to_pretty_console(),
-        TextComponent::text("https://discord.gg/wT8XjrjKkf")
-            .color_named(NamedColor::Aqua)
-            .to_pretty_console()
+        "{}",
+        TextComponent::custom(
+            "pumpkin",
+            "server.join_discord",
+            server_locale(),
+            vec![
+                TextComponent::custom("pumpkin", "server.discord", server_locale(), vec![])
+                    .color_named(NamedColor::DarkBlue),
+                TextComponent::text("https://discord.gg/wT8XjrjKkf").color_named(NamedColor::Aqua),
+            ],
+        )
+        .to_pretty_console()
     );
 }
 
 fn handle_interrupt() {
     warn!(
         "{}",
-        TextComponent::text("Received interrupt signal; stopping server...")
-            .color_named(NamedColor::Red)
-            .to_pretty_console()
+        TextComponent::custom(
+            "pumpkin",
+            "server.stopping.interrupt",
+            server_locale(),
+            vec![],
+        )
+        .color_named(NamedColor::Red)
+        .to_pretty_console()
     );
     stop_or_exit_server();
 }
@@ -229,16 +314,24 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
 
             tracing::error!(
                 "{}",
-                TextComponent::text("Aborting due to the main thread panicking.")
-                    .color(Color::Named(NamedColor::Red))
-                    .to_pretty_console()
+                TextComponent::custom(
+                    "pumpkin",
+                    "server.panic.main_abort",
+                    server_locale(),
+                    vec![],
+                )
+                .color(Color::Named(NamedColor::Red))
+                .to_pretty_console()
             );
         } else {
             // It's a subsequent panic.
             tracing::error!(
                 "{}: {}",
-                TextComponent::text(
-                    "The main thread panicked while stopping the server; aborting."
+                TextComponent::custom(
+                    "pumpkin",
+                    "server.panic.main_while_stop",
+                    server_locale(),
+                    vec![],
                 )
                 .color(Color::Named(NamedColor::Red))
                 .bold()
@@ -261,10 +354,15 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
         // It's a subsequent panic; let's just alert about it.
         tracing::error!(
             "{}: {}",
-            TextComponent::text("Encountered panic while shutting down")
-                .color(Color::Named(NamedColor::Red))
-                .bold()
-                .to_pretty_console(),
+            TextComponent::custom(
+                "pumpkin",
+                "server.panic.while_shutdown",
+                server_locale(),
+                vec![],
+            )
+            .color(Color::Named(NamedColor::Red))
+            .bold()
+            .to_pretty_console(),
             payload
                 .downcast_ref::<&str>()
                 .copied()
@@ -322,6 +420,22 @@ fn log_performance_backends(perf: &PerformanceConfig) {
     };
 
     info!(
+        "{}",
+        TextComponent::custom(
+            "pumpkin",
+            "server.performance.backends",
+            server_locale(),
+            vec![
+                TextComponent::text(active_allocator),
+                TextComponent::text(perf.allocator.as_str()),
+                TextComponent::text(active_compression),
+                TextComponent::text(perf.compression_backend.as_str()),
+            ],
+        )
+        .to_pretty_console()
+    );
+    // Keep structured fields for log scrapers (English identifiers).
+    debug!(
         "Performance backends: allocator={} (config={}), compression={} (config={})",
         active_allocator,
         perf.allocator.as_str(),

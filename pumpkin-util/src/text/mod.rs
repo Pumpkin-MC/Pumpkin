@@ -1,6 +1,7 @@
 use crate::text::color::{ARGBColor, hsv_to_rgb};
 use crate::translation::{
-    Locale, get_translation, get_translation_text, reorder_substitutions, translation_to_pretty,
+    Locale, get_console_translation_text, get_translation, get_translation_text,
+    reorder_substitutions, server_locale, translation_to_pretty_console,
 };
 use click::ClickEvent;
 use color::Color;
@@ -114,14 +115,14 @@ impl TextComponentBase {
                 with,
             } => {
                 let key = bedrock_translate.as_ref().unwrap_or(&translate);
-                translation_to_pretty(format!("minecraft:{key}"), Locale::EnUs, with)
+                translation_to_pretty_console(format!("minecraft:{key}"), with)
             }
             TextContent::EntityNames {
                 selector,
                 separator: _,
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
-            TextContent::Custom { key, with, .. } => translation_to_pretty(key, Locale::EnUs, with),
+            TextContent::Custom { key, with, .. } => translation_to_pretty_console(key, with),
         };
         let style = self.style;
         let color = style.color;
@@ -687,13 +688,42 @@ impl TextComponent {
         self
     }
 
-    /// Extracts the raw text content for English (US).
+    /// Extracts the raw text content using the server console locale.
+    ///
+    /// In bilingual mode, translation keys are resolved as `中文 / English`.
     ///
     /// # Returns
     /// The plain text content.
     #[must_use]
     pub fn get_text(self) -> String {
-        self.0.get_text(Locale::EnUs)
+        if crate::translation::bilingual_console() {
+            // Resolve translation nodes bilingually; plain text passes through.
+            match *self.0.content {
+                TextContent::Translate {
+                    translate,
+                    bedrock_translate,
+                    with,
+                } => {
+                    let key = bedrock_translate.as_ref().unwrap_or(&translate);
+                    let mut text =
+                        get_console_translation_text(format!("minecraft:{key}"), with);
+                    for child in self.0.extra {
+                        text += &TextComponent(child).get_text();
+                    }
+                    text
+                }
+                TextContent::Custom { key, with, .. } => {
+                    let mut text = get_console_translation_text(key, with);
+                    for child in self.0.extra {
+                        text += &TextComponent(child).get_text();
+                    }
+                    text
+                }
+                _ => self.0.get_text(server_locale()),
+            }
+        } else {
+            self.0.get_text(server_locale())
+        }
     }
 
     /// Creates a chat message with formatting placeholders replaced.
