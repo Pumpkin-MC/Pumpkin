@@ -19,7 +19,12 @@ impl FreezeWhenLookedGoal {
         Box::new(Self { was_frozen: false })
     }
 
-    fn player_looking_at(mob: &dyn Mob, player_yaw: f32, player_pitch: f32, player_eye: Vector3<f64>) -> bool {
+    fn player_looking_at(
+        mob: &dyn Mob,
+        player_yaw: f32,
+        player_pitch: f32,
+        player_eye: Vector3<f64>,
+    ) -> bool {
         let mob_pos = mob.get_entity().pos.load();
         let mob_eye = Vector3::new(
             mob_pos.x,
@@ -81,12 +86,8 @@ impl Goal for FreezeWhenLookedGoal {
                 let pe = player.get_entity();
                 let ppos = pe.pos.load();
                 let eye = Vector3::new(ppos.x, ppos.y + PLAYER_EYE, ppos.z);
-                if FreezeWhenLookedGoal::player_looking_at(
-                    mob,
-                    pe.yaw.load(),
-                    pe.pitch.load(),
-                    eye,
-                ) {
+                if FreezeWhenLookedGoal::player_looking_at(mob, pe.yaw.load(), pe.pitch.load(), eye)
+                {
                     return true;
                 }
             }

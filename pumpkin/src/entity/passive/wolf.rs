@@ -76,7 +76,12 @@ impl WolfEntity {
             );
             goal_selector.add_goal(
                 3,
-                Box::new(AvoidEntityGoal::new(&EntityType::TRADER_LLAMA, 24.0, 1.5, 1.5)),
+                Box::new(AvoidEntityGoal::new(
+                    &EntityType::TRADER_LLAMA,
+                    24.0,
+                    1.5,
+                    1.5,
+                )),
             );
             goal_selector.add_goal(4, Box::new(LeapAtTargetGoal::new(0.4)));
             goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
@@ -119,7 +124,11 @@ impl WolfEntity {
             );
             target_selector.add_goal(
                 7,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WITHER_SKELETON, true),
+                ActiveTargetGoal::with_default(
+                    &mob_arc.mob_entity,
+                    &EntityType::WITHER_SKELETON,
+                    true,
+                ),
             );
         };
 

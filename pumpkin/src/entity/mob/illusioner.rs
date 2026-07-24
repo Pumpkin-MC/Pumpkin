@@ -9,8 +9,9 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, bow_attack::BowAttackGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, join_anger::JoinAngerGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        join_anger::JoinAngerGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, revenge::RevengeGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };

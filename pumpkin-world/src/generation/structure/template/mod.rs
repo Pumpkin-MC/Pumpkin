@@ -248,11 +248,7 @@ pub fn place_template(
 }
 
 /// Rotate an entity's relative double position within a template of `size`.
-fn transform_entity_pos(
-    rotation: Rotation,
-    pos: Vector3<f64>,
-    size: Vector3<i32>,
-) -> Vector3<f64> {
+fn transform_entity_pos(rotation: Rotation, pos: Vector3<f64>, size: Vector3<i32>) -> Vector3<f64> {
     match rotation {
         Rotation::None => pos,
         Rotation::Clockwise90 => Vector3::new(f64::from(size.z) - 1.0 - pos.z, pos.y, pos.x),
@@ -261,9 +257,7 @@ fn transform_entity_pos(
             pos.y,
             f64::from(size.z) - 1.0 - pos.z,
         ),
-        Rotation::CounterClockwise90 => {
-            Vector3::new(pos.z, pos.y, f64::from(size.x) - 1.0 - pos.x)
-        }
+        Rotation::CounterClockwise90 => Vector3::new(pos.z, pos.y, f64::from(size.x) - 1.0 - pos.x),
     }
 }
 

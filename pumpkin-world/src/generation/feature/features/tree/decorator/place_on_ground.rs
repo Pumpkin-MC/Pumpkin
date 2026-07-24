@@ -66,7 +66,8 @@ impl PlaceOnGroundTreeDecorator {
         random: &mut RandomGenerator,
     ) {
         // Snap Y to motion-blocking-no-leaves surface (vanilla PlaceOnGroundDecorator).
-        let surface_y = chunk.top_motion_blocking_block_no_leaves_height_exclusive(pos.0.x, pos.0.z);
+        let surface_y =
+            chunk.top_motion_blocking_block_no_leaves_height_exclusive(pos.0.x, pos.0.z);
         // height exclusive → solid top is surface_y - 1; place litter at surface_y.
         let ground = BlockPos::new(pos.0.x, surface_y - 1, pos.0.z);
         let place_at = BlockPos::new(pos.0.x, surface_y, pos.0.z);

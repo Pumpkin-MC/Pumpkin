@@ -6,8 +6,8 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal,
-        evoker_cast::EvokerCastGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, join_anger::JoinAngerGoal, revenge::RevengeGoal, swim::SwimGoal,
+        evoker_cast::EvokerCastGoal, join_anger::JoinAngerGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},

@@ -20,10 +20,9 @@ pub struct WitherEntity {
 impl WitherEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        mob_entity.living_entity.set_attribute_base(
-            &pumpkin_data::attributes::Attributes::FOLLOW_RANGE,
-            40.0,
-        );
+        mob_entity
+            .living_entity
+            .set_attribute_base(&pumpkin_data::attributes::Attributes::FOLLOW_RANGE, 40.0);
         let wither = Self { mob_entity };
         let mob_arc = Arc::new(wither);
         let mob_weak: Weak<dyn Mob> = {

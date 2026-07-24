@@ -82,7 +82,11 @@ impl FoxEntity {
             );
             target_selector.add_goal(
                 3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TROPICAL_FISH, false),
+                ActiveTargetGoal::with_default(
+                    &mob_arc.mob_entity,
+                    &EntityType::TROPICAL_FISH,
+                    false,
+                ),
             );
         };
 

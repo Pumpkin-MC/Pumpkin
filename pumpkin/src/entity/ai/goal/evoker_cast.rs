@@ -45,11 +45,7 @@ impl EvokerCastGoal {
             SoundCategory::Hostile,
             &shooter.pos.load(),
         );
-        world.play_sound(
-            Sound::EntityEvokerCastSpell,
-            SoundCategory::Hostile,
-            &tpos,
-        );
+        world.play_sound(Sound::EntityEvokerCastSpell, SoundCategory::Hostile, &tpos);
         world.play_sound(
             Sound::EntityEvokerFangsAttack,
             SoundCategory::Hostile,

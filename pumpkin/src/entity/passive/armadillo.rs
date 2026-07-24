@@ -48,10 +48,7 @@ impl ArmadilloEntity {
                 &EntityType::CAVE_SPIDER,
                 &EntityType::CREEPER,
             ] {
-                goal_selector.add_goal(
-                    2,
-                    Box::new(AvoidEntityGoal::new(ty, 6.0, 1.0, 1.2)),
-                );
+                goal_selector.add_goal(2, Box::new(AvoidEntityGoal::new(ty, 6.0, 1.0, 1.2)));
             }
             goal_selector.add_goal(3, Box::new(WanderAroundGoal::new(0.7)));
             goal_selector.add_goal(

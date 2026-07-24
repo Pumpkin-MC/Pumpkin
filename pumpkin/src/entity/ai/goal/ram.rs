@@ -100,11 +100,7 @@ impl Goal for RamGoal {
             let dist_sq = mob_pos.squared_distance_to_vec(&tpos);
             if dist_sq < MIN_RANGE_SQ || self.phase >= to_goal_ticks(CHARGE_TICKS) {
                 let world = mob.get_entity().world.load();
-                world.play_sound(
-                    Sound::EntityGoatRamImpact,
-                    SoundCategory::Neutral,
-                    &mob_pos,
-                );
+                world.play_sound(Sound::EntityGoatRamImpact, SoundCategory::Neutral, &mob_pos);
                 let _ = target
                     .damage(target.as_ref(), RAM_DAMAGE, DamageType::MOB_ATTACK)
                     .await;

@@ -25,10 +25,7 @@ impl Goal for LeapAtTargetGoal {
             };
             let entity = mob.get_entity();
             // Must be on ground (vanilla checks onGround).
-            if !entity
-                .on_ground
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
+            if !entity.on_ground.load(std::sync::atomic::Ordering::Relaxed) {
                 return false;
             }
             let mob_pos = entity.pos.load();

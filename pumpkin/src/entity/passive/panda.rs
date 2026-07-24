@@ -51,10 +51,7 @@ impl PandaEntity {
                 &EntityType::CREEPER,
                 &EntityType::SPIDER,
             ] {
-                goal_selector.add_goal(
-                    6,
-                    Box::new(AvoidEntityGoal::new(ty, 4.0, 2.0, 2.0)),
-                );
+                goal_selector.add_goal(6, Box::new(AvoidEntityGoal::new(ty, 4.0, 2.0, 2.0)));
             }
             goal_selector.add_goal(
                 9,

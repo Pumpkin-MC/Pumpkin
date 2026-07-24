@@ -8,9 +8,9 @@ use pumpkin_data::item_stack::ItemStack;
 use crate::entity::{
     Entity, EntityBase, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal,
+        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, join_anger::JoinAngerGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, join_anger::JoinAngerGoal, revenge::RevengeGoal, swim::SwimGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},

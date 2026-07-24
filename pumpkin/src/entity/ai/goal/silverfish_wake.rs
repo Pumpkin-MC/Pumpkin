@@ -84,8 +84,7 @@ impl Goal for SilverfishWakeFriendsGoal {
             for dy in -1..=2 {
                 for dx in -SCAN_RADIUS..=SCAN_RADIUS {
                     for dz in -SCAN_RADIUS..=SCAN_RADIUS {
-                        let pos =
-                            BlockPos::new(origin.0.x + dx, origin.0.y + dy, origin.0.z + dz);
+                        let pos = BlockPos::new(origin.0.x + dx, origin.0.y + dy, origin.0.z + dz);
                         let block = world.get_block(&pos);
                         if !is_infested(block) {
                             continue;

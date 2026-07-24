@@ -60,7 +60,12 @@ impl WanderingTraderEntity {
             );
             goal_selector.add_goal(
                 1,
-                Box::new(AvoidEntityGoal::new(&EntityType::ILLUSIONER, 12.0, 0.5, 0.5)),
+                Box::new(AvoidEntityGoal::new(
+                    &EntityType::ILLUSIONER,
+                    12.0,
+                    0.5,
+                    0.5,
+                )),
             );
             goal_selector.add_goal(
                 1,

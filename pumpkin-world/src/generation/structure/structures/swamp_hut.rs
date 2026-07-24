@@ -71,11 +71,7 @@ fn queue_structure_mob(entity_id: &str, wx: f64, wy: f64, wz: f64) {
     nbt.put_string("id", entity_id.to_string());
     nbt.put_list(
         "Pos",
-        vec![
-            NbtTag::Double(wx),
-            NbtTag::Double(wy),
-            NbtTag::Double(wz),
-        ],
+        vec![NbtTag::Double(wx), NbtTag::Double(wy), NbtTag::Double(wz)],
     );
     nbt.put_list(
         "Motion",

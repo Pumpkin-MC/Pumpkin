@@ -51,10 +51,7 @@ impl RabbitEntity {
                 &EntityType::HUSK,
                 &EntityType::STRAY,
             ] {
-                goal_selector.add_goal(
-                    4,
-                    Box::new(AvoidEntityGoal::new(ty, 4.0, 2.2, 2.2)),
-                );
+                goal_selector.add_goal(4, Box::new(AvoidEntityGoal::new(ty, 4.0, 2.2, 2.2)));
             }
             goal_selector.add_goal(2, BreedGoal::new(0.8));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));

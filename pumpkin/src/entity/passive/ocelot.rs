@@ -46,10 +46,7 @@ impl OcelotEntity {
             goal_selector.add_goal(7, Box::new(LeapAtTargetGoal::new(0.3)));
             goal_selector.add_goal(8, Box::new(MeleeAttackGoal::new(1.0, true)));
             // Breed priority 9 — no BreedGoal import needed if we skip for wild ocelot? vanilla has it
-            goal_selector.add_goal(
-                9,
-                crate::entity::ai::goal::breed::BreedGoal::new(0.8),
-            );
+            goal_selector.add_goal(9, crate::entity::ai::goal::breed::BreedGoal::new(0.8));
             goal_selector.add_goal(10, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
                 11,
