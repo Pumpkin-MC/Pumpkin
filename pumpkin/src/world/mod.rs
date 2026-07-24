@@ -393,7 +393,11 @@ impl World {
             return;
         }
 
-        let current_chunk = base_entity.block_pos.load().chunk_position();
+        let position = base_entity.pos.load();
+        let current_chunk = Vector2::new(
+            get_section_cord(position.x.floor() as i32),
+            get_section_cord(position.z.floor() as i32),
+        );
         let mut nbt = NbtCompound::new();
         base_entity.write_nbt(&mut nbt).await;
         entity.write_nbt(&mut nbt).await;
