@@ -485,7 +485,7 @@ pub fn spawn_for_chunk(
         // Vanilla picks one packed position per category. Creatures only run about
         // every 400 ticks (world.level_time), so give more pack attempts then.
         // Monsters tick every chunk tick — fewer attempts to limit load.
-        let attempts = if category == &MobCategory::CREATURE {
+        let attempts = if category.id == MobCategory::CREATURE.id {
             8
         } else {
             3
@@ -536,8 +536,8 @@ pub fn get_random_pos_within(
     ) + 1;
 
     // Creatures almost always surface; monsters mix surface + caves.
-    let y = if category == &MobCategory::CREATURE
-        || category == &MobCategory::AMBIENT
+    let y = if category.id == MobCategory::CREATURE.id
+        || category.id == MobCategory::AMBIENT.id
         || rng.next_bounded_i32(2) == 0
     {
         // Feet in the air column above grass — NOT inside the solid surface block.

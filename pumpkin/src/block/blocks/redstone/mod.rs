@@ -33,6 +33,10 @@ pub mod tripwire;
 pub mod tripwire_hook;
 pub mod turbo;
 
+// Vanilla 26.2 neighbor pipeline
+pub mod neighbor_updater;
+pub mod orientation;
+
 // abstract
 pub mod abstract_redstone_gate;
 pub mod dispenser;

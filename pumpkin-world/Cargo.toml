@@ -5,6 +5,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+default = []
+# Prefer flate2 zlib-rs backend (pure Rust; feature-unified with workspace rust_backend).
+zlib-rs = ["flate2/zlib-rs"]
+
 [dependencies]
 pumpkin-nbt.workspace = true
 pumpkin-util.workspace = true

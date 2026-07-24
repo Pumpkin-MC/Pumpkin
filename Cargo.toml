@@ -138,7 +138,11 @@ dashmap = { version = "6.2", default-features = false }
 ecdsa = { version = "0.17.0", default-features = false, features = ["std"] }
 either = { version = "1.16.0", default-features = false }
 enum_dispatch = { version = "0.3.13", default-features = false }
+# Default backend is pure-Rust miniz_oxide. Optional `zlib-rs` feature on the
+# `pumpkin` crate enables flate2's zlib-rs (takes priority over rust_backend).
 flate2 = { version = "1.1.9", default-features = false, features = ["rust_backend"] }
+# Optional global allocator (enabled via pumpkin feature `mimalloc`).
+mimalloc = { version = "0.1", default-features = false }
 heck = { version = "0.5", default-features = false }
 hmac = { version = "=0.13.0", default-features = false }
 indexmap = { version = "2.14", default-features = false, features = ["std"] }

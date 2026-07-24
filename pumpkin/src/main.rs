@@ -4,6 +4,12 @@
 #[cfg(target_os = "wasi")]
 compile_error!("Compiling for WASI targets is not supported!");
 
+/// Optional mimalloc global allocator (Cargo feature `mimalloc`).
+/// Default builds keep the system allocator.
+#[cfg(feature = "mimalloc")]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use std::{
     backtrace::{Backtrace, BacktraceStatus},
@@ -26,7 +32,9 @@ use pumpkin::{
 };
 use pumpkin::{PumpkinServer, stop_server};
 
-use pumpkin_config::{LoadConfiguration, PumpkinConfig};
+use pumpkin_config::{
+    AllocatorBackend, CompressionBackend, LoadConfiguration, PerformanceConfig, PumpkinConfig,
+};
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
@@ -91,6 +99,7 @@ async fn main() {
             "Release"
         }
     );
+    log_performance_backends(&config.advanced.performance);
     print_support_links_and_warning();
 
     tokio::spawn(async {
@@ -267,6 +276,62 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
 
 fn is_main_thread() -> bool {
     Some(&thread::current().id()) == MAIN_THREAD.get()
+}
+
+/// Log which performance backends are active and warn on config/feature mismatch.
+///
+/// Allocator and flate2 backend are compile-time; `pumpkin.toml` records the
+/// intended choice so operators know what to rebuild with.
+fn log_performance_backends(perf: &PerformanceConfig) {
+    let built_mimalloc = cfg!(feature = "mimalloc");
+    let built_zlib_rs = cfg!(feature = "zlib-rs");
+
+    match perf.allocator {
+        AllocatorBackend::Mimalloc if !built_mimalloc => {
+            warn!(
+                "pumpkin.toml advanced.performance.allocator = \"mimalloc\" but this binary was not built with --features mimalloc; using system allocator"
+            );
+        }
+        AllocatorBackend::System if built_mimalloc => {
+            warn!(
+                "pumpkin.toml advanced.performance.allocator = \"system\" but binary was built with --features mimalloc; mimalloc is active (compile-time only)"
+            );
+        }
+        _ => {}
+    }
+
+    match perf.compression_backend {
+        CompressionBackend::ZlibRs if !built_zlib_rs => {
+            warn!(
+                "pumpkin.toml advanced.performance.compression_backend = \"zlib_rs\" but this binary was not built with --features zlib-rs; using pure-Rust miniz_oxide"
+            );
+        }
+        CompressionBackend::Rust if built_zlib_rs => {
+            warn!(
+                "pumpkin.toml advanced.performance.compression_backend = \"rust\" but binary was built with --features zlib-rs; zlib-rs is active (compile-time only)"
+            );
+        }
+        _ => {}
+    }
+
+    let active_allocator = if built_mimalloc {
+        "mimalloc"
+    } else {
+        "system"
+    };
+    let active_compression = if built_zlib_rs {
+        "zlib-rs"
+    } else {
+        "rust (miniz_oxide)"
+    };
+
+    info!(
+        "Performance backends: allocator={} (config={}), compression={} (config={})",
+        active_allocator,
+        perf.allocator.as_str(),
+        active_compression,
+        perf.compression_backend.as_str(),
+    );
 }
 
 /// Returns `Some` if the crash report was successfully set. That

@@ -34,7 +34,7 @@ use crate::{
     block::{
         self,
         registry::BlockRegistry,
-        {OnNeighborUpdateArgs, OnScheduledTickArgs},
+        {OnScheduledTickArgs},
     },
     command::client_suggestions,
     entity::{Entity, EntityBase, player::Player, r#type::from_type},
@@ -228,6 +228,8 @@ pub struct World {
     /// Cached ambient sky darken (0–11). Updated each environment tick so
     /// monster spawn light checks can run without locking time/weather.
     pub sky_darken: AtomicU8,
+    /// Vanilla `Level.neighborUpdater` — CollectingNeighborUpdater queue.
+    pub neighbor_updater: crate::block::blocks::redstone::neighbor_updater::WorldNeighborUpdater,
 }
 
 impl PartialEq for World {
@@ -317,6 +319,8 @@ impl World {
             server,
             block_entities: DashMap::new(),
             sky_darken: AtomicU8::new(0),
+            neighbor_updater:
+                crate::block::blocks::redstone::neighbor_updater::WorldNeighborUpdater::new(),
         }
     }
 
@@ -4992,65 +4996,41 @@ impl World {
         (Block::from_state_id(id), id)
     }
 
-    /// Updates neighboring blocks of a block
-    pub async fn update_neighbors(
-        self: &Arc<Self>,
-        block_pos: &BlockPos,
+    /// Updates neighboring blocks of a block.
+    ///
+    /// Vanilla `Level.updateNeighborsAt` /
+    /// `CollectingNeighborUpdater.updateNeighborsAtExceptFromFacing`
+    /// (order W/E/D/U/N/S, re-entrant queue).
+    ///
+    /// Boxed to break async recursion through neighbor handlers / set_block_state.
+    pub fn update_neighbors<'a>(
+        self: &'a Arc<Self>,
+        block_pos: &'a BlockPos,
         except: Option<BlockDirection>,
-    ) {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
         let source_block = self.get_block(block_pos);
-        for direction in BlockDirection::update_order() {
-            if except.is_some_and(|d| d == direction) {
-                continue;
-            }
-
-            let neighbor_pos = block_pos.offset(direction.to_offset());
-            let (neighbor_block, neighbor_fluid) = self.get_block_and_fluid(&neighbor_pos);
-
-            if let Some(neighbor_pumpkin_block) =
-                self.block_registry.get_pumpkin_block(neighbor_block.id)
-            {
-                neighbor_pumpkin_block
-                    .on_neighbor_update(OnNeighborUpdateArgs {
-                        world: self,
-                        block: neighbor_block,
-                        position: &neighbor_pos,
-                        source_block,
-                        notify: false,
-                    })
-                    .await;
-            }
-
-            if let Some(neighbor_pumpkin_fluid) =
-                self.block_registry.get_pumpkin_fluid(neighbor_fluid.id)
-            {
-                neighbor_pumpkin_fluid
-                    .on_neighbor_update(self, neighbor_fluid, &neighbor_pos, false)
-                    .await;
-            }
-        }
+        let pos = *block_pos;
+        Box::pin(async move {
+            self.neighbor_updater
+                .update_neighbors_at_except(self, pos, source_block, except, None)
+                .await;
+        })
     }
 
-    pub async fn update_neighbor(
-        self: &Arc<Self>,
-        neighbor_block_pos: &BlockPos,
-        source_block: &Block,
-    ) {
-        let neighbor_block = self.get_block(neighbor_block_pos);
-
-        if let Some(neighbor_pumpkin_block) =
-            self.block_registry.get_pumpkin_block(neighbor_block.id)
-        {
-            neighbor_pumpkin_block
-                .on_neighbor_update(OnNeighborUpdateArgs {
-                    world: self,
-                    block: neighbor_block,
-                    position: neighbor_block_pos,
-                    source_block,
-                    notify: false,
-                })
+    /// Vanilla `Level.neighborChanged` / `CollectingNeighborUpdater.neighborChanged`.
+    pub fn update_neighbor<'a>(
+        self: &'a Arc<Self>,
+        neighbor_block_pos: &'a BlockPos,
+        source_block: &'a Block,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+        // Re-resolve so the collector can store a `'static` registry reference.
+        let source = Block::from_id(source_block.id);
+        let pos = *neighbor_block_pos;
+        Box::pin(async move {
+            self.neighbor_updater
+                .neighbor_changed(self, pos, source, None)
                 .await;
-        }
+        })
     }
 
     pub async fn update_from_neighbor_shapes(

@@ -12,6 +12,7 @@ pub mod fun;
 pub mod logging;
 pub use logging::{development_mode, set_development_mode};
 pub mod networking;
+pub mod performance;
 pub mod plugins;
 pub mod recipe;
 
@@ -25,6 +26,7 @@ pub use networking::compression::CompressionConfig;
 pub use networking::java::JavaConfig;
 pub use networking::lan_broadcast::LANBroadcastConfig;
 pub use networking::rcon::RCONConfig;
+pub use performance::{AllocatorBackend, CompressionBackend, PerformanceConfig};
 pub use plugins::PluginsConfig;
 pub use pvp::PVPConfig;
 pub use server_links::ServerLinksConfig;
@@ -146,6 +148,9 @@ pub struct AdvancedConfiguration {
     pub plugins: PluginsConfig,
     /// Advancement configuration
     pub advancement: AdvancementConfig,
+    /// Optional performance backends (allocator / zlib). Defaults preserve
+    /// system malloc + pure-Rust compression; enable Cargo features to activate.
+    pub performance: performance::PerformanceConfig,
 }
 
 /// Basic configuration for core server settings.
