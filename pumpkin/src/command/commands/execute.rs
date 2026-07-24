@@ -10,7 +10,7 @@ use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::entity_anchor::EntityAnchorArgumentType;
 use crate::command::argument_types::resource_key::ResourceKeyArgument;
 use crate::command::context::command_context::CommandContext;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::error_types::{CommandErrorType, DISPATCHER_UNKNOWN_COMMAND};
 use crate::command::node::attached::{CommandNodeId, NodeId};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::tree::Tree;
@@ -34,7 +34,21 @@ impl CommandExecutor for ExecuteRunExecutor {
         Box::pin(async move {
             let command_str = StringArgumentType::get(context, "command")?;
             let dispatcher = context.server().command_dispatcher.read().await;
-            dispatcher.execute_input(command_str, &context.source).await
+            match dispatcher.execute_input(command_str, &context.source).await {
+                Ok(result) => Ok(result),
+                Err(error) if error.is(&DISPATCHER_UNKNOWN_COMMAND) => {
+                    dispatcher
+                        .fallback_dispatcher
+                        .handle_command(
+                            &context.source.output,
+                            context.server().as_ref(),
+                            command_str,
+                        )
+                        .await;
+                    Ok(1)
+                }
+                Err(error) => Err(error),
+            }
         })
     }
 }
