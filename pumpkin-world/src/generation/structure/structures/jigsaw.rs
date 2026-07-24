@@ -768,10 +768,10 @@ mod tests {
         );
     }
 
-    /// Prove expansion hack itself matters when structure_key is absent (no data fallback).
+    /// Prove expansion hack itself matters when `structure_key` is absent (no data fallback).
     #[test]
     fn expansion_hack_flag_increases_village_pieces_without_structure_key() {
-        let seed = 999_i64;
+        let seed = 999i64;
         let make_ctx = || StructureGeneratorContext {
             seed,
             chunk_x: 8,

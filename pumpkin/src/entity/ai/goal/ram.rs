@@ -79,9 +79,9 @@ impl Goal for RamGoal {
             }
 
             let mob_pos = mob.get_entity().pos.load();
-            let tpos = target.get_entity().pos.load();
-            let dx = tpos.x - mob_pos.x;
-            let dz = tpos.z - mob_pos.z;
+            let target_pos = target.get_entity().pos.load();
+            let dx = target_pos.x - mob_pos.x;
+            let dz = target_pos.z - mob_pos.z;
             let len = (dx * dx + dz * dz).sqrt().max(0.001);
 
             {
@@ -97,7 +97,7 @@ impl Goal for RamGoal {
             mob.get_entity().set_velocity(vel);
 
             self.phase += 1;
-            let dist_sq = mob_pos.squared_distance_to_vec(&tpos);
+            let dist_sq = mob_pos.squared_distance_to_vec(&target_pos);
             if dist_sq < MIN_RANGE_SQ || self.phase >= to_goal_ticks(CHARGE_TICKS) {
                 let world = mob.get_entity().world.load();
                 world.play_sound(Sound::EntityGoatRamImpact, SoundCategory::Neutral, &mob_pos);

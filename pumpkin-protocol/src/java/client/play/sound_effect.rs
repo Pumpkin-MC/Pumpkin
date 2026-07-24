@@ -10,7 +10,7 @@ use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 use crate::{ClientPacket, IdOr, SoundEvent, VarInt, WritingError, ser::NetworkWriteExt};
 
 /// Clientbound sound effect — matches vanilla `PlaySoundS2CPacket` /
-/// MCProtocolLib `ClientboundSoundPacket`.
+/// `MCProtocolLib` `ClientboundSoundPacket`.
 ///
 /// Wire format (after sound holder + category):
 /// - x/y/z as `i32` fixed-point world coords (`world * 8`, client divides by 8)
@@ -32,7 +32,7 @@ pub struct CSoundEffect {
 
 impl CSoundEffect {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         sound_event: IdOr<SoundEvent>,
         sound_category: SoundCategory,
         position: &Vector3<f64>,
@@ -91,7 +91,7 @@ impl ClientPacket for CSoundEffect {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::io::{Cursor, Read};
 
     use pumpkin_data::sound::SoundCategory;
     use pumpkin_data::sound_id_remap::remap_sound_id_for_version;
@@ -154,7 +154,6 @@ mod tests {
         let mut x_buf = [0u8; 4];
         let mut y_buf = [0u8; 4];
         let mut z_buf = [0u8; 4];
-        use std::io::Read;
         cur.read_exact(&mut x_buf).unwrap();
         cur.read_exact(&mut y_buf).unwrap();
         cur.read_exact(&mut z_buf).unwrap();

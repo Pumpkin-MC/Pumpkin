@@ -95,8 +95,8 @@ impl Goal for WindChargeAttackGoal {
             };
 
             let mob_pos = mob.get_entity().pos.load();
-            let tpos = target.get_entity().pos.load();
-            let dist_sq = mob_pos.squared_distance_to_vec(&tpos);
+            let target_pos = target.get_entity().pos.load();
+            let dist_sq = mob_pos.squared_distance_to_vec(&target_pos);
 
             {
                 let eye = target.get_entity().get_eye_pos();
@@ -106,7 +106,7 @@ impl Goal for WindChargeAttackGoal {
 
             if dist_sq > ATTACK_RADIUS_SQ {
                 let mut nav = mob.get_mob_entity().navigator.lock().unwrap();
-                nav.set_progress(NavigatorGoal::new(mob_pos, tpos, self.speed));
+                nav.set_progress(NavigatorGoal::new(mob_pos, target_pos, self.speed));
             } else {
                 mob.get_mob_entity().navigator.lock().unwrap().stop();
             }

@@ -38,18 +38,22 @@ impl EvokerCastGoal {
     async fn cast_fangs(mob: &dyn Mob, target: &dyn EntityBase) {
         let shooter = mob.get_entity();
         let world = shooter.world.load();
-        let tpos = target.get_entity().pos.load();
+        let target_pos = target.get_entity().pos.load();
 
         world.play_sound(
             Sound::EntityEvokerPrepareAttack,
             SoundCategory::Hostile,
             &shooter.pos.load(),
         );
-        world.play_sound(Sound::EntityEvokerCastSpell, SoundCategory::Hostile, &tpos);
+        world.play_sound(
+            Sound::EntityEvokerCastSpell,
+            SoundCategory::Hostile,
+            &target_pos,
+        );
         world.play_sound(
             Sound::EntityEvokerFangsAttack,
             SoundCategory::Hostile,
-            &tpos,
+            &target_pos,
         );
 
         // Stand-in for fangs: magic damage (vanilla fang ~6).
