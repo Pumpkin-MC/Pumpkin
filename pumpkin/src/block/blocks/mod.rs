@@ -92,6 +92,8 @@ pub mod infested;
 pub mod powder_snow;
 pub mod snow;
 pub mod sponge;
+/// Shared canSurvive / updateShape helpers (vanilla block-update patterns).
+pub mod support;
 
 // Entities, hazards & misc gameplay blocks
 pub mod anvil;

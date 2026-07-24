@@ -1,6 +1,6 @@
 use crate::block::{
-    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs,
+    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -10,7 +10,7 @@ use pumpkin_data::{Block, BlockDirection, FacingExt, HorizontalFacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::tick::TickPriority;
+use pumpkin_world::world::BlockFlags;
 
 #[pumpkin_block("minecraft:ladder")]
 pub struct LadderBlock;
@@ -64,18 +64,18 @@ impl BlockBehaviour for LadderBlock {
         }
         false
     }
+    /// Vanilla LadderBlock.updateShape: if attach face neighbour breaks → AIR immediately.
     fn get_state_for_neighbor_update<'a>(
         &'a self,
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let props = LadderLikeProperties::from_state_id(args.state_id, args.block);
-            if props.facing.to_block_direction().opposite() == args.direction
-                && !can_place_ladder_at(
-                    args.world,
-                    args.position,
-                    props.facing.to_block_direction().opposite(),
-                )
+            // facing = direction ladder points; attach is opposite.
+            // Vanilla: directionToNeighbour.getOpposite() == FACING && !canSurvive
+            let facing = props.facing.to_block_direction();
+            if args.direction.opposite() == facing
+                && !can_place_ladder_at(args.world, args.position, facing.opposite())
             {
                 return BlockStateId::AIR;
             }
@@ -83,20 +83,18 @@ impl BlockBehaviour for LadderBlock {
         })
     }
 
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let state_id = args.world.get_block_state_id(args.position);
             if Block::from_state_id(state_id) != &Block::LADDER {
                 return;
             }
             let props = LadderLikeProperties::from_state_id(state_id, args.block);
-            if !can_place_ladder_at(
-                args.world,
-                args.position,
-                props.facing.to_block_direction().opposite(),
-            ) {
+            let attach = props.facing.to_block_direction().opposite();
+            if !can_place_ladder_at(args.world, args.position, attach) {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
+                    .await;
             }
         })
     }

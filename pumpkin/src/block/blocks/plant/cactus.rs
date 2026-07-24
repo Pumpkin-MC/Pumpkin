@@ -22,7 +22,7 @@ impl BlockBehaviour for CactusBlock {
         Box::pin(async move {
             if !can_place_at(args.world.as_ref(), args.position) {
                 args.world
-                    .break_block(args.position, None, BlockFlags::empty())
+                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
                     .await;
             }
         })

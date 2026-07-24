@@ -69,7 +69,7 @@ impl BlockBehaviour for ChorusPlantBlock {
             // to connected chorus blocks, which schedule their own ticks.
             if !can_survive(args.world.as_ref(), args.position) {
                 args.world
-                    .break_block(args.position, None, BlockFlags::empty())
+                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
                     .await;
             }
         })

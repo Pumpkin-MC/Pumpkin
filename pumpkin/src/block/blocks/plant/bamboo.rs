@@ -82,7 +82,7 @@ impl BlockBehaviour for BambooBlock {
         Box::pin(async move {
             if !<Self as PlantBlockBase>::can_place_at(self, args.world.as_ref(), args.position) {
                 args.world
-                    .break_block(args.position, None, BlockFlags::empty())
+                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
                     .await;
             } else if args.world.get_block(&args.position.down()) == &Block::BAMBOO_SAPLING {
                 args.world

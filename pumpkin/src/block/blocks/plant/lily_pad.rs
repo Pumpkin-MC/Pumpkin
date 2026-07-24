@@ -23,7 +23,7 @@ impl BlockBehaviour for LilyPadBlock {
                 .ends_with("_boat")
             {
                 args.world
-                    .break_block(args.position, None, BlockFlags::empty())
+                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
                     .await;
             }
         })

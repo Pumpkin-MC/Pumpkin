@@ -41,7 +41,29 @@ impl FallingBlock {
 
 impl BlockMetadata for FallingBlock {
     fn ids() -> Box<[BlockId]> {
-        [BlockId::GRAVEL, BlockId::SAND, BlockId::RED_SAND].into()
+        // Vanilla FallingBlock / ColoredFallingBlock / ConcretePowderBlock
+        [
+            BlockId::GRAVEL,
+            BlockId::SAND,
+            BlockId::RED_SAND,
+            BlockId::WHITE_CONCRETE_POWDER,
+            BlockId::ORANGE_CONCRETE_POWDER,
+            BlockId::MAGENTA_CONCRETE_POWDER,
+            BlockId::LIGHT_BLUE_CONCRETE_POWDER,
+            BlockId::YELLOW_CONCRETE_POWDER,
+            BlockId::LIME_CONCRETE_POWDER,
+            BlockId::PINK_CONCRETE_POWDER,
+            BlockId::GRAY_CONCRETE_POWDER,
+            BlockId::LIGHT_GRAY_CONCRETE_POWDER,
+            BlockId::CYAN_CONCRETE_POWDER,
+            BlockId::PURPLE_CONCRETE_POWDER,
+            BlockId::BLUE_CONCRETE_POWDER,
+            BlockId::BROWN_CONCRETE_POWDER,
+            BlockId::GREEN_CONCRETE_POWDER,
+            BlockId::RED_CONCRETE_POWDER,
+            BlockId::BLACK_CONCRETE_POWDER,
+        ]
+        .into()
     }
 }
 

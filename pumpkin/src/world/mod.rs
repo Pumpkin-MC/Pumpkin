@@ -5096,10 +5096,16 @@ impl World {
             .await;
 
         if new_state_id != block_state_id {
+            // Vanilla `Block.updateOrDestroy`: the *result* is applied with notify flags so
+            // clients and cascading neighbours see the change. Incoming `flags` often have
+            // NOTIFY stripped to prevent shape-update recursion storms during setBlock; that
+            // must not leave drops invisible or attachment chains stuck until random ticks.
+            let apply_flags = flags | BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::NOTIFY_LISTENERS;
             if is_air(new_state_id) {
-                self.break_block(block_pos, None, flags).await;
+                self.break_block(block_pos, None, apply_flags).await;
             } else {
-                self.set_block_state(block_pos, new_state_id, flags).await;
+                self.set_block_state(block_pos, new_state_id, apply_flags)
+                    .await;
             }
         }
     }

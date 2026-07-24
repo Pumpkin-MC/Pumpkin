@@ -76,6 +76,15 @@ impl BlockBehaviour for AnvilBlock {
             async move { FallingBlock::get_state_for_neighbor_update(&FallingBlock, args).await },
         )
     }
+
+    fn on_neighbor_update<'a>(
+        &'a self,
+        args: crate::block::OnNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            FallingBlock::on_neighbor_update(&FallingBlock, args).await;
+        })
+    }
 }
 
 struct AnvilScreenFactory;

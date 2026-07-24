@@ -3,10 +3,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockStateId, block_properties::SnowLikeProperties, item::Item, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    tick::TickPriority,
-    world::{BlockAccessor, BlockFlags},
-};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::{
     BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
@@ -80,7 +77,7 @@ impl BlockBehaviour for LayeredSnowBlock {
         Box::pin(async move {
             if !can_place_at(args.world.as_ref(), args.position) {
                 args.world
-                    .break_block(args.position, None, BlockFlags::empty())
+                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
                     .await;
             }
         })
@@ -88,26 +85,26 @@ impl BlockBehaviour for LayeredSnowBlock {
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            // Snow layers melt when lit by block light above level 11,
-            // e.g. from a nearby torch.
+            // Vanilla SnowLayerBlock.randomTick: melt when block light > 11 only.
             if args.world.get_block_light_level(args.position).unwrap_or(0) > 11 {
                 args.world
-                    .break_block(args.position, None, BlockFlags::empty())
+                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
                     .await;
             }
         })
     }
 
+    /// Vanilla: updateShape → AIR immediately if !canSurvive (not scheduled).
     fn get_state_for_neighbor_update<'a>(
         &'a self,
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position) {
-                args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
+            if can_place_at(args.world, args.position) {
+                args.state_id
+            } else {
+                BlockStateId::AIR
             }
-            args.state_id
         })
     }
 }
