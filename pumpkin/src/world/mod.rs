@@ -20,6 +20,7 @@ use std::{
 use tracing::{debug, error, info, trace, warn};
 
 pub mod chunker;
+pub mod entity_lookup;
 pub mod explosion;
 pub mod loot;
 pub mod map;
@@ -188,9 +189,9 @@ pub struct World {
     pub level_info: Arc<ArcSwap<LevelData>>,
     /// A map of active players within the world, keyed by their unique UUID.
     pub players: ArcSwap<Vec<Arc<Player>>>,
-    /// A map of active entities within the world, keyed by their unique UUID.
-    /// This does not include players.
-    pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
+    /// Live non-player entities — vanilla `EntityLookup` (id + uuid maps, O(1)
+    /// add/remove). Does not include players.
+    pub entities: entity_lookup::EntityLookup,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -294,7 +295,7 @@ impl World {
             level,
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
-            entities: ArcSwap::new(Arc::new(Vec::new())),
+            entities: entity_lookup::EntityLookup::new(),
             scoreboard: Mutex::new(Scoreboard::default()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 5.999_996_8E7, 0, 5, 300)),
             level_time: Mutex::new(LevelTime::new()),
@@ -3853,11 +3854,7 @@ impl World {
                     }
 
                     if !entities_to_add.is_empty() {
-                        world.entities.rcu(|current_entities| {
-                            let mut new_entities = (**current_entities).clone();
-                            new_entities.extend(entities_to_add.iter().cloned());
-                            new_entities
-                        });
+                        world.entities.extend(entities_to_add.iter().cloned());
                     }
                 } else {
                     // The chunk's entities are already live (another watcher loaded
@@ -3889,10 +3886,8 @@ impl World {
 
     /// Gets an entity by an entity id
     pub fn get_entity_by_id(&self, id: i32) -> Option<Arc<dyn EntityBase>> {
-        for entity in self.entities.load().iter() {
-            if entity.get_entity().entity_id == id {
-                return Some(entity.clone());
-            }
+        if let Some(entity) = self.entities.get_by_id(id) {
+            return Some(entity);
         }
         for player in self.players.load().iter() {
             if player.get_entity().entity_id == id {
@@ -3982,11 +3977,7 @@ impl World {
     ///
     /// An `Option<Arc<dyn EntityBase>>` containing the player if found, or `None` if not.
     pub fn get_entity_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<dyn EntityBase>> {
-        self.entities
-            .load()
-            .iter()
-            .find(|p| p.get_entity().entity_uuid == id)
-            .cloned()
+        self.entities.get_by_uuid(id)
     }
 
     /// Gets a list of players whose location equals the given position in the world.
@@ -4293,13 +4284,9 @@ impl World {
     pub fn spawn_entity_non_save(&self, entity: &Arc<dyn EntityBase>) {
         let _base_entity = entity.get_entity();
         self.broadcast_entity_spawn(entity);
-        self.spawn_state.load().add_entity(self, entity.as_ref());
-
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.push(entity.clone());
-            new_entities
-        });
+        if self.entities.add(entity.clone()) {
+            self.spawn_state.load().add_entity(self, entity.as_ref());
+        }
     }
 
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
@@ -4327,17 +4314,9 @@ impl World {
 
     #[allow(clippy::unused_async)]
     pub async fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-
-        // Guard against duplicate entities with the same UUID.
-        // This can happen when chunk entity data is loaded while the entity
-        // already exists in the world (e.g. another player is still tracking it).
-        let already_exists = self
-            .entities
-            .load()
-            .iter()
-            .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
-        if already_exists {
+        // Guard against duplicate UUID (vanilla EntityLookup.add). Can happen
+        // when chunk entity data is loaded while the entity is already live.
+        if !self.entities.add(entity.clone()) {
             return;
         }
 
@@ -4345,12 +4324,6 @@ impl World {
         // unload (see `save_entity`), never at spawn, so it can't be both live and
         // serialized at once (which would double it on the next reload).
         self.spawn_state.load().add_entity(self, entity.as_ref());
-
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.push(entity.clone());
-            new_entities
-        });
     }
 
     #[allow(clippy::unused_async)]
@@ -4359,29 +4332,14 @@ impl World {
         // Ensure concurrent tick/damage paths see the entity as gone even if
         // callers forgot to call `Entity::mark_removed` first.
         base_entity.mark_removed(crate::entity::RemovalReason::Discarded);
-        let uuid = base_entity.entity_uuid;
-        // Side effect is safe with ArcSwap rcu: on CAS retry the flag is rewritten
-        // from the latest snapshot, so only the winning remove adjusts spawn caps.
-        let mut removed_from_list = false;
-        self.entities.rcu(|current_entities| {
-            if !current_entities
-                .iter()
-                .any(|e| e.get_entity().entity_uuid == uuid)
-            {
-                removed_from_list = false;
-                return (**current_entities).clone();
-            }
-            let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|e| e.get_entity().entity_uuid != uuid);
-            removed_from_list = true;
-            new_entities
-        });
-        if removed_from_list {
+        // O(1) remove — only adjust spawn caps if the entity was actually present
+        // (prevents double-remove under-counting mob caps).
+        if self.entities.remove(entity).is_some() {
             self.spawn_state.load().remove_entity(self, entity);
         } else {
             debug!(
                 entity_id = base_entity.entity_id,
-                entity_uuid = %uuid,
+                entity_uuid = %base_entity.entity_uuid,
                 entity_type = base_entity.entity_type.resource_name,
                 "remove_entity: entity was not in world list (already removed)"
             );
@@ -4397,22 +4355,15 @@ impl World {
 
     pub async fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
         let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
-        let mut entities_to_remove = Vec::new();
-
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|entity| {
-                let base_entity = entity.get_entity();
-                let pos = base_entity.chunk_pos.load();
-                if chunks_set.contains(&pos) {
-                    base_entity.mark_removed(crate::entity::RemovalReason::UnloadedToChunk);
-                    entities_to_remove.push(entity.clone());
-                    false
-                } else {
-                    true
-                }
-            });
-            new_entities
+        let entities_to_remove = self.entities.drain_if(|entity| {
+            let base_entity = entity.get_entity();
+            let pos = base_entity.chunk_pos.load();
+            if chunks_set.contains(&pos) {
+                base_entity.mark_removed(crate::entity::RemovalReason::UnloadedToChunk);
+                true
+            } else {
+                false
+            }
         });
 
         for entity in entities_to_remove {

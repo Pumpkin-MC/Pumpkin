@@ -230,12 +230,7 @@ impl DragonFight {
         match existing {
             Some(uuid) if has_active_portal => {
                 // Stale dragon after a completed fight — remove it.
-                if let Some(e) = world
-                    .entities
-                    .load()
-                    .iter()
-                    .find(|e| e.get_entity().entity_uuid == uuid)
-                {
+                if let Some(e) = world.entities.get_by_uuid(uuid) {
                     e.get_entity().remove().await;
                 }
                 self.dragon_uuid = None;

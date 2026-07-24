@@ -1429,7 +1429,7 @@ impl LivingEntity {
                 source_type = source.map(|s| s.get_entity().entity_type.resource_name),
                 cause_id = cause.map(|c| c.get_entity().entity_id),
                 cause_type = cause.map(|c| c.get_entity().entity_type.resource_name),
-                world_entities = world.entities.load().len(),
+                world_entities = world.entities.len(),
                 "on_death: entity already removed from world; skipping death handling \
                  (likely concurrent despawn/remove during parallel entity tick)"
             );

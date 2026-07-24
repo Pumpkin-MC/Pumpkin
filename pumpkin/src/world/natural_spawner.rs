@@ -1,7 +1,6 @@
 use crate::entity::EntityBase;
 use crate::entity::r#type::{check_spawn_rules, from_type};
 use crate::world::World;
-use arc_swap::ArcSwap;
 use pumpkin_data::biome::Spawner;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
@@ -330,7 +329,7 @@ impl SpawnState {
 
     pub fn new(
         chunk_count: i32,
-        entities: &ArcSwap<Vec<Arc<dyn EntityBase>>>,
+        entities: &crate::world::entity_lookup::EntityLookup,
         world: &Arc<World>,
     ) -> Self {
         let potential = PotentialCalculator::default();

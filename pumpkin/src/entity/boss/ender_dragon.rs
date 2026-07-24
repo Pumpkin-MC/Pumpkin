@@ -171,12 +171,7 @@ impl EntityBase for EnderDragonPart {
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             let world = self.entity.world.load();
-            if let Some(dragon_base) = world
-                .entities
-                .load()
-                .iter()
-                .find(|e| e.get_entity().entity_uuid == self.dragon_uuid)
-            {
+            if let Some(dragon_base) = world.entities.get_by_uuid(self.dragon_uuid) {
                 return dragon_base.damage(source, amount, damage_type).await;
             }
             false
