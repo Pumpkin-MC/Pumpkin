@@ -64,7 +64,7 @@ impl Goal for MoveTowardsTargetGoal {
                 self.wanted = None;
                 return false;
             }
-            let step = (8.0 + mob.get_random().random_range(0.0..8.0)).min(horiz * 0.85);
+            let step = (8.0_f64 + mob.get_random().random_range(0.0..8.0)).min(horiz * 0.85);
             let wanted = Vector3::new(
                 me.x + dx / horiz * step,
                 them.y.clamp(me.y - 7.0, me.y + 7.0),
