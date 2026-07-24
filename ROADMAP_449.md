@@ -49,20 +49,25 @@ Existing WASM plugins must recompile against the updated WIT definitions. Plugin
 ## 2. Panic Trigger Audit
 
 ### Scope
-Scanned ~1,400+ lines across `pumpkin-protocol`, `pumpkin/src/net/`, `pumpkin/src/server/`, and `pumpkin-plugin-api` for `.unwrap()` and `.expect()` calls.
+Scanned ~1,400+ lines across `pumpkin-protocol`, `pumpkin/src/net/`, `pumpkin/src/server/`, `pumpkin/src/world/`, and `pumpkin-plugin-api` for `.unwrap()` and `.expect()` calls.
 
 ### Categorization
 
 | Category | Count Fixed | Strategy |
 |----------|-------------|----------|
 | **Network encode/decode** | 12 | Return `Result` with error description; close connection |
-| **Registry lookups** | 4 | `match Item::from_id()` with early return |
-| **Weak ref upgrades** | 1 | `let Some(server) = ... else { return; }` |
+| **Registry lookups** | 6 | `let Some(x) = ... else { continue/return; }` |
+| **Weak ref upgrades** | 3 | `let Some(server) = ... else { return; }` / `expect()` |
 | **Mutex locks (plugin API)** | 8 | `.unwrap_or_else(\|e\| e.into_inner())` — recover from poisoned state |
+| **Mutex locks (world)** | 8 | `.unwrap_or_else(PoisonError::into_inner)` |
 | **Mutex locks (network)** | 2 | `.unwrap_or_else(PoisonError::into_inner)` |
 | **Type downcasts** | 2 | `let Some(x) = ... else { warn + return; }` |
 | **Config/validation** | 3 | `let...else` with kick/error message |
 | **Unix time** | 2 | `.unwrap_or_default()` |
+| **Partial comparison** | 2 | `.unwrap_or(Ordering::Equal)` |
+| **File I/O** | 2 | `if let Err(e) = ... { warn!(...) }` |
+| **NBT serialization** | 2 | `.expect("writing to Vec is infallible")` |
+| **WASM resource table** | 5 | `?` operator / descriptive `.expect()` messages |
 | **Startup invariants** | 3 | Kept `.expect()` — acceptable at init (key gen, world load) |
 | **Test code** | ~15 | Kept — test panics are acceptable |
 
@@ -104,8 +109,150 @@ let Ok(action) = PlayerAction::try_from(packet.action.0) else {
 ### Acceptable Panics (Not Changed)
 - `key_store.rs` — RSA key generation at startup (server cannot function without keys)
 - `server/mod.rs` — World loading at startup (`expect("World loading panicked")`)
+- `DowncastResourceExt` trait impls — Type-system invariant panics with descriptive messages
 - Fuzz targets (`pumpkin-protocol/fuzz/`) — Test-only code
 - Const `NonZeroUsize::new(N).unwrap()` — Compile-time verified
+
+### Medium-Risk Changes (World/Server/Plugin — Phase 2B)
+
+Scanned ~35 `.unwrap()` locations across `pumpkin/src/world/`, `pumpkin/src/server/`, and `pumpkin-plugin-api` WASM loaders.
+
+#### `world/portal/nether.rs` — Portal Position Search
+```rust
+// Before:
+if ideal_pos.is_none() || dist < ideal_pos.as_ref().unwrap().2
+
+// After:
+if ideal_pos.as_ref().is_none_or(|p| dist < p.2)
+```
+
+#### `world/natural_spawner.rs` — Mutex Poison Recovery
+```rust
+// Before:
+Self(std::sync::Mutex::new(self.0.lock().unwrap().clone()))
+
+// After:
+Self(std::sync::Mutex::new(
+    self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone(),
+))
+```
+
+#### `world/natural_spawner.rs` — Entity Type Lookup
+```rust
+// Before:
+let entity_type = EntityType::from_name(
+    spawner.r#type.strip_prefix("minecraft:").unwrap_or(spawner.r#type),
+).unwrap();
+
+// After:
+let Some(entity_type) = EntityType::from_name(
+    spawner.r#type.strip_prefix("minecraft:").unwrap_or(spawner.r#type),
+) else { continue; };
+```
+
+#### `world/mod.rs` — Heightmap Mutex
+```rust
+// Before:
+chunk.heightmap.lock().unwrap().get(...)
+
+// After:
+chunk.heightmap.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(...)
+```
+
+#### `world/mod.rs` — Partial Comparison
+```rust
+// Before:
+.partial_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
+.unwrap()
+
+// After:
+.partial_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
+.unwrap_or(std::cmp::Ordering::Equal)
+```
+
+#### `world/mod.rs` — Weak Server Reference
+```rust
+// Before:
+self.server.upgrade().unwrap().plugin_manager.fire(event).await;
+
+// After:
+self.server.upgrade()
+    .expect("world holds strong reference to server")
+    .plugin_manager.fire(event).await;
+```
+
+#### `world/loot.rs` — Registry Lookup
+```rust
+// Before:
+let key = &item_entry.name.strip_prefix("minecraft:").unwrap();
+vec![ItemStack::new(1, Item::from_registry_key(key).unwrap())]
+
+// After:
+let Some(key) = item_entry.name.strip_prefix("minecraft:") else {
+    return Vec::new();
+};
+let Some(item) = Item::from_registry_key(key) else {
+    return Vec::new();
+};
+vec![ItemStack::new(1, item)]
+```
+
+#### `world/chunker.rs` — Weak Ref + Const
+```rust
+// Before:
+let server = player.world().server.upgrade().unwrap();
+NonZeroU8::new(2).unwrap()
+
+// After:
+let Some(server) = player.world().server.upgrade() else {
+    return NonZeroU8::new(8).expect("constant is nonzero");
+};
+NonZeroU8::new(2).expect("constant is nonzero")
+```
+
+#### `server/mod.rs` — File Copy
+```rust
+// Before:
+fs::copy(dat_path, backup_path).unwrap();
+
+// After:
+if let Err(e) = fs::copy(dat_path, backup_path) {
+    tracing::warn!("Failed to back up level.dat: {e}");
+}
+```
+
+#### Plugin WASM Loaders — Error Propagation
+```rust
+// Before (server.rs):
+self.add_player(player).expect("failed to add player resource")
+
+// After:
+self.add_player(player) // returns wasmtime::Result, propagated with ?
+
+// Before (player.rs):
+let server = self.server.as_ref().expect("server not available");
+
+// After:
+let server = self.server.as_ref()
+    .ok_or_else(|| wasmtime::Error::msg("server not available"))?;
+
+// Before (text.rs):
+.expect("invalid handle")
+
+// After:
+.expect("invalid text-component resource handle")
+```
+
+#### `plugin/api/context.rs` — Directory Creation
+```rust
+// Before:
+fs::create_dir_all(&path).unwrap();
+
+// After:
+if let Err(e) = fs::create_dir_all(&path) {
+    tracing::warn!("Failed to create plugin data folder {}: {e}", path.display());
+}
+```
 
 ---
 
@@ -201,6 +348,25 @@ let total = manager.total_ticks();    // e.g., 120_000
 - `world.rs` — Position record access in world operations
 - `commands/mod.rs` — Position record construction
 
+### `pumpkin/src/world/` (Phase 2B)
+- `portal/nether.rs` — Portal position search (`is_none_or()` combinator)
+- `natural_spawner.rs` — Mutex poison recovery + entity type `let...else`
+- `mod.rs` — Heightmap locks, `partial_cmp`, `server.upgrade()`, NBT serialization
+- `loot.rs` — Registry lookup + slot pop
+- `chunker.rs` — Weak server ref + `NonZeroU8` const
+
+### `pumpkin/src/server/` (Phase 2B)
+- `mod.rs` — `fs::copy` error handling
+
+### `pumpkin-plugin-api/` (Phase 2B)
+- `api/context.rs` — `fs::create_dir_all` error handling
+
+### `pumpkin-plugin WASM loaders` (Phase 2B)
+- `text.rs` — Descriptive expect messages
+- `server.rs` — Error propagation with `?`
+- `player.rs` — `DowncastResourceExt` expect messages + `ok_or_else` for server access
+- `item_stack.rs` — Enchantment lookup + serialization expect messages
+
 ---
 
 ## Compiler Checks
@@ -210,6 +376,5 @@ All changes verified with:
 cargo check --all-targets              # Full workspace compilation
 cargo clippy --all-targets --workspace -- -D warnings  # Zero warnings
 cargo fmt --check                      # Formatting
-cargo test -p pumpkin-protocol         # 41/41 tests pass
-cargo test -p pumpkin-plugin-api       # 1/1 tests pass
+cargo test --workspace                 # 408 tests pass, 0 failures
 ```
