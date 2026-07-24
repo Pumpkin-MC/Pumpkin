@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 use arc_swap::ArcSwap;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
+use dashmap::DashSet;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
@@ -529,6 +530,11 @@ pub struct Player {
     pub item_cooldowns: Mutex<HashMap<String, ItemCooldown>>,
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
+    /// Terrain chunks that have actually been queued to this client.
+    ///
+    /// Entity pairing is gated on this set so an entity can never arrive before
+    /// the chunk that contains it.
+    pub delivered_chunks: DashSet<Vector2<i32>>,
     pub has_played_before: AtomicBool,
     pub chat_session: Arc<Mutex<ChatSession>>,
     pub signature_cache: Mutex<MessageCache>,
@@ -782,6 +788,7 @@ impl Player {
                 world.level.chunk_listener.add_global_chunk_listener(),
                 world.clone(),
             )),
+            delivered_chunks: DashSet::new(),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
             last_sent_food: AtomicU8::new(0),
@@ -962,6 +969,7 @@ impl Player {
             .increment_custom(statistics::CustomStatistic::LeaveGame, 1);
         let world = self.world();
         world.remove_player(self, true).await;
+        self.delivered_chunks.clear();
 
         let cylindrical = self.watched_section.load();
         self.chunk_manager.lock().await.clean_up(&world.level);
@@ -2099,8 +2107,19 @@ impl Player {
         };
         if let Some(chunk_of_chunks) = chunk_of_chunks {
             let client = self.client.clone();
+            let player = self.clone();
+            let world = self.world();
             tokio::spawn(async move {
-                client.send_chunks(&chunk_of_chunks).await;
+                let delivered_chunks = client.send_chunks(&chunk_of_chunks).await;
+                if player.world().uuid != world.uuid {
+                    return;
+                }
+                let watched_section = player.watched_section.load();
+                for chunk in delivered_chunks {
+                    if watched_section.is_within_distance(chunk.x, chunk.y) {
+                        player.delivered_chunks.insert(chunk);
+                    }
+                }
             });
             if let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref()
                 && !self.bedrock_spawned.load(Ordering::Relaxed)
@@ -2753,6 +2772,7 @@ impl Player {
     }
 
     pub async fn unload_watched_chunks(&self, world: &World) {
+        self.delivered_chunks.clear();
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
         let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
