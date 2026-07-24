@@ -372,6 +372,26 @@ impl Slot for NormalSlot {
     }
 }
 
+/// Charge logic attached to a [`TakeOnlySlot`] output (merchant/anvil result).
+///
+/// Every take path that actually removes items from a slot ends in
+/// [`Slot::on_take_item`], and every path checks [`Slot::can_take_items`]
+/// first. Putting the charge here (rather than in per-action click gates)
+/// guarantees that inputs/XP are consumed exactly once per verified take,
+/// no matter which action (pickup, shift-click, throw, swap) performed it.
+pub trait TakeSlotCharge: Send + Sync {
+    /// Whether the player may currently take from the output slot
+    /// (e.g. trade not depleted, enough XP levels).
+    fn can_take(&self, player: &dyn InventoryPlayer) -> bool;
+
+    /// Charges one taken output stack (consumes inputs, counts uses, XP).
+    fn on_take<'a>(
+        &'a self,
+        player: &'a dyn InventoryPlayer,
+        stack: &'a ItemStack,
+    ) -> BoxFuture<'a, ()>;
+}
+
 /// Result/output slot: items may be taken, but never inserted by the player.
 ///
 /// `allow_modification` is `can_insert && can_take`, so with `can_insert = false`
@@ -382,6 +402,8 @@ pub struct TakeOnlySlot {
     pub inventory: Arc<dyn Inventory>,
     pub index: usize,
     pub id: AtomicU8,
+    /// Optional charge logic fired on take (merchant/anvil output).
+    charge: Option<Arc<dyn TakeSlotCharge>>,
 }
 
 impl TakeOnlySlot {
@@ -390,6 +412,21 @@ impl TakeOnlySlot {
             inventory,
             index,
             id: AtomicU8::new(0),
+            charge: None,
+        }
+    }
+
+    /// Creates a take-only slot that charges via `charge` on every take.
+    pub fn with_charge(
+        inventory: Arc<dyn Inventory>,
+        index: usize,
+        charge: Arc<dyn TakeSlotCharge>,
+    ) -> Self {
+        Self {
+            inventory,
+            index,
+            id: AtomicU8::new(0),
+            charge: Some(charge),
         }
     }
 }
@@ -409,6 +446,27 @@ impl Slot for TakeOnlySlot {
 
     fn can_insert(&self, _stack: &ItemStack) -> BoxFuture<'_, bool> {
         Box::pin(async move { false })
+    }
+
+    fn can_take_items(&self, player: &dyn InventoryPlayer) -> BoxFuture<'_, bool> {
+        let allowed = self
+            .charge
+            .as_ref()
+            .is_none_or(|charge| charge.can_take(player));
+        Box::pin(async move { allowed })
+    }
+
+    fn on_take_item<'a>(
+        &'a self,
+        player: &'a dyn InventoryPlayer,
+        stack: &'a ItemStack,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(charge) = &self.charge {
+                charge.on_take(player, stack).await;
+            }
+            self.mark_dirty().await;
+        })
     }
 
     fn mark_dirty(&self) -> BoxFuture<'_, ()> {

@@ -103,6 +103,8 @@ impl FurnaceLikeScreenHandler {
             .add_listener(Arc::new(FurnaceLikeScreenListener))
             .await;
         handler.add_inventory_slots();
+        // Container slots precede the player slots; used by Bedrock slot mapping.
+        handler.behaviour.container_slots = handler.behaviour.slots.len();
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         handler.add_player_slots(&player_inventory);
 

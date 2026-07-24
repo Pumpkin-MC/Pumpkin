@@ -585,6 +585,9 @@ impl CraftingTableScreenHandler {
         crafting_table_handler
             .add_recipe_slots(crafting_inventory, provider)
             .await;
+        // Container slots (result + grid) precede the player slots.
+        crafting_table_handler.behaviour.container_slots =
+            crafting_table_handler.behaviour.slots.len();
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         crafting_table_handler.add_player_slots(&player_inventory);
         crafting_table_handler
@@ -676,3 +679,29 @@ impl ScreenHandler for CraftingTableScreenHandler {
 }
 
 impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generic_container_screen_handler::create_generic_9x3;
+    use crate::test_util::MockPlayer;
+    use pumpkin_world::inventory::SimpleInventory;
+
+    #[tokio::test]
+    async fn crafting_table_sets_container_slots() {
+        let player = MockPlayer::new();
+        let handler = CraftingTableScreenHandler::new(1, &player.player_inventory, None).await;
+        // 1 result + 9 grid slots precede the player slots.
+        assert_eq!(handler.get_behaviour().container_slots, 10);
+        assert_eq!(handler.get_behaviour().slots.len(), 46);
+    }
+
+    #[tokio::test]
+    async fn generic_container_sets_container_slots() {
+        let player = MockPlayer::new();
+        let inventory: Arc<dyn Inventory> = Arc::new(SimpleInventory::new(27));
+        let handler = create_generic_9x3(1, &player.player_inventory, inventory).await;
+        assert_eq!(handler.get_behaviour().container_slots, 27);
+        assert_eq!(handler.get_behaviour().slots.len(), 63);
+    }
+}
