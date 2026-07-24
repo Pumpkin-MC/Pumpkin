@@ -138,6 +138,21 @@ impl MeleeAttackGoal {
             .unwrap()
             .avoids_water()
     }
+
+    /// Vanilla `createPath` probe for `canUse` without making the goal future !Send.
+    #[allow(clippy::await_holding_lock)] // guard lives only inside `block_on`, not the outer future
+    fn probe_has_path(
+        navigator: &std::sync::Mutex<crate::entity::ai::pathfinder::Navigator>,
+        living: &crate::entity::living::LivingEntity,
+        dest: Vector3<f64>,
+    ) -> bool {
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                let mut nav = navigator.lock().unwrap();
+                nav.create_path_to(living, dest).await.is_some()
+            })
+        })
+    }
 }
 
 impl Goal for MeleeAttackGoal {
@@ -186,23 +201,17 @@ impl Goal for MeleeAttackGoal {
             }
 
             // Must be able to path to the target (or a dry bank if golem).
+            // Avoid holding `std::sync::MutexGuard` across `.await` (clippy
+            // await_holding_lock / !Send). Probe path with a scoped block_on.
             let avoid_water = Self::mob_avoids_water(mob);
             let dest = Self::path_destination_for(mob, target.as_ref(), avoid_water);
-            // Path destination stuck on self → cannot path (e.g. no bank for water target).
             let me = mob.get_entity().pos.load();
             if me.squared_distance_to_vec(&dest) < 0.25 {
                 return false;
             }
-            // `std::sync::MutexGuard` is !Send — cannot hold it across `.await`.
-            // Run the path probe on the current worker without requiring Send.
             let living = &mob.get_mob_entity().living_entity;
             let navigator = &mob.get_mob_entity().navigator;
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    let mut nav = navigator.lock().unwrap();
-                    nav.create_path_to(living, dest).await.is_some()
-                })
-            })
+            Self::probe_has_path(navigator, living, dest)
         })
     }
 
