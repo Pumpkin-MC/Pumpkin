@@ -296,6 +296,40 @@ mod tests {
 
     use super::{Metadata, MetadataSerializer};
 
+    #[test]
+    fn shared_flags_use_index_zero_across_mapping_renames() {
+        for version in [
+            JavaMinecraftVersion::V_1_21_11,
+            JavaMinecraftVersion::V_26_2,
+        ] {
+            let mut bytes = Vec::new();
+            Metadata::new(TrackedData::SHARED_FLAGS_ID, MetaDataType::BYTE, 0x80u8)
+                .write(&mut bytes, &version)
+                .unwrap();
+
+            assert_eq!(bytes[0], 0);
+        }
+    }
+
+    #[test]
+    fn firework_attachment_uses_index_nine_across_mapping_renames() {
+        for version in [
+            JavaMinecraftVersion::V_1_21_11,
+            JavaMinecraftVersion::V_26_2,
+        ] {
+            let mut bytes = Vec::new();
+            Metadata::new(
+                TrackedData::ATTACHED_TO_TARGET,
+                MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
+                crate::codec::optional_int::OptionalInt(Some(42)),
+            )
+            .write(&mut bytes, &version)
+            .unwrap();
+
+            assert_eq!(bytes[0], 9);
+        }
+    }
+
     struct ParticleMetadata {
         particle_id: VarInt,
         data: [u8; 4],

@@ -35,6 +35,18 @@ pub fn build() -> TokenStream {
         }
     }
 
+    // Firework attachment changed from OPTIONAL_INT to the more specific
+    // OPTIONAL_LIVING_ENTITY_REFERENCE serializer in 26.1. The wire value is
+    // still the optional entity id, so keep one semantic type usable across
+    // both mapping generations.
+    let optional_int_ids = handlers_map.get("optional_int").cloned().unwrap_or_default();
+    let attached_entity_ids = handlers_map
+        .entry("optional_living_entity_reference".to_string())
+        .or_default();
+    for (version, id) in optional_int_ids {
+        attached_entity_ids.entry(version).or_insert(id);
+    }
+
     let mut structure = TokenStream::new();
     let mut to_id_arms = TokenStream::new();
     for (ver, _) in &assets {
