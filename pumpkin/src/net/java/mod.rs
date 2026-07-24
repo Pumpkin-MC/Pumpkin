@@ -1033,7 +1033,8 @@ impl JavaClient {
                     .await;
             }
             id if id == SSetPlayerGround::to_id(version) => {
-                self.handle_player_ground(player, &SSetPlayerGround::read(&mut payload, &version)?);
+                self.handle_player_ground(player, &SSetPlayerGround::read(&mut payload, &version)?)
+                    .await;
             }
             id if id == SPickItemFromBlock::to_id(version) => {
                 self.handle_pick_item_from_block(

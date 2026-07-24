@@ -62,8 +62,8 @@ use pumpkin_protocol::java::client::play::{
     PlayerAction,
 };
 use pumpkin_protocol::java::server::play::{
-    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SBundleItemSelected,
-    SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClientCommand,
+    Action, ActionType, CommandBlockMode, FLAG_HORIZONTAL_COLLISION, FLAG_ON_GROUND, SAttack,
+    SBundleItemSelected, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClientCommand,
     SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
     SCookieResponse as SPCookieResponse, SInteract, SJigsawGenerate, SKeepAlive, SMoveVehicle,
     SPaddleBoat, SPickItemFromBlock, SPickItemFromEntity, SPlaceRecipe, SPlayPingRequest,
@@ -311,6 +311,47 @@ impl JavaClient {
         true
     }
 
+    async fn resolve_player_movement(player: &Arc<Player>, position: Vector3<f64>) -> bool {
+        if player.gamemode.load() == GameMode::Spectator {
+            player.get_entity().set_pos(position);
+            return false;
+        }
+
+        let entity = player.get_entity();
+        let start_position = entity.pos.load();
+        let old_box = entity.bounding_box.load().contract_all(1.0e-5);
+        let requested_movement = position - start_position;
+        entity
+            .move_player_packet(player.as_ref(), requested_movement)
+            .await;
+
+        let mut residual = position - entity.pos.load();
+        if residual.y.abs() < 0.5 {
+            residual.y = 0.0;
+        }
+
+        let new_box = old_box.shift(requested_movement);
+        let (collisions, _) = entity
+            .world
+            .load()
+            .get_block_collisions(new_box, player.as_ref())
+            .await;
+
+        let moved_wrongly =
+            residual.length_squared() > 0.0625 && player.gamemode.load() != GameMode::Creative;
+        let entered_new_collision = collisions
+            .iter()
+            .any(|collision| !collision.intersects(&old_box));
+
+        if moved_wrongly || entered_new_collision {
+            entity.set_pos(start_position);
+            return true;
+        }
+
+        entity.set_pos(position);
+        false
+    }
+
     #[expect(clippy::too_many_lines)]
     pub async fn handle_position(
         &self,
@@ -358,8 +399,15 @@ impl JavaClient {
                 let pos = event.to;
                 let entity = &player.get_entity();
                 let last_pos = entity.pos.load();
-                player.get_entity().set_pos(pos);
-
+                let was_on_ground = entity.on_ground.load(Ordering::Relaxed);
+                if Self::resolve_player_movement(player, pos).await {
+                    entity.horizontal_collision.store(
+                        packet.collision & FLAG_HORIZONTAL_COLLISION != 0,
+                        Ordering::Relaxed,
+                    );
+                    self.force_tp(player, last_pos).await;
+                    return;
+                }
                 let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
                 let cm = (distance * 100.0) as i32;
                 if cm > 0 {
@@ -370,15 +418,19 @@ impl JavaClient {
                 }
 
                 let height_difference = pos.y - last_pos.y;
-                if entity.on_ground.load(Ordering::Relaxed) && packet.collision & FLAG_ON_GROUND == 0 && height_difference > 0.0 {
+                if was_on_ground
+                    && packet.collision & FLAG_ON_GROUND == 0
+                    && height_difference > 0.0
+                {
                     player.jump().await;
                 }
 
                 let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
+                entity.horizontal_collision.store(
+                    packet.collision & FLAG_HORIZONTAL_COLLISION != 0,
+                    Ordering::Relaxed,
+                );
                 entity.on_ground.store(new_on_ground, Ordering::Relaxed);
-                if new_on_ground && entity.is_fall_flying() {
-                    entity.set_fall_flying(false).await;
-                }
                 let world = &player.world();
 
                 // TODO: Warn when player moves to quickly
@@ -496,8 +548,15 @@ impl JavaClient {
                 let pos = event.to;
                 let entity = &player.get_entity();
                 let last_pos = entity.pos.load();
-                player.get_entity().set_pos(pos);
-
+                let was_on_ground = entity.on_ground.load(Ordering::Relaxed);
+                if Self::resolve_player_movement(player, pos).await {
+                    entity.horizontal_collision.store(
+                        packet.collision & FLAG_HORIZONTAL_COLLISION != 0,
+                        Ordering::Relaxed,
+                    );
+                    self.force_tp(player, last_pos).await;
+                    return;
+                }
                 let distance = last_pos.squared_distance_to_vec(&pos).sqrt();
                 let cm = (distance * 100.0) as i32;
                 if cm > 0 {
@@ -508,15 +567,18 @@ impl JavaClient {
                 }
 
                 let height_difference = pos.y - last_pos.y;
-                if entity.on_ground.load(Ordering::Relaxed)
-                    && (packet.collision & FLAG_ON_GROUND) != 0
+                if was_on_ground
+                    && (packet.collision & FLAG_ON_GROUND) == 0
                     && height_difference > 0.0
                 {
                     player.jump().await;
                 }
-                entity
-                    .on_ground
-                    .store((packet.collision & FLAG_ON_GROUND) != 0, Ordering::Relaxed);
+                let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
+                entity.on_ground.store(new_on_ground, Ordering::Relaxed);
+                entity.horizontal_collision.store(
+                    packet.collision & FLAG_HORIZONTAL_COLLISION != 0,
+                    Ordering::Relaxed,
+                );
 
                 entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
 
@@ -614,7 +676,7 @@ impl JavaClient {
         .await;
     }
 
-    pub async fn handle_rotation(&self, player: &Player, rotation: SPlayerRotation) {
+    pub async fn handle_rotation(&self, player: &Arc<Player>, rotation: SPlayerRotation) {
         if !player.has_client_loaded() {
             return;
         }
@@ -629,6 +691,24 @@ impl JavaClient {
         }
         let entity = &player.get_entity();
         entity.on_ground.store(rotation.ground, Ordering::Relaxed);
+        entity
+            .horizontal_collision
+            .store(rotation.horizontal_collision, Ordering::Relaxed);
+        if rotation.ground
+            && !player.abilities.lock().await.flying
+            && player.living_entity.health.load() > 0.0
+            && !player.living_entity.dead.load(Ordering::Relaxed)
+        {
+            player
+                .living_entity
+                .fall(
+                    player.clone(),
+                    0.0,
+                    true,
+                    player.gamemode.load() == GameMode::Creative,
+                )
+                .await;
+        }
         entity.set_rotation(
             wrap_degrees(rotation.yaw) % 360.0,
             wrap_degrees(rotation.pitch),
@@ -714,12 +794,28 @@ impl JavaClient {
         }}
     }
 
-    pub fn handle_player_ground(&self, player: &Player, ground: &SSetPlayerGround) {
-        player
-            .living_entity
-            .entity
-            .on_ground
-            .store(ground.on_ground, Ordering::Relaxed);
+    pub async fn handle_player_ground(&self, player: &Arc<Player>, ground: &SSetPlayerGround) {
+        let entity = player.get_entity();
+        entity.on_ground.store(ground.on_ground, Ordering::Relaxed);
+        entity
+            .horizontal_collision
+            .store(ground.horizontal_collision, Ordering::Relaxed);
+
+        if ground.on_ground
+            && !player.abilities.lock().await.flying
+            && player.living_entity.health.load() > 0.0
+            && !player.living_entity.dead.load(Ordering::Relaxed)
+        {
+            player
+                .living_entity
+                .fall(
+                    player.clone(),
+                    0.0,
+                    true,
+                    player.gamemode.load() == GameMode::Creative,
+                )
+                .await;
+        }
     }
 
     pub async fn handle_pick_item_from_block(
