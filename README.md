@@ -102,6 +102,29 @@ See our [Quick Start](https://docs.pumpkinmc.org/#quick-start) guide to get Pump
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
 
+### NixOS / Nix
+
+Pumpkin is available in [nixpkgs](https://github.com/NixOS/nixpkgs) as `pumpkin-mc`, with a NixOS module for running it as a systemd service.
+
+Try it without installing:
+
+```bash
+nix run nixpkgs#pumpkin-mc
+```
+
+Or enable the service in `configuration.nix`:
+
+```nix
+services.pumpkin-mc = {
+  enable = true;
+  openFirewall = true;
+};
+```
+
+The module runs Pumpkin under a hardened systemd service and exposes typed options for most of `pumpkin.toml` - Java/Bedrock/RCON/query/proxy networking, whitelist, world storage, logging, PvP, and more — plus a `settings` freeform option for anything not yet covered. RCON passwords and Velocity forwarding secrets are read from files at service start rather than stored in the Nix store, so they work with `sops-nix`/`agenix`.
+
+See the [module source](https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/services/games/pumpkin-mc.nix) for the full list of options.
+
 ## Docs
 
 Pumpkin's documentation can be found at <https://pumpkinmc.org/>
