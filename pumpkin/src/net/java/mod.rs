@@ -424,23 +424,15 @@ impl JavaClient {
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
         match self
             .outgoing_packet_queue_send
-            .try_send(OutgoingPacket::normal(packet_data.clone()))
+            .try_send(OutgoingPacket::normal(packet_data))
         {
             Ok(()) => {}
             Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                let sender = self.outgoing_packet_queue_send.clone();
-                let client_id = self.id;
-                let token = self.close_token.clone();
-                tokio::task::block_in_place(move || {
-                    if let Err(err) = sender.blocking_send(OutgoingPacket::normal(packet_data))
-                        && !token.is_cancelled()
-                    {
-                        error!(
-                            "Failed to add packet to the outgoing packet queue for client {}: {}",
-                            client_id, err
-                        );
-                    }
-                });
+                warn!(
+                    "Outgoing packet queue for client {} is full; closing the connection",
+                    self.id
+                );
+                self.close();
             }
             Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
                 if !self.close_token.is_cancelled() {
