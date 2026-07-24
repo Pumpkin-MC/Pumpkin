@@ -146,13 +146,19 @@ pub trait Clearable {
 pub fn sync_write_items_to_nbt(items: &[Arc<Mutex<ItemStack>>], nbt: &mut NbtCompound) {
     let mut slots = Vec::new();
     for (i, item) in items.iter().enumerate() {
-        if let Ok(stack) = item.try_lock()
-            && !stack.is_empty()
-        {
-            let mut item_nbt = NbtCompound::new();
-            item_nbt.put_byte("Slot", i as i8);
-            stack.write_item_stack(&mut item_nbt);
-            slots.push(NbtTag::Compound(item_nbt));
+        match item.try_lock() {
+            Ok(stack) if !stack.is_empty() => {
+                let mut item_nbt = NbtCompound::new();
+                item_nbt.put_byte("Slot", i as i8);
+                stack.write_item_stack(&mut item_nbt);
+                slots.push(NbtTag::Compound(item_nbt));
+            }
+            Ok(_) => {}
+            Err(_) => {
+                tracing::warn!(
+                    "Skipping contended inventory slot {i} while serializing block entity data"
+                );
+            }
         }
     }
     if !slots.is_empty() {

@@ -48,7 +48,6 @@ mod plugins;
 mod pumpkin;
 mod random;
 mod recipe;
-mod reload;
 mod ride;
 mod rotate;
 mod saveall;
