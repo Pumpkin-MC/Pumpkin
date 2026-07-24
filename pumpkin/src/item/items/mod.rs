@@ -26,6 +26,7 @@ pub mod potions;
 pub mod shovel;
 pub mod snowball;
 pub mod spawn_egg;
+pub mod spear;
 pub mod swords;
 pub mod trident;
 pub mod wind_charge;
@@ -62,6 +63,7 @@ use ink_sac::InkSacItem;
 use mace::MaceItem;
 use shovel::ShovelItem;
 use snowball::SnowBallItem;
+use spear::SpearItem;
 use std::sync::Arc;
 use swords::SwordItem;
 use trident::TridentItem;
@@ -79,6 +81,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(FlintAndSteelItem);
     manager.register(SwordItem);
     manager.register(MaceItem);
+    manager.register(SpearItem);
     manager.register(TridentItem);
     manager.register(FishingRodItem);
     // TODO: Register CrossbowItem with per-shot durability cost.

@@ -2121,7 +2121,13 @@ impl JavaClient {
                     player.swap_item().await;
                 }
                 Status::SpearJab => {
-                    debug!("todo");
+                    if player.gamemode.load() == GameMode::Spectator {
+                        return;
+                    }
+
+                    let held = player.inventory().held_item();
+                    let stack = held.lock().await.clone();
+                    server.item_registry.on_spear_jab(&stack, player).await;
                 }
             },
             Err(_) => self.kick(TextComponent::text("Invalid status")).await,
@@ -2652,6 +2658,7 @@ impl JavaClient {
 
         let inv = player.inventory();
         inv.set_selected_slot(slot);
+        player.update_equipment_attributes().await;
         let stack = inv.held_item().lock().await.clone();
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         player.living_entity.send_equipment_changes(equipment);
