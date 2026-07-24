@@ -162,7 +162,23 @@ impl Navigator {
         let mob_position = Vector3::new(start_block_vec.x, start_block_vec.y, start_block_vec.z);
 
         let context = PathfindingContext::new(mob_position, entity.entity.world.load_full());
-        let mut mob_data = MobData::new(start_pos_f, self.mob_width, self.mob_height, 1.0);
+        // Prefer live entity size + STEP_HEIGHT (golem 1.4×2.7 / step 1.0). Hardcoded
+        // 0.6×1.95 + step 1.0 left wide mobs pathing as zombies and failing 1-block steps.
+        let dim = entity.entity.entity_dimension.load();
+        let width = if self.mob_width > 0.0 {
+            self.mob_width.max(dim.width)
+        } else {
+            dim.width
+        };
+        let height = if self.mob_height > 0.0 {
+            self.mob_height.max(dim.height)
+        } else {
+            dim.height
+        };
+        let step_height = entity
+            .get_attribute_value(&Attributes::STEP_HEIGHT)
+            .max(0.6) as f32;
+        let mut mob_data = MobData::new(start_pos_f, width, height, step_height);
         mob_data.on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
         mob_data.set_pathfinding_malus(PathType::DangerFire, 16.0);
         mob_data.set_pathfinding_malus(PathType::DamageFire, -1.0);
@@ -488,9 +504,11 @@ impl Navigator {
         }
 
         // Jump if destination is above us and we're close horizontally.
+        // Vanilla MoveControl: `wantedY - y >= maxUpStep` (not strict `>`).
+        // With STEP_HEIGHT=1.0, a full block step has dy≈1.0 and must jump/step.
         let dy = goal.destination.y - current_pos.y;
         let step = entity.get_attribute_value(&Attributes::STEP_HEIGHT);
-        if dy > step && horizontal < 1.5 {
+        if dy >= step - 1e-3 && horizontal < 1.5 {
             entity
                 .jumping
                 .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -714,11 +732,12 @@ impl Navigator {
                 }
 
                 let jump_distance = 1.0f64.max(width);
+                let step = entity.get_attribute_value(&Attributes::STEP_HEIGHT);
 
-                // Jump when the next node is above step height and we're close enough horizontally
-                if dy > entity.get_attribute_value(&Attributes::STEP_HEIGHT)
-                    && horizontal_dist_sq < jump_distance
-                {
+                // Jump when the next node is at/above step height and close horizontally.
+                // Compare distance (not distance²) to jump_distance — was a units bug.
+                // Use `>= step` like vanilla MoveControl (`wantedY - y >= maxUpStep`).
+                if dy >= step - 1e-3 && horizontal_dist < jump_distance {
                     entity
                         .jumping
                         .store(true, std::sync::atomic::Ordering::SeqCst);

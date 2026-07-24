@@ -1156,6 +1156,12 @@ impl World {
                 block_entity_elapsed,
             );
         }
+
+        // Flush again at end of tick so mid-tick changes (redstone power, fluid
+        // washing torches, player-placed blocks during entity phase) reach clients
+        // in the same game tick — avoids "server already powered / dropped item but
+        // client still shows old dust/torch" visual desync.
+        self.flush_block_updates().await;
     }
 
     pub async fn register_block_change(&self, position: BlockPos, block_state_id: BlockStateId) {

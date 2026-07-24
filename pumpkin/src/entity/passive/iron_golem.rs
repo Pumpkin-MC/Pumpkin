@@ -71,10 +71,13 @@ impl IronGolemEntity {
         let mob_entity = MobEntity::new(entity);
 
         // Prefer dry land (water malus < 0 → impassable for pathfinder).
+        // Vanilla size 1.4×2.7 + STEP_HEIGHT 1.0 (pathfinder used zombie defaults before).
         {
             let mut nav = mob_entity.navigator.lock().unwrap();
             nav.set_pathfinding_malus(PathType::Water, -1.0);
             nav.set_pathfinding_malus(PathType::WaterBorder, -1.0);
+            let dim = EntityType::IRON_GOLEM.dimension;
+            nav.set_mob_dimensions(dim[0], dim[1]);
         }
 
         let iron_golem = Self { mob_entity };

@@ -112,14 +112,16 @@ impl BlockBehaviour for RedstoneTorchBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
+            // Water/lava in cell → break immediately (same as floor/wall torch).
+            if args.world.get_block_state(args.position).is_liquid() {
+                return BlockStateId::AIR;
+            }
             if args.block == &Block::REDSTONE_WALL_TORCH {
                 let props = RWallTorchProps::from_state_id(args.state_id, args.block);
-                if props.facing.to_block_direction().opposite() == args.direction
-                    && !can_place_at(
-                        args.world,
-                        args.position,
-                        props.facing.to_block_direction().opposite(),
-                    )
+                // Vanilla: directionToNeighbour.getOpposite() == FACING && !canSurvive
+                let facing = props.facing.to_block_direction();
+                if args.direction.opposite() == facing
+                    && !can_place_at(args.world, args.position, facing.opposite())
                 {
                     return BlockStateId::AIR;
                 }
@@ -136,6 +138,26 @@ impl BlockBehaviour for RedstoneTorchBlock {
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let state = args.world.get_block_state(args.position);
+
+            // Support gone → break with full notify (client + cascade).
+            if args.block == &Block::REDSTONE_WALL_TORCH {
+                let props = RWallTorchProps::from_state_id(state.id, args.block);
+                let attach = props.facing.to_block_direction().opposite();
+                if !can_place_at(args.world.as_ref(), args.position, attach) {
+                    args.world
+                        .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
+                        .await;
+                    return;
+                }
+            } else if args.block == &Block::REDSTONE_TORCH {
+                let support = args.world.get_block_state(&args.position.down());
+                if !support.is_center_solid(BlockDirection::Up) {
+                    args.world
+                        .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
+                        .await;
+                    return;
+                }
+            }
 
             if args
                 .world
