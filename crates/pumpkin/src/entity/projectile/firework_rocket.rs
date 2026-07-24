@@ -92,6 +92,19 @@ impl FireworkRocketEntity {
 
         entity.remove().await;
     }
+
+    fn free_flight_velocity(velocity: Vector3<f64>, horizontal_collision: bool) -> Vector3<f64> {
+        let horizontal_acceleration = if horizontal_collision { 1.0 } else { 1.15 };
+        velocity
+            .multiply(horizontal_acceleration, 1.0, horizontal_acceleration)
+            .add_raw(0.0, 0.04, 0.0)
+    }
+
+    fn has_explosion(&self) -> bool {
+        self.item_stack
+            .get_data_component::<FireworksImpl>()
+            .is_some_and(|fireworks| !fireworks.explosions.is_empty())
+    }
 }
 
 impl NBTStorage for FireworkRocketEntity {}
@@ -125,14 +138,14 @@ impl EntityBase for FireworkRocketEntity {
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,
-        server: &'a Server,
+        _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = self.get_entity();
             let world = entity.world.load();
+            entity.update_last_pos();
 
             if let Some(shooter_id) = self.entity.owner_id {
-                entity.update_last_pos();
                 if let Some(shooter) = world.get_entity_by_id(shooter_id) {
                     let shooter = shooter.get_entity();
 
@@ -150,12 +163,20 @@ impl EntityBase for FireworkRocketEntity {
                     entity.set_velocity(shooter.velocity.load());
                 }
             } else {
-                self.entity.process_tick(caller, server).await;
-                let mut velocity = entity.velocity.load();
-                velocity.x *= 1.15;
-                velocity.z *= 1.15;
-                velocity.y += 0.04;
+                let velocity = Self::free_flight_velocity(
+                    entity.velocity.load(),
+                    entity.horizontal_collision.load(Ordering::Relaxed),
+                );
+                let start_position = entity.pos.load();
+                entity.move_entity(caller, velocity).await;
                 entity.set_velocity(velocity);
+
+                let actual_movement = entity.pos.load() - start_position;
+                let collided = (actual_movement - velocity).length_squared() > 1.0e-12;
+                if collided && self.has_explosion() {
+                    self.explode_and_remove(&world).await;
+                    return;
+                }
             }
 
             // Increment life and check for explosion
@@ -180,5 +201,28 @@ impl EntityBase for FireworkRocketEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn free_rocket_accelerates_before_moving() {
+        let velocity =
+            FireworkRocketEntity::free_flight_velocity(Vector3::new(0.1, 0.05, -0.2), false);
+
+        assert!((velocity.x - 0.115).abs() < f64::EPSILON);
+        assert!((velocity.y - 0.09).abs() < f64::EPSILON);
+        assert!((velocity.z + 0.23).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn horizontal_collision_suppresses_horizontal_acceleration() {
+        let velocity =
+            FireworkRocketEntity::free_flight_velocity(Vector3::new(0.1, 0.05, -0.2), true);
+
+        assert_eq!(velocity, Vector3::new(0.1, 0.09, -0.2));
     }
 }
