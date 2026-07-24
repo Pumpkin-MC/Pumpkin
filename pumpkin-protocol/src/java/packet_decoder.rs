@@ -194,7 +194,12 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             }
         }
 
-        let payload = self.payload_scratch.split().freeze();
+        // Prefer split_to(len) so capacity is retained for the next packet
+        // (upstream 3103e97 / zero-allocation decode path).
+        let payload = self
+            .payload_scratch
+            .split_to(self.payload_scratch.len())
+            .freeze();
 
         Ok(RawPacket {
             id: packet_id,

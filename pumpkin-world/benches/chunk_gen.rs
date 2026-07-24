@@ -82,6 +82,7 @@ fn setup_cache(
         StagedChunkEnum::Carvers,
         StagedChunkEnum::Features,
         StagedChunkEnum::Lighting,
+        StagedChunkEnum::Spawn,
     ];
     for stage in pipeline {
         if stage as u8 >= target_stage as u8 {
@@ -322,6 +323,27 @@ fn bench_lighting_generation(c: &mut Criterion) {
     });
 }
 
+fn bench_level_chunk_conversion(c: &mut Criterion) {
+    let world_gen = make_world_gen();
+    let block_registry = Arc::new(BlockRegistry);
+
+    c.bench_function("level_chunk_conversion", |b| {
+        b.iter_batched(
+            || setup_cache(StagedChunkEnum::Full, &world_gen, block_registry.as_ref()),
+            |mut cache| {
+                cache.advance(
+                    StagedChunkEnum::Full,
+                    &world_gen,
+                    block_registry.as_ref(),
+                    &LightingEngineConfig::Default,
+                );
+                black_box(cache);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
 criterion_group!(
     benches,
     bench_full_chunk_generation,
@@ -333,5 +355,6 @@ criterion_group!(
     bench_carvers_generation,
     bench_features_generation,
     bench_lighting_generation,
+    bench_level_chunk_conversion,
 );
 criterion_main!(benches);
