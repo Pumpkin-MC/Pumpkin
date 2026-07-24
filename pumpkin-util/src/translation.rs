@@ -58,29 +58,30 @@ pub fn configure_server_locale(value: &str) -> bool {
         // Other locales that ship pumpkin translation packs (see assets/translations/).
         // Note: `Locale::from_str` falls back to EnUs for unknowns, so we only
         // accept an explicit allow-list here.
-        other if matches!(
-            other,
-            "brb"
-                | "de_de"
-                | "es_es"
-                | "fr_fr"
-                | "it_it"
-                | "ja_jp"
-                | "ka_ge"
-                | "ko_kr"
-                | "lzh"
-                | "nds_de"
-                | "nl_be"
-                | "nl_nl"
-                | "pl_pl"
-                | "pt_br"
-                | "ro_ro"
-                | "ru_ru"
-                | "sq_al"
-                | "tr_tr"
-                | "uk_ua"
-                | "vi_vn"
-        ) =>
+        other
+            if matches!(
+                other,
+                "brb"
+                    | "de_de"
+                    | "es_es"
+                    | "fr_fr"
+                    | "it_it"
+                    | "ja_jp"
+                    | "ka_ge"
+                    | "ko_kr"
+                    | "lzh"
+                    | "nds_de"
+                    | "nl_be"
+                    | "nl_nl"
+                    | "pl_pl"
+                    | "pt_br"
+                    | "ro_ro"
+                    | "ru_ru"
+                    | "sq_al"
+                    | "tr_tr"
+                    | "uk_ua"
+                    | "vi_vn"
+            ) =>
         {
             set_server_locale(Locale::from_str(other).unwrap_or(Locale::EnUs));
             set_bilingual_console(false);
@@ -131,11 +132,7 @@ pub fn get_console_translation(key: &str) -> String {
     if bilingual_console() {
         let zh = get_translation(key, Locale::ZhCn);
         let en = get_translation(key, Locale::EnUs);
-        if zh == en {
-            zh
-        } else {
-            format!("{zh} / {en}")
-        }
+        if zh == en { zh } else { format!("{zh} / {en}") }
     } else {
         get_translation(key, server_locale())
     }
@@ -151,11 +148,7 @@ pub fn translation_to_pretty_console<P: Into<Cow<'static, str>>>(
     if bilingual_console() {
         let zh = translation_to_pretty(key.clone(), Locale::ZhCn, with.clone());
         let en = translation_to_pretty(key, Locale::EnUs, with);
-        if zh == en {
-            zh
-        } else {
-            format!("{zh} / {en}")
-        }
+        if zh == en { zh } else { format!("{zh} / {en}") }
     } else {
         translation_to_pretty(key, server_locale(), with)
     }
@@ -171,11 +164,7 @@ pub fn get_console_translation_text<P: Into<Cow<'static, str>>>(
     if bilingual_console() {
         let zh = get_translation_text(key.clone(), Locale::ZhCn, with.clone());
         let en = get_translation_text(key, Locale::EnUs, with);
-        if zh == en {
-            zh
-        } else {
-            format!("{zh} / {en}")
-        }
+        if zh == en { zh } else { format!("{zh} / {en}") }
     } else {
         get_translation_text(key, server_locale(), with)
     }
@@ -928,6 +917,9 @@ mod tests {
         let key = "pumpkin:server.stopped";
         let text = get_console_translation(key);
         assert!(text.contains('/'), "expected bilingual join: {text}");
-        assert!(text.contains("服务器") || text.contains("stopped") || text.contains("停止"), "{text}");
+        assert!(
+            text.contains("服务器") || text.contains("stopped") || text.contains("停止"),
+            "{text}"
+        );
     }
 }

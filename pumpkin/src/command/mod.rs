@@ -234,7 +234,9 @@ impl CommandSender {
     pub fn get_locale(&self) -> Locale {
         match self {
             // Console / RCON / command blocks follow server console language.
-            Self::CommandBlock(..) | Self::Console | Self::Rcon(..) | Self::Dummy => server_locale(),
+            Self::CommandBlock(..) | Self::Console | Self::Rcon(..) | Self::Dummy => {
+                server_locale()
+            }
             Self::Player(player) => {
                 Locale::from_str(&player.config.load().locale).unwrap_or_else(|_| server_locale())
             }

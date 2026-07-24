@@ -39,9 +39,7 @@ use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
 };
-use pumpkin_util::translation::{
-    bilingual_console, configure_server_locale, server_locale,
-};
+use pumpkin_util::translation::{bilingual_console, configure_server_locale, server_locale};
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
@@ -91,8 +89,13 @@ async fn main() {
     if bilingual_console() {
         info!(
             "{}",
-            TextComponent::custom("pumpkin", "server.locale.bilingual", server_locale(), vec![])
-                .to_pretty_console()
+            TextComponent::custom(
+                "pumpkin",
+                "server.locale.bilingual",
+                server_locale(),
+                vec![]
+            )
+            .to_pretty_console()
         );
     } else {
         info!(
@@ -170,14 +173,9 @@ async fn main() {
     let java_part = if advanced_config.networking.java.enabled {
         format!(
             "{} {}",
-            TextComponent::custom(
-                "pumpkin",
-                "server.java_edition",
-                server_locale(),
-                vec![],
-            )
-            .color_named(NamedColor::Yellow)
-            .to_pretty_console(),
+            TextComponent::custom("pumpkin", "server.java_edition", server_locale(), vec![],)
+                .color_named(NamedColor::Yellow)
+                .to_pretty_console(),
             TextComponent::text(format!("{}", advanced_config.networking.java.address))
                 .color_named(NamedColor::DarkBlue)
                 .to_pretty_console()
@@ -188,14 +186,9 @@ async fn main() {
     let bedrock_part = if advanced_config.networking.bedrock.enabled {
         format!(
             "{} {}",
-            TextComponent::custom(
-                "pumpkin",
-                "server.bedrock_edition",
-                server_locale(),
-                vec![],
-            )
-            .color_named(NamedColor::Gold)
-            .to_pretty_console(),
+            TextComponent::custom("pumpkin", "server.bedrock_edition", server_locale(), vec![],)
+                .color_named(NamedColor::Gold)
+                .to_pretty_console(),
             TextComponent::text(format!("{}", advanced_config.networking.bedrock.address))
                 .color_named(NamedColor::DarkBlue)
                 .to_pretty_console()
