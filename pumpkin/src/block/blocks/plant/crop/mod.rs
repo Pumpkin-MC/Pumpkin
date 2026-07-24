@@ -49,6 +49,9 @@ trait CropBlockBase: PlantBlockBase {
     }
 
     async fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
+        if world.get_raw_brightness(pos, 0) < MIN_GROWTH_LIGHT {
+            return;
+        }
         let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);
         if age < self.max_age() {
@@ -76,9 +79,13 @@ trait CropBlockBase: PlantBlockBase {
             }
         }
     }
-
-    //TODO add impl for light level
 }
+
+/// Raw brightness a crop or stem needs to advance a growth stage.
+///
+/// Vanilla checks `getRawBrightness(pos, 0)`, so the sky light is not reduced
+/// by the time of day and crops keep growing at night.
+pub const MIN_GROWTH_LIGHT: u8 = 9;
 
 pub async fn get_available_moisture(world: &Arc<World>, pos: &BlockPos, block: &Block) -> f32 {
     let mut moisture = 1.0;
