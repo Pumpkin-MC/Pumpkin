@@ -1144,7 +1144,19 @@ impl Player {
                 _ => {}
             }
             if config.knockback {
-                combat::handle_knockback(attacker_entity, victim_entity, knockback_strength);
+                // Vanilla LivingEntity.takeKnockback: strength *= (1 - knockbackResistance).
+                // Must apply here — bare Entity has no attributes (golem KB=1.0 → unmovable).
+                let strength = if let Some(living) = victim.get_living_entity() {
+                    let kb_res = living
+                        .get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
+                        .clamp(0.0, 1.0);
+                    knockback_strength * (1.0 - kb_res)
+                } else {
+                    knockback_strength
+                };
+                if strength > 0.0 {
+                    combat::handle_knockback(attacker_entity, victim_entity, strength);
+                }
             }
         }
 

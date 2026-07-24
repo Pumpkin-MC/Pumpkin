@@ -63,13 +63,21 @@ impl AttackType {
     }
 }
 
+/// Vanilla player-attack knockback. Caller must already scale `strength` by
+/// `(1 - knockbackResistance)` (see `Player::attack`). Iron golems have
+/// resistance `1.0` so they take zero horizontal KB.
 pub fn handle_knockback(attacker: &Entity, victim: &Entity, strength: f64) {
+    if strength <= 0.0 {
+        return;
+    }
+
     let yaw = attacker.yaw.load();
     victim.knockback(
         strength * 0.5,
         f64::from((yaw.to_radians()).sin()),
         f64::from(-(yaw.to_radians()).cos()),
     );
+    victim.send_velocity();
 
     let velocity = attacker.velocity.load();
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
