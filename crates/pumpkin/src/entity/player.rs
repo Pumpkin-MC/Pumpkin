@@ -498,6 +498,8 @@ pub struct Player {
     pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
     /// The coordinates of the chunk section the player is currently watching.
     pub watched_section: AtomicCell<Cylindrical>,
+    /// Position used for the last entity tracking update.
+    pub last_entity_tracking_pos: AtomicCell<Vector3<f64>>,
     /// The last time the player performed an action (for idle timeout).
     pub last_action_time: AtomicCell<Instant>,
     /// The ping in millis.
@@ -754,6 +756,7 @@ impl Player {
                 // Since 1 is not possible in vanilla it is used as uninit
                 NonZeroU8::new(1).unwrap_or(NonZeroU8::MIN),
             )),
+            last_entity_tracking_pos: AtomicCell::new(Vector3::new(0.0, 100.0, 0.0)),
             last_action_time: AtomicCell::new(std::time::Instant::now()),
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
@@ -2131,6 +2134,10 @@ impl Player {
                     .await;
                 self.bedrock_spawned.store(true, Ordering::Relaxed);
             }
+        }
+        let position = self.position();
+        if self.last_entity_tracking_pos.swap(position) != position {
+            self.world().update_entity_tracking_for_player(self);
         }
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
         self.living_entity
