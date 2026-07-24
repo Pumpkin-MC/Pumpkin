@@ -231,7 +231,29 @@ impl BlockBehaviour for RedstoneWireBlock {
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
+            // After place, re-evaluate power + turbo (on_place may run before neighbors
+            // finish shape updates). Then flush so clients see power the same tick —
+            // otherwise dust looks unpowered until the next world flush.
             update_wire_neighbors(args.world, args.position).await;
+            let state = args.world.get_block_state(args.position);
+            if state.id != Block::AIR.default_state.id {
+                let mut wire = RedstoneWireProperties::from_state_id(state.id, args.block);
+                let new_power = calculate_power(args.world, args.position).await;
+                if wire.power != new_power {
+                    wire.power = new_power;
+                    args.world
+                        .set_block_state(
+                            args.position,
+                            wire.to_state_id(&Block::REDSTONE_WIRE),
+                            BlockFlags::NOTIFY_LISTENERS,
+                        )
+                        .await;
+                    RedstoneWireTurbo::update_surrounding_neighbors(args.world, *args.position)
+                        .await;
+                    super::notify_after_wire_power_change(args.world, args.position).await;
+                }
+            }
+            args.world.flush_block_updates().await;
         })
     }
 

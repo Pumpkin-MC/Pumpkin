@@ -146,6 +146,7 @@ pub mod custom_bossbar;
 pub mod dragon_fight;
 pub mod end_podium;
 pub mod natural_spawner;
+pub mod phantom_spawner;
 pub mod scoreboard;
 pub mod weather;
 
@@ -225,6 +226,8 @@ pub struct World {
     pub sky_darken: AtomicU8,
     /// Vanilla `Level.neighborUpdater` — `CollectingNeighborUpdater` queue.
     pub neighbor_updater: crate::block::blocks::redstone::neighbor_updater::WorldNeighborUpdater,
+    /// Vanilla `PhantomSpawner` (insomnia / TIME_SINCE_REST custom spawner).
+    pub phantom_spawner: phantom_spawner::PhantomSpawner,
 }
 
 impl PartialEq for World {
@@ -316,6 +319,7 @@ impl World {
             sky_darken: AtomicU8::new(0),
             neighbor_updater:
                 crate::block::blocks::redstone::neighbor_updater::WorldNeighborUpdater::new(),
+            phantom_spawner: phantom_spawner::PhantomSpawner::default(),
         }
     }
 
@@ -1476,6 +1480,9 @@ impl World {
                 error!("Chunk task panicked: {:?}", e);
             }
         }
+
+        // Vanilla ServerLevel.tickCustomSpawners — PhantomSpawner (insomnia).
+        self.phantom_spawner.tick(self, spawn_enemies).await;
     }
 
     pub fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<&Fluid> {

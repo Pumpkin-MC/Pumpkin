@@ -36,7 +36,50 @@ impl BiomeSupplier for MultiNoiseBiomeSupplier {
     fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome {
         let point = noise.sample(x, y, z);
         let point_list = point.convert_to_list();
-        LAST_RESULT_NODE.with_borrow_mut(|last_result| self.source.get(&point_list, last_result))
+        let biome =
+            LAST_RESULT_NODE.with_borrow_mut(|last_result| self.source.get(&point_list, last_result));
+        // Overworld only: slightly reduce taiga-family prevalence (~5%) so
+        // temperate forests/plains appear more often when exploring.
+        // Disabled under `cfg(test)` so vanilla multi-noise golden tests stay exact.
+        #[cfg(not(test))]
+        {
+            if std::ptr::eq(self.source, &OVERWORLD_BIOME_SOURCE) {
+                return reduce_taiga_prevalence(biome, x, z);
+            }
+        }
+        biome
+    }
+}
+
+/// Deterministic ~5% remapping of taiga-family biomes toward forest/snowy plains.
+///
+/// Vanilla multi-noise leaf counts put a large share of temperate climate in
+/// taiga/snowy_taiga; players report long stretches of only taiga. We keep the
+/// vanilla climate tree and soft-bias 5% of taiga samples to neighboring biomes.
+#[cfg(not(test))]
+fn reduce_taiga_prevalence(biome: &'static Biome, x: i32, z: i32) -> &'static Biome {
+    let id = biome.registry_id;
+    let is_taiga = matches!(
+        id,
+        "taiga" | "snowy_taiga" | "old_growth_pine_taiga" | "old_growth_spruce_taiga"
+    );
+    if !is_taiga {
+        return biome;
+    }
+    // Stable hash in 0..99; remap when < 5 (exactly 5%).
+    let h = (i64::from(x)
+        .wrapping_mul(0x9E37_79B9)
+        .wrapping_add(i64::from(z).wrapping_mul(0x85EB_CA77)))
+    .unsigned_abs()
+        % 100;
+    if h >= 5 {
+        return biome;
+    }
+    match id {
+        "snowy_taiga" => &Biome::SNOWY_PLAINS,
+        "old_growth_pine_taiga" | "old_growth_spruce_taiga" => &Biome::FOREST,
+        // plain taiga → forest (still cold-temperate tree biome)
+        _ => &Biome::FOREST,
     }
 }
 

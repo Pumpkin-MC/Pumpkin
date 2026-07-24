@@ -20,6 +20,7 @@ use pumpkin_data::FacingExt;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::Facing;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
@@ -112,8 +113,10 @@ impl BlockBehaviour for RedstoneTorchBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            // Water/lava in cell → break immediately (same as floor/wall torch).
-            if args.world.get_block_state(args.position).is_liquid() {
+            // Water/lava in cell → AIR; `replace_with_state_for_neighbor_update`
+            // maps AIR to `break_block` + NOTIFY so clients drop ghost torches.
+            // Fluid flow also `break_block` before placing water (PistonBehavior::Destroy).
+            if redstone_torch_blocked_by_fluid(args.world, args.position) {
                 return BlockStateId::AIR;
             }
             if args.block == &Block::REDSTONE_WALL_TORCH {
@@ -138,6 +141,14 @@ impl BlockBehaviour for RedstoneTorchBlock {
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let state = args.world.get_block_state(args.position);
+
+            // Fluid washed into cell (or residual after partial replace) → full notify break.
+            if redstone_torch_blocked_by_fluid(args.world.as_ref(), args.position) {
+                args.world
+                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
+                    .await;
+                return;
+            }
 
             // Support gone → break with full notify (client + cascade).
             if args.block == &Block::REDSTONE_WALL_TORCH {
@@ -318,4 +329,13 @@ fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos, facing: BlockDi
     world
         .get_block_state(&block_pos.offset(facing.to_offset()))
         .is_side_solid(facing.opposite())
+}
+
+/// True when this cell is water/lava (torch cannot remain).
+fn redstone_torch_blocked_by_fluid(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+    let state = world.get_block_state(pos);
+    if state.is_liquid() || state.is_waterlogged() {
+        return true;
+    }
+    Fluid::from_state_id(state.id).is_some_and(|f| f.id != Fluid::EMPTY.id)
 }
