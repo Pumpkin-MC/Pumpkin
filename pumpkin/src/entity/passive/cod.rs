@@ -37,13 +37,10 @@ impl CodEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
+            // Vanilla AbstractFish: AvoidEntity(Player only) — not axolotl.
             goal_selector.add_goal(
                 2,
                 Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 8.0, 1.6, 1.4)),
-            );
-            goal_selector.add_goal(
-                2,
-                Box::new(AvoidEntityGoal::new(&EntityType::AXOLOTL, 8.0, 1.6, 1.4)),
             );
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(

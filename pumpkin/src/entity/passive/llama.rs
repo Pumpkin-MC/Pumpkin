@@ -1,18 +1,26 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, escape_danger::EscapeDangerGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
-        snowball_attack::SnowballAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
+        snowball_attack::SnowballAttackGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Llama — neutral; revenge + snowball spit stand-in + hunt wolves.
+// Vanilla ItemTags.LLAMA_TEMPT_ITEMS — hay block primary.
+const TEMPT_ITEMS: &[&Item] = &[&Item::HAY_BLOCK];
+
+/// Llama — vanilla 26.2: spit (snowball stand-in), panic, breed, tempt, hunt wolves.
+///
+/// Decompile: RangedAttackGoal interval 40; LlamaAttackWolfGoal; caravan TODO.
 pub struct LlamaEntity {
     pub mob_entity: MobEntity,
 }
@@ -32,15 +40,18 @@ impl LlamaEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
-            // LlamaSpit entity not ported — snowball ranged stand-in.
-            goal_selector.add_goal(2, SnowballAttackGoal::new(1.25));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.7)));
+            // RunAroundLikeCrazyGoal TODO (untamed)
+            goal_selector.add_goal(3, SnowballAttackGoal::new(1.25)); // RangedAttack spit
+            goal_selector.add_goal(3, EscapeDangerGoal::new(1.2));
+            goal_selector.add_goal(4, BreedGoal::new(1.0));
+            goal_selector.add_goal(5, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS)));
+            goal_selector.add_goal(6, Box::new(FollowParentGoal::new(1.0)));
+            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(0.7)));
             goal_selector.add_goal(
-                6,
+                8,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(9, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(

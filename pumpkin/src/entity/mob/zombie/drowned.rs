@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+use pumpkin_data::entity::EntityType;
+
+use crate::entity::ai::goal::active_target::ActiveTargetGoal;
 use crate::entity::ai::pathfinder::node::PathType;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::{
@@ -7,7 +10,8 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-/// Drowned — inherits zombie goals; prefers water pathfinding (vanilla InWater).
+/// Drowned — vanilla addBehaviourGoals: water/trident/beach + axolotl target.
+/// Inherits shared zombie goals then adds axolotl (decompile Drowned.java).
 pub struct DrownedEntity {
     entity: Arc<ZombieEntityBase>,
 }
@@ -15,13 +19,19 @@ pub struct DrownedEntity {
 impl DrownedEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let entity = ZombieEntityBase::new(entity);
-        // Prefer swimming: water is free, dry land is costly (opposite of golem).
         {
             let mut nav = entity.mob_entity.navigator.lock().unwrap();
             nav.set_pathfinding_malus(PathType::Water, 0.0);
             nav.set_pathfinding_malus(PathType::WaterBorder, 0.0);
-            // Slight penalty on open dry land encourages staying near water.
             nav.set_pathfinding_malus(PathType::Open, 2.0);
+        }
+        // NearestAttackableTargetGoal(Axolotl) priority 3
+        {
+            let mut target_selector = entity.mob_entity.target_selector.lock().unwrap();
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(&entity.mob_entity, &EntityType::AXOLOTL, true),
+            );
         }
         Arc::new(Self { entity })
     }

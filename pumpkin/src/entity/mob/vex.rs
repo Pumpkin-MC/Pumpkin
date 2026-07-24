@@ -5,14 +5,15 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, random_float::RandomFloatGoal, revenge::RevengeGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Vex — flying melee minion (bound-to-owner / charge polish TODO).
+/// Vex — vanilla 26.2: Float, ChargeAttack, RandomMove, Look; player + owner target.
+///
+/// Decompile: no villager/golem NearestAttackableTarget; CopyOwnerTarget TODO.
 pub struct VexEntity {
     pub mob_entity: MobEntity,
 }
@@ -31,31 +32,22 @@ impl VexEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // No swim — flying + float between charges.
-            goal_selector.add_goal(
-                3,
-                crate::entity::ai::goal::random_float::RandomFloatGoal::new(),
-            );
+            // FloatGoal — flying uses zero gravity; RandomFloat ≈ VexRandomMove
+            goal_selector.add_goal(0, RandomFloatGoal::new());
+            // VexChargeAttackGoal stand-in
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.2, true)));
-            goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(8, RandomFloatGoal::new());
             goal_selector.add_goal(
                 9,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 3.0),
             );
-            goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
 
+            // HurtByTarget(Raider ignore).setAlertOthers — JoinAnger raiders TODO
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // VexCopyOwnerTargetGoal TODO
             target_selector.add_goal(
-                2,
+                3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
             );
         };
 

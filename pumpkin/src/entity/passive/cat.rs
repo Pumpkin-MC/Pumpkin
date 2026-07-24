@@ -21,8 +21,7 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_owner::FollowOwnerGoal, follow_parent::FollowParentGoal,
-        leap_at_target::LeapAtTargetGoal, look_around::RandomLookAroundGoal,
+        follow_owner::FollowOwnerGoal, leap_at_target::LeapAtTargetGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, sit::SitGoal,
         swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
@@ -62,30 +61,29 @@ impl CatEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // Vanilla 26.2 Cat.registerGoals (relax-on-owner / lie-on-bed TODO).
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(2, SitGoal::new());
             goal_selector.add_goal(4, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS)));
-            goal_selector.add_goal(5, BreedGoal::new(0.8));
-            goal_selector.add_goal(5, Box::new(LeapAtTargetGoal::new(0.3)));
-            goal_selector.add_goal(6, Box::new(MeleeAttackGoal::new(1.0, true)));
-            goal_selector.add_goal(7, FollowOwnerGoal::new(1.0, 10.0, 5.0));
-            goal_selector.add_goal(9, Box::new(FollowParentGoal::new(0.8)));
+            goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 5.0));
+            goal_selector.add_goal(8, Box::new(LeapAtTargetGoal::new(0.3)));
+            goal_selector.add_goal(9, Box::new(MeleeAttackGoal::new(1.0, true))); // OcelotAttack
+            goal_selector.add_goal(10, BreedGoal::new(0.8));
             goal_selector.add_goal(11, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
                 12,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
             );
-            goal_selector.add_goal(12, Box::new(RandomLookAroundGoal::default()));
 
-            // Hunt rabbits / baby turtles (vanilla cat prey).
+            // NonTameRandomTarget rabbit / baby turtle
             target_selector.add_goal(
                 1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, true),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
             );
             target_selector.add_goal(
                 1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, true),
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false),
             );
         };
 
