@@ -444,16 +444,29 @@ pub async fn drop_loot(
     experience: bool,
     params: LootContextParameters,
 ) {
+    // In 1.21 a tool's `block_experience` enchantment effects are folded over
+    // the sampled amount, and Silk Touch is the only enchantment that defines
+    // one: it sets the result to zero. Special-casing it is equivalent for
+    // now, but a general effect pass would be the faithful implementation.
+    // Read before `params` is moved into the loot table below.
+    let silk_touched = experience
+        && block.experience.is_some()
+        && params.tool.as_ref().is_some_and(|tool| {
+            tool.get_enchantment_level(&pumpkin_data::Enchantment::SILK_TOUCH) > 0
+        });
+
     if let Some(loot_table) = &block.loot_table {
         for stack in loot_table.get_loot(params) {
             world.drop_stack(pos, stack).await;
         }
     }
 
-    if experience && let Some(experience) = &block.experience {
+    if experience
+        && !silk_touched
+        && let Some(experience) = &block.experience
+    {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
         let amount = experience.experience.get(&mut random);
-        // TODO: Silk touch gives no exp
         if amount > 0 {
             ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;
         }
