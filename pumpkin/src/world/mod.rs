@@ -1033,12 +1033,24 @@ impl World {
                     continue;
                 }
 
+                // Skip entities already removed mid-tick (despawn / death cleanup
+                // from a concurrent task). The tick snapshot still holds the Arc.
+                let base = entity.get_entity();
+                if base.removed.load(Ordering::Relaxed) || base.is_removed() {
+                    continue;
+                }
+
                 let e_clone = entity.clone();
                 let s_clone = server_for_entities.clone();
                 let p_cache = players_cache.clone();
 
                 tasks.spawn(async move {
-                    e_clone.get_entity().age.fetch_add(1, Relaxed);
+                    let inner = e_clone.get_entity();
+                    // Re-check after spawn: another task may have removed us.
+                    if inner.removed.load(Ordering::Relaxed) || inner.is_removed() {
+                        return;
+                    }
+                    inner.age.fetch_add(1, Relaxed);
                     e_clone.tick(&e_clone, &s_clone).await;
 
                     let entity_inner = e_clone.get_entity();
@@ -4344,12 +4356,36 @@ impl World {
     #[allow(clippy::unused_async)]
     pub async fn remove_entity(&self, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
-        self.spawn_state.load().remove_entity(self, entity);
+        // Ensure concurrent tick/damage paths see the entity as gone even if
+        // callers forgot to call `Entity::mark_removed` first.
+        base_entity.mark_removed(crate::entity::RemovalReason::Discarded);
+        let uuid = base_entity.entity_uuid;
+        // Side effect is safe with ArcSwap rcu: on CAS retry the flag is rewritten
+        // from the latest snapshot, so only the winning remove adjusts spawn caps.
+        let mut removed_from_list = false;
         self.entities.rcu(|current_entities| {
+            if !current_entities
+                .iter()
+                .any(|e| e.get_entity().entity_uuid == uuid)
+            {
+                removed_from_list = false;
+                return (**current_entities).clone();
+            }
             let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
+            new_entities.retain(|e| e.get_entity().entity_uuid != uuid);
+            removed_from_list = true;
             new_entities
         });
+        if removed_from_list {
+            self.spawn_state.load().remove_entity(self, entity);
+        } else {
+            debug!(
+                entity_id = base_entity.entity_id,
+                entity_uuid = %uuid,
+                entity_type = base_entity.entity_type.resource_name,
+                "remove_entity: entity was not in world list (already removed)"
+            );
+        }
 
         let chunk_pos = base_entity.chunk_pos.load();
         self.broadcast_to_chunk_editioned_sync(
@@ -4369,6 +4405,7 @@ impl World {
                 let base_entity = entity.get_entity();
                 let pos = base_entity.chunk_pos.load();
                 if chunks_set.contains(&pos) {
+                    base_entity.mark_removed(crate::entity::RemovalReason::UnloadedToChunk);
                     entities_to_remove.push(entity.clone());
                     false
                 } else {

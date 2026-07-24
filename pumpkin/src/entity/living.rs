@@ -1410,11 +1410,36 @@ impl LivingEntity {
         // Entity may already be removed (despawn race / concurrent tick). Never
         // panicking the whole server on death — soft-skip if not in world map.
         let Some(dyn_self) = world.get_entity_by_id(self.entity.entity_id) else {
-            tracing::warn!(
+            let pos = self.entity.pos.load();
+            warn!(
                 entity_id = self.entity.entity_id,
-                "on_death: entity already removed from world; skipping death handling"
+                entity_uuid = %self.entity.entity_uuid,
+                entity_type = self.entity.entity_type.resource_name,
+                x = pos.x,
+                y = pos.y,
+                z = pos.z,
+                health = self.health.load(),
+                death_time = self.death_time.load(Relaxed),
+                age = self.entity.age.load(Relaxed),
+                dead = self.dead.load(Relaxed),
+                removed = self.entity.removed.load(Ordering::Relaxed),
+                removal_reason = ?self.entity.removal_reason.load(),
+                damage_type = damage_type.message_id,
+                source_id = source.map(|s| s.get_entity().entity_id),
+                source_type = source.map(|s| s.get_entity().entity_type.resource_name),
+                cause_id = cause.map(|c| c.get_entity().entity_id),
+                cause_type = cause.map(|c| c.get_entity().entity_type.resource_name),
+                world_entities = world.entities.load().len(),
+                "on_death: entity already removed from world; skipping death handling \
+                 (likely concurrent despawn/remove during parallel entity tick)"
             );
             let _ = self.dead.compare_exchange(false, true, Relaxed, Relaxed);
+            // Ensure removed flag is set so further concurrent ticks bail out.
+            if !self.entity.removed.swap(true, Ordering::Relaxed) {
+                self.entity
+                    .removal_reason
+                    .store(Some(super::RemovalReason::Discarded));
+            }
             return;
         };
         if self
@@ -2152,6 +2177,10 @@ impl EntityBase for LivingEntity {
                 return false;
             }
 
+            if self.entity.removed.load(Ordering::Relaxed) || self.entity.is_removed() {
+                return false; // Already removed (despawn / unload race)
+            }
+
             if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
                 return false; // Dying or dead
             }
@@ -2878,6 +2907,9 @@ impl EntityBase for LivingEntity {
                 // Only send death particles once (on the exact tick death_time reaches 20)
                 // and then remove the entity, preventing entity_event spam.
                 if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
+                    self.entity
+                        .removal_reason
+                        .store(Some(super::RemovalReason::Killed));
                     self.entity
                         .world
                         .load()

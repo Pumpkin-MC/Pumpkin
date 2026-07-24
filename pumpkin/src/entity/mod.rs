@@ -672,7 +672,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum RemovalReason {
     Killed,
     Discarded,
@@ -2482,8 +2482,21 @@ impl Entity {
         self.pitch.store(pitch.clamp(-90.0, 90.0) % 360.0);
     }
 
-    /// Removes the `Entity` from their current `World`
+    /// Mark this entity as removed. Idempotent; first caller wins for `reason`.
+    pub fn mark_removed(&self, reason: RemovalReason) {
+        if !self.removed.swap(true, Ordering::Relaxed) {
+            self.removal_reason.store(Some(reason));
+        } else if self.removal_reason.load().is_none() {
+            self.removal_reason.store(Some(reason));
+        }
+    }
+
+    /// Removes the `Entity` from their current `World`.
+    ///
+    /// Sets `removed` / `removal_reason` so concurrent entity ticks (which hold a
+    /// snapshot of the entity list) can bail out instead of racing `on_death`.
     pub async fn remove(&self) {
+        self.mark_removed(RemovalReason::Discarded);
         self.world.load().remove_entity(self).await;
     }
 
