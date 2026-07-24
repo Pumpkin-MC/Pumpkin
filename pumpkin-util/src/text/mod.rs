@@ -707,14 +707,14 @@ impl TextComponent {
                     let key = bedrock_translate.as_ref().unwrap_or(&translate);
                     let mut text = get_console_translation_text(format!("minecraft:{key}"), with);
                     for child in self.0.extra {
-                        text += &TextComponent(child).get_text();
+                        text += &Self(child).get_text();
                     }
                     text
                 }
                 TextContent::Custom { key, with, .. } => {
                     let mut text = get_console_translation_text(key, with);
                     for child in self.0.extra {
-                        text += &TextComponent(child).get_text();
+                        text += &Self(child).get_text();
                     }
                     text
                 }

@@ -29,6 +29,7 @@ static BILINGUAL_CONSOLE: AtomicBool = AtomicBool::new(false);
 /// - `zh_en` / `bilingual` / `zh_cn+en_us` — Chinese + English dual display
 ///
 /// Unknown values fall back to `en_us` and return `false`.
+#[must_use]
 pub fn configure_server_locale(value: &str) -> bool {
     let v = value.trim().to_lowercase().replace('-', "_");
     match v.as_str() {
@@ -723,7 +724,6 @@ impl Locale {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::EnUs => "en_us",
             Self::ZhCn => "zh_cn",
             Self::ZhHk => "zh_hk",
             Self::ZhTw => "zh_tw",
@@ -742,6 +742,7 @@ impl Locale {
             Self::ItIt => "it_it",
             Self::NlNl => "nl_nl",
             Self::NlBe => "nl_be",
+            // EnUs and all other locales without a dedicated pack code.
             _ => "en_us",
         }
     }
