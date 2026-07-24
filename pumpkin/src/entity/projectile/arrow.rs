@@ -354,7 +354,7 @@ impl EntityBase for ArrowEntity {
             match hit {
                 ProjectileHit::Block {
                     pos,
-                    face: _,
+                    face,
                     hit_pos,
                     ..
                 } => {
@@ -365,6 +365,15 @@ impl EntityBase for ArrowEntity {
 
                     let block = world.get_block(&pos);
                     if block == &pumpkin_data::Block::TARGET {
+                        // Vanilla TargetBlock.onProjectileHit
+                        crate::block::blocks::redstone::target_block::TargetBlock::on_projectile_hit(
+                            &world,
+                            &pos,
+                            face,
+                            hit_pos,
+                            true,
+                        )
+                        .await;
                         let player_opt = self.owner_id.and_then(|id| world.get_player_by_id(id));
                         if let Some(player) = player_opt {
                             player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::Bullseye).await;

@@ -88,3 +88,32 @@ shouldPower = hasNeighborSignal(pos)
 ## Method extracts
 
 See `/tmp/mc26.2-src/VANILLA_METHODS/redstone/` and full sources under `/tmp/mc26.2-src/net/minecraft/world/level/{block,redstone}/`.
+
+
+## Component checklist (user list) — 26.2 CFR vs Pumpkin
+
+| Component | Vanilla class | Pumpkin | Signal notes (CFR) | Status |
+|---|---|---|---|---|
+| 红石块 | `PoweredBlock` | `redstone_block.rs` | ownSignal=15, isSignalSource | OK weak 15 |
+| 红石粉 | `RedStoneWireBlock` | `redstone_wire.rs` + `turbo.rs` | Default/Experimental evaluators | Power formula OK |
+| 红石火把 | `RedstoneTorchBlock` | `redstone_torch.rs` | soft power, burn-out toggle list | Implemented |
+| 红石灯 | `RedstoneLampBlock` | `redstone_lamp.rs` | lit delay 4 when turning off | OK |
+| 中继器 | `RepeaterBlock`+`DiodeBlock` | `repeater.rs`+`abstract_redstone_gate.rs` | delay 1–4 *2 ticks, lock | Implemented |
+| 比较器 | `ComparatorBlock` | `comparator.rs` | delay 2, subtract mode | Item frame TODO |
+| 拉杆 | `LeverBlock` | `lever.rs` | weak 15 / strong toward attach | OK |
+| 按钮 | `ButtonBlock` | `buttons.rs` | press duration stone/wood | OK |
+| 压力板 | `BasePressurePlateBlock` | `pressure_plate/*` | weak+strong down | Box TODO |
+| 观察者 | `ObserverBlock` | `observer.rs` | pulse 2 ticks facing | OK |
+| 标靶 | `TargetBlock` | `target_block.rs` | POWER from hit accuracy | **Implemented** (was stub) |
+| 幽匿传感器 | `SculkSensorBlock` | `sculk_sensor.rs` | phase + power | Partial |
+| 阳光传感器 | `DaylightDetectorBlock` | `daylight_detector.rs` | sky light power | OK |
+| 活塞/粘性 | `PistonBaseBlock` | `piston/piston.rs` | sticky property | Implemented |
+| 动力/激活铁轨 | `PoweredRailBlock` | `rails/*` | updateState self-only | Fixed cascade |
+
+### Vanilla signal rules (all sources)
+
+- Weak: `getSignal` → default `ownSignal`
+- Strong: `getDirectSignal` (often same as weak only on attach face for lever/button/torch)
+- Conductors: `getSignal` = max(own weak, max strong into block)
+
+Sources: `/tmp/mc26.2-src/net/minecraft/world/level/block/{PoweredBlock,RedstoneTorchBlock,RedstoneLampBlock,RepeaterBlock,ComparatorBlock,DiodeBlock,LeverBlock,ButtonBlock,BasePressurePlateBlock,ObserverBlock,TargetBlock,SculkSensorBlock,DaylightDetectorBlock,piston/PistonBaseBlock,RedStoneWireBlock}.java`
