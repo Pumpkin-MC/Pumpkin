@@ -1,5 +1,7 @@
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::placed_feature::PlacedFeature as PlacedFeatureKey;
 use pumpkin_data::structures::{Structure, StructureKeys, StructureType};
+use pumpkin_data::translation;
 use pumpkin_data::{Block, BlockStateId, Mirror, Rotation};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::math::block_box::BlockBox;
@@ -43,19 +45,19 @@ const DESCRIPTION: &str = "Places a structure template in the world.";
 const PERMISSION: &str = "minecraft:command.place";
 
 static TEMPLATE_NOT_FOUND: CommandErrorType<1> = CommandErrorType::new(
-    "commands.place.template.invalid",
+    translation::java::COMMANDS_PLACE_TEMPLATE_INVALID,
     "commands.place.template.invalid",
 );
 static JIGSAW_FAILED: CommandErrorType<1> = CommandErrorType::new(
-    "commands.place.jigsaw.failed",
+    translation::java::COMMANDS_PLACE_JIGSAW_FAILED,
     "commands.place.jigsaw.failed",
 );
 static STRUCTURE_INVALID: CommandErrorType<1> = CommandErrorType::new(
-    "commands.place.structure.invalid",
+    translation::java::COMMANDS_PLACE_STRUCTURE_INVALID,
     "commands.place.structure.invalid",
 );
 static FEATURE_INVALID: CommandErrorType<1> = CommandErrorType::new(
-    "commands.place.feature.invalid",
+    translation::java::COMMANDS_PLACE_FEATURE_INVALID,
     "commands.place.feature.invalid",
 );
 
@@ -164,7 +166,7 @@ impl CommandExecutor for PlaceTemplateExecutor {
                 .source
                 .send_feedback(
                     TextComponent::translate(
-                        "commands.place.template.success",
+                        translation::java::COMMANDS_PLACE_TEMPLATE_SUCCESS,
                         [
                             TextComponent::text(template_name.clone()),
                             TextComponent::text(block_pos.0.x.to_string()),
@@ -199,13 +201,15 @@ impl CommandExecutor for PlaceJigsawExecutor {
             let (piece_count, placer) = {
                 let seed = hash_block_pos(block_pos.0.x, block_pos.0.y, block_pos.0.z) as u64;
                 let random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
+                let world_gen = &context.world().level.world_gen;
+                let settings = GenerationSettings::from_dimension(world_gen.dimension());
                 let mut structure_context = StructureGeneratorContext {
                     seed: seed as i64,
                     chunk_x: 0,
                     chunk_z: 0,
                     random,
-                    sea_level: 63,
-                    min_y: -64,
+                    sea_level: settings.sea_level,
+                    min_y: world_gen.dimension().min_y,
                     height_sampler: None,
                     structure_key: None,
                 };
@@ -253,7 +257,7 @@ impl CommandExecutor for PlaceJigsawExecutor {
                 .source
                 .send_feedback(
                     TextComponent::translate(
-                        "commands.place.jigsaw.success",
+                        translation::java::COMMANDS_PLACE_JIGSAW_SUCCESS,
                         [
                             TextComponent::text(piece_count.to_string()),
                             TextComponent::text(block_pos.0.x.to_string()),
@@ -296,6 +300,7 @@ impl CommandExecutor for PlaceStructureExecutor {
 
             let (_piece_count, placer) = {
                 let world_gen = context.world().level.world_gen.clone();
+                let settings = GenerationSettings::from_dimension(world_gen.dimension());
 
                 if structure.structure_type == StructureType::Jigsaw {
                     let pool = structure.start_pool.ok_or_else(|| {
@@ -315,7 +320,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                             chunk_x: block_pos.0.x >> 4,
                             chunk_z: block_pos.0.z >> 4,
                             random,
-                            sea_level: 63,
+                            sea_level: settings.sea_level,
                             min_y: world_gen.dimension().min_y,
                             height_sampler: None,
                             structure_key: Some(key),
@@ -361,7 +366,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                                 chunk_x: block_pos.0.x >> 4,
                                 chunk_z: block_pos.0.z >> 4,
                                 random,
-                                sea_level: 63,
+                                sea_level: settings.sea_level,
                                 min_y: world_gen.dimension().min_y,
                                 height_sampler: None,
                                 structure_key: Some(key),
@@ -512,7 +517,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                 .source
                 .send_feedback(
                     TextComponent::translate(
-                        "commands.place.structure.success",
+                        translation::java::COMMANDS_PLACE_STRUCTURE_SUCCESS,
                         [
                             TextComponent::text(structure_name),
                             TextComponent::text(block_pos.0.x.to_string()),
@@ -575,6 +580,9 @@ impl CommandExecutor for PlaceFeatureExecutor {
             chunk.flat_motion_blocking_height_map = [ground; 256];
             chunk.flat_motion_blocking_no_leaves_height_map = [ground; 256];
 
+            // Feature generation runs against a synthetic solid terrain, not the
+            // live chunk. Features that depend on existing air, caves, or fluids
+            // may therefore differ from normal world generation.
             for x in 0..CHUNK_DIM {
                 for z in 0..CHUNK_DIM {
                     for y in chunk_min_y..surface_y {
@@ -626,7 +634,7 @@ impl CommandExecutor for PlaceFeatureExecutor {
                 .source
                 .send_feedback(
                     TextComponent::translate(
-                        "commands.place.feature.success",
+                        translation::java::COMMANDS_PLACE_FEATURE_SUCCESS,
                         [
                             TextComponent::text(feature_name),
                             TextComponent::text(block_pos.0.x.to_string()),
