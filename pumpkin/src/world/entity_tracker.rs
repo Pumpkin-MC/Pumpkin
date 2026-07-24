@@ -75,7 +75,14 @@ impl World {
 
     fn update_pairing(tracker: &EntityTracker, player: &Arc<Player>) {
         let chunk = entity_chunk(tracker.entity.as_ref());
-        let should_track = player.delivered_chunks.contains(&chunk);
+        let entity = tracker.entity.get_entity();
+        let entity_position = entity.pos.load();
+        let player_position = player.position();
+        let tracking_range = f64::from(client_tracking_range(entity.entity_type)) * 16.0;
+        let should_track = tracking_range > 0.0
+            && player.delivered_chunks.contains(&chunk)
+            && (entity_position.x - player_position.x).abs() <= tracking_range
+            && (entity_position.z - player_position.z).abs() <= tracking_range;
         let player_id = player.gameprofile.id;
         let mut viewers = tracker.viewers.lock().unwrap();
 
@@ -106,6 +113,72 @@ impl World {
         for tracker in &self.entity_trackers {
             tracker.viewers.lock().unwrap().remove(&player_id);
         }
+    }
+}
+
+/// Vanilla 26.2 client tracking ranges, measured in chunks.
+fn client_tracking_range(entity_type: &pumpkin_data::entity::EntityType) -> i32 {
+    match entity_type.resource_name {
+        "marker" => 0,
+        "arrow" | "breeze_wind_charge" | "cod" | "dragon_fireball" | "egg" | "ender_pearl"
+        | "experience_bottle" | "eye_of_ender" | "fireball" | "firework_rocket"
+        | "fishing_bobber" | "lingering_potion" | "llama_spit" | "pufferfish" | "salmon"
+        | "small_fireball" | "snowball" | "spectral_arrow" | "splash_potion" | "trident"
+        | "tropical_fish" | "wind_charge" | "wither_skull" => 4,
+        "bat" | "dolphin" => 5,
+        "evoker_fangs" | "experience_orb" | "item" => 6,
+        "allay"
+        | "bee"
+        | "blaze"
+        | "bogged"
+        | "cat"
+        | "cave_spider"
+        | "chest_minecart"
+        | "command_block_minecart"
+        | "creaking"
+        | "creeper"
+        | "drowned"
+        | "enderman"
+        | "endermite"
+        | "evoker"
+        | "fox"
+        | "furnace_minecart"
+        | "guardian"
+        | "hoglin"
+        | "hopper_minecart"
+        | "husk"
+        | "illusioner"
+        | "magma_cube"
+        | "minecart"
+        | "mule"
+        | "ominous_item_spawner"
+        | "parched"
+        | "parrot"
+        | "phantom"
+        | "piglin"
+        | "piglin_brute"
+        | "pillager"
+        | "rabbit"
+        | "shulker_bullet"
+        | "silverfish"
+        | "skeleton"
+        | "snow_golem"
+        | "spawner_minecart"
+        | "spider"
+        | "squid"
+        | "stray"
+        | "tnt_minecart"
+        | "vex"
+        | "vindicator"
+        | "witch"
+        | "wither_skeleton"
+        | "zoglin"
+        | "zombie"
+        | "zombie_villager"
+        | "zombified_piglin" => 8,
+        "end_crystal" | "lightning_bolt" | "warden" => 16,
+        "mannequin" | "player" => 32,
+        _ => 10,
     }
 }
 
