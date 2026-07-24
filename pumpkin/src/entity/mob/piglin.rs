@@ -177,7 +177,7 @@ pub(super) async fn convert_to_zombified(
     {
         let mut effects = zombified_living.active_effects.lock().await;
         *effects = active_effects;
-    }
+    };
     zombified_living
         .add_effect(Effect {
             effect_type: &StatusEffect::NAUSEA,
