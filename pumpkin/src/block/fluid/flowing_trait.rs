@@ -10,6 +10,80 @@ use std::sync::Arc;
 pub type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 pub type FluidFuture<'a, T> = BlockFuture<'a, T>;
 
+/// Vanilla `LiquidBlock` level base for water / lava block state ids.
+/// Water: 86..=101, Lava: 102..=117.
+fn fluid_block_base(fluid: &Fluid) -> Option<u16> {
+    match fluid.id {
+        // FLOWING_WATER / WATER
+        1 | 2 => Some(86),
+        // FLOWING_LAVA / LAVA
+        3 | 4 => Some(102),
+        _ => None,
+    }
+}
+
+/// Vanilla `LiquidBlock.getFluidState` mapping:
+/// ```text
+/// level 0      → still source (amount 8, not falling)
+/// level 1..=15 → flowing(amount = 8 - (level & 7), falling = level >= 8)
+/// ```
+/// So level 1 → amount 7, level 7 → amount 1, level 8 → amount 8 falling,
+/// level 9 → amount 7 falling, level 15 → amount 1 falling.
+fn props_from_block_level(fluid: &Fluid, block_level: u16) -> FlowingFluidProperties {
+    let mut props = FlowingFluidProperties::default(fluid);
+    if block_level == 0 {
+        props.level = Level::L8;
+        props.falling = Falling::False;
+        return props;
+    }
+    let amount = 8 - (block_level & 7);
+    props.level = Level::from_index(amount - 1);
+    props.falling = if block_level >= 8 {
+        Falling::True
+    } else {
+        Falling::False
+    };
+    props
+}
+
+/// Vanilla `FlowingFluid.getLegacyLevel` / `createLegacyBlock`:
+/// - source → 0
+/// - falling → 8 - min(amount, 8) + 8
+/// - else → 8 - min(amount, 8)
+fn block_level_from_props(props: &FlowingFluidProperties) -> u16 {
+    let amount = u16::from(props.level.to_index()) + 1; // L1=1 … L8=8
+    let is_source = props.level == Level::L8 && props.falling == Falling::False;
+    if is_source {
+        0
+    } else if props.falling == Falling::True {
+        8 - amount.min(8) + 8
+    } else {
+        8 - amount.min(8)
+    }
+}
+
+/// Convert fluid props → block state id using vanilla LiquidBlock levels.
+/// The generated `FlowingWaterLikeFluidProperties::to_state_id` table is inverted
+/// (source 86 was encoded as falling L8), so callers must use this helper.
+fn props_to_state_id(fluid: &Fluid, props: &FlowingFluidProperties) -> BlockStateId {
+    if let Some(base) = fluid_block_base(fluid) {
+        let level = block_level_from_props(props);
+        return BlockStateId::new(base + level).expect("fluid block state id");
+    }
+    // Fallback for unexpected fluids
+    props.to_state_id(fluid)
+}
+
+/// Parse a block state id into fluid props via vanilla LiquidBlock levels.
+fn props_from_state_id(fluid: &Fluid, state_id: BlockStateId) -> Option<FlowingFluidProperties> {
+    let base = fluid_block_base(fluid)?;
+    let id = state_id.as_u16();
+    if id >= base && id <= base + 15 {
+        return Some(props_from_block_level(fluid, id - base));
+    }
+    None
+}
+
 pub trait FlowingFluid: Send + Sync {
     fn get_level_decrease_per_block(&self, world: &World) -> i32;
     fn get_flow_speed(&self, world: &World) -> u8;
@@ -36,6 +110,11 @@ pub trait FlowingFluid: Send + Sync {
         flowing_props
     }
 
+    /// Block state id for these fluid properties (vanilla LiquidBlock level mapping).
+    fn props_to_block_state(&self, fluid: &Fluid, props: &FlowingFluidProperties) -> BlockStateId {
+        props_to_state_id(fluid, props)
+    }
+
     fn get_max_flow_distance(&self, world: &World) -> i32;
     fn can_convert_to_source(&self, world: &Arc<World>) -> bool;
 
@@ -47,13 +126,16 @@ pub trait FlowingFluid: Send + Sync {
 
     /// Returns correct fluid properties for a state, treating waterlogged blocks as water sources
     /// (level 8, non-falling). Returns `None` if the state doesn't contain this fluid.
+    ///
+    /// Uses vanilla `LiquidBlock` level encoding — **not** the inverted generated fluid
+    /// property table (which mapped source state 86 to falling L8).
     fn get_effective_props(
         &self,
         fluid: &Fluid,
         state_id: BlockStateId,
     ) -> Option<FlowingFluidProperties> {
-        if fluid.states.iter().any(|s| s.block_state_id == state_id) {
-            return Some(FlowingFluidProperties::from_state_id(state_id, fluid));
+        if let Some(props) = props_from_state_id(fluid, state_id) {
+            return Some(props);
         }
         if fluid.id == Fluid::FLOWING_WATER.id || fluid.id == Fluid::WATER.id {
             let block = Block::from_state_id(state_id);
@@ -100,7 +182,7 @@ pub trait FlowingFluid: Send + Sync {
                 let new_fluid_state = self.get_new_liquid(world, fluid, block_pos).await;
 
                 if let Some(new_state) = new_fluid_state {
-                    let new_state_id = new_state.to_state_id(fluid);
+                    let new_state_id = self.props_to_block_state(fluid, &new_state);
 
                     if new_state_id != current_block_state_id {
                         world
@@ -165,8 +247,13 @@ pub trait FlowingFluid: Send + Sync {
             // Try to flow down first
             if is_hole {
                 let falling_props = self.get_flowing(fluid, Level::L8, true);
-                self.spread_to(world, fluid, &below_pos, falling_props.to_state_id(fluid))
-                    .await;
+                self.spread_to(
+                    world,
+                    fluid,
+                    &below_pos,
+                    self.props_to_block_state(fluid, &falling_props),
+                )
+                .await;
 
                 // Check if we should also spread to sides
                 if props.level == Level::L8 && props.falling == Falling::False {
@@ -228,11 +315,14 @@ pub trait FlowingFluid: Send + Sync {
     ) -> impl std::future::Future<Output = Option<FlowingFluidProperties>> + Send + 'a {
         async move {
             let current_state_id = world.get_block_state_id(block_pos);
-            let current_props = FlowingFluidProperties::from_state_id(current_state_id, fluid);
-
-            // Sources never change
-            if current_props.level == Level::L8 && current_props.falling != Falling::True {
-                return Some(current_props);
+            // Empty cells (air / non-fluid) have no "current" props — skip source early-out.
+            // Critical: must use get_effective_props (vanilla level map), not the inverted
+            // generated from_state_id which treated source state 86 as falling.
+            if let Some(current_props) = self.get_effective_props(fluid, current_state_id) {
+                // Sources never change
+                if current_props.level == Level::L8 && current_props.falling != Falling::True {
+                    return Some(current_props);
+                }
             }
 
             // First: check horizontal neighbors for infinite source formation
@@ -318,7 +408,7 @@ pub trait FlowingFluid: Send + Sync {
         world: &'a Arc<World>,
         fluid: &'a Fluid,
         pos: &'a BlockPos,
-        state_id: BlockStateId,
+        _state_id: BlockStateId,
         new_props: FlowingFluidProperties,
     ) -> impl std::future::Future<Output = ()> + Send + 'a {
         async move {
@@ -344,7 +434,7 @@ pub trait FlowingFluid: Send + Sync {
 
                     if should_convert {
                         let source_props = self.get_source(fluid, false);
-                        let source_state_id = source_props.to_state_id(fluid);
+                        let source_state_id = self.props_to_block_state(fluid, &source_props);
                         world
                             .set_block_state(pos, source_state_id, BlockFlags::NOTIFY_ALL)
                             .await;
@@ -371,8 +461,11 @@ pub trait FlowingFluid: Send + Sync {
                 }
             }
 
+            // Prefer props-derived state so source places as level 0 (state 86), not the
+            // inverted generated table's level-8 flowing state.
+            let place_id = self.props_to_block_state(fluid, &new_props);
             world
-                .set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL)
+                .set_block_state(pos, place_id, BlockFlags::NOTIFY_ALL)
                 .await;
 
             // Check for infinite source formation after placing new fluid
@@ -383,7 +476,7 @@ pub trait FlowingFluid: Send + Sync {
 
                 if should_convert {
                     let source_props = self.get_source(fluid, false);
-                    let source_state_id = source_props.to_state_id(fluid);
+                    let source_state_id = self.props_to_block_state(fluid, &source_props);
                     world
                         .set_block_state(pos, source_state_id, BlockFlags::NOTIFY_ALL)
                         .await;
@@ -469,7 +562,9 @@ pub trait FlowingFluid: Send + Sync {
         state_id: BlockStateId,
     ) -> impl std::future::Future<Output = ()> + Send + 'a {
         async move {
-            let new_props = FlowingFluidProperties::from_state_id(state_id, fluid);
+            let new_props = self
+                .get_effective_props(fluid, state_id)
+                .unwrap_or_else(|| FlowingFluidProperties::default(fluid));
             self.apply_spread(world, fluid, pos, state_id, new_props)
                 .await;
         }
@@ -507,5 +602,72 @@ pub trait FlowingFluid: Send + Sync {
                 self.spread_to(world, fluid, &side_pos, state_id).await;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod liquid_block_level_tests {
+    use super::*;
+    use pumpkin_data::fluid::Fluid;
+
+    fn roundtrip(block_level: u16) {
+        let fluid = &Fluid::FLOWING_WATER;
+        let props = props_from_block_level(fluid, block_level);
+        let back = block_level_from_props(&props);
+        assert_eq!(
+            back, block_level,
+            "block level {block_level} → props → {back}"
+        );
+    }
+
+    #[test]
+    fn source_is_block_level_0_state_86() {
+        let fluid = &Fluid::FLOWING_WATER;
+        let source = {
+            let mut p = FlowingFluidProperties::default(fluid);
+            p.level = Level::L8;
+            p.falling = Falling::False;
+            p
+        };
+        assert_eq!(block_level_from_props(&source), 0);
+        assert_eq!(
+            props_to_state_id(fluid, &source),
+            Block::WATER.default_state.id
+        );
+
+        // Bucket / default water must read as source, not falling.
+        let from_default = props_from_state_id(fluid, Block::WATER.default_state.id).unwrap();
+        assert_eq!(from_default.level, Level::L8);
+        assert_eq!(from_default.falling, Falling::False);
+    }
+
+    #[test]
+    fn vanilla_level_roundtrip_0_to_15() {
+        for level in 0..=15u16 {
+            roundtrip(level);
+        }
+    }
+
+    #[test]
+    fn flowing_heights_match_vanilla() {
+        let fluid = &Fluid::FLOWING_WATER;
+        // level 1 → amount 7 non-falling; level 7 → amount 1
+        let p1 = props_from_block_level(fluid, 1);
+        assert_eq!(p1.level, Level::L7);
+        assert_eq!(p1.falling, Falling::False);
+
+        let p7 = props_from_block_level(fluid, 7);
+        assert_eq!(p7.level, Level::L1);
+        assert_eq!(p7.falling, Falling::False);
+
+        // level 8 → amount 8 falling
+        let p8 = props_from_block_level(fluid, 8);
+        assert_eq!(p8.level, Level::L8);
+        assert_eq!(p8.falling, Falling::True);
+
+        // level 9 → amount 7 falling
+        let p9 = props_from_block_level(fluid, 9);
+        assert_eq!(p9.level, Level::L7);
+        assert_eq!(p9.falling, Falling::True);
     }
 }

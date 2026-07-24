@@ -56,7 +56,7 @@ use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
-use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
+use pumpkin_data::fluid::FluidState;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{
@@ -154,8 +154,6 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::{self, MotionBlocking};
 use uuid::Uuid;
 use weather::Weather;
-
-type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -4675,10 +4673,9 @@ impl World {
                 })
                 .unwrap_or(false)
             {
-                let mut water_props = FlowingFluidProperties::default(&Fluid::FLOWING_WATER);
-                water_props.level = pumpkin_data::fluid::Level::L8;
-                water_props.falling = Falling::False;
-                water_props.to_state_id(&Fluid::FLOWING_WATER)
+                // Vanilla source water is LiquidBlock level 0 = Block::WATER default (state 86).
+                // Do not use FlowingWaterLikeFluidProperties::to_state_id — generated table is inverted.
+                Block::WATER.default_state.id
             } else {
                 BlockStateId::AIR
             };

@@ -312,7 +312,9 @@ impl FlowingFluid for FlowingLava {
         pos: &BlockPos,
         state_id: BlockStateId,
     ) {
-        let new_props = FlowingFluidProperties::from_state_id(state_id, fluid);
+        let new_props = self
+            .get_effective_props(fluid, state_id)
+            .unwrap_or_else(|| FlowingFluidProperties::default(fluid));
         let current_state_id = world.get_block_state_id(pos);
         let block = Block::from_state_id(current_state_id);
 

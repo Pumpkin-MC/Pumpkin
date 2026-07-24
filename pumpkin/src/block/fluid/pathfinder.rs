@@ -4,7 +4,7 @@ use crate::world::World;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::{
     Block, BlockDirection,
-    fluid::{EnumVariants, Falling, Fluid, FluidProperties, Level},
+    fluid::{EnumVariants, Falling, Fluid, Level},
 };
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
@@ -67,7 +67,7 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
             continue;
         };
 
-        let new_state_id = new_fluid_props.to_state_id(fluid);
+        let new_state_id = fluid_impl.props_to_block_state(fluid, &new_fluid_props);
 
         // Holes get distance 0
         let slope_dist = if is_hole(world, fluid, &side_pos) {
