@@ -373,19 +373,19 @@ impl PumpkinServer {
 
         SERVER_IS_STOPPING.store(true, Ordering::Release);
 
-        if let Some(crash_report) = CRASH_REPORT.get() {
-            crash_report.print_to_console();
-            crash_report.save_and_log();
-
-            info!(
-                "{}",
-                TextComponent::text("Gracefully shutting down...")
-                    .color(Color::Named(NamedColor::Green))
-                    .to_pretty_console()
-            );
-
-            SERVER_EXIT_CODE.store(1, Ordering::Release);
+        // Contained worker panics already saved a crash report; do not flip the
+        // process exit code to 1 on a later manual stop (systemd would treat a
+        // clean Ctrl-C as a crash).
+        if CRASH_REPORT.get().is_some() {
+            info!("A prior worker panic was recorded (crash report on disk); exiting cleanly");
         }
+
+        info!(
+            "{}",
+            TextComponent::text("Gracefully shutting down...")
+                .color(Color::Named(NamedColor::Green))
+                .to_pretty_console()
+        );
 
         info!("Stopped accepting incoming connections");
 
@@ -489,36 +489,36 @@ impl PumpkinServer {
                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
                                         *client.player.lock().await = Some(player.clone());
                                     }
-                                    world
-                                        .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
-                                        .await;
-                                    // Run the play loop in a child task so a panic still
-                                    // returns here for player cleanup (ghost-player fix).
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        let player_play = player.clone();
-                                        let server_play = server_clone.clone();
-                                        let client_id = client.id;
-                                        let play_join = tokio::spawn(async move {
-                                            // Re-resolve client from player for the play loop.
-                                            if let ClientPlatform::Java(c) = player_play.client.as_ref() {
-                                                c.progress_player_packets(&player_play, &server_play).await;
-                                            } else {
-                                                tracing::error!(
-                                                    "Java play task lost Java client for id {client_id}"
-                                                );
-                                            }
-                                        });
-                                        if let Err(e) = play_join.await {
-                                            error!(
-                                                "Java play task for player {} ended with panic/cancel: {e}",
-                                                player.gameprofile.name
-                                            );
+                                    // Spawn + play loop both run in a child task so a panic
+                                    // during spawn_java_player still hits cleanup below.
+                                    let player_play = player.clone();
+                                    let server_play = server_clone.clone();
+                                    let world_play = world.clone();
+                                    let play_join = tokio::spawn(async move {
+                                        world_play
+                                            .spawn_java_player(
+                                                &server_play.basic_config,
+                                                &player_play,
+                                                &server_play,
+                                            )
+                                            .await;
+                                        if let ClientPlatform::Java(c) =
+                                            player_play.client.as_ref()
+                                        {
+                                            c.progress_player_packets(&player_play, &server_play)
+                                                .await;
                                         }
+                                    });
+                                    if let Err(e) = play_join.await {
+                                        error!(
+                                            "Java play task for player {} ended with panic/cancel: {e}",
+                                            player.gameprofile.name
+                                        );
+                                    }
 
-                                        if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                            client.close();
-                                            client.await_tasks().await;
-                                        }
+                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
+                                        client.close();
+                                        client.await_tasks().await;
                                     }
                                     player.remove().await;
                                     server_clone.remove_player(&player).await;

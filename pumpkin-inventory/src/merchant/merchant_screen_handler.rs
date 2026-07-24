@@ -178,10 +178,16 @@ impl ScreenHandler for MerchantScreenHandler {
         player: &'a dyn InventoryPlayer,
     ) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
-            // Taking from the take-only output: charge the trade before the
-            // generic click path removes the stack. PickupAll never reaches
-            // here for the output (can_insert=false skips it in the sweep).
-            if slot_index == 2 {
+            use pumpkin_protocol::java::server::play::SlotActionType;
+
+            // Charge only when the click will actually take from the output.
+            // PickupAll on this slot is a no-op (take-only); charging would
+            // consume inputs without delivering items.
+            let will_take = matches!(
+                action_type,
+                SlotActionType::Pickup | SlotActionType::QuickMove
+            );
+            if slot_index == 2 && will_take {
                 let result_slot = self.get_behaviour().slots[2].clone();
                 if result_slot.has_stack().await {
                     let result_stack = result_slot.get_cloned_stack().await;

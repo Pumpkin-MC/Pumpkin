@@ -165,41 +165,9 @@ impl JavaClient {
             }
         }
 
-        // Don't allow duplicate UUIDs
-        if let Some(online_player) = &server.get_player_by_uuid(profile.id) {
-            debug!(
-                "Player (IP '{}', username '{}') tried to log in with the same UUID ('{}') as an online player (username '{}')",
-                &self.address.lock().await,
-                &profile.name,
-                &profile.id,
-                &online_player.gameprofile.name
-            );
-            self.kick(TextComponent::translate_cross(
-                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
-                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
-                [],
-            ))
-            .await;
-            return;
-        }
-
-        // Don't allow a duplicate username
-        if let Some(online_player) = &server.get_player_by_name(&profile.name) {
-            debug!(
-                "A player (IP '{}', attempted username '{}') tried to log in with the same username as an online player (UUID '{}', username '{}')",
-                &self.address.lock().await,
-                &profile.name,
-                &profile.id,
-                &online_player.gameprofile.name
-            );
-            self.kick(TextComponent::translate_cross(
-                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
-                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
-                [],
-            ))
-            .await;
-            return;
-        }
+        // Duplicate UUID/name is handled centrally in Server::add_player
+        // (kick-old, accept-new). Checking here would reject the new connection
+        // before that path runs, re-introducing ghost-reconnect lockout.
 
         self.finish_login(profile).await;
     }

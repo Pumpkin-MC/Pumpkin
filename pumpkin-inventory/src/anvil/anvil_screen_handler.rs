@@ -186,10 +186,14 @@ impl ScreenHandler for AnvilScreenHandler {
         player: &'a dyn InventoryPlayer,
     ) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
-            // Charge rename/XP on take from take-only output. Combining is not
-            // implemented yet — only clear the base input so a sacrifice item
-            // is not voided on rename. PickupAll cannot sweep this slot.
-            if slot_index == 2 {
+            use pumpkin_protocol::java::server::play::SlotActionType;
+
+            // Charge only for actions that take the result (not PickupAll no-ops).
+            let will_take = matches!(
+                action_type,
+                SlotActionType::Pickup | SlotActionType::QuickMove
+            );
+            if slot_index == 2 && will_take {
                 let result_slot = self.get_behaviour().slots[2].clone();
                 if result_slot.has_stack().await {
                     let result_stack = result_slot.get_cloned_stack().await;
