@@ -45,10 +45,33 @@ pub enum TransactionData {
     ReleaseItem(ReleaseItemTransactionData),
 }
 
-#[derive(Debug, PacketRead)]
+/// Bound for the byte list of a legacy set-item slot entry. The wire length is an
+/// unbounded `VarUInt`; without a cap a small packet claims a multi-GiB allocation.
+const MAX_LEGACY_SLOT_BYTES: u32 = 1024;
+
+#[derive(Debug)]
 pub struct LegacySetItemSlot {
     pub container_id: u8,
     pub slots: Vec<u8>,
+}
+
+impl PacketRead for LegacySetItemSlot {
+    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
+        let container_id = u8::read(buf)?;
+        let slots_len = VarUInt::read(buf)?.0;
+        if slots_len > MAX_LEGACY_SLOT_BYTES {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("legacy slot byte count {slots_len} exceeds limit {MAX_LEGACY_SLOT_BYTES}"),
+            ));
+        }
+        let mut slots = vec![0u8; slots_len as usize];
+        buf.read_exact(&mut slots)?;
+        Ok(Self {
+            container_id,
+            slots,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -235,5 +258,48 @@ impl PacketRead for SInventoryTransaction {
             transaction_type,
             transaction_data,
         })
+    }
+}
+
+#[cfg(test)]
+mod alloc_cap_tests {
+    use super::*;
+    use crate::serial::PacketWrite;
+    use std::io::Cursor;
+
+    #[test]
+    fn legacy_slot_rejects_oversize_slots_len() {
+        let mut buf = Vec::new();
+        0u8.write(&mut buf).unwrap(); // container_id
+        VarUInt(MAX_LEGACY_SLOT_BYTES + 1).write(&mut buf).unwrap();
+
+        let err = LegacySetItemSlot::read(&mut Cursor::new(buf)).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn legacy_slot_accepts_slots_len_at_cap() {
+        let mut buf = Vec::new();
+        7u8.write(&mut buf).unwrap(); // container_id
+        VarUInt(MAX_LEGACY_SLOT_BYTES).write(&mut buf).unwrap();
+        buf.extend_from_slice(&vec![3u8; MAX_LEGACY_SLOT_BYTES as usize]);
+
+        let parsed = LegacySetItemSlot::read(&mut Cursor::new(buf)).unwrap();
+        assert_eq!(parsed.container_id, 7);
+        assert_eq!(parsed.slots.len(), MAX_LEGACY_SLOT_BYTES as usize);
+    }
+
+    #[test]
+    fn transaction_legacy_path_rejects_oversize_slots_len() {
+        // SInventoryTransaction with one legacy entry whose inner byte length is over the cap.
+        let mut buf = Vec::new();
+        VarInt(0).write(&mut buf).unwrap(); // legacy_request_id
+        true.write(&mut buf).unwrap(); // has_legacy_slots
+        VarUInt(1).write(&mut buf).unwrap(); // one legacy entry
+        0u8.write(&mut buf).unwrap(); // container_id
+        VarUInt(MAX_LEGACY_SLOT_BYTES + 1).write(&mut buf).unwrap();
+
+        let err = SInventoryTransaction::read(&mut Cursor::new(buf)).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidData);
     }
 }
