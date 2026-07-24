@@ -7,6 +7,7 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3}
 use uuid::Uuid;
 
 use crate::{
+    MAX_PACKET_DATA_SIZE,
     codec::{var_int::VarInt, var_uint::VarUInt},
     serial::PacketRead,
 };
@@ -160,7 +161,15 @@ impl PacketRead for Vec<u8> {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         #[expect(clippy::uninit_vec)]
         {
-            let len = VarUInt::read(reader)?.0 as _;
+            let len = VarUInt::read(reader)?.0 as usize;
+            // Landmine cap: no current caller reads a byte list from the wire, but
+            // an unbounded `VarUInt` length here would pre-allocate attacker-sized memory.
+            if len > MAX_PACKET_DATA_SIZE {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("byte array length {len} exceeds limit {MAX_PACKET_DATA_SIZE}"),
+                ));
+            }
             let mut buf = Self::with_capacity(len);
             unsafe {
                 buf.set_len(len);
@@ -397,5 +406,33 @@ impl<'a> crate::serial::PacketReadSlice<'a> for crate::codec::var_uint::VarUInt 
 impl<'a> crate::serial::PacketReadSlice<'a> for crate::codec::var_ulong::VarULong {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         Self::read(buf)
+    }
+}
+
+#[cfg(test)]
+mod alloc_cap_tests {
+    use super::*;
+    use crate::serial::PacketWrite;
+    use std::io::Cursor;
+
+    #[test]
+    fn vec_u8_rejects_len_over_cap() {
+        let mut buf = Vec::new();
+        VarUInt((MAX_PACKET_DATA_SIZE + 1) as u32)
+            .write(&mut buf)
+            .unwrap();
+
+        let err = Vec::<u8>::read(&mut Cursor::new(buf)).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn vec_u8_reads_small_payload() {
+        let mut buf = Vec::new();
+        VarUInt(3).write(&mut buf).unwrap();
+        buf.extend_from_slice(&[1, 2, 3]);
+
+        let parsed = Vec::<u8>::read(&mut Cursor::new(buf)).unwrap();
+        assert_eq!(parsed, vec![1, 2, 3]);
     }
 }

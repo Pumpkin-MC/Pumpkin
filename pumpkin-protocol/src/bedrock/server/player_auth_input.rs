@@ -144,12 +144,22 @@ pub struct PlayerInventoryAction {
 /// Vanilla sends a handful; an unbounded `VarUInt` length pre-allocates attacker-sized memory.
 const MAX_INVENTORY_ACTIONS: usize = 64;
 
+/// Bound for the legacy set-item slot entry count carried by auth input.
+/// Vanilla sends a handful; an unbounded `VarUInt` count drives an attacker-sized parse loop.
+const MAX_LEGACY_SLOTS: u32 = 256;
+
 impl PacketRead for PlayerInventoryAction {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let legacy_request_id = VarInt::read(buf)?;
         let mut legacy_slots = Vec::new();
         if legacy_request_id.0 < -1 && (legacy_request_id.0 & 1) == 0 {
             let slots_len = VarUInt::read(buf)?.0;
+            if slots_len > MAX_LEGACY_SLOTS {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("legacy slot count {slots_len} exceeds limit {MAX_LEGACY_SLOTS}"),
+                ));
+            }
             for _ in 0..slots_len {
                 legacy_slots.push(
                     crate::bedrock::server::inventory_transaction::LegacySetItemSlot::read(buf)?,
@@ -340,6 +350,16 @@ mod alloc_cap_tests {
         VarUInt((MAX_INVENTORY_ACTIONS + 1) as u32)
             .write(&mut buf)
             .unwrap();
+
+        let err = PlayerInventoryAction::read(&mut Cursor::new(buf)).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn rejects_legacy_slots_len_over_cap() {
+        let mut buf = Vec::new();
+        VarInt(-2).write(&mut buf).unwrap(); // legacy_request_id: legacy slots follow
+        VarUInt(MAX_LEGACY_SLOTS + 1).write(&mut buf).unwrap();
 
         let err = PlayerInventoryAction::read(&mut Cursor::new(buf)).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
