@@ -19,6 +19,7 @@ use crate::world::World;
 pub const SURVIVAL_BREAK_FLAGS: BlockFlags = BlockFlags::NOTIFY_ALL;
 
 /// Vanilla vegetation/carpet style: if unsupported, `updateShape` returns AIR immediately.
+#[must_use]
 #[inline]
 pub fn air_if_unsupported(supported: bool, current_state_id: BlockStateId) -> BlockStateId {
     if supported {
