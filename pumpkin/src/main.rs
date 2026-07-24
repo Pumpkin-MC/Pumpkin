@@ -247,14 +247,17 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
         exit(1);
     }
 
-    // Worker-thread panics must NOT take down the whole server. Log a crash
-    // report and let the task die; other connections keep serving.
+    // Worker-thread panics must NOT take down the whole server. Log and let the
+    // task die; other connections keep serving.
     // (Previously the first worker panic called stop_server(), turning every
     // reachable unwrap into a remote kill switch.)
-    crash_report.print_to_console();
-    crash_report.save_and_log();
-    // Keep the first report for process exit status if the server later stops.
-    let _ = try_set_crash_report(crash_report);
+    //
+    // Only the first worker panic saves a full crash report to disk — a
+    // repeatable panic primitive must not fill the disk with reports.
+    if let Some(report) = try_set_crash_report(crash_report) {
+        report.print_to_console();
+        report.save_and_log();
+    }
 
     tracing::error!(
         "{}: {}",
