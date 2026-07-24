@@ -63,8 +63,11 @@ mod imp {
 
 #[cfg(not(unix))]
 mod imp {
-    /// Saving and restoring terminal attributes is only needed on Unix,
-    /// where leaked raw mode outlives the process; this is a no-op here.
+    /// Not implemented on this platform. On Windows, rustyline changes the
+    /// console mode with `SetConsoleMode` and can leak it the same way on an
+    /// abnormal exit; restoring it would need `GetConsoleMode` plus an exit
+    /// hook, which is left for someone who can test it. Every report in
+    /// issue #2441 is from Unix.
     pub const fn save_original_state() {}
 }
 
