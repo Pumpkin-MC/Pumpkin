@@ -1407,6 +1407,13 @@ impl World {
             spawn_enemies,
             spawn_passives,
         ));
+        if pumpkin_config::development_mode() && spawn_passives {
+            tracing::debug!(
+                "passive spawn tick: categories={:?} spawnable_chunks={}",
+                spawn_list.iter().map(|c| c.id).collect::<Vec<_>>(),
+                spawn_state.spawnable_chunk_count()
+            );
+        }
 
         // 5. Spawn Chunk Spawners into the SAME JoinSet
         if !spawn_list.is_empty() {

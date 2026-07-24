@@ -368,8 +368,26 @@ impl SpawnState {
     }
     #[inline]
     pub fn can_spawn_for_category_global(&self, category: &'static MobCategory) -> bool {
+        // Vanilla: maxInstances * spawnableChunks / 289 (floor).
+        // With few loaded chunks floor stays 0 for CREATURE (max=10) until ~29 chunks,
+        // so animals never appear on small/laggy views. Use ceiling so sparse loads
+        // still allow at least one pack when any spawnable chunk exists.
+        let limit = if self.spawnable_chunk_count <= 0 {
+            0
+        } else {
+            (category.max * self.spawnable_chunk_count + MAGIC_NUMBER - 1) / MAGIC_NUMBER
+        };
+        self.mob_category_counts.0[category.id].load(Relaxed) < limit
+    }
+
+    #[must_use]
+    pub fn spawnable_chunk_count(&self) -> i32 {
+        self.spawnable_chunk_count
+    }
+
+    #[must_use]
+    pub fn category_count(&self, category: &'static MobCategory) -> i32 {
         self.mob_category_counts.0[category.id].load(Relaxed)
-            < category.max * self.spawnable_chunk_count / MAGIC_NUMBER
     }
     pub fn can_spawn_for_category_local(
         &self,
@@ -482,9 +500,8 @@ pub fn spawn_for_chunk(
         if !spawn_state.can_spawn_for_category_local(world, category, chunk_pos) {
             continue;
         }
-        // Vanilla picks one packed position per category. Creatures only run about
-        // every 400 ticks (world.level_time), so give more pack attempts then.
-        // Monsters tick every chunk tick — fewer attempts to limit load.
+        // Vanilla: one random pack origin per category per chunk attempt.
+        // Creatures only enter the spawn list every ~400 ticks (persistent).
         let attempts = if category.id == MobCategory::CREATURE.id {
             8
         } else {
@@ -492,6 +509,13 @@ pub fn spawn_for_chunk(
         };
         for _ in 0..attempts {
             if !spawn_state.can_spawn_for_category_global(category) {
+                if pumpkin_config::development_mode() && category.id == MobCategory::CREATURE.id {
+                    tracing::debug!(
+                        "creature spawn skipped: global cap (chunks={}, count={})",
+                        spawn_state.spawnable_chunk_count(),
+                        spawn_state.category_count(category)
+                    );
+                }
                 break;
             }
             let random_pos = get_random_pos_within(world.min_y, &chunk_pos, chunk, category);
@@ -507,6 +531,14 @@ pub fn spawn_for_chunk(
                 is_thundering,
             );
             if !batch.is_empty() {
+                if pumpkin_config::development_mode() && category.id == MobCategory::CREATURE.id {
+                    tracing::info!(
+                        "spawned {} creature(s) near {:?} in chunk {:?}",
+                        batch.len(),
+                        random_pos,
+                        chunk_pos
+                    );
+                }
                 entities.extend(batch);
                 break; // one successful pack per category per chunk tick
             }

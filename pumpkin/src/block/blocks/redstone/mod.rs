@@ -61,6 +61,19 @@ pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
     }
 }
 
+/// Vanilla `DefaultRedstoneWireEvaluator.updatePowerStrength` after `setBlock(..., 2)`:
+/// for each of `pos` and its 6 neighbors, call `level.updateNeighborsAt(p, wire)`.
+///
+/// Without this, lamps / repeaters / torches only re-read power when dust is broken
+/// (which runs [`update_wire_neighbors`]) — pulses and lever flips look "stuck".
+pub async fn notify_after_wire_power_change(world: &Arc<World>, pos: &BlockPos) {
+    world.update_neighbors(pos, None).await;
+    for direction in BlockDirection::all() {
+        let neighbor_pos = pos.offset(direction.to_offset());
+        world.update_neighbors(&neighbor_pos, None).await;
+    }
+}
+
 pub async fn is_emitting_redstone_power(
     block: &Block,
     state: &BlockState,

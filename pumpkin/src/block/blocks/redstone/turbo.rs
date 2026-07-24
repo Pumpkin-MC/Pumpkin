@@ -407,8 +407,8 @@ impl RedstoneWireTurbo {
         }
         if i != j {
             wire.power = j;
-            // NOTIFY_LISTENERS: clients see power level; turbo itself walks
-            // neighbors so we must not NOTIFY_NEIGHBORS (would recurse/stack).
+            // NOTIFY_LISTENERS: clients see power level; turbo walks wire graph.
+            // Still need vanilla post-power neighbor updates for non-wire blocks.
             world
                 .set_block_state(
                     &pos,
@@ -416,6 +416,7 @@ impl RedstoneWireTurbo {
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
+            super::notify_after_wire_power_change(world, &pos).await;
         }
         wire
     }
