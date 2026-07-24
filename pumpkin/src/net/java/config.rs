@@ -28,6 +28,21 @@ use tracing::{debug, trace, warn};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
 
+/// Once-marker for "known packs already answered" (F-AUTH-05).
+///
+/// Re-sending `SKnownPacks` is nearly free for the client, but every answer
+/// costs a full synced-registry clone + dump, so only the first one may be
+/// handled. The marker also suppresses further `send_known_packs` round-trips
+/// from the resource-pack-response path, the finding's second trigger.
+///
+/// The marker lives in `JavaClient::keep_alive_id`, which carries no meaningful
+/// value before Play-state keep-alives begin: the server never sends keep-alives
+/// during Config, config-state keep-alive handling additionally requires
+/// `wait_for_keep_alive` (never set outside Play), and the first Play keep-alive
+/// unconditionally overwrites the id before any comparison. `i64::MIN` cannot
+/// collide with a real id (millisecond timestamps since the epoch).
+const KNOWN_PACKS_ANSWERED: i64 = i64::MIN;
+
 impl JavaClient {
     pub async fn handle_client_information_config(
         &self,
@@ -141,6 +156,16 @@ impl JavaClient {
                 self.id
             );
         }
+        if self.keep_alive_id.load() == KNOWN_PACKS_ANSWERED {
+            // Known packs were already answered (registries dumped, config
+            // finished); a replayed response must not start another
+            // known-packs round-trip (F-AUTH-05, second trigger).
+            debug!(
+                "Client {} re-sent a resource pack response after config finished; ignoring",
+                self.id
+            );
+            return;
+        }
         self.send_known_packs().await;
     }
 
@@ -159,6 +184,13 @@ impl JavaClient {
         _config_acknowledged: SKnownPacks,
         server: &Arc<Server>,
     ) -> Option<PacketHandlerResult> {
+        if self.keep_alive_id.load() == KNOWN_PACKS_ANSWERED {
+            // Replay of an already-answered packet; do not run the registry dump again.
+            debug!("Client {} re-sent known packs; ignoring", self.id);
+            return None;
+        }
+        self.keep_alive_id.store(KNOWN_PACKS_ANSWERED);
+
         debug!("Handling known packs");
         // let mut tags_to_send = Vec::new();
         let version = self.version.load();

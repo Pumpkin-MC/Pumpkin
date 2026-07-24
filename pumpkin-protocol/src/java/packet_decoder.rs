@@ -10,6 +10,15 @@ use crate::{
 
 // decrypt -> decompress -> raw
 
+/// Read chunk used to grow the payload buffer incrementally.
+///
+/// Applies while decoding (including inflating) a packet. The client-declared
+/// decompressed length may be as large as `MAX_PACKET_DATA_SIZE`, so it must
+/// not be reserved up front; growing in chunks bounds the allocation a lying
+/// declaration can force (F-PROT-06). The total is still hard-capped by the
+/// declared-length checks.
+const PAYLOAD_READ_CHUNK: usize = 64 * 1024;
+
 pub enum DecompressionReader<R: AsyncRead + Unpin> {
     Decompress(ZlibDecoder<BufReader<R>>),
     None(R),
@@ -168,10 +177,13 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
 
         let payload_len_hint = expected_packet_data_len.saturating_sub(packet_id_len);
         self.payload_scratch.clear();
-        self.payload_scratch.reserve(payload_len_hint);
 
-        let mut total_read = 0;
-        while total_read < payload_len_hint {
+        // Grow the scratch incrementally as bytes actually arrive instead of
+        // reserving the client-declared length up front; `payload_len_hint` is
+        // already capped at `MAX_PACKET_DATA_SIZE`, which bounds the loop.
+        while self.payload_scratch.len() < payload_len_hint {
+            let to_read = (payload_len_hint - self.payload_scratch.len()).min(PAYLOAD_READ_CHUNK);
+            self.payload_scratch.reserve(to_read);
             let bytes_read = reader
                 .read_buf(&mut self.payload_scratch)
                 .await
@@ -179,7 +191,6 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             if bytes_read == 0 {
                 break;
             }
-            total_read += bytes_read;
         }
 
         if let Some(expected_uncompressed_packet_data_len) = expected_uncompressed_packet_data_len {
@@ -493,6 +504,55 @@ mod tests {
             cap_after_p2, cap_after_p1,
             "Buffer capacity should be retained and reused without new heap allocations"
         );
+        Ok(())
+    }
+
+    /// A valid compressed packet larger than one read chunk must decode
+    /// correctly while the scratch buffer grows incrementally.
+    #[tokio::test]
+    async fn decode_large_compressed_packet_incremental_growth()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let packet_id = 9;
+        let payload = vec![0x55u8; 3 * PAYLOAD_READ_CHUNK + 17];
+
+        let packet = build_packet(packet_id, &payload, true, None, None)?;
+
+        let mut decoder = TCPNetworkDecoder::new(packet.as_slice());
+        decoder.set_compression(1000);
+
+        let raw_packet = decoder.get_raw_packet().await.map_err(|e| e.to_string())?;
+        assert_eq!(raw_packet.id, packet_id);
+        assert_eq!(raw_packet.payload.as_ref(), payload);
+        Ok(())
+    }
+
+    /// A declared decompressed length larger than what the stream actually
+    /// inflates to must fail the equality check after an early EOF.
+    #[tokio::test]
+    async fn decode_with_larger_declared_decompressed_length()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let packet_id = 10;
+        let payload = b"small";
+
+        let mut data_to_compress = Vec::new();
+        data_to_compress.write_var_int(&VarInt(packet_id))?;
+        data_to_compress.write_slice(payload)?;
+        let compressed = compress_zlib(&data_to_compress)?;
+
+        let mut buffer = Vec::new();
+        // Lie about the decompressed length.
+        buffer.write_var_int(&VarInt((data_to_compress.len() + 1_000_000) as i32))?;
+        buffer.write_slice(&compressed)?;
+
+        let mut packet = Vec::new();
+        packet.write_var_int(&VarInt(buffer.len() as i32))?;
+        packet.extend_from_slice(&buffer);
+
+        let mut decoder = TCPNetworkDecoder::new(packet.as_slice());
+        decoder.set_compression(1000);
+
+        let result = decoder.get_raw_packet().await;
+        assert!(result.is_err(), "declared-length mismatch must error");
         Ok(())
     }
 }

@@ -197,21 +197,6 @@ fn handle_interrupt() {
 }
 
 fn handle_panic(panic_info: &PanicHookInfo<'_>) {
-    // Generate a crash report.
-    let crash_report = {
-        // We capture the backtraces here, and not in the
-        // crash report, so that the backtrace doesn't show
-        // the CrashReport's `new` function.
-        let captured_backtrace = Backtrace::capture();
-        let full_backtrace = if captured_backtrace.status() == BacktraceStatus::Captured {
-            FullBacktrace::Captured
-        } else {
-            FullBacktrace::ForceCaptured(Backtrace::force_capture())
-        };
-
-        CrashReport::new(panic_info, captured_backtrace, full_backtrace)
-    };
-
     let payload = panic_info.payload();
     let payload_str = payload
         .downcast_ref::<&str>()
@@ -219,9 +204,18 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
         .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
         .unwrap_or("<unknown>");
 
+    // Building a crash report captures a backtrace, which is expensive. Only
+    // build one when it can actually be stored (the first panic overall);
+    // `try_set_crash_report` remains the authoritative gate, so a race between
+    // concurrent first panics merely builds one report too many.
+    let report_storable =
+        !SERVER_IS_STOPPING.load(Ordering::Acquire) && CRASH_REPORT.get().is_none();
+
     if is_main_thread() {
         // Main-thread panic is unrecoverable: write a crash report and exit.
-        if let Some(crash_report) = try_set_crash_report(crash_report) {
+        if report_storable
+            && let Some(crash_report) = try_set_crash_report(build_crash_report(panic_info))
+        {
             crash_report.print_to_console();
             crash_report.save_and_log();
 
@@ -253,8 +247,10 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
     // reachable unwrap into a remote kill switch.)
     //
     // Only the first worker panic saves a full crash report to disk — a
-    // repeatable panic primitive must not fill the disk with reports.
-    if let Some(report) = try_set_crash_report(crash_report) {
+    // repeatable panic primitive must not fill the disk with reports, nor burn
+    // CPU capturing a backtrace per panic; subsequent panics only get the log
+    // line below.
+    if report_storable && let Some(report) = try_set_crash_report(build_crash_report(panic_info)) {
         report.print_to_console();
         report.save_and_log();
     }
@@ -267,6 +263,20 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
             .to_pretty_console(),
         payload_str
     );
+}
+
+fn build_crash_report(panic_info: &PanicHookInfo<'_>) -> CrashReport {
+    // We capture the backtraces here, and not in the
+    // crash report, so that the backtrace doesn't show
+    // the CrashReport's `new` function.
+    let captured_backtrace = Backtrace::capture();
+    let full_backtrace = if captured_backtrace.status() == BacktraceStatus::Captured {
+        FullBacktrace::Captured
+    } else {
+        FullBacktrace::ForceCaptured(Backtrace::force_capture())
+    };
+
+    CrashReport::new(panic_info, captured_backtrace, full_backtrace)
 }
 
 fn is_main_thread() -> bool {
