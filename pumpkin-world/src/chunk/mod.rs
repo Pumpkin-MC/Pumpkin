@@ -793,8 +793,8 @@ mod tests {
     use super::{ChunkData, ChunkLight, ChunkSections, NEXT_CHUNK_INSTANCE_ID};
     use crate::chunk::palette::BlockPalette;
     use crate::tick::scheduler::ChunkTickScheduler;
-    use pumpkin_data::{Block, block_properties::has_random_ticks};
     use pumpkin_data::chunk::ChunkStatus;
+    use pumpkin_data::{Block, block_properties::has_random_ticks};
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
