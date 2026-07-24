@@ -400,8 +400,14 @@ impl World {
     /// currently in; the chunk is rewritten from scratch every unload cycle, so
     /// there is nothing stale to deduplicate.
     async fn save_entity(&self, entity: &Arc<dyn EntityBase>) {
-        let current_chunk = entity.get_entity().block_pos.load().chunk_position();
+        let base_entity = entity.get_entity();
+        if !base_entity.entity_type.saveable {
+            return;
+        }
+
+        let current_chunk = base_entity.block_pos.load().chunk_position();
         let mut nbt = NbtCompound::new();
+        base_entity.write_nbt(&mut nbt).await;
         entity.write_nbt(&mut nbt).await;
         let chunk = self.level.get_entity_chunk(current_chunk).await;
         chunk.data.lock().await.push(nbt);
@@ -3765,6 +3771,7 @@ impl World {
                         // Pos is zero since it will be read from nbt.
                         let entity =
                             from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, uuid);
+                        entity.get_entity().read_nbt_non_mut(entity_nbt).await;
                         entity.read_nbt_non_mut(entity_nbt).await;
                         entity.init_data_tracker().await;
 
