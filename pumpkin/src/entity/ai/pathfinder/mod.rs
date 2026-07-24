@@ -343,6 +343,79 @@ impl Navigator {
         None
     }
 
+    /// True when the path is much longer than the straight line to the goal —
+    /// typical of A* circling hills/water while a clear charge exists.
+    fn path_is_excessive_detour(
+        path: &Path,
+        from: Vector3<f64>,
+        destination: Vector3<f64>,
+    ) -> bool {
+        let n = path.get_node_count();
+        if n < 2 {
+            return false;
+        }
+        let mut path_len = 0.0f64;
+        for i in 0..(n - 1) {
+            let Some(a) = path.get_node_pos(i) else {
+                break;
+            };
+            let Some(b) = path.get_node_pos(i + 1) else {
+                break;
+            };
+            let dx = f64::from(b.x - a.x);
+            let dy = f64::from(b.y - a.y);
+            let dz = f64::from(b.z - a.z);
+            path_len += (dx * dx + dy * dy + dz * dz).sqrt();
+        }
+        let dx = destination.x - from.x;
+        let dy = destination.y - from.y;
+        let dz = destination.z - from.z;
+        let straight = (dx * dx + dy * dy + dz * dz).sqrt().max(0.5);
+        // > ~40% longer than straight and at least 4 blocks of waste → detour.
+        path_len > straight * 1.4 + 4.0
+    }
+
+    /// Advance past path nodes the mob is already standing on (vanilla
+    /// `followThePath` consumes the start node immediately). Also skips a
+    /// first waypoint that sits *behind* the mob relative to the path end
+    /// (common cause of golem "walk back then charge").
+    fn skip_nodes_already_reached(path: &mut Path, entity: &LivingEntity) {
+        let current_pos = entity.entity.pos.load();
+        let bbox = entity.entity.bounding_box.load();
+        let width = (bbox.max.x - bbox.min.x).max(0.1);
+        let max_waypoint = if width > 0.75 {
+            width * 0.5
+        } else {
+            0.75 - width * 0.5
+        };
+        // Never skip the final node — need at least one waypoint to walk to.
+        while path.get_next_node_index() + 1 < path.get_node_count() {
+            let Some(next) = path.get_next_node_pos() else {
+                break;
+            };
+            let nx = f64::from(next.x) + 0.5 - current_pos.x;
+            let ny = f64::from(next.y) - current_pos.y;
+            let nz = f64::from(next.z) + 0.5 - current_pos.z;
+            let near_xz = nx.abs() < max_waypoint && nz.abs() < max_waypoint;
+            if near_xz && ny.abs() < NODE_REACH_Y {
+                path.advance();
+                continue;
+            }
+            // Skip reverse first step: next node is opposite the path end direction.
+            if let Some(end) = path.get_node_pos(path.get_node_count() - 1) {
+                let ex = f64::from(end.x) + 0.5 - current_pos.x;
+                let ez = f64::from(end.z) + 0.5 - current_pos.z;
+                let end_dist_sq = ex * ex + ez * ez;
+                let dot = nx * ex + nz * ez;
+                if end_dist_sq > 2.25 && dot < 0.0 {
+                    path.advance();
+                    continue;
+                }
+            }
+            break;
+        }
+    }
+
     /// Best-effort straight walk when A* fails — keeps melee chases moving instead
     /// of freezing until the next repath luckily succeeds.
     fn direct_walk_toward(&self, entity: &LivingEntity, goal: &NavigatorGoal) {
@@ -395,8 +468,15 @@ impl Navigator {
         entity.entity.head_yaw.store(target_yaw);
         entity.entity.body_yaw.store(target_yaw);
 
+        // After this tick's turn, if still >90° off the goal, only rotate —
+        // prevents "walk away then charge" when the target is behind us.
+        let remaining_yaw = wrap_degrees(desired_yaw - target_yaw);
         let attr = entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-        entity.set_speed(goal.speed * attr);
+        if remaining_yaw.abs() > 90.0 {
+            entity.clear_speed();
+        } else {
+            entity.set_speed(goal.speed * attr);
+        }
 
         // Jump if destination is above us and we're close horizontally.
         let dy = goal.destination.y - current_pos.y;
@@ -456,6 +536,21 @@ impl Navigator {
             self.last_node_index = 0;
             self.path_start_pos = Some(entity.entity.pos.load());
             self.repath_cooldown = 10; // repath a bit faster during chase
+
+            // Drop long detours: iron golems / melee should charge the target, not
+            // walk behind it then turn around (vanilla MoveControl aims straight
+            // when createPath is short; long A* loops look like reverse chase).
+            if let Some(path) = self.current_path.as_ref()
+                && Self::path_is_excessive_detour(path, entity.entity.pos.load(), goal.destination)
+            {
+                self.current_path = None;
+            }
+
+            // Skip start node(s) already under our feet so we don't first step
+            // "backward" onto the path origin block.
+            if let Some(path) = self.current_path.as_mut() {
+                Self::skip_nodes_already_reached(path, entity);
+            }
 
             // A* failed: keep the goal and walk straight toward the destination
             // so melee mobs (vindicator/golem/zombie) don't freeze in place.
@@ -603,9 +698,15 @@ impl Navigator {
                 entity.entity.head_yaw.store(target_yaw);
                 entity.entity.body_yaw.store(target_yaw);
 
-                // Vanilla MoveControl/Navigator: setSpeed(modifier * MOVEMENT_SPEED)
+                // Vanilla MoveControl/Navigator: setSpeed(modifier * MOVEMENT_SPEED).
+                // No forward input while still facing >90° off after this turn.
+                let remaining_yaw = wrap_degrees(desired_yaw - target_yaw);
                 let attr = entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-                entity.set_speed(goal.speed * attr);
+                if remaining_yaw.abs() > 90.0 {
+                    entity.clear_speed();
+                } else {
+                    entity.set_speed(goal.speed * attr);
+                }
 
                 let jump_distance = 1.0f64.max(width);
 

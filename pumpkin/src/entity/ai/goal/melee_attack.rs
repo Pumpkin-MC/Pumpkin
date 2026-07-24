@@ -48,15 +48,11 @@ impl MeleeAttackGoal {
         target.get_entity().is_alive()
     }
 
-    /// Ground block center near the target — better path endpoints than mid-body Y.
+    /// Vanilla `Navigation.moveTo(Entity)` uses the living target's feet position
+    /// (not a snapped block center). Snapping to block centers made A* prefer
+    /// side/back approaches before charging.
     fn path_destination(target: &dyn EntityBase) -> Vector3<f64> {
-        let pos = target.get_entity().pos.load();
-        let block = pos.to_block_pos();
-        Vector3::new(
-            f64::from(block.0.x) + 0.5,
-            f64::from(block.0.y),
-            f64::from(block.0.z) + 0.5,
-        )
+        target.get_entity().pos.load()
     }
 
     /// Prefer dry ground near the target. Iron golems (and any mob with water

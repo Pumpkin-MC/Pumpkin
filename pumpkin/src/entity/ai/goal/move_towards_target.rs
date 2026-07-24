@@ -53,9 +53,23 @@ impl Goal for MoveTowardsTargetGoal {
                 self.wanted = None;
                 return false;
             }
-            // Approximate DefaultRandomPos.getPosTowards: step partway toward target.
-            let t = 0.35 + mob.get_random().random_range(0.0..0.4);
-            let wanted = Vector3::new(me.x + (them.x - me.x) * t, me.y, me.z + (them.z - me.z) * t);
+            // Vanilla: DefaultRandomPos.getPosTowards(mob, 16, 7, target.pos, π/2)
+            // — random walkable point in a ±90° cone toward the target, range 16.
+            // Approximate with a forward step along the target bearing (never
+            // sideways/back): 8–16 blocks or 85% of remaining distance.
+            let dx = them.x - me.x;
+            let dz = them.z - me.z;
+            let horiz = (dx * dx + dz * dz).sqrt();
+            if horiz < 0.5 {
+                self.wanted = None;
+                return false;
+            }
+            let step = (8.0 + mob.get_random().random_range(0.0..8.0)).min(horiz * 0.85);
+            let wanted = Vector3::new(
+                me.x + dx / horiz * step,
+                them.y.clamp(me.y - 7.0, me.y + 7.0),
+                me.z + dz / horiz * step,
+            );
             self.wanted = Some(wanted);
             true
         })
