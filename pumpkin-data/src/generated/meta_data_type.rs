@@ -386,14 +386,14 @@ impl MetaDataType {
         v26_2: -1i32,
     };
     pub const OPTIONAL_LIVING_ENTITY_REFERENCE: MetaDataType = MetaDataType {
-        v1_21: -1i32,
-        v1_21_2: -1i32,
-        v1_21_4: -1i32,
-        v1_21_5: -1i32,
-        v1_21_6: -1i32,
-        v1_21_7: -1i32,
-        v1_21_9: -1i32,
-        v1_21_11: -1i32,
+        v1_21: 20i32,
+        v1_21_2: 20i32,
+        v1_21_4: 20i32,
+        v1_21_5: 20i32,
+        v1_21_6: 20i32,
+        v1_21_7: 20i32,
+        v1_21_9: 19i32,
+        v1_21_11: 19i32,
         v26_1: 13i32,
         v26_2: 13i32,
     };

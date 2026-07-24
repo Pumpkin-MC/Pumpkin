@@ -71,7 +71,7 @@ impl FireworkRocketEntity {
         rocket.entity.entity.send_meta_data(
             &[Metadata::new(
                 TrackedData::ATTACHED_TO_TARGET,
-                MetaDataType::OPTIONAL_INT,
+                MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
                 OptionalInt(Some(shooter.entity_id)),
             )],
             None,
