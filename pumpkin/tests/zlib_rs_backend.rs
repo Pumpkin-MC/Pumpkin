@@ -1,4 +1,4 @@
-//! Smoke / correctness tests for the optional `zlib-rs` flate2 backend.
+//! Smoke / correctness tests for the optional `zlib-rs` `flate2` backend.
 //!
 //! Run with:
 //! ```text

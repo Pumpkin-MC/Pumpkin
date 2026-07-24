@@ -4,7 +4,7 @@
 //! backend is selected at **compile time** via Cargo features:
 //!
 //! - `mimalloc` → global allocator = mimalloc
-//! - `zlib-rs`  → flate2 uses zlib-rs (else pure-Rust miniz_oxide)
+//! - `zlib-rs`  → flate2 uses zlib-rs (else pure-Rust `miniz_oxide`)
 //!
 //! Default config keeps vanilla-friendly defaults: system malloc + rust zlib.
 
@@ -22,7 +22,7 @@ pub struct PerformanceConfig {
 
     /// DEFLATE / zlib implementation used by flate2 (network + some storage paths).
     ///
-    /// - `rust` — pure-Rust miniz_oxide (`flate2` `rust_backend`, default)
+    /// - `rust` — pure-Rust `miniz_oxide` (`flate2` `rust_backend`, default)
     /// - `zlib_rs` — pure-Rust zlib-rs (`flate2` `zlib-rs`); requires
     ///   `cargo build --features zlib-rs`
     pub compression_backend: CompressionBackend,
@@ -64,10 +64,10 @@ impl AllocatorBackend {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CompressionBackend {
-    /// Pure-Rust miniz_oxide (`flate2` feature `rust_backend`).
+    /// Pure-Rust `miniz_oxide` (`flate2` feature `rust_backend`).
     #[default]
     Rust,
-    /// Pure-Rust zlib-rs (`flate2` feature `zlib-rs`); usually faster than miniz_oxide,
+    /// Pure-Rust zlib-rs (`flate2` feature `zlib-rs`); usually faster than `miniz_oxide`,
     /// no C toolchain required (unlike zlib-ng).
     ZlibRs,
 }

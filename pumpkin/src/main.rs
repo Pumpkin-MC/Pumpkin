@@ -280,7 +280,7 @@ fn is_main_thread() -> bool {
 
 /// Log which performance backends are active and warn on config/feature mismatch.
 ///
-/// Allocator and flate2 backend are compile-time; `pumpkin.toml` records the
+/// Allocator and `flate2` backend are compile-time; `pumpkin.toml` records the
 /// intended choice so operators know what to rebuild with.
 fn log_performance_backends(perf: &PerformanceConfig) {
     let built_mimalloc = cfg!(feature = "mimalloc");
