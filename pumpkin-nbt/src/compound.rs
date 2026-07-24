@@ -43,7 +43,7 @@ impl NbtCompound {
         }
     }
 
-    pub fn skip_content<R: NbtReadHelper>(reader: &mut R) -> Result<(), Error> {
+    pub fn skip_content<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<(), Error> {
         loop {
             let tag_id = match reader.get_u8() {
                 Ok(id) => id,
@@ -64,7 +64,7 @@ impl NbtCompound {
         Ok(())
     }
 
-    pub fn deserialize_content<R: NbtReadHelper>(reader: &mut R) -> Result<Self, Error> {
+    pub fn deserialize_content<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<Self, Error> {
         let mut compound = Self::new();
 
         loop {

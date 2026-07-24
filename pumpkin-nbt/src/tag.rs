@@ -175,12 +175,12 @@ impl NbtTag {
         Ok(())
     }
 
-    pub fn deserialize<R: NbtReadHelper>(reader: &mut R) -> Result<Self, Error> {
+    pub fn deserialize<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<Self, Error> {
         let tag_id = reader.get_u8()?;
         Self::deserialize_data(reader, tag_id)
     }
 
-    pub fn skip_data<R: NbtReadHelper>(reader: &mut R, tag_id: u8) -> Result<(), Error> {
+    pub fn skip_data<'a, R: NbtReadHelper<'a>>(reader: &mut R, tag_id: u8) -> Result<(), Error> {
         match tag_id {
             END_ID => Ok(()),
             BYTE_ID => reader.skip_i8(),
@@ -239,7 +239,10 @@ impl NbtTag {
         }
     }
 
-    pub fn deserialize_data<R: NbtReadHelper>(reader: &mut R, tag_id: u8) -> Result<Self, Error> {
+    pub fn deserialize_data<'a, R: NbtReadHelper<'a>>(
+        reader: &mut R,
+        tag_id: u8,
+    ) -> Result<Self, Error> {
         match tag_id {
             END_ID => Ok(Self::End),
             BYTE_ID => {
@@ -283,7 +286,7 @@ impl NbtTag {
                 }
                 Ok(Self::ByteArray(byte_array.into()))
             }
-            STRING_ID => Ok(Self::String(reader.get_string()?.into())),
+            STRING_ID => Ok(Self::String(reader.get_string()?.into_owned().into())),
             LIST_ID => {
                 let tag_type_id = reader.get_u8()?;
                 let len = reader.get_i32()?;
