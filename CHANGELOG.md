@@ -42,9 +42,26 @@ Replaced unsafe panic-prone patterns with graceful error handling across the cod
 - `net/bedrock/connection.rs` — `.unwrap()` on `UNIX_EPOCH.elapsed()` replaced with `.unwrap_or_default()`.
 - `server/connection_cache.rs` — `.unwrap()` on VarInt encode replaced with `let _ =` (infallible); `.expect()` on JSON serialization replaced with `.unwrap_or_else()`.
 
+**pumpkin (world/server/plugin — Phase 2B):**
+- `world/portal/nether.rs` — 2 `.unwrap()` calls on `Option` replaced with `is_none_or()` combinator.
+- `world/natural_spawner.rs` — 8 `.unwrap()` calls: mutex locks replaced with `.unwrap_or_else(PoisonError::into_inner)`; entity type lookups use `let...else` with `continue`/`break`.
+- `world/mod.rs` — 18 `.unwrap()` calls: heightmap mutex locks use `PoisonError::into_inner`; `partial_cmp` uses `unwrap_or(Ordering::Equal)`; `server.upgrade()` uses `expect()`; NBT serialization uses `expect()`; `max_players` conversion uses `.min(i32::MAX as u32)`.
+- `world/loot.rs` — 3 `.unwrap()` calls: registry key lookup uses `let...else` returning empty vec; slot pop uses `let...else` with `break`.
+- `world/chunker.rs` — 2 `.unwrap()` calls: `server.upgrade()` uses `let...else` with default view distance; `NonZeroU8::new(2)` uses `expect()`.
+- `server/mod.rs` — `fs::copy` `.unwrap()` replaced with `if let Err` + warning log.
+- `server/key_store.rs` — 2 `.expect()` calls kept (startup-critical RSA key generation).
+- `server/scheduler.rs` — 1 `.unwrap()` on `BinaryHeap::pop()` guarded by `peek()` check, kept.
+
 **pumpkin-plugin-api:**
 - 8 `.unwrap()` calls on `Mutex::lock()` replaced with `.unwrap_or_else(|e| e.into_inner())` to handle poisoned mutexes gracefully.
 - `forms.rs` — 5 `.unwrap()` calls on `serde_json::Value` accessor methods replaced with `if let Some(val)` pattern matching.
+
+**pumpkin-plugin WASM loaders (Phase 2B):**
+- `text.rs` — 5 `.expect()` calls improved with descriptive messages ("invalid text-component resource handle", "text-component resource type mismatch").
+- `server.rs` — 3 `.expect("failed to add ... resource")` replaced with `?` operator propagation (returns `wasmtime::Result`).
+- `player.rs` — 5 `.unwrap()` calls in `DowncastResourceExt` replaced with `.expect()` with descriptive messages; 7 `.expect("server not available")` replaced with `.ok_or_else(|| wasmtime::Error::msg(...))?.`
+- `item_stack.rs` — `.unwrap()` on enchantment lookup replaced with `.expect()`; `.unwrap()` on serialization replaced with `.expect()`.
+- `context.rs` — `fs::create_dir_all` `.unwrap()` replaced with `if let Err` + warning log.
 
 ### Fixed
 - Mutex poisoning in plugin API no longer panics the entire WASM runtime when a plugin handler panics.
@@ -53,6 +70,11 @@ Replaced unsafe panic-prone patterns with graceful error handling across the cod
 - Game profile missing during config acknowledgement no longer panics; the player is kicked with a clear message.
 - Block entity downcast failures in command block / jigsaw block handlers no longer crash; they log a warning and return early.
 - Plugin API `FormResponse::parse` no longer uses `.unwrap()` after type checks; uses idiomatic `if let Some()` patterns.
+- Nether portal position search no longer panics on `None` unwrap; uses `is_none_or()` combinator.
+- Natural spawner entity type lookup no longer panics on unknown registry entries; skips spawning gracefully.
+- World heightmap access no longer panics on poisoned mutexes; recovers gracefully.
+- Plugin WASM resource table operations now propagate errors via `wasmtime::Result` instead of panicking.
+- Plugin data folder creation no longer panics on filesystem errors; logs a warning instead.
 
 ### Technical Notes
 - All changes pass `cargo clippy --all-targets --workspace -- -D warnings` with zero new warnings.

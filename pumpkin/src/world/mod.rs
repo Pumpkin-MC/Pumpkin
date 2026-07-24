@@ -269,7 +269,7 @@ impl World {
                 chunk
                     .heightmap
                     .lock()
-                    .unwrap()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .get(height_map, x, z, self.min_y)
             })
             .await
@@ -640,11 +640,12 @@ impl World {
             );
             recipient.client.enqueue_packet(packet).await;
 
-            recipient
-                .signature_cache
-                .lock()
-                .await
-                .add_seen_signature(&chat_message.signature.clone().unwrap()); // Unwrap is safe because we check for None in validate_chat_message
+            recipient.signature_cache.lock().await.add_seen_signature(
+                &chat_message
+                    .signature
+                    .clone()
+                    .expect("signature verified in validate_chat_message"),
+            ); // Unwrap is safe because we check for None in validate_chat_message
 
             if recipient.gameprofile.id != sender.gameprofile.id {
                 // Sender may update recipient on signatures recipient hasn't seen
@@ -1006,7 +1007,11 @@ impl World {
             block_entity_future
         );
 
-        self.level.chunk_loading.lock().unwrap().send_change();
+        self.level
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .send_change();
 
         if let Some(ref fight_mutex) = self.dragon_fight {
             dragon_fight::DragonFight::tick(fight_mutex, self).await;
@@ -1635,12 +1640,16 @@ impl World {
             let delta = Vector3::new(rand_value & 15, rand_value >> 16 & 15, rand_value >> 8 & 15);
             let random_pos = Vector3::new(
                 chunk_pos.x << 4,
-                chunk.heightmap.lock().unwrap().get(
-                    MotionBlocking,
-                    chunk_pos.x << 4,
-                    chunk_pos.y << 4,
-                    self.min_y,
-                ),
+                chunk
+                    .heightmap
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get(
+                        MotionBlocking,
+                        chunk_pos.x << 4,
+                        chunk_pos.y << 4,
+                        self.min_y,
+                    ),
                 chunk_pos.y << 4,
             )
             .add(&delta);
@@ -1734,12 +1743,16 @@ impl World {
 
         self.level
             .read_chunk_sync(&chunk_pos, |chunk| {
-                let height = chunk.heightmap.lock().unwrap().get(
-                    ChunkHeightmapType::WorldSurface,
-                    position.x,
-                    position.y,
-                    self.dimension.min_y,
-                );
+                let height = chunk
+                    .heightmap
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get(
+                        ChunkHeightmapType::WorldSurface,
+                        position.x,
+                        position.y,
+                        self.dimension.min_y,
+                    );
 
                 if height >= self.dimension.min_y {
                     return height;
@@ -1767,7 +1780,7 @@ impl World {
                 chunk
                     .heightmap
                     .lock()
-                    .unwrap()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .get(height_map, x, z, self.min_y)
             })
             .unwrap_or(self.min_y)
@@ -2417,7 +2430,7 @@ impl World {
                 config.skin_parts,
             );
             meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
-                .unwrap();
+                .expect("writing metadata to Vec is infallible");
         };
         java_meta_buf.put_u8(255);
 
@@ -2546,13 +2559,14 @@ impl World {
                 entity_id,
                 base_config.hardcore,
                 dimensions,
-                server
-                    .advanced_config
-                    .networking
-                    .java
-                    .max_players
-                    .try_into()
-                    .unwrap(),
+                VarInt(
+                    server
+                        .advanced_config
+                        .networking
+                        .java
+                        .max_players
+                        .min(i32::MAX as u32) as i32,
+                ),
                 server
                     .advanced_config
                     .networking
@@ -2863,7 +2877,7 @@ impl World {
                 config.skin_parts,
             );
             meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
-                .unwrap();
+                .expect("writing metadata to Vec is infallible");
         };
         java_meta_buf.put_u8(255);
 
@@ -3011,7 +3025,8 @@ impl World {
                         MetaDataType::BYTE,
                         config.skin_parts,
                     );
-                    meta.write(&mut buf, &client.version.load()).unwrap();
+                    meta.write(&mut buf, &client.version.load())
+                        .expect("writing metadata to Vec is infallible");
                 };
                 drop(config);
                 // END
@@ -3883,7 +3898,7 @@ impl World {
                     .load()
                     .squared_distance_to_vec(&pos)
                     .partial_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
-                    .unwrap()
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .cloned()
     }
@@ -3930,7 +3945,7 @@ impl World {
                     .load()
                     .squared_distance_to_vec(&pos)
                     .partial_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(&pos))
-                    .unwrap()
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|p| p.1.clone())
     }
@@ -4096,7 +4111,7 @@ impl World {
                 let event = self
                     .server
                     .upgrade()
-                    .unwrap()
+                    .expect("world holds strong reference to server")
                     .plugin_manager
                     .fire(event)
                     .await;
@@ -4493,7 +4508,7 @@ impl World {
         let event = self
             .server
             .upgrade()
-            .unwrap()
+            .expect("world holds strong reference to server")
             .plugin_manager
             .fire::<BlockBreakEvent>(event)
             .await;
@@ -4993,7 +5008,7 @@ impl World {
                 chunk
                     .pending_block_entities
                     .lock()
-                    .unwrap()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .remove(block_pos)
             })
             .flatten()?;
@@ -5012,7 +5027,7 @@ impl World {
 
         if let Some(nbt) = &block_entity_nbt {
             let mut bytes = Vec::new();
-            to_bytes_unnamed(nbt, &mut bytes).unwrap();
+            to_bytes_unnamed(nbt, &mut bytes).expect("serialization to Vec is infallible");
             self.broadcast_to_chunk(
                 chunk_pos,
                 &CBlockEntityData::new(
@@ -5038,7 +5053,7 @@ impl World {
                 chunk
                     .pending_block_entities
                     .lock()
-                    .unwrap()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(block_pos, nbt.clone());
                 chunk.mark_dirty(true);
             });
@@ -5069,7 +5084,7 @@ impl World {
 
         if let Some(nbt) = &block_entity_nbt {
             let mut bytes = Vec::new();
-            to_bytes_unnamed(nbt, &mut bytes).unwrap();
+            to_bytes_unnamed(nbt, &mut bytes).expect("serialization to Vec is infallible");
             self.broadcast_to_chunk(
                 chunk_pos,
                 &CBlockEntityData::new(

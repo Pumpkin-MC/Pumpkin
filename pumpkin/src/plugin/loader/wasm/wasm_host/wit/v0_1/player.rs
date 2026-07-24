@@ -508,32 +508,25 @@ impl DowncastResourceExt<PlayerResource> for Resource<Player> {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
-            .unwrap()
+            .expect("invalid player resource handle")
             .downcast_ref::<PlayerResource>()
-            .ok_or("resource type mismatch")
-            .map_err(wasmtime::Error::msg)
-            .unwrap()
+            .expect("player resource type mismatch")
     }
 
     fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut PlayerResource {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
-            .unwrap()
+            .expect("invalid player resource handle")
             .downcast_mut::<PlayerResource>()
-            .ok_or("resource type mismatch")
-            .map_err(wasmtime::Error::msg)
-            .unwrap()
+            .expect("player resource type mismatch")
     }
 
     fn consume(self, state: &mut PluginHostState) -> PlayerResource {
         state
             .resource_table
             .delete::<PlayerResource>(Resource::new_own(self.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
-            .unwrap()
+            .expect("invalid player resource handle")
     }
 }
 
@@ -739,7 +732,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         level: pumpkin::plugin::permission::PermissionLevel,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect("server not available");
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("server not available"))?;
         let level = from_wit_permission_level(level);
         let command_dispatcher = server.command_dispatcher.read().await;
         player
@@ -755,7 +751,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         value: bool,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect("server not available");
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("server not available"))?;
 
         let mut perm_manager = server.permission_manager.write().await;
         let attachment = perm_manager.get_attachment(player.gameprofile.id);
@@ -772,7 +771,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         node: String,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect("server not available");
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("server not available"))?;
 
         let mut perm_manager = server.permission_manager.write().await;
         let attachment = perm_manager.get_attachment(player.gameprofile.id);
@@ -789,7 +791,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         node: String,
     ) -> wasmtime::Result<Option<bool>> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect("server not available");
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("server not available"))?;
 
         let mut perm_manager = server.permission_manager.write().await;
         let attachment = perm_manager.get_attachment(player.gameprofile.id);
@@ -804,7 +809,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         node: String,
     ) -> wasmtime::Result<bool> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect("server not available");
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("server not available"))?;
         Ok(player.has_permission(server, &node).await)
     }
 
@@ -1039,7 +1047,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         reason: Option<Resource<pumpkin::plugin::text::TextComponent>>,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect("server not available");
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("server not available"))?;
         let reason = reason.map(|r| text_component_from_resource(self, &r));
         player.ban(server, reason).await;
         Ok(())
@@ -1051,7 +1062,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         reason: Option<Resource<pumpkin::plugin::text::TextComponent>>,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let server = self.server.as_ref().expect("server not available");
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("server not available"))?;
         let reason = reason.map(|r| text_component_from_resource(self, &r));
         player.ban_ip(server, reason).await;
         Ok(())

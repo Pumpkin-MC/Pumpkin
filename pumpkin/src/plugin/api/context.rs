@@ -81,8 +81,11 @@ impl Context {
     #[must_use]
     pub fn get_data_folder(&self) -> PathBuf {
         let path = Path::new("plugins").join(&self.metadata.name);
-        if !path.exists() {
-            fs::create_dir_all(&path).unwrap();
+        if let Err(e) = fs::create_dir_all(&path) {
+            tracing::warn!(
+                "Failed to create plugin data folder {}: {e}",
+                path.display()
+            );
         }
         path
     }

@@ -184,7 +184,9 @@ impl Server {
             let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
             if dat_path.exists() {
                 let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
-                fs::copy(dat_path, backup_path).unwrap();
+                if let Err(e) = fs::copy(dat_path, backup_path) {
+                    tracing::warn!("Failed to back up level.dat: {e}");
+                }
             }
         }
         let level_info = level_info.unwrap_or_else(|err| {

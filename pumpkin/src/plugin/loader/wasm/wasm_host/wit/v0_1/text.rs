@@ -52,25 +52,25 @@ impl DowncastResourceExt<TextComponentResource> for wasmtime::component::Resourc
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect("invalid handle")
+            .expect("invalid text-component resource handle")
             .downcast_ref()
-            .expect("type mismatch")
+            .expect("text-component resource type mismatch")
     }
 
     fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut TextComponentResource {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect("invalid handle")
+            .expect("invalid text-component resource handle")
             .downcast_mut()
-            .expect("type mismatch")
+            .expect("text-component resource type mismatch")
     }
 
     fn consume(self, state: &mut PluginHostState) -> TextComponentResource {
         state
             .resource_table
             .delete(wasmtime::component::Resource::new_own(self.rep()))
-            .expect("invalid handle")
+            .expect("invalid text-component resource handle")
     }
 }
 

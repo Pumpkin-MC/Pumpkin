@@ -110,14 +110,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
-        Ok(server
+        server
             .get_all_players()
             .into_iter()
-            .map(|player| {
-                self.add_player(player)
-                    .expect("failed to add player resource")
-            })
-            .collect())
+            .map(|player| self.add_player(player))
+            .collect::<wasmtime::Result<Vec<_>>>()
     }
 
     async fn get_player_by_name(
@@ -163,15 +160,12 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
-        Ok(server
+        server
             .worlds
             .load()
             .iter()
-            .map(|world| {
-                self.add_world(world.clone())
-                    .expect("failed to add world resource")
-            })
-            .collect())
+            .map(|world| self.add_world(world.clone()))
+            .collect::<wasmtime::Result<Vec<_>>>()
     }
 
     async fn get_world_by_name(
@@ -184,15 +178,13 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
-        Ok(server
+        server
             .worlds
             .load()
             .iter()
             .find(|world| world.dimension.minecraft_name == name)
-            .map(|world| {
-                self.add_world(world.clone())
-                    .expect("failed to add world resource")
-            }))
+            .map(|world| self.add_world(world.clone()))
+            .transpose()
     }
 
     async fn create_world(
