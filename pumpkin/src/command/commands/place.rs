@@ -678,6 +678,10 @@ fn apply_delta(
     height: i32,
     placer: &mut WorldBlockPlacer<'_>,
 ) {
+    // The synthetic chunk is seeded with terrain so structure pieces can carve
+    // against it. Applying the delta therefore intentionally propagates air
+    // changes too, which can replace real terrain where a piece carved that
+    // synthetic stone.
     let mut idx = 0usize;
     for x in 0..CHUNK_DIM {
         for y in min_y..min_y + height {
