@@ -28,8 +28,13 @@ const MAX_METADATA_LIST_LEN: usize = 1024;
 fn is_metadata_plausible(metadata: &PluginMetadata) -> bool {
     let text_plausible =
         |text: &String| text.len() <= MAX_METADATA_TEXT_LEN && text.len() <= text.capacity();
-    let list_plausible =
-        |list: &Vec<String>| list.len() <= MAX_METADATA_LIST_LEN && list.len() <= list.capacity();
+    // The inner strings must be checked too: a list header can look sane
+    // while its elements are garbage, and those elements are cloned as well.
+    let list_plausible = |list: &Vec<String>| {
+        list.len() <= MAX_METADATA_LIST_LEN
+            && list.len() <= list.capacity()
+            && list.iter().all(text_plausible)
+    };
 
     !metadata.name.is_empty()
         && text_plausible(&metadata.name)
@@ -114,5 +119,63 @@ impl PluginLoader for NativePluginLoader {
     /// Windows specific issue: Windows locks DLLs, so we must indicate they cannot be unloaded.
     fn can_unload(&self) -> bool {
         !cfg!(target_os = "windows")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_METADATA_LIST_LEN, MAX_METADATA_TEXT_LEN, is_metadata_plausible};
+    use crate::plugin::PluginMetadata;
+
+    fn valid() -> PluginMetadata {
+        PluginMetadata {
+            name: "example".to_string(),
+            version: "1.0.0".to_string(),
+            authors: vec!["someone".to_string()],
+            description: "an example plugin".to_string(),
+            dependencies: Vec::new(),
+            permissions: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn accepts_normal_metadata() {
+        assert!(is_metadata_plausible(&valid()));
+    }
+
+    #[test]
+    fn rejects_empty_name() {
+        let mut metadata = valid();
+        metadata.name = String::new();
+        assert!(!is_metadata_plausible(&metadata));
+    }
+
+    #[test]
+    fn rejects_oversized_text_field() {
+        let mut metadata = valid();
+        metadata.description = "x".repeat(MAX_METADATA_TEXT_LEN + 1);
+        assert!(!is_metadata_plausible(&metadata));
+    }
+
+    #[test]
+    fn rejects_oversized_list() {
+        let mut metadata = valid();
+        metadata.authors = vec![String::new(); MAX_METADATA_LIST_LEN + 1];
+        assert!(!is_metadata_plausible(&metadata));
+    }
+
+    #[test]
+    fn rejects_oversized_string_inside_a_list() {
+        let mut metadata = valid();
+        metadata.authors = vec!["y".repeat(MAX_METADATA_TEXT_LEN + 1)];
+        assert!(!is_metadata_plausible(&metadata));
+    }
+
+    #[test]
+    fn accepts_field_at_the_size_limit() {
+        let mut metadata = valid();
+        metadata.description = "x".repeat(MAX_METADATA_TEXT_LEN);
+        metadata.permissions = vec!["z".repeat(MAX_METADATA_TEXT_LEN); 2];
+        assert!(is_metadata_plausible(&metadata));
     }
 }
