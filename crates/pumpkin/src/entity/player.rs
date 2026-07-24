@@ -35,9 +35,7 @@ use advancement::PlayerAdvancement;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::{
-    AttributeModifiersImpl, EnchantmentsImpl, GliderImpl, Operation,
-};
+use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -589,22 +587,6 @@ struct SkinTexture {
 struct SkinMetadata {
     #[serde(default)]
     model: Option<String>,
-}
-
-fn can_glide_using(stack: &ItemStack, slot: &EquipmentSlot) -> bool {
-    if stack.get_data_component::<GliderImpl>().is_none() {
-        return false;
-    }
-
-    let Some(equippable) = stack.get_data_component::<EquippableImpl>() else {
-        return false;
-    };
-    let next_damage_will_break = stack.is_damageable()
-        && stack
-            .get_max_damage()
-            .is_some_and(|max_damage| stack.get_damage() >= max_damage - 1);
-
-    equippable.slot == slot && !next_damage_will_break
 }
 
 impl Player {
@@ -1774,11 +1756,12 @@ impl Player {
         abilities.flying
     }
 
-    async fn has_usable_glider(&self) -> bool {
+    pub(crate) async fn usable_glider_slots(&self) -> Vec<EquipmentSlot> {
+        let mut slots = Vec::new();
         let main_hand = self.inventory.held_item();
         let main_hand_stack = main_hand.lock().await;
-        if can_glide_using(&main_hand_stack, &EquipmentSlot::MAIN_HAND) {
-            return true;
+        if LivingEntity::can_glide_using(&main_hand_stack, &EquipmentSlot::MAIN_HAND) {
+            slots.push(EquipmentSlot::MAIN_HAND);
         }
         drop(main_hand_stack);
 
@@ -1793,12 +1776,16 @@ impl Player {
 
         for (slot, stack) in equipped_items {
             let stack = stack.lock().await;
-            if can_glide_using(&stack, &slot) {
-                return true;
+            if LivingEntity::can_glide_using(&stack, &slot) && !slots.contains(&slot) {
+                slots.push(slot);
             }
         }
 
-        false
+        slots
+    }
+
+    async fn has_usable_glider(&self) -> bool {
+        !self.usable_glider_slots().await.is_empty()
     }
 
     pub async fn try_to_start_fall_flying(&self) -> bool {
@@ -1807,6 +1794,7 @@ impl Player {
             || entity.on_ground.load(Ordering::Relaxed)
             || entity.touching_water.load(Ordering::Relaxed)
             || entity.has_vehicle().await
+            || self.is_flying().await
             || self
                 .living_entity
                 .has_effect(&StatusEffect::LEVITATION)
@@ -1821,11 +1809,7 @@ impl Player {
     }
 
     pub async fn stop_fall_flying(&self) {
-        let entity = self.get_entity();
-        if !entity.is_fall_flying() {
-            entity.set_fall_flying(true).await;
-        }
-        entity.set_fall_flying(false).await;
+        self.living_entity.stop_fall_flying().await;
     }
 
     fn is_sleeping(&self) -> bool {
@@ -5830,15 +5814,18 @@ mod tests {
     fn elytra_can_glide_from_its_equipment_slot() {
         let stack = ItemStack::new(1, &Item::ELYTRA);
 
-        assert!(can_glide_using(&stack, &EquipmentSlot::CHEST));
-        assert!(!can_glide_using(&stack, &EquipmentSlot::HEAD));
+        assert!(LivingEntity::can_glide_using(&stack, &EquipmentSlot::CHEST));
+        assert!(!LivingEntity::can_glide_using(&stack, &EquipmentSlot::HEAD));
     }
 
     #[test]
     fn items_without_the_glider_component_cannot_glide() {
         let stack = ItemStack::new(1, &Item::DIAMOND_CHESTPLATE);
 
-        assert!(!can_glide_using(&stack, &EquipmentSlot::CHEST));
+        assert!(!LivingEntity::can_glide_using(
+            &stack,
+            &EquipmentSlot::CHEST
+        ));
     }
 
     #[test]
@@ -5847,9 +5834,12 @@ mod tests {
         let max_damage = stack.get_max_damage().unwrap();
 
         stack.set_damage(max_damage - 2);
-        assert!(can_glide_using(&stack, &EquipmentSlot::CHEST));
+        assert!(LivingEntity::can_glide_using(&stack, &EquipmentSlot::CHEST));
 
         stack.set_damage(max_damage - 1);
-        assert!(!can_glide_using(&stack, &EquipmentSlot::CHEST));
+        assert!(!LivingEntity::can_glide_using(
+            &stack,
+            &EquipmentSlot::CHEST
+        ));
     }
 }

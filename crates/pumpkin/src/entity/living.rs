@@ -15,7 +15,7 @@ use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
-    AtomicBool, AtomicU8,
+    AtomicBool, AtomicU8, AtomicU32,
     Ordering::{Relaxed, SeqCst},
 };
 use std::{collections::HashMap, sync::atomic::AtomicI32};
@@ -41,7 +41,7 @@ use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
-    EquipmentSlot, EquippableImpl, FoodImpl,
+    EquipmentSlot, EquippableImpl, FoodImpl, GliderImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -89,6 +89,8 @@ pub struct LivingEntity {
     pub dead: AtomicBool,
     /// The distance the entity has been falling.
     pub fall_distance: AtomicCell<f32>,
+    /// Number of consecutive ticks spent fall flying.
+    pub fall_fly_ticks: AtomicU32,
     pub active_effects: Mutex<HashMap<&'static StatusEffect, Effect>>,
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
     pub equipment_drop_chances: Arc<Mutex<HashMap<EquipmentSlot, f32>>>,
@@ -166,6 +168,7 @@ impl LivingEntity {
             last_damage_taken: AtomicCell::new(0.0),
             absorption: AtomicCell::new(0.0),
             fall_distance: AtomicCell::new(0.0),
+            fall_fly_ticks: AtomicU32::new(0),
             death_time: AtomicU8::new(0),
             dead: AtomicBool::new(false),
             item_use_time: AtomicI32::new(0),
@@ -847,6 +850,10 @@ impl LivingEntity {
             self.jumping_cooldown.store(0, SeqCst);
         }
 
+        if self.entity.is_fall_flying() {
+            self.update_fall_flying(caller).await;
+        }
+
         if self.has_effect(&StatusEffect::SLOW_FALLING).await
             || self.has_effect(&StatusEffect::LEVITATION).await
         {
@@ -862,10 +869,16 @@ impl LivingEntity {
             && self.entity.entity_type != &EntityType::STRIDER
         {
             self.travel_in_fluid(caller, touching_water).await;
+        } else if self.entity.is_fall_flying() {
+            self.travel_fall_flying(caller).await;
         } else {
-            // TODO: Gliding
-
             self.travel_in_air(caller).await;
+        }
+
+        if self.entity.is_fall_flying() {
+            self.fall_fly_ticks.fetch_add(1, Relaxed);
+        } else {
+            self.fall_fly_ticks.store(0, Relaxed);
         }
 
         // TODO: Apply Soul Speed boot durability when tick_block_underneath is implemented.
@@ -957,6 +970,201 @@ impl LivingEntity {
         });
 
         self.entity.velocity.store(velo);
+    }
+
+    async fn travel_fall_flying<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
+        if self.climbing.load(Relaxed) {
+            self.travel_in_air(caller).await;
+            self.stop_fall_flying().await;
+            return;
+        }
+
+        let previous_velocity = self.entity.velocity.load();
+        let previous_horizontal_speed = previous_velocity.horizontal_length();
+        let velocity = Self::update_fall_flying_movement(
+            previous_velocity,
+            self.entity.rotation().to_f64(),
+            self.entity.pitch.load(),
+            self.get_effective_gravity(caller).await,
+        );
+        self.entity.velocity.store(velocity);
+        self.make_move(caller).await;
+
+        // Player movement is client-authoritative in Pumpkin, so make_move does
+        // not resolve its collision. The client still supplies vanilla's
+        // horizontal-collision flag in movement packets.
+        if caller.get_player().is_some() && self.entity.horizontal_collision.load(SeqCst) {
+            let mut collided_velocity = self.entity.velocity.load();
+            collided_velocity.x = 0.0;
+            collided_velocity.z = 0.0;
+            self.entity.velocity.store(collided_velocity);
+        }
+
+        let new_horizontal_speed = self.entity.velocity.load().horizontal_length();
+        self.handle_fall_flying_collision(
+            caller.as_ref(),
+            previous_horizontal_speed,
+            new_horizontal_speed,
+        )
+        .await;
+    }
+
+    fn update_fall_flying_movement(
+        mut movement: Vector3<f64>,
+        look_angle: Vector3<f64>,
+        pitch: f32,
+        gravity: f64,
+    ) -> Vector3<f64> {
+        let lean_angle = f64::from(pitch).to_radians();
+        let look_horizontal_length = look_angle.x.hypot(look_angle.z);
+        let movement_horizontal_length = movement.horizontal_length();
+        let lift_force = lean_angle.cos().powi(2);
+
+        movement.y += gravity * (-1.0 + lift_force * 0.75);
+
+        if movement.y < 0.0 && look_horizontal_length > 0.0 {
+            let convert = movement.y * -0.1 * lift_force;
+            movement.x += look_angle.x * convert / look_horizontal_length;
+            movement.y += convert;
+            movement.z += look_angle.z * convert / look_horizontal_length;
+        }
+
+        if lean_angle < 0.0 && look_horizontal_length > 0.0 {
+            let convert = movement_horizontal_length * -lean_angle.sin() * 0.04;
+            movement.x -= look_angle.x * convert / look_horizontal_length;
+            movement.y += convert * 3.2;
+            movement.z -= look_angle.z * convert / look_horizontal_length;
+        }
+
+        if look_horizontal_length > 0.0 {
+            movement.x += (look_angle.x / look_horizontal_length * movement_horizontal_length
+                - movement.x)
+                * 0.1;
+            movement.z += (look_angle.z / look_horizontal_length * movement_horizontal_length
+                - movement.z)
+                * 0.1;
+        }
+
+        movement.multiply(0.99, 0.98, 0.99)
+    }
+
+    async fn handle_fall_flying_collision(
+        &self,
+        caller: &dyn EntityBase,
+        previous_horizontal_speed: f64,
+        new_horizontal_speed: f64,
+    ) {
+        if !self.entity.horizontal_collision.load(SeqCst) {
+            return;
+        }
+
+        let damage = ((previous_horizontal_speed - new_horizontal_speed) * 10.0 - 3.0) as f32;
+        if damage > 0.0 {
+            self.entity.play_sound(Self::get_fall_sound(damage as i32));
+            self.damage(caller, damage, DamageType::FLY_INTO_WALL).await;
+        }
+    }
+
+    async fn update_fall_flying(&self, caller: &Arc<dyn EntityBase>) {
+        self.fall_distance.store(Self::fall_flying_fall_distance(
+            self.entity.velocity.load().y,
+            self.fall_distance.load(),
+        ));
+
+        let usable_slots = self.usable_glider_slots(caller.as_ref()).await;
+        if self.entity.on_ground.load(Relaxed)
+            || self.entity.has_vehicle().await
+            || self.has_effect(&StatusEffect::LEVITATION).await
+            || usable_slots.is_empty()
+        {
+            self.entity.set_fall_flying(false).await;
+            return;
+        }
+
+        let next_tick = self.fall_fly_ticks.load(Relaxed) + 1;
+        if next_tick.is_multiple_of(20) {
+            let slot = usable_slots[rand::random_range(0..usable_slots.len())].clone();
+            self.damage_glider_in_slot(caller.as_ref(), &slot).await;
+        }
+    }
+
+    async fn usable_glider_slots(&self, caller: &dyn EntityBase) -> Vec<EquipmentSlot> {
+        if let Some(player) = caller.get_player() {
+            return player.usable_glider_slots().await;
+        }
+
+        let equipped_items = {
+            let equipment = self.entity_equipment.lock().await;
+            equipment
+                .equipment
+                .iter()
+                .map(|(slot, stack)| (slot.clone(), stack.clone()))
+                .collect::<Vec<_>>()
+        };
+        let mut slots = Vec::new();
+        for (slot, stack) in equipped_items {
+            let stack = stack.lock().await;
+            if Self::can_glide_using(&stack, &slot) {
+                slots.push(slot);
+            }
+        }
+        slots
+    }
+
+    async fn damage_glider_in_slot(&self, caller: &dyn EntityBase, slot: &EquipmentSlot) {
+        if let Some(player) = caller.get_player() {
+            player.damage_item_in_slot(slot, 1).await;
+            return;
+        }
+
+        let stack = self.entity_equipment.lock().await.get(slot);
+        let (result, updated_stack) = {
+            let mut stack = stack.lock().await;
+            let result = stack.damage_item(1);
+            (result, stack.clone())
+        };
+        if result == DamageResult::Untouched {
+            return;
+        }
+        if result == DamageResult::Broken {
+            self.entity
+                .world
+                .load()
+                .send_entity_status(&self.entity, super::equipment_break_status(slot));
+        }
+        self.send_equipment_changes(&[(slot.clone(), updated_stack)]);
+    }
+
+    #[must_use]
+    pub fn can_glide_using(stack: &ItemStack, slot: &EquipmentSlot) -> bool {
+        if stack.get_data_component::<GliderImpl>().is_none() {
+            return false;
+        }
+
+        let Some(equippable) = stack.get_data_component::<EquippableImpl>() else {
+            return false;
+        };
+        let next_damage_will_break = stack.is_damageable()
+            && stack
+                .get_max_damage()
+                .is_some_and(|max_damage| stack.get_damage() >= max_damage - 1);
+
+        equippable.slot == slot && !next_damage_will_break
+    }
+
+    pub async fn stop_fall_flying(&self) {
+        if !self.entity.is_fall_flying() {
+            self.entity.set_fall_flying(true).await;
+        }
+        self.entity.set_fall_flying(false).await;
+    }
+
+    fn fall_flying_fall_distance(vertical_velocity: f64, fall_distance: f32) -> f32 {
+        if vertical_velocity > -0.5 && fall_distance > 1.0 {
+            1.0
+        } else {
+            fall_distance
+        }
     }
 
     async fn travel_in_fluid<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, water: bool) {
@@ -1921,6 +2129,7 @@ impl LivingEntity {
 
         // Clear fall/fire state
         self.fall_distance.store(0f32);
+        self.fall_fly_ticks.store(0, Relaxed);
         self.death_time.store(0, Relaxed);
         self.entity.extinguish();
         self.entity.fire_ticks.store(0, Relaxed);
@@ -2900,6 +3109,27 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fall_flying_movement_matches_level_vanilla_glide() {
+        let movement = LivingEntity::update_fall_flying_movement(
+            Vector3::default(),
+            Vector3::new(0.0, 0.0, 1.0),
+            0.0,
+            0.08,
+        );
+
+        assert_eq!(movement.x, 0.0);
+        assert!((movement.y - -0.017_64).abs() < 1.0e-12);
+        assert!((movement.z - 0.001_782).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn fall_flying_caps_only_non_dive_fall_distance() {
+        assert_eq!(LivingEntity::fall_flying_fall_distance(-0.49, 40.0), 1.0);
+        assert_eq!(LivingEntity::fall_flying_fall_distance(-0.5, 40.0), 40.0);
+        assert_eq!(LivingEntity::fall_flying_fall_distance(-0.1, 0.5), 0.5);
+    }
 
     // ── bypasses_armor_durability ─────────────────────────────────────
 
