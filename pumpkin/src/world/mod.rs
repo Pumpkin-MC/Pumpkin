@@ -4290,10 +4290,12 @@ impl World {
     }
 
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
-        // Equip weapons/armor *before* spawn packets so clients see the bow/axe
-        // on the first entity spawn (skeleton bow, vindicator axe, …).
-        entity.init_data_tracker().await;
+        // Vanilla tracking order: spawn packet first, then entity data.
+        // Metadata (e.g. ItemEntity DATA_ITEM / ItemStack) sent before the client
+        // knows the entity id is dropped — drops would render as empty/invisible.
+        // Equipment is attached in try_enqueue_spawn_packet after CSpawnEntity.
         self.broadcast_entity_spawn(&entity);
+        entity.init_data_tracker().await;
         self.add_entity_silent(entity).await;
     }
 
