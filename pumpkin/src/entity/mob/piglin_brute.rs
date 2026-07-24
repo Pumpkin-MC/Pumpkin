@@ -3,6 +3,7 @@ use std::sync::{Arc, Weak};
 
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
+use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
@@ -69,7 +70,27 @@ impl PiglinBruteEntity {
     }
 }
 
-impl NBTStorage for PiglinBruteEntity {}
+impl NBTStorage for PiglinBruteEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            nbt.put_int(
+                "TimeInOverworld",
+                self.time_in_overworld.load(Ordering::Relaxed),
+            );
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.time_in_overworld.store(
+                nbt.get_int("TimeInOverworld").unwrap_or(0),
+                Ordering::Relaxed,
+            );
+        })
+    }
+}
 
 impl Mob for PiglinBruteEntity {
     fn get_mob_entity(&self) -> &MobEntity {

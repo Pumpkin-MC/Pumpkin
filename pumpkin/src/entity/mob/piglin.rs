@@ -2,7 +2,10 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::dimension::Dimension;
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::potion::Effect;
+use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
@@ -69,7 +72,27 @@ impl PiglinEntity {
     }
 }
 
-impl NBTStorage for PiglinEntity {}
+impl NBTStorage for PiglinEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            nbt.put_int(
+                "TimeInOverworld",
+                self.time_in_overworld.load(Ordering::Relaxed),
+            );
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.time_in_overworld.store(
+                nbt.get_int("TimeInOverworld").unwrap_or(0),
+                Ordering::Relaxed,
+            );
+        })
+    }
+}
 
 impl Mob for PiglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
@@ -153,8 +176,18 @@ pub(super) async fn convert_to_zombified_piglin(caller: &Arc<dyn EntityBase>) {
     {
         let mut effects = zombified_living.active_effects.lock().await;
         *effects = active_effects;
-        drop(effects);
-    };
+    }
+    zombified_living
+        .add_effect(Effect {
+            effect_type: &StatusEffect::NAUSEA,
+            duration: 200,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        })
+        .await;
 
     world.spawn_entity(zombified).await;
 }
