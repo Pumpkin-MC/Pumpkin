@@ -224,7 +224,7 @@ pub struct World {
     /// Cached ambient sky darken (0–11). Updated each environment tick so
     /// monster spawn light checks can run without locking time/weather.
     pub sky_darken: AtomicU8,
-    /// Vanilla `Level.neighborUpdater` — CollectingNeighborUpdater queue.
+    /// Vanilla `Level.neighborUpdater` — `CollectingNeighborUpdater` queue.
     pub neighbor_updater: crate::block::blocks::redstone::neighbor_updater::WorldNeighborUpdater,
 }
 
@@ -4998,7 +4998,7 @@ impl World {
     /// `CollectingNeighborUpdater.updateNeighborsAtExceptFromFacing`
     /// (order W/E/D/U/N/S, re-entrant queue).
     ///
-    /// Boxed to break async recursion through neighbor handlers / set_block_state.
+    /// Boxed to break async recursion through neighbor handlers / `set_block_state`.
     pub fn update_neighbors<'a>(
         self: &'a Arc<Self>,
         block_pos: &'a BlockPos,

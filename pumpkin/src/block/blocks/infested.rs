@@ -19,7 +19,7 @@ impl BlockBehaviour for InfestedBlock {
                 return;
             }
             let pos = args.position.0.to_f64() + Vector3::new(0.5, 0.0, 0.5);
-            let silver = from_type(&EntityType::SILVERFISH, pos, &args.world, Uuid::new_v4());
+            let silver = from_type(&EntityType::SILVERFISH, pos, args.world, Uuid::new_v4());
             silver.get_entity().set_pos(pos);
             args.world.spawn_entity(silver).await;
         })

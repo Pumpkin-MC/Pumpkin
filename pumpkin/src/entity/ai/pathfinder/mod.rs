@@ -454,7 +454,7 @@ impl Navigator {
 
         let dx = goal.destination.x - current_pos.x;
         let dz = goal.destination.z - current_pos.z;
-        let horizontal = (dx * dx + dz * dz).sqrt();
+        let horizontal = dx.hypot(dz);
         if horizontal < 0.05 {
             entity.clear_speed();
             return;

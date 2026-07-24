@@ -59,12 +59,12 @@ impl Goal for MoveTowardsTargetGoal {
             // sideways/back): 8–16 blocks or 85% of remaining distance.
             let dx = them.x - me.x;
             let dz = them.z - me.z;
-            let horiz = (dx * dx + dz * dz).sqrt();
+            let horiz = dx.hypot(dz);
             if horiz < 0.5 {
                 self.wanted = None;
                 return false;
             }
-            let step = (8.0_f64 + mob.get_random().random_range(0.0..8.0)).min(horiz * 0.85);
+            let step = (8.0f64 + mob.get_random().random_range(0.0..8.0)).min(horiz * 0.85);
             let wanted = Vector3::new(
                 me.x + dx / horiz * step,
                 them.y.clamp(me.y - 7.0, me.y + 7.0),

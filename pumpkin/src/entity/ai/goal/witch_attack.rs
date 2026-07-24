@@ -37,7 +37,7 @@ impl WitchAttackGoal {
         let dx = to.x - from.x;
         let dy = to.y - from.y;
         let dz = to.z - from.z;
-        let horiz = (dx * dx + dz * dz).sqrt();
+        let horiz = dx.hypot(dz);
         let yaw = (dz.atan2(dx).to_degrees() as f32) - 90.0;
         let pitch = -(dy.atan2(horiz).to_degrees() as f32);
         (yaw, pitch)

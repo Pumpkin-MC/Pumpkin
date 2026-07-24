@@ -55,7 +55,7 @@ impl Goal for LeapAtTargetGoal {
             let target_pos = target.get_entity().pos.load();
             let dx = target_pos.x - mob_pos.x;
             let dz = target_pos.z - mob_pos.z;
-            let horiz = (dx * dx + dz * dz).sqrt().max(1.0e-4);
+            let horiz = dx.hypot(dz).max(1.0e-4);
             let mut vel = entity.velocity.load();
             // Vanilla: add (dx/h * 0.5, yd, dz/h * 0.5) scaled by current speed.
             vel.x += (dx / horiz) * 0.5;

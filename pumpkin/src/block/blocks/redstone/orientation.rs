@@ -56,13 +56,12 @@ static ORIENTATIONS: std::sync::LazyLock<[RedstoneOrientation; 48]> =
 
 fn build_orientations() -> [RedstoneOrientation; 48] {
     let mut table: [Option<RedstoneOrientation>; 48] = [None; 48];
-    // Seed maps filled with self-index placeholders; generate_context fills real targets.
     let seed = make_orientation(BlockDirection::Up, BlockDirection::North, SideBias::Left);
     generate_context(seed, &mut table);
     std::array::from_fn(|i| table[i].expect("orientation table incomplete"))
 }
 
-/// Build a raw orientation (maps initially point at self index; rewritten by generate_context).
+/// Build a raw orientation (maps initially point at self index; rewritten by `generate_context`).
 fn make_orientation(
     up: BlockDirection,
     front: BlockDirection,
@@ -96,7 +95,6 @@ fn generate_context(
     if let Some(existing) = lookup[idx] {
         return existing;
     }
-    // Placeholder so recursive calls see this slot occupied.
     lookup[idx] = Some(self_o);
 
     for bias in SideBias::all() {
@@ -168,10 +166,10 @@ impl RedstoneOrientation {
         self.side_bias
     }
 
-    /// Vanilla neighbor order for this orientation:
+    /// Vanilla neighbor order:
     /// opposite(front), front, side, opposite(side), opposite(up), up
     #[must_use]
-    pub fn get_directions(self) -> [BlockDirection; 6] {
+    pub const fn get_directions(self) -> [BlockDirection; 6] {
         [
             self.front.opposite(),
             self.front,
@@ -238,7 +236,7 @@ impl RedstoneOrientation {
     }
 }
 
-fn compute_side(up: BlockDirection, front: BlockDirection, bias: SideBias) -> BlockDirection {
+const fn compute_side(up: BlockDirection, front: BlockDirection, bias: SideBias) -> BlockDirection {
     // right = front × up (right-handed); LEFT uses opposite of that.
     let fv = front.to_offset();
     let uv = up.to_offset();
@@ -252,10 +250,10 @@ fn compute_side(up: BlockDirection, front: BlockDirection, bias: SideBias) -> Bl
     }
 }
 
-fn nearest_direction(x: i32, y: i32, z: i32) -> BlockDirection {
-    let ax = x.abs();
-    let ay = y.abs();
-    let az = z.abs();
+const fn nearest_direction(x: i32, y: i32, z: i32) -> BlockDirection {
+    let ax = x.unsigned_abs();
+    let ay = y.unsigned_abs();
+    let az = z.unsigned_abs();
     if ax >= ay && ax >= az {
         if x >= 0 {
             BlockDirection::East
@@ -277,27 +275,26 @@ fn nearest_direction(x: i32, y: i32, z: i32) -> BlockDirection {
 
 /// Vanilla `Orientation.generateIndex`.
 ///
-/// Index layout: `((up.ordinal() << 2) + front_key) << 1 + side_bias`
-/// (Rust `+` binds tighter than `<<`, matching the intended 48-slot packing).
-fn generate_index(up: BlockDirection, front: BlockDirection, side_bias: SideBias) -> usize {
-    let front_axis_key = if up.to_axis() == Axis::Y {
-        if front.to_axis() == Axis::X { 1 } else { 0 }
-    } else if front.to_axis() == Axis::Y {
-        1
-    } else {
-        0
+/// Index layout packs `up`, `front_key`, and `side_bias` into 0..47.
+/// Explicit parens: `((up << 2) + front_key) << 1 + bias`.
+const fn generate_index(up: BlockDirection, front: BlockDirection, side_bias: SideBias) -> usize {
+    let front_axis_key: usize = match (up.to_axis(), front.to_axis()) {
+        (Axis::Y, Axis::X) => 1,
+        (Axis::Y, _) => 0,
+        (_, Axis::Y) => 1,
+        _ => 0,
     };
     // AxisDirection: NEGATIVE=0 (D/N/W), POSITIVE=1 (U/S/E)
-    let front_dir = match front {
+    let front_dir: usize = match front {
         BlockDirection::Down | BlockDirection::North | BlockDirection::West => 0,
         BlockDirection::Up | BlockDirection::South | BlockDirection::East => 1,
     };
     let front_key = (front_axis_key << 1) | front_dir;
     let up_ord = direction_ordinal(up);
-    ((up_ord << 2) + front_key << 1) + side_bias.ordinal()
+    (((up_ord << 2) + front_key) << 1) + side_bias.ordinal()
 }
 
-fn direction_ordinal(d: BlockDirection) -> usize {
+const fn direction_ordinal(d: BlockDirection) -> usize {
     // Vanilla Direction.ordinal: DOWN=0 UP=1 NORTH=2 SOUTH=3 WEST=4 EAST=5
     match d {
         BlockDirection::Down => 0,
@@ -352,7 +349,6 @@ mod tests {
     #[test]
     fn with_front_when_parallel_to_up_rotates_up() {
         let o = RedstoneOrientation::of(BlockDirection::Up, BlockDirection::North, SideBias::Left);
-        // Front becomes Up → up becomes opposite(old front)=South
         let o2 = o.with_front(BlockDirection::Up);
         assert_eq!(o2.get_front(), BlockDirection::Up);
         assert_eq!(o2.get_up(), BlockDirection::South);
@@ -362,9 +358,9 @@ mod tests {
     fn directions_order() {
         let o = RedstoneOrientation::of(BlockDirection::Up, BlockDirection::North, SideBias::Left);
         let dirs = o.get_directions();
-        assert_eq!(dirs[0], BlockDirection::South); // opposite front
-        assert_eq!(dirs[1], BlockDirection::North); // front
-        assert_eq!(dirs[4], BlockDirection::Down); // opposite up
+        assert_eq!(dirs[0], BlockDirection::South);
+        assert_eq!(dirs[1], BlockDirection::North);
+        assert_eq!(dirs[4], BlockDirection::Down);
         assert_eq!(dirs[5], BlockDirection::Up);
     }
 

@@ -189,7 +189,7 @@ impl BlockBehaviour for FireBlock {
                 return;
             }
 
-            let dimension = &args.world.dimension;
+            let dimension = args.world.dimension;
             // First lets check if we are in OverWorld or Nether, its not possible to place an Nether portal in other dimensions in Vanilla
             if (dimension == &Dimension::OVERWORLD || dimension == &Dimension::THE_NETHER)
                 && let Some(portal) =

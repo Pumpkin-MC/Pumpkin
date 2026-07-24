@@ -82,7 +82,7 @@ impl Goal for RamGoal {
             let target_pos = target.get_entity().pos.load();
             let dx = target_pos.x - mob_pos.x;
             let dz = target_pos.z - mob_pos.z;
-            let len = (dx * dx + dz * dz).sqrt().max(0.001);
+            let len = dx.hypot(dz).max(0.001);
 
             {
                 let eye = target.get_entity().get_eye_pos();

@@ -48,7 +48,7 @@ enum NeighborUpdates {
         orientation: NeighborOrientation,
         moved_by_piston: bool,
     },
-    /// `MultiNeighborUpdate` — walk UPDATE_ORDER, skip one facing
+    /// `MultiNeighborUpdate` — walk `UPDATE_ORDER`, skip one facing
     Multi {
         source_pos: BlockPos,
         source_block: &'static Block,
@@ -165,7 +165,8 @@ async fn execute_update(
 /// Vanilla `NeighborUpdater.executeShapeUpdate` (best-effort via registry shape update).
 ///
 /// Uses boxed future for `set_block_state` to avoid async recursion with the
-/// neighbor collector (shape → set → update_neighbors → collector → shape).
+/// neighbor collector (shape → set → `update_neighbors` → collector → shape).
+#[expect(clippy::too_many_arguments)]
 fn execute_shape_update<'a>(
     world: &'a Arc<World>,
     direction: BlockDirection,
@@ -217,7 +218,7 @@ pub struct CollectingNeighborUpdater {
 impl CollectingNeighborUpdater {
     /// `max_chained < 0` means unlimited (vanilla).
     #[must_use]
-    pub fn new(max_chained: i32) -> Self {
+    pub const fn new(max_chained: i32) -> Self {
         Self {
             max_chained,
             count: 0,
@@ -254,9 +255,8 @@ impl CollectingNeighborUpdater {
 
     /// Merge `addedThisLayer` onto stack in vanilla order (index 0 ends on top).
     fn merge_added_layer(&mut self) {
-        // Vanilla: for i = size-1 .. 0: stack.push(list[i])  → list[0] processed first
-        let items: Vec<_> = self.added_this_layer.drain(..).collect();
-        for u in items.into_iter().rev() {
+        // Vanilla: for i = size-1 .. 0: stack.push(list[i]) → list[0] processed first
+        while let Some(u) = self.added_this_layer.pop() {
             self.stack.push_back(u);
         }
     }
@@ -334,7 +334,7 @@ impl WorldNeighborUpdater {
         }
     }
 
-    /// `updateNeighborsAtExceptFromFacing` → MultiNeighborUpdate.
+    /// `updateNeighborsAtExceptFromFacing` → `MultiNeighborUpdate`.
     pub async fn update_neighbors_at_except(
         &self,
         world: &Arc<World>,
@@ -343,10 +343,7 @@ impl WorldNeighborUpdater {
         skip: Option<BlockDirection>,
         orientation: NeighborOrientation,
     ) {
-        let mut idx = 0;
-        if skip.is_some_and(|s| s == UPDATE_ORDER[0]) {
-            idx = 1;
-        }
+        let idx = usize::from(skip.is_some_and(|s| s == UPDATE_ORDER[0]));
         let should_run = {
             let mut g = self.inner.lock().await;
             g.enqueue(
@@ -366,6 +363,7 @@ impl WorldNeighborUpdater {
     }
 
     /// Shape update queue entry.
+    #[expect(clippy::too_many_arguments)]
     pub async fn shape_update(
         &self,
         world: &Arc<World>,
@@ -402,13 +400,11 @@ impl WorldNeighborUpdater {
             let step = {
                 let mut g = self.inner.lock().await;
                 g.merge_added_layer();
-                match g.stack.pop_back() {
-                    Some(u) => u,
-                    None => {
-                        g.clear_after_run();
-                        return;
-                    }
-                }
+                let Some(u) = g.stack.pop_back() else {
+                    g.clear_after_run();
+                    return;
+                };
+                u
             };
 
             let mut next = step;
@@ -478,10 +474,11 @@ impl InstantNeighborUpdater {
 }
 
 /// Vanilla `ExperimentalRedstoneUtils.initialOrientation` without feature-flag gate.
+///
 /// Returns `None` so callers match non-experiment vanilla (null orientation).
-/// Use [`initial_orientation_experiments`] when REDSTONE_EXPERIMENTS is on.
+/// Use [`initial_orientation_experiments`] when `REDSTONE_EXPERIMENTS` is on.
 #[must_use]
-pub fn initial_orientation(
+pub const fn initial_orientation(
     _front: Option<BlockDirection>,
     _up: Option<BlockDirection>,
 ) -> NeighborOrientation {

@@ -87,7 +87,7 @@ impl BowAttackGoal {
         let dx = to.x - from.x;
         let dy = to.y - from.y;
         let dz = to.z - from.z;
-        let horiz = (dx * dx + dz * dz).sqrt();
+        let horiz = dx.hypot(dz);
         let yaw = (dz.atan2(dx).to_degrees() as f32) - 90.0;
         let pitch = -(dy.atan2(horiz).to_degrees() as f32);
         (yaw, pitch)
@@ -296,7 +296,7 @@ impl Goal for BowAttackGoal {
 
             // From CFR RangedCrossbowAttackGoal (26.2): attackRadius=8 for pillager.
             let is_crossbow = Self::main_hand_is_crossbow(mob).await;
-            let crossbow_radius_sq = 64.0_f64;
+            let crossbow_radius_sq = 64.0f64;
             // Vanilla canRun() only when UNCHARGED → half speed while pathing during charge.
             let charging = is_crossbow && self.draw_time >= 0;
 
@@ -334,7 +334,7 @@ impl Goal for BowAttackGoal {
                 let dir = {
                     let dx = target_pos.x - mob_pos.x;
                     let dz = target_pos.z - mob_pos.z;
-                    let len = (dx * dx + dz * dz).sqrt().max(0.001);
+                    let len = dx.hypot(dz).max(0.001);
                     let fx = dx / len;
                     let fz = dz / len;
                     let (sx, sz) = if self.strafing_clockwise {

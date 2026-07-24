@@ -437,7 +437,7 @@ pub fn check_spawn_rules(
     true
 }
 
-/// Vanilla `Animal.checkAnimalSpawnRules` ground: animals_spawnable_on + common dirt variants.
+/// Vanilla `Animal.checkAnimalSpawnRules` ground: `animals_spawnable_on` + common dirt variants.
 fn is_animal_spawnable_ground(below: &Block) -> bool {
     use pumpkin_data::tag::{self, Taggable};
     below.has_tag(&tag::Block::MINECRAFT_ANIMALS_SPAWNABLE_ON)
