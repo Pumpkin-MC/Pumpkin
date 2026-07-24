@@ -22,18 +22,14 @@ use super::common::{
     update_flanking_rails_shape,
 };
 
-// TODO: Fix redstone rail power extension behavior
-// Currently, redstone sources (like redstone torch) can incorrectly extend rail power
-// when placed at any powered rail position. In Minecraft, power should only extend
-// when a redstone source is placed at the LAST powered rail or at an unpowered rail.
-//
-// Example of INCORRECT current behavior:
-// redstone_torch [powered_rail×9] [unpowered_rail×3]
-// If redstone torch is placed at 6th powered rail → power extends (WRONG)
-//
-// Example of CORRECT Minecraft behavior:
-// redstone_torch [powered_rail×9] [unpowered_rail×3]
-// Power should only extend when redstone source is at 9th rail (last powered) or unpowered rail
+// Vanilla 26.2 PoweredRailBlock (CFR):
+// updateState only recomputes *this* rail:
+//   shouldPower = hasNeighborSignal(pos)
+//              || findPoweredRailSignal(forward, 0)
+//              || findPoweredRailSignal(backward, 0)
+// isSameRailWithPower continues only through already-POWERED rails (depth < 8)
+// and returns true if a rail in the chain hasNeighborSignal.
+// Neighbor rails re-evaluate via block updates — do NOT BFS the whole track here.
 
 #[pumpkin_block("minecraft:powered_rail")]
 pub struct PoweredRailBlock;
@@ -56,73 +52,9 @@ impl BlockBehaviour for PoweredRailBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             update_flanking_rails_shape(args.world, args.block, args.state_id, args.position).await;
-
+            // Vanilla BaseRailBlock.onPlace → updateState(this only).
             self.update_powered_state(args.world, args.block, args.position)
                 .await;
-
-            let final_state_id = args.world.get_block_state_id(args.position);
-            let rail_props = RailProperties::new(final_state_id, args.block);
-
-            self.update_connected_rails(args.world, args.position, &rail_props, true, 0)
-                .await;
-            self.update_connected_rails(args.world, args.position, &rail_props, false, 0)
-                .await;
-
-            for direction in rail_props.directions() {
-                let neighbor_pos = args.position.offset(direction.to_offset());
-
-                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &neighbor_pos)
-                {
-                    self.update_powered_state_internal(
-                        args.world,
-                        neighbor_rail.0,
-                        &neighbor_pos,
-                        false,
-                    )
-                    .await;
-                    self.update_connected_rails(
-                        args.world,
-                        &neighbor_pos,
-                        &neighbor_rail.1,
-                        true,
-                        0,
-                    )
-                    .await;
-                    self.update_connected_rails(
-                        args.world,
-                        &neighbor_pos,
-                        &neighbor_rail.1,
-                        false,
-                        0,
-                    )
-                    .await;
-                }
-
-                let up_pos = neighbor_pos.up();
-                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &up_pos) {
-                    self.update_powered_state_internal(args.world, neighbor_rail.0, &up_pos, false)
-                        .await;
-                    self.update_connected_rails(args.world, &up_pos, &neighbor_rail.1, true, 0)
-                        .await;
-                    self.update_connected_rails(args.world, &up_pos, &neighbor_rail.1, false, 0)
-                        .await;
-                }
-
-                let down_pos = neighbor_pos.down();
-                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &down_pos) {
-                    self.update_powered_state_internal(
-                        args.world,
-                        neighbor_rail.0,
-                        &down_pos,
-                        false,
-                    )
-                    .await;
-                    self.update_connected_rails(args.world, &down_pos, &neighbor_rail.1, true, 0)
-                        .await;
-                    self.update_connected_rails(args.world, &down_pos, &neighbor_rail.1, false, 0)
-                        .await;
-                }
-            }
         })
     }
 
@@ -135,81 +67,26 @@ impl BlockBehaviour for PoweredRailBlock {
                 return;
             }
 
+            // Vanilla BaseRailBlock.neighborChanged → PoweredRailBlock.updateState(self only).
+            // Cascade happens through NOTIFY when this rail's POWERED flips.
             self.update_powered_state(args.world, args.block, args.position)
-                .await;
-
-            let state_id = args.world.get_block_state_id(args.position);
-            let rail_props = RailProperties::new(state_id, args.block);
-
-            self.update_connected_rails(args.world, args.position, &rail_props, true, 0)
-                .await;
-            self.update_connected_rails(args.world, args.position, &rail_props, false, 0)
                 .await;
         })
     }
 
     fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state_id = args.old_state_id;
-            let rail_props = RailProperties::new(state_id, args.block);
-
+            // Vanilla rail removal: notify neighbors; they recompute via neighborChanged.
+            let rail_props = RailProperties::new(args.old_state_id, args.block);
             if rail_props.shape().is_ascending() {
                 args.world
                     .update_neighbor(&args.position.up(), args.block)
                     .await;
             }
-
             args.world.update_neighbor(args.position, args.block).await;
             args.world
                 .update_neighbor(&args.position.down(), args.block)
                 .await;
-
-            let directions = rail_props.directions();
-            for direction in directions {
-                let neighbor_pos = args.position.offset(direction.to_offset());
-
-                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &neighbor_pos)
-                {
-                    self.update_powered_state(args.world, neighbor_rail.0, &neighbor_pos)
-                        .await;
-                    self.update_connected_rails(
-                        args.world,
-                        &neighbor_pos,
-                        &neighbor_rail.1,
-                        true,
-                        0,
-                    )
-                    .await;
-                    self.update_connected_rails(
-                        args.world,
-                        &neighbor_pos,
-                        &neighbor_rail.1,
-                        false,
-                        0,
-                    )
-                    .await;
-                }
-
-                let up_pos = neighbor_pos.up();
-                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &up_pos) {
-                    self.update_powered_state(args.world, neighbor_rail.0, &up_pos)
-                        .await;
-                    self.update_connected_rails(args.world, &up_pos, &neighbor_rail.1, true, 0)
-                        .await;
-                    self.update_connected_rails(args.world, &up_pos, &neighbor_rail.1, false, 0)
-                        .await;
-                }
-
-                let down_pos = neighbor_pos.down();
-                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &down_pos) {
-                    self.update_powered_state(args.world, neighbor_rail.0, &down_pos)
-                        .await;
-                    self.update_connected_rails(args.world, &down_pos, &neighbor_rail.1, true, 0)
-                        .await;
-                    self.update_connected_rails(args.world, &down_pos, &neighbor_rail.1, false, 0)
-                        .await;
-                }
-            }
         })
     }
 
@@ -370,9 +247,9 @@ impl PoweredRailBlock {
             .await
     }
 
+    /// Vanilla `PoweredRailBlock.updateState` — only this rail.
     async fn update_powered_state(&self, world: &Arc<World>, block: &Block, pos: &BlockPos) {
-        self.update_powered_state_internal(world, block, pos, true)
-            .await;
+        self.update_powered_state_internal(world, block, pos).await;
     }
 
     async fn update_powered_state_internal(
@@ -380,14 +257,13 @@ impl PoweredRailBlock {
         world: &Arc<World>,
         block: &Block,
         pos: &BlockPos,
-        propagate: bool,
     ) {
         let state_id = world.get_block_state_id(pos);
         let mut rail_props = RailProperties::new(state_id, block);
         let current_powered = rail_props.is_powered();
 
+        // Vanilla: hasNeighborSignal(pos) || findPoweredRailSignal(true) || findPoweredRailSignal(false)
         let direct_power = block_receives_redstone_power(world, pos).await;
-
         let rail_power = self
             .is_powered_by_other_rails(world, pos, &rail_props, true, 0)
             .await
@@ -399,6 +275,7 @@ impl PoweredRailBlock {
 
         if current_powered != should_be_powered {
             rail_props.set_powered(should_be_powered);
+            // NOTIFY_ALL → neighbors re-enter on_neighbor_update (vanilla cascade).
             world
                 .set_block_state(pos, rail_props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                 .await;
@@ -408,155 +285,7 @@ impl PoweredRailBlock {
             if rail_props.shape().is_ascending() {
                 world.update_neighbor(&pos.up(), block).await;
             }
-
-            if propagate {
-                let updated_rail_props = RailProperties::new(rail_props.to_state_id(block), block);
-                Box::pin(self.update_connected_rails(world, pos, &updated_rail_props, true, 0))
-                    .await;
-                Box::pin(self.update_connected_rails(world, pos, &updated_rail_props, false, 0))
-                    .await;
-            }
         }
     }
 
-    async fn update_connected_rails(
-        &self,
-        world: &Arc<World>,
-        pos: &BlockPos,
-        state: &RailProperties,
-        direction: bool,
-        distance: u8,
-    ) {
-        if distance >= 8 {
-            return;
-        }
-
-        let mut x = pos.0.x;
-        let mut y = pos.0.y;
-        let mut z = pos.0.z;
-        let mut check_down = true;
-        let mut next_shape = state.shape();
-
-        match next_shape {
-            pumpkin_data::block_properties::RailShape::NorthSouth => {
-                if direction {
-                    z += 1;
-                } else {
-                    z -= 1;
-                }
-            }
-            pumpkin_data::block_properties::RailShape::EastWest => {
-                if direction {
-                    x -= 1;
-                } else {
-                    x += 1;
-                }
-            }
-            pumpkin_data::block_properties::RailShape::AscendingEast => {
-                if direction {
-                    x -= 1;
-                } else {
-                    x += 1;
-                    y += 1;
-                    check_down = false;
-                }
-                next_shape = pumpkin_data::block_properties::RailShape::EastWest;
-            }
-            pumpkin_data::block_properties::RailShape::AscendingWest => {
-                if direction {
-                    x -= 1;
-                    y += 1;
-                    check_down = false;
-                } else {
-                    x += 1;
-                }
-                next_shape = pumpkin_data::block_properties::RailShape::EastWest;
-            }
-            pumpkin_data::block_properties::RailShape::AscendingNorth => {
-                if direction {
-                    z += 1;
-                } else {
-                    z -= 1;
-                    y += 1;
-                    check_down = false;
-                }
-                next_shape = pumpkin_data::block_properties::RailShape::NorthSouth;
-            }
-            pumpkin_data::block_properties::RailShape::AscendingSouth => {
-                if direction {
-                    z += 1;
-                    y += 1;
-                    check_down = false;
-                } else {
-                    z -= 1;
-                }
-                next_shape = pumpkin_data::block_properties::RailShape::NorthSouth;
-            }
-            _ => return,
-        }
-
-        let next_pos = BlockPos::new(x, y, z);
-        self.update_rail_at_position(world, &next_pos, direction, distance, next_shape)
-            .await;
-
-        if check_down {
-            let down_pos = BlockPos::new(x, y - 1, z);
-            self.update_rail_at_position(world, &down_pos, direction, distance, next_shape)
-                .await;
-        }
-    }
-
-    async fn update_rail_at_position(
-        &self,
-        world: &Arc<World>,
-        pos: &BlockPos,
-        direction: bool,
-        distance: u8,
-        expected_shape: pumpkin_data::block_properties::RailShape,
-    ) {
-        let block = world.get_block(pos);
-        if *block != Block::POWERED_RAIL {
-            return;
-        }
-
-        let state_id = world.get_block_state_id(pos);
-        let rail_props = RailProperties::new(state_id, block);
-        let rail_shape = rail_props.shape();
-
-        let shapes_compatible = match expected_shape {
-            pumpkin_data::block_properties::RailShape::EastWest => !matches!(
-                rail_shape,
-                pumpkin_data::block_properties::RailShape::NorthSouth
-                    | pumpkin_data::block_properties::RailShape::AscendingNorth
-                    | pumpkin_data::block_properties::RailShape::AscendingSouth
-            ),
-            pumpkin_data::block_properties::RailShape::NorthSouth => !matches!(
-                rail_shape,
-                pumpkin_data::block_properties::RailShape::EastWest
-                    | pumpkin_data::block_properties::RailShape::AscendingEast
-                    | pumpkin_data::block_properties::RailShape::AscendingWest
-            ),
-            _ => true,
-        };
-
-        if shapes_compatible {
-            self.update_powered_state_internal(world, block, pos, false)
-                .await;
-
-            Box::pin(self.update_connected_rails(world, pos, &rail_props, direction, distance + 1))
-                .await;
-        }
-    }
-
-    fn find_rail_at_position(
-        world: &World,
-        pos: &BlockPos,
-    ) -> Option<(&'static Block, RailProperties)> {
-        let block = world.get_block(pos);
-        (*block == Block::POWERED_RAIL).then(|| {
-            let state_id = world.get_block_state_id(pos);
-            let rail_props = RailProperties::new(state_id, block);
-            (block, rail_props)
-        })
-    }
 }
