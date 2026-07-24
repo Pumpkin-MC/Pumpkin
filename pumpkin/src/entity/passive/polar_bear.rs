@@ -5,14 +5,21 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+        active_target::ActiveTargetGoal, escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
-/// Polar bear — vanilla 26.2: melee + panic + hunt foxes; cub-player aggro TODO.
+/// Polar bear — vanilla 26.2 `PolarBear.registerGoals` (CFR).
+///
+/// ```text
+/// 0 Float; 1 Melee(1.25); 1 Panic(2.0); 4 FollowParent(1.25);
+/// 5 Stroll(1.0); 6 LookAt Player 6; 7 RandomLook
+/// target: HurtBy; AttackPlayers(cub) TODO; angry Player TODO; Fox; ResetAnger TODO
+/// ```
 pub struct PolarBearEntity {
     pub mob_entity: MobEntity,
 }
@@ -31,9 +38,12 @@ impl PolarBearEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // Vanilla: Float, Melee, Panic, FollowParent, Stroll, Look — no leap/fish.
+            // Vanilla 26.2 CFR PolarBear.registerGoals
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.25, false)));
+            goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.25, true)));
+            // PanicGoal stand-in (babies panic more broadly in vanilla).
+            goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
+            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 6,
@@ -43,7 +53,7 @@ impl PolarBearEntity {
 
             // PolarBearHurtByTarget + AttackPlayers (cub) + angry player + fox + ResetAnger
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            // PolarBearAttackPlayersGoal TODO (cub-nearby)
+            // PolarBearAttackPlayersGoal / NeutralMob anger TODO
             target_selector.add_goal(
                 4,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true),

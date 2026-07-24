@@ -13,10 +13,11 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-/// Fox — vanilla 26.2 registerGoals stand-in (stalk/sleep/eat-berries TODO).
+/// Fox — **has AI** (vanilla 26.2 CFR stand-in).
 ///
-/// Decompile: Float, Panic, Breed, Avoid(Player/Wolf/PolarBear), Pounce, Melee,
-/// FollowParent, Stroll; land targets chicken/rabbit/fish.
+/// Implemented: Float, Panic, Breed, Avoid(Player/Wolf/PolarBear), Pounce/Leap,
+/// Melee, FollowParent, Stroll, LookAt; targets chicken/rabbit/cod/salmon/tropical.
+/// TODO: StalkPrey, Sleep, EatBerries, Faceplant, trust/defend.
 pub struct FoxEntity {
     pub mob_entity: MobEntity,
 }

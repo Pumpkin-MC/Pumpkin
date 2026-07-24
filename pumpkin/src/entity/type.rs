@@ -401,6 +401,14 @@ pub fn check_spawn_rules(
         return SlimeEntity::check_slime_spawn_rules(world, pos);
     }
 
+    // Vanilla PolarBear.checkPolarBearSpawnRules (26.2 CFR):
+    // - In frozen-ocean alternate biomes: light + stand on ice (POLAR_BEARS_SPAWNABLE_ON_ALTERNATE)
+    // - Else: Animal.checkAnimalSpawnRules (grass-like + light > 8)
+    // Snowy plains / ice spikes use the animal path but often surface is snow/ice.
+    if id == EntityType::POLAR_BEAR.id {
+        return check_polar_bear_spawn_rules(world, pos);
+    }
+
     // Vanilla Animal.checkMobSpawnRules: most land animals need grass (or equivalent)
     // underfoot for natural spawns.
     if entity_type.category == &MobCategory::CREATURE
@@ -410,14 +418,7 @@ pub fn check_spawn_rules(
         )
     {
         let below = world.get_block(&pos.down());
-        let ok_ground = below == &Block::GRASS_BLOCK
-            || below == &Block::DIRT
-            || below == &Block::PODZOL
-            || below == &Block::COARSE_DIRT
-            || below == &Block::ROOTED_DIRT
-            || below == &Block::MOSS_BLOCK
-            || below == &Block::MUD
-            || below == &Block::SNOW_BLOCK;
+        let ok_ground = is_animal_spawnable_ground(below);
         if !ok_ground {
             return false;
         }
@@ -429,4 +430,39 @@ pub fn check_spawn_rules(
     }
 
     true
+}
+
+/// Vanilla `Animal.checkAnimalSpawnRules` ground: animals_spawnable_on + common dirt variants.
+fn is_animal_spawnable_ground(below: &Block) -> bool {
+    use pumpkin_data::tag::Taggable;
+    below.has_tag(&Block::MINECRAFT_ANIMALS_SPAWNABLE_ON)
+        || below == &Block::GRASS_BLOCK
+        || below == &Block::DIRT
+        || below == &Block::PODZOL
+        || below == &Block::COARSE_DIRT
+        || below == &Block::ROOTED_DIRT
+        || below == &Block::MOSS_BLOCK
+        || below == &Block::MUD
+        || below == &Block::SNOW_BLOCK
+}
+
+/// Vanilla `PolarBear.checkPolarBearSpawnRules`.
+fn check_polar_bear_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+    use pumpkin_data::tag::Taggable;
+    let light = world.get_raw_brightness_no_darken(pos);
+    if light <= 8 {
+        return false;
+    }
+    let below = world.get_block(&pos.down());
+    // Frozen oceans / ice: must stand on ice (tag is only "ice" in data — also allow packed/blue).
+    if below.has_tag(&Block::MINECRAFT_POLAR_BEARS_SPAWNABLE_ON_ALTERNATE)
+        || below == &Block::ICE
+        || below == &Block::PACKED_ICE
+        || below == &Block::BLUE_ICE
+        || below == &Block::FROSTED_ICE
+    {
+        return true;
+    }
+    // Snowy plains etc.: animal ground (grass/snow block).
+    is_animal_spawnable_ground(below)
 }

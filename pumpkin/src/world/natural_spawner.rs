@@ -482,10 +482,14 @@ pub fn spawn_for_chunk(
         if !spawn_state.can_spawn_for_category_local(world, category, chunk_pos) {
             continue;
         }
-        // Vanilla picks one packed position per category; we try a few so natural
-        // refresh is noticeable without breaking caps (still gated by can_spawn).
-        // Creatures only roll every ~400 ticks; give them a few pack attempts.
-        let attempts = 3;
+        // Vanilla picks one packed position per category. Creatures only run about
+        // every 400 ticks (world.level_time), so give more pack attempts then.
+        // Monsters tick every chunk tick — fewer attempts to limit load.
+        let attempts = if category == &MobCategory::CREATURE {
+            8
+        } else {
+            3
+        };
         for _ in 0..attempts {
             if !spawn_state.can_spawn_for_category_global(category) {
                 break;
