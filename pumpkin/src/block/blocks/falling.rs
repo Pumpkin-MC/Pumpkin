@@ -32,7 +32,11 @@ impl FallingBlock {
     }
 
     /// Schedule a planned tick if one is not already queued (vanilla NTE path).
-    fn schedule_fall_tick(world: &crate::world::World, block: &Block, pos: pumpkin_util::math::position::BlockPos) {
+    fn schedule_fall_tick(
+        world: &crate::world::World,
+        block: &Block,
+        pos: pumpkin_util::math::position::BlockPos,
+    ) {
         if !world.is_block_tick_scheduled(&pos, block) {
             world.schedule_block_tick(block, pos, DELAY_AFTER_PLACE, TickPriority::Normal);
         }

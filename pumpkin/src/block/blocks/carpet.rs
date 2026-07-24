@@ -3,7 +3,8 @@
 
 use crate::block::blocks::support::{air_if_unsupported, has_floor_support};
 use crate::block::{
-    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnNeighborUpdateArgs,
+    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    OnNeighborUpdateArgs,
 };
 use pumpkin_data::BlockStateId;
 use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};

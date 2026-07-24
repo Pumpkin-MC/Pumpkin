@@ -45,7 +45,12 @@ impl TorchBlock {
     }
 
     /// Vanilla `BaseTorchBlock.canSurvive` / wall variant.
-    fn can_survive(world: &dyn BlockAccessor, block: &Block, pos: &BlockPos, state_id: BlockStateId) -> bool {
+    fn can_survive(
+        world: &dyn BlockAccessor,
+        block: &Block,
+        pos: &BlockPos,
+        state_id: BlockStateId,
+    ) -> bool {
         // Fluid at this cell: torch cannot exist (water washes it out immediately via shape/neighbor).
         if is_fluid_blocking_torch(world, pos) {
             return false;
@@ -177,13 +182,9 @@ impl BlockBehaviour for TorchBlock {
 }
 
 fn floor_torch_block(item_or_block: &Block) -> &'static Block {
-    if *item_or_block == Block::SOUL_TORCH
-        || *item_or_block == Block::SOUL_WALL_TORCH
-    {
+    if *item_or_block == Block::SOUL_TORCH || *item_or_block == Block::SOUL_WALL_TORCH {
         &Block::SOUL_TORCH
-    } else if *item_or_block == Block::COPPER_TORCH
-        || *item_or_block == Block::COPPER_WALL_TORCH
-    {
+    } else if *item_or_block == Block::COPPER_TORCH || *item_or_block == Block::COPPER_WALL_TORCH {
         &Block::COPPER_TORCH
     } else {
         &Block::TORCH
@@ -191,13 +192,9 @@ fn floor_torch_block(item_or_block: &Block) -> &'static Block {
 }
 
 fn wall_torch_block(item_or_block: &Block) -> &'static Block {
-    if *item_or_block == Block::SOUL_TORCH
-        || *item_or_block == Block::SOUL_WALL_TORCH
-    {
+    if *item_or_block == Block::SOUL_TORCH || *item_or_block == Block::SOUL_WALL_TORCH {
         &Block::SOUL_WALL_TORCH
-    } else if *item_or_block == Block::COPPER_TORCH
-        || *item_or_block == Block::COPPER_WALL_TORCH
-    {
+    } else if *item_or_block == Block::COPPER_TORCH || *item_or_block == Block::COPPER_WALL_TORCH {
         &Block::COPPER_WALL_TORCH
     } else {
         &Block::WALL_TORCH
@@ -205,7 +202,11 @@ fn wall_torch_block(item_or_block: &Block) -> &'static Block {
 }
 
 /// Vanilla `WallTorchBlock.canSurvive` — face-sturdy on the attachment side.
-fn wall_can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos, facing: BlockDirection) -> bool {
+fn wall_can_place_at(
+    world: &dyn BlockAccessor,
+    block_pos: &BlockPos,
+    facing: BlockDirection,
+) -> bool {
     world
         .get_block_state(&block_pos.offset(facing.to_offset()))
         .is_side_solid(facing.opposite())
