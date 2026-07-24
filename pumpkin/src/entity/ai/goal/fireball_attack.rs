@@ -27,9 +27,9 @@ impl FireballAttackGoal {
 
     fn in_range(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
         let mob_pos = mob.get_entity().pos.load();
-        let tpos = target.get_entity().pos.load();
-        (tpos.y - mob_pos.y).abs() <= 4.0
-            && mob_pos.squared_distance_to_vec(&tpos) < ATTACK_RADIUS_SQ
+        let target_pos = target.get_entity().pos.load();
+        (target_pos.y - mob_pos.y).abs() <= 4.0
+            && mob_pos.squared_distance_to_vec(&target_pos) < ATTACK_RADIUS_SQ
     }
 
     fn look_angles(from: Vector3<f64>, to: Vector3<f64>) -> (f32, f32) {
