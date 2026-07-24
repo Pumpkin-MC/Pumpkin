@@ -409,41 +409,85 @@ pub fn check_spawn_rules(
         return check_polar_bear_spawn_rules(world, pos);
     }
 
-    // Vanilla Fox.checkFoxSpawnRules: FOXES_SPAWNABLE_ON + isBrightEnoughToSpawn.
-    if id == EntityType::FOX.id {
-        return check_fox_spawn_rules(world, pos);
-    }
-
-    // Vanilla Animal.checkAnimalSpawnRules for natural OnGround creatures:
-    // below.is(ANIMALS_SPAWNABLE_ON) && isBrightEnoughToSpawn (raw light > 8).
+    // Vanilla per-species ground tags (not only grass_block). Taiga/podzol must
+    // still get wolves/rabbits/foxes; plains get sheep/cows on grass.
     if entity_type.category == &MobCategory::CREATURE
         && matches!(
             entity_type.spawn_restriction.location,
             pumpkin_data::entity::SpawnLocation::OnGround
         )
     {
-        return check_animal_spawn_rules(world, pos);
+        return check_creature_spawn_rules(entity_type, world, pos);
     }
 
     true
 }
 
-/// Vanilla `Animal.checkAnimalSpawnRules` / `isBrightEnoughToSpawn`.
+/// Vanilla `Animal.isBrightEnoughToSpawn`: getRawBrightness(pos, 0) > 8.
+fn is_bright_enough_to_spawn(world: &World, pos: &BlockPos) -> bool {
+    world.get_raw_brightness_no_darken(pos) > 8
+}
+
+/// Vanilla `Animal.checkAnimalSpawnRules` default: ANIMALS_SPAWNABLE_ON (grass).
 fn check_animal_spawn_rules(world: &World, pos: &BlockPos) -> bool {
-    use pumpkin_data::tag::{self, Taggable};
+    use pumpkin_data::tag::Block as BlockTag;
+    check_creature_spawn_on_tag(world, pos, &BlockTag::MINECRAFT_ANIMALS_SPAWNABLE_ON)
+}
+
+fn check_creature_spawn_on_tag(
+    world: &World,
+    pos: &BlockPos,
+    ground_tag: &'static pumpkin_data::tag::Tag,
+) -> bool {
+    use pumpkin_data::tag::Taggable;
     let below = world.get_block(&pos.down());
-    if !below.has_tag(&tag::Block::MINECRAFT_ANIMALS_SPAWNABLE_ON) {
+    if !below.has_tag(ground_tag) {
         return false;
     }
-    // getRawBrightness(pos, 0) > 8
-    world.get_raw_brightness_no_darken(pos) > 8
+    is_bright_enough_to_spawn(world, pos)
+}
+
+/// Pick the correct block tag for each OnGround creature (vanilla 26.2 tags).
+///
+/// Without this, every creature is forced onto `animals_spawnable_on` (= grass
+/// only), so taiga (podzol/coarse dirt/snow) never re-spawns wolves/rabbits and
+/// looks empty after generation packs despawn or unload.
+fn check_creature_spawn_rules(
+    entity_type: &'static EntityType,
+    world: &World,
+    pos: &BlockPos,
+) -> bool {
+    use pumpkin_data::tag::Block as BlockTag;
+    let id = entity_type.id;
+    let ground = if id == EntityType::WOLF.id {
+        &BlockTag::MINECRAFT_WOLVES_SPAWNABLE_ON
+    } else if id == EntityType::FOX.id {
+        &BlockTag::MINECRAFT_FOXES_SPAWNABLE_ON
+    } else if id == EntityType::RABBIT.id {
+        &BlockTag::MINECRAFT_RABBITS_SPAWNABLE_ON
+    } else if id == EntityType::PARROT.id {
+        &BlockTag::MINECRAFT_PARROTS_SPAWNABLE_ON
+    } else if id == EntityType::GOAT.id {
+        &BlockTag::MINECRAFT_GOATS_SPAWNABLE_ON
+    } else if id == EntityType::CAMEL.id {
+        &BlockTag::MINECRAFT_CAMELS_SPAWNABLE_ON
+    } else if id == EntityType::ARMADILLO.id {
+        &BlockTag::MINECRAFT_ARMADILLO_SPAWNABLE_ON
+    } else if id == EntityType::MOOSHROOM.id {
+        &BlockTag::MINECRAFT_MOOSHROOMS_SPAWNABLE_ON
+    } else if id == EntityType::FROG.id {
+        &BlockTag::MINECRAFT_FROGS_SPAWNABLE_ON
+    } else {
+        // Sheep, pig, chicken, cow, horse, donkey, llama, etc.
+        &BlockTag::MINECRAFT_ANIMALS_SPAWNABLE_ON
+    };
+    check_creature_spawn_on_tag(world, pos, ground)
 }
 
 /// Vanilla `PolarBear.checkPolarBearSpawnRules`.
 fn check_polar_bear_spawn_rules(world: &World, pos: &BlockPos) -> bool {
     use pumpkin_data::tag::{self, Taggable};
-    let light = world.get_raw_brightness_no_darken(pos);
-    if light <= 8 {
+    if !is_bright_enough_to_spawn(world, pos) {
         return false;
     }
     let below = world.get_block(&pos.down());
@@ -458,15 +502,4 @@ fn check_polar_bear_spawn_rules(world: &World, pos: &BlockPos) -> bool {
     }
     // Else animal rules (ANIMALS_SPAWNABLE_ON only).
     check_animal_spawn_rules(world, pos)
-}
-
-/// Vanilla `Fox.checkFoxSpawnRules`:
-/// `below.is(FOXES_SPAWNABLE_ON) && Animal.isBrightEnoughToSpawn` (raw light > 8).
-fn check_fox_spawn_rules(world: &World, pos: &BlockPos) -> bool {
-    use pumpkin_data::tag::{self, Taggable};
-    let below = world.get_block(&pos.down());
-    if !below.has_tag(&tag::Block::MINECRAFT_FOXES_SPAWNABLE_ON) {
-        return false;
-    }
-    world.get_raw_brightness_no_darken(pos) > 8
 }
