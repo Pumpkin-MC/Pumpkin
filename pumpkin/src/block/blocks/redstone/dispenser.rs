@@ -37,8 +37,6 @@ use pumpkin_inventory::screen_handler::{
     BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_protocol::IdOr;
-use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -209,21 +207,27 @@ impl BlockBehaviour for DispenserBlock {
                     ];
                     let boats = BoatItem::ids();
 
-                    if arrows.contains(&item.item.id) {                             // Arrows
+                    if arrows.contains(&item.item.id) {
+                        // Arrows
                         Self::fire_arrow(&ctx, &mut item).await;
-                    } else if boats.contains(&item.item.id) {                       // Boats
+                    } else if boats.contains(&item.item.id) {
+                        // Boats
                         if !Self::dispense_boat(&ctx, &mut item).await {
                             Self::drop_item(&ctx, &mut item).await;
                         }
-                    } else if item.item.id == Item::ARMOR_STAND.id {                // Armor stands
+                    } else if item.item.id == Item::ARMOR_STAND.id {
+                        // Armor stands
                         if !Self::dispense_armor_stand(&ctx, &mut item).await {
                             Self::drop_item(&ctx, &mut item).await;
                         }
-                    } else if item.item.id == Item::TNT.id {                        // TNT
+                    } else if item.item.id == Item::TNT.id {
+                        // TNT
                         Self::dispense_tnt(&ctx, &mut item).await;
-                    } else if entity_from_egg(item.item.id).is_some() {             // Spawn eggs
+                    } else if entity_from_egg(item.item.id).is_some() {
+                        // Spawn eggs
                         Self::dispense_spawn_egg(&ctx, &mut item).await;
-                    } else {                                                        // Default / Drop
+                    } else {
+                        // Default / Drop
                         Self::drop_item(&ctx, &mut item).await;
                     }
                 } else {
@@ -279,24 +283,11 @@ impl DispenserBlock {
             Self::ARROW_DISPENSE_UNCERTAINTY,
         );
 
-        let chunk_pos = arrow.get_entity().chunk_pos.load();
         let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
         world.spawn_entity(arrow_arc).await;
 
-        let sound_pitch = 1.0 / (rand::random::<f32>() * 0.4 + 1.2) * 0.5;
-        let sound_packet = CSoundEffect::new(
-            IdOr::Id(Sound::EntityArrowShoot as u16),
-            SoundCategory::Neutral,
-            &position,
-            1.0,
-            sound_pitch,
-            0.0,
-        );
-
-        world.broadcast_to_chunk(chunk_pos, &sound_packet);
-
         ctx.world
-            .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
+            .sync_world_event(WorldEvent::SoundDispenserProjectileLaunch, *ctx.position, 0);
 
         ctx.world.sync_world_event(
             WorldEvent::ParticlesShootSmoke,
@@ -326,9 +317,17 @@ impl DispenserBlock {
 
     async fn dispense_boat(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
         let target = Self::target_position(ctx);
-        if ctx.world.get_fluid(&target).id != Fluid::WATER.id {
+        let is_water = |id: u16| id == Fluid::WATER.id || id == Fluid::FLOWING_WATER.id;
+
+        let spawn_pos = if is_water(ctx.world.get_fluid(&target).id) {
+            target.to_f64()
+        } else if ctx.world.get_block_state(&target).is_air()
+            && is_water(ctx.world.get_fluid(&target.down()).id)
+        {
+            target.down().to_f64()
+        } else {
             return false;
-        }
+        };
 
         let entity_type = BoatItem::item_to_entity(item.item);
         let dimensions = EntityDimensions::new(
@@ -336,7 +335,6 @@ impl DispenserBlock {
             entity_type.dimension[1],
             entity_type.eye_height,
         );
-        let spawn_pos = target.to_f64();
         if !Self::has_room_for(ctx, spawn_pos, &dimensions) {
             return false;
         }
@@ -411,7 +409,7 @@ impl DispenserBlock {
         let spawn_pos = Self::target_position(ctx).to_f64();
 
         let mob = from_type(entity_type, spawn_pos, ctx.world, Uuid::new_v4());
-        let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
+        let yaw = wrap_degrees(rng().random::<f32>() * 360.0) % 360.0;
         mob.get_entity().set_rotation(yaw, 0.0);
         apply_entity_variant(item, mob.as_ref());
 
