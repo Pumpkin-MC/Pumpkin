@@ -113,7 +113,7 @@ use crate::entity::vehicle::boat::BoatEntity;
 use crate::entity::vehicle::minecart::MinecartEntity;
 use crate::entity::{Entity, EntityBase, mob};
 use crate::world::World;
-use pumpkin_data::Block;
+use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
 use std::sync::atomic::AtomicBool;
 
 #[expect(clippy::too_many_lines)]
@@ -277,7 +277,10 @@ pub fn from_type(
             };
             Arc::new(WindChargeEntity::new_breeze(thrown))
         }
-        id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
+        id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(
+            entity,
+            ItemStack::new(1, &Item::FIREWORK_ROCKET),
+        )),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),
         id if id == EntityType::LINGERING_POTION.id => Arc::new(LingeringPotionEntity::new(entity)),
         id if id == EntityType::EYE_OF_ENDER.id => Arc::new(EyeOfEnder::new(entity)),

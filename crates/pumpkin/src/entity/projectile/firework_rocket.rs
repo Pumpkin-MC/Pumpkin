@@ -3,8 +3,14 @@ use crate::{
     server::Server,
     world::World,
 };
-use pumpkin_data::{entity::EntityStatus, meta_data_type::MetaDataType, tracked_data::TrackedData};
-use pumpkin_protocol::{codec::optional_int::OptionalInt, java::client::play::Metadata};
+use pumpkin_data::{
+    data_component_impl::FireworksImpl, entity::EntityStatus, item_stack::ItemStack,
+    meta_data_type::MetaDataType, tracked_data::TrackedData,
+};
+use pumpkin_protocol::{
+    codec::{item_stack_seralizer::ItemStackSerializer, optional_int::OptionalInt},
+    java::client::play::Metadata,
+};
 use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
@@ -19,12 +25,22 @@ const GRAVITY: f64 = 0.0;
 
 pub struct FireworkRocketEntity {
     entity: ThrownItemEntity,
+    item_stack: ItemStack,
     life: AtomicU32,
     life_time: AtomicU32,
 }
 
 impl FireworkRocketEntity {
-    pub fn new(entity: Entity) -> Self {
+    fn lifetime(item_stack: &ItemStack, random: &mut RandomGenerator) -> u32 {
+        let flight_count = item_stack
+            .get_data_component::<FireworksImpl>()
+            .map_or(1, |fireworks| 1 + fireworks.flight_duration)
+            .max(1) as u32;
+
+        10 * flight_count + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32
+    }
+
+    pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
 
         entity.set_velocity(Vector3::new(
@@ -32,6 +48,7 @@ impl FireworkRocketEntity {
             0.05,
             random.next_triangular(0.0, 0.002_297),
         ));
+        let life_time = Self::lifetime(&item_stack, &mut random);
         Self {
             entity: ThrownItemEntity {
                 entity,
@@ -40,14 +57,13 @@ impl FireworkRocketEntity {
                 has_hit: AtomicBool::new(false),
                 gravity: GRAVITY,
             },
+            item_stack,
             life: 0.into(),
-            // TODO
-            life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
-                .into(),
+            life_time: life_time.into(),
         }
     }
 
-    pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
+    pub fn new_shot(entity: Entity, shooter: &Entity, item_stack: ItemStack) -> Self {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
 
         // Set random initial velocity
@@ -58,26 +74,14 @@ impl FireworkRocketEntity {
             0.05,
             random.next_triangular(0.0, 0.002_297),
         ));
+        let life_time = Self::lifetime(&item_stack, &mut random);
 
-        // Set random life
-        let rocket = Self {
+        Self {
             entity: thrown,
+            item_stack,
             life: 0.into(),
-            life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
-                .into(),
-        };
-
-        // Set shooter metadata
-        rocket.entity.entity.send_meta_data(
-            &[Metadata::new(
-                TrackedData::ATTACHED_TO_TARGET,
-                MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
-                OptionalInt(Some(shooter.entity_id)),
-            )],
-            None,
-        );
-
-        rocket
+            life_time: life_time.into(),
+        }
     }
 
     pub async fn explode_and_remove(&self, world: &World) {
@@ -93,24 +97,45 @@ impl FireworkRocketEntity {
 impl NBTStorage for FireworkRocketEntity {}
 
 impl EntityBase for FireworkRocketEntity {
+    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::ID_FIREWORKS_ITEM,
+                    MetaDataType::ITEM_STACK,
+                    &ItemStackSerializer::from(self.item_stack.clone()),
+                )],
+                None,
+            );
+
+            if let Some(shooter_id) = self.entity.owner_id {
+                entity.send_meta_data(
+                    &[Metadata::new(
+                        TrackedData::ATTACHED_TO_TARGET,
+                        MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
+                        OptionalInt(Some(shooter_id)),
+                    )],
+                    None,
+                );
+            }
+        })
+    }
+
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.process_tick(caller, server).await;
-
             let entity = self.get_entity();
             let world = entity.world.load();
-            let mut velocity = entity.velocity.load();
 
             if let Some(shooter_id) = self.entity.owner_id {
-                // Check if the player who fired this rocket still exists in the world
+                entity.update_last_pos();
                 if let Some(shooter) = world.get_entity_by_id(shooter_id) {
                     let shooter = shooter.get_entity();
 
-                    // Logic for boosting Elytra flight
                     if shooter.is_fall_flying() {
                         let rotation = shooter.rotation().to_f64();
                         let shooter_vel = shooter.velocity.load();
@@ -119,13 +144,14 @@ impl EntityBase for FireworkRocketEntity {
                             shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);
 
                         shooter.set_velocity(new_shooter_vel);
-
-                        entity.set_pos(shooter.pos.load());
-                        entity.set_velocity(new_shooter_vel);
                     }
+
+                    entity.set_pos(shooter.pos.load());
+                    entity.set_velocity(shooter.velocity.load());
                 }
             } else {
-                // Standard firework rocket flight logic
+                self.entity.process_tick(caller, server).await;
+                let mut velocity = entity.velocity.load();
                 velocity.x *= 1.15;
                 velocity.z *= 1.15;
                 velocity.y += 0.04;
@@ -133,7 +159,7 @@ impl EntityBase for FireworkRocketEntity {
             }
 
             // Increment life and check for explosion
-            let current_life = self.life.fetch_add(1, Ordering::Relaxed);
+            let current_life = self.life.fetch_add(1, Ordering::Relaxed) + 1;
             if current_life > self.life_time.load(Ordering::Relaxed) {
                 self.explode_and_remove(&world).await;
             }

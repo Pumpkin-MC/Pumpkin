@@ -25,7 +25,7 @@ impl ItemMetadata for FireworkRocketItem {
 impl ItemBehaviour for FireworkRocketItem {
     fn use_on_block<'a>(
         &'a self,
-        _item: &'a mut ItemStack,
+        item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -44,7 +44,7 @@ impl ItemBehaviour for FireworkRocketItem {
                 ),
                 &EntityType::FIREWORK_ROCKET,
             );
-            let entity = FireworkRocketEntity::new(entity);
+            let entity = FireworkRocketEntity::new(entity, item.clone());
             world.spawn_entity(Arc::new(entity)).await;
         })
     }
@@ -62,7 +62,9 @@ impl ItemBehaviour for FireworkRocketItem {
                     player.get_entity().pos.load(),
                     &EntityType::FIREWORK_ROCKET,
                 );
-                let entity = FireworkRocketEntity::new_shot(entity, player.get_entity());
+                let item_stack = player.inventory.held_item().lock().await.clone();
+                let entity =
+                    FireworkRocketEntity::new_shot(entity, player.get_entity(), item_stack);
                 world.spawn_entity(Arc::new(entity)).await;
             }
         })
