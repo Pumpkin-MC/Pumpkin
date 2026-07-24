@@ -1998,6 +1998,7 @@ impl Player {
                         player.delivered_chunks.insert(chunk);
                     }
                 }
+                world.update_entity_tracking_for_player(&player);
             });
             if let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref()
                 && !self.bedrock_spawned.load(Ordering::Relaxed)

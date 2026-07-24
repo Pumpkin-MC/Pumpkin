@@ -20,6 +20,7 @@ use std::{
 use tracing::{debug, error, info, trace, warn};
 
 pub mod chunker;
+mod entity_tracker;
 pub mod explosion;
 pub mod loot;
 pub mod map;
@@ -197,6 +198,7 @@ pub struct World {
     /// A map of active entities within the world, keyed by their unique UUID.
     /// This does not include players.
     pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
+    entity_trackers: DashMap<i32, entity_tracker::EntityTracker>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -296,6 +298,7 @@ impl World {
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
             entities: ArcSwap::new(Arc::new(Vec::new())),
+            entity_trackers: DashMap::new(),
             scoreboard: Mutex::new(Scoreboard::default()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 5.999_996_8E7, 0, 5, 300)),
             level_time: Mutex::new(LevelTime::new()),
@@ -920,6 +923,7 @@ impl World {
         let entities_to_tick = self.entities.load();
         let entity_count = entities_to_tick.len();
         let server_for_entities = server.clone();
+        let world_for_entities = self.clone();
         let active_chunks = self.active_chunks.load();
 
         let entity_future = async move {
@@ -944,10 +948,12 @@ impl World {
                 let e_clone = entity.clone();
                 let s_clone = server_for_entities.clone();
                 let p_cache = players_cache.clone();
+                let world = world_for_entities.clone();
 
                 tasks.spawn(async move {
                     e_clone.get_entity().age.fetch_add(1, Relaxed);
                     e_clone.tick(&e_clone, &s_clone).await;
+                    world.update_entity_tracking_for_entity(&e_clone);
 
                     let entity_inner = e_clone.get_entity();
                     let entity_pos = entity_inner.pos.load();
@@ -3668,39 +3674,23 @@ impl World {
                         entity.read_nbt_non_mut(entity_nbt).await;
                         entity.init_data_tracker().await;
 
-                        let base_entity = entity.get_entity();
                         // Clear velocity so the client does not replay the drop
                         // animation; residual velocity from the original drop is
                         // stale data.
-                        base_entity.velocity.store(Vector3::default());
-
-                        player
-                            .client
-                            .enqueue_packet(&base_entity.create_spawn_packet())
-                            .await;
+                        entity
+                            .get_entity()
+                            .velocity
+                            .store(Vector3::default());
                         entities_to_add.push(entity);
                     }
 
-                    if !entities_to_add.is_empty() {
-                        world.entities.rcu(|current_entities| {
-                            let mut new_entities = (**current_entities).clone();
-                            new_entities.extend(entities_to_add.iter().cloned());
-                            new_entities
-                        });
+                    for entity in entities_to_add {
+                        world.add_entity_silent(entity).await;
                     }
                 } else {
-                    // The chunk's entities are already live (another watcher loaded
-                    // them). Just send this player the spawn packets for the live
-                    // entities currently in this chunk.
-                    for entity in world.entities.load().iter() {
-                        let base_entity = entity.get_entity();
-                        if base_entity.chunk_pos.load() == position {
-                            player
-                                .client
-                                .enqueue_packet(&base_entity.create_spawn_packet())
-                                .await;
-                        }
-                    }
+                    // Another watcher already made these entities live. Pairing is
+                    // deferred until this player's terrain batch completes.
+                    world.update_entity_tracking_for_player(&player);
                 }
             }
 
@@ -4051,6 +4041,7 @@ impl World {
         player: &Arc<Player>,
         fire_event: bool,
     ) -> Option<Arc<Player>> {
+        self.remove_player_from_entity_tracking(player);
         let mut removed_player: Option<Arc<Player>> = None;
 
         self.players.rcu(|current_list| {
@@ -4123,8 +4114,6 @@ impl World {
     }
 
     pub fn spawn_entity_non_save(&self, entity: &Arc<dyn EntityBase>) {
-        let _base_entity = entity.get_entity();
-        self.broadcast_entity_spawn(entity);
         self.spawn_state.load().add_entity(self, entity.as_ref());
 
         self.entities.rcu(|current_entities| {
@@ -4132,27 +4121,12 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
+        self.register_entity_tracking(entity.clone());
     }
 
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
-        self.broadcast_entity_spawn(&entity);
         entity.init_data_tracker().await;
         self.add_entity_silent(entity).await;
-    }
-
-    pub fn broadcast_entity_spawn(&self, entity: &Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-        let chunk_pos = base_entity.chunk_pos.load();
-
-        let players = self.players.load();
-        for player in players.iter() {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(player).get() as i32;
-
-            if is_within_view_distance(chunk_pos, center, view_distance) {
-                player.client.try_enqueue_spawn_packet(entity);
-            }
-        }
     }
 
     #[allow(clippy::unused_async)]
@@ -4181,6 +4155,7 @@ impl World {
             new_entities.push(entity.clone());
             new_entities
         });
+        self.register_entity_tracking(entity);
     }
 
     #[allow(clippy::unused_async)]
@@ -4192,13 +4167,7 @@ impl World {
             new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
             new_entities
         });
-
-        let chunk_pos = base_entity.chunk_pos.load();
-        self.broadcast_to_chunk_editioned_sync(
-            chunk_pos,
-            &CRemoveEntities::new(&[base_entity.entity_id.into()]),
-            &CRemoveActor::new(VarLong(base_entity.entity_id as i64)),
-        );
+        self.remove_entity_tracking(base_entity.entity_id);
     }
 
     pub async fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
@@ -4209,7 +4178,11 @@ impl World {
             let mut new_entities = (**current_entities).clone();
             new_entities.retain(|entity| {
                 let base_entity = entity.get_entity();
-                let pos = base_entity.chunk_pos.load();
+                let entity_pos = base_entity.pos.load();
+                let pos = Vector2::new(
+                    get_section_cord(entity_pos.x.floor() as i32),
+                    get_section_cord(entity_pos.z.floor() as i32),
+                );
                 if chunks_set.contains(&pos) {
                     entities_to_remove.push(entity.clone());
                     false
@@ -4221,6 +4194,7 @@ impl World {
         });
 
         for entity in entities_to_remove {
+            self.remove_entity_tracking(entity.get_entity().entity_id);
             self.save_entity(&entity).await;
             self.spawn_state.load().remove_entity(self, entity.as_ref());
         }
