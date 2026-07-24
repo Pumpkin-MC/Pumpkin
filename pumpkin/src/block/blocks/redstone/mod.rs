@@ -72,8 +72,9 @@ pub async fn notify_after_wire_power_change(world: &Arc<World>, pos: &BlockPos) 
         let neighbor_pos = pos.offset(direction.to_offset());
         world.update_neighbors(&neighbor_pos, None).await;
     }
-    // Wire power + lamp/torch reactions must hit the client this tick (not next).
-    world.flush_block_updates().await;
+    // Do NOT flush here. Vanilla marks dirty via setBlock → chunkSource.blockChanged,
+    // then ServerChunkCache.broadcastChangedChunks once per tick. Per-wire flush was
+    // O(wires × players) and not vanilla.
 }
 
 pub async fn is_emitting_redstone_power(

@@ -1157,10 +1157,10 @@ impl World {
             );
         }
 
-        // Flush again at end of tick so mid-tick changes (redstone power, fluid
-        // washing torches, player-placed blocks during entity phase) reach clients
-        // in the same game tick — avoids "server already powered / dropped item but
-        // client still shows old dust/torch" visual desync.
+        // Vanilla broadcasts only once mid-tick (in chunkSource.tick). Changes after
+        // that (entity/player phase) wait until the next tick's broadcast. We flush
+        // once more at tick end so player/entity-driven setBlock still syncs without
+        // waiting a full extra 50ms — still one batch, not per-block.
         self.flush_block_updates().await;
     }
 
@@ -1171,6 +1171,13 @@ impl World {
             .insert(position, block_state_id);
     }
 
+    /// Send pending block state changes to clients.
+    ///
+    /// Vanilla analogue: `ServerChunkCache.blockChanged` only dirties a
+    /// `ChunkHolder`; `broadcastChangedChunks` later emits
+    /// `ClientboundBlockUpdatePacket` / `ClientboundSectionBlocksUpdatePacket`
+    /// once per tick. Call sites must batch (after NTE / end of tick), never
+    /// flush on every single `setBlock` (e.g. each redstone dust power change).
     pub async fn flush_block_updates(&self) {
         let mut block_state_updates_by_chunk_section: HashMap<
             Vector3<i32>,
@@ -1348,7 +1355,9 @@ impl World {
             }
         }
 
-        // Push block changes from NTE to clients before random ticks / entities.
+        // Vanilla: after block/fluid scheduled ticks, chunkSource.tick →
+        // broadcastChangedChunks (batch dirty sections). We flush once here so NTE
+        // results (sand, water, wire) reach clients this game tick — not per setBlock.
         self.flush_block_updates().await;
 
         // ONE JoinSet for remaining chunk operations (random ticks only below)
