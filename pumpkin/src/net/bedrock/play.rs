@@ -665,15 +665,19 @@ impl BedrockClient {
                 }
 
                 if data.action_type.0 == 0 {
-                    // Click block
+                    // Click block. Never trust client item_in_hand to spawn items
+                    // in survival — only creative may adopt the client descriptor.
                     let is_creative = player.gamemode.load() == GameMode::Creative;
-                    let client_stack = descriptor_to_stack(&data.item_in_hand, is_creative);
-
                     let held_item = player.inventory.held_item();
-                    if !client_stack.is_empty() {
-                        let mut server_stack = held_item.lock().await;
-                        if server_stack.is_empty() || server_stack.item.id != client_stack.item.id {
-                            *server_stack = client_stack.clone();
+                    if is_creative {
+                        let client_stack = descriptor_to_stack(&data.item_in_hand, true);
+                        if !client_stack.is_empty() {
+                            let mut server_stack = held_item.lock().await;
+                            if server_stack.is_empty()
+                                || server_stack.item.id != client_stack.item.id
+                            {
+                                *server_stack = client_stack;
+                            }
                         }
                     }
 
@@ -1343,6 +1347,16 @@ impl BedrockClient {
                         source,
                         destination,
                     } => {
+                        // CreatedOutput is only valid after a craft action set
+                        // `created_item`. Mapping it to the real result slot lets
+                        // clients copy craft output without consuming the grid.
+                        if source.container_name.container_name == ContainerName::CreatedOutput
+                            && created_item.is_none()
+                        {
+                            tracing::debug!("CreatedOutput move without tracked craft");
+                            result = 1;
+                            break;
+                        }
                         let mut source_stack =
                             get_slot_stack(&*screen_handler, &source, created_item.as_ref()).await;
                         if source_stack.is_empty() && created_item.is_none() {
@@ -1569,17 +1583,19 @@ impl BedrockClient {
                                 break;
                             }
 
-                            // Verify the grid still has enough ingredients for `reps` crafts
-                            // by attempting takes one-by-one; stop early if a take empties output.
+                            // Take one craft at a time. ResultSlot::on_take_item
+                            // refills from remaining ingredients; empty result
+                            // means the grid can no longer craft.
                             let mut crafted_count: u16 = 0;
+                            let expected_id = output_stack.item.id;
                             for _ in 0..reps {
                                 let current = output_slot.get_cloned_stack().await;
-                                if current.is_empty() || current.item.id != output_stack.item.id {
+                                if current.is_empty() || current.item.id != expected_id {
                                     break;
                                 }
+                                let batch = u16::from(current.item_count);
                                 output_slot.on_take_item(player.as_ref(), &current).await;
-                                crafted_count = crafted_count
-                                    .saturating_add(u16::from(output_stack.item_count));
+                                crafted_count = crafted_count.saturating_add(batch);
                             }
                             if crafted_count == 0 {
                                 result = 1;
@@ -1888,27 +1904,35 @@ fn map_bedrock_container_slot(
 ) -> Option<usize> {
     let container_slots = screen_handler.get_behaviour().container_slots;
     let is_player_screen = screen_handler.window_type().is_none();
+    let slot_count = screen_handler.get_behaviour().slots.len();
+
+    // Bound every mapped index so a crafted slot_id cannot panic the handler.
+    let in_range = |idx: usize| (idx < slot_count).then_some(idx);
 
     match container_name {
         ContainerName::HotBar => {
+            // Hotbar is always 9 slots; unbounded slot_id was a one-packet panic.
+            if slot_id >= 9 {
+                return None;
+            }
             if is_player_screen {
-                Some(36 + slot_id as usize)
+                in_range(36 + slot_id as usize)
             } else {
-                Some(container_slots + 27 + slot_id as usize)
+                in_range(container_slots + 27 + slot_id as usize)
             }
         }
         ContainerName::Inventory | ContainerName::CombinedHotBarAndInventory => {
             if slot_id < 9 {
                 if is_player_screen {
-                    Some(36 + slot_id as usize)
+                    in_range(36 + slot_id as usize)
                 } else {
-                    Some(container_slots + 27 + slot_id as usize)
+                    in_range(container_slots + 27 + slot_id as usize)
                 }
             } else if slot_id < 36 {
                 if is_player_screen {
-                    Some(slot_id as usize)
+                    in_range(slot_id as usize)
                 } else {
-                    Some(container_slots + (slot_id - 9) as usize)
+                    in_range(container_slots + (slot_id - 9) as usize)
                 }
             } else {
                 None
@@ -2170,10 +2194,12 @@ async fn get_slot_stack(
     slot_info: &pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo,
     created_item: Option<&ItemStack>,
 ) -> ItemStack {
-    if let (ContainerName::CreatedOutput, Some(stack)) =
-        (slot_info.container_name.container_name, created_item)
-    {
-        return stack.clone();
+    // CreatedOutput is virtual: only the tracked craft result, never the real
+    // screen result slot (that would skip ingredient consumption).
+    if slot_info.container_name.container_name == ContainerName::CreatedOutput {
+        return created_item
+            .cloned()
+            .unwrap_or_else(|| ItemStack::EMPTY.clone());
     }
     if slot_info.container_name.container_name == ContainerName::Cursor {
         let cursor_lock = screen_handler.get_behaviour().cursor_stack.lock().await;
