@@ -10,6 +10,7 @@ use pumpkin_data::{
     item_stack::ItemStack,
 };
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
+use pumpkin_inventory::slot::Slot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::bedrock::{
     client::inventory_content::CInventoryContent,
@@ -765,15 +766,19 @@ impl BedrockClient {
                         }
                     }
                 } else if data.action_type.0 == 1 {
-                    // Click air / Use item
+                    // Click air / Use item. Same rule as click-block: never adopt
+                    // client item_in_hand in survival.
                     let is_creative = player.gamemode.load() == GameMode::Creative;
-                    let client_stack = descriptor_to_stack(&data.item_in_hand, is_creative);
-
                     let held_item = player.inventory.held_item();
-                    if !client_stack.is_empty() {
-                        let mut server_stack = held_item.lock().await;
-                        if server_stack.is_empty() || server_stack.item.id != client_stack.item.id {
-                            *server_stack = client_stack.clone();
+                    if is_creative {
+                        let client_stack = descriptor_to_stack(&data.item_in_hand, true);
+                        if !client_stack.is_empty() {
+                            let mut server_stack = held_item.lock().await;
+                            if server_stack.is_empty()
+                                || server_stack.item.id != client_stack.item.id
+                            {
+                                *server_stack = client_stack;
+                            }
                         }
                     }
 
@@ -1270,6 +1275,8 @@ impl BedrockClient {
         };
         use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction;
 
+        const MAX_CRAFT_REPETITIONS: u8 = 64;
+
         let current_screen_handler = player.current_screen_handler.lock().await.clone();
         let mut screen_handler = current_screen_handler.lock().await;
 
@@ -1347,9 +1354,11 @@ impl BedrockClient {
                         source,
                         destination,
                     } => {
-                        // CreatedOutput is only valid after a craft action set
-                        // `created_item`. Mapping it to the real result slot lets
-                        // clients copy craft output without consuming the grid.
+                        if is_result_preview_container(source.container_name.container_name) {
+                            tracing::debug!("Reject Take/Place from result preview container");
+                            result = 1;
+                            break;
+                        }
                         if source.container_name.container_name == ContainerName::CreatedOutput
                             && created_item.is_none()
                         {
@@ -1359,7 +1368,7 @@ impl BedrockClient {
                         }
                         let mut source_stack =
                             get_slot_stack(&*screen_handler, &source, created_item.as_ref()).await;
-                        if source_stack.is_empty() && created_item.is_none() {
+                        if source_stack.is_empty() {
                             tracing::debug!("Source stack is empty in Take/Place");
                             result = 1;
                             break;
@@ -1385,29 +1394,13 @@ impl BedrockClient {
                             }
 
                             source_stack.decrement(count);
-                            if source.container_name.container_name == ContainerName::CreatedOutput
-                            {
-                                if let Some(ref mut stack) = created_item {
-                                    stack.decrement(count);
-                                    if stack.is_empty() {
-                                        created_item = None;
-                                    }
-                                }
-                            } else if source.container_name.container_name == ContainerName::Cursor
-                            {
-                                let cursor_is_empty = screen_handler
-                                    .get_behaviour()
-                                    .cursor_stack
-                                    .lock()
-                                    .await
-                                    .is_empty();
-                                if cursor_is_empty && let Some(ref mut stack) = created_item {
-                                    stack.decrement(count);
-                                    if stack.is_empty() {
-                                        created_item = None;
-                                    }
-                                }
-                            }
+                            consume_created_output_source(
+                                source.container_name.container_name,
+                                count,
+                                &mut created_item,
+                                &*screen_handler,
+                            )
+                            .await;
                             let source_stack = if source_stack.is_empty() {
                                 ItemStack::EMPTY.clone()
                             } else {
@@ -1446,10 +1439,32 @@ impl BedrockClient {
                         }
                     }
                     ItemStackRequestAction::Swap { slot1, slot2 } => {
+                        // Preview/result containers are not free-item sources.
+                        if is_result_preview_container(slot1.container_name.container_name)
+                            || is_result_preview_container(slot2.container_name.container_name)
+                        {
+                            result = 1;
+                            break;
+                        }
+                        if (slot1.container_name.container_name == ContainerName::CreatedOutput
+                            || slot2.container_name.container_name == ContainerName::CreatedOutput)
+                            && created_item.is_none()
+                        {
+                            result = 1;
+                            break;
+                        }
                         let stack1 =
                             get_slot_stack(&*screen_handler, &slot1, created_item.as_ref()).await;
                         let stack2 =
                             get_slot_stack(&*screen_handler, &slot2, created_item.as_ref()).await;
+
+                        // Moving CreatedOutput into inventory must spend the craft.
+                        if slot1.container_name.container_name == ContainerName::CreatedOutput {
+                            consume_created_item(&mut created_item, stack1.item_count);
+                        }
+                        if slot2.container_name.container_name == ContainerName::CreatedOutput {
+                            consume_created_item(&mut created_item, stack2.item_count);
+                        }
 
                         update_slot_stack(player, &mut *screen_handler, &slot1, stack2.clone())
                             .await;
@@ -1476,6 +1491,16 @@ impl BedrockClient {
                         source,
                         randomly: _,
                     } => {
+                        if is_result_preview_container(source.container_name.container_name) {
+                            result = 1;
+                            break;
+                        }
+                        if source.container_name.container_name == ContainerName::CreatedOutput
+                            && created_item.is_none()
+                        {
+                            result = 1;
+                            break;
+                        }
                         let mut source_stack =
                             get_slot_stack(&*screen_handler, &source, created_item.as_ref()).await;
                         if source_stack.is_empty() {
@@ -1488,6 +1513,13 @@ impl BedrockClient {
                             player.drop_item(dropped_stack).await;
 
                             source_stack.decrement(count);
+                            consume_created_output_source(
+                                source.container_name.container_name,
+                                count,
+                                &mut created_item,
+                                &*screen_handler,
+                            )
+                            .await;
                             let source_stack = if source_stack.is_empty() {
                                 ItemStack::EMPTY.clone()
                             } else {
@@ -1513,6 +1545,16 @@ impl BedrockClient {
                     }
                     ItemStackRequestAction::Destroy { count, source }
                     | ItemStackRequestAction::Consume { count, source } => {
+                        if is_result_preview_container(source.container_name.container_name) {
+                            result = 1;
+                            break;
+                        }
+                        if source.container_name.container_name == ContainerName::CreatedOutput
+                            && created_item.is_none()
+                        {
+                            result = 1;
+                            break;
+                        }
                         let mut source_stack =
                             get_slot_stack(&*screen_handler, &source, created_item.as_ref()).await;
                         if source_stack.is_empty() {
@@ -1522,6 +1564,13 @@ impl BedrockClient {
                         let count = count.min(source_stack.item_count);
                         if count > 0 {
                             source_stack.decrement(count);
+                            consume_created_output_source(
+                                source.container_name.container_name,
+                                count,
+                                &mut created_item,
+                                &*screen_handler,
+                            )
+                            .await;
                             let source_stack = if source_stack.is_empty() {
                                 ItemStack::EMPTY.clone()
                             } else {
@@ -1554,38 +1603,49 @@ impl BedrockClient {
                         repetitions,
                         ..
                     } => {
-                        // Bound repetitions; each take must consume a full set of inputs.
-                        const MAX_CRAFT_REPETITIONS: u8 = 64;
+                        // Only 2×2 player craft and 3×3 crafting table. Any other
+                        // open window would treat slots[0] as "output" and mint
+                        // free stacks from chest/etc contents.
+                        let window_type = screen_handler.window_type();
+                        let is_crafting_screen = window_type.is_none()
+                            || window_type == Some(pumpkin_data::screen::WindowType::Crafting);
+                        if !is_crafting_screen {
+                            tracing::debug!(
+                                "Reject CraftRecipe on non-crafting window {:?}",
+                                window_type
+                            );
+                            result = 1;
+                            break;
+                        }
+
                         if repetitions > 0 {
                             let reps = repetitions.min(MAX_CRAFT_REPETITIONS);
                             screen_handler.update_to_client().await;
 
-                            let is_player = screen_handler.window_type().is_none();
+                            let is_player = window_type.is_none();
                             let grid_size = if is_player { 4 } else { 9 };
-                            for i in 0..grid_size {
-                                let grid_slot_index = 1 + i;
-                                let grid_slot =
-                                    screen_handler.get_behaviour().slots[grid_slot_index].clone();
-                                let grid_stack = grid_slot.get_cloned_stack().await;
-                                tracing::debug!(
-                                    "Crafting Grid slot {i} (slot index {grid_slot_index}): Item ID: {}, Count: {}",
-                                    grid_stack.item.id,
-                                    grid_stack.item_count
-                                );
+                            let slots = &screen_handler.get_behaviour().slots;
+                            // Output + full grid must exist.
+                            if slots.len() <= grid_size {
+                                result = 1;
+                                break;
                             }
 
-                            let output_slot = screen_handler.get_behaviour().slots[0].clone();
-                            let output_stack = output_slot.get_cloned_stack().await;
+                            let output_slot = slots[0].clone();
+                            // Refuse if slot 0 accepts inserts (not a craft output).
+                            if Slot::can_insert(output_slot.as_ref(), ItemStack::EMPTY).await {
+                                tracing::debug!("CraftRecipe output slot is not take-only");
+                                result = 1;
+                                break;
+                            }
 
+                            let output_stack = output_slot.get_cloned_stack().await;
                             if output_stack.is_empty() {
                                 tracing::warn!("Client tried to craft, but output slot is empty!");
                                 result = 1;
                                 break;
                             }
 
-                            // Take one craft at a time. ResultSlot::on_take_item
-                            // refills from remaining ingredients; empty result
-                            // means the grid can no longer craft.
                             let mut crafted_count: u16 = 0;
                             let expected_id = output_stack.item.id;
                             for _ in 0..reps {
@@ -1605,13 +1665,9 @@ impl BedrockClient {
                             total_crafted.item_count = crafted_count.min(u16::from(u8::MAX)) as u8;
                             created_item = Some(total_crafted);
 
-                            // Record updates for all grid slots so Bedrock client is notified of consumed ingredients!
-                            let is_player = screen_handler.window_type().is_none();
-                            let grid_size = if is_player { 4 } else { 9 };
                             for i in 0..grid_size {
                                 let grid_slot_index = 1 + i;
-                                let grid_slot =
-                                    screen_handler.get_behaviour().slots[grid_slot_index].clone();
+                                let grid_slot = slots[grid_slot_index].clone();
                                 let grid_stack = grid_slot.get_cloned_stack().await;
                                 record_update(
                                     &mut updates,
@@ -1896,6 +1952,53 @@ impl BedrockClient {
     }
 }
 
+/// Display-only result previews must never be move *sources* — they map to the
+/// real result slot and would mint free items without consumption.
+const fn is_result_preview_container(name: ContainerName) -> bool {
+    matches!(
+        name,
+        ContainerName::CraftingOutputPreview
+            | ContainerName::AnvilResultPreview
+            | ContainerName::SmithingTableResultPreview
+            | ContainerName::TradeResultPreview
+            | ContainerName::Trade2ResultPreview
+            | ContainerName::LoomResultPreview
+            | ContainerName::GrindstoneResultPreview
+            | ContainerName::StonecutterResultPreview
+            | ContainerName::CartographyResultPreview
+    )
+}
+
+fn consume_created_item(created_item: &mut Option<ItemStack>, count: u8) {
+    if let Some(stack) = created_item.as_mut() {
+        stack.decrement(count);
+        if stack.is_empty() {
+            *created_item = None;
+        }
+    }
+}
+
+async fn consume_created_output_source(
+    source_name: ContainerName,
+    count: u8,
+    created_item: &mut Option<ItemStack>,
+    screen_handler: &dyn ScreenHandler,
+) {
+    if source_name == ContainerName::CreatedOutput {
+        consume_created_item(created_item, count);
+    } else if source_name == ContainerName::Cursor {
+        let cursor_is_empty = screen_handler
+            .get_behaviour()
+            .cursor_stack
+            .lock()
+            .await
+            .is_empty();
+        if cursor_is_empty {
+            consume_created_item(created_item, count);
+        }
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn map_bedrock_container_slot(
     screen_handler: &dyn ScreenHandler,
@@ -1906,41 +2009,41 @@ fn map_bedrock_container_slot(
     let is_player_screen = screen_handler.window_type().is_none();
     let slot_count = screen_handler.get_behaviour().slots.len();
 
-    // Bound every mapped index so a crafted slot_id cannot panic the handler.
+    // Every mapped index is range-checked. No arm may return a raw usize.
     let in_range = |idx: usize| (idx < slot_count).then_some(idx);
 
-    match container_name {
+    let raw: Option<usize> = match container_name {
         ContainerName::HotBar => {
-            // Hotbar is always 9 slots; unbounded slot_id was a one-packet panic.
             if slot_id >= 9 {
-                return None;
-            }
-            if is_player_screen {
-                in_range(36 + slot_id as usize)
+                None
+            } else if is_player_screen {
+                Some(36 + slot_id as usize)
             } else {
-                in_range(container_slots + 27 + slot_id as usize)
+                Some(container_slots + 27 + slot_id as usize)
             }
         }
         ContainerName::Inventory | ContainerName::CombinedHotBarAndInventory => {
             if slot_id < 9 {
                 if is_player_screen {
-                    in_range(36 + slot_id as usize)
+                    Some(36 + slot_id as usize)
                 } else {
-                    in_range(container_slots + 27 + slot_id as usize)
+                    Some(container_slots + 27 + slot_id as usize)
                 }
             } else if slot_id < 36 {
                 if is_player_screen {
-                    in_range(slot_id as usize)
+                    Some(slot_id as usize)
                 } else {
-                    in_range(container_slots + (slot_id - 9) as usize)
+                    Some(container_slots + (slot_id - 9) as usize)
                 }
             } else {
                 None
             }
         }
-        ContainerName::Armor => (slot_id < 4).then(|| 5 + slot_id as usize),
-        ContainerName::Offhand => (slot_id == 0).then_some(45),
-        ContainerName::Cursor => None,
+        ContainerName::Armor => (slot_id < 4).then_some(5 + slot_id as usize),
+        // Player screen only; anvil/merchant etc. have <46 slots.
+        ContainerName::Offhand => (slot_id == 0 && is_player_screen).then_some(45),
+        // Cursor and virtual craft output — never real screen indices.
+        ContainerName::Cursor | ContainerName::CreatedOutput => None,
         ContainerName::CraftingInput => {
             if is_player_screen {
                 if slot_id < 4 {
@@ -1964,27 +2067,10 @@ fn map_bedrock_container_slot(
                 None
             }
         }
-        ContainerName::CraftingOutputPreview | ContainerName::CreatedOutput => {
-            if is_player_screen {
-                Some(0)
-            } else if let Some(window_type) = screen_handler.window_type() {
-                match window_type {
-                    pumpkin_data::screen::WindowType::Crafting => Some(0),
-                    pumpkin_data::screen::WindowType::Stonecutter => Some(1),
-                    pumpkin_data::screen::WindowType::Anvil
-                    | pumpkin_data::screen::WindowType::Furnace
-                    | pumpkin_data::screen::WindowType::BlastFurnace
-                    | pumpkin_data::screen::WindowType::Smoker
-                    | pumpkin_data::screen::WindowType::Grindstone
-                    | pumpkin_data::screen::WindowType::Merchant => Some(2),
-                    pumpkin_data::screen::WindowType::Loom
-                    | pumpkin_data::screen::WindowType::Smithing => Some(3),
-                    _ => None,
-                }
-            } else {
-                None
-            }
-        }
+        // Previews map for write-back/display only; get_slot_stack refuses them as free sources.
+        ContainerName::CraftingOutputPreview => (is_player_screen
+            || screen_handler.window_type() == Some(pumpkin_data::screen::WindowType::Crafting))
+        .then_some(0),
         ContainerName::AnvilInput => matches!(
             screen_handler.window_type(),
             Some(pumpkin_data::screen::WindowType::Anvil)
@@ -2155,7 +2241,8 @@ fn map_bedrock_container_slot(
         )
         .then_some(2),
         _ => ((slot_id as usize) < container_slots).then_some(slot_id as usize),
-    }
+    };
+    raw.and_then(in_range)
 }
 
 struct SlotUpdate {
@@ -2194,14 +2281,18 @@ async fn get_slot_stack(
     slot_info: &pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo,
     created_item: Option<&ItemStack>,
 ) -> ItemStack {
-    // CreatedOutput is virtual: only the tracked craft result, never the real
-    // screen result slot (that would skip ingredient consumption).
-    if slot_info.container_name.container_name == ContainerName::CreatedOutput {
+    let name = slot_info.container_name.container_name;
+    // Virtual craft output only.
+    if name == ContainerName::CreatedOutput {
         return created_item
             .cloned()
             .unwrap_or_else(|| ItemStack::EMPTY.clone());
     }
-    if slot_info.container_name.container_name == ContainerName::Cursor {
+    // Result previews are display-only as *sources* — never copy real results free.
+    if is_result_preview_container(name) {
+        return ItemStack::EMPTY.clone();
+    }
+    if name == ContainerName::Cursor {
         let cursor_lock = screen_handler.get_behaviour().cursor_stack.lock().await;
         if cursor_lock.is_empty()
             && let Some(stack) = created_item
@@ -2210,11 +2301,7 @@ async fn get_slot_stack(
         }
         return cursor_lock.clone();
     }
-    if let Some(screen_slot) = map_bedrock_container_slot(
-        screen_handler,
-        slot_info.container_name.container_name,
-        slot_info.slot_id,
-    ) {
+    if let Some(screen_slot) = map_bedrock_container_slot(screen_handler, name, slot_info.slot_id) {
         screen_handler.get_behaviour().slots[screen_slot]
             .get_cloned_stack()
             .await
@@ -2273,5 +2360,38 @@ async fn update_slot_stack(
             .set_stack(new_stack.clone())
             .await;
         screen_handler.set_received_stack(screen_slot, new_stack);
+    }
+}
+
+#[cfg(test)]
+mod hardening_tests {
+    use super::*;
+
+    #[test]
+    fn result_preview_containers_are_flagged() {
+        assert!(is_result_preview_container(
+            ContainerName::CraftingOutputPreview
+        ));
+        assert!(is_result_preview_container(
+            ContainerName::AnvilResultPreview
+        ));
+        assert!(is_result_preview_container(
+            ContainerName::TradeResultPreview
+        ));
+        assert!(!is_result_preview_container(ContainerName::CreatedOutput));
+        assert!(!is_result_preview_container(ContainerName::HotBar));
+        assert!(!is_result_preview_container(ContainerName::FurnaceResult));
+    }
+
+    #[test]
+    fn consume_created_item_clears_when_empty() {
+        let mut created = Some(ItemStack::new(3, &pumpkin_data::item::Item::EMERALD));
+        consume_created_item(&mut created, 2);
+        assert_eq!(created.as_ref().unwrap().item_count, 1);
+        consume_created_item(&mut created, 1);
+        assert!(created.is_none());
+        // No panic when already none
+        consume_created_item(&mut created, 5);
+        assert!(created.is_none());
     }
 }
