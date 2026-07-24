@@ -23,8 +23,20 @@ const MAX_METADATA_LIST_LEN: usize = 1024;
 /// against a different Pumpkin build, the field lengths read here can be
 /// garbage even when the API version check passes, and cloning or logging
 /// such metadata aborts the server with an enormous allocation (see issue
-/// #2434). Only lengths and capacities are inspected here; the potentially
-/// invalid data pointers are never dereferenced.
+/// #2434).
+///
+/// This is a mitigation, not a sound fix: reading a `#[repr(Rust)]` struct
+/// written by a different toolchain is already undefined behaviour, and
+/// checking the strings inside the lists follows the lists' data pointers.
+/// It does not dereference anything that the `metadata.clone()` below would
+/// not dereference anyway, and it bails out earlier: the scalar fields are
+/// checked first and short-circuit, so mismatched metadata is almost always
+/// rejected before any pointer is followed.
+///
+/// The sound fix is to give the metadata a stable representation across the
+/// boundary (C strings or serialized bytes) and to export a build
+/// fingerprint alongside `PUMPKIN_API_VERSION` so a toolchain mismatch is
+/// rejected deterministically.
 fn is_metadata_plausible(metadata: &PluginMetadata) -> bool {
     let text_plausible =
         |text: &String| text.len() <= MAX_METADATA_TEXT_LEN && text.len() <= text.capacity();
@@ -122,6 +134,11 @@ impl PluginLoader for NativePluginLoader {
     }
 }
 
+// These cover only the pure predicate on well-formed values. The actual
+// hazard (a struct whose layout came from another toolchain) cannot be
+// constructed in safe Rust, so the `len <= capacity` conjunct is untestable
+// here. Adding a field to `PluginMetadata` deliberately breaks `valid()`, so
+// that the new field has to be considered in `is_metadata_plausible`.
 #[cfg(test)]
 mod tests {
     use super::{MAX_METADATA_LIST_LEN, MAX_METADATA_TEXT_LEN, is_metadata_plausible};
