@@ -22,7 +22,9 @@ const TEMPT_ITEMS: &[&Item] = &[
     &Item::HAY_BLOCK,
 ];
 
-/// Horse — basic animal AI (tame/ride TODO).
+/// Horse — vanilla AbstractHorse goals (RunAroundLikeCrazy / rear TODO).
+///
+/// Decompile: Float+MountPanic+Tempt (addBehaviourGoals) + Breed/FollowParent/Stroll.
 pub struct HorseEntity {
     pub mob_entity: MobEntity,
 }
@@ -39,8 +41,10 @@ impl HorseEntity {
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            // addBehaviourGoals
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.2));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(1.2)); // MountPanic
+            // RunAroundLikeCrazyGoal TODO (untamed)
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.0)));

@@ -17,6 +17,7 @@ use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::ai::goal::active_target::ActiveTargetGoal;
+use crate::entity::ai::goal::join_anger::JoinAngerGoal;
 use crate::entity::ai::goal::look_around::RandomLookAroundGoal;
 use crate::entity::ai::goal::look_at_entity::LookAtEntityGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
@@ -92,12 +93,15 @@ impl ShulkerEntity {
             goal_selector.add_goal(7, Box::new(ShulkerPeekGoal::new(mob_arc.clone())));
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
+            // Vanilla: HurtByTarget(Shulker).setAlertOthers + Nearest + DefenseAttack
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(1, JoinAngerGoal::new(&EntityType::SHULKER));
+            // ShulkerNearestAttackGoal ≈ player
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
-            // End city defense: also shoot at golems.
+            // ShulkerDefenseAttackGoal stand-in: opportunistic golem
             target_selector.add_goal(
                 3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),

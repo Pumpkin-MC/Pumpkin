@@ -35,12 +35,16 @@ impl IllusionerEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // Vanilla 26.2 Illusioner.registerGoals
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // 1 SpellcasterCastingSpellGoal TODO
             goal_selector.add_goal(
-                1,
-                Box::new(AvoidEntityGoal::new(&EntityType::CREAKING, 8.0, 0.6, 1.0)),
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::CREAKING, 8.0, 1.0, 1.2)),
             );
-            goal_selector.add_goal(4, BowAttackGoal::new(0.5, 20));
+            // 4 MirrorSpell / 5 BlindnessSpell TODO
+            // 6 RangedBowAttackGoal(0.5, 20, 15)
+            goal_selector.add_goal(6, BowAttackGoal::new(0.5, 20));
             goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(
                 9,

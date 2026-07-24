@@ -17,7 +17,7 @@ use crate::entity::{
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::TROPICAL_FISH_BUCKET];
 
-/// Axolotl — hunts aquatic hostiles; play-dead state TODO.
+/// Axolotl — **Brain** in vanilla (`AxolotlAi`); GoalSelector hunt/tempt stand-in (play-dead TODO).
 pub struct AxolotlEntity {
     pub mob_entity: MobEntity,
 }

@@ -51,9 +51,13 @@ impl StriderEntity {
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 8,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(
+                9,
+                LookAtEntityGoal::with_default(mob_weak, &EntityType::STRIDER, 8.0),
+            );
         };
 
         mob_arc

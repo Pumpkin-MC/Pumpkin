@@ -16,7 +16,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-/// Zoglin — attacks almost everything non-zoglin (undead-ish aggression).
+/// Zoglin — **Brain** in vanilla; stand-in attacks non-zoglin living (excl. creeper).
 pub struct ZoglinEntity {
     pub mob_entity: MobEntity,
 }

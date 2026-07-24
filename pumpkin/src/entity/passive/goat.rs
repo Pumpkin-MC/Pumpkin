@@ -15,7 +15,7 @@ use crate::entity::{
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
-/// Goat — neutral; ram when angered; long-jump TODO.
+/// Goat — **Brain** in vanilla (`GoatAi`); GoalSelector breed/tempt/ram stand-in.
 pub struct GoatEntity {
     pub mob_entity: MobEntity,
 }

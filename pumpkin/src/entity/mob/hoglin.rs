@@ -14,7 +14,9 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-/// Hoglin — hunt players/piglin; flee when converted conditions TODO.
+/// Hoglin — **Brain** in vanilla (`HoglinAi`); GoalSelector stand-in only.
+///
+/// Brain activities: hunt players/piglins, flee when outnumbered, breed, etc.
 pub struct HoglinEntity {
     pub mob_entity: MobEntity,
 }

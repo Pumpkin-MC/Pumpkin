@@ -1,19 +1,37 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        join_anger::JoinAngerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        breed::BreedGoal, follow_parent::FollowParentGoal, join_anger::JoinAngerGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     ai::pathfinder::node::PathType,
     mob::{Mob, MobEntity},
 };
 
-/// Bee — revenge sting; pollinate/hive TODO.
+// Vanilla ItemTags.BEE_FOOD — common flowers stand-in.
+const TEMPT_ITEMS: &[&Item] = &[
+    &Item::DANDELION,
+    &Item::POPPY,
+    &Item::ALLIUM,
+    &Item::CORNFLOWER,
+    &Item::TORCHFLOWER,
+    &Item::SUNFLOWER,
+    &Item::LILAC,
+    &Item::ROSE_BUSH,
+    &Item::PEONY,
+];
+
+/// Bee — vanilla 26.2 GoalSelector (hive/pollinate Brain-ish goals TODO).
+///
+/// Decompile `Bee.registerGoals`: Attack, EnterHive, Breed, Tempt, Pollinate,
+/// FollowParent, Wander, Float; HurtBy.setAlertOthers + BecomeAngry.
 pub struct BeeEntity {
     pub mob_entity: MobEntity,
 }
@@ -23,7 +41,6 @@ impl BeeEntity {
         let mob_entity = MobEntity::new(entity);
         {
             let mut nav = mob_entity.navigator.lock().unwrap();
-            // Prefer air; strongly avoid water (vanilla bee water malus).
             nav.set_pathfinding_malus(PathType::Water, 16.0);
             nav.set_pathfinding_malus(PathType::WaterBorder, 8.0);
         }
@@ -38,18 +55,26 @@ impl BeeEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.4, true)));
-            goal_selector.add_goal(3, Box::new(WanderAroundGoal::new(1.0)));
+            // 0 BeeAttackGoal
+            goal_selector.add_goal(0, Box::new(MeleeAttackGoal::new(1.4, true)));
+            // 1 BeeEnterHiveGoal TODO
+            goal_selector.add_goal(2, BreedGoal::new(1.0));
+            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS)));
+            // 4 BeePollinateGoal TODO
+            goal_selector.add_goal(5, Box::new(FollowParentGoal::new(1.25)));
+            // 5–7 hive/flower/crop goals TODO
+            goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(1.0)));
+            // 9 FloatGoal — last priority in vanilla
+            goal_selector.add_goal(9, Box::new(SwimGoal::default()));
             goal_selector.add_goal(
-                4,
+                10,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(5, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
 
-            // Neutral until hurt; hive anger stand-in via pack join.
+            // BeeHurtByOther.setAlertOthers + BecomeAngry stand-in
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(2, JoinAngerGoal::new(&EntityType::BEE));
+            target_selector.add_goal(1, JoinAngerGoal::new(&EntityType::BEE));
         };
 
         mob_arc

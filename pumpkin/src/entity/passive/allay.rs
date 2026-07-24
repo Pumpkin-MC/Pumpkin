@@ -12,7 +12,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-/// Allay — follows nearest player; item collect TODO.
+/// Allay — **Brain** in vanilla (`AllayAi`); FollowPlayer + float stand-in (item collect TODO).
 pub struct AllayEntity {
     pub mob_entity: MobEntity,
 }

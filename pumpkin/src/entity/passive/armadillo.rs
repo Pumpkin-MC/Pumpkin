@@ -12,7 +12,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-/// Armadillo — flees threats; roll-up state TODO.
+/// Armadillo — **Brain** in vanilla (`ArmadilloAi` scare sensor); flee stand-in + roll TODO.
 pub struct ArmadilloEntity {
     pub mob_entity: MobEntity,
 }

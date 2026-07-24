@@ -123,4 +123,28 @@ mod tests {
         assert!(src.contains("EntityType::PLAYER") && src.contains("AvoidEntityGoal"));
         assert!(!src.contains("EntityType::AXOLOTL"));
     }
+
+    #[test]
+    fn bee_has_breed_tempt_and_pack_anger() {
+        // Decompile Bee.java: Breed + Tempt(BEE_FOOD) + HurtBy.setAlertOthers.
+        let src = include_str!("../passive/bee.rs");
+        assert!(src.contains("BreedGoal"));
+        assert!(src.contains("TemptGoal") && src.contains("DANDELION"));
+        assert!(src.contains("JoinAngerGoal") && src.contains("BEE"));
+        assert!(src.contains("MeleeAttackGoal"));
+    }
+
+    #[test]
+    fn strider_no_zombified_flee_looks_at_strider() {
+        let src = include_str!("../passive/strider.rs");
+        assert!(!src.contains("ZOMBIFIED_PIGLIN"));
+        assert!(src.contains("EntityType::STRIDER"));
+    }
+
+    #[test]
+    fn shulker_pack_anger_and_player_target() {
+        let src = include_str!("../mob/shulker.rs");
+        assert!(src.contains("JoinAngerGoal") && src.contains("SHULKER"));
+        assert!(src.contains("EntityType::PLAYER"));
+    }
 }
