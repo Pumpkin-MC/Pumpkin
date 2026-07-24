@@ -338,7 +338,7 @@ impl BlockBehaviour for CommandBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let send_command_feedback = {
-                let game_rules = args.world.level_info.load().game_rules;
+                let game_rules = &args.world.level_info.load().game_rules;
                 game_rules.send_command_feedback
             };
 

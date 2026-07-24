@@ -236,8 +236,9 @@ impl RedstoneOrientation {
     }
 }
 
-const fn compute_side(up: BlockDirection, front: BlockDirection, bias: SideBias) -> BlockDirection {
+fn compute_side(up: BlockDirection, front: BlockDirection, bias: SideBias) -> BlockDirection {
     // right = front × up (right-handed); LEFT uses opposite of that.
+    // Not `const`: `BlockDirection::to_offset` is not const.
     let fv = front.to_offset();
     let uv = up.to_offset();
     let rx = fv.y * uv.z - fv.z * uv.y;
@@ -250,7 +251,7 @@ const fn compute_side(up: BlockDirection, front: BlockDirection, bias: SideBias)
     }
 }
 
-const fn nearest_direction(x: i32, y: i32, z: i32) -> BlockDirection {
+fn nearest_direction(x: i32, y: i32, z: i32) -> BlockDirection {
     let ax = x.unsigned_abs();
     let ay = y.unsigned_abs();
     let az = z.unsigned_abs();
