@@ -495,20 +495,30 @@ impl Server {
             client.kick(DisconnectReason::Kicked, reason).await;
             return None;
         }
-        if self.get_player_by_uuid(profile.id).is_some()
-            || self.get_player_by_name(&profile.name).is_some()
-        {
-            client
-                .kick(
-                    DisconnectReason::Kicked,
-                    TextComponent::translate_cross(
-                        translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
-                        translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
-                        [],
-                    ),
-                )
-                .await;
-            return None;
+
+        // Vanilla parity: kick the existing session and accept the new one.
+        // Reject-new left ghosts / stuck sessions locking out legit reconnects.
+        let dup_msg = TextComponent::translate_cross(
+            translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+            translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+            [],
+        );
+        if let Some(online) = self.get_player_by_uuid(profile.id) {
+            debug!(
+                "Duplicate UUID login for '{}'; kicking existing session",
+                profile.name
+            );
+            online.kick(DisconnectReason::Kicked, dup_msg.clone()).await;
+            online.remove().await;
+            self.remove_player(&online).await;
+        } else if let Some(online) = self.get_player_by_name(&profile.name) {
+            debug!(
+                "Duplicate name login for '{}'; kicking existing session",
+                profile.name
+            );
+            online.kick(DisconnectReason::Kicked, dup_msg).await;
+            online.remove().await;
+            self.remove_player(&online).await;
         }
 
         let gamemode = self.defaultgamemode.lock().await.gamemode;
