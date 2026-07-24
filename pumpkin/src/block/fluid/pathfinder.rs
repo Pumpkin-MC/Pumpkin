@@ -67,7 +67,7 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
             continue;
         };
 
-        let new_state_id = fluid_impl.props_to_block_state(fluid, &new_fluid_props);
+        let new_state_id = fluid_impl.props_to_block_state(fluid, new_fluid_props);
 
         // Holes get distance 0
         let slope_dist = if is_hole(world, fluid, &side_pos) {

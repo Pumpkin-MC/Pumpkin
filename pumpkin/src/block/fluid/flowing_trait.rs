@@ -50,8 +50,8 @@ fn props_from_block_level(fluid: &Fluid, block_level: u16) -> FlowingFluidProper
 /// - source → 0
 /// - falling → 8 - min(amount, 8) + 8
 /// - else → 8 - min(amount, 8)
-fn block_level_from_props(props: &FlowingFluidProperties) -> u16 {
-    let amount = u16::from(props.level.to_index()) + 1; // L1=1 … L8=8
+fn block_level_from_props(props: FlowingFluidProperties) -> u16 {
+    let amount = props.level.to_index() + 1; // L1=1 … L8=8
     let is_source = props.level == Level::L8 && props.falling == Falling::False;
     if is_source {
         0
@@ -65,7 +65,7 @@ fn block_level_from_props(props: &FlowingFluidProperties) -> u16 {
 /// Convert fluid props → block state id using vanilla LiquidBlock levels.
 /// The generated `FlowingWaterLikeFluidProperties::to_state_id` table is inverted
 /// (source 86 was encoded as falling L8), so callers must use this helper.
-fn props_to_state_id(fluid: &Fluid, props: &FlowingFluidProperties) -> BlockStateId {
+fn props_to_state_id(fluid: &Fluid, props: FlowingFluidProperties) -> BlockStateId {
     if let Some(base) = fluid_block_base(fluid) {
         let level = block_level_from_props(props);
         return BlockStateId::new(base + level).expect("fluid block state id");
@@ -111,7 +111,7 @@ pub trait FlowingFluid: Send + Sync {
     }
 
     /// Block state id for these fluid properties (vanilla LiquidBlock level mapping).
-    fn props_to_block_state(&self, fluid: &Fluid, props: &FlowingFluidProperties) -> BlockStateId {
+    fn props_to_block_state(&self, fluid: &Fluid, props: FlowingFluidProperties) -> BlockStateId {
         props_to_state_id(fluid, props)
     }
 
@@ -182,7 +182,7 @@ pub trait FlowingFluid: Send + Sync {
                 let new_fluid_state = self.get_new_liquid(world, fluid, block_pos).await;
 
                 if let Some(new_state) = new_fluid_state {
-                    let new_state_id = self.props_to_block_state(fluid, &new_state);
+                    let new_state_id = self.props_to_block_state(fluid, new_state);
 
                     if new_state_id != current_block_state_id {
                         world
@@ -251,7 +251,7 @@ pub trait FlowingFluid: Send + Sync {
                     world,
                     fluid,
                     &below_pos,
-                    self.props_to_block_state(fluid, &falling_props),
+                    self.props_to_block_state(fluid, falling_props),
                 )
                 .await;
 
@@ -434,7 +434,7 @@ pub trait FlowingFluid: Send + Sync {
 
                     if should_convert {
                         let source_props = self.get_source(fluid, false);
-                        let source_state_id = self.props_to_block_state(fluid, &source_props);
+                        let source_state_id = self.props_to_block_state(fluid, source_props);
                         world
                             .set_block_state(pos, source_state_id, BlockFlags::NOTIFY_ALL)
                             .await;
@@ -463,7 +463,7 @@ pub trait FlowingFluid: Send + Sync {
 
             // Prefer props-derived state so source places as level 0 (state 86), not the
             // inverted generated table's level-8 flowing state.
-            let place_id = self.props_to_block_state(fluid, &new_props);
+            let place_id = self.props_to_block_state(fluid, new_props);
             world
                 .set_block_state(pos, place_id, BlockFlags::NOTIFY_ALL)
                 .await;
@@ -476,7 +476,7 @@ pub trait FlowingFluid: Send + Sync {
 
                 if should_convert {
                     let source_props = self.get_source(fluid, false);
-                    let source_state_id = self.props_to_block_state(fluid, &source_props);
+                    let source_state_id = self.props_to_block_state(fluid, source_props);
                     world
                         .set_block_state(pos, source_state_id, BlockFlags::NOTIFY_ALL)
                         .await;
@@ -613,7 +613,7 @@ mod liquid_block_level_tests {
     fn roundtrip(block_level: u16) {
         let fluid = &Fluid::FLOWING_WATER;
         let props = props_from_block_level(fluid, block_level);
-        let back = block_level_from_props(&props);
+        let back = block_level_from_props(props);
         assert_eq!(
             back, block_level,
             "block level {block_level} → props → {back}"
@@ -629,9 +629,9 @@ mod liquid_block_level_tests {
             p.falling = Falling::False;
             p
         };
-        assert_eq!(block_level_from_props(&source), 0);
+        assert_eq!(block_level_from_props(source), 0);
         assert_eq!(
-            props_to_state_id(fluid, &source),
+            props_to_state_id(fluid, source),
             Block::WATER.default_state.id
         );
 
