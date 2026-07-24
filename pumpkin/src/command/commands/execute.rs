@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::command::CommandSender;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::block::BlockArgumentType;
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
@@ -35,10 +34,7 @@ impl CommandExecutor for ExecuteRunExecutor {
         Box::pin(async move {
             let command_str = StringArgumentType::get(context, "command")?;
             let dispatcher = context.server().command_dispatcher.read().await;
-            dispatcher
-                .handle_command(&context.source, command_str)
-                .await;
-            Ok(1)
+            dispatcher.execute_input(command_str, &context.source).await
         })
     }
 }
@@ -54,7 +50,10 @@ fn execute_as_modifier<'a>(
             let display_name = target.get_display_name().await;
             let name = target.get_name().get_text();
             source.entity = Some(target.clone());
-            source.output = CommandSender::Entity(name.clone());
+            // Keep the original output sender so the nested command retains the
+            // invoker's permissions (including explicit permission grants).
+            // TODO: Teach fallback commands to use CommandSource world/position
+            // context so `execute as/at/positioned` applies to them as well.
             source.name = name;
             source.display_name = display_name;
             sources.push(Arc::new(source));
