@@ -1354,9 +1354,11 @@ impl Entity {
     /// `LivingEntity.takeKnockback()`
     /// This function calculates the entity's new velocity based on the specified knockback strength and direction.
     ///
-    /// `strength` is expected to already be scaled by the victim's
-    /// `KNOCKBACK_RESISTANCE` (see `combat::knockback_after_resistance`), since
-    /// that attribute lives on `LivingEntity`, not `Entity`.
+    /// Knockback resistance is not applied here, because it is a `LivingEntity`
+    /// attribute and this is an `Entity` method. Callers modelling vanilla's
+    /// `LivingEntity.knockback` scale `strength` with
+    /// `combat::knockback_after_resistance` first; callers modelling vanilla's raw
+    /// `Entity.push` (such as the ender dragon) pass `strength` unscaled.
     pub fn apply_knockback(&self, strength: f64, mut x: f64, mut z: f64) {
         if strength <= 0.0 {
             return;
