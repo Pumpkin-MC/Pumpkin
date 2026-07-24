@@ -103,25 +103,25 @@ fn generate_context(
     }
 
     for front in BlockDirection::all() {
-        let mut up = self_o.up;
-        if front == self_o.up {
-            up = self_o.front.opposite();
-        }
-        if front == self_o.up.opposite() {
-            up = self_o.front;
-        }
+        let up = if front == self_o.up {
+            self_o.front.opposite()
+        } else if front == self_o.up.opposite() {
+            self_o.front
+        } else {
+            self_o.up
+        };
         let child = generate_context(make_orientation(up, front, self_o.side_bias), lookup);
         self_o.with_front[direction_ordinal(front)] = child.index;
     }
 
     for up in BlockDirection::all() {
-        let mut front = self_o.front;
-        if up == self_o.front {
-            front = self_o.up.opposite();
-        }
-        if up == self_o.front.opposite() {
-            front = self_o.up;
-        }
+        let front = if up == self_o.front {
+            self_o.up.opposite()
+        } else if up == self_o.front.opposite() {
+            self_o.up
+        } else {
+            self_o.front
+        };
         let child = generate_context(make_orientation(up, front, self_o.side_bias), lookup);
         self_o.with_up[direction_ordinal(up)] = child.index;
     }

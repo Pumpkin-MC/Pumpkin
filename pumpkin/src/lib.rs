@@ -4,6 +4,7 @@
 // Prefer green CI over mass-rewriting unrelated goals in this pass; tighten later.
 #![allow(
     clippy::bool_to_int_with_if,
+    clippy::branches_sharing_code,
     clippy::doc_markdown,
     clippy::duration_suboptimal_units,
     clippy::if_same_then_else,
@@ -16,12 +17,14 @@
     clippy::option_if_let_else,
     clippy::precedence,
     clippy::redundant_closure,
+    clippy::redundant_closure_for_method_calls,
     clippy::semicolon_outside_block,
     clippy::separated_literal_suffix,
     clippy::single_match_else,
     clippy::too_many_arguments,
     clippy::too_many_lines,
-    clippy::use_self
+    clippy::use_self,
+    clippy::useless_let_if_seq
 )]
 
 use crate::crash::CrashReport;

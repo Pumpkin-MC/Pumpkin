@@ -166,7 +166,6 @@ async fn execute_update(
 ///
 /// Uses boxed future for `set_block_state` to avoid async recursion with the
 /// neighbor collector (shape → set → `update_neighbors` → collector → shape).
-#[expect(clippy::too_many_arguments)]
 fn execute_shape_update<'a>(
     world: &'a Arc<World>,
     direction: BlockDirection,
@@ -363,7 +362,6 @@ impl WorldNeighborUpdater {
     }
 
     /// Shape update queue entry.
-    #[expect(clippy::too_many_arguments)]
     pub async fn shape_update(
         &self,
         world: &Arc<World>,

@@ -679,12 +679,8 @@ impl Navigator {
                 // When the next node is below, aim at the *edge* toward it so we
                 // walk off instead of spinning on the lip (vanilla effectively does
                 // this via waypoint size + step).
-                let aim_x = if dy < -0.25 && dx.abs() > 0.05 {
-                    // Nudge past the current block center toward the lower node.
-                    target_pos.x
-                } else {
-                    target_pos.x
-                };
+                // When stepping down, still aim at the lower node (same X/Z as target).
+                let aim_x = target_pos.x;
                 let aim_z = target_pos.z;
                 let adx = aim_x - current_pos.x;
                 let adz = aim_z - current_pos.z;

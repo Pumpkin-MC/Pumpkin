@@ -10,6 +10,7 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
         sonic_boom::SonicBoomGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
+    living::LivingEntity,
     mob::{Mob, MobEntity},
 };
 
@@ -69,7 +70,7 @@ impl WardenEntity {
         {
             let t = self.mob_entity.target.lock().await;
             if let Some(cur) = t.as_ref()
-                && cur.get_living_entity().is_some_and(|l| l.is_alive())
+                && cur.get_living_entity().is_some_and(LivingEntity::is_alive)
             {
                 return;
             }
