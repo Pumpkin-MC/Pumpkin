@@ -5,6 +5,7 @@ use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::{Block, tracked_data::TrackedData};
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, atomic::Ordering};
 
@@ -27,19 +28,27 @@ impl FallingEntity {
         }
     }
 
-    /// Replaced the current Block and Spawns a new Falling one
+    /// Vanilla `FallingBlockEntity.fall`:
+    /// `level.setBlock(pos, state.getFluidState().createLegacyBlock(), 3)` + `addFreshEntity`.
+    /// Flag 3 = NOTIFY_NEIGHBORS | NOTIFY_CLIENTS. Dry sand → AIR; waterlogged → water source.
     pub async fn replace_spawn(world: &Arc<World>, position: BlockPos, block_state: BlockStateId) {
-        // Replace the original block, TODO: use fluid state
+        // Prefer fluid legacy (waterlogged sand leaves water); else AIR.
+        let legacy_id = {
+            let block = Block::from_state_id(block_state);
+            if block.is_waterlogged(block_state) {
+                Block::WATER.default_state.id
+            } else {
+                Block::AIR.default_state.id
+            }
+        };
         world
-            .set_block_state(
-                &position,
-                Block::AIR.default_state.id,
-                BlockFlags::NOTIFY_ALL,
-            )
+            .set_block_state(&position, legacy_id, BlockFlags::NOTIFY_ALL)
             .await;
 
-        let position = position.0.to_f64().add_raw(0.5, 0.0, 0.5);
-        let entity = Entity::new(world.clone(), position, &EntityType::FALLING_BLOCK);
+        let entity_pos = position.0.to_f64().add_raw(0.5, 0.0, 0.5);
+        let entity = Entity::new(world.clone(), entity_pos, &EntityType::FALLING_BLOCK);
+        // Zero initial velocity (vanilla setDeltaMovement(Vec3.ZERO)).
+        entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
         entity
             .data
             .store(i32::from(block_state.as_u16()), Ordering::Relaxed);

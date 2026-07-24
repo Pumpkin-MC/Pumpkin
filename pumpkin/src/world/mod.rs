@@ -1314,38 +1314,39 @@ impl World {
         let active_chunks = self.active_chunks.load();
         let tick_data = self.level.get_tick_data(&active_chunks);
 
-        // ONE JoinSet for all chunk operations
-        let mut chunk_tasks = tokio::task::JoinSet::new();
-
-        // 1. Spawn Block Ticks
+        // Vanilla LevelTicks.tick: scheduled block/fluid ticks (NTE) run **sequentially**
+        // in sub-tick order — not in parallel. Parallel JoinSet races break falling-block
+        // chains (top sand sees bottom still present and never re-schedules).
+        //
+        // 1. Block scheduled ticks (FallingBlock, repeater, etc.)
         for scheduled_tick in tick_data.block_ticks {
-            let world = self.clone();
-            let pos = scheduled_tick.position; // Clone for the move closure
-            chunk_tasks.spawn(async move {
-                let block = world.get_block(&pos);
-                if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(block.id) {
-                    pumpkin_block
-                        .on_scheduled_tick(OnScheduledTickArgs {
-                            world: &world,
-                            block,
-                            position: &pos,
-                        })
-                        .await;
-                }
-            });
+            let pos = scheduled_tick.position;
+            let block = self.get_block(&pos);
+            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {
+                pumpkin_block
+                    .on_scheduled_tick(OnScheduledTickArgs {
+                        world: self,
+                        block,
+                        position: &pos,
+                    })
+                    .await;
+            }
         }
 
-        // 2. Spawn Fluid Ticks
+        // 2. Fluid scheduled ticks (water/lava flow)
         for scheduled_tick in tick_data.fluid_ticks {
-            let world = self.clone();
             let pos = scheduled_tick.position;
-            chunk_tasks.spawn(async move {
-                let fluid = world.get_fluid(&pos);
-                if let Some(pumpkin_fluid) = world.block_registry.get_pumpkin_fluid(fluid.id) {
-                    pumpkin_fluid.on_scheduled_tick(&world, fluid, &pos).await;
-                }
-            });
+            let fluid = self.get_fluid(&pos);
+            if let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid.id) {
+                pumpkin_fluid.on_scheduled_tick(self, fluid, &pos).await;
+            }
         }
+
+        // Push block changes from NTE to clients before random ticks / entities.
+        self.flush_block_updates().await;
+
+        // ONE JoinSet for remaining chunk operations (random ticks only below)
+        let mut chunk_tasks = tokio::task::JoinSet::new();
 
         // 3. Spawn Random Ticks
         for scheduled_tick in tick_data.random_ticks {

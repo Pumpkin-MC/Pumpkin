@@ -19,21 +19,25 @@ struct ChunkTickSchedulerInner<T> {
 }
 
 impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
+    /// Advance one game tick and return ticks whose delay has elapsed.
+    ///
+    /// Ring buffer: `offset` is the **next** slot to process. A tick scheduled with
+    /// `delay = D` is placed at `(offset + D) % MAX` and fires after D `step_tick`s
+    /// (vanilla: `scheduleTick(..., delay)` runs on the D-th subsequent tick).
     pub fn step_tick(&self) -> Vec<OrderedTick<&'a T>> {
-        // Atomic update for the offset
-        let current_offset = self.offset.fetch_add(1, Ordering::SeqCst) % MAX_TICK_DELAY;
-        let next_offset = (current_offset + 1) % MAX_TICK_DELAY;
-        self.offset.store(next_offset, Ordering::SeqCst);
-
         let mut inner_guard = self
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let Some(inner) = inner_guard.as_mut() else {
+            // Still advance time so delays stay aligned when the queue is empty.
+            let _ = self.offset.fetch_add(1, Ordering::SeqCst);
             return Vec::new();
         };
 
+        let current_offset = self.offset.load(Ordering::SeqCst) % MAX_TICK_DELAY;
         let res = std::mem::take(&mut inner.tick_queue[current_offset]);
+        let _ = self.offset.fetch_add(1, Ordering::SeqCst);
 
         if !res.is_empty() {
             for next_tick in &res {
@@ -60,8 +64,10 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             })
         });
 
+        // Dedup by (pos, type) like vanilla LevelChunkTicks.ticksPerPosition.
         if inner.queued_ticks.insert((tick.position, tick.value)) {
-            let offset = self.offset.load(Ordering::SeqCst);
+            let offset = self.offset.load(Ordering::SeqCst) % MAX_TICK_DELAY;
+            // delay 0 → this step's slot; delay 2 → two steps later (vanilla sand).
             let index = (offset + tick.delay as usize) % MAX_TICK_DELAY;
 
             inner.tick_queue[index].push(OrderedTick {
