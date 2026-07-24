@@ -1407,9 +1407,16 @@ impl LivingEntity {
         cause: Option<&dyn EntityBase>,
     ) {
         let world = self.entity.world.load();
-        let dyn_self = world
-            .get_entity_by_id(self.entity.entity_id)
-            .expect("Entity not found in world");
+        // Entity may already be removed (despawn race / concurrent tick). Never
+        // panicking the whole server on death — soft-skip if not in world map.
+        let Some(dyn_self) = world.get_entity_by_id(self.entity.entity_id) else {
+            tracing::warn!(
+                entity_id = self.entity.entity_id,
+                "on_death: entity already removed from world; skipping death handling"
+            );
+            let _ = self.dead.compare_exchange(false, true, Relaxed, Relaxed);
+            return;
+        };
         if self
             .dead
             .compare_exchange(false, true, Relaxed, Relaxed)
