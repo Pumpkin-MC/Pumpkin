@@ -1026,9 +1026,8 @@ impl JavaClient {
                 debug!("todo");
             }
             Action::StartFlyingElytra => {
-                let fall_flying = entity.check_fall_flying();
-                if entity.is_fall_flying() != fall_flying {
-                    entity.set_fall_flying(fall_flying).await;
+                if !player.try_to_start_fall_flying().await {
+                    player.stop_fall_flying().await;
                 }
             }
             // <= 1.21.5
