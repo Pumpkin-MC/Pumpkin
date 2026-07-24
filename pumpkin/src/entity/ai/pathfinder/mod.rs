@@ -142,6 +142,15 @@ impl Navigator {
         self.mob_height = height;
     }
 
+    /// Vanilla `PathNavigation.createPath` — used by `MeleeAttackGoal.canUse`.
+    pub async fn create_path_to(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+    ) -> Option<Path> {
+        self.compute_path(entity, destination).await
+    }
+
     #[allow(clippy::too_many_lines)]
     async fn compute_path(
         &mut self,

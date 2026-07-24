@@ -17,6 +17,8 @@ pub struct MeleeAttackGoal {
     #[expect(dead_code)]
     attack_interval_ticks: i32,
     last_target_position: Option<Vector3<f64>>,
+    /// Vanilla `lastCanUseCheck` — throttle pathfinding in `canUse` to every 20 ticks.
+    last_can_use_check: i64,
 }
 
 impl MeleeAttackGoal {
@@ -32,6 +34,7 @@ impl MeleeAttackGoal {
             cooldown: 0,
             attack_interval_ticks: 20,
             last_target_position: None,
+            last_can_use_check: i64::MIN,
         }
     }
 
@@ -140,26 +143,65 @@ impl MeleeAttackGoal {
 impl Goal for MeleeAttackGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
-            // Vanilla MeleeAttackGoal.canUse has no world-age throttle — only a
-            // living target. A 20-tick gate here delayed retarget after kills
-            // (vindicator/golem standing over corpses).
-            let target = mob.get_mob_entity().target.lock().await;
+            // Vanilla MeleeAttackGoal.canUse (26.2):
+            // - throttle canUse checks to every 20 game ticks
+            // - require createPath(target) != null OR isWithinMeleeAttackRange
+            // Without the path check, MeleeAttack always steals MOVE and blocks
+            // MoveTowardsTargetGoal (iron golem 0.9 approach) when A* fails.
+            let age = i64::from(
+                mob.get_entity()
+                    .age
+                    .load(std::sync::atomic::Ordering::Relaxed),
+            );
+            if self.last_can_use_check != i64::MIN && age.wrapping_sub(self.last_can_use_check) < 20
+            {
+                return false;
+            }
+            self.last_can_use_check = age;
 
-            let Some(target) = target.as_ref() else {
+            let target = {
+                let guard = mob.get_mob_entity().target.lock().await;
+                guard.clone()
+            };
+            let Some(target) = target else {
                 return false;
             };
             if !Self::target_is_valid(target.as_ref()) {
                 return false;
             }
-            // Reject creative/spectator players
             if target
                 .get_player()
                 .is_some_and(|p| p.is_spectator() || p.is_creative())
             {
                 return false;
             }
-            true
+
+            // In melee range → can start without a full path (vanilla).
+            if mob
+                .get_mob_entity()
+                .is_in_attack_range(target.as_ref())
+                .await
+            {
+                return true;
+            }
+
+            // Must be able to path to the target (or a dry bank if golem).
+            let avoid_water = Self::mob_avoids_water(mob);
+            let dest = Self::path_destination_for(mob, target.as_ref(), avoid_water);
+            // Path destination stuck on self → cannot path (e.g. no bank for water target).
+            let me = mob.get_entity().pos.load();
+            if me.squared_distance_to_vec(&dest) < 0.25 {
+                return false;
+            }
+            let living = &mob.get_mob_entity().living_entity;
+            let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+            navigator.create_path_to(living, dest).await.is_some()
         })
+    }
+
+    fn should_run_every_tick(&self) -> bool {
+        // Vanilla MeleeAttackGoal.requiresUpdateEveryTick() == true
+        true
     }
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {

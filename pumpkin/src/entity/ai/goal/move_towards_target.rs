@@ -106,6 +106,7 @@ impl Goal for MoveTowardsTargetGoal {
             nav.set_progress(NavigatorGoal {
                 current_progress: mob.get_entity().pos.load(),
                 destination: wanted,
+                // Iron golem: 0.9×MOVEMENT_SPEED while approaching (fast vs 0.6 stroll).
                 speed: self.speed,
             });
         })
@@ -114,6 +115,28 @@ impl Goal for MoveTowardsTargetGoal {
     fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             self.wanted = None;
+        })
+    }
+
+    fn should_run_every_tick(&self) -> bool {
+        true
+    }
+
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        // Keep speed applied while pathing — navigator may clear it during large turns.
+        Box::pin(async {
+            if let Some(wanted) = self.wanted {
+                let mut nav = mob.get_mob_entity().navigator.lock().unwrap();
+                if nav.is_idle() {
+                    nav.set_progress(NavigatorGoal {
+                        current_progress: mob.get_entity().pos.load(),
+                        destination: wanted,
+                        speed: self.speed,
+                    });
+                } else {
+                    nav.set_speed(self.speed);
+                }
+            }
         })
     }
 
