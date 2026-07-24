@@ -27,7 +27,7 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
@@ -491,6 +491,8 @@ pub struct Player {
     pub item_cooldowns: Mutex<HashMap<String, ItemCooldown>>,
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
+    /// Prevents slow clients from accumulating overlapping chunk-send tasks.
+    chunk_send_permit: Arc<Semaphore>,
     pub has_played_before: AtomicBool,
     pub chat_session: Arc<Mutex<ChatSession>>,
     pub signature_cache: Mutex<MessageCache>,
@@ -702,6 +704,7 @@ impl Player {
                 world.level.chunk_listener.add_global_chunk_listener(),
                 world.clone(),
             )),
+            chunk_send_permit: Arc::new(Semaphore::new(1)),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
             last_sent_food: AtomicU8::new(0),
@@ -1961,10 +1964,13 @@ impl Player {
                 *xp -= 1;
             }
         }
+        let send_permit = self.chunk_send_permit.clone().try_acquire_owned().ok();
         let (chunk_of_chunks, total_sent_chunks) = {
             let mut chunk_manager = self.chunk_manager.lock().await;
             chunk_manager.pull_new_chunks();
-            let chunks = if let ClientPlatform::Java(_) = self.client.as_ref() {
+            let chunks = if send_permit.is_none() {
+                None
+            } else if let ClientPlatform::Java(_) = self.client.as_ref() {
                 // Java clients can only send a limited amount of chunks per tick.
                 // If we have sent too many chunks without receiving an ack, we stop sending chunks.
                 chunk_manager
@@ -1975,9 +1981,10 @@ impl Player {
             };
             (chunks, chunk_manager.sent_chunks_count())
         };
-        if let Some(chunk_of_chunks) = chunk_of_chunks {
+        if let (Some(chunk_of_chunks), Some(send_permit)) = (chunk_of_chunks, send_permit) {
             let client = self.client.clone();
             tokio::spawn(async move {
+                let _send_permit = send_permit;
                 client.send_chunks(&chunk_of_chunks).await;
             });
             if let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref()

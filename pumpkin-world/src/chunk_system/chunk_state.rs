@@ -1,11 +1,11 @@
-use crate::chunk::{ChunkData, ChunkLight, ChunkSections};
+use crate::chunk::{ChunkData, ChunkLight, ChunkSections, NEXT_CHUNK_INSTANCE_ID};
 use crate::generation::biome_coords;
 use crate::tick::scheduler::ChunkTickScheduler;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::dimension::Dimension;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::ProtoChunk;
 use crate::level::SyncChunk;
@@ -222,6 +222,8 @@ impl Chunk {
                 status: ChunkStatus::Empty,
                 blending_data: None,
                 dirty: AtomicBool::new(false),
+                instance_id: NEXT_CHUNK_INSTANCE_ID.fetch_add(1, Ordering::Relaxed),
+                network_revision: AtomicU64::new(0),
             })),
         ) {
             Self::Proto(proto) => proto,
@@ -313,6 +315,8 @@ impl Chunk {
             pending_block_entities: Mutex::new(pending_block_entities),
             status: proto_chunk.stage.into(),
             blending_data: proto_chunk.blending_data,
+            instance_id: NEXT_CHUNK_INSTANCE_ID.fetch_add(1, Ordering::Relaxed),
+            network_revision: AtomicU64::new(0),
         };
 
         chunk.heightmap = Mutex::new(chunk.calculate_heightmap());

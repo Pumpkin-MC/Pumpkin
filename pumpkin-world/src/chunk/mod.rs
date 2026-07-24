@@ -12,13 +12,15 @@ use pumpkin_util::math::position::BlockPos;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
 pub mod format;
 pub mod io;
 pub mod palette;
+
+pub(crate) static NEXT_CHUNK_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 
 // TODO
 pub const CHUNK_WIDTH: usize = BlockPalette::SIZE;
@@ -81,6 +83,8 @@ pub struct ChunkData {
     pub status: ChunkStatus,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub dirty: AtomicBool,
+    pub(crate) instance_id: u64,
+    pub(crate) network_revision: AtomicU64,
 }
 
 pub struct ChunkEntityData {
@@ -574,6 +578,20 @@ impl ChunkSections {
 }
 
 impl ChunkData {
+    #[must_use]
+    pub const fn instance_id(&self) -> u64 {
+        self.instance_id
+    }
+
+    #[must_use]
+    pub fn network_revision(&self) -> u64 {
+        self.network_revision.load(Ordering::Acquire)
+    }
+
+    pub fn mark_network_changed(&self) {
+        self.network_revision.fetch_add(1, Ordering::AcqRel);
+    }
+
     /// Returns the replaced block state ID
     pub fn set_block_absolute_y(
         &self,
@@ -598,6 +616,7 @@ impl ChunkData {
         if old != block_state_id {
             let state = BlockState::from_id(block_state_id);
             self.update_heightmap(relative_x, relative_y, relative_z, state);
+            self.mark_network_changed();
         }
         old
     }
@@ -771,9 +790,45 @@ pub enum ChunkSerializingError {
 
 #[cfg(test)]
 mod tests {
-    use super::ChunkSections;
+    use super::{ChunkData, ChunkLight, ChunkSections, NEXT_CHUNK_INSTANCE_ID};
     use crate::chunk::palette::BlockPalette;
+    use crate::tick::scheduler::ChunkTickScheduler;
+    use pumpkin_data::chunk::ChunkStatus;
     use pumpkin_data::{Block, block_properties::has_random_ticks};
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+    fn empty_chunk() -> ChunkData {
+        ChunkData {
+            section: ChunkSections::new(1, -64),
+            heightmap: Mutex::default(),
+            x: 0,
+            z: 0,
+            block_ticks: ChunkTickScheduler::default(),
+            fluid_ticks: ChunkTickScheduler::default(),
+            pending_block_entities: Mutex::default(),
+            light_engine: Mutex::new(ChunkLight::default()),
+            light_populated: AtomicBool::new(false),
+            status: ChunkStatus::Full,
+            blending_data: None,
+            dirty: AtomicBool::new(true),
+            instance_id: NEXT_CHUNK_INSTANCE_ID.fetch_add(1, Ordering::Relaxed),
+            network_revision: AtomicU64::new(0),
+        }
+    }
+
+    #[test]
+    fn every_block_mutation_advances_network_revision() {
+        let chunk = empty_chunk();
+
+        chunk.set_block_absolute_y(0, -64, 0, Block::STONE.default_state.id);
+        let first_revision = chunk.network_revision();
+        chunk.set_block_absolute_y(0, -64, 0, Block::DIRT.default_state.id);
+
+        assert_eq!(first_revision, 1);
+        assert_eq!(chunk.network_revision(), 2);
+        assert!(chunk.dirty.load(Ordering::Relaxed));
+    }
 
     #[test]
     fn random_tick_cache_initializes_from_palette_contents() {

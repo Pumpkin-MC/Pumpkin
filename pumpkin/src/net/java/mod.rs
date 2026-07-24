@@ -1,5 +1,5 @@
 use pumpkin_protocol::java::client::play::{
-    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
+    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CPlayDisconnect,
 };
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
@@ -31,7 +31,7 @@ use pumpkin_protocol::{
     java::{
         client::{config::CConfigDisconnect, login::CLoginDisconnect},
         packet_decoder::TCPNetworkDecoder,
-        packet_encoder::TCPNetworkEncoder,
+        packet_encoder::{PreparedPacket, TCPNetworkEncoder},
         server::{
             config::{
                 SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse,
@@ -128,21 +128,36 @@ pub enum OutgoingPacketType {
 }
 
 struct OutgoingPacket {
-    data: Bytes,
+    data: OutgoingPacketData,
     completion: Option<oneshot::Sender<()>>,
+}
+
+enum OutgoingPacketData {
+    Raw(Bytes),
+    Prepared(Arc<PreparedPacket>),
 }
 
 impl OutgoingPacket {
     const fn normal(data: Bytes) -> Self {
         Self {
-            data,
+            data: OutgoingPacketData::Raw(data),
             completion: None,
         }
     }
 
     const fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
         Self {
-            data,
+            data: OutgoingPacketData::Raw(data),
+            completion: Some(completion),
+        }
+    }
+
+    const fn high_priority_prepared(
+        data: Arc<PreparedPacket>,
+        completion: oneshot::Sender<()>,
+    ) -> Self {
+        Self {
+            data: OutgoingPacketData::Prepared(data),
             completion: Some(completion),
         }
     }
@@ -352,6 +367,11 @@ impl JavaClient {
         };
 
         self.send_packet_now(&CChunkBatchStart).await;
+        let compression = &server.advanced_config.networking.java.compression;
+        let compression = compression
+            .enabled
+            .then_some((compression.info.threshold as usize, compression.info.level));
+        let mut sent = 0u16;
         for chunk in chunks {
             let event = ChunkSend::new(player.world(), chunk.clone());
             let event = server.plugin_manager.fire(event).await;
@@ -359,20 +379,22 @@ impl JavaClient {
                 continue;
             }
 
-            let mut buf = Vec::new();
             let version = self.version.load();
-            if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(version))) {
-                error!("Failed to write chunk data id: {err:?}");
-                continue;
+            match server
+                .chunk_packet_cache
+                .get_or_prepare(event.chunk, version, compression)
+                .await
+            {
+                Ok(packet) => {
+                    self.send_prepared_packet_now(packet).await;
+                    sent = sent.saturating_add(1);
+                }
+                Err(error) => {
+                    warn!("Failed to prepare chunk packet: {error}");
+                }
             }
-            if let Err(err) = CChunkData(chunk).write_packet_data(&mut buf, &version) {
-                error!("Failed to write chunk data: {err:?}");
-                continue;
-            }
-            self.send_packet_now_data(buf.into()).await;
         }
-        self.send_packet_now(&CChunkBatchEnd::new(chunks.len() as u16))
-            .await;
+        self.send_packet_now(&CChunkBatchEnd::new(sent)).await;
     }
 
     pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
@@ -427,6 +449,28 @@ impl JavaClient {
                     self.id, err
                 );
             }
+        }
+    }
+
+    async fn send_prepared_packet_now(&self, packet: Arc<PreparedPacket>) {
+        let (completion_tx, completion_rx) = oneshot::channel();
+        if let Err(err) = self
+            .outgoing_packet_priority_send
+            .send(OutgoingPacket::high_priority_prepared(
+                packet,
+                completion_tx,
+            ))
+            .await
+            && !self.close_token.is_cancelled()
+        {
+            error!(
+                "Failed to add prepared packet to the outgoing queue for client {}: {}",
+                self.id, err
+            );
+            return;
+        }
+        if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
+            self.close();
         }
     }
 
@@ -721,7 +765,15 @@ impl JavaClient {
                     let mut writer = writer.lock().await;
                     let mut failed = false;
                     for packet in &packet_batch {
-                        if let Err(err) = writer.write_packet(packet.data.clone()).await {
+                        let result = match &packet.data {
+                            OutgoingPacketData::Raw(data) => {
+                                writer.write_packet(data.clone()).await
+                            }
+                            OutgoingPacketData::Prepared(data) => {
+                                writer.write_prepared_packet(data).await
+                            }
+                        };
+                        if let Err(err) = result {
                             failed = true;
                             // It is expected that the packet will fail if we are closed
                             if !close_token.is_cancelled() {

@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
     sync::{
         RwLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -66,6 +66,9 @@ impl PathFromLevelFolder for ChunkData {
 impl Dirtiable for ChunkData {
     #[inline]
     fn mark_dirty(&self, flag: bool) {
+        if flag {
+            self.mark_network_changed();
+        }
         self.dirty.store(flag, Ordering::Relaxed);
     }
 
@@ -381,6 +384,8 @@ impl ChunkData {
             light_populated: AtomicBool::new(light_correct),
             status,
             blending_data: None,
+            instance_id: super::NEXT_CHUNK_INSTANCE_ID.fetch_add(1, Ordering::Relaxed),
+            network_revision: AtomicU64::new(0),
         })
     }
 

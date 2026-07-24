@@ -23,6 +23,8 @@ pub struct JavaConfig {
     pub simulation_distance: NonZeroU8,
     /// Java Edition packet compression settings.
     pub compression: CompressionConfig,
+    /// Maximum memory used by prepared chunk packets. Set to `0` to disable the cache.
+    pub chunk_packet_cache_mib: usize,
     /// Message of the Day; the server's description displayed on the status screen.
     pub motd: String,
     /// Authentication settings for client connections.
@@ -40,6 +42,7 @@ impl Default for JavaConfig {
             view_distance: NonZeroU8::new(16).unwrap(),
             simulation_distance: NonZeroU8::new(10).unwrap(),
             compression: CompressionConfig::default(),
+            chunk_packet_cache_mib: 64,
             motd: "A blazingly fast Pumpkin server!".to_string(),
             authentication: AuthenticationConfig::default(),
         }

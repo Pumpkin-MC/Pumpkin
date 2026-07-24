@@ -189,6 +189,7 @@ impl GenerationSchedule {
                 for section in &mut engine.sky_light {
                     section.fill(15);
                 }
+                chunk.mark_network_changed();
                 chunk.dirty.store(true, Relaxed);
             }
             LightingEngineConfig::Dark => {
@@ -199,6 +200,7 @@ impl GenerationSchedule {
                 for section in &mut engine.sky_light {
                     section.fill(0);
                 }
+                chunk.mark_network_changed();
                 chunk.dirty.store(true, Relaxed);
             }
             LightingEngineConfig::Default => {}
