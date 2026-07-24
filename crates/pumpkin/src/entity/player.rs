@@ -35,7 +35,9 @@ use advancement::PlayerAdvancement;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
+use pumpkin_data::data_component_impl::{
+    AttributeModifiersImpl, EnchantmentsImpl, GliderImpl, Operation,
+};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -587,6 +589,22 @@ struct SkinTexture {
 struct SkinMetadata {
     #[serde(default)]
     model: Option<String>,
+}
+
+fn can_glide_using(stack: &ItemStack, slot: &EquipmentSlot) -> bool {
+    if stack.get_data_component::<GliderImpl>().is_none() {
+        return false;
+    }
+
+    let Some(equippable) = stack.get_data_component::<EquippableImpl>() else {
+        return false;
+    };
+    let next_damage_will_break = stack.is_damageable()
+        && stack
+            .get_max_damage()
+            .is_some_and(|max_damage| stack.get_damage() >= max_damage - 1);
+
+    equippable.slot == slot && !next_damage_will_break
 }
 
 impl Player {
@@ -1754,6 +1772,60 @@ impl Player {
     pub async fn is_flying(&self) -> bool {
         let abilities = self.abilities.lock().await;
         abilities.flying
+    }
+
+    async fn has_usable_glider(&self) -> bool {
+        let main_hand = self.inventory.held_item();
+        let main_hand_stack = main_hand.lock().await;
+        if can_glide_using(&main_hand_stack, &EquipmentSlot::MAIN_HAND) {
+            return true;
+        }
+        drop(main_hand_stack);
+
+        let equipped_items = {
+            let equipment = self.inventory.entity_equipment.lock().await;
+            equipment
+                .equipment
+                .iter()
+                .map(|(slot, stack)| (slot.clone(), stack.clone()))
+                .collect::<Vec<_>>()
+        };
+
+        for (slot, stack) in equipped_items {
+            let stack = stack.lock().await;
+            if can_glide_using(&stack, &slot) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub async fn try_to_start_fall_flying(&self) -> bool {
+        let entity = self.get_entity();
+        if entity.is_fall_flying()
+            || entity.on_ground.load(Ordering::Relaxed)
+            || entity.touching_water.load(Ordering::Relaxed)
+            || entity.has_vehicle().await
+            || self
+                .living_entity
+                .has_effect(&StatusEffect::LEVITATION)
+                .await
+            || !self.has_usable_glider().await
+        {
+            return false;
+        }
+
+        entity.set_fall_flying(true).await;
+        true
+    }
+
+    pub async fn stop_fall_flying(&self) {
+        let entity = self.get_entity();
+        if !entity.is_fall_flying() {
+            entity.set_fall_flying(true).await;
+        }
+        entity.set_fall_flying(false).await;
     }
 
     fn is_sleeping(&self) -> bool {
@@ -5741,7 +5813,8 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::bedrock_inventory_slot;
+    use super::{EquipmentSlot, ItemStack, bedrock_inventory_slot, can_glide_using};
+    use pumpkin_data::item::Item;
 
     #[test]
     fn player_screen_slots_map_to_bedrock_inventory() {
@@ -5751,5 +5824,32 @@ mod tests {
         assert_eq!(bedrock_inventory_slot(44), Some(8));
         assert_eq!(bedrock_inventory_slot(8), None);
         assert_eq!(bedrock_inventory_slot(45), None);
+    }
+
+    #[test]
+    fn elytra_can_glide_from_its_equipment_slot() {
+        let stack = ItemStack::new(1, &Item::ELYTRA);
+
+        assert!(can_glide_using(&stack, &EquipmentSlot::CHEST));
+        assert!(!can_glide_using(&stack, &EquipmentSlot::HEAD));
+    }
+
+    #[test]
+    fn items_without_the_glider_component_cannot_glide() {
+        let stack = ItemStack::new(1, &Item::DIAMOND_CHESTPLATE);
+
+        assert!(!can_glide_using(&stack, &EquipmentSlot::CHEST));
+    }
+
+    #[test]
+    fn elytra_cannot_glide_when_the_next_damage_will_break_it() {
+        let mut stack = ItemStack::new(1, &Item::ELYTRA);
+        let max_damage = stack.get_max_damage().unwrap();
+
+        stack.set_damage(max_damage - 2);
+        assert!(can_glide_using(&stack, &EquipmentSlot::CHEST));
+
+        stack.set_damage(max_damage - 1);
+        assert!(!can_glide_using(&stack, &EquipmentSlot::CHEST));
     }
 }
