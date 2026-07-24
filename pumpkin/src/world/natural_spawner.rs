@@ -368,15 +368,9 @@ impl SpawnState {
     }
     #[inline]
     pub fn can_spawn_for_category_global(&self, category: &'static MobCategory) -> bool {
-        // Vanilla: maxInstances * spawnableChunks / 289 (floor).
-        // With few loaded chunks floor stays 0 for CREATURE (max=10) until ~29 chunks,
-        // so animals never appear on small/laggy views. Use ceiling so sparse loads
-        // still allow at least one pack when any spawnable chunk exists.
-        let limit = if self.spawnable_chunk_count <= 0 {
-            0
-        } else {
-            (category.max * self.spawnable_chunk_count + MAGIC_NUMBER - 1) / MAGIC_NUMBER
-        };
+        // Vanilla SpawnState.canSpawnForCategoryGlobal:
+        // maxInstancesPerChunk * spawnableChunkCount / 289  (integer floor).
+        let limit = category.max * self.spawnable_chunk_count / MAGIC_NUMBER;
         self.mob_category_counts.0[category.id].load(Relaxed) < limit
     }
 
@@ -457,29 +451,27 @@ impl SpawnState {
     }
 }
 
+/// Vanilla `NaturalSpawner.getFilteredSpawningCategories(state, spawnEnemies, spawnPersistent)`.
+///
+/// - Hostile categories need `spawn_enemies`
+/// - Persistent categories (CREATURE, WATER_CREATURE, …) need `spawn_persistent` (~every 400 ticks)
+/// - Friendly non-persistent always allowed when global cap allows
 #[must_use]
 pub fn get_filtered_spawning_categories(
     state: &SpawnState,
-    spawn_friendlies: bool,
     spawn_enemies: bool,
-    spawn_passives: bool,
+    spawn_persistent: bool,
 ) -> Vec<&'static MobCategory> {
     let mut ret = Vec::with_capacity(MobCategory::SPAWNING_CATEGORIES.len());
     for category in MobCategory::SPAWNING_CATEGORIES {
-        let is_type_allowed = if category.is_friendly {
-            spawn_friendlies
-        } else {
-            spawn_enemies
-        };
-
-        if !is_type_allowed {
+        // if (!spawnEnemies && !isFriendly) continue
+        if !spawn_enemies && !category.is_friendly {
             continue;
         }
-
-        if category.is_persistent && !spawn_passives {
+        // if (!spawnPersistent && isPersistent) continue
+        if !spawn_persistent && category.is_persistent {
             continue;
         }
-
         if state.can_spawn_for_category_global(category) {
             ret.push(category);
         }
@@ -487,6 +479,7 @@ pub fn get_filtered_spawning_categories(
     ret
 }
 
+/// Vanilla `NaturalSpawner.spawnForChunk` — one pack attempt per category per chunk.
 pub fn spawn_for_chunk(
     world: &Arc<World>,
     chunk_pos: Vector2<i32>,
@@ -500,83 +493,54 @@ pub fn spawn_for_chunk(
         if !spawn_state.can_spawn_for_category_local(world, category, chunk_pos) {
             continue;
         }
-        // Vanilla: one random pack origin per category per chunk attempt.
-        // Creatures only enter the spawn list every ~400 ticks (persistent).
-        let attempts = if category.id == MobCategory::CREATURE.id {
-            8
-        } else {
-            3
-        };
-        for _ in 0..attempts {
-            if !spawn_state.can_spawn_for_category_global(category) {
-                if pumpkin_config::development_mode() && category.id == MobCategory::CREATURE.id {
-                    tracing::debug!(
-                        "creature spawn skipped: global cap (chunks={}, count={})",
-                        spawn_state.spawnable_chunk_count(),
-                        spawn_state.category_count(category)
-                    );
-                }
-                break;
-            }
-            let random_pos = get_random_pos_within(world.min_y, &chunk_pos, chunk, category);
-            if random_pos.0.y <= world.min_y {
-                continue;
-            }
-            let batch = spawn_category_for_position(
-                category,
-                world,
-                random_pos,
-                &chunk_pos,
-                spawn_state,
-                is_thundering,
-            );
-            if !batch.is_empty() {
-                if pumpkin_config::development_mode() && category.id == MobCategory::CREATURE.id {
-                    tracing::info!(
-                        "spawned {} creature(s) near {:?} in chunk {:?}",
-                        batch.len(),
-                        random_pos,
-                        chunk_pos
-                    );
-                }
-                entities.extend(batch);
-                break; // one successful pack per category per chunk tick
-            }
+        // Vanilla spawnCategoryForChunk: single getRandomPosWithin + spawnCategoryForPosition.
+        let start = get_random_pos_within(world.min_y, &chunk_pos, chunk);
+        if start.0.y < world.min_y + 1 {
+            continue;
         }
+        let batch = spawn_category_for_position(
+            category,
+            world,
+            start,
+            &chunk_pos,
+            spawn_state,
+            is_thundering,
+        );
+        if pumpkin_config::development_mode()
+            && category.id == MobCategory::CREATURE.id
+            && !batch.is_empty()
+        {
+            tracing::info!(
+                "natural creature spawn: {} at {:?} chunk {:?}",
+                batch.len(),
+                start,
+                chunk_pos
+            );
+        }
+        entities.extend(batch);
     }
     entities
 }
 
-/// Pick a random column in the chunk. For ground mobs prefer near-surface Y
-/// (vanilla pack spawning heavily uses the surface heightmap).
+/// Vanilla `NaturalSpawner.getRandomPosWithin`:
+/// `x,z` random in chunk; `y = randomInclusive(minY, WORLD_SURFACE+1)`.
 pub fn get_random_pos_within(
     min_y: i32,
     chunk_pos: &Vector2<i32>,
     chunk: &Arc<ChunkData>,
-    category: &'static MobCategory,
 ) -> BlockPos {
     let mut rng = Xoroshiro::from_seed(get_seed());
 
     let x = (chunk_pos.x << 4) + rng.next_bounded_i32(16);
     let z = (chunk_pos.y << 4) + rng.next_bounded_i32(16);
-    // Heightmap = highest opaque block Y; +1 = first air above surface (vanilla feet).
-    let surface_air_y = chunk.heightmap.lock().unwrap().get(
+    let top_empty_y = chunk.heightmap.lock().unwrap().get(
         ChunkHeightmapType::WorldSurface,
         x,
         z,
         chunk.section.min_y,
     ) + 1;
-
-    // Creatures almost always surface; monsters mix surface + caves.
-    let y = if category.id == MobCategory::CREATURE.id
-        || category.id == MobCategory::AMBIENT.id
-        || rng.next_bounded_i32(2) == 0
-    {
-        // Feet in the air column above grass — NOT inside the solid surface block.
-        surface_air_y.max(min_y + 1)
-    } else {
-        rng.next_inbetween_i32(min_y, surface_air_y.max(min_y + 1))
-    };
+    let top = top_empty_y.max(min_y + 1);
+    let y = rng.next_inbetween_i32(min_y, top);
     BlockPos::new(x, y, z)
 }
 
@@ -730,6 +694,13 @@ pub fn spawn_category_for_position(
         )
     };
 
+    // Vanilla: if (chunk.getBlockState(start).isRedstoneConductor(...)) return;
+    // Full solid cubes conduct redstone → pack origin invalid.
+    let start_state = world.get_block_state(&pos);
+    if start_state.is_solid_block() && start_state.is_full_cube() {
+        return batch_buffer;
+    }
+
     'group_loop: for _ in 0..3 {
         let mut new_x = pos.0.x;
         let mut new_z = pos.0.z;
@@ -741,6 +712,7 @@ pub fn spawn_category_for_position(
         'spawn_loop: while inc < random_group_size {
             new_x += rng().random_range(0..6) - rng().random_range(0..6);
             new_z += rng().random_range(0..6) - rng().random_range(0..6);
+            // Vanilla keeps pack Y at yStart (no vertical crawl).
             let mut new_pos = BlockPos::new(new_x, pos.0.y, new_z);
 
             if current_spawner.is_none() {
@@ -762,9 +734,8 @@ pub fn spawn_category_for_position(
                 continue;
             };
 
+            // Vanilla: SpawnPlacements.adjustSpawnPosition only (no cave crawl).
             new_pos = adjust_spawn_position(world, new_pos, entity_type);
-            // Snap OnGround packs onto solid ground if adjust left us floating.
-            new_pos = find_ground_spawn_y(world, new_pos, entity_type);
 
             let spawn_pos_f64 = Vector3::new(
                 f64::from(new_pos.0.x) + 0.5,
@@ -815,55 +786,6 @@ pub fn spawn_category_for_position(
         }
     }
     batch_buffer
-}
-
-/// Find a valid standing spot near `pos` (prefer up if inside solid, else down).
-fn find_ground_spawn_y(
-    world: &World,
-    mut pos: BlockPos,
-    entity_type: &'static EntityType,
-) -> BlockPos {
-    if !matches!(
-        entity_type.spawn_restriction.location,
-        SpawnLocation::OnGround
-    ) {
-        return pos;
-    }
-    let min_y = world.min_y;
-
-    let is_valid = |p: BlockPos| {
-        let feet = world.get_block_state(&p);
-        let below = world.get_block_state(&p.down());
-        let head = world.get_block_state(&p.up());
-        below.is_side_solid(BlockDirection::Up)
-            && is_valid_empty_spawn_block(feet)
-            && is_valid_empty_spawn_block(head)
-    };
-
-    if is_valid(pos) {
-        return pos;
-    }
-
-    // If feet are inside solid (old surface bug), climb out first.
-    let mut up = pos;
-    for _ in 0..8 {
-        up = up.up();
-        if is_valid(up) {
-            return up;
-        }
-    }
-
-    // Otherwise search downward for a cave/ledge.
-    for _ in 0..16 {
-        if pos.0.y <= min_y + 1 {
-            break;
-        }
-        pos = pos.down();
-        if is_valid(pos) {
-            return pos;
-        }
-    }
-    pos
 }
 
 #[must_use]

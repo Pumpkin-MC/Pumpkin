@@ -1397,19 +1397,24 @@ impl World {
                 lock.difficulty == Difficulty::Peaceful,
             )
         };
-        let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
+        // Vanilla ServerChunkCache: animals/persistent every 400 game ticks;
+        // monsters when doMobSpawning && !peaceful && spawnMonsters.
+        let spawn_persistent = self.level_time.lock().await.time_of_day % 400 == 0;
         let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
-        let spawn_passives = spawn_passives && spawn_mobs;
 
-        let spawn_list = Arc::new(natural_spawner::get_filtered_spawning_categories(
-            &spawn_state,
-            spawn_mobs,
-            spawn_enemies,
-            spawn_passives,
-        ));
-        if pumpkin_config::development_mode() && spawn_passives {
+        // Vanilla only builds the category list when doMobSpawning is true.
+        let spawn_list = if spawn_mobs {
+            Arc::new(natural_spawner::get_filtered_spawning_categories(
+                &spawn_state,
+                spawn_enemies,
+                spawn_persistent,
+            ))
+        } else {
+            Arc::new(Vec::new())
+        };
+        if pumpkin_config::development_mode() && spawn_persistent {
             tracing::debug!(
-                "passive spawn tick: categories={:?} spawnable_chunks={}",
+                "vanilla persistent spawn tick: categories={:?} spawnable_chunks={}",
                 spawn_list.iter().map(|c| c.id).collect::<Vec<_>>(),
                 spawn_state.spawnable_chunk_count()
             );

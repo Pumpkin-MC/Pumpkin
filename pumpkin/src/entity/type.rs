@@ -414,41 +414,29 @@ pub fn check_spawn_rules(
         return check_fox_spawn_rules(world, pos);
     }
 
-    // Vanilla Animal.checkMobSpawnRules: most land animals need grass (or equivalent)
-    // underfoot for natural spawns.
+    // Vanilla Animal.checkAnimalSpawnRules for natural OnGround creatures:
+    // below.is(ANIMALS_SPAWNABLE_ON) && isBrightEnoughToSpawn (raw light > 8).
     if entity_type.category == &MobCategory::CREATURE
         && matches!(
             entity_type.spawn_restriction.location,
             pumpkin_data::entity::SpawnLocation::OnGround
         )
     {
-        let below = world.get_block(&pos.down());
-        let ok_ground = is_animal_spawnable_ground(below);
-        if !ok_ground {
-            return false;
-        }
-        // Vanilla Animal.checkMobSpawnRules: raw brightness > 8 (no sky darken).
-        let light = world.get_raw_brightness_no_darken(pos);
-        if light <= 8 {
-            return false;
-        }
+        return check_animal_spawn_rules(world, pos);
     }
 
     true
 }
 
-/// Vanilla `Animal.checkAnimalSpawnRules` ground: `animals_spawnable_on` + common dirt variants.
-fn is_animal_spawnable_ground(below: &Block) -> bool {
+/// Vanilla `Animal.checkAnimalSpawnRules` / `isBrightEnoughToSpawn`.
+fn check_animal_spawn_rules(world: &World, pos: &BlockPos) -> bool {
     use pumpkin_data::tag::{self, Taggable};
-    below.has_tag(&tag::Block::MINECRAFT_ANIMALS_SPAWNABLE_ON)
-        || below == &Block::GRASS_BLOCK
-        || below == &Block::DIRT
-        || below == &Block::PODZOL
-        || below == &Block::COARSE_DIRT
-        || below == &Block::ROOTED_DIRT
-        || below == &Block::MOSS_BLOCK
-        || below == &Block::MUD
-        || below == &Block::SNOW_BLOCK
+    let below = world.get_block(&pos.down());
+    if !below.has_tag(&tag::Block::MINECRAFT_ANIMALS_SPAWNABLE_ON) {
+        return false;
+    }
+    // getRawBrightness(pos, 0) > 8
+    world.get_raw_brightness_no_darken(pos) > 8
 }
 
 /// Vanilla `PolarBear.checkPolarBearSpawnRules`.
@@ -459,7 +447,7 @@ fn check_polar_bear_spawn_rules(world: &World, pos: &BlockPos) -> bool {
         return false;
     }
     let below = world.get_block(&pos.down());
-    // Frozen oceans / ice: must stand on ice (tag is only "ice" in data — also allow packed/blue).
+    // Alternate: polar_bears_spawnable_on_alternate (ice) in frozen-ocean style biomes.
     if below.has_tag(&tag::Block::MINECRAFT_POLAR_BEARS_SPAWNABLE_ON_ALTERNATE)
         || below == &Block::ICE
         || below == &Block::PACKED_ICE
@@ -468,8 +456,8 @@ fn check_polar_bear_spawn_rules(world: &World, pos: &BlockPos) -> bool {
     {
         return true;
     }
-    // Snowy plains etc.: animal ground (grass/snow block).
-    is_animal_spawnable_ground(below)
+    // Else animal rules (ANIMALS_SPAWNABLE_ON only).
+    check_animal_spawn_rules(world, pos)
 }
 
 /// Vanilla `Fox.checkFoxSpawnRules`:
