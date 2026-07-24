@@ -193,15 +193,17 @@ impl Goal for MeleeAttackGoal {
             if me.squared_distance_to_vec(&dest) < 0.25 {
                 return false;
             }
+            // `std::sync::MutexGuard` is !Send — cannot hold it across `.await`.
+            // Run the path probe on the current worker without requiring Send.
             let living = &mob.get_mob_entity().living_entity;
-            let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
-            navigator.create_path_to(living, dest).await.is_some()
+            let navigator = &mob.get_mob_entity().navigator;
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    let mut nav = navigator.lock().unwrap();
+                    nav.create_path_to(living, dest).await.is_some()
+                })
+            })
         })
-    }
-
-    fn should_run_every_tick(&self) -> bool {
-        // Vanilla MeleeAttackGoal.requiresUpdateEveryTick() == true
-        true
     }
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
@@ -390,6 +392,7 @@ impl Goal for MeleeAttackGoal {
     }
 
     fn should_run_every_tick(&self) -> bool {
+        // Vanilla MeleeAttackGoal.requiresUpdateEveryTick() == true
         true
     }
 
