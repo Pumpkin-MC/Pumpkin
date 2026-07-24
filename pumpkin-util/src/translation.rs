@@ -914,7 +914,7 @@ mod tests {
 
     #[test]
     fn bilingual_console_translation_joins_when_different() {
-        configure_server_locale("zh_en");
+        assert!(configure_server_locale("zh_en"));
         let key = "pumpkin:server.stopped";
         let text = get_console_translation(key);
         assert!(text.contains('/'), "expected bilingual join: {text}");
