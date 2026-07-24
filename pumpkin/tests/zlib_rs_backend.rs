@@ -39,11 +39,7 @@ fn deflate_roundtrip(data: &[u8], level: Compression) {
     assert_eq!(out, data, "deflate roundtrip mismatch");
 }
 
-#[test]
-fn zlib_rs_feature_is_enabled() {
-    // This file only compiles when `zlib-rs` is on; assert for clarity in logs.
-    assert!(cfg!(feature = "zlib-rs"));
-}
+// This integration test is only built with `--features zlib-rs` (see `#![cfg(...)]` above).
 
 #[test]
 fn zlib_empty_and_small() {
