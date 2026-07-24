@@ -124,6 +124,7 @@ impl EntityLookup {
     }
 
     /// Remove by UUID. Returns the removed entity if it was present.
+    #[must_use]
     pub fn remove_uuid(&self, uuid: Uuid) -> Option<Arc<dyn EntityBase>> {
         let entity = self.by_uuid.remove(&uuid)?.1;
         let id = entity.get_entity().entity_id;
@@ -132,11 +133,13 @@ impl EntityLookup {
     }
 
     /// Remove by entity identity (UUID).
+    #[must_use]
     pub fn remove(&self, entity: &dyn EntityBase) -> Option<Arc<dyn EntityBase>> {
         self.remove_uuid(entity.get_entity().entity_uuid)
     }
 
     /// Remove all entities matching `should_remove`, returning those removed.
+    #[must_use]
     pub fn drain_if(
         &self,
         mut should_remove: impl FnMut(&Arc<dyn EntityBase>) -> bool,
@@ -146,13 +149,7 @@ impl EntityLookup {
         let uuids: Vec<Uuid> = self
             .by_uuid
             .iter()
-            .filter_map(|entry| {
-                if should_remove(entry.value()) {
-                    Some(*entry.key())
-                } else {
-                    None
-                }
-            })
+            .filter_map(|entry| should_remove(entry.value()).then(|| *entry.key()))
             .collect();
         for uuid in uuids {
             if let Some(entity) = self.remove_uuid(uuid) {

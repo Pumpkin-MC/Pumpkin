@@ -238,7 +238,7 @@ impl CommandSender {
                 server_locale()
             }
             Self::Player(player) => {
-                Locale::from_str(&player.config.load().locale).unwrap_or_else(|_| server_locale())
+                Locale::from_str(&player.config.load().locale).unwrap_or_else(|()| server_locale())
             }
         }
     }
