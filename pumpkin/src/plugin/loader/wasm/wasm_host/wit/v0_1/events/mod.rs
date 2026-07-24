@@ -48,13 +48,17 @@ pub trait ToFromWasmEvent {
 }
 
 pub(super) const fn to_wasm_position(position: Vector3<f64>) -> pumpkin::plugin::common::Position {
-    (position.x, position.y, position.z)
+    pumpkin::plugin::common::Position {
+        x: position.x,
+        y: position.y,
+        z: position.z,
+    }
 }
 
 pub(super) const fn from_wasm_position(
     position: pumpkin::plugin::common::Position,
 ) -> Vector3<f64> {
-    Vector3::new(position.0, position.1, position.2)
+    Vector3::new(position.x, position.y, position.z)
 }
 
 pub(super) const fn to_wasm_block_position(

@@ -76,8 +76,16 @@ pub(crate) const fn to_wit_bounding_box(
     bb: pumpkin_util::math::boundingbox::BoundingBox,
 ) -> WitBoundingBox {
     WitBoundingBox {
-        min: (bb.min.x, bb.min.y, bb.min.z),
-        max: (bb.max.x, bb.max.y, bb.max.z),
+        min: pumpkin::plugin::common::Position {
+            x: bb.min.x,
+            y: bb.min.y,
+            z: bb.min.z,
+        },
+        max: pumpkin::plugin::common::Position {
+            x: bb.max.x,
+            y: bb.max.y,
+            z: bb.max.z,
+        },
     }
 }
 
@@ -498,7 +506,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         world_ref.provider.play_sound_raw(
             sound_data as u16,
             internal_category,
-            &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+            &pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y, pos.z),
             volume,
             pitch,
         );
@@ -520,11 +528,11 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             .ok_or_else(|| wasmtime::Error::msg(format!("Unknown particle: {particle_name}")))?;
 
         world_ref.provider.spawn_particle(
-            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+            pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y, pos.z),
             pumpkin_util::math::vector3::Vector3::new(
-                offset.0 as f32,
-                offset.1 as f32,
-                offset.2 as f32,
+                offset.x as f32,
+                offset.y as f32,
+                offset.z as f32,
             ),
             max_speed,
             count,
@@ -545,7 +553,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         // Currently Explosion only supports power and position in this codebase
         let explosion = Explosion::new(
             power,
-            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+            pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y, pos.z),
         );
         explosion.explode(&world_ref.provider).await;
         Ok(())
@@ -644,7 +652,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let internal_type = pumpkin_data::entity::EntityType::from_name(type_name)
             .ok_or_else(|| wasmtime::Error::msg(format!("Invalid entity type: {type_name}")))?;
 
-        let internal_pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
+        let internal_pos = pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y, pos.z);
         let entity = crate::entity::r#type::from_type(
             internal_type,
             internal_pos,

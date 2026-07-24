@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
 
 use crossbeam::atomic::AtomicCell;
@@ -23,6 +23,12 @@ pub struct ServerTickRateManager {
     sprint_time_spend: AtomicI64,
     scheduled_current_sprint_ticks: AtomicI64,
     previous_is_frozen: AtomicBool,
+
+    // Rolling TPS/MSPT diagnostics
+    tick_count: AtomicU64,
+    total_tick_nanos: AtomicU64,
+    rolling_tps_x100: AtomicU32,
+    rolling_mspt_x100: AtomicU32,
 }
 
 impl ServerTickRateManager {
@@ -39,6 +45,10 @@ impl ServerTickRateManager {
             sprint_time_spend: AtomicI64::new(0),
             scheduled_current_sprint_ticks: AtomicI64::new(0),
             previous_is_frozen: AtomicBool::new(false),
+            tick_count: AtomicU64::new(0),
+            total_tick_nanos: AtomicU64::new(0),
+            rolling_tps_x100: AtomicU32::new(2000),
+            rolling_mspt_x100: AtomicU32::new(500),
         }
     }
 }
@@ -77,6 +87,54 @@ impl ServerTickRateManager {
 
     pub fn is_stepping_forward(&self) -> bool {
         self.frozen_ticks_to_run.load(Ordering::Relaxed) > 0
+    }
+
+    /// Records the duration of a completed tick and updates rolling TPS/MSPT averages.
+    /// Called once per tick from the main tick loop.
+    pub fn record_tick(&self, duration_nanos: u64) {
+        let prev_count = self.tick_count.fetch_add(1, Ordering::Relaxed);
+        self.total_tick_nanos
+            .fetch_add(duration_nanos, Ordering::Relaxed);
+
+        // Update rolling averages every 20 ticks (~1 second at 20 TPS)
+        if prev_count.is_multiple_of(20) && prev_count > 0 {
+            let total_nanos = self.total_tick_nanos.load(Ordering::Relaxed);
+            let count = self.tick_count.load(Ordering::Relaxed);
+            if let Some(avg_nanos) = total_nanos.checked_div(count) {
+                if let Some(tps_x100) = (NANOSECONDS_PER_SECOND as u64 * 100).checked_div(avg_nanos)
+                {
+                    self.rolling_tps_x100
+                        .store(tps_x100 as u32, Ordering::Relaxed);
+                }
+                // MSPT * 100 (fixed-point)
+                let mspt_x100 = (avg_nanos / 10_000) as u32;
+                self.rolling_mspt_x100.store(mspt_x100, Ordering::Relaxed);
+            }
+        }
+    }
+
+    /// Returns the current rolling average TPS (ticks per second).
+    pub fn current_tps(&self) -> f32 {
+        self.rolling_tps_x100.load(Ordering::Relaxed) as f32 / 100.0
+    }
+
+    /// Returns the current rolling average MSPT (milliseconds per tick).
+    pub fn current_mspt(&self) -> f32 {
+        self.rolling_mspt_x100.load(Ordering::Relaxed) as f32 / 100.0
+    }
+
+    /// Returns the average tick duration in nanoseconds across all recorded ticks.
+    pub fn avg_tick_duration_nanos(&self) -> u64 {
+        let count = self.tick_count.load(Ordering::Relaxed);
+        self.total_tick_nanos
+            .load(Ordering::Relaxed)
+            .checked_div(count)
+            .unwrap_or(0)
+    }
+
+    /// Returns the total number of ticks processed since server start.
+    pub fn total_ticks(&self) -> u64 {
+        self.tick_count.load(Ordering::Relaxed)
     }
 
     pub fn set_tick_rate(&self, server: &Server, rate: f32) {

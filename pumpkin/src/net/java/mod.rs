@@ -267,7 +267,7 @@ impl JavaClient {
                     // Generate a unique ID (current timestamp in ms)
                     let keep_alive_id = SystemTime::now()
                         .duration_since(UNIX_EPOCH)
-                        .unwrap()
+                        .unwrap_or_default()
                         .as_millis() as i64;
 
                     self.keep_alive_id.store(keep_alive_id);
@@ -361,11 +361,20 @@ impl JavaClient {
 
             let mut buf = Vec::new();
             let version = self.version.load();
-            buf.write_var_int(&VarInt(CChunkData::to_id(version)))
-                .unwrap();
-            CChunkData(chunk)
+            if buf
+                .write_var_int(&VarInt(CChunkData::to_id(version)))
+                .is_err()
+            {
+                tracing::warn!(player = %self.id, "Failed to write chunk batch VarInt");
+                continue;
+            }
+            if CChunkData(chunk)
                 .write_packet_data(&mut buf, &version)
-                .unwrap();
+                .is_err()
+            {
+                tracing::warn!(player = %self.id, "Failed to serialize chunk data");
+                continue;
+            }
             self.send_packet_now_data(buf.into()).await;
         }
         self.send_packet_now(&CChunkBatchEnd::new(chunks.len() as u16))
@@ -375,7 +384,10 @@ impl JavaClient {
     pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
-        self.write_packet(packet, writer).unwrap();
+        if let Err(err) = self.write_packet(packet, writer) {
+            tracing::warn!(player = %self.id, "Failed to serialize packet: {err}");
+            return;
+        }
         let payload = Bytes::from(buf);
 
         let player = self.player.lock().await.clone();
@@ -395,7 +407,10 @@ impl JavaClient {
     pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
-        self.write_packet(packet, writer).unwrap();
+        if let Err(err) = self.write_packet(packet, writer) {
+            tracing::warn!(player = %self.id, "Failed to serialize packet: {err}");
+            return;
+        }
         self.try_enqueue_packet_data(buf.into());
     }
 
@@ -495,7 +510,10 @@ impl JavaClient {
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
-        self.write_packet(packet, writer).unwrap();
+        if let Err(err) = self.write_packet(packet, writer) {
+            tracing::warn!(player = %self.id, "Failed to serialize packet: {err}");
+            return;
+        }
         let payload = Bytes::from(packet_buf);
 
         let player = self.player.lock().await.clone();

@@ -245,16 +245,20 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 }
 
                 full_packet_len_var_int
-                    .encode_async(self.writer.as_mut().unwrap())
+                    .encode_async(self.writer.as_mut().ok_or_else(|| {
+                        PacketEncodeError::Message("writer already consumed".into())
+                    })?)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 data_len_var_int
-                    .encode_async(self.writer.as_mut().unwrap())
+                    .encode_async(self.writer.as_mut().ok_or_else(|| {
+                        PacketEncodeError::Message("writer already consumed".into())
+                    })?)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 self.writer
                     .as_mut()
-                    .unwrap()
+                    .ok_or_else(|| PacketEncodeError::Message("writer already consumed".into()))?
                     .write_all(&self.compression_scratch)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
@@ -279,16 +283,20 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 }
 
                 full_packet_len_var_int
-                    .encode_async(self.writer.as_mut().unwrap())
+                    .encode_async(self.writer.as_mut().ok_or_else(|| {
+                        PacketEncodeError::Message("writer already consumed".into())
+                    })?)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 data_len_var_int
-                    .encode_async(self.writer.as_mut().unwrap())
+                    .encode_async(self.writer.as_mut().ok_or_else(|| {
+                        PacketEncodeError::Message("writer already consumed".into())
+                    })?)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 self.writer
                     .as_mut()
-                    .unwrap()
+                    .ok_or_else(|| PacketEncodeError::Message("writer already consumed".into()))?
                     .write_all(&packet_data)
                     .await
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
@@ -306,12 +314,16 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             }
 
             full_packet_len_var_int
-                .encode_async(self.writer.as_mut().unwrap())
+                .encode_async(
+                    self.writer.as_mut().ok_or_else(|| {
+                        PacketEncodeError::Message("writer already consumed".into())
+                    })?,
+                )
                 .await
                 .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
             self.writer
                 .as_mut()
-                .unwrap()
+                .ok_or_else(|| PacketEncodeError::Message("writer already consumed".into()))?
                 .write_all(&packet_data)
                 .await
                 .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
@@ -323,7 +335,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     pub async fn flush(&mut self) -> Result<(), PacketEncodeError> {
         self.writer
             .as_mut()
-            .unwrap()
+            .ok_or_else(|| PacketEncodeError::Message("writer already consumed".into()))?
             .flush()
             .await
             .map_err(|err| PacketEncodeError::Message(err.to_string()))

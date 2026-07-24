@@ -60,7 +60,8 @@ impl<'a> CachedBranding {
 
     fn build_brand() -> Box<[u8]> {
         let mut buf = Vec::new();
-        VarInt(Self::BRAND.len() as i32).encode(&mut buf).unwrap();
+        // SAFETY: Encoding a VarInt to Vec<u8> is infallible
+        let _ = VarInt(Self::BRAND.len() as i32).encode(&mut buf);
         buf.extend_from_slice(Self::BRAND_BYTES);
         buf.into_boxed_slice()
     }
@@ -90,7 +91,7 @@ impl CachedStatus {
             version.protocol = client_protocol as u32;
         }
 
-        let json = serde_json::to_string(&response).expect("Failed to serialize status response");
+        let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
 
         CStatusResponse::new(json)
     }

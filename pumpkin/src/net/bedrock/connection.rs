@@ -17,7 +17,7 @@ impl BedrockClient {
         self.send_framed_packet(
             &CConnectedPong::new(
                 packet.time,
-                UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+                UNIX_EPOCH.elapsed().unwrap_or_default().as_millis() as u64,
             ),
             RakReliability::Unreliable,
         )

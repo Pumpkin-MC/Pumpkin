@@ -739,7 +739,10 @@ impl JavaClient {
             return;
         }
 
-        let stack = ItemStack::new(1, Item::from_id(block.item_id).unwrap());
+        let Some(item) = Item::from_id(block.item_id) else {
+            return;
+        };
+        let stack = ItemStack::new(1, item);
 
         let slot_with_stack = player.inventory().get_slot_with_stack(&stack).await;
 
@@ -803,7 +806,10 @@ impl JavaClient {
         }
 
         if let Some(egg_item_id) = found_egg {
-            let stack = ItemStack::new(1, Item::from_id(egg_item_id).unwrap());
+            let Some(item) = Item::from_id(egg_item_id) else {
+                return;
+            };
+            let stack = ItemStack::new(1, item);
 
             let slot_with_stack = player.inventory().get_slot_with_stack(&stack).await;
 
@@ -869,8 +875,14 @@ impl JavaClient {
                 CommandBlockMode::Impulse => Block::COMMAND_BLOCK,
             };
 
-            let old_command_block: &CommandBlockEntity =
-                block_entity.as_any().downcast_ref().unwrap();
+            let Some(old_command_block) =
+                block_entity.as_any().downcast_ref::<CommandBlockEntity>()
+            else {
+                tracing::warn!(
+                    "Block entity at command block position is not a CommandBlockEntity"
+                );
+                return;
+            };
 
             props.conditional = command.flags & 0x2 != 0;
 
@@ -937,7 +949,11 @@ impl JavaClient {
                 return;
             }
 
-            let jigsaw_block: &JigsawBlockEntity = block_entity.as_any().downcast_ref().unwrap();
+            let Some(jigsaw_block) = block_entity.as_any().downcast_ref::<JigsawBlockEntity>()
+            else {
+                warn!("Block entity is not a JigsawBlockEntity");
+                return;
+            };
 
             *jigsaw_block.name.lock().await = jigsaw.name;
             *jigsaw_block.target.lock().await = jigsaw.target;
@@ -1368,7 +1384,10 @@ impl JavaClient {
             PlayerInteractEvent::new(player, InteractAction::LeftClickAir, &Block::AIR, None)
         };
 
-        let server = player.world().server.upgrade().unwrap();
+        let Some(server) = player.world().server.upgrade() else {
+            tracing::warn!("Server has been dropped while player is connected");
+            return;
+        };
 
         send_cancellable! {{
             server;
@@ -2425,7 +2444,10 @@ impl JavaClient {
             &sign_entity.back_text
         };
 
-        *text.messages.lock().unwrap() = [
+        *text
+            .messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = [
             sign_data.line_1,
             sign_data.line_2,
             sign_data.line_3,
@@ -2756,8 +2778,8 @@ impl JavaClient {
 
         let response = CCommandSuggestions::new(
             packet.id,
-            (last_word_start + 2).try_into().unwrap(),
-            (cmd.len() - last_word_start - 1).try_into().unwrap(),
+            VarInt((last_word_start + 2) as i32),
+            VarInt((cmd.len() - last_word_start - 1) as i32),
             suggestions.into(),
         );
 

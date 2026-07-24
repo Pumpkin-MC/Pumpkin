@@ -177,7 +177,7 @@ impl HostEntity for PluginHostState {
         let world = world.provider.clone();
         entity_base
             .teleport(
-                pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+                pumpkin_util::math::vector3::Vector3::new(pos.x, pos.y, pos.z),
                 None,
                 None,
                 world,
@@ -196,7 +196,7 @@ impl HostEntity for PluginHostState {
             .get_entity()
             .velocity
             .store(pumpkin_util::math::vector3::Vector3::new(
-                velocity.0, velocity.1, velocity.2,
+                velocity.x, velocity.y, velocity.z,
             ));
         Ok(())
     }

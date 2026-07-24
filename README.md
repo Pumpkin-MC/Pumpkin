@@ -98,6 +98,15 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 
 See our [Quick Start](https://docs.pumpkinmc.org/#quick-start) guide to get Pumpkin running.
 
+## Recent Changes (1.0.0 Roadmap)
+
+See [CHANGELOG.md](CHANGELOG.md) for full details.
+
+- **Plugin API ABI Stability** — WIT `position` type changed from anonymous tuple to named record for stable cross-compiler layout; deprecated types removed.
+- **Panic-Free Network Layer** — ~30 `.unwrap()`/`.expect()` calls removed from network handlers and protocol encoder; the server now logs warnings and drops bad packets instead of crashing.
+- **Tick Diagnostics** — Zero-allocation, lock-free rolling TPS and MSPT metrics available via `ServerTickRateManager::current_tps()` and `current_mspt()`.
+- **Mutex Poison Resilience** — Plugin API mutex locks now recover from poisoned state instead of panicking.
+
 ## Contributions
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)

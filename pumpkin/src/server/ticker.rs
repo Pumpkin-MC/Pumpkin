@@ -43,6 +43,8 @@ impl Ticker {
 
             let tick_duration_nanos = tick_start_time.elapsed().as_nanos() as i64;
 
+            manager.record_tick(tick_duration_nanos as u64);
+
             let tick_number = server.tick_count.load(Ordering::Relaxed);
             let _ = server
                 .plugin_manager

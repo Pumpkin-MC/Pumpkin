@@ -124,7 +124,7 @@ impl wit::Guest for Component {
     ///
     /// Returns the event unchanged if no handler is registered for the given id.
     fn handle_event(event_id: u32, server: Server, event: events::Event) -> events::Event {
-        let handlers = EVENT_HANDLERS.lock().unwrap();
+        let handlers = EVENT_HANDLERS.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(handler) = handlers.get(&event_id) {
             handler.handle_erased(server, event)
         } else {
@@ -141,7 +141,7 @@ impl wit::Guest for Component {
         server: Server,
         args: command::ConsumedArgs,
     ) -> Result<i32, command::CommandError> {
-        let handlers = COMMAND_HANDLERS.lock().unwrap();
+        let handlers = COMMAND_HANDLERS.lock().unwrap_or_else(|e| e.into_inner());
         handlers.get(&command_id).map_or_else(
             || {
                 Err(command::CommandError::CommandFailed(TextComponent::text(
@@ -154,7 +154,7 @@ impl wit::Guest for Component {
 
     /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.
     fn handle_task(handler_id: u32, server: Server) {
-        let mut handlers = TASK_HANDLERS.lock().unwrap();
+        let mut handlers = TASK_HANDLERS.lock().unwrap_or_else(|e| e.into_inner());
         handlers.handle(handler_id, server);
     }
 }

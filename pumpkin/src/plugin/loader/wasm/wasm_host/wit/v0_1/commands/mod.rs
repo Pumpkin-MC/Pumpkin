@@ -500,7 +500,11 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .get_sender_res(&sender)?
             .provider
             .position()
-            .map(|p| (p.x, p.y, p.z)))
+            .map(|p| Position {
+                x: p.x,
+                y: p.y,
+                z: p.z,
+            }))
     }
 
     async fn world(

@@ -230,18 +230,19 @@ impl BedrockClient {
     pub fn start_outgoing_packet_task(self: &Arc<Self>) {
         let client = self.clone();
         self.spawn_task(async move {
-            let mut packet_receiver = {
-                let mut guard = client.outgoing_packet_queue_recv.lock().await;
-                guard
-                    .take()
-                    .expect("Outgoing packet receiver was already taken")
+            let mut guard = client.outgoing_packet_queue_recv.lock().await;
+            let Some(mut packet_receiver) = guard.take() else {
+                tracing::error!("Outgoing packet receiver was already taken, aborting send loop");
+                return;
             };
-            let mut priority_packet_receiver = {
-                let mut guard = client.outgoing_packet_priority_recv.lock().await;
-                guard
-                    .take()
-                    .expect("Outgoing packet receiver was already taken")
+            drop(guard);
+
+            let mut guard = client.outgoing_packet_priority_recv.lock().await;
+            let Some(mut priority_packet_receiver) = guard.take() else {
+                tracing::error!("Outgoing priority packet receiver was already taken, aborting send loop");
+                return;
             };
+            drop(guard);
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
 
             while !client.close_token.is_cancelled() {
@@ -1234,7 +1235,7 @@ impl BedrockClient {
                         0,
                         [SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 19132)); 10],
                         request.time,
-                        UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+                        UNIX_EPOCH.elapsed().unwrap_or_default().as_millis() as u64,
                     ),
                     RakReliability::Unreliable,
                 )

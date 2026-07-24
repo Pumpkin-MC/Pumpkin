@@ -404,7 +404,10 @@ impl BedrockClient {
         packet: pumpkin_protocol::bedrock::server::player_auth_input::PlayerBlockAction,
     ) {
         use pumpkin_protocol::bedrock::server::player_action::Action as PlayerAction;
-        let action = PlayerAction::try_from(packet.action.0).unwrap();
+        let Ok(action) = PlayerAction::try_from(packet.action.0) else {
+            tracing::warn!("Invalid player action: {}", packet.action.0);
+            return;
+        };
         self.handle_player_action(
             player,
             server,
