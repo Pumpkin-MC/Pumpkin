@@ -38,6 +38,7 @@ flate2.workspace = true
 bitflags.workspace = true
 
 [dev-dependencies]
+criterion = { workspace = true, features = ["async_tokio"] }
 # Validate correctness
 
 [[bench]]
