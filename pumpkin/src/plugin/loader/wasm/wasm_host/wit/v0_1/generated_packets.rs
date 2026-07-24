@@ -740,7 +740,7 @@ pub fn serialize_java_packet(
 #[must_use]
 pub fn deserialize_java_serverbound_packet(
     id: i32,
-    payload: &[u8],
+    mut payload: &[u8],
     version: JavaMinecraftVersion,
 ) -> Option<ServerboundPacket> {
     match id {
@@ -748,7 +748,7 @@ pub fn deserialize_java_serverbound_packet(
             == pumpkin_protocol::java::server::config::SClientInformationConfig::to_id(version) =>
         {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::config::SClientInformationConfig as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::config::SClientInformationConfig as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::ConfigSClientInformationConfig(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigSClientInformationConfig {
                 locale: p.locale.into(),
                 view_distance: p.view_distance.try_into().unwrap(),
@@ -762,21 +762,21 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::config::SKeepAlive::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::config::SKeepAlive as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::config::SKeepAlive as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::ConfigSKeepAlive(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigSKeepAlive {
                 keep_alive_id: p.keep_alive_id.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::config::SKnownPacks::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::config::SKnownPacks as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::config::SKnownPacks as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::ConfigSKnownPacks(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigSKnownPacks {
                 known_pack_count: p.known_pack_count.0.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::config::SConfigResourcePack::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::config::SConfigResourcePack as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::config::SConfigResourcePack as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::ConfigSConfigResourcePack(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigSConfigResourcePack {
                 uuid: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid { high: p.uuid.as_u64_pair().1, low: p.uuid.as_u64_pair().0 },
                 result: p.result.0.try_into().unwrap(),
@@ -784,14 +784,14 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SAttack::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SAttack as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SAttack as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SAttack(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SAttack {
                 entity_id: p.entity_id.0.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SBundleItemSelected::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SBundleItemSelected as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SBundleItemSelected as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SBundleItemSelected(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SBundleItemSelected {
                 slot_id: p.slot_id.0.try_into().unwrap(),
                 selected_item_index: p.selected_item_index.0.try_into().unwrap(),
@@ -799,21 +799,21 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SChatCommand::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SChatCommand as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SChatCommand as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SChatCommand(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SChatCommand {
                 command: p.command.into(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SChunkBatch::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SChunkBatch as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SChunkBatch as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SChunkBatch(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SChunkBatch {
                 chunks_per_tick: p.chunks_per_tick.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SClientCommand::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SClientCommand as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SClientCommand as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SClientCommand(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SClientCommand {
                 action_id: p.action_id.0.try_into().unwrap(),
             }))
@@ -822,7 +822,7 @@ pub fn deserialize_java_serverbound_packet(
             == pumpkin_protocol::java::server::play::SClientInformationPlay::to_id(version) =>
         {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SClientInformationPlay as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SClientInformationPlay as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SClientInformationPlay(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SClientInformationPlay {
                 locale: p.locale.into(),
                 view_distance: p.view_distance.try_into().unwrap(),
@@ -836,14 +836,14 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SCloseContainer::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SCloseContainer as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SCloseContainer as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SCloseContainer(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SCloseContainer {
                 window_id: p.window_id.0.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SCommandSuggestion::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SCommandSuggestion as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SCommandSuggestion as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SCommandSuggestion(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SCommandSuggestion {
                 id: p.id.0.try_into().unwrap(),
                 command: p.command.into(),
@@ -851,14 +851,14 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SConfirmTeleport::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SConfirmTeleport as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SConfirmTeleport as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SConfirmTeleport(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SConfirmTeleport {
                 teleport_id: p.teleport_id.0.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SContainerButtonClick::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SContainerButtonClick as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SContainerButtonClick as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SContainerButtonClick(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SContainerButtonClick {
                 window_id: p.window_id.0.try_into().unwrap(),
                 button_id: p.button_id.0.try_into().unwrap(),
@@ -866,7 +866,7 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SJigsawGenerate::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SJigsawGenerate as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SJigsawGenerate as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SJigsawGenerate(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SJigsawGenerate {
                 pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
                 levels: p.levels.0.try_into().unwrap(),
@@ -875,14 +875,14 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SKeepAlive::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SKeepAlive as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SKeepAlive as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SKeepAlive(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SKeepAlive {
                 keep_alive_id: p.keep_alive_id.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SMoveVehicle::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SMoveVehicle as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SMoveVehicle as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SMoveVehicle(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SMoveVehicle {
                 x: p.x.try_into().unwrap(),
                 y: p.y.try_into().unwrap(),
@@ -893,7 +893,7 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SPaddleBoat::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPaddleBoat as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SPaddleBoat as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SPaddleBoat(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPaddleBoat {
                 left_paddle: p.left_paddle.try_into().unwrap(),
                 right_paddle: p.right_paddle.try_into().unwrap(),
@@ -901,7 +901,7 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SPickItemFromBlock::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPickItemFromBlock as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SPickItemFromBlock as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SPickItemFromBlock(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPickItemFromBlock {
                 pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
                 include_data: p.include_data.try_into().unwrap(),
@@ -909,7 +909,7 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SPickItemFromEntity::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPickItemFromEntity as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SPickItemFromEntity as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SPickItemFromEntity(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPickItemFromEntity {
                 id: p.id.0,
                 include_data: p.include_data.try_into().unwrap(),
@@ -917,14 +917,14 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SPlayPingRequest::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayPingRequest as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SPlayPingRequest as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SPlayPingRequest(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPlayPingRequest {
                 payload: p.payload.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SPlaceRecipe::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlaceRecipe as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SPlaceRecipe as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SPlaceRecipe(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPlaceRecipe {
                 container_id: p.container_id.try_into().unwrap(),
                 recipe_display_id: p.recipe_display_id.0.try_into().unwrap(),
@@ -933,14 +933,14 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SPlayerAbilities::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerAbilities as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SPlayerAbilities as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SPlayerAbilities(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPlayerAbilities {
                 flags: p.flags.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SPlayerAction::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerAction as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SPlayerAction as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SPlayerAction(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPlayerAction {
                 status: p.status.0.try_into().unwrap(),
                 position: (p.position.0.x, p.position.0.y, p.position.0.z),
@@ -950,21 +950,21 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SSetPlayerGround::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSetPlayerGround as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SSetPlayerGround as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SSetPlayerGround(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SSetPlayerGround {
                 on_ground: p.on_ground.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SPlayerInput::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerInput as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SPlayerInput as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SPlayerInput(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPlayerInput {
                 input: p.input.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SPlayerPosition::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerPosition as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SPlayerPosition as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SPlayerPosition(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPlayerPosition {
                 position: (p.position.x as _, p.position.y as _, p.position.z as _),
                 collision: p.collision.try_into().unwrap(),
@@ -974,7 +974,7 @@ pub fn deserialize_java_serverbound_packet(
             == pumpkin_protocol::java::server::play::SPlayerPositionRotation::to_id(version) =>
         {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerPositionRotation as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SPlayerPositionRotation as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SPlayerPositionRotation(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPlayerPositionRotation {
                 position: (p.position.x as _, p.position.y as _, p.position.z as _),
                 yaw: p.yaw.try_into().unwrap(),
@@ -984,7 +984,7 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SPlayerRotation::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SPlayerRotation as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SPlayerRotation as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SPlayerRotation(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SPlayerRotation {
                 yaw: p.yaw.try_into().unwrap(),
                 pitch: p.pitch.try_into().unwrap(),
@@ -995,7 +995,7 @@ pub fn deserialize_java_serverbound_packet(
             == pumpkin_protocol::java::server::play::SRecipeBookChangeSettings::to_id(version) =>
         {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SRecipeBookChangeSettings as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SRecipeBookChangeSettings as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SRecipeBookChangeSettings(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SRecipeBookChangeSettings {
                 book_type: p.book_type.0.try_into().unwrap(),
                 is_open: p.is_open.try_into().unwrap(),
@@ -1004,21 +1004,21 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SRecipeBookSeenRecipe::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SRecipeBookSeenRecipe as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SRecipeBookSeenRecipe as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SRecipeBookSeenRecipe(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SRecipeBookSeenRecipe {
                 recipe_display_id: p.recipe_display_id.0.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SRenameItem::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SRenameItem as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SRenameItem as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SRenameItem(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SRenameItem {
                 item_name: p.item_name.into(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SSeenAdvancement::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSeenAdvancement as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SSeenAdvancement as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(match p {
                 pumpkin_protocol::java::server::play::SSeenAdvancement::OpenTab(identifier) => ServerboundPacket::SSeenAdvancement(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SSeenAdvancement::OpenTab(identifier.to_string())),
                 pumpkin_protocol::java::server::play::SSeenAdvancement::CloseTab => ServerboundPacket::SSeenAdvancement(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SSeenAdvancement::CloseTab),
@@ -1026,14 +1026,14 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SSelectTrade::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSelectTrade as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SSelectTrade as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SSelectTrade(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SSelectTrade {
                 selected_slot: p.selected_slot.0.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SSetCommandBlock::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSetCommandBlock as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SSetCommandBlock as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SSetCommandBlock(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SSetCommandBlock {
                 pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
                 command: p.command.into(),
@@ -1043,14 +1043,14 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SSetHeldItem::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSetHeldItem as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SSetHeldItem as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SSetHeldItem(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SSetHeldItem {
                 slot: p.slot.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SSetJigsawBlock::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSetJigsawBlock as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SSetJigsawBlock as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SSetJigsawBlock(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SSetJigsawBlock {
                 pos: (p.pos.0.x, p.pos.0.y, p.pos.0.z),
                 name: p.name.into(),
@@ -1064,21 +1064,21 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SSwingArm::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SSwingArm as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SSwingArm as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SSwingArm(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SSwingArm {
                 hand: p.hand.0.try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::play::STeleportToEntity::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::STeleportToEntity as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::STeleportToEntity as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::STeleportToEntity(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::STeleportToEntity {
                 target: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid { high: p.target.as_u64_pair().1, low: p.target.as_u64_pair().0 },
             }))
         }
         id if id == pumpkin_protocol::java::server::play::SUseItem::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SUseItem as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SUseItem as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SUseItem(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SUseItem {
                 hand: p.hand.0.try_into().unwrap(),
                 sequence: p.sequence.0.try_into().unwrap(),
@@ -1088,7 +1088,7 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::play::SUseItemOn::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::play::SUseItemOn as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::play::SUseItemOn as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::SUseItemOn(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::SUseItemOn {
                 hand: p.hand.0.try_into().unwrap(),
                 position: (p.position.0.x, p.position.0.y, p.position.0.z),
@@ -1101,7 +1101,7 @@ pub fn deserialize_java_serverbound_packet(
         }
         id if id == pumpkin_protocol::java::server::status::SStatusPingRequest::to_id(version) => {
             use pumpkin_protocol::ServerPacket;
-            let p = <pumpkin_protocol::java::server::status::SStatusPingRequest as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;
+            let p = <pumpkin_protocol::java::server::status::SStatusPingRequest as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::StatusSStatusPingRequest(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::StatusSStatusPingRequest {
                 payload: p.payload.try_into().unwrap(),
             }))

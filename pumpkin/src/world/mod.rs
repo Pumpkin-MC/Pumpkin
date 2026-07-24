@@ -550,7 +550,7 @@ impl World {
         self.broadcast_editioned(&je_packet, &be_packet).await;
     }
 
-    fn component_to_bedrock_text(message: &TextComponent) -> SText {
+    fn component_to_bedrock_text(message: &TextComponent) -> SText<'static> {
         match &*message.0.content {
             pumpkin_util::text::TextContent::Translate {
                 translate,
@@ -612,7 +612,7 @@ impl World {
     pub async fn broadcast_secure_player_chat(
         &self,
         sender: &Arc<Player>,
-        chat_message: &SChatMessage,
+        chat_message: &SChatMessage<'_>,
         decorated_message: &TextComponent,
     ) {
         let messages_sent: i32 = sender.chat_session.lock().await.messages_sent;
@@ -627,8 +627,8 @@ impl World {
                 VarInt(messages_received),
                 sender.gameprofile.id,
                 VarInt(messages_sent),
-                chat_message.signature.clone(),
-                chat_message.message.clone(),
+                chat_message.signature.map(std::convert::Into::into),
+                chat_message.message.into(),
                 chat_message.timestamp,
                 chat_message.salt,
                 sender_last_seen.indexed_for(recipient).await,
@@ -640,11 +640,13 @@ impl World {
             );
             recipient.client.enqueue_packet(packet).await;
 
-            recipient
-                .signature_cache
-                .lock()
-                .await
-                .add_seen_signature(&chat_message.signature.clone().unwrap()); // Unwrap is safe because we check for None in validate_chat_message
+            if let Some(signature) = chat_message.signature {
+                recipient
+                    .signature_cache
+                    .lock()
+                    .await
+                    .add_seen_signature(signature);
+            }
 
             if recipient.gameprofile.id != sender.gameprofile.id {
                 // Sender may update recipient on signatures recipient hasn't seen
@@ -1298,6 +1300,14 @@ impl World {
         while let Some(res) = chunk_tasks.join_next().await {
             if let Err(e) = res {
                 error!("Chunk task panicked: {:?}", e);
+            }
+        }
+
+        // Update chunk inhabited time for active chunks
+        let loaded_chunks = self.level.loaded_chunks.clone();
+        for pos in active_chunks.iter() {
+            if let Some(chunk) = loaded_chunks.get(pos) {
+                chunk.inhabited_time.fetch_add(1, Relaxed);
             }
         }
     }
@@ -2545,7 +2555,7 @@ impl World {
             .send_packet_now(&CLogin::new(
                 entity_id,
                 base_config.hardcore,
-                dimensions,
+                &dimensions,
                 server
                     .advanced_config
                     .networking

@@ -3609,7 +3609,7 @@ impl Player {
             .await;
     }
 
-    pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem) {
+    pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem<'_>) {
         self.update_last_action_time();
         let screen_handler_arc = self.current_screen_handler.lock().await.clone();
         let mut screen_handler = screen_handler_arc.lock().await;
@@ -3618,7 +3618,9 @@ impl Player {
             .as_any_mut()
             .downcast_mut::<pumpkin_inventory::anvil::AnvilScreenHandler>()
         {
-            anvil_handler.update_item_name(packet.item_name).await;
+            anvil_handler
+                .update_item_name(packet.item_name.to_string())
+                .await;
         }
     }
 

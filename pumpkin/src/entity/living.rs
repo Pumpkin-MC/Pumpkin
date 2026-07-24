@@ -29,6 +29,7 @@ use crate::block::OnLandedUponArgs;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
+use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::entity::{EntityBaseFuture, NbtFuture};
@@ -90,6 +91,7 @@ pub struct LivingEntity {
     pub fall_distance: AtomicCell<f32>,
     pub active_effects: Mutex<HashMap<&'static StatusEffect, Effect>>,
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
+    pub equipment_drop_chances: Arc<Mutex<HashMap<EquipmentSlot, f32>>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
     pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
 
@@ -172,6 +174,7 @@ impl LivingEntity {
             livings_flags: AtomicU8::new(0),
             active_effects: Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
+            equipment_drop_chances: Arc::new(Mutex::new(HashMap::new())),
             equipment_slots: Arc::new(build_equipment_slots()),
             jumping: AtomicBool::new(false),
             jumping_cooldown: AtomicU8::new(0),
@@ -187,6 +190,9 @@ impl LivingEntity {
     }
 
     pub fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
+        if equipment.is_empty() {
+            return;
+        }
         let equipment: Vec<(i8, ItemStackSerializer)> = equipment
             .iter()
             .map(|(slot, stack)| {
@@ -1339,6 +1345,7 @@ impl LivingEntity {
 
             // Plays the death sound
             world.send_entity_status(&self.entity, EntityStatus::Death);
+            let looting_level;
             let tool = if let Some(cause_ent) = cause {
                 if let Some(player) = cause_ent
                     .cast_any()
@@ -1349,11 +1356,16 @@ impl LivingEntity {
                         .get_stack_in_hand(pumpkin_util::Hand::Right)
                         .await;
                     let stack_guard = hand_stack.lock().await;
+                    looting_level = stack_guard
+                        .get_enchantment_level(&Enchantment::LOOTING)
+                        .max(0) as u32;
                     (stack_guard.item_count > 0).then(|| stack_guard.clone())
                 } else {
+                    looting_level = 0;
                     None
                 }
             } else {
+                looting_level = 0;
                 None
             };
 
@@ -1394,7 +1406,7 @@ impl LivingEntity {
             }
             self.entity.pose.store(EntityPose::Dying);
 
-            self.drop_equipment().await;
+            self.drop_equipment(looting_level).await;
 
             // Broadcast death message if it's a player and the gamerule is enabled
             self.broadcast_death_message(&*dyn_self, damage_type, source, cause)
@@ -1404,23 +1416,48 @@ impl LivingEntity {
         }
     }
 
-    async fn drop_equipment(&self) {
+    async fn drop_equipment(&self, looting_level: u32) {
         let world = self.entity.world.load();
         let block_pos = self.entity.block_pos.load();
 
-        let armor_slots: Vec<Arc<Mutex<ItemStack>>> = {
-            let equipment_lock = self.entity_equipment.lock().await;
-            self.equipment_slots
-                .values()
-                .map(|slot| equipment_lock.get(slot))
-                .collect()
+        let drop_chances = self.equipment_drop_chances.lock().await;
+
+        let slots_to_drop: Vec<EquipmentSlot> = {
+            let mut slots: Vec<_> = self.equipment_slots.values().cloned().collect();
+            slots.push(EquipmentSlot::MAIN_HAND);
+            slots
         };
 
-        for equipment in armor_slots {
-            let item = {
-                let mut item_lock = equipment.lock().await;
+        for slot in &slots_to_drop {
+            let mut chance = drop_chances
+                .get(slot)
+                .copied()
+                .unwrap_or(DEFAULT_EQUIPMENT_DROP_CHANCE);
+            // Vanilla approximation: EnchantmentHelper.processEquipmentDropChance
+            // adds lootingLevel * 0.01 to the per-slot equipment drop chance.
+            chance += looting_level as f32 * 0.01;
+            chance = chance.min(1.0);
+            if rand::random::<f32>() >= chance {
+                continue;
+            }
+            let mut item = {
+                let q = self.entity_equipment.lock().await;
+                let item_arc = q.get(slot);
+                let mut item_lock = item_arc.lock().await;
                 mem::replace(&mut *item_lock, ItemStack::EMPTY.clone())
             };
+            if item.is_empty() {
+                continue;
+            }
+            // Vanilla approximation: Mob.dropCustomDeathLoot applies random
+            // damage to dropped equipment using two chained random calls:
+            // setDamageValue(maxDamage - random.nextInt(1 + random.nextInt(max(maxDamage - 3, 1))))
+            if let Some(max_damage) = item.get_max_damage() {
+                let mut rng = rand::rng();
+                let inner = rng.random_range(0..(max_damage - 3).max(1));
+                let outer = rng.random_range(0..=inner);
+                item.set_damage((max_damage - outer).max(0));
+            }
             world.drop_stack(&block_pos, item).await;
         }
     }
@@ -1798,12 +1835,10 @@ impl LivingEntity {
         if let Some(player) = caller.get_player() {
             return player.inventory.held_item();
         }
-        // TODO: this is wrong
-        let slot = self
-            .equipment_slots
-            .get(&PlayerInventory::OFF_HAND_SLOT)
-            .unwrap();
-        self.entity_equipment.lock().await.get(slot)
+        self.entity_equipment
+            .lock()
+            .await
+            .get(&EquipmentSlot::MAIN_HAND)
     }
 
     pub async fn get_stack_in_hand(

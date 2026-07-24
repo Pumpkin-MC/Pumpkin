@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::PLAY_MOVE_VEHICLE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_MOVE_VEHICLE)]
 pub struct SMoveVehicle {
@@ -16,9 +15,9 @@ pub struct SMoveVehicle {
     pub pitch: f32,
 }
 
-impl ServerPacket for SMoveVehicle {
+impl<'a> ServerPacket<'a> for SMoveVehicle {
     fn read(
-        mut bytebuf: impl Read,
+        bytebuf: &mut &'a [u8],
         _protocol_version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
         Ok(Self {

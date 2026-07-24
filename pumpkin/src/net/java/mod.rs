@@ -267,7 +267,7 @@ impl JavaClient {
                     // Generate a unique ID (current timestamp in ms)
                     let keep_alive_id = SystemTime::now()
                         .duration_since(UNIX_EPOCH)
-                        .unwrap()
+                        .unwrap_or_default()
                         .as_millis() as i64;
 
                     self.keep_alive_id.store(keep_alive_id);
@@ -361,11 +361,14 @@ impl JavaClient {
 
             let mut buf = Vec::new();
             let version = self.version.load();
-            buf.write_var_int(&VarInt(CChunkData::to_id(version)))
-                .unwrap();
-            CChunkData(chunk)
-                .write_packet_data(&mut buf, &version)
-                .unwrap();
+            if let Err(err) = buf.write_var_int(&VarInt(CChunkData::to_id(version))) {
+                error!("Failed to write chunk data id: {err:?}");
+                continue;
+            }
+            if let Err(err) = CChunkData(chunk).write_packet_data(&mut buf, &version) {
+                error!("Failed to write chunk data: {err:?}");
+                continue;
+            }
             self.send_packet_now_data(buf.into()).await;
         }
         self.send_packet_now(&CChunkBatchEnd::new(chunks.len() as u16))
@@ -375,7 +378,10 @@ impl JavaClient {
     pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
-        self.write_packet(packet, writer).unwrap();
+        if let Err(err) = self.write_packet(packet, writer) {
+            error!("Failed to write packet: {err:?}");
+            return;
+        }
         let payload = Bytes::from(buf);
 
         let player = self.player.lock().await.clone();
@@ -395,7 +401,10 @@ impl JavaClient {
     pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
-        self.write_packet(packet, writer).unwrap();
+        if let Err(err) = self.write_packet(packet, writer) {
+            error!("Failed to write packet: {err:?}");
+            return;
+        }
         self.try_enqueue_packet_data(buf.into());
     }
 
@@ -495,7 +504,10 @@ impl JavaClient {
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
-        self.write_packet(packet, writer).unwrap();
+        if let Err(err) = self.write_packet(packet, writer) {
+            error!("Failed to write packet: {err:?}");
+            return;
+        }
         let payload = Bytes::from(packet_buf);
 
         let player = self.player.lock().await.clone();
@@ -620,10 +632,10 @@ impl JavaClient {
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling handshake group");
-        let payload = &packet.payload[..];
+        let mut payload = &packet.payload[..];
         match packet.id {
             0 => {
-                self.handle_handshake(SHandShake::read(payload, &self.version.load())?)
+                self.handle_handshake(SHandShake::read(&mut payload, &self.version.load())?)
                     .await;
                 Ok(None)
             }
@@ -640,7 +652,7 @@ impl JavaClient {
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling status group");
-        let payload = &packet.payload[..];
+        let mut payload = &packet.payload[..];
         let version = self.version.load();
 
         match packet.id {
@@ -649,7 +661,7 @@ impl JavaClient {
                 Ok(None)
             }
             id if id == SStatusPingRequest::to_id(version) => {
-                self.handle_ping_request(SStatusPingRequest::read(payload, &version)?)
+                self.handle_ping_request(SStatusPingRequest::read(&mut payload, &version)?)
                     .await;
                 Ok(None)
             }
@@ -766,30 +778,36 @@ impl JavaClient {
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling login group for id");
-        let payload = &packet.payload[..];
+        let mut payload = &packet.payload[..];
         let version = self.version.load();
 
         match packet.id {
             id if id == SLoginStart::to_id(version) => {
-                self.handle_login_start(server, SLoginStart::read(payload, &version)?)
+                self.handle_login_start(server, SLoginStart::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SEncryptionResponse::to_id(version) => {
                 self.handle_encryption_response(
                     server,
-                    SEncryptionResponse::read(payload, &version)?,
+                    SEncryptionResponse::read(&mut payload, &version)?,
                 )
                 .await;
             }
             id if id == SLoginPluginResponse::to_id(version) => {
-                self.handle_plugin_response(server, SLoginPluginResponse::read(payload, &version)?)
-                    .await;
+                self.handle_plugin_response(
+                    server,
+                    SLoginPluginResponse::read(&mut payload, &version)?,
+                )
+                .await;
             }
             id if id == SLoginAcknowledged::to_id(version) => {
                 self.handle_login_acknowledged(server).await;
             }
             id if id == SLoginCookieResponse::to_id(version) => {
-                self.handle_login_cookie_response(&SLoginCookieResponse::read(payload, &version)?);
+                self.handle_login_cookie_response(&SLoginCookieResponse::read(
+                    &mut payload,
+                    &version,
+                )?);
             }
             _ => {
                 error!(
@@ -807,25 +825,27 @@ impl JavaClient {
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling config group for id {}", packet.id);
-        let payload = &packet.payload[..];
+        let mut payload = &packet.payload[..];
         let version = self.version.load();
 
         match packet.id {
             id if id == SClientInformationConfig::to_id(version) => {
                 self.handle_client_information_config(SClientInformationConfig::read(
-                    payload, &version,
+                    &mut payload,
+                    &version,
                 )?)
                 .await;
             }
             id if id == SPluginMessage::to_id(version) => {
-                self.handle_plugin_message(SPluginMessage::read(payload, &version)?)
+                self.handle_plugin_message(SPluginMessage::read(&mut payload, &version)?)
                     .await;
             }
             id if id
                 == pumpkin_protocol::java::server::config::SCustomClickAction::to_id(version) =>
             {
                 let _packet = pumpkin_protocol::java::server::config::SCustomClickAction::read(
-                    payload, &version,
+                    &mut payload,
+                    &version,
                 )?;
                 warn!("CustomClickAction in config state not yet supported");
             }
@@ -834,7 +854,7 @@ impl JavaClient {
             }
             id if id == SKnownPacks::to_id(version) => {
                 if let Some(i) = self
-                    .handle_known_packs(SKnownPacks::read(payload, &version)?, server)
+                    .handle_known_packs(SKnownPacks::read(&mut payload, &version)?, server)
                     .await
                 {
                     return Ok(Some(i));
@@ -842,19 +862,23 @@ impl JavaClient {
             }
             id if id == pumpkin_protocol::java::server::config::SKeepAlive::to_id(version) => {
                 self.handle_config_keep_alive(
-                    pumpkin_protocol::java::server::config::SKeepAlive::read(payload, &version)?,
+                    pumpkin_protocol::java::server::config::SKeepAlive::read(
+                        &mut payload,
+                        &version,
+                    )?,
                 )
                 .await;
             }
             id if id == SConfigCookieResponse::to_id(version) => {
                 self.handle_config_cookie_response(&SConfigCookieResponse::read(
-                    payload, &version,
+                    &mut payload,
+                    &version,
                 )?);
             }
             id if id == SConfigResourcePack::to_id(version) => {
                 self.handle_resource_pack_response(
                     server,
-                    SConfigResourcePack::read(payload, &version)?,
+                    SConfigResourcePack::read(&mut payload, &version)?,
                 )
                 .await;
             }
@@ -875,7 +899,7 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        let payload = &packet.payload[..];
+        let mut payload = &packet.payload[..];
         let version = self.version.load();
 
         let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
@@ -890,63 +914,81 @@ impl JavaClient {
 
         match packet.id {
             id if id == SConfirmTeleport::to_id(version) => {
-                self.handle_confirm_teleport(player, SConfirmTeleport::read(payload, &version)?)
-                    .await;
+                self.handle_confirm_teleport(
+                    player,
+                    SConfirmTeleport::read(&mut payload, &version)?,
+                )
+                .await;
             }
             id if id == SChangeGameMode::to_id(version) => {
-                self.handle_change_game_mode(player, SChangeGameMode::read(payload, &version)?)
-                    .await;
+                self.handle_change_game_mode(
+                    player,
+                    SChangeGameMode::read(&mut payload, &version)?,
+                )
+                .await;
             }
             id if id == SChatCommand::to_id(version) => {
-                self.handle_chat_command(player, server, &(SChatCommand::read(payload, &version)?))
-                    .await;
+                self.handle_chat_command(
+                    player,
+                    server,
+                    &(SChatCommand::read(&mut payload, &version)?),
+                )
+                .await;
             }
             id if id == SChatMessage::to_id(version) => {
-                self.handle_chat_message(server, player, SChatMessage::read(payload, &version)?)
-                    .await;
+                self.handle_chat_message(
+                    server,
+                    player,
+                    SChatMessage::read(&mut payload, &version)?,
+                )
+                .await;
             }
             id if id == SClientInformationPlay::to_id(version) => {
                 self.handle_client_information(
                     player,
-                    SClientInformationPlay::read(payload, &version)?,
+                    SClientInformationPlay::read(&mut payload, &version)?,
                 )
                 .await;
             }
             id if id == SClientCommand::to_id(version) => {
-                self.handle_client_status(player, SClientCommand::read(payload, &version)?)
+                self.handle_client_status(player, SClientCommand::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SPlayerInput::to_id(version) => {
-                self.handle_player_input(player, SPlayerInput::read(payload, &version)?, server)
-                    .await;
+                self.handle_player_input(
+                    player,
+                    SPlayerInput::read(&mut payload, &version)?,
+                    server,
+                )
+                .await;
             }
             id if id == SMoveVehicle::to_id(version) => {
-                self.handle_move_vehicle(player, SMoveVehicle::read(payload, &version)?)
+                self.handle_move_vehicle(player, SMoveVehicle::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SPaddleBoat::to_id(version) => {
-                self.handle_paddle_boat(player, SPaddleBoat::read(payload, &version)?)
+                self.handle_paddle_boat(player, SPaddleBoat::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SInteract::to_id(version) => {
-                self.handle_interact(player, SInteract::read(payload, &version)?, server)
+                self.handle_interact(player, SInteract::read(&mut payload, &version)?, server)
                     .await;
             }
             id if id == SBundleItemSelected::to_id(version) => {
                 self.handle_bundle_item_selected(
                     player,
-                    SBundleItemSelected::read(payload, &version)?,
+                    SBundleItemSelected::read(&mut payload, &version)?,
                 )
                 .await;
             }
             id if id == SAttack::to_id(version) => {
-                self.handle_attack(player, SAttack::read(payload, &version)?, server)
+                self.handle_attack(player, SAttack::read(&mut payload, &version)?, server)
                     .await;
             }
             id if id == STeleportToEntity::to_id(version) => {
                 self.handle_teleport_to_entity(
                     player,
-                    STeleportToEntity::read(payload, &version)?,
+                    STeleportToEntity::read(&mut payload, &version)?,
                     server,
                 )
                 .await;
@@ -954,7 +996,7 @@ impl JavaClient {
             id if id == pumpkin_protocol::java::server::play::SKeepAlive::to_id(version) => {
                 self.handle_keep_alive(
                     player,
-                    pumpkin_protocol::java::server::play::SKeepAlive::read(payload, &version)?,
+                    pumpkin_protocol::java::server::play::SKeepAlive::read(&mut payload, &version)?,
                 )
                 .await;
             }
@@ -964,35 +1006,39 @@ impl JavaClient {
             id if id == STestInstanceBlockAction::to_id(version) => {
                 self.handle_test_instance_block_action(
                     player,
-                    &STestInstanceBlockAction::read(payload, &version)?,
+                    &STestInstanceBlockAction::read(&mut payload, &version)?,
                 );
             }
             id if id == SSetTestBlock::to_id(version) => {
-                self.handle_set_test_block(player, &SSetTestBlock::read(payload, &version)?);
+                self.handle_set_test_block(player, &SSetTestBlock::read(&mut payload, &version)?);
             }
             id if id == SPlayerPosition::to_id(version) => {
-                self.handle_position(player, server, SPlayerPosition::read(payload, &version)?)
-                    .await;
+                self.handle_position(
+                    player,
+                    server,
+                    SPlayerPosition::read(&mut payload, &version)?,
+                )
+                .await;
             }
             id if id == SPlayerPositionRotation::to_id(version) => {
                 self.handle_position_rotation(
                     player,
                     server,
-                    SPlayerPositionRotation::read(payload, &version)?,
+                    SPlayerPositionRotation::read(&mut payload, &version)?,
                 )
                 .await;
             }
             id if id == SPlayerRotation::to_id(version) => {
-                self.handle_rotation(player, SPlayerRotation::read(payload, &version)?)
+                self.handle_rotation(player, SPlayerRotation::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SSetPlayerGround::to_id(version) => {
-                self.handle_player_ground(player, &SSetPlayerGround::read(payload, &version)?);
+                self.handle_player_ground(player, &SSetPlayerGround::read(&mut payload, &version)?);
             }
             id if id == SPickItemFromBlock::to_id(version) => {
                 self.handle_pick_item_from_block(
                     player,
-                    SPickItemFromBlock::read(payload, &version)?,
+                    SPickItemFromBlock::read(&mut payload, &version)?,
                 )
                 .await;
             }
@@ -1002,7 +1048,8 @@ impl JavaClient {
                 self.handle_pick_item_from_entity(
                     player,
                     pumpkin_protocol::java::server::play::SPickItemFromEntity::read(
-                        payload, &version,
+                        &mut payload,
+                        &version,
                     )?,
                 )
                 .await;
@@ -1010,31 +1057,41 @@ impl JavaClient {
             id if id == SPlayerAbilities::to_id(version) => {
                 self.handle_player_abilities(
                     player,
-                    SPlayerAbilities::read(payload, &version)?,
+                    SPlayerAbilities::read(&mut payload, &version)?,
                     server,
                 )
                 .await;
             }
             id if id == SPlayerAction::to_id(version) => {
-                self.handle_player_action(player, SPlayerAction::read(payload, &version)?, server)
-                    .await;
+                self.handle_player_action(
+                    player,
+                    SPlayerAction::read(&mut payload, &version)?,
+                    server,
+                )
+                .await;
             }
             id if id == SSetCommandBlock::to_id(version) => {
-                self.handle_set_command_block(player, SSetCommandBlock::read(payload, &version)?)
-                    .await;
+                self.handle_set_command_block(
+                    player,
+                    SSetCommandBlock::read(&mut payload, &version)?,
+                )
+                .await;
             }
             id if id == SSetJigsawBlock::to_id(version) => {
-                self.handle_set_jigsaw_block(player, SSetJigsawBlock::read(payload, &version)?)
-                    .await;
+                self.handle_set_jigsaw_block(
+                    player,
+                    SSetJigsawBlock::read(&mut payload, &version)?,
+                )
+                .await;
             }
             id if id == SJigsawGenerate::to_id(version) => {
-                self.handle_jigsaw_generate(player, SJigsawGenerate::read(payload, &version)?)
+                self.handle_jigsaw_generate(player, SJigsawGenerate::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SPlayerCommand::to_id(version) => {
                 self.handle_player_command(
                     player,
-                    SPlayerCommand::read(payload, &version)?,
+                    SPlayerCommand::read(&mut payload, &version)?,
                     server,
                 )
                 .await;
@@ -1043,126 +1100,133 @@ impl JavaClient {
                 Self::handle_player_loaded(player);
             }
             id if id == SPlayPingRequest::to_id(version) => {
-                self.handle_play_ping_request(SPlayPingRequest::read(payload, &version)?)
+                self.handle_play_ping_request(SPlayPingRequest::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SClickSlot::to_id(version) => {
                 player
-                    .on_slot_click(SClickSlot::read(payload, &version)?, server)
+                    .on_slot_click(SClickSlot::read(&mut payload, &version)?, server)
                     .await;
             }
             id if id == SContainerButtonClick::to_id(version) => {
                 player
-                    .on_container_button_click(SContainerButtonClick::read(payload, &version)?)
+                    .on_container_button_click(SContainerButtonClick::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SSetHeldItem::to_id(version) => {
-                self.handle_set_held_item(player, SSetHeldItem::read(payload, &version)?)
+                self.handle_set_held_item(player, SSetHeldItem::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SSetCreativeSlot::to_id(version) => {
-                self.handle_set_creative_slot(player, SSetCreativeSlot::read(payload, &version)?)
-                    .await?;
+                self.handle_set_creative_slot(
+                    player,
+                    SSetCreativeSlot::read(&mut payload, &version)?,
+                )
+                .await?;
             }
             id if id == SSwingArm::to_id(version) => {
-                self.handle_swing_arm(player, SSwingArm::read(payload, &version)?)
+                self.handle_swing_arm(player, SSwingArm::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SUpdateSign::to_id(version) => {
-                self.handle_sign_update(player, SUpdateSign::read(payload, &version)?)
+                self.handle_sign_update(player, SUpdateSign::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SUseItemOn::to_id(version) => {
-                self.handle_use_item_on(player, SUseItemOn::read(payload, &version)?, server)
+                self.handle_use_item_on(player, SUseItemOn::read(&mut payload, &version)?, server)
                     .await?;
             }
             id if id == SUseItem::to_id(version) => {
-                self.handle_use_item(player, &SUseItem::read(payload, &version)?, server)
+                self.handle_use_item(player, &SUseItem::read(&mut payload, &version)?, server)
                     .await;
             }
             id if id == SCommandSuggestion::to_id(version) => {
                 self.handle_command_suggestion(
                     player,
-                    SCommandSuggestion::read(payload, &version)?,
+                    SCommandSuggestion::read(&mut payload, &version)?,
                     server,
                 )
                 .await;
             }
             id if id == SPCookieResponse::to_id(version) => {
-                self.handle_cookie_response(&SPCookieResponse::read(payload, &version)?);
+                self.handle_cookie_response(&SPCookieResponse::read(&mut payload, &version)?);
             }
             id if id == SCloseContainer::to_id(version) => {
                 self.handle_close_container(
                     player,
                     server,
-                    SCloseContainer::read(payload, &version)?,
+                    SCloseContainer::read(&mut payload, &version)?,
                 )
                 .await;
             }
             id if id == SChunkBatch::to_id(version) => {
-                self.handle_chunk_batch(player, SChunkBatch::read(payload, &version)?)
+                self.handle_chunk_batch(player, SChunkBatch::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SPlayerSession::to_id(version) => {
                 self.handle_chat_session_update(
                     player,
                     server,
-                    SPlayerSession::read(payload, &version)?,
+                    SPlayerSession::read(&mut payload, &version)?,
                 )
                 .await;
             }
             id if id == SCustomPayload::to_id(version) => {
-                let payload = SCustomPayload::read(payload, &version)?;
+                let payload = SCustomPayload::read(&mut payload, &version)?;
                 let event = PlayerCustomPayloadEvent::new(
                     player.clone(),
                     payload.channel.to_string(),
-                    Bytes::from(payload.data),
+                    Bytes::copy_from_slice(payload.data),
                 );
                 server.plugin_manager.fire(event).await;
             }
             id if id == SRecipeBookChangeSettings::to_id(version) => {
                 self.handle_recipe_book_change_settings(
                     player,
-                    SRecipeBookChangeSettings::read(payload, &version)?,
+                    SRecipeBookChangeSettings::read(&mut payload, &version)?,
                 )
                 .await;
             }
             id if id == SRecipeBookSeenRecipe::to_id(version) => {
                 self.handle_recipe_book_seen_recipe(
                     player,
-                    SRecipeBookSeenRecipe::read(payload, &version)?,
+                    SRecipeBookSeenRecipe::read(&mut payload, &version)?,
                 )
                 .await;
             }
             id if id == SRenameItem::to_id(version) => {
                 player
-                    .on_rename_item(SRenameItem::read(payload, &version)?)
+                    .on_rename_item(SRenameItem::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SPlaceRecipe::to_id(version) => {
-                let packet = SPlaceRecipe::read(payload, &version)?;
+                let packet = SPlaceRecipe::read(&mut payload, &version)?;
                 self.handle_place_recipe(server, player, packet).await;
             }
             id if id
                 == pumpkin_protocol::java::server::play::SCustomClickAction::to_id(version) =>
             {
                 let packet = pumpkin_protocol::java::server::play::SCustomClickAction::read(
-                    payload, &version,
+                    &mut payload,
+                    &version,
                 )?;
                 let event = crate::plugin::api::events::player::custom_click_action::CustomClickActionEvent::new(
                     player.clone(),
-                    packet.action_id.clone(),
-                    packet.payload.map(Bytes::from),
+                    packet.action_id.to_string(),
+                    packet.payload.map(Bytes::copy_from_slice),
                 );
                 server.plugin_manager.fire(event).await;
             }
             id if id == SSelectTrade::to_id(version) => {
-                self.handle_select_trade(player, SSelectTrade::read(payload, &version)?)
+                self.handle_select_trade(player, SSelectTrade::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SSeenAdvancement::to_id(version) => {
-                self.handle_seen_advancement(player, SSeenAdvancement::read(payload, &version)?)
-                    .await;
+                self.handle_seen_advancement(
+                    player,
+                    SSeenAdvancement::read(&mut payload, &version)?,
+                )
+                .await;
             }
             _ => {
                 warn!("Failed to handle player packet id {}", packet.id);

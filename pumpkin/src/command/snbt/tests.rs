@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use pumpkin_nbt::{compound::NbtCompound, nbt_compound_tag, tag::NbtTag};
 
 const BUILT_IN_LIKE_SUGGESTIONS: &[&str] = &["(", "bool", "false", "true", "uuid"];
@@ -339,19 +337,17 @@ fn operations() {
 fn maps() {
     assert_parse_ok!(
         "{x:5}",
-        NbtTag::Compound(NbtCompound {
-            child_tags: HashMap::from([("x".into(), NbtTag::Int(5))])
-        })
+        nbt_compound_tag! {
+            "x": NbtTag::Int(5)
+        }
     );
     assert_parse_ok!(
         "{ a:1b,B :2uS , c:3L  }",
-        NbtTag::Compound(NbtCompound {
-            child_tags: HashMap::from([
-                ("a".into(), NbtTag::Byte(1)),
-                ("B".into(), NbtTag::Short(2)),
-                ("c".into(), NbtTag::Long(3))
-            ])
-        })
+        nbt_compound_tag! {
+            "a": NbtTag::Byte(1),
+            "B": NbtTag::Short(2),
+            "c": NbtTag::Long(3)
+        }
     );
     assert_parse_ok!(
         "{ a:1b, \"a\":2b, 'a':\"hi\" }",

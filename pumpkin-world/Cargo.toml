@@ -59,8 +59,8 @@ slotmap.workspace = true
 crossfire.workspace = true
 
 [dev-dependencies]
+tempfile.workspace = true
 criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
-temp-dir.workspace = true
 # Deserialize NaN and Inf
 serde_json5.workspace = true
 
@@ -68,9 +68,9 @@ serde_json5.workspace = true
 name = "chunk"
 harness = false
 
-#[[bench]]
-#name = "chunk_io"
-#harness = false
+[[bench]]
+name = "chunk_io"
+harness = false
 
 [[bench]]
 name = "chunk_gen"

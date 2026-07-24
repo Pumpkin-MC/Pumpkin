@@ -5,16 +5,15 @@ use crate::{
 use pumpkin_data::packet::serverbound::PLAY_TELEPORT_TO_ENTITY;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_TELEPORT_TO_ENTITY)]
 pub struct STeleportToEntity {
     pub target: uuid::Uuid,
 }
 
-impl ServerPacket for STeleportToEntity {
+impl<'a> ServerPacket<'a> for STeleportToEntity {
     fn read(
-        mut bytebuf: impl Read,
+        bytebuf: &mut &'a [u8],
         _protocol_version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
         Ok(Self {

@@ -287,6 +287,19 @@ impl CommandDispatcher {
             return Vec::new();
         };
 
+        // Gate suggestions on command permissions, mirroring `dispatch`. Many
+        // legacy commands store their permission only in `self.permissions` and
+        // have no in-tree `Require` node, so without this check their argument
+        // consumers would leak privileged data (e.g. banned/op/whitelisted
+        // player names) to unprivileged players via tab-complete.
+        let Some(permission) = self.permissions.get(key) else {
+            return Vec::new();
+        };
+
+        if !src.has_permission(server, permission.as_str()).await {
+            return Vec::new();
+        }
+
         let mut suggestions = HashSet::new();
 
         // try paths and collect the nodes that fail

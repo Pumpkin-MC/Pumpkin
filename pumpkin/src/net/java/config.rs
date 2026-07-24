@@ -31,7 +31,7 @@ const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
 impl JavaClient {
     pub async fn handle_client_information_config(
         &self,
-        client_information: SClientInformationConfig,
+        client_information: SClientInformationConfig<'_>,
     ) {
         debug!("Handling client settings");
         if client_information.view_distance <= 0 {
@@ -47,7 +47,7 @@ impl JavaClient {
             ChatMode::try_from(client_information.chat_mode.0),
         ) {
             *self.config.lock().await = Some(PlayerConfig {
-                locale: client_information.locale,
+                locale: client_information.locale.to_string(),
                 // client_information.view_distance was checked above to be > 0 so compiler should optimize this out.
                 view_distance: NonZeroU8::new(client_information.view_distance as u8).unwrap(),
                 chat_mode,
@@ -63,11 +63,11 @@ impl JavaClient {
         }
     }
 
-    pub async fn handle_plugin_message(&self, plugin_message: SPluginMessage) {
+    pub async fn handle_plugin_message(&self, plugin_message: SPluginMessage<'_>) {
         debug!("Handling plugin message");
         if plugin_message.channel.starts_with(BRAND_CHANNEL_PREFIX) {
             debug!("Got a client brand");
-            match str::from_utf8(&plugin_message.data) {
+            match str::from_utf8(plugin_message.data) {
                 Ok(brand) => *self.brand.lock().await = Some(brand.to_string()),
                 Err(e) => self.kick(TextComponent::text(e.to_string())).await,
             }
@@ -144,7 +144,7 @@ impl JavaClient {
         self.send_known_packs().await;
     }
 
-    pub fn handle_config_cookie_response(&self, packet: &SConfigCookieResponse) {
+    pub fn handle_config_cookie_response(&self, packet: &SConfigCookieResponse<'_>) {
         // TODO: allow plugins to access this
         debug!(
             "Received cookie_response[config]: key: \"{}\", has_payload: \"{}\", payload_length: \"{:?}\"",

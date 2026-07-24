@@ -38,6 +38,7 @@ pub mod creeper;
 pub mod elder_guardian;
 pub mod enderman;
 pub mod endermite;
+pub mod equipment;
 pub mod evoker;
 pub mod ghast;
 pub mod giant;
@@ -96,6 +97,7 @@ impl MobEntity {
     const AI_DISABLED_FLAG: u8 = 1;
     const LEFT_HANDED_FLAG: u8 = 2;
     const ATTACKING_FLAG: u8 = 4;
+    const CAN_PICK_UP_LOOT_FLAG: u8 = 8;
 
     #[must_use]
     pub fn new(entity: Entity) -> Self {
@@ -143,6 +145,14 @@ impl MobEntity {
 
     pub fn set_left_handed(&self, left_handed: bool) {
         self.set_mob_flag(Self::LEFT_HANDED_FLAG, left_handed);
+    }
+
+    pub fn can_pick_up_loot(&self) -> bool {
+        (self.mob_flags.load(Relaxed) & Self::CAN_PICK_UP_LOOT_FLAG) != 0
+    }
+
+    pub fn set_can_pick_up_loot(&self, value: bool) {
+        self.set_mob_flag(Self::CAN_PICK_UP_LOOT_FLAG, value);
     }
 
     pub fn is_left_handed(&self) -> bool {
@@ -514,6 +524,22 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             self.mob_init_data_tracker().await;
+            let world = self.get_mob_entity().living_entity.entity.world.load();
+            crate::entity::mob::equipment::equip_mob_on_spawn(self as &dyn EntityBase, &world)
+                .await;
+
+            let entity_name = self.get_entity().entity_type.resource_name;
+            if let Some(def) = crate::entity::mob::equipment::EQUIPMENT_REGISTRY.get(entity_name)
+                && def.can_pick_up_loot
+            {
+                let difficulty = crate::entity::mob::equipment::RegionalDifficulty::at(
+                    &world,
+                    self.get_entity().pos.load(),
+                );
+                let pickup_chance = 0.55 * difficulty.special_multiplier;
+                self.get_mob_entity()
+                    .set_can_pick_up_loot(rand::random::<f32>() < pickup_chance);
+            }
         })
     }
 

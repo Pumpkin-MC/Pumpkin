@@ -64,6 +64,8 @@ pub fn generate_single_chunk(
 #[cfg(test)]
 mod tests {
     use crate::biome::hash_seed;
+    use crate::chunk::ChunkHeightmapType;
+    use crate::chunk_system::Chunk;
     use crate::chunk_system::{StagedChunkEnum, generate_single_chunk};
     use crate::generation::get_world_gen;
     use crate::world::WorldPortalExt;
@@ -120,7 +122,7 @@ mod tests {
         let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
         let biome_mixer_seed = hash_seed(world_gen.seed());
 
-        let _ = generate_single_chunk(
+        let chunk = generate_single_chunk(
             &dimension,
             biome_mixer_seed,
             &world_gen,
@@ -129,6 +131,25 @@ mod tests {
             0,
             StagedChunkEnum::Full,
         );
+        let Chunk::Level(chunk) = chunk else {
+            panic!("full generation must return a level chunk");
+        };
+        let recalculated = chunk.calculate_heightmap();
+        let generated = chunk.heightmap.lock().unwrap();
+        for x in 0..16 {
+            for z in 0..16 {
+                for heightmap_type in [
+                    ChunkHeightmapType::WorldSurface,
+                    ChunkHeightmapType::MotionBlocking,
+                    ChunkHeightmapType::MotionBlockingNoLeaves,
+                ] {
+                    assert_eq!(
+                        generated.get(heightmap_type, x, z, chunk.section.min_y),
+                        recalculated.get(heightmap_type, x, z, chunk.section.min_y),
+                    );
+                }
+            }
+        }
     }
 
     #[test]

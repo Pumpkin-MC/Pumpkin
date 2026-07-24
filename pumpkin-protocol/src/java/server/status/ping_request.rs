@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::STATUS_PING_REQUEST;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 /// Sent by the client to measure the round-trip time (latency) to the server.
 ///
@@ -16,9 +15,9 @@ pub struct SStatusPingRequest {
     pub payload: i64,
 }
 
-impl ServerPacket for SStatusPingRequest {
+impl<'a> ServerPacket<'a> for SStatusPingRequest {
     fn read(
-        mut bytebuf: impl Read,
+        bytebuf: &mut &'a [u8],
         _protocol_version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
         Ok(Self {

@@ -98,6 +98,8 @@ impl MoveControlTrait for MoveControl {
                 self.operation = Operation::Wait;
             }
         }
+
+        // Navigator owns movement input while this controller waits.
     }
 }
 
