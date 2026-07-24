@@ -86,6 +86,10 @@ pub struct JavaClient {
     /// Set only by `finish_login` after identity is accepted (online auth, offline
     /// finish, or verified proxy). `LoginAck` without this is an auth-bypass path.
     pub login_finished: AtomicBool,
+    /// Set once the client's first `SKnownPacks` answer has been handled. The
+    /// registry dump it triggers is expensive, so replays (and late
+    /// resource-pack responses) must not start another round-trip (F-AUTH-05).
+    pub known_packs_answered: AtomicBool,
     /// The client's configuration settings, Optional
     pub config: Mutex<Option<PlayerConfig>>,
     /// The Address used to connect to the Server, Send in the Handshake
@@ -161,6 +165,7 @@ impl JavaClient {
             id,
             gameprofile: Mutex::new(None),
             login_finished: AtomicBool::new(false),
+            known_packs_answered: AtomicBool::new(false),
             config: Mutex::new(None),
             server_address: Mutex::new("".into()),
             address: Mutex::new(address),
