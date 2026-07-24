@@ -15,7 +15,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-use super::piglin::convert_to_zombified_piglin;
+use super::piglin::convert_to_zombified;
 
 pub struct PiglinBruteEntity {
     pub mob_entity: MobEntity,
@@ -115,7 +115,7 @@ impl Mob for PiglinBruteEntity {
             self.time_in_overworld.store(new_time, Ordering::Relaxed);
 
             if new_time >= 300 {
-                convert_to_zombified_piglin(caller).await;
+                convert_to_zombified(caller, &EntityType::ZOMBIFIED_PIGLIN).await;
             }
         })
     }

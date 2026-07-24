@@ -14,8 +14,8 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
-    mob::zombified_piglin::ZombifiedPiglinEntity,
     mob::{Mob, MobEntity},
+    r#type::from_type,
 };
 
 pub struct PiglinEntity {
@@ -117,13 +117,16 @@ impl Mob for PiglinEntity {
             self.time_in_overworld.store(new_time, Ordering::Relaxed);
 
             if new_time >= 300 {
-                convert_to_zombified_piglin(caller).await;
+                convert_to_zombified(caller, &EntityType::ZOMBIFIED_PIGLIN).await;
             }
         })
     }
 }
 
-pub(super) async fn convert_to_zombified_piglin(caller: &Arc<dyn EntityBase>) {
+pub(super) async fn convert_to_zombified(
+    caller: &Arc<dyn EntityBase>,
+    target_type: &'static EntityType,
+) {
     let entity = caller.get_entity();
     let pos = entity.pos.load();
     let world = entity.world.load_full();
@@ -150,9 +153,7 @@ pub(super) async fn convert_to_zombified_piglin(caller: &Arc<dyn EntityBase>) {
 
     entity.remove().await;
 
-    let new_entity = Entity::from_uuid(uuid, world.clone(), pos, &EntityType::ZOMBIFIED_PIGLIN);
-    let zombified = ZombifiedPiglinEntity::new(new_entity);
-
+    let zombified = from_type(target_type, pos, &world, uuid);
     let zombified_entity = zombified.get_entity();
     let zombified_living = zombified
         .get_living_entity()
