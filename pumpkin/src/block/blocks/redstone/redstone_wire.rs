@@ -203,12 +203,15 @@ impl BlockBehaviour for RedstoneWireBlock {
     ) -> BlockFuture<'a, u8> {
         Box::pin(async move {
             let wire = RedstoneWireProperties::from_state_id(args.state.id, args.block);
-            if args.direction == BlockDirection::Up
-                || wire.is_side_connected(args.direction.opposite().to_horizontal_facing().unwrap())
-            {
-                wire.power
-            } else {
-                0
+            match args.direction {
+                // `RedStoneWireBlock.getSignal`: dust never powers the block above it.
+                BlockDirection::Down => 0,
+                BlockDirection::Up => wire.power,
+                direction => direction
+                    .opposite()
+                    .to_horizontal_facing()
+                    .filter(|side| wire.is_side_connected(*side))
+                    .map_or(0, |_| wire.power),
             }
         })
     }
@@ -217,16 +220,7 @@ impl BlockBehaviour for RedstoneWireBlock {
         &'a self,
         args: GetRedstonePowerArgs<'a>,
     ) -> BlockFuture<'a, u8> {
-        Box::pin(async move {
-            let wire = RedstoneWireProperties::from_state_id(args.state.id, args.block);
-            if args.direction == BlockDirection::Up
-                || wire.is_side_connected(args.direction.opposite().to_horizontal_facing().unwrap())
-            {
-                wire.power
-            } else {
-                0
-            }
-        })
+        Box::pin(async move { self.get_weak_redstone_power(args).await })
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
@@ -551,35 +545,43 @@ fn max_wire_power(wire_power: u8, world: &World, pos: BlockPos) -> u8 {
 }
 
 async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
-    let mut block_power: u8 = 0;
-    let mut wire_power: u8 = 0;
-
-    let up_pos = pos.offset(BlockDirection::Up.to_offset());
-    let up_state = world.get_block_state(&up_pos);
-
+    // Match `RedstoneWireEvaluator`: direct power can arrive from every face,
+    // but incoming dust is considered only on the four horizontal paths.
+    let mut block_power = 0;
     for side in BlockDirection::all() {
         let neighbor_pos = pos.offset(side.to_offset());
-        wire_power = max_wire_power(wire_power, world, neighbor_pos);
         let (neighbor, neighbor_state) = world.get_block_and_state(&neighbor_pos);
         block_power = block_power.max(
             get_redstone_power_no_dust(neighbor, neighbor_state, world, neighbor_pos, side).await,
         );
-        if side.is_horizontal() {
-            if !up_state.is_solid_block() && neighbor_state.is_solid_block() {
+    }
+
+    if block_power == 15 {
+        return block_power;
+    }
+
+    let up_pos = pos.offset(BlockDirection::Up.to_offset());
+    let up_state = world.get_block_state(&up_pos);
+    let mut wire_power = 0;
+    for direction in BlockDirection::horizontal() {
+        let neighbor_pos = pos.offset(direction.to_block_direction().to_offset());
+        let neighbor_state = world.get_block_state(&neighbor_pos);
+        wire_power = max_wire_power(wire_power, world, neighbor_pos);
+
+        if neighbor_state.is_solid_block() {
+            if !up_state.is_solid_block() {
                 wire_power = max_wire_power(
                     wire_power,
                     world,
                     neighbor_pos.offset(BlockDirection::Up.to_offset()),
                 );
             }
-
-            if !neighbor_state.is_solid_block() {
-                wire_power = max_wire_power(
-                    wire_power,
-                    world,
-                    neighbor_pos.offset(BlockDirection::Down.to_offset()),
-                );
-            }
+        } else {
+            wire_power = max_wire_power(
+                wire_power,
+                world,
+                neighbor_pos.offset(BlockDirection::Down.to_offset()),
+            );
         }
     }
 
