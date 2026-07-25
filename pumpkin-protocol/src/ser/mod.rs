@@ -87,10 +87,6 @@ pub trait NetworkReadExt {
         self.get_f64_be()
     }
 
-    fn read_boxed_slice(&mut self, count: usize) -> Result<Box<[u8]>, ReadingError>;
-
-    fn read_remaining_to_boxed_slice(&mut self, bound: usize) -> Result<Box<[u8]>, ReadingError>;
-
     fn read_bytes_to_buf(&mut self, buf: &mut [u8]) -> Result<(), ReadingError>;
 
     fn get_bool(&mut self) -> Result<bool, ReadingError>;
@@ -99,19 +95,44 @@ pub trait NetworkReadExt {
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError>;
     fn get_var_ulong(&mut self) -> Result<VarULong, ReadingError>;
     fn get_str_bounded(&mut self, bound: usize) -> Result<Box<str>, ReadingError>;
-    fn get_str(&mut self) -> Result<Box<str>, ReadingError>;
+    #[inline]
+    fn get_str(&mut self) -> Result<Box<str>, ReadingError> {
+        self.get_str_bounded(i32::MAX as usize)
+    }
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError>;
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError>;
 
+    #[inline]
     fn get_option<G>(
         &mut self,
         parse: impl FnOnce(&mut Self) -> Result<G, ReadingError>,
-    ) -> Result<Option<G>, ReadingError>;
+    ) -> Result<Option<G>, ReadingError> {
+        if self.get_bool()? {
+            Ok(Some(parse(self)?))
+        } else {
+            Ok(None)
+        }
+    }
 
+    #[inline]
     fn get_list<G>(
         &mut self,
         parse: impl Fn(&mut Self) -> Result<G, ReadingError>,
-    ) -> Result<Vec<G>, ReadingError>;
+    ) -> Result<Vec<G>, ReadingError> {
+        const MAX_LIST_SIZE: usize = 65536;
+
+        let len = self.get_var_int()?.0 as usize;
+        if len > MAX_LIST_SIZE {
+            return Err(ReadingError::TooLarge(format!(
+                "List length {len} exceeds limit"
+            )));
+        }
+        let mut list = Vec::with_capacity(len);
+        for _ in 0..len {
+            list.push(parse(self)?);
+        }
+        Ok(list)
+    }
 }
 
 /// Reads zero-copy protocol values directly from a packet payload.
@@ -254,38 +275,6 @@ impl<R: Read> NetworkReadExt for R {
             .map_err(|err| ReadingError::Incomplete(err.to_string()))
     }
 
-    fn read_boxed_slice(&mut self, length: usize) -> Result<Box<[u8]>, ReadingError> {
-        // Increase this to at least 2MB to handle larger Bedrock batches
-        const MAX_SLICE_LENGTH: usize = 2 * 1024 * 1024; // 2MB
-        if !(0..=MAX_SLICE_LENGTH).contains(&length) {
-            return Err(ReadingError::Message(format!(
-                "read_boxed_slice: length {length} out of bounds"
-            )));
-        }
-        let mut buf = vec![0u8; length];
-        self.read_exact(&mut buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        Ok(buf.into())
-    }
-
-    fn read_remaining_to_boxed_slice(&mut self, bound: usize) -> Result<Box<[u8]>, ReadingError> {
-        let mut return_buf = Vec::new();
-
-        // Take one extra byte to check for exceeding bound
-        self.take(bound as u64 + 1)
-            .read_to_end(&mut return_buf)
-            .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
-
-        if return_buf.len() > bound {
-            return Err(ReadingError::TooLarge(
-                "Read remaining too long".to_string(),
-            ));
-        }
-
-        Ok(return_buf.into_boxed_slice())
-    }
-
     fn get_bool(&mut self) -> Result<bool, ReadingError> {
         let byte = self.get_u8()?;
         Ok(byte != 0)
@@ -320,22 +309,36 @@ impl<R: Read> NetworkReadExt for R {
             )));
         }
 
-        let data = self.read_boxed_slice(bytes_len)?;
-        let string =
-            std::str::from_utf8(&data).map_err(|e| ReadingError::Message(e.to_string()))?;
+        if bytes_len <= 128 {
+            let mut stack_buf = [0u8; 128];
+            let slice = &mut stack_buf[..bytes_len];
+            self.read_exact(slice)
+                .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
 
-        // Next, if we're able to find the (bound + 1)th UTF-16 character, the string is too big.
-        if string.encode_utf16().nth(bound).is_some() {
-            return Err(ReadingError::TooLarge(format!(
-                "string has too many UTF-16 characters (more than the maximum limit {bound})"
-            )));
+            let string =
+                std::str::from_utf8(slice).map_err(|e| ReadingError::Message(e.to_string()))?;
+
+            if string.encode_utf16().nth(bound).is_some() {
+                return Err(ReadingError::TooLarge(format!(
+                    "string has too many UTF-16 characters (more than the maximum limit {bound})"
+                )));
+            }
+
+            Ok(string.into())
+        } else {
+            let mut data = vec![0u8; bytes_len];
+            self.read_bytes_to_buf(&mut data)?;
+            let string =
+                std::str::from_utf8(&data).map_err(|e| ReadingError::Message(e.to_string()))?;
+
+            if string.encode_utf16().nth(bound).is_some() {
+                return Err(ReadingError::TooLarge(format!(
+                    "string has too many UTF-16 characters (more than the maximum limit {bound})"
+                )));
+            }
+
+            Ok(string.into())
         }
-
-        Ok(string.into())
-    }
-
-    fn get_str(&mut self) -> Result<Box<str>, ReadingError> {
-        self.get_str_bounded(i32::MAX as usize)
     }
 
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError> {
@@ -346,39 +349,29 @@ impl<R: Read> NetworkReadExt for R {
     }
 
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError> {
-        let bytes = self.read_boxed_slice(bits.div_ceil(8))?;
-        Ok(bytes)
+        let byte_count = bits.div_ceil(8);
+        let mut bytes = vec![0u8; byte_count];
+        self.read_bytes_to_buf(&mut bytes)?;
+        Ok(bytes.into_boxed_slice())
+    }
+}
+
+#[inline]
+pub fn read_remaining_bytes(read: &mut impl Read, bound: usize) -> Result<Box<[u8]>, ReadingError> {
+    let mut return_buf = Vec::with_capacity(bound.min(1024));
+
+    // Take one extra byte to check for exceeding bound
+    read.take(bound as u64 + 1)
+        .read_to_end(&mut return_buf)
+        .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
+
+    if return_buf.len() > bound {
+        return Err(ReadingError::TooLarge(
+            "Read remaining too long".to_string(),
+        ));
     }
 
-    fn get_option<G>(
-        &mut self,
-        parse: impl FnOnce(&mut Self) -> Result<G, ReadingError>,
-    ) -> Result<Option<G>, ReadingError> {
-        if self.get_bool()? {
-            Ok(Some(parse(self)?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn get_list<G>(
-        &mut self,
-        parse: impl Fn(&mut Self) -> Result<G, ReadingError>,
-    ) -> Result<Vec<G>, ReadingError> {
-        const MAX_LIST_SIZE: usize = 65536;
-
-        let len = self.get_var_int()?.0 as usize;
-        if len > MAX_LIST_SIZE {
-            return Err(ReadingError::TooLarge(format!(
-                "List length {len} exceeds limit"
-            )));
-        }
-        let mut list = Vec::with_capacity(len);
-        for _ in 0..len {
-            list.push(parse(self)?);
-        }
-        Ok(list)
-    }
+    Ok(return_buf.into_boxed_slice())
 }
 
 pub trait NetworkWriteExt {

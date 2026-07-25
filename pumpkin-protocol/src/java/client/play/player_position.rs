@@ -84,9 +84,9 @@ impl ClientPacket for CPlayerPosition {
     }
 }
 
-impl ServerPacket for CPlayerPosition {
+impl<'a> ServerPacket<'a> for CPlayerPosition {
     fn read(
-        mut read: impl std::io::Read,
+        read: &mut &'a [u8],
         _version: &JavaMinecraftVersion,
     ) -> Result<Self, crate::ser::ReadingError> {
         Ok(Self {

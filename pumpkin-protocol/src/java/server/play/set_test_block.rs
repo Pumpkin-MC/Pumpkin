@@ -4,24 +4,27 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::{
     ServerPacket,
-    ser::{NetworkReadExt, ReadingError},
+    ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
 #[java_packet(PLAY_SET_TEST_BLOCK)]
-pub struct SSetTestBlock {
+pub struct SSetTestBlock<'a> {
     pub position: BlockPos,
     pub mode: TestBlockMode,
-    pub message: String,
+    pub message: &'a str,
 }
 
-impl ServerPacket for SSetTestBlock {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SSetTestBlock<'a> {
+    fn read(
+        mut bytebuf: &mut &'a [u8],
+        _version: &JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
         Ok(Self {
             position: BlockPos::from_i64(bytebuf.get_i64_be()?),
             mode: TestBlockMode::read(&mut bytebuf)?,
-            message: bytebuf.get_str()?.into_string(),
+            message: bytebuf.get_str_borrowed()?,
         })
     }
 }

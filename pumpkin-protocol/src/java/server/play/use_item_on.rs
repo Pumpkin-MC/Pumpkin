@@ -6,7 +6,6 @@ use pumpkin_data::packet::serverbound::PLAY_USE_ITEM_ON;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 use crate::VarInt;
 
@@ -21,8 +20,8 @@ pub struct SUseItemOn {
     pub sequence: VarInt,
 }
 
-impl ServerPacket for SUseItemOn {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SUseItemOn {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             hand: bytebuf.get_var_int()?,
             position: BlockPos::from_i64(bytebuf.get_i64_be()?),

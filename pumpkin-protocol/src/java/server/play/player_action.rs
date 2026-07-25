@@ -6,7 +6,6 @@ use pumpkin_data::packet::serverbound::PLAY_PLAYER_ACTION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 use crate::VarInt;
 
@@ -18,9 +17,9 @@ pub struct SPlayerAction {
     pub sequence: VarInt,
 }
 
-impl ServerPacket for SPlayerAction {
+impl<'a> ServerPacket<'a> for SPlayerAction {
     fn read(
-        mut bytebuf: impl Read,
+        bytebuf: &mut &'a [u8],
         _protocol_version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
         Ok(Self {

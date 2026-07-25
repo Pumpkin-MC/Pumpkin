@@ -2,7 +2,6 @@ use crate::{ServerPacket, ser::ReadingError};
 use pumpkin_data::packet::serverbound::STATUS_STATUS_REQUEST;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 /// Sent by the client to request the server's current status information.
 ///
@@ -11,9 +10,9 @@ use std::io::Read;
 #[java_packet(STATUS_STATUS_REQUEST)]
 pub struct SStatusRequest;
 
-impl ServerPacket for SStatusRequest {
+impl<'a> ServerPacket<'a> for SStatusRequest {
     fn read(
-        _bytebuf: impl Read,
+        _bytebuf: &mut &'a [u8],
         _protocol_version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
         Ok(Self)

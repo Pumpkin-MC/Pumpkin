@@ -22,8 +22,11 @@ pub struct SClickSlot {
     pub carried_item: OptionalItemStackHash,
 }
 
-impl ServerPacket for SClickSlot {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SClickSlot {
+    fn read(
+        mut bytebuf: &mut &'a [u8],
+        _version: &JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
         let sync_id = bytebuf.get_var_int()?;
         let revision = bytebuf.get_var_int()?;
         let slot = bytebuf.get_i16_be()?;
@@ -31,6 +34,11 @@ impl ServerPacket for SClickSlot {
         let mode = SlotActionType::read(&mut bytebuf)?;
 
         let length_of_array = bytebuf.get_var_int()?;
+        if length_of_array.0 < 0 || length_of_array.0 > 256 {
+            return Err(ReadingError::Message(
+                "Changed slots length out of bounds".into(),
+            ));
+        }
         let mut array_of_changed_slots = Vec::with_capacity(length_of_array.0 as usize);
         for _ in 0..length_of_array.0 {
             array_of_changed_slots.push((

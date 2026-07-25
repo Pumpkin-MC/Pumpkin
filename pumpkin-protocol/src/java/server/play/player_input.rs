@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::PLAY_PLAYER_INPUT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_PLAYER_INPUT)]
 pub struct SPlayerInput {
@@ -23,8 +22,8 @@ impl SPlayerInput {
     pub const SPRINT: i8 = 64;
 }
 
-impl ServerPacket for SPlayerInput {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SPlayerInput {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             input: bytebuf.get_i8()?,
         })

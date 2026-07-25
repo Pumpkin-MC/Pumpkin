@@ -12,18 +12,18 @@ use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
 #[java_packet(PLAY_TEST_INSTANCE_BLOCK_ACTION)]
-pub struct STestInstanceBlockAction {
+pub struct STestInstanceBlockAction<'a> {
     pub pos: BlockPos,
     pub action: TestInstanceBlockAction,
-    pub data: TestInstanceBlockData,
+    pub data: TestInstanceBlockData<'a>,
 }
 
-impl ServerPacket for STestInstanceBlockAction {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for STestInstanceBlockAction<'a> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             pos: BlockPos::from_i64(bytebuf.get_i64_be()?),
-            action: TestInstanceBlockAction::read(&mut bytebuf)?,
-            data: TestInstanceBlockData::read(&mut bytebuf)?,
+            action: TestInstanceBlockAction::read(bytebuf)?,
+            data: TestInstanceBlockData::read(bytebuf)?,
         })
     }
 }
@@ -72,18 +72,18 @@ impl VarIntVector3 {
     }
 }
 
-pub struct TestInstanceBlockData {
-    pub test: Option<String>,
+pub struct TestInstanceBlockData<'a> {
+    pub test: Option<&'a str>,
     pub size: VarIntVector3,
     pub rotation: pumpkin_data::block_rotation::Rotation,
     pub ignore_entities: bool,
     pub status: TestInstanceBlockStatus,
-    pub error_message: Option<String>,
+    pub error_message: Option<&'a str>,
 }
 
-impl TestInstanceBlockData {
-    fn read(bytebuf: &mut impl Read) -> Result<Self, ReadingError> {
-        let test = bytebuf.get_option(|b| b.get_str().map(String::from))?;
+impl<'a> TestInstanceBlockData<'a> {
+    fn read(bytebuf: &mut &'a [u8]) -> Result<Self, ReadingError> {
+        let test = bytebuf.get_option(crate::ser::NetworkReadSliceExt::get_str_borrowed)?;
         let size = VarIntVector3::read(bytebuf)?;
         let rotation = match bytebuf.get_var_int()?.0 {
             0 => pumpkin_data::block_rotation::Rotation::None,
@@ -104,7 +104,8 @@ impl TestInstanceBlockData {
                 ));
             }
         };
-        let error_message = bytebuf.get_option(|b| b.get_str().map(String::from))?;
+        let error_message =
+            bytebuf.get_option(crate::ser::NetworkReadSliceExt::get_str_borrowed)?;
 
         Ok(Self {
             test,

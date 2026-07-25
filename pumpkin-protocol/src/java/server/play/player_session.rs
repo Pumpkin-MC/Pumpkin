@@ -1,5 +1,3 @@
-use std::io::Read;
-
 use pumpkin_data::packet::serverbound::PLAY_CHAT_SESSION_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -18,22 +16,24 @@ pub struct SPlayerSession {
     pub key_signature: Box<[u8]>,
 }
 
-impl ServerPacket for SPlayerSession {
-    fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SPlayerSession {
+    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let session_id = read.get_uuid()?;
         let expires_at = read.get_i64_be()?;
 
         let public_key_length = read.get_var_int()?.0 as usize;
-        let public_key = read.read_boxed_slice(public_key_length)?;
+        let mut public_key = vec![0u8; public_key_length];
+        read.read_bytes_to_buf(&mut public_key)?;
 
         let key_signature_length = read.get_var_int()?.0 as usize;
-        let key_signature = read.read_boxed_slice(key_signature_length)?;
+        let mut key_signature = vec![0u8; key_signature_length];
+        read.read_bytes_to_buf(&mut key_signature)?;
 
         Ok(Self {
             session_id,
             expires_at,
-            public_key,
-            key_signature,
+            public_key: public_key.into_boxed_slice(),
+            key_signature: key_signature.into_boxed_slice(),
         })
     }
 }

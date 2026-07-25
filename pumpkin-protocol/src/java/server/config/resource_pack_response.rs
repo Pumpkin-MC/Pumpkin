@@ -6,7 +6,6 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 use crate::VarInt;
 
@@ -34,8 +33,8 @@ pub struct SConfigResourcePack {
     pub result: VarInt,
 }
 
-impl ServerPacket for SConfigResourcePack {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SConfigResourcePack {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             uuid: bytebuf.get_uuid()?,
             result: bytebuf.get_var_int()?,

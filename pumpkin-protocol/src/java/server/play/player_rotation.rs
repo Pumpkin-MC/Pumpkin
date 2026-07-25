@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::PLAY_MOVE_PLAYER_ROT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_MOVE_PLAYER_ROT)]
 pub struct SPlayerRotation {
@@ -14,8 +13,8 @@ pub struct SPlayerRotation {
     pub ground: bool,
 }
 
-impl ServerPacket for SPlayerRotation {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SPlayerRotation {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             yaw: bytebuf.get_f32_be()?,
             pitch: bytebuf.get_f32_be()?,
