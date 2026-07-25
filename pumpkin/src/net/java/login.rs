@@ -1,4 +1,5 @@
 use arc_swap::ArcSwap;
+use pumpkin_config::networking::auth::PlayerProfileConfig;
 use pumpkin_data::translation;
 use pumpkin_protocol::{
     ConnectionState, KnownPack, Label, Link, LinkType,
@@ -10,7 +11,7 @@ use pumpkin_protocol::{
         SEncryptionResponse, SLoginCookieResponse, SLoginPluginResponse, SLoginStart,
     },
 };
-use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
+use pumpkin_util::{ProfileAction, text::TextComponent, version::JavaMinecraftVersion};
 use std::sync::Arc;
 use tracing::{debug, warn};
 use uuid::Uuid;
@@ -26,6 +27,28 @@ use crate::{
     },
     server::Server,
 };
+
+fn validate_profile_actions(
+    actions: Option<&[ProfileAction]>,
+    player_profile: &PlayerProfileConfig,
+) -> Result<(), AuthError> {
+    let Some(actions) = actions else {
+        return Ok(());
+    };
+    if actions.is_empty() {
+        return Ok(());
+    }
+    if !player_profile.allow_banned_players {
+        return Err(AuthError::Banned);
+    }
+    if actions
+        .iter()
+        .any(|action| !player_profile.allowed_actions.contains(action))
+    {
+        return Err(AuthError::DisallowedAction);
+    }
+    Ok(())
+}
 
 impl JavaClient {
     pub async fn handle_login_start(&self, server: &Server, login_start: SLoginStart) {
@@ -157,6 +180,7 @@ impl JavaClient {
                         e => TextComponent::text(e.to_string()),
                     })
                     .await;
+                    return;
                 }
             }
         }
@@ -266,34 +290,15 @@ impl JavaClient {
         )?;
 
         // Check if the player should join
-        if let Some(actions) = &profile.profile_actions {
-            if server
+        validate_profile_actions(
+            profile.profile_actions.as_deref(),
+            &server
                 .advanced_config
                 .networking
                 .java
                 .authentication
-                .player_profile
-                .allow_banned_players
-            {
-                for allowed in &server
-                    .advanced_config
-                    .networking
-                    .java
-                    .authentication
-                    .player_profile
-                    .allowed_actions
-                {
-                    if !actions.contains(allowed) {
-                        return Err(AuthError::DisallowedAction);
-                    }
-                }
-                if !actions.is_empty() {
-                    return Err(AuthError::Banned);
-                }
-            } else if !actions.is_empty() {
-                return Err(AuthError::Banned);
-            }
-        }
+                .player_profile,
+        )?;
         // Validate textures
         for property in profile.properties.load().iter() {
             authentication::validate_textures(
@@ -442,5 +447,48 @@ impl JavaClient {
             version: "26.2",
         }]))
         .await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_profile_actions;
+    use crate::net::authentication::AuthError;
+    use pumpkin_config::networking::auth::PlayerProfileConfig;
+    use pumpkin_util::ProfileAction;
+
+    #[test]
+    fn allows_configured_profile_actions() {
+        let config = PlayerProfileConfig {
+            allow_banned_players: true,
+            allowed_actions: vec![ProfileAction::ForcedNameChange],
+        };
+
+        assert!(
+            validate_profile_actions(Some(&[ProfileAction::ForcedNameChange]), &config).is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_unconfigured_profile_actions() {
+        let config = PlayerProfileConfig {
+            allow_banned_players: true,
+            allowed_actions: vec![ProfileAction::ForcedNameChange],
+        };
+
+        assert!(matches!(
+            validate_profile_actions(Some(&[ProfileAction::UsingBannedSkin]), &config),
+            Err(AuthError::DisallowedAction)
+        ));
+    }
+
+    #[test]
+    fn rejects_profile_actions_when_not_allowed() {
+        let config = PlayerProfileConfig::default();
+
+        assert!(matches!(
+            validate_profile_actions(Some(&[ProfileAction::ForcedNameChange]), &config),
+            Err(AuthError::Banned)
+        ));
     }
 }
