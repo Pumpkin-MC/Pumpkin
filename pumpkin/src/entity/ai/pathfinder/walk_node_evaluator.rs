@@ -316,6 +316,18 @@ impl WalkNodeEvaluator {
         path_type
     }
 
+    /// Reads the path type for the block itself, before land-node classification.
+    ///
+    /// `get_cached_path_type` includes the block below so an air cell over solid
+    /// ground becomes `Walkable`. Vanilla's airborne-start scan tests that raw
+    /// block state instead and must continue through that cell.
+    fn get_raw_path_type(&mut self, pos: Vector3<i32>) -> PathType {
+        self.base
+            .context
+            .as_mut()
+            .map_or(PathType::Blocked, |context| context.get_path_type_from_state(pos))
+    }
+
     fn has_collisions(&mut self, center: Vector3<i32>) -> bool {
         self.base
             .context
@@ -378,13 +390,11 @@ impl NodeEvaluator for WalkNodeEvaluator {
             let bottom_y = start_y - 64;
             let mut found_y = start_y;
             for check_y in (bottom_y..start_y).rev() {
-                let path_type = self
-                    .get_cached_path_type(Vector3::new(
-                        mob_x.floor() as i32,
-                        check_y,
-                        mob_z.floor() as i32,
-                    ))
-                    .await;
+                let path_type = self.get_raw_path_type(Vector3::new(
+                    mob_x.floor() as i32,
+                    check_y,
+                    mob_z.floor() as i32,
+                ));
                 if path_type != PathType::Open && path_type != PathType::Water {
                     found_y = check_y + 1;
                     break;
