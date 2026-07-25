@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection, BlockStateId, entity::EntityType};
+use pumpkin_data::{
+    Block, BlockDirection, BlockStateId, block_properties::RailShape, entity::EntityType,
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
-        OnEntityCollisionArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
-        OnStateReplacedArgs, PlacedArgs,
+        BlockBehaviour, BlockFuture, CanPlaceAtArgs, EmitsRedstonePowerArgs,
+        GetComparatorOutputArgs, GetRedstonePowerArgs, OnEntityCollisionArgs, OnNeighborUpdateArgs,
+        OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs, PlacedArgs,
     },
     entity::EntityBase,
     world::World,
@@ -134,6 +136,16 @@ impl BlockBehaviour for DetectorRailBlock {
         })
     }
 
+    fn get_comparator_output<'a>(
+        &'a self,
+        _args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        // A detector rail is always an analog source. Pumpkin does not yet model
+        // command-block success counts or container minecart inventories, so use
+        // vanilla's zero fallback instead of leaking its 15-strength rail signal.
+        Box::pin(async move { Some(0) })
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_rail_at(args.block_accessor, args.position)
     }
@@ -159,9 +171,9 @@ impl DetectorRailBlock {
                 .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                 .await;
 
-            // BaseRailBlock's normal neighbor update covers adjacent rails. Detector
-            // rails additionally notify the supporting block, matching vanilla's
-            // checkPressed path.
+            self.update_power_to_connected(world, pos, props.shape())
+                .await;
+            world.update_neighbors(pos, None).await;
             world.update_neighbors(&pos.down(), None).await;
         }
 
@@ -179,5 +191,39 @@ impl DetectorRailBlock {
             || entity_type == &EntityType::HOPPER_MINECART
             || entity_type == &EntityType::SPAWNER_MINECART
             || entity_type == &EntityType::TNT_MINECART
+    }
+
+    /// Vanilla `DetectorRailBlock.updatePowerToConnected` uses the rail state's
+    /// explicit endpoints, including the diagonal endpoint of an ascending rail.
+    async fn update_power_to_connected(
+        &self,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        shape: RailShape,
+    ) {
+        for connection in Self::connection_positions(pos, shape) {
+            let connection_block = world.get_block(&connection);
+            world.update_neighbor(&connection, connection_block).await;
+        }
+    }
+
+    fn connection_positions(pos: &BlockPos, shape: RailShape) -> [BlockPos; 2] {
+        let north = pos.offset(BlockDirection::North.to_offset());
+        let south = pos.offset(BlockDirection::South.to_offset());
+        let west = pos.offset(BlockDirection::West.to_offset());
+        let east = pos.offset(BlockDirection::East.to_offset());
+
+        match shape {
+            RailShape::NorthSouth => [north, south],
+            RailShape::EastWest => [west, east],
+            RailShape::AscendingEast => [west, east.up()],
+            RailShape::AscendingWest => [west.up(), east],
+            RailShape::AscendingNorth => [north.up(), south],
+            RailShape::AscendingSouth => [north, south.up()],
+            RailShape::SouthEast => [east, south],
+            RailShape::SouthWest => [west, south],
+            RailShape::NorthWest => [west, north],
+            RailShape::NorthEast => [east, north],
+        }
     }
 }
