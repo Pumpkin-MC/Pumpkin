@@ -311,7 +311,7 @@ impl ComparatorBlock {
 
         let state_id = props.to_state_id(block);
         world
-            .set_block_state(&block_pos, state_id, BlockFlags::empty())
+            .set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_LISTENERS)
             .await;
 
         self.update(world, block_pos, BlockState::from_id(state_id), block)
