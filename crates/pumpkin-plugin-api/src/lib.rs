@@ -85,7 +85,8 @@ mod wit {
         skip: ["init-plugin"],
         path: "../pumpkin-plugin-wit/v0.1",
         world: "plugin",
-        enable_method_chaining: true
+        enable_method_chaining: true,
+        link_native_symbols: true,
     });
 
     use super::Component;
@@ -282,7 +283,14 @@ static mut PLUGIN: Option<Box<dyn Plugin>> = None;
 #[macro_export]
 macro_rules! register_plugin {
     ($plugin_type:ty) => {
+        #[cfg(target_arch = "wasm32")]
         #[unsafe(export_name = "init-plugin")]
+        pub extern "C" fn __init_plugin() {
+            $crate::register_plugin(|| Box::new(<$plugin_type as $crate::Plugin>::new()));
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        #[unsafe(export_name = "init_plugin")]
         pub extern "C" fn __init_plugin() {
             $crate::register_plugin(|| Box::new(<$plugin_type as $crate::Plugin>::new()));
         }

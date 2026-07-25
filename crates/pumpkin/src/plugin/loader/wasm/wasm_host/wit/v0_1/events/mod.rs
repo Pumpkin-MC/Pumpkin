@@ -216,7 +216,7 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
                 PluginInstance::V0_1(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();
                     plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, &event)
+                        .call_handle_event(&mut *store, self.handler_id, server, event)
                         .await
                         .unwrap();
                 }
@@ -236,7 +236,7 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
                 PluginInstance::V0_1(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();
                     let returned_event = plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, &wasm_event)
+                        .call_handle_event(&mut *store, self.handler_id, server, wasm_event)
                         .await
                         .unwrap();
 
