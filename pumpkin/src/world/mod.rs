@@ -3923,11 +3923,23 @@ impl World {
             rel_x * rel_x + rel_z * rel_z
         });
 
-        let mut entity_receiver = self.level.receive_entity_chunks(chunks);
         let level = self.level.clone();
         let world = self.clone();
 
         player.clone().spawn_task(async move {
+            // Structure templates are applied while the block chunk reaches Full.
+            // Do not create its entity chunk first, or an empty entity chunk can
+            // win the race and miss the template entities entirely.
+            let block_chunks = chunks.clone();
+            let block_loads = futures::future::join_all(block_chunks.into_iter().map(|position| {
+                let level = level.clone();
+                async move {
+                    level.get_or_fetch_chunk(position, |_| ()).await;
+                }
+            }));
+            block_loads.await;
+
+            let mut entity_receiver = level.receive_entity_chunks(chunks);
             'main: loop {
                 let recv_result = tokio::select! {
                     () = player.client.await_close_interrupt() => {
@@ -3967,14 +3979,14 @@ impl World {
                     // a duplicate copy that would be re-appended on the next unload
                     // and doubled on every reload.
                     let mut entity_nbts = std::mem::take(&mut *chunk.data.lock().await);
-                    // Structure-template entities not yet pulled by entity-gen.
-                    let from_buffer =
-                        pumpkin_world::generation::structure::template::take_structure_entities(
-                            position.x, position.y,
-                        );
-                    if !from_buffer.is_empty() {
-                        entity_nbts.extend(from_buffer);
-                    }
+                    let structure_entities = level
+                        .read_chunk_sync(&position, |block_chunk| {
+                            let mut pending =
+                                block_chunk.pending_structure_entities.lock().unwrap();
+                            std::mem::take(&mut *pending)
+                        })
+                        .unwrap_or_default();
+                    entity_nbts.extend(structure_entities);
                     let mut entities_to_add: Vec<Arc<dyn EntityBase>> =
                         Vec::with_capacity(entity_nbts.len());
                     for entity_nbt in &entity_nbts {

@@ -26,7 +26,6 @@
 
 mod block_state_resolver;
 mod cache;
-mod entity_buffer;
 pub mod processor;
 mod structure_template;
 mod template_piece;
@@ -45,7 +44,6 @@ pub use cache::{
     TemplateCache, get_pool_elements, get_processor_list_json, get_template,
     get_template_pool_json, global_cache,
 };
-pub use entity_buffer::{push as push_structure_entity, take as take_structure_entities};
 pub use processor::StructureProcessor;
 pub use pumpkin_data::{Mirror as BlockMirror, Rotation as BlockRotation};
 pub use structure_template::{PaletteEntry, StructureTemplate, TemplateBlock, TemplateEntity};
@@ -89,7 +87,9 @@ pub fn place_template(
         processors,
         chunk_box,
     );
-    place_template_entities(template, origin, world_x, world_z, rotation, chunk_box);
+    place_template_entities(
+        chunk, template, origin, world_x, world_z, rotation, chunk_box,
+    );
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -237,6 +237,7 @@ fn place_block_entity(
 }
 
 fn place_template_entities(
+    chunk: &mut ProtoChunk,
     template: &StructureTemplate,
     origin: Vector3<i32>,
     world_x: i32,
@@ -270,27 +271,48 @@ fn place_template_entities(
         let world_ez = f64::from(world_z) + local_pos.z;
 
         let mut placed = entity.nbt.clone();
-        // Ensure Pos is absolute world coordinates (vanilla entity chunk format).
-        placed.put_list(
-            "Pos",
-            vec![
+        // Template NBT already contains Pos/Motion/Rotation, so replace those
+        // fields rather than using NbtCompound::put (which preserves old values).
+        placed.child_tags.insert(
+            "Pos".into(),
+            NbtTag::List(vec![
                 NbtTag::Double(world_ex),
                 NbtTag::Double(world_ey),
                 NbtTag::Double(world_ez),
-            ],
+            ]),
         );
-        // Clear residual motion from the template.
-        placed.put_list(
-            "Motion",
-            vec![
+        placed.child_tags.insert(
+            "Motion".into(),
+            NbtTag::List(vec![
                 NbtTag::Double(0.0),
                 NbtTag::Double(0.0),
                 NbtTag::Double(0.0),
-            ],
+            ]),
         );
-        // Global buffer is race-safe against the separate entity-generation path.
-        // (Entity chunks are built independently of block proto-chunks.)
-        entity_buffer::push(wx >> 4, wz >> 4, placed);
+        let yaw = placed
+            .get_list("Rotation")
+            .and_then(|rotation| rotation.first())
+            .and_then(NbtTag::extract_float)
+            .unwrap_or(0.0);
+        let pitch = placed
+            .get_list("Rotation")
+            .and_then(|rotation| rotation.get(1))
+            .and_then(NbtTag::extract_float)
+            .unwrap_or(0.0);
+        let rotation_degrees = match rotation {
+            Rotation::None => 0.0,
+            Rotation::Clockwise90 => 90.0,
+            Rotation::Rotate180 => 180.0,
+            Rotation::CounterClockwise90 => 270.0,
+        };
+        let yaw = (yaw + 180.0).rem_euclid(360.0) - 180.0 + rotation_degrees;
+        placed.child_tags.insert(
+            "Rotation".into(),
+            NbtTag::List(vec![NbtTag::Float(yaw), NbtTag::Float(pitch)]),
+        );
+        // Vanilla assigns a fresh UUID to every entity placed from a template.
+        placed.child_tags.remove("UUID");
+        chunk.add_entity(placed);
     }
 }
 
@@ -298,13 +320,31 @@ fn place_template_entities(
 fn transform_entity_pos(rotation: Rotation, pos: Vector3<f64>, size: Vector3<i32>) -> Vector3<f64> {
     match rotation {
         Rotation::None => pos,
-        Rotation::Clockwise90 => Vector3::new(f64::from(size.z) - 1.0 - pos.z, pos.y, pos.x),
-        Rotation::Rotate180 => Vector3::new(
-            f64::from(size.x) - 1.0 - pos.x,
-            pos.y,
-            f64::from(size.z) - 1.0 - pos.z,
-        ),
-        Rotation::CounterClockwise90 => Vector3::new(pos.z, pos.y, f64::from(size.x) - 1.0 - pos.x),
+        Rotation::Clockwise90 => Vector3::new(f64::from(size.z) - pos.z, pos.y, pos.x),
+        Rotation::Rotate180 => {
+            Vector3::new(f64::from(size.x) - pos.x, pos.y, f64::from(size.z) - pos.z)
+        }
+        Rotation::CounterClockwise90 => Vector3::new(pos.z, pos.y, f64::from(size.x) - pos.x),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Rotation, Vector3, transform_entity_pos};
+
+    #[test]
+    fn rotated_entity_position_stays_at_the_block_center() {
+        let size = Vector3::new(5, 4, 7);
+        let pos = Vector3::new(0.5, 1.0, 0.5);
+
+        let clockwise = transform_entity_pos(Rotation::Clockwise90, pos, size);
+        assert_eq!(clockwise, Vector3::new(6.5, 1.0, 0.5));
+
+        let reversed = transform_entity_pos(Rotation::Rotate180, pos, size);
+        assert_eq!(reversed, Vector3::new(4.5, 1.0, 6.5));
+
+        let counter_clockwise = transform_entity_pos(Rotation::CounterClockwise90, pos, size);
+        assert_eq!(counter_clockwise, Vector3::new(0.5, 1.0, 4.5));
     }
 }
 

@@ -20,7 +20,6 @@ use crate::{
                 StructureGenerator, StructureGeneratorContext, StructurePieceBase,
                 StructurePiecesCollector, StructurePosition,
             },
-            template::push_structure_entity,
         },
     },
 };
@@ -65,8 +64,8 @@ pub struct SwampHutPiece {
     has_cat: bool,
 }
 
-/// Queue a living entity for later chunk spawn (structure-template entity buffer).
-fn queue_structure_mob(entity_id: &str, wx: f64, wy: f64, wz: f64) {
+/// Queue a living entity for the chunk that placed the structure piece.
+fn queue_structure_mob(chunk: &mut ProtoChunk, entity_id: &str, wx: f64, wy: f64, wz: f64) {
     let mut nbt = NbtCompound::new();
     nbt.put_string("id", entity_id.to_string());
     nbt.put_list(
@@ -81,10 +80,7 @@ fn queue_structure_mob(entity_id: &str, wx: f64, wy: f64, wz: f64) {
             NbtTag::Double(0.0),
         ],
     );
-    // Chunk coords from block position (floor toward -inf for negatives).
-    let cx = (wx.floor() as i32) >> 4;
-    let cz = (wz.floor() as i32) >> 4;
-    push_structure_entity(cx, cz, nbt);
+    chunk.add_entity(nbt);
 }
 
 impl StructurePieceBase for SwampHutPiece {
@@ -266,6 +262,7 @@ impl StructurePieceBase for SwampHutPiece {
             if box_limit.contains(pos.x, pos.y, pos.z) {
                 self.has_witch = true;
                 queue_structure_mob(
+                    chunk,
                     "minecraft:witch",
                     f64::from(pos.x) + 0.5,
                     f64::from(pos.y),
@@ -278,6 +275,7 @@ impl StructurePieceBase for SwampHutPiece {
             if box_limit.contains(pos.x, pos.y, pos.z) {
                 self.has_cat = true;
                 queue_structure_mob(
+                    chunk,
                     "minecraft:cat",
                     f64::from(pos.x) + 0.5,
                     f64::from(pos.y),
