@@ -1,4 +1,5 @@
 use core::str;
+use std::borrow::Cow;
 use std::io::{Read, Write};
 
 use crate::{
@@ -90,6 +91,8 @@ pub trait NetworkReadExt {
 
     fn read_remaining_to_boxed_slice(&mut self, bound: usize) -> Result<Box<[u8]>, ReadingError>;
 
+    fn read_bytes_to_buf(&mut self, buf: &mut [u8]) -> Result<(), ReadingError>;
+
     fn get_bool(&mut self) -> Result<bool, ReadingError>;
     fn get_var_int(&mut self) -> Result<VarInt, ReadingError>;
     fn get_var_uint(&mut self) -> Result<VarUInt, ReadingError>;
@@ -109,6 +112,115 @@ pub trait NetworkReadExt {
         &mut self,
         parse: impl Fn(&mut Self) -> Result<G, ReadingError>,
     ) -> Result<Vec<G>, ReadingError>;
+}
+
+/// Reads zero-copy protocol values directly from a packet payload.
+pub trait NetworkReadSliceExt<'a> {
+    fn get_str_borrowed(&mut self) -> Result<&'a str, ReadingError>;
+    fn get_str_bounded_borrowed(&mut self, bound: usize) -> Result<&'a str, ReadingError>;
+    fn read_slice_borrowed(&mut self, count: usize) -> Result<&'a [u8], ReadingError>;
+    fn read_remaining_slice_borrowed(&mut self, bound: usize) -> Result<&'a [u8], ReadingError>;
+
+    #[inline]
+    fn read_cow_slice_borrowed(&mut self, count: usize) -> Result<Cow<'a, [u8]>, ReadingError> {
+        Ok(Cow::Borrowed(self.read_slice_borrowed(count)?))
+    }
+
+    #[inline]
+    fn read_remaining_to_cow_slice_borrowed(
+        &mut self,
+        bound: usize,
+    ) -> Result<Cow<'a, [u8]>, ReadingError> {
+        Ok(Cow::Borrowed(self.read_remaining_slice_borrowed(bound)?))
+    }
+
+    #[inline]
+    fn get_cow_str_borrowed(&mut self) -> Result<Cow<'a, str>, ReadingError> {
+        self.get_cow_str_bounded_borrowed(i32::MAX as usize)
+    }
+
+    #[inline]
+    fn get_cow_str_bounded_borrowed(&mut self, bound: usize) -> Result<Cow<'a, str>, ReadingError> {
+        Ok(Cow::Borrowed(self.get_str_bounded_borrowed(bound)?))
+    }
+}
+
+impl<'a> NetworkReadSliceExt<'a> for &'a [u8] {
+    #[inline]
+    fn read_slice_borrowed(&mut self, count: usize) -> Result<&'a [u8], ReadingError> {
+        if self.len() < count {
+            return Err(ReadingError::Incomplete(format!(
+                "EOF, Tried to read {count} bytes but only {} bytes left",
+                self.len()
+            )));
+        }
+        let (head, tail) = self.split_at(count);
+        *self = tail;
+        Ok(head)
+    }
+
+    #[inline]
+    fn read_remaining_slice_borrowed(&mut self, bound: usize) -> Result<&'a [u8], ReadingError> {
+        if self.len() > bound {
+            return Err(ReadingError::TooLarge(
+                "Read remaining too long".to_string(),
+            ));
+        }
+        let slice = *self;
+        *self = &[];
+        Ok(slice)
+    }
+
+    #[inline]
+    fn get_str_bounded_borrowed(&mut self, bound: usize) -> Result<&'a str, ReadingError> {
+        let bytes_len = self.get_var_uint()?.0 as usize;
+
+        let maximum_utf8_bytes = bound.saturating_mul(3);
+        if bytes_len > maximum_utf8_bytes {
+            return Err(ReadingError::TooLarge(format!(
+                "string has too many bytes ({bytes_len} > {maximum_utf8_bytes})"
+            )));
+        }
+
+        let bytes = self.read_slice_borrowed(bytes_len)?;
+        let string =
+            std::str::from_utf8(bytes).map_err(|e| ReadingError::Message(e.to_string()))?;
+
+        if string.encode_utf16().nth(bound).is_some() {
+            return Err(ReadingError::TooLarge(format!(
+                "string has too many UTF-16 characters (more than the maximum limit {bound})"
+            )));
+        }
+
+        Ok(string)
+    }
+
+    #[inline]
+    fn get_str_borrowed(&mut self) -> Result<&'a str, ReadingError> {
+        self.get_str_bounded_borrowed(i32::MAX as usize)
+    }
+}
+
+impl<'a, R: NetworkReadSliceExt<'a> + ?Sized> NetworkReadSliceExt<'a> for &mut R {
+    #[inline]
+    fn get_str_borrowed(&mut self) -> Result<&'a str, ReadingError> {
+        (**self).get_str_borrowed()
+    }
+
+    #[inline]
+    fn get_str_bounded_borrowed(&mut self, bound: usize) -> Result<&'a str, ReadingError> {
+        (**self).get_str_bounded_borrowed(bound)
+    }
+
+    #[inline]
+    fn read_slice_borrowed(&mut self, count: usize) -> Result<&'a [u8], ReadingError> {
+        (**self).read_slice_borrowed(count)
+    }
+
+    #[inline]
+    fn read_remaining_slice_borrowed(&mut self, bound: usize) -> Result<&'a [u8], ReadingError> {
+        (**self).read_remaining_slice_borrowed(bound)
+    }
 }
 
 macro_rules! get_number_be {
@@ -136,6 +248,11 @@ impl<R: Read> NetworkReadExt for R {
     get_number_be!(get_u128_be, u128);
     get_number_be!(get_f32_be, f32);
     get_number_be!(get_f64_be, f64);
+
+    fn read_bytes_to_buf(&mut self, buf: &mut [u8]) -> Result<(), ReadingError> {
+        self.read_exact(buf)
+            .map_err(|err| ReadingError::Incomplete(err.to_string()))
+    }
 
     fn read_boxed_slice(&mut self, length: usize) -> Result<Box<[u8]>, ReadingError> {
         // Increase this to at least 2MB to handle larger Bedrock batches
@@ -487,5 +604,24 @@ impl<W: Write> NetworkWriteExt for W {
             .map_err(|e| WritingError::Message(e.to_string()))?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NetworkReadSliceExt;
+
+    #[test]
+    fn borrowed_readers_keep_payload_backing_storage() {
+        let bytes = [2, b'h', b'i', 0x7f];
+        let mut payload = bytes.as_slice();
+
+        let string = payload.get_str_borrowed().unwrap();
+        let tail = payload.read_slice_borrowed(1).unwrap();
+
+        assert_eq!(string, "hi");
+        assert_eq!(string.as_ptr(), bytes[1..].as_ptr());
+        assert_eq!(tail, [0x7f]);
+        assert!(payload.is_empty());
     }
 }
