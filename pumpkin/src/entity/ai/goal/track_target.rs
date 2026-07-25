@@ -149,6 +149,7 @@ impl Goal for TrackTargetGoal {
                 // melee goal until collision-shape-aware sensing is available.
                 let from = mob_entity.living_entity.entity.get_eye_pos();
                 let to = target.entity.get_eye_pos();
+                let world = mob_entity.living_entity.entity.world.load_full();
                 let has_line_of_sight = world
                     .raycast(from, to, async |block_pos, raycast_world| {
                         raycast_world.get_block_state(block_pos).is_solid()
