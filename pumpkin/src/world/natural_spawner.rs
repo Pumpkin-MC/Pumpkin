@@ -622,7 +622,7 @@ pub fn spawn_mobs_for_chunk_generation(
     let mob_settings = &biome.spawners;
     let creatures = &mob_settings.creature;
 
-    if creatures.is_empty() {
+    if creatures.is_empty() || !world.level_info.load().game_rules.spawn_mobs {
         return;
     }
 
@@ -641,13 +641,14 @@ pub fn spawn_mobs_for_chunk_generation(
         };
 
         let count = random.next_inbetween_i32(spawner_data.min_count, spawner_data.max_count);
-        let entity_type = EntityType::from_name(
+        let Some(entity_type) = EntityType::from_name(
             spawner_data
                 .r#type
                 .strip_prefix("minecraft:")
                 .unwrap_or(spawner_data.r#type),
-        )
-        .unwrap();
+        ) else {
+            continue;
+        };
 
         let mut x = xo + random.next_bounded_i32(16);
         let mut z = zo + random.next_bounded_i32(16);
