@@ -20,6 +20,14 @@ pub struct WeightedPressurePlateBlock;
 
 type PressurePlateProps = pumpkin_data::block_properties::LightWeightedPressurePlateLikeProperties;
 
+/// Vanilla `WeightedPressurePlateBlock.getSignalStrength`.
+#[must_use]
+fn weighted_signal_strength(entity_count: usize, max_weight: usize) -> u8 {
+    debug_assert!(max_weight > 0);
+    let fraction = entity_count.min(max_weight) as f32 / max_weight as f32;
+    (fraction * 15.0).ceil() as u8
+}
+
 impl BlockMetadata for WeightedPressurePlateBlock {
     fn ids() -> Box<[BlockId]> {
         // light = Gold
@@ -110,13 +118,9 @@ impl PressurePlate for WeightedPressurePlateBlock {
             150
         };
         let aabb = detection_box_at(pos);
-        let len = world.get_entities_at_box(&aabb).len() + world.get_players_at_box(&aabb).len();
-        let len = len.min(weight);
-        if len > 0 {
-            let f = (weight.min(len) / weight) as f32;
-            return (f * 15.0).ceil() as u8;
-        }
-        0
+        let entity_count =
+            world.get_entities_at_box(&aabb).len() + world.get_players_at_box(&aabb).len();
+        weighted_signal_strength(entity_count, weight)
     }
 
     fn set_redstone_output(&self, block: &Block, state: &BlockState, output: u8) -> BlockStateId {
@@ -127,5 +131,24 @@ impl PressurePlate for WeightedPressurePlateBlock {
 
     fn tick_rate(&self) -> u8 {
         10
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::weighted_signal_strength;
+
+    #[test]
+    fn produces_vanilla_weighted_plate_levels() {
+        assert_eq!(weighted_signal_strength(0, 15), 0);
+        assert_eq!(weighted_signal_strength(1, 15), 1);
+        assert_eq!(weighted_signal_strength(14, 15), 14);
+        assert_eq!(weighted_signal_strength(15, 15), 15);
+
+        assert_eq!(weighted_signal_strength(1, 150), 1);
+        assert_eq!(weighted_signal_strength(10, 150), 1);
+        assert_eq!(weighted_signal_strength(11, 150), 2);
+        assert_eq!(weighted_signal_strength(150, 150), 15);
+        assert_eq!(weighted_signal_strength(151, 150), 15);
     }
 }
