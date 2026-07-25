@@ -4,11 +4,16 @@ use crate::world::World;
 use pumpkin_data::biome::Spawner;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
-use pumpkin_data::tag::Block::MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE;
+use pumpkin_data::tag::Block::{
+    MINECRAFT_BUTTONS, MINECRAFT_FIRE, MINECRAFT_FOX_IMMUNE_TO, MINECRAFT_POLAR_BEAR_IMMUNE_TO,
+    MINECRAFT_PRESSURE_PLATES, MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE,
+    MINECRAFT_SNOW_GOLEM_IMMUNE_TO, MINECRAFT_STRAY_IMMUNE_TO, MINECRAFT_WITHER_IMMUNE_TO,
+    MINECRAFT_WITHER_SKELETON_IMMUNE_TO,
+};
 use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::WorldgenBiome::MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::get_section_cord;
@@ -1042,7 +1047,8 @@ pub fn is_spawn_position_ok(
                 down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
 
             if is_valid_spawn_below {
-                is_valid_empty_spawn_block(cur) && is_valid_empty_spawn_block(up)
+                is_valid_empty_spawn_block(cur, entity_type)
+                    && is_valid_empty_spawn_block(up, entity_type)
             } else {
                 false
             }
@@ -1085,7 +1091,8 @@ pub fn is_spawn_position_ok_cache(
                 down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
 
             if is_valid_spawn_below {
-                is_valid_empty_spawn_block(state) && is_valid_empty_spawn_block(up)
+                is_valid_empty_spawn_block(state, entity_type)
+                    && is_valid_empty_spawn_block(up, entity_type)
             } else {
                 false
             }
@@ -1133,14 +1140,88 @@ pub fn adjust_spawn_position(
     pos
 }
 
+/// Vanilla `BlockState.isSignalSource` for the blocks whose non-full collision
+/// shapes would otherwise let a mob spawn inside them.
 #[must_use]
-pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
+fn is_signal_source(state: &BlockState) -> bool {
+    let block = Block::from_state_id(state.id);
+
+    block.has_tag(&MINECRAFT_BUTTONS)
+        || block.has_tag(&MINECRAFT_PRESSURE_PLATES)
+        || matches!(
+            block.id,
+            BlockId::REPEATER
+                | BlockId::COMPARATOR
+                | BlockId::DAYLIGHT_DETECTOR
+                | BlockId::LEVER
+                | BlockId::SCULK_SENSOR
+                | BlockId::CALIBRATED_SCULK_SENSOR
+                | BlockId::LIGHTNING_ROD
+                | BlockId::LECTERN
+                | BlockId::REDSTONE_BLOCK
+                | BlockId::JUKEBOX
+                | BlockId::REDSTONE_TORCH
+                | BlockId::REDSTONE_WALL_TORCH
+                | BlockId::TRAPPED_CHEST
+                | BlockId::OBSERVER
+                | BlockId::TARGET
+                | BlockId::REDSTONE_WIRE
+                | BlockId::TRIPWIRE_HOOK
+                | BlockId::DETECTOR_RAIL
+        )
+}
+
+/// Vanilla `EntityType.isBlockDangerous` immunity tags.
+#[must_use]
+fn is_immune_to_block(entity_type: &EntityType, block: &Block) -> bool {
+    let id = entity_type.id;
+    (id == EntityType::FOX.id && block.has_tag(&MINECRAFT_FOX_IMMUNE_TO))
+        || (id == EntityType::POLAR_BEAR.id && block.has_tag(&MINECRAFT_POLAR_BEAR_IMMUNE_TO))
+        || (id == EntityType::SNOW_GOLEM.id && block.has_tag(&MINECRAFT_SNOW_GOLEM_IMMUNE_TO))
+        || (id == EntityType::STRAY.id && block.has_tag(&MINECRAFT_STRAY_IMMUNE_TO))
+        || (id == EntityType::WITHER.id && block.has_tag(&MINECRAFT_WITHER_IMMUNE_TO))
+        || (id == EntityType::WITHER_SKELETON.id
+            && block.has_tag(&MINECRAFT_WITHER_SKELETON_IMMUNE_TO))
+}
+
+/// Vanilla `NodeEvaluator.isBurningBlock`.
+#[must_use]
+fn is_burning_block(state: &BlockState, block: &Block) -> bool {
+    block.has_tag(&MINECRAFT_FIRE)
+        || matches!(
+            block.id,
+            BlockId::LAVA | BlockId::MAGMA_BLOCK | BlockId::LAVA_CAULDRON
+        )
+        || (matches!(block.id, BlockId::CAMPFIRE | BlockId::SOUL_CAMPFIRE) && state.luminance > 0)
+}
+
+/// Vanilla `EntityType.isBlockDangerous`.
+#[must_use]
+fn is_block_dangerous(state: &BlockState, entity_type: &EntityType) -> bool {
+    let block = Block::from_state_id(state.id);
+    if is_immune_to_block(entity_type, block) {
+        return false;
+    }
+
+    if !entity_type.fire_immune && is_burning_block(state, block) {
+        return true;
+    }
+
+    matches!(
+        block.id,
+        BlockId::WITHER_ROSE | BlockId::SWEET_BERRY_BUSH | BlockId::CACTUS | BlockId::POWDER_SNOW
+    )
+}
+
+/// Vanilla `NaturalSpawner.isValidEmptySpawnBlock`.
+#[must_use]
+pub fn is_valid_empty_spawn_block(state: &BlockState, entity_type: &EntityType) -> bool {
     if state.is_full_cube() {
         return false;
     }
-    // if state.is_signal_source() {
-    //     return false;
-    // }
+    if is_signal_source(state) {
+        return false;
+    }
     if state.is_liquid() {
         return false;
     }
@@ -1148,9 +1229,7 @@ pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
         return false;
     }
 
-    // TODO: !entityType.isBlockDangerous(blockState)
-    // (e.g., preventing spawns inside Sweet Berry Bushes, Wither Roses, or Fire)
-    true
+    !is_block_dangerous(state, entity_type)
 }
 
 #[cfg(test)]
@@ -1163,6 +1242,42 @@ mod tests {
         assert!(is_redstone_conductor(soul_sand));
         assert!(!soul_sand.is_full_cube());
         assert!(!is_redstone_conductor(Block::REDSTONE_BLOCK.default_state));
+    }
+
+    #[test]
+    fn empty_spawn_blocks_reject_signal_sources() {
+        let lever = Block::LEVER.default_state;
+        assert!(!lever.is_full_cube());
+        assert!(is_signal_source(lever));
+        assert!(!is_valid_empty_spawn_block(lever, &EntityType::ZOMBIE));
+    }
+
+    #[test]
+    fn dangerous_spawn_blocks_honor_entity_immunities() {
+        assert!(is_block_dangerous(
+            Block::FIRE.default_state,
+            &EntityType::ZOMBIE,
+        ));
+        assert!(!is_block_dangerous(
+            Block::FIRE.default_state,
+            &EntityType::BLAZE,
+        ));
+        assert!(is_block_dangerous(
+            Block::SWEET_BERRY_BUSH.default_state,
+            &EntityType::ZOMBIE,
+        ));
+        assert!(!is_block_dangerous(
+            Block::SWEET_BERRY_BUSH.default_state,
+            &EntityType::FOX,
+        ));
+        assert!(is_block_dangerous(
+            Block::POWDER_SNOW.default_state,
+            &EntityType::ZOMBIE,
+        ));
+        assert!(!is_block_dangerous(
+            Block::POWDER_SNOW.default_state,
+            &EntityType::POLAR_BEAR,
+        ));
     }
 
     #[test]
