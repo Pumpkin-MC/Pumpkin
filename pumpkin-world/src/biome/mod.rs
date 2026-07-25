@@ -54,7 +54,7 @@ impl BiomeSupplier for MultiNoiseBiomeSupplier {
 /// Deterministic ~5% remapping of taiga-family biomes toward forest/snowy plains.
 ///
 /// Vanilla multi-noise leaf counts put a large share of temperate climate in
-/// taiga/snowy_taiga; players report long stretches of only taiga. We keep the
+/// `taiga`/`snowy_taiga`; players report long stretches of only taiga. We keep the
 /// vanilla climate tree and soft-bias 5% of taiga samples to neighboring biomes.
 #[cfg(not(test))]
 fn reduce_taiga_prevalence(biome: &'static Biome, x: i32, z: i32) -> &'static Biome {
@@ -77,8 +77,7 @@ fn reduce_taiga_prevalence(biome: &'static Biome, x: i32, z: i32) -> &'static Bi
     }
     match id {
         "snowy_taiga" => &Biome::SNOWY_PLAINS,
-        "old_growth_pine_taiga" | "old_growth_spruce_taiga" => &Biome::FOREST,
-        // plain taiga → forest (still cold-temperate tree biome)
+        // Plain and old-growth taiga map to forest (still cold-temperate tree biome).
         _ => &Biome::FOREST,
     }
 }
