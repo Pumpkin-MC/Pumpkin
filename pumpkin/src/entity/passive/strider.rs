@@ -7,8 +7,8 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        go_to_lava::GoToLavaGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     ai::pathfinder::node::PathType,
     mob::{Mob, MobEntity},
@@ -42,11 +42,11 @@ impl StriderEntity {
 
         {
             // Vanilla 26.2 Strider.registerGoals — no FloatGoal, no zombified avoid.
-            // StriderGoToLavaGoal TODO (path malus already prefers lava).
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.65));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.4, TEMPT_ITEMS)));
+            goal_selector.add_goal(4, GoToLavaGoal::new(1.0));
             goal_selector.add_goal(5, Box::new(FollowParentGoal::new(1.0)));
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(

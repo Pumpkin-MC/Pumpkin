@@ -839,7 +839,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 std::mem::take(&mut *guard)
             };
 
-            navigator.tick(&mob_entity.living_entity).await;
+            navigator
+                .tick(&mob_entity.living_entity, &mob_entity.move_control)
+                .await;
 
             {
                 *mob_entity.navigator.lock().unwrap() = navigator;

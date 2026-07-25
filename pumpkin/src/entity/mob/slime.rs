@@ -450,6 +450,25 @@ impl MoveControlTrait for SlimeMoveControl {
         living_entity.living_speed.store(0.0);
         living_entity.movement_input.store(movement_input);
     }
+
+    fn set_wanted_position(&mut self, x: f64, _y: f64, z: f64, speed_modifier: f64) {
+        let Some(slime) = self.slime.upgrade() else {
+            return;
+        };
+
+        let pos = slime.entity.living_entity.entity.pos.load();
+        let xd = x - pos.x;
+        let zd = z - pos.z;
+        if xd.mul_add(xd, zd * zd) < 2.500_000_3e-7 {
+            slime.speed_modifier.store(0.0);
+            return;
+        }
+
+        slime
+            .target_yaw
+            .store((zd.atan2(xd).to_degrees() as f32) - 90.0);
+        slime.speed_modifier.store(speed_modifier);
+    }
 }
 
 pub struct SlimeFloatGoal {

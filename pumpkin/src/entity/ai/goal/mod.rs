@@ -22,6 +22,7 @@ pub mod follow_owner;
 pub mod follow_parent;
 pub mod follow_player;
 pub mod freeze_when_looked;
+pub mod go_to_lava;
 pub mod goal_selector;
 pub mod guardian_laser;
 pub mod join_anger;

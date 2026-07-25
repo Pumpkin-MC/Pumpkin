@@ -106,11 +106,16 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
     }
 
     fn get_target_pos(&self) -> BlockPos {
-        self.target_pos.up()
+        self.move_to_target_pos.get().map_or_else(
+            || self.target_pos.up(),
+            |goal| goal.get_move_to_target(self.target_pos),
+        )
     }
 
-    const fn should_reset_path(&self) -> bool {
-        self.trying_time % 40 == 0
+    fn should_reset_path(&self) -> bool {
+        self.move_to_target_pos
+            .get()
+            .map_or(true, |goal| goal.should_recalculate_path(self.trying_time))
     }
 
     fn set_navigation_target(mob: &dyn Mob, destination: Vector3<f64>, speed: f64) {
@@ -140,6 +145,14 @@ pub trait MoveToTargetPos: Send + Sync {
 
     fn get_desired_distance_to_target(&self) -> f64 {
         1.0
+    }
+
+    fn get_move_to_target(&self, block_pos: BlockPos) -> BlockPos {
+        block_pos.up()
+    }
+
+    fn should_recalculate_path(&self, trying_time: i32) -> bool {
+        trying_time % 40 == 0
     }
 }
 

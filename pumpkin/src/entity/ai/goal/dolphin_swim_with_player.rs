@@ -147,14 +147,15 @@ impl Goal for DolphinSwimWithPlayerGoal {
                 player_pos.z,
             );
 
-            let mut navigator = mob_entity.navigator.lock().unwrap();
-            if distance_sq < STOP_RANGE_SQ {
-                navigator.stop();
-            } else {
-                let mob_pos = mob_entity.living_entity.entity.pos.load();
-                navigator.set_progress(NavigatorGoal::new(mob_pos, player_pos, self.speed));
+            {
+                let mut navigator = mob_entity.navigator.lock().unwrap();
+                if distance_sq < STOP_RANGE_SQ {
+                    navigator.stop();
+                } else {
+                    let mob_pos = mob_entity.living_entity.entity.pos.load();
+                    navigator.set_progress(NavigatorGoal::new(mob_pos, player_pos, self.speed));
+                }
             }
-            drop(navigator);
 
             if Self::is_swimming(player) && mob.get_random().random_range(0..6) == 0 {
                 Self::grant_grace(player).await;

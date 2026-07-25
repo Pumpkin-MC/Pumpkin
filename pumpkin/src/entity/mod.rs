@@ -14,6 +14,7 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::blocks_movement;
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -1252,6 +1253,90 @@ impl Entity {
         self.supporting_block_pos.load()
     }
 
+    fn resolve_movement_against_collisions(
+        bounding_box: BoundingBox,
+        movement: Vector3<f64>,
+        collisions: &[BoundingBox],
+    ) -> Vector3<f64> {
+        let mut resolved = Vector3::default();
+
+        for axis in Axis::all() {
+            let requested = movement.get_axis(axis);
+            if requested == 0.0 {
+                continue;
+            }
+
+            let mut axis_movement = Vector3::default();
+            axis_movement.set_axis(axis, requested);
+            let current_box = bounding_box.shift(resolved);
+            let mut max_time = 1.0;
+
+            for collision in collisions {
+                if let Some(collision_time) =
+                    current_box.calculate_collision_time(collision, axis_movement, axis, max_time)
+                {
+                    max_time = collision_time;
+                }
+            }
+
+            resolved.set_axis(axis, requested * max_time);
+        }
+
+        resolved
+    }
+
+    fn find_supporting_block(
+        bounding_box: BoundingBox,
+        vertical_movement: f64,
+        collisions: &[BoundingBox],
+        collision_sources: &[BlockPos],
+    ) -> Option<BlockPos> {
+        if vertical_movement >= 0.0 {
+            return None;
+        }
+
+        let mut axis_movement = Vector3::default();
+        axis_movement.y = vertical_movement;
+        let mut max_time = 1.0;
+        let mut supporting_block = None;
+
+        for (collision, source) in collisions.iter().zip(collision_sources) {
+            if let Some(collision_time) =
+                bounding_box.calculate_collision_time(collision, axis_movement, Axis::Y, max_time)
+            {
+                max_time = collision_time;
+                supporting_block = Some(*source);
+            }
+        }
+
+        supporting_block
+    }
+
+    fn find_step_supporting_block(
+        bounding_box: BoundingBox,
+        movement: Vector3<f64>,
+        collisions: &[BoundingBox],
+        collision_sources: &[BlockPos],
+    ) -> Option<BlockPos> {
+        let final_box = bounding_box.shift(movement);
+        let mut support = None;
+        let mut support_height = f64::NEG_INFINITY;
+
+        for (collision, source) in collisions.iter().zip(collision_sources) {
+            let touches_feet = (collision.max.y - final_box.min.y).abs() <= 1.0e-7;
+            let overlaps_xz = collision.min.x < final_box.max.x
+                && collision.max.x > final_box.min.x
+                && collision.min.z < final_box.max.z
+                && collision.max.z > final_box.min.z;
+            if touches_feet && overlaps_xz && collision.max.y > support_height {
+                support = Some(*source);
+                support_height = collision.max.y;
+            }
+        }
+
+        support
+    }
+
     #[expect(clippy::float_cmp)]
     async fn adjust_movement_for_collisions(
         &self,
@@ -1262,88 +1347,104 @@ impl Entity {
             return movement;
         }
 
+        let was_on_ground = self.on_ground.load(Ordering::SeqCst);
+        let previous_supporting_block = self.supporting_block_pos.load();
         self.on_ground.store(false, Ordering::SeqCst);
         self.supporting_block_pos.store(None);
         self.horizontal_collision.store(false, Ordering::SeqCst);
 
         let bounding_box = self.bounding_box.load();
-
-        let (collisions, block_positions) = self
-            .world
-            .load()
+        let world = self.world.load_full();
+        let (collisions, block_positions) = world
             .get_block_collisions(bounding_box.stretch(movement), caller)
             .await;
 
-        if collisions.is_empty() {
-            return movement;
+        let mut collision_sources = Vec::with_capacity(collisions.len());
+        for (end, position) in block_positions {
+            collision_sources.resize(end, position);
         }
 
-        let mut adjusted_movement = movement;
+        let mut adjusted_movement =
+            Self::resolve_movement_against_collisions(bounding_box, movement, &collisions);
+        let mut supporting_block =
+            Self::find_supporting_block(bounding_box, movement.y, &collisions, &collision_sources);
+        let mut on_ground = if movement.y == 0.0 {
+            was_on_ground
+        } else {
+            supporting_block.is_some()
+        };
+        if movement.y == 0.0 {
+            supporting_block = previous_supporting_block;
+        }
 
-        // Y-Axis adjustment
-        if movement.get_axis(Axis::Y) != 0.0 {
-            let mut max_time = 1.0;
-            let mut positions = block_positions.into_iter();
-            let (mut collisions_len, mut position) = positions.next().unwrap();
-            let mut supporting_block_pos = None;
+        let mut horizontal_collision =
+            movement.x != adjusted_movement.x || movement.z != adjusted_movement.z;
+        let max_step_height = caller.get_living_entity().map_or(0.0, |living| {
+            living.get_attribute_value(&Attributes::STEP_HEIGHT)
+        });
 
-            for (i, inert_box) in collisions.iter().enumerate() {
-                if i == collisions_len {
-                    (collisions_len, position) = positions.next().unwrap();
-                }
+        if max_step_height > 0.0 && (on_ground || was_on_ground) && horizontal_collision {
+            let grounded_box = if supporting_block.is_some() {
+                bounding_box.shift(Vector3::new(0.0, adjusted_movement.y, 0.0))
+            } else {
+                bounding_box
+            };
+            let mut step_search_box =
+                grounded_box.expand_towards(movement.x, max_step_height, movement.z);
+            if supporting_block.is_none() {
+                step_search_box = step_search_box.expand_towards(0.0, -1.0e-5, 0.0);
+            }
 
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
-                    inert_box,
-                    adjusted_movement,
-                    Axis::Y,
-                    max_time,
-                ) {
-                    max_time = collision_time;
+            let (step_collisions, step_positions) =
+                world.get_block_collisions(step_search_box, caller).await;
+            let mut step_sources = Vec::with_capacity(step_collisions.len());
+            for (end, position) in step_positions {
+                step_sources.resize(end, position);
+            }
 
-                    // If the entity is moving downwards and collides, set the supporting block position
-                    if movement.get_axis(Axis::Y) < 0.0 {
-                        supporting_block_pos = Some(position);
+            let mut step_heights = Vec::with_capacity(step_collisions.len() * 2);
+            for collision in &step_collisions {
+                for height in [collision.min.y, collision.max.y] {
+                    let relative_height = height - grounded_box.min.y;
+                    if relative_height > 0.0
+                        && relative_height <= max_step_height
+                        && (relative_height - adjusted_movement.y).abs() > 1.0e-7
+                    {
+                        step_heights.push(relative_height);
                     }
                 }
             }
+            step_heights.sort_by(f64::total_cmp);
+            step_heights.dedup_by(|a, b| (*a - *b).abs() <= 1.0e-7);
 
-            if max_time != 1.0 {
-                let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
-                adjusted_movement.set_axis(Axis::Y, changed_component);
-            }
-
-            self.on_ground
-                .store(supporting_block_pos.is_some(), Ordering::SeqCst);
-            self.supporting_block_pos.store(supporting_block_pos);
-        }
-
-        let mut horizontal_collision = false;
-
-        for axis in Axis::horizontal() {
-            if movement.get_axis(axis) == 0.0 {
-                continue;
-            }
-
-            let mut max_time = 1.0;
-
-            for inert_box in &collisions {
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
-                    inert_box,
-                    adjusted_movement,
-                    axis,
-                    max_time,
-                ) {
-                    max_time = collision_time;
+            for step_height in step_heights {
+                let stepped = Self::resolve_movement_against_collisions(
+                    grounded_box,
+                    Vector3::new(movement.x, step_height, movement.z),
+                    &step_collisions,
+                );
+                if stepped.horizontal_length_squared()
+                    > adjusted_movement.horizontal_length_squared()
+                {
+                    let distance_to_ground = bounding_box.min.y - grounded_box.min.y;
+                    adjusted_movement =
+                        Vector3::new(stepped.x, stepped.y - distance_to_ground, stepped.z);
+                    supporting_block = Self::find_step_supporting_block(
+                        grounded_box,
+                        stepped,
+                        &step_collisions,
+                        &step_sources,
+                    );
+                    on_ground = true;
+                    horizontal_collision =
+                        movement.x != adjusted_movement.x || movement.z != adjusted_movement.z;
+                    break;
                 }
             }
-
-            if max_time != 1.0 {
-                let changed_component = adjusted_movement.get_axis(axis) * max_time;
-                adjusted_movement.set_axis(axis, changed_component);
-                horizontal_collision = true;
-            }
         }
 
+        self.on_ground.store(on_ground, Ordering::SeqCst);
+        self.supporting_block_pos.store(supporting_block);
         self.horizontal_collision
             .store(horizontal_collision, Ordering::SeqCst);
 

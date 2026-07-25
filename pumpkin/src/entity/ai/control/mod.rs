@@ -14,4 +14,8 @@ pub trait Control: Send + Sync {
 
 pub trait MoveControlTrait: Control {
     fn tick(&mut self, mob: &dyn Mob);
+
+    fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed_modifier: f64);
+
+    fn stop(&mut self) {}
 }

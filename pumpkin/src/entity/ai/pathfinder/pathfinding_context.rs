@@ -63,6 +63,19 @@ impl PathfindingContext {
         pt
     }
 
+    /// Vanilla `WalkNodeEvaluator.getFloorLevel` for land navigation.
+    #[must_use]
+    pub fn get_floor_level(&self, pos: Vector3<i32>) -> f64 {
+        let below = pos.add_raw(0, -1, 0).as_blockpos();
+        let state = self.world.get_block_state(&below);
+        let collision_height = state
+            .get_block_collision_shapes()
+            .map(|shape| shape.max.y)
+            .fold(0.0, f64::max);
+
+        f64::from(below.0.y) + collision_height
+    }
+
     /// Classifies a block position into a `PathType` for pathfinding.
     #[must_use]
     pub fn compute_path_type_from_state(&self, pos: Vector3<i32>) -> PathType {

@@ -1,10 +1,12 @@
 use crate::entity::ai::control::{Control, MoveControlTrait};
 use crate::entity::mob::Mob;
-use pumpkin_data::attributes::Attributes;
+use pumpkin_data::{
+    Block,
+    attributes::Attributes,
+    tag::{self, Taggable},
+};
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::atomic::Ordering;
-
-// Attributes::STEP_HEIGHT still used for jump check.
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub enum Operation {
@@ -71,21 +73,39 @@ impl MoveControlTrait for MoveControl {
             }
 
             let y_rot_d = (zd.atan2(xd).to_degrees() as f32) - 90.0;
-            entity
-                .yaw
-                .store(self.change_angle(entity.yaw.load(), y_rot_d, 90.0));
+            let yaw = self.change_angle(entity.yaw.load(), y_rot_d, 90.0);
+            entity.yaw.store(yaw);
+            // Pumpkin has no separate BodyRotationControl yet; keep the body aligned
+            // with navigation while LookControl retains independent head tracking.
+            entity.body_yaw.store(yaw);
 
             // Vanilla: setSpeed(speedModifier * MOVEMENT_SPEED)
             let attr = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
             living_entity.set_speed(self.speed_modifier * attr);
 
-            // Vanilla: `wantedY - y >= maxUpStep()` (inclusive) so 1-block steps work
-            // when STEP_HEIGHT is exactly 1.0 (iron golem).
+            // `MoveControl` is also the fallback jump path when a direct navigation
+            // attempt reaches a solid obstacle before A* can produce a step-up node.
+            // Vanilla uses the target height and the current block's collision shape.
             let step_height = living_entity.get_attribute_value(&Attributes::STEP_HEIGHT);
             let horiz_limit = 1.0f64.max(entity.entity_dimension.load().width as f64);
-            if yd >= step_height - 1e-3 && xd * xd + zd * zd < horiz_limit * horiz_limit {
+            let block_pos = entity.block_pos.load();
+            let world = entity.world.load();
+            let state = world.get_block_state(&block_pos);
+            let block = Block::from_state_id(state.id);
+            let collision_requires_jump = !state.collision_shapes.is_empty()
+                && !block.has_tag(&tag::Block::MINECRAFT_DOORS)
+                && !block.has_tag(&tag::Block::MINECRAFT_FENCES)
+                && state
+                    .get_block_collision_shapes()
+                    .any(|shape| pos.y < shape.max.y + f64::from(block_pos.0.y));
+            let target_requires_jump =
+                yd > step_height && xd * xd + zd * zd < horiz_limit * horiz_limit;
+
+            if target_requires_jump || collision_requires_jump {
                 living_entity.jumping.store(true, Ordering::SeqCst);
                 self.operation = Operation::Jumping;
+            } else {
+                living_entity.jumping.store(false, Ordering::SeqCst);
             }
         } else if self.operation == Operation::Jumping {
             let attr = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
@@ -93,10 +113,21 @@ impl MoveControlTrait for MoveControl {
 
             if entity.on_ground.load(Ordering::Relaxed) {
                 self.operation = Operation::Wait;
+                living_entity.jumping.store(false, Ordering::SeqCst);
             }
+        } else {
+            // Vanilla clears forward input while idle. Active navigation dispatches a
+            // fresh wanted position before this controller runs every tick.
+            living_entity.clear_speed();
         }
-        // Wait: do not clear navigator-written speed.
-        // Navigator ticks before move control and owns path-following motion.
+    }
+
+    fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed_modifier: f64) {
+        Self::set_wanted_position(self, x, y, z, speed_modifier);
+    }
+
+    fn stop(&mut self) {
+        Self::stop(self);
     }
 }
 
@@ -119,6 +150,13 @@ impl MoveControl {
         if self.operation != Operation::Jumping {
             self.operation = Operation::MoveTo;
         }
+    }
+
+    pub fn stop(&mut self) {
+        self.operation = Operation::Wait;
+        self.strafe_forwards = 0.0;
+        self.strafe_right = 0.0;
+        self.speed_modifier = 0.0;
     }
 
     pub const fn strafe(&mut self, forwards: f32, right: f32) {

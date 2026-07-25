@@ -1,6 +1,6 @@
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::entity::living::LivingEntity;
+use crate::entity::{ai::control::MoveControlTrait, living::LivingEntity};
 
 use crate::entity::ai::pathfinder::binary_heap::BinaryHeap;
 use crate::entity::ai::pathfinder::node::Coordinate;
@@ -11,8 +11,8 @@ use crate::entity::ai::pathfinder::path::Path;
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::ai::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
 use pumpkin_data::attributes::Attributes;
-use pumpkin_util::math::wrap_degrees;
 use std::collections::HashMap;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub mod binary_heap;
@@ -94,7 +94,6 @@ impl Default for Navigator {
 const MAX_ITERS: usize = 560;
 // Vanilla PathFinder uses ~1.0 heuristic scale (some versions 1.5).
 const TARGET_DISTANCE_MULTIPLIER: f32 = 1.0;
-const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 // Vanilla GroundPathNavigation: abs(dy) < 1.0 for "on node". Exactly 1-block drops
 // sit at dy≈1.0 and fail that check — we allow a hair more so mobs step down
 // instead of orbiting the ledge and repathing the long way around.
@@ -441,9 +440,47 @@ impl Navigator {
         }
     }
 
+    fn set_wanted_position(
+        move_control: &Mutex<Box<dyn MoveControlTrait>>,
+        destination: Vector3<f64>,
+        speed: f64,
+    ) {
+        move_control.lock().unwrap().set_wanted_position(
+            destination.x,
+            destination.y,
+            destination.z,
+            speed,
+        );
+    }
+
+    fn stop_move_control(move_control: &Mutex<Box<dyn MoveControlTrait>>) {
+        move_control.lock().unwrap().stop();
+    }
+
+    fn get_ground_y(entity: &LivingEntity, target: Vector3<f64>) -> f64 {
+        let target_block = target.to_block_pos();
+        let below = target_block.down();
+        let state = entity.entity.world.load().get_block_state(&below);
+        if state.is_air() {
+            return target.y;
+        }
+
+        let collision_height = state
+            .get_block_collision_shapes()
+            .map(|shape| shape.max.y)
+            .fold(0.0, f64::max);
+        f64::from(below.0.y) + collision_height
+    }
+
     /// Best-effort straight walk when A* fails — keeps melee chases moving instead
-    /// of freezing until the next repath luckily succeeds.
-    fn direct_walk_toward(&self, entity: &LivingEntity, goal: &NavigatorGoal) {
+    /// of freezing until the next repath luckily succeeds. This still goes through
+    /// `MoveControl`, which owns collision-triggered jumping in vanilla.
+    fn direct_walk_toward(
+        &self,
+        entity: &LivingEntity,
+        goal: &NavigatorGoal,
+        move_control: &Mutex<Box<dyn MoveControlTrait>>,
+    ) {
         let current_pos = entity.entity.pos.load();
 
         // Iron golem etc.: never direct-walk into water when water is impassable.
@@ -458,6 +495,7 @@ impl Navigator {
             };
             if is_water(dest_block) || is_water(dest_block.down()) {
                 entity.clear_speed();
+                Self::stop_move_control(move_control);
                 return;
             }
             // Also refuse a step that would walk off land into water immediately ahead.
@@ -473,6 +511,7 @@ impl Navigator {
             let ahead_block = ahead.to_block_pos();
             if is_water(ahead_block) || is_water(ahead_block.down()) {
                 entity.clear_speed();
+                Self::stop_move_control(move_control);
                 return;
             }
         }
@@ -482,37 +521,11 @@ impl Navigator {
         let horizontal = dx.hypot(dz);
         if horizontal < 0.05 {
             entity.clear_speed();
+            Self::stop_move_control(move_control);
             return;
         }
-        let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
-        let current_yaw = entity.entity.yaw.load();
-        let yaw_diff = wrap_degrees(desired_yaw - current_yaw);
-        let target_yaw =
-            current_yaw + yaw_diff.clamp(-MAX_YAW_TURN_PER_TICK, MAX_YAW_TURN_PER_TICK);
-        entity.entity.yaw.store(target_yaw);
-        entity.entity.head_yaw.store(target_yaw);
-        entity.entity.body_yaw.store(target_yaw);
 
-        // After this tick's turn, if still >90° off the goal, only rotate —
-        // prevents "walk away then charge" when the target is behind us.
-        let remaining_yaw = wrap_degrees(desired_yaw - target_yaw);
-        let attr = entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-        if remaining_yaw.abs() > 90.0 {
-            entity.clear_speed();
-        } else {
-            entity.set_speed(goal.speed * attr);
-        }
-
-        // Jump if destination is above us and we're close horizontally.
-        // Vanilla MoveControl: `wantedY - y >= maxUpStep` (not strict `>`).
-        // With STEP_HEIGHT=1.0, a full block step has dy≈1.0 and must jump/step.
-        let dy = goal.destination.y - current_pos.y;
-        let step = entity.get_attribute_value(&Attributes::STEP_HEIGHT);
-        if dy >= step - 1e-3 && horizontal < 1.5 {
-            entity
-                .jumping
-                .store(true, std::sync::atomic::Ordering::SeqCst);
-        }
+        Self::set_wanted_position(move_control, goal.destination, goal.speed);
     }
 
     fn needs_new_path(&self, goal: &NavigatorGoal) -> bool {
@@ -537,11 +550,16 @@ impl Navigator {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn tick(&mut self, entity: &LivingEntity) {
+    pub async fn tick(
+        &mut self,
+        entity: &LivingEntity,
+        move_control: &Mutex<Box<dyn MoveControlTrait>>,
+    ) {
         let Some(goal) = self.current_goal.take() else {
             // Idle: stop the mob
             self.is_idle.store(true, Ordering::Relaxed);
             entity.clear_speed();
+            Self::stop_move_control(move_control);
             return;
         };
 
@@ -549,6 +567,7 @@ impl Navigator {
             self.is_idle.store(true, Ordering::Relaxed);
             self.current_path = None;
             entity.clear_speed();
+            Self::stop_move_control(move_control);
             return;
         }
 
@@ -583,7 +602,7 @@ impl Navigator {
             // so melee mobs (vindicator/golem/zombie) don't freeze in place.
             if self.current_path.is_none() {
                 self.is_idle.store(false, Ordering::Relaxed);
-                self.direct_walk_toward(entity, &goal);
+                self.direct_walk_toward(entity, &goal, move_control);
                 self.current_goal = Some(goal);
                 return;
             }
@@ -591,7 +610,7 @@ impl Navigator {
 
         if self.current_path.is_none() {
             self.is_idle.store(false, Ordering::Relaxed);
-            self.direct_walk_toward(entity, &goal);
+            self.direct_walk_toward(entity, &goal, move_control);
             self.current_goal = Some(goal);
             return;
         }
@@ -602,6 +621,7 @@ impl Navigator {
                 self.is_idle.store(true, Ordering::Relaxed);
                 self.current_path = None;
                 entity.clear_speed();
+                Self::stop_move_control(move_control);
                 return;
             }
 
@@ -619,6 +639,7 @@ impl Navigator {
                 self.current_path = None;
                 self.ticks_on_current_node = 0;
                 entity.clear_speed();
+                Self::stop_move_control(move_control);
                 return;
             }
 
@@ -634,6 +655,7 @@ impl Navigator {
                         self.current_path = None;
                         self.ticks_on_current_node = 0;
                         entity.clear_speed();
+                        Self::stop_move_control(move_control);
                         return;
                     }
                 }
@@ -644,11 +666,12 @@ impl Navigator {
 
             if let Some(next_block) = path.get_next_node_pos() {
                 // Vanilla: Vec3.atBottomCenterOf(nextNodePos)
-                let target_pos = Vector3::new(
+                let mut target_pos = Vector3::new(
                     f64::from(next_block.x) + 0.5,
                     f64::from(next_block.y),
                     f64::from(next_block.z) + 0.5,
                 );
+                target_pos.y = Self::get_ground_y(entity, target_pos);
 
                 let current_pos = entity.entity.pos.load();
                 let dx = target_pos.x - current_pos.x;
@@ -703,49 +726,10 @@ impl Navigator {
                     return;
                 }
 
-                // When the next node is below, aim at the *edge* toward it so we
-                // walk off instead of spinning on the lip (vanilla effectively does
-                // this via waypoint size + step).
-                // When stepping down, still aim at the lower node (same X/Z as target).
-                let aim_x = target_pos.x;
-                let aim_z = target_pos.z;
-                let adx = aim_x - current_pos.x;
-                let adz = aim_z - current_pos.z;
-
-                let desired_yaw = wrap_degrees((adz.atan2(adx) as f32).to_degrees() - 90.0);
-                let current_yaw = entity.entity.yaw.load();
-                let yaw_diff = wrap_degrees(desired_yaw - current_yaw);
-                let target_yaw =
-                    current_yaw + yaw_diff.clamp(-MAX_YAW_TURN_PER_TICK, MAX_YAW_TURN_PER_TICK);
-                entity.entity.yaw.store(target_yaw);
-                entity.entity.head_yaw.store(target_yaw);
-                entity.entity.body_yaw.store(target_yaw);
-
-                // Vanilla MoveControl/Navigator: setSpeed(modifier * MOVEMENT_SPEED).
-                // No forward input while still facing >90° off after this turn.
-                let remaining_yaw = wrap_degrees(desired_yaw - target_yaw);
-                let attr = entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-                if remaining_yaw.abs() > 90.0 {
-                    entity.clear_speed();
-                } else {
-                    entity.set_speed(goal.speed * attr);
-                }
-
-                let jump_distance = 1.0f64.max(width);
-                let step = entity.get_attribute_value(&Attributes::STEP_HEIGHT);
-
-                // Jump when the next node is at/above step height and close horizontally.
-                // Compare distance (not distance²) to jump_distance — was a units bug.
-                // Use `>= step` like vanilla MoveControl (`wantedY - y >= maxUpStep`).
-                if dy >= step - 1e-3 && horizontal_dist < jump_distance {
-                    entity
-                        .jumping
-                        .store(true, std::sync::atomic::Ordering::SeqCst);
-                } else {
-                    entity
-                        .jumping
-                        .store(false, std::sync::atomic::Ordering::SeqCst);
-                }
+                // Vanilla PathNavigation hands each waypoint to MoveControl. Besides
+                // setting yaw/speed, that controller jumps when a solid shape blocks a
+                // direct fallback, which is what lets sheep clear a one-block stone.
+                Self::set_wanted_position(move_control, target_pos, goal.speed);
 
                 // Don't stuck-cancel while we're clearly approaching a step-down
                 // (small horizontal progress is expected on the lip).
@@ -756,6 +740,7 @@ impl Navigator {
                 self.is_idle.store(true, Ordering::Relaxed);
                 self.current_path = None;
                 entity.clear_speed();
+                Self::stop_move_control(move_control);
             }
         }
 
