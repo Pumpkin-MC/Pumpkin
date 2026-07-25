@@ -80,6 +80,7 @@ use std::sync::{
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+pub mod ageable;
 pub mod ai;
 pub mod area_effect_cloud;
 pub mod attributes;
