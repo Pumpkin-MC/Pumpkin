@@ -367,11 +367,9 @@ impl World {
     pub fn update_active_chunks(self: &Arc<Self>) {
         // Vanilla: entity/block ticking uses simulation-distance; natural spawn
         // candidate set uses a fixed radius-8 tracker (independent of sim dist).
-        let simulation_distance = self
-            .server
-            .upgrade()
-            .map(|s| i32::from(get_simulation_distance(&s).get()))
-            .unwrap_or(10);
+        let simulation_distance = self.server.upgrade().map_or(10, |s| {
+            std::num::NonZeroI32::from(get_simulation_distance(&s)).get()
+        });
 
         let mut active_chunks = FxHashSet::default();
         let mut natural_spawn_chunks = FxHashSet::default();

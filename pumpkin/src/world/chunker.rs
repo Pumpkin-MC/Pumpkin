@@ -25,9 +25,10 @@ pub fn get_view_distance(player: &Player) -> NonZeroU8 {
         .clamp(NonZeroU8::new(2).unwrap(), max_view_distance)
 }
 
-/// Server simulation distance used for entity/block ticking (vanilla
-/// `server.properties` `simulation-distance`). When both Java and Bedrock are
-/// enabled, take the max so neither platform under-ticks the shared world.
+/// Server simulation distance for entity/block ticking.
+///
+/// Mirrors vanilla `simulation-distance`. When both editions are enabled, use
+/// the max so neither under-ticks the shared world.
 #[must_use]
 pub fn get_simulation_distance(server: &crate::server::Server) -> NonZeroU8 {
     let net = &server.advanced_config.networking;
@@ -39,10 +40,9 @@ pub fn get_simulation_distance(server: &crate::server::Server) -> NonZeroU8 {
                 net.bedrock.simulation_distance
             }
         }
-        (true, false) => net.java.simulation_distance,
         (false, true) => net.bedrock.simulation_distance,
-        // Fall back to Java defaults when neither edition is enabled.
-        (false, false) => net.java.simulation_distance,
+        // Java-only, or neither edition enabled (fall back to Java defaults).
+        (true, false) | (false, false) => net.java.simulation_distance,
     }
 }
 
