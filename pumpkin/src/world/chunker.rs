@@ -42,7 +42,7 @@ pub fn get_simulation_distance(server: &crate::server::Server) -> NonZeroU8 {
         }
         (false, true) => net.bedrock.simulation_distance,
         // Java-only, or neither edition enabled (fall back to Java defaults).
-        (true, false) | (false, false) => net.java.simulation_distance,
+        (_, false) => net.java.simulation_distance,
     }
 }
 
