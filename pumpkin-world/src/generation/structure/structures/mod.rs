@@ -1,8 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use pumpkin_data::Block;
-use pumpkin_data::BlockState;
-use pumpkin_data::{Mirror, Rotation};
+use pumpkin_data::fluid::Fluid;
+use pumpkin_data::{
+    Block, BlockState, Mirror, Rotation, block_state_transform::transform_block_state,
+};
 use pumpkin_util::HeightMap;
 use pumpkin_util::{
     BlockDirection,
@@ -38,6 +39,15 @@ pub mod ruined_portal;
 pub mod shipwreck;
 pub mod stronghold;
 pub mod swamp_hut;
+
+#[must_use]
+fn fluid_for_structure_placement(block: &BlockState) -> Option<&'static Fluid> {
+    if let Some(fluid) = Fluid::from_state_id(block.id) {
+        return (fluid.id != Fluid::EMPTY.id).then_some(fluid);
+    }
+
+    block.is_waterlogged().then_some(&Fluid::WATER)
+}
 
 pub trait BlockRandomizer {
     fn get_block(&self, rng: &mut RandomGenerator, is_border: bool) -> &BlockState;
@@ -442,25 +452,22 @@ impl StructurePiece {
             return;
         }
 
-        // // Apply Mirror and Rotation
-        // if self.mirror != BlockMirror::None {
-        //     block = block.mirror(self.mirror);
-        // }
-        // if self.rotation != BlockRotation::None {
-        //     block = block.rotate(self.rotation);
-        // }
+        let block = self.transform_block_for_placement(block);
 
         // World interaction
         world.set_block_state(block_pos.x, block_pos.y, block_pos.z, block);
 
-        // let fluid_state = world.get_fluid_state(&block_pos);
-        // if !fluid_state.is_empty() {
-        //     world.schedule_fluid_tick(&block_pos, fluid_state.fluid(), 0);
-        // }
+        if let Some(fluid) = fluid_for_structure_placement(block) {
+            world.schedule_fluid_tick(block_pos.x, block_pos.y, block_pos.z, fluid);
+        }
 
         // if block.needs_post_processing() {
         //     world.mark_block_for_post_processing(&block_pos);
         // }
+    }
+
+    fn transform_block_for_placement(&self, block: &BlockState) -> &'static BlockState {
+        transform_block_state(block.id, self.mirror, self.rotation)
     }
 
     /// Places a chest with a deferred loot table at the given local coordinates.
@@ -732,5 +739,55 @@ mod structure_random_tests {
                 372_718_864
             ]
         );
+    }
+
+    #[test]
+    fn structure_placement_schedules_fluid_and_waterlogged_states() {
+        assert_eq!(
+            fluid_for_structure_placement(Block::WATER.default_state).map(|fluid| fluid.id),
+            Some(Fluid::WATER.id)
+        );
+        assert!(fluid_for_structure_placement(Block::AIR.default_state).is_none());
+
+        let waterlogged_fence = Block::OAK_FENCE
+            .states
+            .iter()
+            .find(|state| state.is_waterlogged())
+            .expect("oak fence has a waterlogged state");
+        assert_eq!(
+            fluid_for_structure_placement(waterlogged_fence).map(|fluid| fluid.id),
+            Some(Fluid::WATER.id)
+        );
+    }
+
+    #[test]
+    fn structure_piece_rotates_block_states_for_each_facing() {
+        let stairs = BlockState::from_id(
+            Block::OAK_STAIRS
+                .from_properties(&[("facing", "north")])
+                .to_state_id(&Block::OAK_STAIRS),
+        );
+        let mut piece = StructurePiece::new(
+            StructurePieceType::JungleTemple,
+            BlockBox::new(0, 0, 0, 1, 1, 1),
+            0,
+        );
+
+        for (facing, expected) in [
+            (BlockDirection::North, "north"),
+            (BlockDirection::South, "south"),
+            (BlockDirection::West, "west"),
+            (BlockDirection::East, "east"),
+        ] {
+            piece.set_facing(Some(facing));
+            let state = piece.transform_block_for_placement(stairs);
+            let facing = Block::from_state_id(state.id)
+                .properties(state.id)
+                .expect("stairs have properties")
+                .to_props()
+                .into_iter()
+                .find_map(|(key, value)| (key == "facing").then_some(value));
+            assert_eq!(facing, Some(expected));
+        }
     }
 }

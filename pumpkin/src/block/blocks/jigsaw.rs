@@ -185,13 +185,13 @@ const fn mirror_direction(dir: BlockDirection, mirror: Mirror) -> BlockDirection
     match mirror {
         Mirror::None => dir,
         Mirror::LeftRight => match dir {
-            BlockDirection::East => BlockDirection::West,
-            BlockDirection::West => BlockDirection::East,
+            BlockDirection::North => BlockDirection::South,
+            BlockDirection::South => BlockDirection::North,
             _ => dir,
         },
         Mirror::FrontBack => match dir {
-            BlockDirection::North => BlockDirection::South,
-            BlockDirection::South => BlockDirection::North,
+            BlockDirection::East => BlockDirection::West,
+            BlockDirection::West => BlockDirection::East,
             _ => dir,
         },
     }

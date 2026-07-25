@@ -317,6 +317,8 @@ pub mod block_rotation;
 #[cfg(feature = "block")]
 pub mod block_state;
 #[cfg(feature = "block")]
+pub mod block_state_transform;
+#[cfg(feature = "block")]
 mod blocks;
 
 #[cfg(feature = "block")]

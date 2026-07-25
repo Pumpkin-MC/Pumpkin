@@ -1,8 +1,49 @@
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU8, Ordering};
+
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
 use crate::{Block, BlockDirection, BlockId};
+
+const WATERLOGGED_UNKNOWN: u8 = 0;
+const WATERLOGGED_FALSE: u8 = 1;
+const WATERLOGGED_TRUE: u8 = 2;
+
+// Property decoding allocates a boxed property object. Cache this immutable state attribute
+// by global state ID because waterlogged checks run in fluid and generation hot paths.
+static WATERLOGGED_STATE_CACHE: OnceLock<Box<[AtomicU8]>> = OnceLock::new();
+
+pub(crate) fn is_waterlogged_state(id: BlockStateId) -> bool {
+    let cache = WATERLOGGED_STATE_CACHE.get_or_init(|| {
+        (0..usize::from(BlockStateId::STATE_COUNT))
+            .map(|_| AtomicU8::new(WATERLOGGED_UNKNOWN))
+            .collect()
+    });
+    let cached = &cache[usize::from(id.as_u16())];
+    let value = cached.load(Ordering::Relaxed);
+    if value != WATERLOGGED_UNKNOWN {
+        return value == WATERLOGGED_TRUE;
+    }
+
+    let block = Block::from_state_id(id);
+    let is_waterlogged = block.properties(id).is_some_and(|props| {
+        props
+            .to_props()
+            .iter()
+            .any(|(key, value)| key == &"waterlogged" && value == &"true")
+    });
+    cached.store(
+        if is_waterlogged {
+            WATERLOGGED_TRUE
+        } else {
+            WATERLOGGED_FALSE
+        },
+        Ordering::Relaxed,
+    );
+    is_waterlogged
+}
 
 /// Represents a specific state of a block, including its properties and physical behaviors.
 ///
@@ -153,14 +194,7 @@ impl BlockState {
 
     #[must_use]
     pub fn is_waterlogged(&self) -> bool {
-        let block = Block::from_state_id(self.id);
-
-        block.properties(self.id).is_some_and(|props| {
-            props
-                .to_props()
-                .iter()
-                .any(|(k, v)| k == &"waterlogged" && v == &"true")
-        })
+        is_waterlogged_state(self.id)
     }
 
     /// Produce a new state identical to `self` except the waterlogged property

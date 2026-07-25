@@ -19,8 +19,8 @@ use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomImpl, get_seed};
 use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
 use pumpkin_world::generation::proto_chunk::GenerationCache;
-use rand::seq::IndexedRandom;
-use rand::{RngExt, rng};
+use rand::{Rng, RngExt, rng};
+use rustc_hash::FxHashSet;
 use std::fmt;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -34,6 +34,12 @@ pub const NATURAL_SPAWN_CHUNK_RANGE: i32 = 8;
 /// Vanilla `NaturalSpawner.SPAWN_DISTANCE_BLOCK` squared
 /// (`ChunkMap.playerIsCloseEnoughForSpawning` uses 128² = 16384).
 pub const SPAWN_DISTANCE_BLOCK_SQ: f64 = 128.0 * 128.0;
+
+/// Java's `BlockState.isRedstoneConductor` is represented by this cached block-state flag.
+#[must_use]
+fn is_redstone_conductor(state: &BlockState) -> bool {
+    state.is_solid_block()
+}
 
 /// Vanilla `ChunkMap.anyPlayerCloseEnoughForSpawningInternal`.
 #[must_use]
@@ -600,13 +606,14 @@ pub fn spawn_mobs_for_chunk_generation(
     let xo = chunk_x << 4;
     let zo = chunk_z << 4;
 
-    while rand::random::<f32>() < biome.creature_spawn_probability {
-        let Some(spawner_data) = creatures.choose(&mut rand::rng()) else {
+    let mut random = rng();
+    while random.random::<f32>() < biome.creature_spawn_probability {
+        let Some(spawner_data) = choose_weighted_spawner(creatures, &mut random) else {
             continue;
         };
 
         let count = spawner_data.min_count
-            + rand::random_range(0..(1 + spawner_data.max_count - spawner_data.min_count).max(1));
+            + random.random_range(0..(1 + spawner_data.max_count - spawner_data.min_count).max(1));
         let entity_type = EntityType::from_name(
             spawner_data
                 .r#type
@@ -615,8 +622,8 @@ pub fn spawn_mobs_for_chunk_generation(
         )
         .unwrap();
 
-        let mut x = xo + rand::random_range(0..16);
-        let mut z = zo + rand::random_range(0..16);
+        let mut x = xo + random.random_range(0..16);
+        let mut z = zo + random.random_range(0..16);
         let start_x = x;
         let start_z = z;
 
@@ -641,19 +648,19 @@ pub fn spawn_mobs_for_chunk_generation(
                     let entity = from_type(entity_type, spawn_pos_f64, world, Uuid::new_v4());
                     entity
                         .get_entity()
-                        .set_rotation(rand::random::<f32>() * 360., 0.);
+                        .set_rotation(random.random::<f32>() * 360., 0.);
                     world.spawn_entity_non_save(&entity);
                     success = true;
                 }
 
                 // Random jitter for the next mob in the group
-                x += rand::random_range(0..5) - rand::random_range(0..5);
-                z += rand::random_range(0..5) - rand::random_range(0..5);
+                x += random.random_range(0..5) - random.random_range(0..5);
+                z += random.random_range(0..5) - random.random_range(0..5);
 
-                // Keep group within the chunk bounds
-                if x < xo || x >= xo + 16 || z < zo || z >= zo + 16 {
-                    x = start_x;
-                    z = start_z;
+                // Vanilla retries the jitter from the group's origin until it lands in chunk.
+                while x < xo || x >= xo + 16 || z < zo || z >= zo + 16 {
+                    x = start_x + random.random_range(0..5) - random.random_range(0..5);
+                    z = start_z + random.random_range(0..5) - random.random_range(0..5);
                 }
             }
         }
@@ -734,32 +741,50 @@ pub fn spawn_category_for_position(
     };
 
     // Vanilla: if (chunk.getBlockState(start).isRedstoneConductor(...)) return;
-    // Full solid cubes conduct redstone → pack origin invalid.
     let start_state = world.get_block_state(&pos);
-    if start_state.is_solid_block() && start_state.is_full_cube() {
+    if is_redstone_conductor(start_state) {
         return batch_buffer;
     }
 
+    let mut random = rng();
     'group_loop: for _ in 0..3 {
         let mut new_x = pos.0.x;
         let mut new_z = pos.0.z;
 
-        let mut random_group_size = (rng().random::<f32>() * 4.).ceil() as i32;
+        let mut random_group_size = (random.random::<f32>() * 4.).ceil() as i32;
         let mut inc = 0;
         let mut current_spawner = None;
 
-        'spawn_loop: while inc < random_group_size {
-            new_x += rng().random_range(0..6) - rng().random_range(0..6);
-            new_z += rng().random_range(0..6) - rng().random_range(0..6);
+        while inc < random_group_size {
+            new_x += random.random_range(0..6) - random.random_range(0..6);
+            new_z += random.random_range(0..6) - random.random_range(0..6);
             // Vanilla keeps pack Y at yStart (no vertical crawl).
-            let mut new_pos = BlockPos::new(new_x, pos.0.y, new_z);
+            let new_pos = BlockPos::new(new_x, pos.0.y, new_z);
+            let spawn_pos_f64 = Vector3::new(
+                f64::from(new_pos.0.x) + 0.5,
+                f64::from(new_pos.0.y),
+                f64::from(new_pos.0.z) + 0.5,
+            );
+            let player_distance = get_nearest_player(&spawn_pos_f64, &player_positions);
+            if !is_right_distance_to_player_and_spawn_point(
+                world,
+                &new_pos,
+                player_distance,
+                chunk_pos,
+                world_spawn,
+            ) {
+                inc += 1;
+                continue;
+            }
 
             if current_spawner.is_none() {
-                let Some(spawner) = get_random_spawn_mob_at(world, category, &new_pos) else {
-                    break 'spawn_loop;
+                let Some(spawner) =
+                    get_random_spawn_mob_at_with_random(world, category, &new_pos, &mut random)
+                else {
+                    continue 'group_loop;
                 };
                 current_spawner = Some(spawner);
-                random_group_size = rng().random_range(spawner.min_count..=spawner.max_count);
+                random_group_size = random.random_range(spawner.min_count..=spawner.max_count);
             }
 
             let spawner = current_spawner.unwrap();
@@ -773,22 +798,7 @@ pub fn spawn_category_for_position(
                 continue;
             };
 
-            // Vanilla: SpawnPlacements.adjustSpawnPosition only (no cave crawl).
-            new_pos = adjust_spawn_position(world, new_pos, entity_type);
-
-            let spawn_pos_f64 = Vector3::new(
-                f64::from(new_pos.0.x) + 0.5,
-                f64::from(new_pos.0.y),
-                f64::from(new_pos.0.z) + 0.5,
-            );
-
-            let player_distance = get_nearest_player(&spawn_pos_f64, &player_positions);
-            if !is_right_distance_to_player_and_spawn_point(
-                &new_pos,
-                player_distance,
-                chunk_pos,
-                world_spawn,
-            ) {
+            if !spawner_is_in_biome_pool(world.level.get_rough_biome(&new_pos), category, spawner) {
                 inc += 1;
                 continue;
             }
@@ -812,7 +822,7 @@ pub fn spawn_category_for_position(
             let entity = from_type(entity_type, spawn_pos_f64, world, Uuid::new_v4());
             entity
                 .get_entity()
-                .set_rotation(rng().random::<f32>() * 360., 0.);
+                .set_rotation(random.random::<f32>() * 360., 0.);
 
             spawn_cluster_size += 1;
             batch_buffer.push(entity);
@@ -842,6 +852,7 @@ pub fn get_nearest_player(pos: &Vector3<f64>, player_positions: &[Vector3<f64>])
 
 #[must_use]
 pub fn is_right_distance_to_player_and_spawn_point(
+    world: &World,
     pos: &BlockPos,
     distance: f64,
     chunk_pos: &Vector2<i32>,
@@ -859,8 +870,18 @@ pub fn is_right_distance_to_player_and_spawn_point(
     {
         return false;
     }
-    // Keep pack inside the chunk being processed.
-    chunk_pos == &Vector2::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z))
+    let target_chunk = Vector2::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z));
+    can_spawn_entities_in_chunk(*chunk_pos, target_chunk, &world.active_chunks.load())
+}
+
+/// Vanilla permits a pack to spill from its origin chunk into another entity-ticking chunk.
+#[must_use]
+fn can_spawn_entities_in_chunk(
+    origin_chunk: Vector2<i32>,
+    target_chunk: Vector2<i32>,
+    active_chunks: &FxHashSet<Vector2<i32>>,
+) -> bool {
+    origin_chunk == target_chunk || active_chunks.contains(&target_chunk)
 }
 
 #[must_use]
@@ -869,31 +890,90 @@ pub fn get_random_spawn_mob_at(
     category: &'static MobCategory,
     block_pos: &BlockPos,
 ) -> Option<&'static Spawner> {
+    let mut random = rng();
+    get_random_spawn_mob_at_with_random(world, category, block_pos, &mut random)
+}
+
+fn get_random_spawn_mob_at_with_random<R: Rng + ?Sized>(
+    world: &Arc<World>,
+    category: &'static MobCategory,
+    block_pos: &BlockPos,
+    random: &mut R,
+) -> Option<&'static Spawner> {
     // TODO Holder<Biome> holder = level.getBiome(pos);
     let biome = world.level.get_rough_biome(block_pos);
     if category == &MobCategory::WATER_AMBIENT
         && biome.has_tag(&MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS)
-        && rng().random::<f32>() < 0.98f32
+        && random.random::<f32>() < 0.98f32
     {
-        None
-    } else {
-        // TODO isInNetherFortressBounds(pos, level, cetagory, structureManager) then NetherFortressStructure.FORTRESS_ENEMIES
-        // TODO structureManager.getAllStructuresAt(pos); ChunkGenerator::getMobsAt
-        match category.id {
-            id if id == MobCategory::MONSTER.id => biome.spawners.monster,
-            id if id == MobCategory::CREATURE.id => biome.spawners.creature,
-            id if id == MobCategory::AMBIENT.id => biome.spawners.ambient,
-            id if id == MobCategory::AXOLOTLS.id => biome.spawners.axolotls,
-            id if id == MobCategory::UNDERGROUND_WATER_CREATURE.id => {
-                biome.spawners.underground_water_creature
-            }
-            id if id == MobCategory::WATER_CREATURE.id => biome.spawners.water_creature,
-            id if id == MobCategory::WATER_AMBIENT.id => biome.spawners.water_ambient,
-            id if id == MobCategory::MISC.id => biome.spawners.misc,
-            _ => panic!(),
-        }
-        .choose(&mut rng())
+        return None;
     }
+
+    // TODO isInNetherFortressBounds(pos, level, cetagory, structureManager) then NetherFortressStructure.FORTRESS_ENEMIES
+    // TODO structureManager.getAllStructuresAt(pos); ChunkGenerator::getMobsAt
+    choose_weighted_spawner(spawn_pool_for_category(biome, category), random)
+}
+
+fn spawn_pool_for_category(biome: &Biome, category: &'static MobCategory) -> &'static [Spawner] {
+    match category.id {
+        id if id == MobCategory::MONSTER.id => biome.spawners.monster,
+        id if id == MobCategory::CREATURE.id => biome.spawners.creature,
+        id if id == MobCategory::AMBIENT.id => biome.spawners.ambient,
+        id if id == MobCategory::AXOLOTLS.id => biome.spawners.axolotls,
+        id if id == MobCategory::UNDERGROUND_WATER_CREATURE.id => {
+            biome.spawners.underground_water_creature
+        }
+        id if id == MobCategory::WATER_CREATURE.id => biome.spawners.water_creature,
+        id if id == MobCategory::WATER_AMBIENT.id => biome.spawners.water_ambient,
+        id if id == MobCategory::MISC.id => biome.spawners.misc,
+        _ => panic!(),
+    }
+}
+
+fn spawner_is_in_biome_pool(
+    biome: &Biome,
+    category: &'static MobCategory,
+    spawner: &Spawner,
+) -> bool {
+    spawn_pool_for_category(biome, category)
+        .iter()
+        .any(|candidate| {
+            candidate.r#type == spawner.r#type
+                && candidate.min_count == spawner.min_count
+                && candidate.max_count == spawner.max_count
+        })
+}
+
+fn total_spawner_weight(spawners: &[Spawner]) -> Option<u64> {
+    let total = spawners.iter().try_fold(0_u64, |total, spawner| {
+        total.checked_add(u64::from(spawner.weight))
+    })?;
+    (total != 0).then_some(total)
+}
+
+#[must_use]
+fn select_weighted_spawner(spawners: &[Spawner], mut roll: u64) -> Option<&Spawner> {
+    if roll >= total_spawner_weight(spawners)? {
+        return None;
+    }
+
+    for spawner in spawners {
+        let weight = u64::from(spawner.weight);
+        if roll < weight {
+            return Some(spawner);
+        }
+        roll -= weight;
+    }
+
+    None
+}
+
+fn choose_weighted_spawner<'a, R: Rng + ?Sized>(
+    spawners: &'a [Spawner],
+    random: &mut R,
+) -> Option<&'a Spawner> {
+    let total = total_spawner_weight(spawners)?;
+    select_weighted_spawner(spawners, random.random_range(0..total))
 }
 
 pub fn is_valid_spawn_position_for_type(
@@ -949,9 +1029,9 @@ pub fn is_spawn_position_ok(
     match entity_type.spawn_restriction.location {
         SpawnLocation::InLava => world.get_fluid(block_pos).has_tag(&MINECRAFT_LAVA),
         SpawnLocation::InWater => {
-            // TODO !level.getBlockState(blockPos).isRedstoneConductor(level, blockPos)
             let above_state = world.get_block_state(&block_pos.up());
-            world.get_fluid(block_pos).has_tag(&MINECRAFT_WATER) && !above_state.is_full_cube()
+            world.get_fluid(block_pos).has_tag(&MINECRAFT_WATER)
+                && !is_redstone_conductor(above_state)
         }
         SpawnLocation::OnGround => {
             let down = world.get_block_state(&block_pos.down());
@@ -991,7 +1071,7 @@ pub fn is_spawn_position_ok_cache(
 
             state.is_liquid()
                 && Block::from_state_id(state.id).has_tag(&MINECRAFT_WATER)
-                && !above_state.is_full_cube()
+                && !is_redstone_conductor(above_state)
         }
         SpawnLocation::OnGround => {
             let down_pos = block_pos.down().0;
@@ -1071,4 +1151,138 @@ pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
     // TODO: !entityType.isBlockDangerous(blockState)
     // (e.g., preventing spawns inside Sweet Berry Bushes, Wither Roses, or Fire)
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redstone_conductors_are_not_limited_to_full_cubes() {
+        let soul_sand = Block::SOUL_SAND.default_state;
+        assert!(is_redstone_conductor(soul_sand));
+        assert!(!soul_sand.is_full_cube());
+        assert!(!is_redstone_conductor(Block::REDSTONE_BLOCK.default_state));
+    }
+
+    #[test]
+    fn packs_can_cross_into_an_active_neighboring_chunk() {
+        let origin = Vector2::new(0, 0);
+        let neighbor = Vector2::new(1, 0);
+        let mut active_chunks = FxHashSet::default();
+        active_chunks.insert(neighbor);
+
+        assert!(can_spawn_entities_in_chunk(origin, origin, &active_chunks,));
+        assert!(can_spawn_entities_in_chunk(
+            origin,
+            neighbor,
+            &active_chunks,
+        ));
+        assert!(!can_spawn_entities_in_chunk(
+            origin,
+            Vector2::new(2, 0),
+            &active_chunks,
+        ));
+    }
+
+    #[test]
+    fn generated_biome_spawner_weights_are_preserved() {
+        let zombie = Biome::BADLANDS
+            .spawners
+            .monster
+            .iter()
+            .find(|spawner| spawner.r#type == "minecraft:zombie")
+            .expect("badlands has a zombie spawner");
+        assert_eq!(zombie.weight, 95);
+    }
+
+    #[test]
+    fn pack_spawner_must_exist_in_the_destination_biome_pool() {
+        let zombie = Biome::BADLANDS
+            .spawners
+            .monster
+            .iter()
+            .find(|spawner| spawner.r#type == "minecraft:zombie")
+            .expect("badlands has a zombie spawner");
+
+        assert!(spawner_is_in_biome_pool(
+            &Biome::BADLANDS,
+            &MobCategory::MONSTER,
+            zombie,
+        ));
+        assert!(!spawner_is_in_biome_pool(
+            &Biome::WARPED_FOREST,
+            &MobCategory::MONSTER,
+            zombie,
+        ));
+    }
+
+    #[test]
+    fn selects_biome_spawners_by_weight_boundaries() {
+        let spawners = [
+            Spawner {
+                r#type: "minecraft:first",
+                min_count: 1,
+                max_count: 1,
+                weight: 2,
+            },
+            Spawner {
+                r#type: "minecraft:second",
+                min_count: 1,
+                max_count: 1,
+                weight: 3,
+            },
+            Spawner {
+                r#type: "minecraft:third",
+                min_count: 1,
+                max_count: 1,
+                weight: 1,
+            },
+        ];
+
+        assert_eq!(
+            select_weighted_spawner(&spawners, 0).map(|spawner| spawner.r#type),
+            Some("minecraft:first")
+        );
+        assert_eq!(
+            select_weighted_spawner(&spawners, 1).map(|spawner| spawner.r#type),
+            Some("minecraft:first")
+        );
+        assert_eq!(
+            select_weighted_spawner(&spawners, 2).map(|spawner| spawner.r#type),
+            Some("minecraft:second")
+        );
+        assert_eq!(
+            select_weighted_spawner(&spawners, 4).map(|spawner| spawner.r#type),
+            Some("minecraft:second")
+        );
+        assert_eq!(
+            select_weighted_spawner(&spawners, 5).map(|spawner| spawner.r#type),
+            Some("minecraft:third")
+        );
+        assert!(select_weighted_spawner(&spawners, 6).is_none());
+    }
+
+    #[test]
+    fn ignores_zero_weight_biome_spawners() {
+        let spawners = [
+            Spawner {
+                r#type: "minecraft:ignored",
+                min_count: 1,
+                max_count: 1,
+                weight: 0,
+            },
+            Spawner {
+                r#type: "minecraft:selected",
+                min_count: 1,
+                max_count: 1,
+                weight: 1,
+            },
+        ];
+
+        assert_eq!(
+            select_weighted_spawner(&spawners, 0).map(|spawner| spawner.r#type),
+            Some("minecraft:selected")
+        );
+    }
 }

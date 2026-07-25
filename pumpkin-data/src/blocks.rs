@@ -1,5 +1,7 @@
 use crate::{
     BlockState, BlockStateId,
+    block_state::is_waterlogged_state,
+    block_state_transform::transform_block_state,
     tag::{RegistryKey, Tag, Taggable},
 };
 use pumpkin_util::{
@@ -124,12 +126,8 @@ impl FromResourceLocation for &'static Block {
 impl Block {
     #[must_use]
     pub fn is_waterlogged(&self, id: BlockStateId) -> bool {
-        self.properties(id).is_some_and(|properties| {
-            properties
-                .to_props()
-                .into_iter()
-                .any(|(key, value)| key == "waterlogged" && value == "true")
-        })
+        debug_assert_eq!(self.id, Block::from_state_id(id).id);
+        is_waterlogged_state(id)
     }
 
     /// Returns a new [`BlockState`] reference for the given [`BlockStateId`] with the
@@ -178,21 +176,23 @@ impl Block {
     }
 
     #[must_use]
-    pub const fn mirror(
+    pub fn mirror(
         &self,
         id: BlockStateId,
-        _mirror: crate::block_rotation::Mirror,
+        mirror: crate::block_rotation::Mirror,
     ) -> &'static BlockState {
-        BlockState::from_id(id)
+        debug_assert_eq!(self.id, Block::from_state_id(id).id);
+        transform_block_state(id, mirror, crate::block_rotation::Rotation::None)
     }
 
     #[must_use]
-    pub const fn rotate(
+    pub fn rotate(
         &self,
         id: BlockStateId,
-        _rotation: crate::block_rotation::Rotation,
+        rotation: crate::block_rotation::Rotation,
     ) -> &'static BlockState {
-        BlockState::from_id(id)
+        debug_assert_eq!(self.id, Block::from_state_id(id).id);
+        transform_block_state(id, crate::block_rotation::Mirror::None, rotation)
     }
 }
 

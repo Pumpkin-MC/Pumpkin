@@ -204,9 +204,9 @@ pub enum Mirror {
     /// No mirroring
     #[default]
     None,
-    /// Mirror along the X axis (left-right flip when looking north)
+    /// Java's `LEFT_RIGHT` mirror, which flips the Z axis.
     LeftRight,
-    /// Mirror along the Z axis (front-back flip)
+    /// Java's `FRONT_BACK` mirror, which flips the X axis.
     FrontBack,
 }
 
@@ -222,8 +222,8 @@ impl Mirror {
     pub const fn transform_pos(&self, pos: Vector3<i32>, size: Vector3<i32>) -> Vector3<i32> {
         match self {
             Self::None => pos,
-            Self::LeftRight => Vector3::new(size.x - 1 - pos.x, pos.y, pos.z),
-            Self::FrontBack => Vector3::new(pos.x, pos.y, size.z - 1 - pos.z),
+            Self::LeftRight => Vector3::new(pos.x, pos.y, size.z - 1 - pos.z),
+            Self::FrontBack => Vector3::new(size.x - 1 - pos.x, pos.y, pos.z),
         }
     }
 
@@ -239,17 +239,17 @@ impl Mirror {
                 _ => leak_str(facing),
             },
             Self::LeftRight => match facing {
-                "east" => "west",
-                "west" => "east",
-                "north" => "north",
-                "south" => "south",
-                _ => leak_str(facing),
-            },
-            Self::FrontBack => match facing {
                 "north" => "south",
                 "south" => "north",
                 "east" => "east",
                 "west" => "west",
+                _ => leak_str(facing),
+            },
+            Self::FrontBack => match facing {
+                "east" => "west",
+                "west" => "east",
+                "north" => "north",
+                "south" => "south",
                 _ => leak_str(facing),
             },
         }
@@ -260,8 +260,8 @@ impl Mirror {
     pub const fn mirror_block_rotation(&self, rotation: i32) -> i32 {
         match self {
             Self::None => rotation,
-            Self::LeftRight => (16 - rotation) % 16,
-            Self::FrontBack => (8 - rotation + 16) % 16,
+            Self::LeftRight => (8 - rotation + 16) % 16,
+            Self::FrontBack => (16 - rotation) % 16,
         }
     }
 
@@ -271,16 +271,16 @@ impl Mirror {
         match self {
             Self::None => rotation,
             Self::LeftRight => match rotation {
-                Rotation::None => Rotation::None,
-                Rotation::Clockwise90 => Rotation::CounterClockwise90,
-                Rotation::Rotate180 => Rotation::Rotate180,
-                Rotation::CounterClockwise90 => Rotation::Clockwise90,
-            },
-            Self::FrontBack => match rotation {
                 Rotation::None => Rotation::Rotate180,
                 Rotation::Clockwise90 => Rotation::Clockwise90,
                 Rotation::Rotate180 => Rotation::None,
                 Rotation::CounterClockwise90 => Rotation::CounterClockwise90,
+            },
+            Self::FrontBack => match rotation {
+                Rotation::None => Rotation::None,
+                Rotation::Clockwise90 => Rotation::CounterClockwise90,
+                Rotation::Rotate180 => Rotation::Rotate180,
+                Rotation::CounterClockwise90 => Rotation::Clockwise90,
             },
         }
     }
@@ -290,4 +290,42 @@ impl Mirror {
 /// This is used for non-standard property values that aren't covered by static strings.
 pub fn leak_str(s: &str) -> &'static str {
     s.to_string().leak()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mirrors_positions_and_facings_with_java_axes() {
+        let size = Vector3::new(5, 3, 7);
+        let pos = Vector3::new(1, 2, 2);
+
+        assert_eq!(
+            Mirror::LeftRight.transform_pos(pos, size),
+            Vector3::new(1, 2, 4)
+        );
+        assert_eq!(
+            Mirror::FrontBack.transform_pos(pos, size),
+            Vector3::new(3, 2, 2)
+        );
+        assert_eq!(Mirror::LeftRight.mirror_facing("north"), "south");
+        assert_eq!(Mirror::LeftRight.mirror_facing("east"), "east");
+        assert_eq!(Mirror::FrontBack.mirror_facing("north"), "north");
+        assert_eq!(Mirror::FrontBack.mirror_facing("east"), "west");
+    }
+
+    #[test]
+    fn mirrors_block_rotation_with_java_formulas() {
+        assert_eq!(Mirror::LeftRight.mirror_block_rotation(3), 5);
+        assert_eq!(Mirror::FrontBack.mirror_block_rotation(3), 13);
+        assert_eq!(
+            Mirror::LeftRight.get_rotation(Rotation::None),
+            Rotation::Rotate180
+        );
+        assert_eq!(
+            Mirror::FrontBack.get_rotation(Rotation::Clockwise90),
+            Rotation::CounterClockwise90
+        );
+    }
 }
