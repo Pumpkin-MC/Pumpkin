@@ -159,12 +159,21 @@ impl BreathManager {
             pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Short(air as i16),
         );
 
+        // 1.21.x: TrackedData::AIR + MetaDataType::INTEGER, Has to be INTEGER, not INT, because the type id is -1
+        // 26.x:   TrackedData::AIR_SUPPLY_ID + MetaDataType::INT
         player.get_entity().send_meta_data(
-            &[Metadata::new(
-                TrackedData::AIR_SUPPLY_ID,
-                MetaDataType::INT,
-                VarInt(air),
-            )],
+            &[
+                Metadata::new(
+                    TrackedData::AIR_SUPPLY_ID,
+                    MetaDataType::INT,
+                    VarInt(air),
+                ),
+                Metadata::new(
+                    TrackedData::AIR,
+                    MetaDataType::INTEGER,
+                    VarInt(air),
+                ),
+            ],
             Some(&bedrock_meta),
         );
     }
