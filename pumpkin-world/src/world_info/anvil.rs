@@ -71,6 +71,29 @@ fn write_level_dat(level: &LevelDat, level_folder: &Path) -> Result<(), WorldInf
     Ok(())
 }
 
+fn restore_level_dat_from_backup(
+    current_path: &Path,
+    backup_path: &Path,
+) -> Result<(), WorldInfoError> {
+    let corrupted_path = current_path.with_file_name("level.dat_corrupted");
+
+    if current_path.exists() {
+        if corrupted_path.exists() {
+            fs::remove_file(&corrupted_path)?;
+        }
+        fs::rename(current_path, &corrupted_path)?;
+    }
+
+    if let Err(error) = fs::rename(backup_path, current_path) {
+        if !current_path.exists() && corrupted_path.exists() {
+            let _ = fs::rename(&corrupted_path, current_path);
+        }
+        return Err(error.into());
+    }
+
+    Ok(())
+}
+
 fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
     // Define a struct that only has the data version. This is necessary because if a user tries to
     // load a world with different data, they will get a generic "Failed to deserialize level.dat error".
@@ -142,6 +165,7 @@ impl WorldInfoReader for AnvilLevelInfo {
             ) => return Err(error),
             Err(primary_error) => match read_level_dat(&backup_path) {
                 Ok(data) => {
+                    restore_level_dat_from_backup(&path, &backup_path)?;
                     warn!(
                         error = %primary_error,
                         current = %path.display(),
@@ -295,7 +319,10 @@ mod test {
         world_info::{DataPacks, LevelData, WorldGenSettings, WorldInfoError, WorldVersion},
     };
 
-    use super::{AnvilLevelInfo, LEVEL_DAT_FILE_NAME, LevelDat, WorldInfoReader, WorldInfoWriter};
+    use super::{
+        AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME, LevelDat, WorldInfoReader,
+        WorldInfoWriter,
+    };
 
     #[test]
     fn preserve_level_dat_seed() {
@@ -313,6 +340,36 @@ mod test {
         let data = AnvilLevelInfo.read_world_info(&world_path).unwrap();
 
         assert_eq!(data.world_gen_settings.seed, seed);
+    }
+
+    #[test]
+    fn restores_valid_backup_after_primary_level_dat_is_corrupted() {
+        let temp_dir = TempDir::new().unwrap();
+        let world_path = temp_dir.path().join("world");
+
+        let mut backup_data = LevelData::default(Seed(1337));
+        backup_data.level_name = "backup".to_string();
+        let mut primary_data = LevelData::default(Seed(42));
+        primary_data.level_name = "primary".to_string();
+        AnvilLevelInfo
+            .write_world_info(&backup_data, &world_path)
+            .unwrap();
+        AnvilLevelInfo
+            .write_world_info(&primary_data, &world_path)
+            .unwrap();
+
+        fs::write(
+            world_path.join(LEVEL_DAT_FILE_NAME),
+            b"corrupted level data",
+        )
+        .unwrap();
+
+        let data = AnvilLevelInfo.read_world_info(&world_path).unwrap();
+
+        assert_eq!(data.level_name, "backup");
+        assert!(world_path.join("level.dat_corrupted").is_file());
+        assert!(world_path.join(LEVEL_DAT_FILE_NAME).is_file());
+        assert!(!world_path.join(LEVEL_DAT_BACKUP_FILE_NAME).exists());
     }
 
     static LEVEL_DAT: LazyLock<LevelDat> = LazyLock::new(|| LevelDat {

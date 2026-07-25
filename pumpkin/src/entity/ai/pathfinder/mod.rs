@@ -1,4 +1,4 @@
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::entity::{ai::control::MoveControlTrait, living::LivingEntity};
 
@@ -157,7 +157,10 @@ impl Navigator {
         destination: Vector3<f64>,
     ) -> Option<Path> {
         let start_pos_f = entity.entity.pos.load();
-        let start_block_vec = start_pos_f.to_i32();
+        // Vanilla `Entity.blockPosition()` and `BlockPos.containing` floor world
+        // coordinates. Rounding shifts every `.5` waypoint into the next block,
+        // which makes a path miss the intended ledge or choose a diagonal route.
+        let start_block_vec = start_pos_f.floor_to_i32();
         let mob_position = Vector3::new(start_block_vec.x, start_block_vec.y, start_block_vec.z);
 
         let context = PathfindingContext::new(mob_position, entity.entity.world.load_full());
@@ -194,7 +197,7 @@ impl Navigator {
 
         let mut start_node = self.evaluator.get_start().await?;
 
-        let mut target = self.evaluator.get_target(destination.to_block_pos());
+        let mut target = self.evaluator.get_target(BlockPos::floored_v(destination));
 
         start_node.g = 0.0;
         let start_dist = start_node.distance(&target);
@@ -458,7 +461,7 @@ impl Navigator {
     }
 
     fn get_ground_y(entity: &LivingEntity, target: Vector3<f64>) -> f64 {
-        let target_block = target.to_block_pos();
+        let target_block = BlockPos::floored_v(target);
         let below = target_block.down();
         let state = entity.entity.world.load().get_block_state(&below);
         if state.is_air() {
@@ -486,7 +489,7 @@ impl Navigator {
         // Iron golem etc.: never direct-walk into water when water is impassable.
         if self.avoids_water() {
             let world = entity.entity.world.load();
-            let dest_block = goal.destination.to_block_pos();
+            let dest_block = BlockPos::floored_v(goal.destination);
             let is_water = |p: pumpkin_util::math::position::BlockPos| {
                 use pumpkin_data::tag::Taggable;
                 let id = world.get_block_state_id(&p);
@@ -508,7 +511,7 @@ impl Navigator {
                     .signum()
                     .clamp(-1.0, 1.0),
             );
-            let ahead_block = ahead.to_block_pos();
+            let ahead_block = BlockPos::floored_v(ahead);
             if is_water(ahead_block) || is_water(ahead_block.down()) {
                 entity.clear_speed();
                 Self::stop_move_control(move_control);
@@ -537,7 +540,7 @@ impl Navigator {
         }
         self.current_path.as_ref().is_some_and(|p| {
             let path_target = p.get_target();
-            let goal_target = goal.destination.to_i32();
+            let goal_target = goal.destination.floor_to_i32();
             let dx = f64::from(path_target.x - goal_target.x);
             let dy = f64::from(path_target.y - goal_target.y);
             let dz = f64::from(path_target.z - goal_target.z);
