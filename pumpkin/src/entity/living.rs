@@ -40,8 +40,8 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::{
-    AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
-    EquipmentSlot, EquippableImpl, FoodImpl,
+    AttributeModifiersImpl, BlocksAttacksImpl, ConsumableImpl, ConsumeEffect, DeathProtectionImpl,
+    EnchantmentsImpl, EquipmentSlot, EquippableImpl, FoodImpl, IDSet, IdOr,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -2695,6 +2695,77 @@ impl EntityBase for LivingEntity {
                         let effects = crate::item::potion::PotionContents::read_potion_effects(item);
                         crate::item::potion::PotionContents::apply_effects_to(self, effects, 1.0, crate::item::potion::PotionApplicationSource::Normal).await;
                         is_potion = true;
+                    }
+
+                    // Handle consumable component effects (milk clears all effects,
+                    // honey bottles remove poison, etc.)
+                    if let Some(consumable) = item.get_data_component::<ConsumableImpl>() {
+                        for consume_effect in &*consumable.effects {
+                            match consume_effect {
+                                ConsumeEffect::ClearAllEffects => {
+                                    if let Some(player) = caller.get_player() {
+                                        player.remove_all_effects().await;
+                                    } else {
+                                        let effect_types: Vec<&'static StatusEffect> = self
+                                            .active_effects
+                                            .lock()
+                                            .await
+                                            .keys()
+                                            .copied()
+                                            .collect();
+                                        for effect_type in effect_types {
+                                            self.remove_effect(effect_type).await;
+                                        }
+                                    }
+                                }
+                                ConsumeEffect::RemoveEffects(id_set) => {
+                                    if let IDSet::IDs(ids) = id_set {
+                                        for effect_type in ids.iter() {
+                                            self.remove_effect(effect_type).await;
+                                        }
+                                    }
+                                }
+                                ConsumeEffect::ApplyEffects((effects, probability)) => {
+                                    if rand::rng().random::<f32>() < *probability {
+                                        let resolved = effects
+                                            .iter()
+                                            .filter_map(|instance| {
+                                                StatusEffect::from_minecraft_name(
+                                                    &instance.effect_id,
+                                                )
+                                                .map(|effect_type| {
+                                                    (
+                                                        effect_type,
+                                                        instance.duration,
+                                                        instance.amplifier as u8,
+                                                        instance.ambient,
+                                                        instance.show_particles,
+                                                        instance.show_icon,
+                                                    )
+                                                })
+                                            })
+                                            .collect();
+                                        crate::item::potion::PotionContents::apply_effects_to(
+                                            self,
+                                            resolved,
+                                            1.0,
+                                            crate::item::potion::PotionApplicationSource::Normal,
+                                        )
+                                        .await;
+                                    }
+                                }
+                                ConsumeEffect::TeleportRandomly(_) => {
+                                    warn!("ConsumeEffect::TeleportRandomly is not yet implemented");
+                                }
+                                ConsumeEffect::PlaySound(sound) => {
+                                    if let IdOr::Id(sound) = sound {
+                                        let world = self.entity.world.load();
+                                        let pos = self.entity.pos.load();
+                                        world.play_sound(*sound, SoundCategory::Players, &pos);
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     if let Some(player) = caller.get_player() {
