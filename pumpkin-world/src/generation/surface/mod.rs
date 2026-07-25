@@ -367,6 +367,33 @@ pub const fn test_water_material(
                 + context.run_depth * condition.surface_depth_multiplier
 }
 
+pub fn test_vertical_gradient(
+    condition: &VerticalGradientMaterialCondition,
+    context: &MaterialRuleContext,
+) -> bool {
+    let true_at = condition
+        .true_at_and_below
+        .get_y(context.min_y as i16, context.height);
+    let false_at = condition
+        .false_at_and_above
+        .get_y(context.min_y as i16, context.height);
+
+    let block_y = context.block_pos_y;
+    if block_y <= true_at {
+        return true;
+    }
+    if block_y >= false_at {
+        return false;
+    }
+    let splitter = context
+        .random_deriver
+        .from_lo_and_hi(condition.random_lo, condition.random_hi)
+        .next_splitter();
+    let mapped = pumpkin_util::math::map(block_y as f32, true_at as f32, false_at as f32, 1.0, 0.0);
+    let mut random = splitter.split_pos(context.block_pos_x, block_y, context.block_pos_z);
+    random.next_f32() < mapped
+}
+
 #[cfg(test)]
 mod tests {
     use pumpkin_util::random::xoroshiro128::Xoroshiro;
@@ -410,31 +437,4 @@ mod tests {
         context.sample_noise(&DoublePerlinNoiseParameters::GRAVEL);
         assert_eq!(context.noise_samplers.iter().flatten().count(), 2);
     }
-}
-
-pub fn test_vertical_gradient(
-    condition: &VerticalGradientMaterialCondition,
-    context: &MaterialRuleContext,
-) -> bool {
-    let true_at = condition
-        .true_at_and_below
-        .get_y(context.min_y as i16, context.height);
-    let false_at = condition
-        .false_at_and_above
-        .get_y(context.min_y as i16, context.height);
-
-    let block_y = context.block_pos_y;
-    if block_y <= true_at {
-        return true;
-    }
-    if block_y >= false_at {
-        return false;
-    }
-    let splitter = context
-        .random_deriver
-        .from_lo_and_hi(condition.random_lo, condition.random_hi)
-        .next_splitter();
-    let mapped = pumpkin_util::math::map(block_y as f32, true_at as f32, false_at as f32, 1.0, 0.0);
-    let mut random = splitter.split_pos(context.block_pos_x, block_y, context.block_pos_z);
-    random.next_f32() < mapped
 }
