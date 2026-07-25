@@ -20,8 +20,6 @@ use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::random::xoroshiro128::Xoroshiro;
-use pumpkin_util::random::{RandomImpl, get_seed};
 use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
 use pumpkin_world::generation::proto_chunk::GenerationCache;
 use rand::{Rng, RngExt, rng};
@@ -579,10 +577,10 @@ pub fn get_random_pos_within(
     chunk_pos: &Vector2<i32>,
     chunk: &Arc<ChunkData>,
 ) -> BlockPos {
-    let mut rng = Xoroshiro::from_seed(get_seed());
+    let mut rng = rng();
 
-    let x = (chunk_pos.x << 4) + rng.next_bounded_i32(16);
-    let z = (chunk_pos.y << 4) + rng.next_bounded_i32(16);
+    let x = (chunk_pos.x << 4) + rng.random_range(0..16);
+    let z = (chunk_pos.y << 4) + rng.random_range(0..16);
     let top_empty_y = chunk.heightmap.lock().unwrap().get(
         ChunkHeightmapType::WorldSurface,
         x,
@@ -590,7 +588,7 @@ pub fn get_random_pos_within(
         chunk.section.min_y,
     ) + 1;
     let top = top_empty_y.max(min_y + 1);
-    let y = rng.next_inbetween_i32(min_y, top);
+    let y = rng.random_range(min_y..=top);
     BlockPos::new(x, y, z)
 }
 
