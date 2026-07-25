@@ -89,6 +89,16 @@ mod tests {
     }
 
     #[test]
+    fn dolphin_swims_with_nearby_swimming_players() {
+        let src = include_str!("../passive/dolphin.rs");
+        assert!(src.contains("DolphinSwimWithPlayerGoal::new(4.0)"));
+        assert!(
+            !src.contains("fn mob_tick"),
+            "Dolphin's Grace must be owned by the swim-with-player goal"
+        );
+    }
+
+    #[test]
     fn piglin_brute_does_not_flee_zombified() {
         let src = include_str!("../mob/piglin_brute.rs");
         assert!(

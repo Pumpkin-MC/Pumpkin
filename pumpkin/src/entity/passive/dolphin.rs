@@ -1,22 +1,20 @@
-use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::potion::Effect;
-use pumpkin_data::{effect::StatusEffect, sound::Sound, sound::SoundCategory};
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, NBTStorage,
     ai::goal::{
-        avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        avoid_entity::AvoidEntityGoal, dolphin_swim_with_player::DolphinSwimWithPlayerGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     ai::pathfinder::node::PathType,
     mob::{Mob, MobEntity},
 };
 
-/// Dolphin — revenge + periodic Dolphin's Grace for nearby swimming players.
+/// Dolphin — water movement, player swimming support, and guardian avoidance.
 pub struct DolphinEntity {
     pub mob_entity: MobEntity,
 }
@@ -40,8 +38,9 @@ impl DolphinEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // Vanilla 26.2 Dolphin.registerGoals (treasure/swim-with-player TODO).
+            // Vanilla 26.2 Dolphin.registerGoals (treasure/air/water TODO).
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(2, DolphinSwimWithPlayerGoal::new(4.0));
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(4, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(
@@ -74,40 +73,6 @@ impl DolphinEntity {
 
         mob_arc
     }
-
-    async fn grant_grace(&self) {
-        let living = &self.mob_entity.living_entity;
-        if !living.is_alive() {
-            return;
-        }
-        let world = living.entity.world.load();
-        let pos = living.entity.pos.load();
-        for player in world.get_nearby_players(pos, 10.0) {
-            if player.is_spectator() || player.is_creative() {
-                continue;
-            }
-            // Only while player is in water.
-            if !player
-                .get_entity()
-                .touching_water
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
-                continue;
-            }
-            player
-                .add_effect(Effect {
-                    effect_type: &StatusEffect::DOLPHINS_GRACE,
-                    duration: 100, // 5s refresh
-                    amplifier: 0,
-                    ambient: false,
-                    show_particles: true,
-                    show_icon: true,
-                    blend: false,
-                })
-                .await;
-        }
-        let _ = (Sound::EntityDolphinAmbient, SoundCategory::Neutral);
-    }
 }
 
 impl NBTStorage for DolphinEntity {}
@@ -115,14 +80,5 @@ impl NBTStorage for DolphinEntity {}
 impl Mob for DolphinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
-    }
-
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let age = self.mob_entity.living_entity.entity.age.load(Relaxed);
-            if age % 20 == 0 {
-                self.grant_grace().await;
-            }
-        })
     }
 }
