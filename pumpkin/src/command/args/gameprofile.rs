@@ -260,18 +260,14 @@ async fn resolve_profiles_from_token(
         }
     }
 
-    if let Ok(uuid) = offline_uuid(raw_arg.value) {
-        let profile = profile_from_uuid_name(uuid, raw_arg.value.to_string());
-        server
-            .data
-            .user_cache
-            .write()
-            .await
-            .upsert(profile.id, profile.name.clone());
-        return Ok(vec![profile]);
-    }
-
-    Err(syntax_player_unknown(raw_arg))
+    let profile = profile_from_uuid_name(offline_uuid(raw_arg.value), raw_arg.value.to_string());
+    server
+        .data
+        .user_cache
+        .write()
+        .await
+        .upsert(profile.id, profile.name.clone());
+    Ok(vec![profile])
 }
 
 async fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<GameProfile> {

@@ -77,7 +77,7 @@ impl JavaClient {
             let id = if server.advanced_config.networking.java.online_mode {
                 login_start.uuid
             } else {
-                offline_uuid(&login_start.name).expect("This is very not safe and bad")
+                offline_uuid(&login_start.name)
             };
 
             let profile = GameProfile {

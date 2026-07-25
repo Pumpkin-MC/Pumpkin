@@ -69,6 +69,7 @@ rsa.workspace = true
 
 # authentication
 ureq = { workspace = true, features = ["json"] }
+md5.workspace = true
 
 sha1.workspace = true
 
