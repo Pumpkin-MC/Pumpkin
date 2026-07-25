@@ -325,7 +325,9 @@ impl WalkNodeEvaluator {
         self.base
             .context
             .as_mut()
-            .map_or(PathType::Blocked, |context| context.get_path_type_from_state(pos))
+            .map_or(PathType::Blocked, |context| {
+                context.get_path_type_from_state(pos)
+            })
     }
 
     fn has_collisions(&mut self, center: Vector3<i32>) -> bool {

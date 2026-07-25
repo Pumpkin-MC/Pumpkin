@@ -493,7 +493,10 @@ mod test {
         let decoded: LevelDat =
             from_bytes(Cursor::new(serialized)).expect("Failed to decode level.dat");
 
-        assert_eq!(decoded.data.enabled_features, level_dat.data.enabled_features);
+        assert_eq!(
+            decoded.data.enabled_features,
+            level_dat.data.enabled_features
+        );
     }
 
     #[test]

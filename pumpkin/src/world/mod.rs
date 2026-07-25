@@ -594,11 +594,7 @@ impl World {
 
     /// Enqueues block events reliably on the same FIFO queue as block state updates.
     async fn enqueue_synced_block_event(&self, pos: BlockPos, packet: &CBlockEvent) {
-        let pos = Vector3::new(
-            f64::from(pos.0.x),
-            f64::from(pos.0.y),
-            f64::from(pos.0.z),
-        );
+        let pos = Vector3::new(f64::from(pos.0.x), f64::from(pos.0.y), f64::from(pos.0.z));
         let recipients = self
             .players
             .load()

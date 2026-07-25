@@ -2,10 +2,7 @@ use std::sync::atomic::Ordering;
 use std::{pin::Pin, sync::Arc};
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{
-    Block, BlockDirection, BlockState,
-    block_properties::BlockProperties,
-};
+use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::BlockProperties};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
@@ -298,16 +295,13 @@ fn read_vanilla_block_state(nbt: &NbtCompound) -> Option<&'static BlockState> {
         .find(|state| {
             block.properties(state.id).is_some_and(|state_properties| {
                 state_properties.to_props().iter().all(|(name, value)| {
-                    properties
-                        .get_string(name)
-                        .or_else(|| {
-                            default_properties
-                                .iter()
-                                .find_map(|(default_name, default_value)| {
-                                    (*default_name == *name).then_some(*default_value)
-                                })
-                        })
-                        == Some(*value)
+                    properties.get_string(name).or_else(|| {
+                        default_properties
+                            .iter()
+                            .find_map(|(default_name, default_value)| {
+                                (*default_name == *name).then_some(*default_value)
+                            })
+                    }) == Some(*value)
                 })
             })
         })

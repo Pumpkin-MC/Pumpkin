@@ -100,8 +100,7 @@ impl MoveControlTrait for MoveControl {
                 && state
                     .get_block_collision_shapes()
                     .any(|shape| pos.y < shape.max.y + f64::from(block_pos.0.y));
-            let target_requires_jump = yd > step_height
-                && xd * xd + zd * zd < max_jump_distance_sq;
+            let target_requires_jump = yd > step_height && xd * xd + zd * zd < max_jump_distance_sq;
 
             if target_requires_jump || collision_requires_jump {
                 living_entity.jumping.store(true, Ordering::SeqCst);
