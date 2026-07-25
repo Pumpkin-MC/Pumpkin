@@ -1491,6 +1491,7 @@ impl World {
         for pos in active_chunks.iter() {
             if let Some(chunk) = loaded_chunks.get(pos) {
                 chunk.inhabited_time.fetch_add(1, Relaxed);
+                chunk.dirty.store(true, Relaxed);
             }
         }
     }
