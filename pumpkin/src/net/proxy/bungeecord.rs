@@ -14,8 +14,6 @@ pub enum BungeeCordError {
     FailedParseUUID,
     #[error("Failed to parse properties")]
     FailedParseProperties,
-    #[error("Failed to make offline UUID")]
-    FailedMakeOfflineUUID,
 }
 
 /// Attempts to login a player via `BungeeCord`.
@@ -51,7 +49,7 @@ pub async fn bungeecord_login(
         Some(uuid_str) if !uuid_str.is_empty() => uuid_str
             .parse()
             .map_err(|_| BungeeCordError::FailedParseUUID)?,
-        _ => offline_uuid(&name).map_err(|_| BungeeCordError::FailedMakeOfflineUUID)?,
+        _ => offline_uuid(&name),
     };
 
     let properties = match parts.next() {

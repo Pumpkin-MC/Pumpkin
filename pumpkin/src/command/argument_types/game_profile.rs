@@ -86,18 +86,17 @@ impl GameProfileResult {
                         }
                         _ => Err(Self::unknown_player_syntax_error()),
                     };
-                } else if let Ok(uuid) = offline_uuid(name) {
-                    let profile = Self::profile_from_uuid_name(uuid, name.clone());
-                    server
-                        .data
-                        .user_cache
-                        .write()
-                        .await
-                        .upsert(profile.id, profile.name.clone());
-                    return Ok(vec![profile]);
                 }
 
-                return Err(Self::unknown_player_syntax_error());
+                let uuid = offline_uuid(name);
+                let profile = Self::profile_from_uuid_name(uuid, name.clone());
+                server
+                    .data
+                    .user_cache
+                    .write()
+                    .await
+                    .upsert(profile.id, profile.name.clone());
+                return Ok(vec![profile]);
             }
             Self::Uuid(uuid) => {
                 let server = source.server();

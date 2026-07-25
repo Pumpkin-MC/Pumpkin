@@ -21,11 +21,10 @@ use pumpkin_util::{
 };
 use serde::{Deserialize, Deserializer};
 use sha1::Digest;
-use sha2::Sha256;
 use tokio::task::JoinHandle;
 
 use thiserror::Error;
-use uuid::Uuid;
+use uuid::{Builder, Uuid};
 pub mod authentication;
 pub mod bedrock;
 pub mod java;
@@ -63,8 +62,11 @@ where
     Ok(ArcSwap::new(Arc::new(v)))
 }
 
-pub fn offline_uuid(username: &str) -> Result<Uuid, uuid::Error> {
-    Uuid::from_slice(&Sha256::digest(username)[..16])
+/// Returns the UUID Vanilla assigns to a player when authentication is disabled.
+#[must_use]
+pub fn offline_uuid(username: &str) -> Uuid {
+    let name = format!("OfflinePlayer:{username}");
+    Builder::from_md5_bytes(*md5::compute(name.as_bytes())).into_uuid()
 }
 
 /// Represents a player's configuration settings.
@@ -517,7 +519,18 @@ pub enum DisconnectReason {
 
 #[cfg(test)]
 mod tests {
-    use crate::net::is_valid_player_name;
+    use crate::net::{is_valid_player_name, offline_uuid};
+    use uuid::Uuid;
+
+    #[test]
+    fn offline_uuid_matches_vanilla() {
+        assert_eq!(
+            offline_uuid("Notch"),
+            "b50ad385-829d-3141-a216-7e7d7539ba7f"
+                .parse::<Uuid>()
+                .unwrap()
+        );
+    }
 
     /// Test case for a standard, valid English name at max length.
     #[test]
