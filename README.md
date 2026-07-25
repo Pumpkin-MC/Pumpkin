@@ -12,7 +12,7 @@
 and customizable experience. It prioritizes performance and player enjoyment while adhering to the core mechanics of the game.
 <div align="center">
 
-![Pumpkin Chunk Loading](./assets/pumpkin_chunk_loading.gif)
+![Pumpkin Chunk Loading](./assets/pumpkin-chunk-loading.webp)
 
 </div>
 
