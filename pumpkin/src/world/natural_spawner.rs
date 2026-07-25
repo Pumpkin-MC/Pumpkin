@@ -85,7 +85,15 @@ pub fn any_player_close_enough_for_spawning(world: &World, chunk_pos: Vector2<i3
 /// (`FixedPlayerDistanceChunkTracker` radius 8 around any player chunk).
 #[must_use]
 pub fn is_natural_spawn_candidate(world: &World, chunk_pos: Vector2<i32>) -> bool {
+    let spectators_generate_chunks = world
+        .level_info
+        .load()
+        .game_rules
+        .spectators_generate_chunks;
     for player in world.players.load().iter() {
+        if player.gamemode.load() == GameMode::Spectator && !spectators_generate_chunks {
+            continue;
+        }
         let center = player.get_entity().chunk_pos.load();
         if (chunk_pos.x - center.x)
             .abs()

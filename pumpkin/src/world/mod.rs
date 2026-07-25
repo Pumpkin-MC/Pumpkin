@@ -378,7 +378,14 @@ impl World {
         // candidate set uses a fixed radius-8 tracker (independent of sim dist).
         let mut active_chunks = FxHashSet::default();
         let mut natural_spawn_chunks = FxHashSet::default();
+        let spectators_generate_chunks =
+            self.level_info.load().game_rules.spectators_generate_chunks;
         for player in self.players.load().iter() {
+            // Match ChunkMap.skipPlayer: spectators only drive chunk loading and
+            // the natural-spawn chunk tracker when this rule permits it.
+            if player.gamemode.load() == GameMode::Spectator && !spectators_generate_chunks {
+                continue;
+            }
             let center = player.get_entity().chunk_pos.load();
             let simulation_distance =
                 std::num::NonZeroI32::from(get_simulation_distance(player)).get();
