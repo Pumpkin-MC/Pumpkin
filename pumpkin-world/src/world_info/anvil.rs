@@ -1,5 +1,5 @@
 use std::{
-    fs::File,
+    fs::{self, File},
     io::{Cursor, Read},
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
@@ -143,6 +143,8 @@ impl WorldInfoWriter for AnvilLevelInfo {
         info: &LevelData,
         level_folder: &Path,
     ) -> Result<(), WorldInfoError> {
+        fs::create_dir_all(level_folder)?;
+
         let start = SystemTime::now();
         let since_the_epoch = start
             .duration_since(UNIX_EPOCH)
@@ -155,10 +157,10 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
         let world_info_file = File::create(path)?;
 
-        let compression_writer = GzEncoder::new(world_info_file, Compression::best());
-        // TODO: Proper error handling
-        pumpkin_nbt::to_bytes(&level, compression_writer)
-            .expect("Failed to write level.dat to disk");
+        let mut compression_writer = GzEncoder::new(world_info_file, Compression::best());
+        pumpkin_nbt::to_bytes(&level, &mut compression_writer)
+            .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
+        compression_writer.finish()?;
 
         let data_version = info.data_version;
 
@@ -255,12 +257,13 @@ mod test {
         let data = LevelData::default(Seed(1337));
 
         let temp_dir = TempDir::new().unwrap();
+        let world_path = temp_dir.path().join("world");
 
-        AnvilLevelInfo
-            .write_world_info(&data, temp_dir.path())
-            .unwrap();
+        AnvilLevelInfo.write_world_info(&data, &world_path).unwrap();
 
-        let data = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
+        assert!(world_path.join(LEVEL_DAT_FILE_NAME).is_file());
+
+        let data = AnvilLevelInfo.read_world_info(&world_path).unwrap();
 
         assert_eq!(data.world_gen_settings.seed, seed);
     }
