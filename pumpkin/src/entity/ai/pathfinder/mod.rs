@@ -97,6 +97,21 @@ const NODE_REACH_XZ: f64 = 0.5;
 const NODE_REACH_Y: f64 = 1.0;
 const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 
+fn should_relax_node(tentative_g: f32, known_g: Option<f32>) -> bool {
+    known_g.is_none_or(|known_g| tentative_g < known_g)
+}
+
+fn known_node_g(
+    open_set: &BinaryHeap,
+    closed_set: &HashMap<Vector3<i32>, Node>,
+    candidate: &Node,
+) -> Option<f32> {
+    open_set
+        .get_node(candidate)
+        .map(|node| node.g)
+        .or_else(|| closed_set.get(&candidate.pos.0).map(|node| node.g))
+}
+
 impl Navigator {
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
         self.is_idle.store(false, Ordering::Relaxed);
@@ -220,13 +235,11 @@ impl Navigator {
                 let tentative_g = current.g + step_cost + neighbor.cost_malus;
 
                 let in_heap = self.open_set.contains(&neighbor);
-                if neighbor.walked_dist < follow_range
-                    && (!in_heap
-                        || self
-                            .open_set
-                            .get_node(&neighbor)
-                            .is_some_and(|existing| tentative_g < existing.g))
-                {
+                let known_g = known_node_g(&self.open_set, &closed_set, &neighbor);
+                if neighbor.walked_dist < follow_range && should_relax_node(tentative_g, known_g) {
+                    // A lower-cost route may reopen a closed node. Higher-cost routes must not
+                    // overwrite its predecessor, or reconstruction can form a cycle.
+                    closed_set.remove(&neighbor.pos.0);
                     neighbor.came_from = Some(current.pos.0);
                     neighbor.g = tentative_g;
                     let dist_to_target = neighbor.distance(&target);
@@ -454,5 +467,33 @@ impl Navigator {
     #[must_use]
     pub fn is_idle(&self) -> bool {
         self.is_idle.load(Ordering::Relaxed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BinaryHeap, HashMap, Node, known_node_g, should_relax_node};
+
+    #[test]
+    fn only_relaxes_unseen_or_lower_cost_nodes() {
+        assert!(should_relax_node(2.0, None));
+        assert!(should_relax_node(2.0, Some(3.0)));
+        assert!(!should_relax_node(2.0, Some(2.0)));
+        assert!(!should_relax_node(2.0, Some(1.0)));
+    }
+
+    #[test]
+    fn does_not_reopen_closed_node_with_worse_cost() {
+        let closed_node = Node {
+            g: 2.0,
+            ..Default::default()
+        };
+
+        let mut closed_set = HashMap::new();
+        closed_set.insert(closed_node.pos.0, closed_node);
+
+        let known_g = known_node_g(&BinaryHeap::new(), &closed_set, &closed_node);
+        assert_eq!(known_g, Some(2.0));
+        assert!(!should_relax_node(4.0, known_g));
     }
 }
