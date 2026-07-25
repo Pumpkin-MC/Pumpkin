@@ -2160,7 +2160,10 @@ impl JavaClient {
 
     async fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
         let synced_state_id = world.get_block_state_id(&position);
-        self.send_packet_now(&CBlockUpdate::new(
+        // Keep client corrections ordered with chunk and redstone updates. The
+        // priority lane can overtake a newer normal block update and recreate a
+        // ghost block client-side.
+        self.enqueue_packet(&CBlockUpdate::new(
             position,
             VarInt(i32::from(synced_state_id.as_u16())),
         ))

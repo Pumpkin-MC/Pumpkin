@@ -1235,57 +1235,68 @@ impl World {
                 .push((position, block_state_id));
         }
 
-        // TODO: only send packet to players who have the chunks loaded
-        // TODO: Send light updates to update the wire directly next to a broken block
         for (chunk_section, updates) in block_state_updates_by_chunk_section {
             if updates.is_empty() {
                 continue;
             }
             let chunk_pos = Vector2::new(chunk_section.x, chunk_section.z);
-            if updates.len() == 1 {
-                let (block_pos, block_state_id) = updates[0];
-                let be_block_id = BlockState::to_be_network_id(block_state_id);
-                self.broadcast_to_chunk_editioned_sync(
-                    chunk_pos,
-                    &CBlockUpdate::new(block_pos, i32::from(block_state_id.as_u16()).into()),
-                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
-                        block_pos,
-                        be_block_id as u32,
-                    ),
-                );
-            } else {
-                let players = self.players.load();
-                let mut java_recipients = Vec::new();
+            self.enqueue_block_updates(chunk_pos, &updates).await;
+        }
+    }
 
-                let recipients = players.iter().filter(|p| {
-                    let center = p.get_entity().chunk_pos.load();
-                    let view_distance = get_view_distance(p).get() as i32;
-                    is_within_view_distance(chunk_pos, center, view_distance)
-                });
+    /// Queues authoritative block updates on each client's ordered normal queue.
+    ///
+    /// World state packets must not use the lossy `try_enqueue` path or the
+    /// high-priority queue: either can leave redstone/fluid visuals behind the
+    /// server state after a rapid update cascade.
+    async fn enqueue_block_updates(
+        &self,
+        chunk_pos: Vector2<i32>,
+        updates: &[(BlockPos, BlockStateId)],
+    ) {
+        let recipients = self
+            .players
+            .load()
+            .iter()
+            .filter(|player| {
+                let center = player.get_entity().chunk_pos.load();
+                let view_distance = get_view_distance(player).get() as i32;
+                is_within_view_distance(chunk_pos, center, view_distance)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
 
-                for p in recipients {
-                    match p.client.as_ref() {
-                        ClientPlatform::Java(_) => java_recipients.push(p),
-                        ClientPlatform::Bedrock(be_client) => {
-                            for (block_pos, block_state_id) in &updates {
-                                let be_block_id = BlockState::to_be_network_id(*block_state_id);
-                                be_client.try_enqueue_packet(
-                                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
-                                        *block_pos,
-                                        be_block_id as u32,
-                                    ),
-                                );
-                            }
-                        }
+        if updates.len() == 1 {
+            let (block_pos, block_state_id) = updates[0];
+            let java_packet =
+                CBlockUpdate::new(block_pos, i32::from(block_state_id.as_u16()).into());
+            let bedrock_packet = pumpkin_protocol::bedrock::client::CUpdateBlock::new(
+                block_pos,
+                BlockState::to_be_network_id(block_state_id) as u32,
+            );
+
+            for player in recipients {
+                match player.client.as_ref() {
+                    ClientPlatform::Java(client) => client.enqueue_packet(&java_packet).await,
+                    ClientPlatform::Bedrock(client) => client.enqueue_packet(&bedrock_packet).await,
+                }
+            }
+            return;
+        }
+
+        let java_packet = CMultiBlockUpdate::new(updates);
+        for player in recipients {
+            match player.client.as_ref() {
+                ClientPlatform::Java(client) => client.enqueue_packet(&java_packet).await,
+                ClientPlatform::Bedrock(client) => {
+                    for (block_pos, block_state_id) in updates {
+                        let bedrock_packet = pumpkin_protocol::bedrock::client::CUpdateBlock::new(
+                            *block_pos,
+                            BlockState::to_be_network_id(*block_state_id) as u32,
+                        );
+                        client.enqueue_packet(&bedrock_packet).await;
                     }
                 }
-
-                let recipients_by_version =
-                    Self::collect_java_recipients_by_version(java_recipients.into_iter());
-                Self::broadcast_java_grouped(
-                    &CMultiBlockUpdate::new(&updates),
-                    recipients_by_version,
-                );
             }
         }
     }
