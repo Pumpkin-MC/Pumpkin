@@ -209,12 +209,16 @@ pub struct World {
     pub block_registry: Arc<BlockRegistry>,
     pub server: Weak<Server>,
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
+    /// Serializes block-event processing and its client packet enqueue order.
+    synced_block_event_flush_lock: Mutex<()>,
     /// Dirty block positions waiting to be broadcast to clients.
     ///
     /// State changes may race while chunk, player, and entity ticks run in
     /// parallel. Keep only positions here and read the authoritative state when
     /// flushing, otherwise an older writer can leave a stale client snapshot.
     unsent_block_changes: Mutex<FxHashSet<BlockPos>>,
+    /// Block entities that need an authoritative state/data update pair.
+    unsent_block_entity_updates: std::sync::Mutex<FxHashSet<BlockPos>>,
     /// Serializes snapshots and packet enqueueing so older flushes cannot be
     /// delivered after a newer one.
     block_update_flush_lock: Mutex<()>,
@@ -315,7 +319,9 @@ impl World {
             sea_level: generation_settings.sea_level,
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
+            synced_block_event_flush_lock: Mutex::new(()),
             unsent_block_changes: Mutex::new(FxHashSet::default()),
+            unsent_block_entity_updates: std::sync::Mutex::new(FxHashSet::default()),
             block_update_flush_lock: Mutex::new(()),
             portal_poi: Mutex::new(portal_poi),
             dragon_fight,
@@ -539,6 +545,12 @@ impl World {
     }
 
     pub async fn flush_synced_block_events(self: &Arc<Self>) {
+        let _flush_guard = self.synced_block_event_flush_lock.lock().await;
+
+        // Vanilla broadcasts changed chunks before processing block events. Enqueue
+        // those state packets first so the event cannot animate an older client state.
+        self.flush_block_updates().await;
+
         // THIS IS IMPORTANT
         // it prevents deadlocks and also removes the need to wait for a lock when adding a new synced block
         let events = {
@@ -556,15 +568,34 @@ impl World {
                 continue;
             }
             let chunk_pos = event.pos.chunk_position();
-            self.broadcast_to_chunk(
-                chunk_pos,
-                &CBlockEvent::new(
-                    event.pos,
-                    event.r#type,
-                    event.data,
-                    VarInt(block.id.as_u16() as i32),
-                ),
+            let packet = CBlockEvent::new(
+                event.pos,
+                event.r#type,
+                event.data,
+                VarInt(block.id.as_u16() as i32),
             );
+            self.enqueue_synced_block_event(chunk_pos, &packet).await;
+        }
+    }
+
+    /// Enqueues block events reliably on the same FIFO queue as block state updates.
+    async fn enqueue_synced_block_event(&self, chunk_pos: Vector2<i32>, packet: &CBlockEvent) {
+        let recipients = self
+            .players
+            .load()
+            .iter()
+            .filter(|player| {
+                let center = player.get_entity().chunk_pos.load();
+                let view_distance = get_view_distance(player).get() as i32;
+                is_within_view_distance(chunk_pos, center, view_distance)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        for player in recipients {
+            if let ClientPlatform::Java(client) = player.client.as_ref() {
+                client.enqueue_packet(packet).await;
+            }
         }
     }
 
@@ -1242,13 +1273,19 @@ impl World {
             let chunk_pos = Vector2::new(chunk_section.x, chunk_section.z);
             self.enqueue_block_updates(chunk_pos, &updates).await;
         }
+
+        let block_entity_updates = {
+            let mut guard = self.unsent_block_entity_updates.lock().unwrap();
+            std::mem::take(&mut *guard)
+        };
+        self.enqueue_block_entity_updates(&block_entity_updates)
+            .await;
     }
 
     /// Queues authoritative block updates on each client's ordered normal queue.
     ///
-    /// World state packets must not use the lossy `try_enqueue` path or the
-    /// high-priority queue: either can leave redstone/fluid visuals behind the
-    /// server state after a rapid update cascade.
+    /// World state packets must stay on the ordered, non-lossy queue so rapid
+    /// redstone and fluid cascades cannot leave a stale client snapshot.
     async fn enqueue_block_updates(
         &self,
         chunk_pos: Vector2<i32>,
@@ -1296,6 +1333,50 @@ impl World {
                         );
                         client.enqueue_packet(&bedrock_packet).await;
                     }
+                }
+            }
+        }
+    }
+
+    async fn enqueue_block_entity_updates(&self, updates: &FxHashSet<BlockPos>) {
+        for position in updates {
+            let Some(block_entity) = self.get_block_entity(position) else {
+                continue;
+            };
+            let state_id = self.get_block_state_id(position);
+            if BlockState::from_id(state_id).block_entity_type == u16::MAX {
+                continue;
+            }
+            let Some(nbt) = block_entity.chunk_data_nbt() else {
+                continue;
+            };
+
+            let mut bytes = Vec::new();
+            to_bytes_unnamed(&nbt, &mut bytes).unwrap();
+
+            let state_packet = CBlockUpdate::new(*position, VarInt(i32::from(state_id.as_u16())));
+            let block_entity_packet = CBlockEntityData::new(
+                *position,
+                VarInt(block_entity.get_id() as i32),
+                bytes.into_boxed_slice(),
+            );
+            let chunk_pos = position.chunk_position();
+            let recipients = self
+                .players
+                .load()
+                .iter()
+                .filter(|player| {
+                    let center = player.get_entity().chunk_pos.load();
+                    let view_distance = get_view_distance(player).get() as i32;
+                    is_within_view_distance(chunk_pos, center, view_distance)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+
+            for player in recipients {
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    client.enqueue_packet(&state_packet).await;
+                    client.enqueue_packet(&block_entity_packet).await;
                 }
             }
         }
@@ -5205,25 +5286,15 @@ impl World {
     pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
-        let block_entity_nbt = block_entity.chunk_data_nbt();
-
-        if let Some(nbt) = &block_entity_nbt {
-            let mut bytes = Vec::new();
-            to_bytes_unnamed(nbt, &mut bytes).unwrap();
-            self.broadcast_to_chunk(
-                chunk_pos,
-                &CBlockEntityData::new(
-                    block_entity.get_position(),
-                    VarInt(block_entity.get_id() as i32),
-                    bytes.into_boxed_slice(),
-                ),
-            );
-        }
 
         self.block_entities
             .entry(chunk_pos)
             .or_default()
             .insert(block_pos, block_entity);
+        self.unsent_block_entity_updates
+            .lock()
+            .unwrap()
+            .insert(block_pos);
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
             chunk.mark_dirty(true);
         });
@@ -5262,20 +5333,10 @@ impl World {
     pub fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
-        let block_entity_nbt = block_entity.chunk_data_nbt();
-
-        if let Some(nbt) = &block_entity_nbt {
-            let mut bytes = Vec::new();
-            to_bytes_unnamed(nbt, &mut bytes).unwrap();
-            self.broadcast_to_chunk(
-                chunk_pos,
-                &CBlockEntityData::new(
-                    block_entity.get_position(),
-                    VarInt(block_entity.get_id() as i32),
-                    bytes.into_boxed_slice(),
-                ),
-            );
-        }
+        self.unsent_block_entity_updates
+            .lock()
+            .unwrap()
+            .insert(block_pos);
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
             chunk.mark_dirty(true);
         });

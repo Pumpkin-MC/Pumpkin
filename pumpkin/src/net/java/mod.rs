@@ -98,14 +98,10 @@ pub struct JavaClient {
     tasks: TaskTracker,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
-    /// A normal-priority queue of serialized packets to send to the network.
+    /// FIFO queue of serialized packets to send to the network.
     outgoing_packet_queue_send: Sender<OutgoingPacket>,
-    /// A normal-priority queue of serialized packets to send to the network.
+    /// FIFO queue of serialized packets to send to the network.
     outgoing_packet_queue_recv: Option<Receiver<OutgoingPacket>>,
-    /// A high-priority queue of serialized packets to send to the network.
-    outgoing_packet_priority_send: Sender<OutgoingPacket>,
-    /// A high-priority queue of serialized packets to send to the network.
-    outgoing_packet_priority_recv: Option<Receiver<OutgoingPacket>>,
     /// The packet encoder for outgoing packets.
     network_writer: Arc<Mutex<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
@@ -122,11 +118,6 @@ pub struct JavaClient {
     pub packet_sequence: AtomicI32,
 }
 
-pub enum OutgoingPacketType {
-    Normal,
-    HighPriority,
-}
-
 struct OutgoingPacket {
     data: Bytes,
     completion: Option<oneshot::Sender<()>>,
@@ -140,7 +131,7 @@ impl OutgoingPacket {
         }
     }
 
-    const fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
+    const fn with_completion(data: Bytes, completion: oneshot::Sender<()>) -> Self {
         Self {
             data,
             completion: Some(completion),
@@ -153,7 +144,6 @@ impl JavaClient {
     pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: u64) -> Self {
         let (read, write) = tcp_stream.into_split();
         let (send, recv) = tokio::sync::mpsc::channel(4096);
-        let (priority_send, priority_recv) = tokio::sync::mpsc::channel(4096);
         Self {
             id,
             gameprofile: Mutex::new(None),
@@ -165,8 +155,6 @@ impl JavaClient {
             tasks: TaskTracker::new(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
-            outgoing_packet_priority_send: priority_send,
-            outgoing_packet_priority_recv: Some(priority_recv),
             version: AtomicCell::new(CURRENT_MC_VERSION),
             network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(BufWriter::new(write)))),
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
@@ -528,14 +516,14 @@ impl JavaClient {
         let (completion_tx, completion_rx) = oneshot::channel();
 
         if let Err(err) = self
-            .outgoing_packet_priority_send
-            .send(OutgoingPacket::high_priority(packet, completion_tx))
+            .outgoing_packet_queue_send
+            .send(OutgoingPacket::with_completion(packet, completion_tx))
             .await
         {
             // It is expected that the packet will fail if we are closed
             if !self.close_token.is_cancelled() {
                 warn!(
-                    "Failed to add high-priority packet to the outgoing packet queue for client {}: {}",
+                    "Failed to add packet to the outgoing packet queue for client {}: {}",
                     self.id, err
                 );
                 // We now need to close the connection to the client since the stream is in an
@@ -679,19 +667,13 @@ impl JavaClient {
             .outgoing_packet_queue_recv
             .take()
             .expect("This was set in the new fn");
-        let mut priority_packet_receiver = self
-            .outgoing_packet_priority_recv
-            .take()
-            .expect("This was set in the new fn");
         let close_token = self.close_token.clone();
         let writer = self.network_writer.clone();
         let id = self.id;
         self.spawn_task(async move {
             while !close_token.is_cancelled() {
                 let recv_result = tokio::select! {
-                    biased;
                     () = close_token.cancelled() => None,
-                    res = priority_packet_receiver.recv() => res,
                     res = packet_receiver.recv() => res,
                 };
 
@@ -703,14 +685,6 @@ impl JavaClient {
                 packet_batch.push(packet_data);
 
                 while packet_batch.len() < MAX_BATCH_SIZE {
-                    match priority_packet_receiver.try_recv() {
-                        Ok(packet_data) => {
-                            packet_batch.push(packet_data);
-                            continue;
-                        }
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => {}
-                    }
-
                     match packet_receiver.try_recv() {
                         Ok(packet_data) => packet_batch.push(packet_data),
                         Err(TryRecvError::Disconnected | TryRecvError::Empty) => break,
@@ -1033,7 +1007,8 @@ impl JavaClient {
                     .await;
             }
             id if id == SSetPlayerGround::to_id(version) => {
-                self.handle_player_ground(player, &SSetPlayerGround::read(&mut payload, &version)?);
+                let ground = SSetPlayerGround::read(&mut payload, &version)?;
+                self.handle_player_ground(player, &ground).await;
             }
             id if id == SPickItemFromBlock::to_id(version) => {
                 self.handle_pick_item_from_block(
