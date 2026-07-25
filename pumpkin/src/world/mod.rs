@@ -371,7 +371,8 @@ impl World {
         let mut natural_spawn_chunks = FxHashSet::default();
         for player in self.players.load().iter() {
             let center = player.get_entity().chunk_pos.load();
-            let simulation_distance = i32::from(get_simulation_distance(player).get());
+            let simulation_distance =
+                std::num::NonZeroI32::from(get_simulation_distance(player)).get();
             for dx in -simulation_distance..=simulation_distance {
                 for dy in -simulation_distance..=simulation_distance {
                     active_chunks.insert(center.add_raw(dx, dy));

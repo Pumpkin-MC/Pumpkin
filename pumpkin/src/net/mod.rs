@@ -20,7 +20,6 @@ use pumpkin_util::{
     version::{BedrockMinecraftVersion, JavaMinecraftVersion},
 };
 use serde::{Deserialize, Deserializer};
-use sha1::Digest;
 use tokio::task::JoinHandle;
 
 use thiserror::Error;
