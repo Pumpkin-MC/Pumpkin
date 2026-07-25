@@ -21,7 +21,7 @@ use std::sync::atomic::{
     Ordering::{Relaxed, SeqCst},
 };
 use std::{collections::HashMap, sync::atomic::AtomicI32};
-use tracing::warn;
+use tracing::{info, warn};
 
 use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
@@ -1292,6 +1292,19 @@ impl LivingEntity {
         ground: bool,
         dont_damage: bool,
     ) {
+        // Match Entity::checkFallDamage: apply the final downward movement before
+        // handling a landing, otherwise the landing packet loses its last delta.
+        if height_difference < 0.0 {
+            let new_fall_distance = if !self.should_prevent_fall_damage()
+                && !self.should_prevent_fall_damage_in_area()
+            {
+                self.fall_distance.load() - height_difference as f32
+            } else {
+                0.0
+            };
+            self.fall_distance.store(new_fall_distance);
+        }
+
         if ground {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance <= 0.0
@@ -1316,16 +1329,6 @@ impl LivingEntity {
             } else {
                 self.handle_fall_damage(&*caller, fall_distance, 1.0).await;
             }
-        } else if height_difference < 0.0 {
-            let new_fall_distance = if !self.should_prevent_fall_damage()
-                && !self.should_prevent_fall_damage_in_area()
-            {
-                let distance = self.fall_distance.load();
-                distance - (height_difference as f32)
-            } else {
-                0f32
-            };
-            self.fall_distance.store(new_fall_distance);
         }
     }
 
@@ -1588,6 +1591,13 @@ impl LivingEntity {
         let world = self.entity.world.load();
         let show_death_messages = { world.level_info.load().game_rules.show_death_messages };
         if self.entity.entity_type == &EntityType::PLAYER && show_death_messages {
+            if let Some(player) = dyn_self.get_player() {
+                info!(
+                    player = %player.gameprofile.name,
+                    damage_type = damage_type.message_id,
+                    "Player died"
+                );
+            }
             //TODO: KillCredit
             let death_message = Self::get_death_message(dyn_self, damage_type, source, cause).await;
             if let Some(server) = world.server.upgrade() {
@@ -2626,7 +2636,8 @@ impl EntityBase for LivingEntity {
 
             // Apply remaining damage to health (clamped)
             let max_h = self.get_max_health();
-            let new_health = self.health.load() - remaining;
+            let health_before = self.health.load();
+            let new_health = health_before - remaining;
             let clamped_health = new_health.max(0.0).min(max_h);
             if remaining > 0.0 {
                 self.set_health(clamped_health);
@@ -2654,10 +2665,33 @@ impl EntityBase for LivingEntity {
             }
 
             // Check if the entity died and isn't protected by a death protection mechanic (ex. totem of undying)
-            if clamped_health <= 0.0
-                && (bypasses_cooldown_protection || !self.try_use_death_protector(caller).await)
-            {
-                self.on_death(damage_type, source, cause).await;
+            if clamped_health <= 0.0 {
+                let protected =
+                    !bypasses_cooldown_protection && self.try_use_death_protector(caller).await;
+                if !protected {
+                    if pumpkin_config::development_mode() {
+                        info!(
+                            entity = self.entity.entity_type.resource_name,
+                            entity_id = self.entity.entity_id,
+                            damage_type = damage_type.message_id,
+                            source = source.map_or("none", |entity| entity
+                                .get_entity()
+                                .entity_type
+                                .resource_name),
+                            cause = cause.map_or("none", |entity| entity
+                                .get_entity()
+                                .entity_type
+                                .resource_name),
+                            raw_damage = amount,
+                            effective_damage = effective_amount,
+                            applied_damage = remaining,
+                            health_before,
+                            health_after = clamped_health,
+                            "lethal damage"
+                        );
+                    }
+                    self.on_death(damage_type, source, cause).await;
+                }
             }
 
             // Armor durability is based on incoming raw damage, not post-absorption remaining.

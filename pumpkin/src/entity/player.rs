@@ -2658,6 +2658,20 @@ impl Player {
         }
     }
 
+    pub fn entity_interaction_range(&self) -> f64 {
+        self.living_entity
+            .get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE)
+    }
+
+    pub fn is_within_entity_interaction_range(
+        &self,
+        bounding_box: &BoundingBox,
+        additional_range: f64,
+    ) -> bool {
+        let range = self.entity_interaction_range() + additional_range;
+        bounding_box.squared_magnitude(self.living_entity.entity.get_eye_pos()) < range * range
+    }
+
     pub fn can_interact_with_block_at(&self, position: &BlockPos, additional_range: f64) -> bool {
         let d = self.block_interaction_range() + additional_range;
         let box_pos = BoundingBox::from_block(position);

@@ -425,6 +425,11 @@ impl JavaClient {
                         )
                         .await;
                 }
+                // ServerGamePacketListenerImpl resets accumulated fall distance
+                // after every accepted upward player movement.
+                if height_difference > 0.0 {
+                    player.living_entity.fall_distance.store(0.0);
+                }
                 chunker::update_position(player).await;
                 let delta = Vector3::new(
                     pos.x - last_pos.x,
@@ -509,7 +514,7 @@ impl JavaClient {
 
                 let height_difference = pos.y - last_pos.y;
                 if entity.on_ground.load(Ordering::Relaxed)
-                    && (packet.collision & FLAG_ON_GROUND) != 0
+                    && (packet.collision & FLAG_ON_GROUND) == 0
                     && height_difference > 0.0
                 {
                     player.jump().await;
@@ -581,6 +586,11 @@ impl JavaClient {
                         )
                         .await;
                 }
+                // ServerGamePacketListenerImpl resets accumulated fall distance
+                // after every accepted upward player movement.
+                if height_difference > 0.0 {
+                    player.living_entity.fall_distance.store(0.0);
+                }
                 chunker::update_position(player).await;
                 let delta = Vector3::new(
                     pos.x - last_pos.x,
@@ -614,8 +624,14 @@ impl JavaClient {
         .await;
     }
 
-    pub async fn handle_rotation(&self, player: &Player, rotation: SPlayerRotation) {
+    pub async fn handle_rotation(&self, player: &Arc<Player>, rotation: SPlayerRotation) {
         if !player.has_client_loaded() {
+            return;
+        }
+        if player.get_entity().has_vehicle().await {
+            return;
+        }
+        if player.awaiting_teleport.lock().await.is_some() {
             return;
         }
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
@@ -633,6 +649,23 @@ impl JavaClient {
             wrap_degrees(rotation.yaw) % 360.0,
             wrap_degrees(rotation.pitch),
         );
+        entity.on_ground.store(rotation.ground, Ordering::Relaxed);
+        if rotation.ground
+            && !player.abilities.lock().await.flying
+            && player.living_entity.health.load() > 0.0
+            && !player.living_entity.dead.load(Ordering::Relaxed)
+        {
+            // Rotation-only movement packets can also be the landing packet.
+            player
+                .living_entity
+                .fall(
+                    player.clone(),
+                    0.0,
+                    true,
+                    player.gamemode.load() == GameMode::Creative,
+                )
+                .await;
+        }
         // Send the new position to all other players.
         let entity_id = entity.entity_id;
         let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
@@ -714,12 +747,37 @@ impl JavaClient {
         }}
     }
 
-    pub fn handle_player_ground(&self, player: &Player, ground: &SSetPlayerGround) {
+    pub async fn handle_player_ground(&self, player: &Arc<Player>, ground: &SSetPlayerGround) {
+        if !player.has_client_loaded()
+            || player.get_entity().has_vehicle().await
+            || player.awaiting_teleport.lock().await.is_some()
+        {
+            return;
+        }
+
         player
             .living_entity
             .entity
             .on_ground
             .store(ground.on_ground, Ordering::Relaxed);
+
+        if ground.on_ground
+            && !player.abilities.lock().await.flying
+            && player.living_entity.health.load() > 0.0
+            && !player.living_entity.dead.load(Ordering::Relaxed)
+        {
+            // Status-only movement packets can be the landing packet. They must
+            // perform the same fall-damage check as position-bearing packets.
+            player
+                .living_entity
+                .fall(
+                    player.clone(),
+                    0.0,
+                    true,
+                    player.gamemode.load() == GameMode::Creative,
+                )
+                .await;
+        }
     }
 
     pub async fn handle_pick_item_from_block(
@@ -1763,6 +1821,10 @@ impl JavaClient {
             .await;
             return;
         };
+        let target_bounds = target.get_entity().bounding_box.load();
+        if !player.is_within_entity_interaction_range(&target_bounds, 3.0) {
+            return;
+        }
         if let Some(player_victim) = &player_target {
             if player_victim.living_entity.health.load() <= 0.0 {
                 return;
@@ -1818,6 +1880,12 @@ impl JavaClient {
                     .send_packet_now(&CSetCamera::new(entity_id))
                     .await;
                 return;
+            }
+            if action == ActionType::Attack {
+                let target_bounds = target.get_entity().bounding_box.load();
+                if !player.is_within_entity_interaction_range(&target_bounds, 3.0) {
+                    return;
+                }
             }
             send_cancellable! {{
                 server;
@@ -2160,9 +2228,7 @@ impl JavaClient {
 
     async fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
         let synced_state_id = world.get_block_state_id(&position);
-        // Keep client corrections ordered with chunk and redstone updates. The
-        // priority lane can overtake a newer normal block update and recreate a
-        // ghost block client-side.
+        // Keep client corrections ordered with chunk and redstone updates.
         self.enqueue_packet(&CBlockUpdate::new(
             position,
             VarInt(i32::from(synced_state_id.as_u16())),

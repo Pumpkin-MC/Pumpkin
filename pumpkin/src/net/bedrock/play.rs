@@ -866,7 +866,10 @@ impl BedrockClient {
                     1 => {
                         let world = player.world();
                         if let Some(target) = world.get_entity_by_id(target_runtime_id) {
-                            player.attack(target).await;
+                            let target_bounds = target.get_entity().bounding_box.load();
+                            if player.is_within_entity_interaction_range(&target_bounds, 3.0) {
+                                player.attack(target).await;
+                            }
                         }
                     }
                     _ => {
@@ -955,7 +958,10 @@ impl BedrockClient {
                 let target_runtime_id = packet.target_runtime_id.0 as i32;
                 let world = player.world();
                 if let Some(target) = world.get_entity_by_id(target_runtime_id) {
-                    player.attack(target).await;
+                    let target_bounds = target.get_entity().bounding_box.load();
+                    if player.is_within_entity_interaction_range(&target_bounds, 3.0) {
+                        player.attack(target).await;
+                    }
                 }
             }
             _ => {}
