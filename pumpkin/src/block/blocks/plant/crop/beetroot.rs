@@ -7,7 +7,8 @@ use rand::RngExt;
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::crop::CropBlockBase;
 use crate::block::{
-    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
+    BlockBehaviour, BlockFuture, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    RandomTickArgs,
 };
 
 type BeetrootProperties = NetherWartLikeProperties;
@@ -42,6 +43,24 @@ impl BlockBehaviour for BeetrootBlock {
             }
         })
     }
+
+    fn is_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
+        <Self as CropBlockBase>::can_bonemeal(self, args.state_id, args.block)
+    }
+
+    fn is_bonemeal_success(&self, _args: BonemealArgs<'_>) -> bool {
+        // Beetroot advances on 75% of applications; the item is consumed on the other 25% too
+        // (that consumption happens on validity, in the item). Vanilla expresses this as
+        // `getBonemealAgeIncrease = super() / 3` (= randInt(2,5)/3 -> 0 at 1/4, 1 at 3/4); a success
+        // roll gives the same distribution while only firing BlockGrowEvent on actual growth.
+        rand::rng().random_bool(0.75)
+    }
+
+    fn perform_bonemeal<'a>(&'a self, args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            <Self as CropBlockBase>::grow_from_bonemeal(self, args.world, args.position).await;
+        })
+    }
 }
 
 impl PlantBlockBase for BeetrootBlock {}
@@ -49,6 +68,10 @@ impl PlantBlockBase for BeetrootBlock {}
 impl CropBlockBase for BeetrootBlock {
     fn max_age(&self) -> i32 {
         3
+    }
+
+    fn bonemeal_age_increase(&self) -> i32 {
+        1
     }
 
     fn get_age(&self, state: BlockStateId, block: &Block) -> i32 {

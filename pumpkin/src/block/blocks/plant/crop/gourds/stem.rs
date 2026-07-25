@@ -1,6 +1,6 @@
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    RandomTickArgs,
+    BlockBehaviour, BlockFuture, BlockMetadata, BonemealArgs, CanPlaceAtArgs,
+    GetStateForNeighborUpdateArgs, RandomTickArgs,
     blocks::plant::{PlantBlockBase, crop::get_available_moisture},
 };
 use pumpkin_data::{
@@ -121,6 +121,28 @@ impl BlockBehaviour for StemBlock {
                     }
                 }
             }
+        })
+    }
+
+    fn is_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
+        let props = StemProperties::from_state_id(args.state_id, args.block);
+        i32::from(props.age) < 7
+    }
+
+    fn perform_bonemeal<'a>(&'a self, args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // Bone meal only advances the stem's age (clamped to 7); it never spawns the gourd,
+            // which forms via the separate mature-stem random tick above. Use the validated `args`
+            // snapshot so the mutation matches the block/state `is_bonemeal_target` checked.
+            let props = StemProperties::from_state_id(args.state_id, args.block);
+            let new_age = (i32::from(props.age) + rand::rng().random_range(2..=5)).min(7);
+            args.world
+                .set_block_state(
+                    args.position,
+                    Self::state_with_age(args.block, args.state_id, new_age),
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
         })
     }
 }
