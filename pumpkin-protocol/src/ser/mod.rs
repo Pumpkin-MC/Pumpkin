@@ -62,27 +62,35 @@ pub trait NetworkReadExt {
     fn get_i128_be(&mut self) -> Result<i128, ReadingError>;
     fn get_u128_be(&mut self) -> Result<u128, ReadingError>;
 
+    #[inline]
     fn get_i16(&mut self) -> Result<i16, ReadingError> {
         self.get_i16_be()
     }
+    #[inline]
     fn get_u16(&mut self) -> Result<u16, ReadingError> {
         self.get_u16_be()
     }
+    #[inline]
     fn get_i32(&mut self) -> Result<i32, ReadingError> {
         self.get_i32_be()
     }
+    #[inline]
     fn get_u32(&mut self) -> Result<u32, ReadingError> {
         self.get_u32_be()
     }
+    #[inline]
     fn get_i64(&mut self) -> Result<i64, ReadingError> {
         self.get_i64_be()
     }
+    #[inline]
     fn get_u64(&mut self) -> Result<u64, ReadingError> {
         self.get_u64_be()
     }
+    #[inline]
     fn get_f32(&mut self) -> Result<f32, ReadingError> {
         self.get_f32_be()
     }
+    #[inline]
     fn get_f64(&mut self) -> Result<f64, ReadingError> {
         self.get_f64_be()
     }
@@ -227,17 +235,14 @@ impl<'a, R: NetworkReadSliceExt<'a> + ?Sized> NetworkReadSliceExt<'a> for &mut R
     fn get_str_borrowed(&mut self) -> Result<&'a str, ReadingError> {
         (**self).get_str_borrowed()
     }
-
     #[inline]
     fn get_str_bounded_borrowed(&mut self, bound: usize) -> Result<&'a str, ReadingError> {
         (**self).get_str_bounded_borrowed(bound)
     }
-
     #[inline]
     fn read_slice_borrowed(&mut self, count: usize) -> Result<&'a [u8], ReadingError> {
         (**self).read_slice_borrowed(count)
     }
-
     #[inline]
     fn read_remaining_slice_borrowed(&mut self, bound: usize) -> Result<&'a [u8], ReadingError> {
         (**self).read_remaining_slice_borrowed(bound)
@@ -246,6 +251,7 @@ impl<'a, R: NetworkReadSliceExt<'a> + ?Sized> NetworkReadSliceExt<'a> for &mut R
 
 macro_rules! get_number_be {
     ($name:ident, $type:ty) => {
+        #[inline]
         fn $name(&mut self) -> Result<$type, ReadingError> {
             let mut buf = [0u8; std::mem::size_of::<$type>()];
             self.read_exact(&mut buf)
@@ -270,31 +276,38 @@ impl<R: Read> NetworkReadExt for R {
     get_number_be!(get_f32_be, f32);
     get_number_be!(get_f64_be, f64);
 
+    #[inline]
     fn read_bytes_to_buf(&mut self, buf: &mut [u8]) -> Result<(), ReadingError> {
         self.read_exact(buf)
             .map_err(|err| ReadingError::Incomplete(err.to_string()))
     }
 
+    #[inline]
     fn get_bool(&mut self) -> Result<bool, ReadingError> {
         let byte = self.get_u8()?;
         Ok(byte != 0)
     }
 
+    #[inline]
     fn get_var_int(&mut self) -> Result<VarInt, ReadingError> {
         VarInt::decode(self)
     }
+    #[inline]
     fn get_var_uint(&mut self) -> Result<VarUInt, ReadingError> {
         VarUInt::decode(self)
     }
 
+    #[inline]
     fn get_var_long(&mut self) -> Result<VarLong, ReadingError> {
         VarLong::decode(self)
     }
 
+    #[inline]
     fn get_var_ulong(&mut self) -> Result<VarULong, ReadingError> {
         VarULong::decode(self)
     }
 
+    #[inline]
     fn get_str_bounded(&mut self, bound: usize) -> Result<Box<str>, ReadingError> {
         let bytes_len = self.get_var_uint()?.0 as usize;
 
@@ -341,6 +354,7 @@ impl<R: Read> NetworkReadExt for R {
         }
     }
 
+    #[inline]
     fn get_uuid(&mut self) -> Result<uuid::Uuid, ReadingError> {
         let mut bytes = [0u8; 16];
         self.read_exact(&mut bytes)
@@ -348,6 +362,7 @@ impl<R: Read> NetworkReadExt for R {
         Ok(uuid::Uuid::from_bytes(bytes))
     }
 
+    #[inline]
     fn get_fixed_bitset(&mut self, bits: usize) -> Result<FixedBitSet, ReadingError> {
         let byte_count = bits.div_ceil(8);
         let mut bytes = vec![0u8; byte_count];

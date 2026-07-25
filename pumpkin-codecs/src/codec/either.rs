@@ -1,5 +1,34 @@
 use crate::{DataResult, Decode, DynamicOps, Encode};
-use either::Either;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Either<L, R> {
+    Left(L),
+    Right(R),
+}
+
+impl<L, R> Either<L, R> {
+    pub const fn is_left(&self) -> bool {
+        matches!(self, Self::Left(_))
+    }
+
+    pub const fn is_right(&self) -> bool {
+        matches!(self, Self::Right(_))
+    }
+
+    pub fn left(self) -> Option<L> {
+        match self {
+            Self::Left(l) => Some(l),
+            Self::Right(_) => None,
+        }
+    }
+
+    pub fn right(self) -> Option<R> {
+        match self {
+            Self::Left(_) => None,
+            Self::Right(r) => Some(r),
+        }
+    }
+}
 
 impl<L: Encode, R: Encode> Encode for Either<L, R> {
     fn encode<O: DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> DataResult<O::Value> {
@@ -46,9 +75,9 @@ impl<L: Decode, R: Decode> Decode for Either<L, R> {
 
 #[cfg(test)]
 mod test {
+    use super::Either;
     use crate::json_ops::JsonOps;
     use crate::{assert_decode, assert_encode_success};
-    use either::Either;
     use serde_json::json;
 
     #[test]

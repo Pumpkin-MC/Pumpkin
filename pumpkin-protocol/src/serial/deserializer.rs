@@ -399,7 +399,6 @@ impl<'a> crate::serial::PacketReadSlice<'a> for crate::codec::var_ulong::VarULon
         Self::read(buf)
     }
 }
-
 #[cfg(test)]
 mod tests {
     use crate::serial::PacketReadSlice;

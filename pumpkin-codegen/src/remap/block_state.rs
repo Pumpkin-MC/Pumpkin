@@ -7,10 +7,115 @@ use crate::version::JavaMinecraftVersion;
 /// Generates the `TokenStream` for per-version block-state remap tables and the
 /// `remap_block_state_for_version` function.
 pub fn build() -> TokenStream {
+    let node_1_7_2 = MappingNode {
+        version: JavaMinecraftVersion::V_1_7_2,
+        value: "../assets/viabackwards/data/mappings-1.7.6to1.7.2.nbt",
+        child: None,
+    };
+    let node_1_7_6 = MappingNode {
+        version: JavaMinecraftVersion::V_1_7_6,
+        value: "../assets/viarewind/data/mappings-1.8to1.7.10.nbt",
+        child: Some(&node_1_7_2),
+    };
+    let node_1_8 = MappingNode {
+        version: JavaMinecraftVersion::V_1_8,
+        value: "../assets/viarewind/data/mappings-1.9.4to1.8.nbt",
+        child: Some(&node_1_7_6),
+    };
+    let node_1_9 = MappingNode {
+        version: JavaMinecraftVersion::V_1_9,
+        value: "../assets/viabackwards/data/mappings-1.10to1.9.4.nbt",
+        child: Some(&node_1_8),
+    };
+    let node_1_10 = MappingNode {
+        version: JavaMinecraftVersion::V_1_10,
+        value: "../assets/viabackwards/data/mappings-1.11to1.10.nbt",
+        child: Some(&node_1_9),
+    };
+    let node_1_11 = MappingNode {
+        version: JavaMinecraftVersion::V_1_11,
+        value: "../assets/viabackwards/data/mappings-1.12to1.11.nbt",
+        child: Some(&node_1_10),
+    };
+    let node_1_12 = MappingNode {
+        version: JavaMinecraftVersion::V_1_12,
+        value: "../assets/viabackwards/data/mappings-1.13to1.12.nbt",
+        child: Some(&node_1_11),
+    };
+    let node_1_13 = MappingNode {
+        version: JavaMinecraftVersion::V_1_13,
+        value: "../assets/viabackwards/data/mappings-1.13.2to1.13.nbt",
+        child: Some(&node_1_12),
+    };
+    let node_1_13_2 = MappingNode {
+        version: JavaMinecraftVersion::V_1_13_2,
+        value: "../assets/viabackwards/data/mappings-1.14to1.13.2.nbt",
+        child: Some(&node_1_13),
+    };
+    let node_1_14 = MappingNode {
+        version: JavaMinecraftVersion::V_1_14,
+        value: "../assets/viabackwards/data/mappings-1.15to1.14.nbt",
+        child: Some(&node_1_13_2),
+    };
+    let node_1_15 = MappingNode {
+        version: JavaMinecraftVersion::V_1_15,
+        value: "../assets/viabackwards/data/mappings-1.16to1.15.nbt",
+        child: Some(&node_1_14),
+    };
+    let node_1_16 = MappingNode {
+        version: JavaMinecraftVersion::V_1_16,
+        value: "../assets/viabackwards/data/mappings-1.16.2to1.16.nbt",
+        child: Some(&node_1_15),
+    };
+    let node_1_16_2 = MappingNode {
+        version: JavaMinecraftVersion::V_1_16_2,
+        value: "../assets/viabackwards/data/mappings-1.17to1.16.2.nbt",
+        child: Some(&node_1_16),
+    };
+    let node_1_17 = MappingNode {
+        version: JavaMinecraftVersion::V_1_17,
+        value: "../assets/viabackwards/data/mappings-1.18to1.17.nbt",
+        child: Some(&node_1_16_2),
+    };
+    let node_1_18 = MappingNode {
+        version: JavaMinecraftVersion::V_1_18,
+        value: "../assets/viabackwards/data/mappings-1.19to1.18.nbt",
+        child: Some(&node_1_17),
+    };
+    let node_1_19 = MappingNode {
+        version: JavaMinecraftVersion::V_1_19,
+        value: "../assets/viabackwards/data/mappings-1.19.3to1.19.nbt",
+        child: Some(&node_1_18),
+    };
+    let node_1_19_3 = MappingNode {
+        version: JavaMinecraftVersion::V_1_19_3,
+        value: "../assets/viabackwards/data/mappings-1.19.4to1.19.3.nbt",
+        child: Some(&node_1_19),
+    };
+    let node_1_19_4 = MappingNode {
+        version: JavaMinecraftVersion::V_1_19_4,
+        value: "../assets/viabackwards/data/mappings-1.20to1.19.4.nbt",
+        child: Some(&node_1_19_3),
+    };
+    let node_1_20 = MappingNode {
+        version: JavaMinecraftVersion::V_1_20,
+        value: "../assets/viabackwards/data/mappings-1.20.2to1.20.nbt",
+        child: Some(&node_1_19_4),
+    };
+    let node_1_20_2 = MappingNode {
+        version: JavaMinecraftVersion::V_1_20_2,
+        value: "../assets/viabackwards/data/mappings-1.20.3to1.20.2.nbt",
+        child: Some(&node_1_20),
+    };
+    let node_1_20_3 = MappingNode {
+        version: JavaMinecraftVersion::V_1_20_3,
+        value: "../assets/viabackwards/data/mappings-1.20.5to1.20.3.nbt",
+        child: Some(&node_1_20_2),
+    };
     let node_1_20_5 = MappingNode {
         version: JavaMinecraftVersion::V_1_20_5,
         value: "../assets/viabackwards/data/mappings-1.21to1.20.5.nbt",
-        child: None,
+        child: Some(&node_1_20_3),
     };
     let node_1_21 = MappingNode {
         version: JavaMinecraftVersion::V_1_21,

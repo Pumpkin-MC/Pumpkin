@@ -1,19 +1,19 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::particle::Particle;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
-use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity, EntityBaseFuture, NBTStorage, NbtFuture,
+    ageable::AgeableMob,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
+    passive::animal::Animal,
     player::Player,
 };
 use pumpkin_nbt::compound::NbtCompound;
@@ -30,12 +30,16 @@ const PIG_FOOD: &[&Item] = &[
 /// Wiki: <https://minecraft.wiki/w/Pig>
 pub struct PigEntity {
     pub mob_entity: MobEntity,
+    pub ageable_data: crate::entity::ageable::AgeableData,
 }
 
 impl PigEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let pig = Self { mob_entity };
+        let pig = Self {
+            mob_entity,
+            ageable_data: crate::entity::ageable::AgeableData::default(),
+        };
         let mob_arc = Arc::new(pig);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -62,13 +66,33 @@ impl PigEntity {
     }
 }
 
+impl crate::entity::ageable::AgeableMob for PigEntity {
+    fn get_ageable_data(&self) -> &crate::entity::ageable::AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl NBTStorage for PigEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        self.mob_entity.living_entity.write_nbt(nbt)
+        Box::pin(async move {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            self.write_ageable_nbt(nbt);
+            self.write_animal_nbt(nbt);
+        })
     }
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        self.mob_entity.living_entity.read_nbt_non_mut(nbt)
+        Box::pin(async move {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.read_ageable_nbt(nbt);
+            self.read_animal_nbt(nbt);
+        })
+    }
+}
+
+impl super::animal::Animal for PigEntity {
+    fn is_food(&self, item_stack: &ItemStack) -> bool {
+        PIG_FOOD.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 
@@ -82,32 +106,7 @@ impl Mob for PigEntity {
         player: &'a Arc<Player>,
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            let is_food = PIG_FOOD.iter().any(|i| i.id == item_stack.item.id);
-            if is_food && self.is_breeding_ready() && !self.is_in_love() {
-                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-
-                self.mob_entity
-                    .set_love_ticks(600, Some(player.gameprofile.id));
-                let entity = &self.mob_entity.living_entity.entity;
-                let world = entity.world.load();
-                let pos = entity.pos.load();
-
-                world.spawn_particle(
-                    pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
-                    Vector3::new(0.5, 0.5, 0.5),
-                    1.0,
-                    7,
-                    Particle::Heart,
-                );
-                world.play_sound(
-                    Sound::EntityPigAmbient,
-                    SoundCategory::Neutral,
-                    &entity.pos.load(),
-                );
-                return true;
-            }
-            false
-        })
+        use super::animal::Animal;
+        self.animal_interact(player, item_stack, Sound::EntityPigAmbient)
     }
 }

@@ -241,7 +241,7 @@ mod test {
         io::{Cursor, Read},
         sync::LazyLock,
     };
-    use temp_dir::TempDir;
+    use tempfile::TempDir;
 
     use crate::{
         global_path,

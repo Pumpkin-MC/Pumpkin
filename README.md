@@ -15,7 +15,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 
 <div align="center">
 
-![Pumpkin Chunk Loading](./assets/pumpkin_chunk_loading.webp)
+![Pumpkin Chunk Loading](./assets/pumpkin_chunk_loading.gif)
 
 </div>
 
@@ -148,4 +148,4 @@ Consider joining [our Discord server](https://discord.gg/wT8XjrjKkf) to stay up-
 
 ## Funding
 
-If you want to fund me and help the project, check out my [GitHub sponsors](https://github.com/sponsors/Pumpkin-MC).
+If you want to fund me and help the project, check out the [Donation Page](https://pumpkinmc.org/donate/).

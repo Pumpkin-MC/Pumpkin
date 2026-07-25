@@ -158,9 +158,72 @@ impl DataComponentImpl for RarityImpl {
     default_impl!(Rarity);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct CustomModelDataImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct CustomModelDataImpl {
+    pub floats: Vec<f32>,
+    pub flags: Vec<bool>,
+    pub strings: Vec<String>,
+    pub colors: Vec<i32>,
+}
+impl CustomModelDataImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let floats = compound
+            .get_list("floats")
+            .map(|l| l.iter().filter_map(NbtTag::extract_float).collect())
+            .unwrap_or_default();
+        let flags = compound
+            .get_list("flags")
+            .map(|l| l.iter().filter_map(NbtTag::extract_bool).collect())
+            .unwrap_or_default();
+        let strings = compound
+            .get_list("strings")
+            .map(|l| {
+                l.iter()
+                    .filter_map(|t| t.extract_string().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        // Vanilla encodes the color list as ints, but tolerate a packed int array too.
+        let colors = if let Some(arr) = compound.get_int_array("colors") {
+            arr.to_vec()
+        } else if let Some(l) = compound.get_list("colors") {
+            l.iter().filter_map(NbtTag::extract_int).collect()
+        } else {
+            Vec::new()
+        };
+        Some(Self {
+            floats,
+            flags,
+            strings,
+            colors,
+        })
+    }
+}
 impl DataComponentImpl for CustomModelDataImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_list(
+            "floats",
+            self.floats.iter().map(|f| NbtTag::Float(*f)).collect(),
+        );
+        compound.put_list(
+            "flags",
+            self.flags.iter().map(|b| NbtTag::Byte(*b as i8)).collect(),
+        );
+        compound.put_list(
+            "strings",
+            self.strings
+                .iter()
+                .map(|s| NbtTag::String(s.clone().into()))
+                .collect(),
+        );
+        compound.put_list(
+            "colors",
+            self.colors.iter().map(|c| NbtTag::Int(*c)).collect(),
+        );
+        NbtTag::Compound(compound)
+    }
     default_impl!(CustomModelData);
 }
 
@@ -183,20 +246,63 @@ impl DataComponentImpl for EnchantmentGlintOverrideImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct TooltipStyleImpl;
+pub struct TooltipStyleImpl {
+    pub id: String,
+}
+impl TooltipStyleImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|id| Self { id: id.to_string() })
+    }
+}
 impl DataComponentImpl for TooltipStyleImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.id.clone().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.id) as i32
+    }
     default_impl!(TooltipStyle);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct NoteBlockSoundImpl;
+pub struct NoteBlockSoundImpl {
+    pub sound: String,
+}
+impl NoteBlockSoundImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|sound| Self {
+            sound: sound.to_string(),
+        })
+    }
+}
 impl DataComponentImpl for NoteBlockSoundImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.sound.clone().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.sound) as i32
+    }
     default_impl!(NoteBlockSound);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BaseColorImpl;
+pub struct BaseColorImpl {
+    pub color: String,
+}
+impl BaseColorImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|color| Self {
+            color: color.to_string(),
+        })
+    }
+}
 impl DataComponentImpl for BaseColorImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.color.clone().into())
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.color) as i32
+    }
     default_impl!(BaseColor);
 }
 
@@ -230,9 +336,24 @@ impl DataComponentImpl for PotDecorationsImpl {
     default_impl!(PotDecorations);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct LockImpl;
+/// The lock's item predicate, kept as its raw NBT compound since Pumpkin does
+/// not yet model item predicates.
+// TODO: replace `predicate` with a typed item predicate once item predicates are modelled.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LockImpl {
+    pub predicate: NbtCompound,
+}
+impl LockImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_compound().map(|predicate| Self {
+            predicate: predicate.clone(),
+        })
+    }
+}
 impl DataComponentImpl for LockImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(self.predicate.clone())
+    }
     default_impl!(Lock);
 }
 

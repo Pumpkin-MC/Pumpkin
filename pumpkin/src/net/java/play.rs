@@ -644,7 +644,6 @@ impl JavaClient {
             return;
         }
         let entity = &player.get_entity();
-        entity.on_ground.store(rotation.ground, Ordering::Relaxed);
         entity.set_rotation(
             wrap_degrees(rotation.yaw) % 360.0,
             wrap_degrees(rotation.pitch),

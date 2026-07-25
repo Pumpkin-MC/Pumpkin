@@ -538,7 +538,9 @@ impl ToTokens for LootConditionStruct {
                     .and_then(|p| p.entity_type.as_ref())
                     .map(|t| match t {
                         StringOrVec::String(s) => quote! { Some(#s) },
-                        StringOrVec::Vec(v) => v.first().map_or(quote! { None }, |s| quote! { Some(#s) }),
+                        StringOrVec::Vec(v) => {
+                            v.first().map_or(quote! { None }, |s| quote! { Some(#s) })
+                        }
                     })
                     .unwrap_or(quote! { None });
 
@@ -559,7 +561,9 @@ impl ToTokens for LootConditionStruct {
                     .and_then(|ench| ench.enchantments.as_ref())
                     .map(|t| match t {
                         StringOrVec::String(s) => quote! { Some(#s) },
-                        StringOrVec::Vec(v) => v.first().map_or(quote! { None }, |s| quote! { Some(#s) }),
+                        StringOrVec::Vec(v) => {
+                            v.first().map_or(quote! { None }, |s| quote! { Some(#s) })
+                        }
                     })
                     .unwrap_or(quote! { None });
 
@@ -613,7 +617,9 @@ impl ToTokens for LootConditionStruct {
                     .and_then(|e| e.entity_type.as_ref())
                     .map(|t| match t {
                         StringOrVec::String(s) => quote! { Some(#s) },
-                        StringOrVec::Vec(v) => v.first().map_or(quote! { None }, |s| quote! { Some(#s) }),
+                        StringOrVec::Vec(v) => {
+                            v.first().map_or(quote! { None }, |s| quote! { Some(#s) })
+                        }
                     })
                     .unwrap_or(quote! { None });
 
@@ -623,7 +629,9 @@ impl ToTokens for LootConditionStruct {
                     .and_then(|e| e.entity_type.as_ref())
                     .map(|t| match t {
                         StringOrVec::String(s) => quote! { Some(#s) },
-                        StringOrVec::Vec(v) => v.first().map_or(quote! { None }, |s| quote! { Some(#s) }),
+                        StringOrVec::Vec(v) => {
+                            v.first().map_or(quote! { None }, |s| quote! { Some(#s) })
+                        }
                     })
                     .unwrap_or(quote! { None });
 
@@ -643,7 +651,9 @@ impl ToTokens for LootConditionStruct {
                     .and_then(|p| p.biome.as_ref())
                     .map(|b| match b {
                         StringOrVec::String(s) => quote! { Some(#s) },
-                        StringOrVec::Vec(v) => v.first().map_or(quote! { None }, |s| quote! { Some(#s) }),
+                        StringOrVec::Vec(v) => {
+                            v.first().map_or(quote! { None }, |s| quote! { Some(#s) })
+                        }
                     })
                     .unwrap_or(quote! { None });
                 quote! { LootCondition::LocationCheck { offset_x: #ox, offset_y: #oy, offset_z: #oz, expected_biome: #expected_biome } }

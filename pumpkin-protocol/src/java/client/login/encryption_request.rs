@@ -46,14 +46,16 @@ impl ClientPacket for CEncryptionRequest<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_string(self.server_id)?;
         write.write_var_int(&crate::VarInt(self.public_key.len() as i32))?;
         write.write_all(self.public_key)?;
         write.write_var_int(&crate::VarInt(self.verify_token.len() as i32))?;
         write.write_all(self.verify_token)?;
-        write.write_bool(self.should_authenticate)?;
+        if version >= &JavaMinecraftVersion::V_1_19 {
+            write.write_bool(self.should_authenticate)?;
+        }
         Ok(())
     }
 }

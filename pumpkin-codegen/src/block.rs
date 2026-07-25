@@ -1,6 +1,6 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
-use pumpkin_nbt::deserializer::{NbtReadHelper, NbtReadHelperBedrock, NbtStreamReader};
+use pumpkin_nbt::deserializer::{NbtReadHelper, NbtReadHelperBedrock};
 use pumpkin_util::math::{experience::Experience, vector3::Vector3};
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
@@ -1456,7 +1456,7 @@ fn get_be_data_from_nbt<R: Read + Seek>(
     let data_end = reader.seek(SeekFrom::End(0)).unwrap();
     let _ = reader.seek(SeekFrom::Start(data_start));
 
-    let nbt_reader = &mut NbtReadHelperBedrock::new(NbtStreamReader(&mut *reader));
+    let nbt_reader = &mut NbtReadHelperBedrock::new(pumpkin_nbt::deserializer::NbtStreamReader(&mut *reader));
 
     loop {
         if nbt_reader.reader().0.stream_position().unwrap() >= data_end {

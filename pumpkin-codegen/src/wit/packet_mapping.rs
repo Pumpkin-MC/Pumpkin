@@ -43,7 +43,7 @@ pub fn build_java_mapping() -> String {
     output.push_str("}\n\n");
 
     output.push_str("#[must_use]\n");
-    output.push_str("pub fn deserialize_java_serverbound_packet(id: i32, payload: &[u8], version: JavaMinecraftVersion) -> Option<ServerboundPacket> {\n");
+    output.push_str("pub fn deserialize_java_serverbound_packet(id: i32, mut payload: &[u8], version: JavaMinecraftVersion) -> Option<ServerboundPacket> {\n");
     output.push_str("    match id {\n");
 
     for state in server_states {
@@ -715,7 +715,7 @@ fn emit_struct_output(
                 ));
                 output.push_str("            use pumpkin_protocol::ServerPacket;\n");
                 output.push_str(&format!(
-                    "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;\n",
+                    "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;\n",
                     rust_path_prefix, struct_name
                 ));
             } else {
@@ -846,7 +846,7 @@ fn process_enum(
                 ));
                 output.push_str("            use pumpkin_protocol::ServerPacket;\n");
                 output.push_str(&format!(
-                    "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;\n",
+                    "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;\n",
                     rust_path_prefix, enum_name
                 ));
             } else {

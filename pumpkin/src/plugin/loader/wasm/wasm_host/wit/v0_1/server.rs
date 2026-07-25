@@ -310,12 +310,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
-        Ok(server
-            .advanced_config
-            .networking
-            .java
-            .authentication
-            .enabled)
+        Ok(server.advanced_config.networking.java.online_mode)
     }
 
     async fn get_motd(&mut self, _rep: Resource<Server>) -> wasmtime::Result<String> {
