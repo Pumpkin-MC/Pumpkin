@@ -179,6 +179,7 @@ pumpkin-nbt = { path = "crates/pumpkin-nbt", default-features = false }
 pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
 pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
 pumpkin-world = { path = "crates/pumpkin-world", default-features = false }
+native-wit-wasmtime = { git = "https://github.com/BjornTheProgrammer/native-wit", default-features = false }
 quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
 rand = { version = "0.10.2", default-features = false, features = ["std", "std_rng", "thread_rng"] }
 rsa = { version = "=0.10.0-rc.18", default-features = false, features = ["std", "encoding"] }
@@ -219,7 +220,7 @@ wasmtime-wasi-http = { version = "47.0", default-features = false, features = ["
 hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
 webrtc = { version = "0.17.0", default-features = false }
-wit-bindgen = { version = "0.60", default-features = false, features = ["macros"] }
+wit-bindgen = { git = "https://github.com/BjornTheProgrammer/wit-bindgen", branch = "wit-native", default-features = false, features = ["macros"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
