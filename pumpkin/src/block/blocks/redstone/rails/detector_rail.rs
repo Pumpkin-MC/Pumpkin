@@ -1,14 +1,19 @@
-use pumpkin_data::BlockStateId;
-use pumpkin_macros::pumpkin_block;
-use pumpkin_world::world::BlockFlags;
+use std::sync::Arc;
 
-use crate::block::BlockBehaviour;
-use crate::block::BlockFuture;
-use crate::block::CanPlaceAtArgs;
-use crate::block::OnNeighborUpdateArgs;
-use crate::block::OnPlaceArgs;
-use crate::block::PlacedArgs;
-use crate::entity::EntityBase;
+use pumpkin_data::{Block, BlockDirection, BlockStateId, entity::EntityType};
+use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
+use pumpkin_world::{tick::TickPriority, world::BlockFlags};
+
+use crate::{
+    block::{
+        BlockBehaviour, BlockFuture, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+        OnEntityCollisionArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+        OnStateReplacedArgs, PlacedArgs,
+    },
+    entity::EntityBase,
+    world::World,
+};
 
 use super::RailProperties;
 use super::common::{
@@ -18,6 +23,10 @@ use super::common::{
 
 #[pumpkin_block("minecraft:detector_rail")]
 pub struct DetectorRailBlock;
+
+// Vanilla DetectorRailBlock.getSearchBB: a centered 0.6 x 0.8 x 0.6 volume.
+const DETECTOR_RAIL_SEARCH_BOX: BoundingBox =
+    BoundingBox::new_array([0.2, 0.0, 0.2], [0.8, 0.8, 0.8]);
 
 impl BlockBehaviour for DetectorRailBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
@@ -37,6 +46,28 @@ impl BlockBehaviour for DetectorRailBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             update_flanking_rails_shape(args.world, args.block, args.state_id, args.position).await;
+            self.check_pressed(args.world, args.block, args.position)
+                .await;
+        })
+    }
+
+    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let props = RailProperties::new(args.state.id, args.block);
+            if !props.is_powered() && Self::is_minecart(args.entity) {
+                self.check_pressed(args.world, args.block, args.position)
+                    .await;
+            }
+        })
+    }
+
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let state = args.world.get_block_state(args.position);
+            if RailProperties::new(state.id, args.block).is_powered() {
+                self.check_pressed(args.world, args.block, args.position)
+                    .await;
+            }
         })
     }
 
@@ -50,7 +81,103 @@ impl BlockBehaviour for DetectorRailBlock {
         })
     }
 
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if args.moved {
+                return;
+            }
+
+            // Vanilla BaseRailBlock.affectNeighborsAfterRemoval.
+            let old_props = RailProperties::new(args.old_state_id, args.block);
+            if old_props.shape().is_ascending() {
+                args.world.update_neighbors(&args.position.up(), None).await;
+            }
+            args.world.update_neighbors(args.position, None).await;
+            args.world
+                .update_neighbors(&args.position.down(), None)
+                .await;
+        })
+    }
+
+    fn emits_redstone_power<'a>(
+        &'a self,
+        _args: EmitsRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, bool> {
+        Box::pin(async move { true })
+    }
+
+    fn get_weak_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            if RailProperties::new(args.state.id, args.block).is_powered() {
+                15
+            } else {
+                0
+            }
+        })
+    }
+
+    fn get_strong_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            if args.direction == BlockDirection::Up
+                && RailProperties::new(args.state.id, args.block).is_powered()
+            {
+                15
+            } else {
+                0
+            }
+        })
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_rail_at(args.block_accessor, args.position)
+    }
+}
+
+impl DetectorRailBlock {
+    async fn check_pressed(&self, world: &Arc<World>, block: &Block, pos: &BlockPos) {
+        if !rail_placement_is_valid(world, block, pos).await {
+            return;
+        }
+
+        let state = world.get_block_state(pos);
+        let mut props = RailProperties::new(state.id, block);
+        let was_pressed = props.is_powered();
+        let is_pressed = world
+            .get_entities_at_box(&DETECTOR_RAIL_SEARCH_BOX.at_pos(*pos))
+            .iter()
+            .any(|entity| Self::is_minecart(entity.as_ref()));
+
+        if was_pressed != is_pressed {
+            props.set_powered(is_pressed);
+            world
+                .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
+                .await;
+
+            // BaseRailBlock's normal neighbor update covers adjacent rails. Detector
+            // rails additionally notify the supporting block, matching vanilla's
+            // checkPressed path.
+            world.update_neighbors(&pos.down(), None).await;
+        }
+
+        if is_pressed {
+            world.schedule_block_tick(block, *pos, 20, TickPriority::Normal);
+        }
+    }
+
+    fn is_minecart(entity: &dyn EntityBase) -> bool {
+        let entity_type = entity.get_entity().entity_type;
+        entity_type == &EntityType::MINECART
+            || entity_type == &EntityType::CHEST_MINECART
+            || entity_type == &EntityType::COMMAND_BLOCK_MINECART
+            || entity_type == &EntityType::FURNACE_MINECART
+            || entity_type == &EntityType::HOPPER_MINECART
+            || entity_type == &EntityType::SPAWNER_MINECART
+            || entity_type == &EntityType::TNT_MINECART
     }
 }
