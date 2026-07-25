@@ -5,6 +5,7 @@ use enum_dispatch::enum_dispatch;
 use pumpkin_data::chunk::{Biome, BiomeTree, NETHER_BIOME_SOURCE, OVERWORLD_BIOME_SOURCE};
 
 use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
+pub mod biome_finder;
 pub mod end;
 pub mod multi_noise;
 pub mod position_finder;
