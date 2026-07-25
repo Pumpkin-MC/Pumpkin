@@ -2281,6 +2281,9 @@ impl Player {
     /// The state id is encoded here rather than passed to [`CParticle`] as a typed
     /// field because it has to be remapped to this client's protocol version, and
     /// the packet only carries already-encoded extra particle data.
+    ///
+    /// Java only, like [`Self::spawn_particle`]: `CParticle` is a Java packet, so
+    /// Bedrock clients are skipped.
     pub fn spawn_block_particle(
         &self,
         position: Vector3<f64>,
@@ -2295,18 +2298,15 @@ impl Player {
             return;
         };
 
-        let mut data = Vec::new();
-        if data
-            .write_var_int(&VarInt(i32::from(remap_block_state_for_version(
-                block_state_id.as_u16(),
-                client.version.load(),
-            ))))
-            .is_err()
-        {
-            return;
-        }
+        // A single VarInt, so at most 5 bytes.
+        let mut data = Vec::with_capacity(5);
+        // Writing to a `Vec` never fails.
+        let _ = data.write_var_int(&VarInt(i32::from(remap_block_state_for_version(
+            block_state_id.as_u16(),
+            client.version.load(),
+        ))));
 
-        self.client.try_enqueue_packet(&CParticle::new(
+        let packet = CParticle::new(
             false,
             false,
             position,
@@ -2315,7 +2315,10 @@ impl Player {
             particle_count,
             VarInt(Particle::Block as i32),
             &data,
-        ));
+        );
+        if let Ok(bytes) = client.serialize_packet(&packet) {
+            client.try_enqueue_packet(bytes);
+        }
     }
 
     pub async fn play_sound(
