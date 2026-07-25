@@ -261,21 +261,57 @@ fn write_block_state(state: &BlockState, nbt: &mut NbtCompound) {
 }
 
 fn read_pushed_block_state(nbt: &NbtCompound) -> &'static BlockState {
+    if let Some(state) = read_vanilla_block_state(nbt) {
+        return state;
+    }
+
     if let Some(id) = nbt.get_int(BLOCK_STATE_ID)
-        && let Some(state_id) = pumpkin_data::BlockStateId::new(id as u16)
+        && let Ok(id) = u16::try_from(id)
+        && let Some(state_id) = pumpkin_data::BlockStateId::new(id)
     {
         return BlockState::from_id(state_id);
     }
-    // Vanilla-style: blockState compound with Name (properties ignored for now).
-    if let Some(compound) = nbt.get_compound("blockState")
-        && let Some(name) = compound.get_string("Name")
-    {
-        let name = name.strip_prefix("minecraft:").unwrap_or(name);
-        if let Some(block) = Block::from_name(name) {
-            return block.default_state;
-        }
-    }
     Block::AIR.default_state
+}
+
+/// Decodes the vanilla `BlockState.CODEC` payload used by moving piston block entities.
+///
+/// `Properties` and each individual property are optional in the vanilla codec, so any
+/// omitted values inherit from the block's default state. Matching existing states instead
+/// of feeding arbitrary saved NBT into generated property parsers also keeps malformed or
+/// newer-world data from panicking the server.
+fn read_vanilla_block_state(nbt: &NbtCompound) -> Option<&'static BlockState> {
+    let block_state = nbt.get_compound("blockState")?;
+    let name = block_state.get_string("Name")?;
+    let block = Block::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?;
+    let Some(properties) = block_state.get_compound("Properties") else {
+        return Some(block.default_state);
+    };
+    let Some(default_properties) = block.properties(block.default_state.id) else {
+        return Some(block.default_state);
+    };
+    let default_properties = default_properties.to_props();
+
+    block
+        .states
+        .iter()
+        .find(|state| {
+            block.properties(state.id).is_some_and(|state_properties| {
+                state_properties.to_props().iter().all(|(name, value)| {
+                    properties
+                        .get_string(name)
+                        .or_else(|| {
+                            default_properties
+                                .iter()
+                                .find_map(|(default_name, default_value)| {
+                                    (*default_name == *name).then_some(*default_value)
+                                })
+                        })
+                        == Some(*value)
+                })
+            })
+        })
+        .or(Some(block.default_state))
 }
 
 impl BlockEntity for PistonBlockEntity {
