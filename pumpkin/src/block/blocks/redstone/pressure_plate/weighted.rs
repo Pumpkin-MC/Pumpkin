@@ -10,6 +10,7 @@ use crate::{
         GetRedstonePowerArgs, OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
         OnStateReplacedArgs,
     },
+    entity::EntityBase,
     world::World,
 };
 
@@ -118,8 +119,11 @@ impl PressurePlate for WeightedPressurePlateBlock {
             150
         };
         let aabb = detection_box_at(pos);
-        let entity_count =
-            world.get_entities_at_box(&aabb).len() + world.get_players_at_box(&aabb).len();
+        let entity_count = world
+            .get_all_at_box(&aabb)
+            .into_iter()
+            .filter(|entity| !entity.is_spectator())
+            .count();
         weighted_signal_strength(entity_count, weight)
     }
 

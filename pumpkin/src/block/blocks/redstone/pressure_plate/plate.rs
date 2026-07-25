@@ -12,6 +12,7 @@ use crate::{
         GetRedstonePowerArgs, OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
         OnStateReplacedArgs,
     },
+    entity::EntityBase,
     world::World,
 };
 
@@ -98,14 +99,21 @@ impl PressurePlate for PressurePlateBlock {
         if props.powered { 15 } else { 0 }
     }
 
-    async fn calculate_redstone_output(&self, world: &World, _block: &Block, pos: &BlockPos) -> u8 {
+    async fn calculate_redstone_output(&self, world: &World, block: &Block, pos: &BlockPos) -> u8 {
         let aabb = detection_box_at(pos);
-        if !world.get_entities_at_box(&aabb).is_empty()
-            || !world.get_players_at_box(&aabb).is_empty()
-        {
-            return 15;
+        let detects_everything = block
+            .id
+            .has_tag(tag::Block::MINECRAFT_WOODEN_PRESSURE_PLATES);
+
+        // Vanilla uses Entity.class for wooden plates and LivingEntity.class for
+        // stone plates, excluding spectators in both cases.
+        if world.get_all_at_box(&aabb).into_iter().any(|entity| {
+            !entity.is_spectator() && (detects_everything || entity.get_living_entity().is_some())
+        }) {
+            15
+        } else {
+            0
         }
-        0
     }
 
     fn set_redstone_output(&self, block: &Block, state: &BlockState, output: u8) -> BlockStateId {
