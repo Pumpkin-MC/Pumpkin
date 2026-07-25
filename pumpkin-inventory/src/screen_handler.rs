@@ -916,6 +916,17 @@ pub trait ScreenHandler: Send + Sync {
 
                     let mut cursor_stack = behaviour.cursor_stack.lock().await;
                     let initial_count = cursor_stack.item_count;
+                    let drag_slot_count = behaviour.drag_slots.len();
+                    // Guard against empty or oversized drag sets. Casting len to u8
+                    // previously wrapped at 256 → division by zero → panic → shutdown.
+                    if drag_slot_count == 0 || drag_slot_count > 256 {
+                        behaviour.drag_slots.clear();
+                        return;
+                    }
+                    if !matches!(drag_button, 0..=2) {
+                        behaviour.drag_slots.clear();
+                        return;
+                    }
                     for slot_index in &behaviour.drag_slots {
                         let slot = behaviour.slots[*slot_index as usize].clone();
                         let stack_lock = slot.get_stack().await;
@@ -925,14 +936,13 @@ pub trait ScreenHandler: Send + Sync {
                             && slot.can_insert(&cursor_stack).await
                         {
                             let mut inserting_count = if drag_button == 0 {
-                                initial_count / behaviour.drag_slots.len() as u8
+                                (u32::from(initial_count) / drag_slot_count as u32) as u8
                             } else if drag_button == 1 {
                                 1
-                            } else if drag_button == 2 {
+                            } else {
+                                // drag_button == 2 (creative full-stack drag)
                                 cursor_stack.item_count = cursor_stack.get_max_stack_size();
                                 cursor_stack.item_count
-                            } else {
-                                panic!("Invalid drag button: {drag_button}");
                             };
                             inserting_count = inserting_count
                                 .min(max(
@@ -1220,8 +1230,8 @@ pub trait ScreenHandler: Send + Sync {
 
                     slot.mark_dirty().await;
                 }
-            } else if action_type == SlotActionType::Swap && (0..9).contains(&button)
-                || button == 40
+            } else if action_type == SlotActionType::Swap
+                && ((0..9).contains(&button) || button == 40)
             {
                 if slot_index < 0 {
                     return;

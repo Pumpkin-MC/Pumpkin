@@ -373,19 +373,19 @@ impl PumpkinServer {
 
         SERVER_IS_STOPPING.store(true, Ordering::Release);
 
-        if let Some(crash_report) = CRASH_REPORT.get() {
-            crash_report.print_to_console();
-            crash_report.save_and_log();
-
-            info!(
-                "{}",
-                TextComponent::text("Gracefully shutting down...")
-                    .color(Color::Named(NamedColor::Green))
-                    .to_pretty_console()
-            );
-
-            SERVER_EXIT_CODE.store(1, Ordering::Release);
+        // Contained worker panics already saved a crash report; do not flip the
+        // process exit code to 1 on a later manual stop (systemd would treat a
+        // clean Ctrl-C as a crash).
+        if CRASH_REPORT.get().is_some() {
+            info!("A prior worker panic was recorded (crash report on disk); exiting cleanly");
         }
+
+        info!(
+            "{}",
+            TextComponent::text("Gracefully shutting down...")
+                .color(Color::Named(NamedColor::Green))
+                .to_pretty_console()
+        );
 
         info!("Stopped accepting incoming connections");
 
@@ -473,7 +473,13 @@ impl PumpkinServer {
                                      java_client.close();
                                      java_client.await_tasks().await;
                                 },
-                                PacketHandlerResult::ReadyToPlay(profile,config) => {
+                                PacketHandlerResult::ReadyToPlay(profile, config) => {
+                                    // Drop if kick already closed the socket during login races.
+                                    if java_client.is_closed() {
+                                        java_client.close();
+                                        java_client.await_tasks().await;
+                                        return;
+                                    }
                                      if let Some((player, world)) = server_clone
                                      .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
                                           .await
@@ -483,13 +489,34 @@ impl PumpkinServer {
                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
                                         *client.player.lock().await = Some(player.clone());
                                     }
-                                    world
-                                        .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
-                                        .await;
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        client.progress_player_packets(&player, &server_clone).await;
+                                    // Spawn + play loop both run in a child task so a panic
+                                    // during spawn_java_player still hits cleanup below.
+                                    let player_play = player.clone();
+                                    let server_play = server_clone.clone();
+                                    let world_play = world.clone();
+                                    let play_join = tokio::spawn(async move {
+                                        world_play
+                                            .spawn_java_player(
+                                                &server_play.basic_config,
+                                                &player_play,
+                                                &server_play,
+                                            )
+                                            .await;
+                                        if let ClientPlatform::Java(c) =
+                                            player_play.client.as_ref()
+                                        {
+                                            c.progress_player_packets(&player_play, &server_play)
+                                                .await;
+                                        }
+                                    });
+                                    if let Err(e) = play_join.await {
+                                        error!(
+                                            "Java play task for player {} ended with panic/cancel: {e}",
+                                            player.gameprofile.name
+                                        );
+                                    }
 
-                                        // Close when done
+                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
                                         client.close();
                                         client.await_tasks().await;
                                     }
@@ -568,13 +595,35 @@ impl PumpkinServer {
                                                 client_clone.await_tasks().await;
                                             }
                                             PacketHandlerResult::ReadyToPlay(profile, config) => {
+                                                if client_clone.is_closed() {
+                                                    client_clone.close().await;
+                                                    client_clone.await_tasks().await;
+                                                    return;
+                                                }
                                                 if let Some((player, _world)) = server_clone
                                                     .add_player(Arc::new(ClientPlatform::Bedrock(client_clone.clone())), profile, Some(config))
                                                     .await
                                                 {
                                                     *client_clone.player.lock().await = Some(player.clone());
 
-                                                    client_clone.progress_player_packets(&player, &server_clone).await;
+                                                    // Child task so panic during play still cleans up.
+                                                    let player_play = player.clone();
+                                                    let server_play = server_clone.clone();
+                                                    let client_play = client_clone.clone();
+                                                    let play_join = tokio::spawn(async move {
+                                                        client_play
+                                                            .progress_player_packets(
+                                                                &player_play,
+                                                                &server_play,
+                                                            )
+                                                            .await;
+                                                    });
+                                                    if let Err(e) = play_join.await {
+                                                        error!(
+                                                            "Bedrock play task for player {} ended with panic/cancel: {e}",
+                                                            player.gameprofile.name
+                                                        );
+                                                    }
 
                                                     client_clone.close().await;
                                                     client_clone.await_tasks().await;
