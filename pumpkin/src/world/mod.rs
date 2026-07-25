@@ -209,8 +209,15 @@ pub struct World {
     pub block_registry: Arc<BlockRegistry>,
     pub server: Weak<Server>,
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
-    /// A map of unsent block changes, keyed by block position.
-    unsent_block_changes: Mutex<HashMap<BlockPos, BlockStateId>>,
+    /// Dirty block positions waiting to be broadcast to clients.
+    ///
+    /// State changes may race while chunk, player, and entity ticks run in
+    /// parallel. Keep only positions here and read the authoritative state when
+    /// flushing, otherwise an older writer can leave a stale client snapshot.
+    unsent_block_changes: Mutex<FxHashSet<BlockPos>>,
+    /// Serializes snapshots and packet enqueueing so older flushes cannot be
+    /// delivered after a newer one.
+    block_update_flush_lock: Mutex<()>,
     /// POI storage for fast portal lookups
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
@@ -308,7 +315,8 @@ impl World {
             sea_level: generation_settings.sea_level,
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
-            unsent_block_changes: Mutex::new(HashMap::new()),
+            unsent_block_changes: Mutex::new(FxHashSet::default()),
+            block_update_flush_lock: Mutex::new(()),
             portal_poi: Mutex::new(portal_poi),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
@@ -1183,11 +1191,8 @@ impl World {
         self.flush_block_updates().await;
     }
 
-    pub async fn register_block_change(&self, position: BlockPos, block_state_id: BlockStateId) {
-        self.unsent_block_changes
-            .lock()
-            .await
-            .insert(position, block_state_id);
+    pub async fn register_block_change(&self, position: BlockPos, _block_state_id: BlockStateId) {
+        self.unsent_block_changes.lock().await.insert(position);
     }
 
     /// Send pending block state changes to clients.
@@ -1198,6 +1203,7 @@ impl World {
     /// once per tick. Call sites must batch (after NTE / end of tick), never
     /// flush on every single `setBlock` (e.g. each redstone dust power change).
     pub async fn flush_block_updates(&self) {
+        let _flush_guard = self.block_update_flush_lock.lock().await;
         let mut block_state_updates_by_chunk_section: HashMap<
             Vector3<i32>,
             Vec<(BlockPos, BlockStateId)>,
@@ -1206,7 +1212,11 @@ impl World {
             let mut guard = self.unsent_block_changes.lock().await;
             std::mem::take(&mut *guard)
         };
-        for (position, block_state_id) in changes {
+        for position in changes {
+            // `set_block_state` mutates the chunk before it can await the dirty
+            // set lock. Re-read here so racing water/redstone/player updates send
+            // the final state, rather than whichever caller acquired that lock last.
+            let block_state_id = self.get_block_state_id(&position);
             let chunk_section = chunk_section_from_pos(&position);
             block_state_updates_by_chunk_section
                 .entry(chunk_section)
@@ -4455,10 +4465,7 @@ impl World {
             return block_state_id;
         }
 
-        self.unsent_block_changes
-            .lock()
-            .await
-            .insert(*position, block_state_id);
+        self.unsent_block_changes.lock().await.insert(*position);
 
         let old_block = Block::from_state_id(replaced_block_state_id);
         let new_block = Block::from_state_id(block_state_id);

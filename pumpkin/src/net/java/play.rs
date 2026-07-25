@@ -2167,6 +2167,17 @@ impl JavaClient {
         .await;
     }
 
+    async fn sync_use_item_on_block_states(
+        &self,
+        world: &World,
+        position: BlockPos,
+        face: BlockDirection,
+    ) {
+        self.sync_block_state_to_client(world, position).await;
+        self.sync_block_state_to_client(world, position.offset(face.to_offset()))
+            .await;
+    }
+
     pub async fn handle_player_abilities(
         &self,
         player: &Arc<Player>,
@@ -2270,11 +2281,8 @@ impl JavaClient {
             server;
             event;
             'cancelled: {
-                self.enqueue_packet(&CBlockUpdate::new(
-                    position,
-                    VarInt(block.id.as_u16() as i32),
-                ))
-                .await;
+                self.sync_use_item_on_block_states(&world, position, face)
+                    .await;
                 return Ok(());
             }
         }}
@@ -2301,6 +2309,8 @@ impl JavaClient {
                 if matches!(result, BlockActionResult::SuccessServer) {
                     player.swing_hand(hand, true).await;
                 }
+                self.sync_use_item_on_block_states(&world, position, face)
+                    .await;
                 return Ok(());
             }
         }
@@ -2316,6 +2326,9 @@ impl JavaClient {
         if stack.is_empty() {
             // TODO item cool down
             // If the hand is empty we stop here
+            drop(stack);
+            self.sync_use_item_on_block_states(&world, position, face)
+                .await;
             return Ok(());
         }
 
@@ -2363,6 +2376,9 @@ impl JavaClient {
         if !after.are_equal(&before) {
             player.sync_hand_slot(slot_index, after).await;
         }
+
+        self.sync_use_item_on_block_states(&world, position, face)
+            .await;
 
         Ok(())
     }
@@ -2799,14 +2815,7 @@ impl JavaClient {
             .place_block(player, block, server, &use_item_on, location, face)
             .await
         {
-            Ok(Some((final_block_pos, new_state))) => {
-                self.send_packet_now(&CBlockUpdate::new(
-                    final_block_pos,
-                    VarInt(i32::from(new_state.as_u16())),
-                ))
-                .await;
-                Ok(true)
-            }
+            Ok(Some(_)) => Ok(true),
             Ok(None) => Ok(false),
             Err(crate::block::registry::BlockPlacingError::InvalidGamemode) => {
                 Err(BlockPlacingError::InvalidGamemode)

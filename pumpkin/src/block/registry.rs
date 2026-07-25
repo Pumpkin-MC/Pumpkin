@@ -645,7 +645,13 @@ impl BlockRegistry {
             )
             .await;
 
-        Ok(Some((final_block_pos, new_state)))
+        // `placed` callbacks can immediately alter the state (for example, a
+        // powered redstone wire). Return the committed state, not the state
+        // originally selected by `on_place`.
+        Ok(Some((
+            final_block_pos,
+            world.get_block_state_id(&final_block_pos),
+        )))
     }
     pub fn register<T: BlockBehaviour + BlockMetadata + 'static>(&mut self, block: T) {
         let ids = T::ids();
