@@ -232,6 +232,7 @@ pub mod nbt;
 pub mod objective;
 pub mod range;
 pub mod resource_key;
+pub mod resource_or_tag;
 pub mod slot;
 pub mod team;
 pub mod team_color;
