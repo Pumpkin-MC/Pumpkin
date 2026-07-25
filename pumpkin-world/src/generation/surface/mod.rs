@@ -66,7 +66,7 @@ pub struct MaterialRuleContext<'a> {
 }
 
 impl<'a> MaterialRuleContext<'a> {
-    pub fn new(
+    pub const fn new(
         min_y: i8,
         height: u16,
         random_deriver: &'a XoroshiroSplitter,
