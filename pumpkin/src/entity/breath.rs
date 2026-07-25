@@ -163,16 +163,8 @@ impl BreathManager {
         // 26.x:   TrackedData::AIR_SUPPLY_ID + MetaDataType::INT
         player.get_entity().send_meta_data(
             &[
-                Metadata::new(
-                    TrackedData::AIR_SUPPLY_ID,
-                    MetaDataType::INT,
-                    VarInt(air),
-                ),
-                Metadata::new(
-                    TrackedData::AIR,
-                    MetaDataType::INTEGER,
-                    VarInt(air),
-                ),
+                Metadata::new(TrackedData::AIR_SUPPLY_ID, MetaDataType::INT, VarInt(air)),
+                Metadata::new(TrackedData::AIR, MetaDataType::INTEGER, VarInt(air)),
             ],
             Some(&bedrock_meta),
         );
