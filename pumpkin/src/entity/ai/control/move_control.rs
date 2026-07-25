@@ -87,7 +87,9 @@ impl MoveControlTrait for MoveControl {
             // attempt reaches a solid obstacle before A* can produce a step-up node.
             // Vanilla uses the target height and the current block's collision shape.
             let step_height = living_entity.get_attribute_value(&Attributes::STEP_HEIGHT);
-            let horiz_limit = 1.0f64.max(entity.entity_dimension.load().width as f64);
+            // MoveControl compares the squared horizontal distance directly with
+            // `max(1.0, bbWidth)`, rather than squaring that limit again.
+            let max_jump_distance_sq = 1.0f64.max(entity.entity_dimension.load().width as f64);
             let block_pos = entity.block_pos.load();
             let world = entity.world.load();
             let state = world.get_block_state(&block_pos);
@@ -98,8 +100,8 @@ impl MoveControlTrait for MoveControl {
                 && state
                     .get_block_collision_shapes()
                     .any(|shape| pos.y < shape.max.y + f64::from(block_pos.0.y));
-            let target_requires_jump =
-                yd > step_height && xd * xd + zd * zd < horiz_limit * horiz_limit;
+            let target_requires_jump = yd > step_height
+                && xd * xd + zd * zd < max_jump_distance_sq;
 
             if target_requires_jump || collision_requires_jump {
                 living_entity.jumping.store(true, Ordering::SeqCst);
