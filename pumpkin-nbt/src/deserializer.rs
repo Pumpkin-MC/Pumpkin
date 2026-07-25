@@ -4,7 +4,7 @@ use std::io::{Cursor, Seek, SeekFrom};
 
 use crate::{
     BYTE_ARRAY_ID, BYTE_ID, COMPOUND_ID, END_ID, Error, INT_ARRAY_ID, INT_ID, LIST_ID,
-    LONG_ARRAY_ID, LONG_ID, MAX_ARRAY_LENGTH, NbtTag, io,
+    LONG_ARRAY_ID, LONG_ID, MAX_ARRAY_LENGTH, MAX_NBT_DEPTH, NbtTag, io,
 };
 use io::Read;
 use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
@@ -307,6 +307,9 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelper<'a> for NbtReadHelperJava<D> {
 
     fn get_string(&mut self) -> Result<Cow<'a, str>> {
         let len = self.get_string_len()? as usize;
+        if len > MAX_ARRAY_LENGTH {
+            return Err(Error::LargeLength(len));
+        }
         self.reader.read_string(len)
     }
 
@@ -401,6 +404,9 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelper<'a> for NbtReadHelperBedrock<D> {
 
     fn get_string(&mut self) -> Result<Cow<'a, str>> {
         let len = self.get_string_len()? as usize;
+        if len > MAX_ARRAY_LENGTH {
+            return Err(Error::LargeLength(len));
+        }
         self.reader.read_string(len)
     }
 
@@ -414,6 +420,8 @@ pub struct Deserializer<R> {
     tag_to_deserialize_stack: Option<u8>,
     in_list: bool,
     is_named: bool,
+    /// Nesting depth of compounds/lists currently being deserialized.
+    depth: u32,
 }
 
 impl<R> Deserializer<R> {
@@ -423,7 +431,20 @@ impl<R> Deserializer<R> {
             tag_to_deserialize_stack: None,
             in_list: false,
             is_named,
+            depth: 0,
         }
+    }
+
+    const fn enter_nested(&mut self) -> Result<()> {
+        if self.depth >= MAX_NBT_DEPTH {
+            return Err(Error::DepthLimitExceeded);
+        }
+        self.depth += 1;
+        Ok(())
+    }
+
+    const fn exit_nested(&mut self) {
+        self.depth = self.depth.saturating_sub(1);
     }
 }
 
@@ -511,15 +532,29 @@ impl<'de, R: NbtReadHelper<'de>> de::Deserializer<'de> for &mut Deserializer<R> 
                     return Err(Error::LargeLength(remaining_values));
                 }
 
+                // Empty END-typed lists are valid; non-empty are not.
+                if list_type == END_ID && remaining_values != 0 {
+                    return Err(Error::UnknownTagId(list_type));
+                }
+
+                //TODO this is a bit hacky but I couldn't think of a better way
+                // This flag gets auto cleared in visit_seq
                 set_curr_visitor_seq_list_id(Some(list_type));
+                self.enter_nested()?;
                 let result = visitor.visit_seq(ListAccess {
                     de: self,
                     list_type,
                     remaining_values,
-                })?;
-                Ok(result)
+                });
+                self.exit_nested();
+                result
             }
-            COMPOUND_ID => visitor.visit_map(CompoundAccess { de: self }),
+            COMPOUND_ID => {
+                self.enter_nested()?;
+                let result = visitor.visit_map(CompoundAccess { de: self });
+                self.exit_nested();
+                result
+            }
             _ => {
                 let result = match NbtTag::deserialize_data(&mut self.input, tag_to_deserialize)? {
                     NbtTag::Byte(value) => visitor.visit_i8::<Error>(value)?,
@@ -636,8 +671,10 @@ impl<'de, R: NbtReadHelper<'de>> de::Deserializer<'de> for &mut Deserializer<R> 
             }
         }
 
-        let value = visitor.visit_map(CompoundAccess { de: self })?;
-        Ok(value)
+        self.enter_nested()?;
+        let value = visitor.visit_map(CompoundAccess { de: self });
+        self.exit_nested();
+        value
     }
 
     fn deserialize_struct<V: Visitor<'de>>(

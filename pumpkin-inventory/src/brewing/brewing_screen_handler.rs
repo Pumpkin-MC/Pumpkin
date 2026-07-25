@@ -89,6 +89,8 @@ impl BrewingScreenHandler {
                 i,
             )));
         }
+        // Container slots precede the player slots; used by Bedrock slot mapping.
+        handler.behaviour.container_slots = handler.behaviour.slots.len();
 
         // Add player slots
         let pi: Arc<dyn Inventory> = player_inventory.clone();

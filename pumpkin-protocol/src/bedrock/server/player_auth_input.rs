@@ -69,7 +69,21 @@ impl PacketRead for SPlayerAuthInput {
 
         // 3. Block Actions
         let block_actions = if input_data.get(InputData::PerformBlockActions as usize) {
-            let count = VarInt::read(reader)?.0 as usize;
+            const MAX_BLOCK_ACTIONS: usize = 64;
+            let count_i = VarInt::read(reader)?.0;
+            if count_i < 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "negative block action count",
+                ));
+            }
+            let count = count_i as usize;
+            if count > MAX_BLOCK_ACTIONS {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("block action count {count_i} exceeds limit {MAX_BLOCK_ACTIONS}"),
+                ));
+            }
             let mut actions = Vec::with_capacity(count);
             for _ in 0..count {
                 actions.push(PlayerBlockAction::read(reader)?);
@@ -126,20 +140,42 @@ pub struct PlayerInventoryAction {
     pub transaction: crate::bedrock::server::inventory_transaction::UseItemTransactionData,
 }
 
+/// Bound for the action list in an inventory transaction carried by auth input.
+/// Vanilla sends a handful; an unbounded `VarUInt` length pre-allocates attacker-sized memory.
+const MAX_INVENTORY_ACTIONS: usize = 64;
+
+/// Bound for the legacy set-item slot entry count carried by auth input.
+/// Vanilla sends a handful; an unbounded `VarUInt` count drives an attacker-sized parse loop.
+const MAX_LEGACY_SLOTS: u32 = 256;
+
 impl PacketRead for PlayerInventoryAction {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let legacy_request_id = VarInt::read(buf)?;
         let mut legacy_slots = Vec::new();
         if legacy_request_id.0 < -1 && (legacy_request_id.0 & 1) == 0 {
             let slots_len = VarUInt::read(buf)?.0;
+            if slots_len > MAX_LEGACY_SLOTS {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("legacy slot count {slots_len} exceeds limit {MAX_LEGACY_SLOTS}"),
+                ));
+            }
             for _ in 0..slots_len {
                 legacy_slots.push(
                     crate::bedrock::server::inventory_transaction::LegacySetItemSlot::read(buf)?,
                 );
             }
         }
-        let actions_len = VarUInt::read(buf)?.0;
-        let mut actions = Vec::with_capacity(actions_len as usize);
+        let actions_len = VarUInt::read(buf)?.0 as usize;
+        if actions_len > MAX_INVENTORY_ACTIONS {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "inventory action count {actions_len} exceeds limit {MAX_INVENTORY_ACTIONS}"
+                ),
+            ));
+        }
+        let mut actions = Vec::with_capacity(actions_len);
         for _ in 0..actions_len {
             actions
                 .push(crate::bedrock::server::inventory_transaction::InventoryAction::read(buf)?);
@@ -256,4 +292,76 @@ pub enum InputData {
     SneakReleasedRaw = 62,
     SneakPressedRaw = 63,
     SneakCurrentRaw = 64,
+}
+
+#[cfg(test)]
+mod alloc_cap_tests {
+    use super::*;
+    use crate::bedrock::network_item::NetworkItemDescriptor;
+    use crate::serial::PacketWrite;
+    use std::io::Cursor;
+
+    fn encode_inventory_action(buf: &mut Vec<u8>) {
+        // source_type Container, window_id 0, slot 0, empty old/new items
+        VarULong(0).write(buf).unwrap();
+        VarInt(0).write(buf).unwrap();
+        VarULong(0).write(buf).unwrap();
+        NetworkItemDescriptor::default().write(buf).unwrap();
+        NetworkItemDescriptor::default().write(buf).unwrap();
+    }
+
+    fn encode_use_item_transaction(buf: &mut Vec<u8>) {
+        VarUInt(0).write(buf).unwrap(); // action_type
+        0u8.write(buf).unwrap(); // trigger_type
+        VarInt(0).write(buf).unwrap(); // block_pos x
+        VarInt(0).write(buf).unwrap(); // block_pos y
+        VarInt(0).write(buf).unwrap(); // block_pos z
+        0u8.write(buf).unwrap(); // block_face
+        VarInt(0).write(buf).unwrap(); // hot_bar_slot
+        NetworkItemDescriptor::default().write(buf).unwrap(); // item_in_hand
+        for _ in 0..6 {
+            0.0f32.write(buf).unwrap(); // player_position + click_position
+        }
+        VarUInt(0).write(buf).unwrap(); // block_runtime_id
+        0u8.write(buf).unwrap(); // client_prediction
+        0u8.write(buf).unwrap(); // client_cooldown_state
+    }
+
+    #[test]
+    fn accepts_actions_len_at_cap() {
+        let mut buf = Vec::new();
+        VarInt(0).write(&mut buf).unwrap(); // legacy_request_id: no legacy slots
+        VarUInt(MAX_INVENTORY_ACTIONS as u32)
+            .write(&mut buf)
+            .unwrap();
+        for _ in 0..MAX_INVENTORY_ACTIONS {
+            encode_inventory_action(&mut buf);
+        }
+        encode_use_item_transaction(&mut buf);
+
+        let parsed = PlayerInventoryAction::read(&mut Cursor::new(buf)).unwrap();
+        assert_eq!(parsed.actions.len(), MAX_INVENTORY_ACTIONS);
+    }
+
+    #[test]
+    fn rejects_actions_len_over_cap() {
+        let mut buf = Vec::new();
+        VarInt(0).write(&mut buf).unwrap(); // legacy_request_id: no legacy slots
+        VarUInt((MAX_INVENTORY_ACTIONS + 1) as u32)
+            .write(&mut buf)
+            .unwrap();
+
+        let err = PlayerInventoryAction::read(&mut Cursor::new(buf)).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn rejects_legacy_slots_len_over_cap() {
+        let mut buf = Vec::new();
+        VarInt(-2).write(&mut buf).unwrap(); // legacy_request_id: legacy slots follow
+        VarUInt(MAX_LEGACY_SLOTS + 1).write(&mut buf).unwrap();
+
+        let err = PlayerInventoryAction::read(&mut Cursor::new(buf)).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    }
 }

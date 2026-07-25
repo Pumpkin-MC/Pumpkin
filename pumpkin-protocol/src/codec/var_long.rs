@@ -128,3 +128,27 @@ impl PacketWrite for VarLong {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod zigzag_tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn round_trip_zigzag_values() {
+        for value in [i64::MIN, -100, -2, -1, 0, 1, 2, 63, 64, 100, i64::MAX] {
+            let mut buf = Vec::new();
+            VarLong(value).write(&mut buf).unwrap();
+            let decoded = VarLong::read(&mut Cursor::new(buf)).unwrap();
+            assert_eq!(decoded.0, value, "round trip failed for {value}");
+        }
+    }
+
+    #[test]
+    fn decodes_zigzag_wire_vectors() {
+        for (wire, expected) in [(0x00u8, 0i64), (0x01, -1), (0x02, 1), (0x03, -2)] {
+            let decoded = VarLong::read(&mut Cursor::new(vec![wire])).unwrap();
+            assert_eq!(decoded.0, expected, "wire {wire:#04x}");
+        }
+    }
+}

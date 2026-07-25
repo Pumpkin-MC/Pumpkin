@@ -10,6 +10,7 @@ use pumpkin_data::{
     item_stack::ItemStack,
 };
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
+use pumpkin_inventory::slot::Slot;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::bedrock::{
     client::inventory_content::CInventoryContent,
@@ -355,7 +356,8 @@ impl BedrockClient {
 
         if input_data.get(InputData::StartFlying as usize) {
             let flying = { player.abilities.lock().await.flying };
-            if !flying {
+            // Reject free survival flight: only fly when the server granted may_fly.
+            if !flying && player.abilities.lock().await.allow_flying {
                 send_cancellable! {{
                     server;
                     PlayerToggleFlightEvent::new(player.clone(), true);
@@ -404,7 +406,15 @@ impl BedrockClient {
         packet: pumpkin_protocol::bedrock::server::player_auth_input::PlayerBlockAction,
     ) {
         use pumpkin_protocol::bedrock::server::player_action::Action as PlayerAction;
-        let action = PlayerAction::try_from(packet.action.0).unwrap();
+        let Ok(action) = PlayerAction::try_from(packet.action.0) else {
+            // Invalid action ids used to unwrap → panic hook shutdown.
+            tracing::debug!(
+                "Ignoring invalid bedrock block action {} from {}",
+                packet.action.0,
+                player.gameprofile.name
+            );
+            return;
+        };
         self.handle_player_action(
             player,
             server,
@@ -488,7 +498,7 @@ impl BedrockClient {
         player: &Arc<Player>,
         packet: SInventoryTransaction,
     ) {
-        tracing::info!("handle_inventory_action: packet={:?}", packet);
+        tracing::debug!("handle_inventory_action from {}", player.gameprofile.name);
         let mut inventory_updated = false;
         let mut updates = Vec::new();
         let result = 0u8;
@@ -546,6 +556,10 @@ impl BedrockClient {
             use pumpkin_protocol::bedrock::server::inventory_transaction::InventoryActionSource;
             let source_type = InventoryActionSource::from(action.source_type);
             if source_type == InventoryActionSource::World {
+                // Only creative may spawn world-source drops from client descriptors.
+                if !is_creative {
+                    continue;
+                }
                 let old_stack = descriptor_to_stack(&action.old_item, is_creative);
                 let new_stack = descriptor_to_stack(&action.new_item, is_creative);
                 if old_stack.is_empty() && !new_stack.is_empty() {
@@ -555,6 +569,11 @@ impl BedrockClient {
                 if let Some(screen_slot) =
                     map_bedrock_slot_to_screen_handler(window_id, action.inventory_slot)
                 {
+                    // Survival: never write arbitrary client item descriptors into slots.
+                    // Creative may set slots from the creative catalog.
+                    if !is_creative {
+                        continue;
+                    }
                     let item_stack = descriptor_to_stack(&action.new_item, is_creative);
 
                     let mut player_screen_handler = player.player_screen_handler.lock().await;
@@ -647,15 +666,19 @@ impl BedrockClient {
                 }
 
                 if data.action_type.0 == 0 {
-                    // Click block
+                    // Click block. Never trust client item_in_hand to spawn items
+                    // in survival — only creative may adopt the client descriptor.
                     let is_creative = player.gamemode.load() == GameMode::Creative;
-                    let client_stack = descriptor_to_stack(&data.item_in_hand, is_creative);
-
                     let held_item = player.inventory.held_item();
-                    if !client_stack.is_empty() {
-                        let mut server_stack = held_item.lock().await;
-                        if server_stack.is_empty() || server_stack.item.id != client_stack.item.id {
-                            *server_stack = client_stack.clone();
+                    if is_creative {
+                        let client_stack = descriptor_to_stack(&data.item_in_hand, true);
+                        if !client_stack.is_empty() {
+                            let mut server_stack = held_item.lock().await;
+                            if server_stack.is_empty()
+                                || server_stack.item.id != client_stack.item.id
+                            {
+                                *server_stack = client_stack;
+                            }
                         }
                     }
 
@@ -743,15 +766,19 @@ impl BedrockClient {
                         }
                     }
                 } else if data.action_type.0 == 1 {
-                    // Click air / Use item
+                    // Click air / Use item. Same rule as click-block: never adopt
+                    // client item_in_hand in survival.
                     let is_creative = player.gamemode.load() == GameMode::Creative;
-                    let client_stack = descriptor_to_stack(&data.item_in_hand, is_creative);
-
                     let held_item = player.inventory.held_item();
-                    if !client_stack.is_empty() {
-                        let mut server_stack = held_item.lock().await;
-                        if server_stack.is_empty() || server_stack.item.id != client_stack.item.id {
-                            *server_stack = client_stack.clone();
+                    if is_creative {
+                        let client_stack = descriptor_to_stack(&data.item_in_hand, true);
+                        if !client_stack.is_empty() {
+                            let mut server_stack = held_item.lock().await;
+                            if server_stack.is_empty()
+                                || server_stack.item.id != client_stack.item.id
+                            {
+                                *server_stack = client_stack;
+                            }
                         }
                     }
 
@@ -1248,6 +1275,8 @@ impl BedrockClient {
         };
         use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestAction;
 
+        const MAX_CRAFT_REPETITIONS: u8 = 64;
+
         let current_screen_handler = player.current_screen_handler.lock().await.clone();
         let mut screen_handler = current_screen_handler.lock().await;
 
@@ -1259,12 +1288,17 @@ impl BedrockClient {
             let mut result = 0u8; // 0 = Success, 1 = Error
 
             for action in request.actions {
-                tracing::info!("Processing ItemStackRequestAction: {:?}", action);
+                tracing::debug!("Processing ItemStackRequestAction");
                 match action {
                     ItemStackRequestAction::CraftCreative {
                         creative_item_id,
                         repetitions,
                     } => {
+                        // Creative catalog is creative-only. Survival must not spawn free items.
+                        if player.gamemode.load() != GameMode::Creative {
+                            result = 1;
+                            break;
+                        }
                         let index = (creative_item_id.0.saturating_sub(1)) as usize;
                         if index < pumpkin_data::bedrock_creative::CREATIVE_ENTRIES.len() {
                             let entry = pumpkin_data::bedrock_creative::CREATIVE_ENTRIES[index];
@@ -1320,21 +1354,39 @@ impl BedrockClient {
                         source,
                         destination,
                     } => {
+                        if source.container_name.container_name == ContainerName::CreatedOutput
+                            && created_item.is_none()
+                        {
+                            tracing::debug!("CreatedOutput move without tracked craft");
+                            result = 1;
+                            break;
+                        }
+                        // A Cursor source backed by the created-item mirror spends the
+                        // mirror; its remainder must not materialize in the physical cursor.
+                        let source_uses_mirror =
+                            is_cursor_mirror(&*screen_handler, &source, created_item.as_ref())
+                                .await;
                         let mut source_stack =
                             get_slot_stack(&*screen_handler, &source, created_item.as_ref()).await;
-                        if source_stack.is_empty() && created_item.is_none() {
+                        if source_stack.is_empty() {
                             tracing::debug!("Source stack is empty in Take/Place");
                             result = 1;
                             break;
                         }
                         let count = count.min(source_stack.item_count);
                         if count > 0 {
-                            let mut dest_stack = get_slot_stack(
-                                &*screen_handler,
-                                &destination,
-                                created_item.as_ref(),
-                            )
-                            .await;
+                            // Destinations resolve to physical state only; the
+                            // created-item mirror is never a merge base.
+                            let mut dest_stack =
+                                get_destination_slot_stack(&*screen_handler, &destination).await;
+                            // Take-only slots (result/output) never accept moved-in stacks.
+                            if !destination_accepts(&*screen_handler, &destination, &source_stack)
+                                .await
+                            {
+                                tracing::debug!("Take/Place destination is take-only");
+                                result = 1;
+                                break;
+                            }
                             if dest_stack.is_empty() {
                                 dest_stack = source_stack.copy_with_count(count);
                             } else if dest_stack.are_items_and_components_equal(&source_stack) {
@@ -1347,31 +1399,32 @@ impl BedrockClient {
                                 break;
                             }
 
-                            source_stack.decrement(count);
-                            if source.container_name.container_name == ContainerName::CreatedOutput
+                            let taken_stack = source_stack.copy_with_count(count);
+                            // A take from a take-only slot is settled through the
+                            // slot itself exactly once (grid use, trade cost, XP).
+                            // Settle before consuming anything so a refused take
+                            // leaves both the craft mirror and the grid untouched.
+                            if !charge_take_only_source(
+                                player.as_ref(),
+                                &*screen_handler,
+                                &source,
+                                &taken_stack,
+                            )
+                            .await
                             {
-                                if let Some(ref mut stack) = created_item {
-                                    stack.decrement(count);
-                                    if stack.is_empty() {
-                                        created_item = None;
-                                    }
-                                }
-                            } else if source.container_name.container_name == ContainerName::Cursor
-                            {
-                                let cursor_is_empty = screen_handler
-                                    .get_behaviour()
-                                    .cursor_stack
-                                    .lock()
-                                    .await
-                                    .is_empty();
-                                if cursor_is_empty && let Some(ref mut stack) = created_item {
-                                    stack.decrement(count);
-                                    if stack.is_empty() {
-                                        created_item = None;
-                                    }
-                                }
+                                tracing::debug!("Take/Place source slot refuses the take");
+                                result = 1;
+                                break;
                             }
-                            let source_stack = if source_stack.is_empty() {
+                            source_stack.decrement(count);
+                            consume_created_output_source(
+                                source.container_name.container_name,
+                                count,
+                                &mut created_item,
+                                &*screen_handler,
+                            )
+                            .await;
+                            let source_stack = if source_stack.is_empty() || source_uses_mirror {
                                 ItemStack::EMPTY.clone()
                             } else {
                                 source_stack
@@ -1409,10 +1462,48 @@ impl BedrockClient {
                         }
                     }
                     ItemStackRequestAction::Swap { slot1, slot2 } => {
+                        if (slot1.container_name.container_name == ContainerName::CreatedOutput
+                            || slot2.container_name.container_name == ContainerName::CreatedOutput)
+                            && created_item.is_none()
+                        {
+                            result = 1;
+                            break;
+                        }
                         let stack1 =
                             get_slot_stack(&*screen_handler, &slot1, created_item.as_ref()).await;
                         let stack2 =
                             get_slot_stack(&*screen_handler, &slot2, created_item.as_ref()).await;
+
+                        // Take-only slots (result/output) never join a swap: the
+                        // incoming half would be a free write into the result.
+                        if !destination_accepts(&*screen_handler, &slot1, &stack2).await
+                            || !destination_accepts(&*screen_handler, &slot2, &stack1).await
+                        {
+                            result = 1;
+                            break;
+                        }
+
+                        // Mirror flags must be captured before any consumption.
+                        let slot1_uses_mirror =
+                            is_cursor_mirror(&*screen_handler, &slot1, created_item.as_ref()).await;
+                        let slot2_uses_mirror =
+                            is_cursor_mirror(&*screen_handler, &slot2, created_item.as_ref()).await;
+
+                        // Moving CreatedOutput into inventory must spend the craft.
+                        if slot1.container_name.container_name == ContainerName::CreatedOutput {
+                            consume_created_item(&mut created_item, stack1.item_count);
+                        }
+                        if slot2.container_name.container_name == ContainerName::CreatedOutput {
+                            consume_created_item(&mut created_item, stack2.item_count);
+                        }
+                        // A Cursor side backed by the created-item mirror spends the
+                        // mirror exactly like a CreatedOutput source.
+                        if slot1_uses_mirror {
+                            consume_created_item(&mut created_item, stack1.item_count);
+                        }
+                        if slot2_uses_mirror {
+                            consume_created_item(&mut created_item, stack2.item_count);
+                        }
 
                         update_slot_stack(player, &mut *screen_handler, &slot1, stack2.clone())
                             .await;
@@ -1439,6 +1530,15 @@ impl BedrockClient {
                         source,
                         randomly: _,
                     } => {
+                        if source.container_name.container_name == ContainerName::CreatedOutput
+                            && created_item.is_none()
+                        {
+                            result = 1;
+                            break;
+                        }
+                        let source_uses_mirror =
+                            is_cursor_mirror(&*screen_handler, &source, created_item.as_ref())
+                                .await;
                         let mut source_stack =
                             get_slot_stack(&*screen_handler, &source, created_item.as_ref()).await;
                         if source_stack.is_empty() {
@@ -1448,10 +1548,31 @@ impl BedrockClient {
                         let count = count.min(source_stack.item_count);
                         if count > 0 {
                             let dropped_stack = source_stack.copy_with_count(count);
+                            // A take from a take-only slot is settled through the
+                            // slot itself exactly once (grid use, trade cost, XP),
+                            // and only a settled take may be dropped.
+                            if !charge_take_only_source(
+                                player.as_ref(),
+                                &*screen_handler,
+                                &source,
+                                &dropped_stack,
+                            )
+                            .await
+                            {
+                                result = 1;
+                                break;
+                            }
                             player.drop_item(dropped_stack).await;
 
                             source_stack.decrement(count);
-                            let source_stack = if source_stack.is_empty() {
+                            consume_created_output_source(
+                                source.container_name.container_name,
+                                count,
+                                &mut created_item,
+                                &*screen_handler,
+                            )
+                            .await;
+                            let source_stack = if source_stack.is_empty() || source_uses_mirror {
                                 ItemStack::EMPTY.clone()
                             } else {
                                 source_stack
@@ -1476,6 +1597,15 @@ impl BedrockClient {
                     }
                     ItemStackRequestAction::Destroy { count, source }
                     | ItemStackRequestAction::Consume { count, source } => {
+                        if source.container_name.container_name == ContainerName::CreatedOutput
+                            && created_item.is_none()
+                        {
+                            result = 1;
+                            break;
+                        }
+                        let source_uses_mirror =
+                            is_cursor_mirror(&*screen_handler, &source, created_item.as_ref())
+                                .await;
                         let mut source_stack =
                             get_slot_stack(&*screen_handler, &source, created_item.as_ref()).await;
                         if source_stack.is_empty() {
@@ -1484,8 +1614,29 @@ impl BedrockClient {
                         }
                         let count = count.min(source_stack.item_count);
                         if count > 0 {
+                            let consumed_stack = source_stack.copy_with_count(count);
+                            // A take from a take-only slot is settled through the
+                            // slot itself exactly once (grid use, trade cost, XP).
+                            if !charge_take_only_source(
+                                player.as_ref(),
+                                &*screen_handler,
+                                &source,
+                                &consumed_stack,
+                            )
+                            .await
+                            {
+                                result = 1;
+                                break;
+                            }
                             source_stack.decrement(count);
-                            let source_stack = if source_stack.is_empty() {
+                            consume_created_output_source(
+                                source.container_name.container_name,
+                                count,
+                                &mut created_item,
+                                &*screen_handler,
+                            )
+                            .await;
+                            let source_stack = if source_stack.is_empty() || source_uses_mirror {
                                 ItemStack::EMPTY.clone()
                             } else {
                                 source_stack
@@ -1517,50 +1668,69 @@ impl BedrockClient {
                         repetitions,
                         ..
                     } => {
+                        // Only 2×2 player craft and 3×3 crafting table. Any other
+                        // open window would treat slots[0] as "output" and mint
+                        // free stacks from chest/etc contents.
+                        let window_type = screen_handler.window_type();
+                        if !window_allows_craft_recipe(window_type) {
+                            tracing::debug!(
+                                "Reject CraftRecipe on non-crafting window {:?}",
+                                window_type
+                            );
+                            result = 1;
+                            break;
+                        }
+
                         if repetitions > 0 {
+                            let reps = repetitions.min(MAX_CRAFT_REPETITIONS);
                             screen_handler.update_to_client().await;
 
-                            let is_player = screen_handler.window_type().is_none();
+                            let is_player = window_type.is_none();
                             let grid_size = if is_player { 4 } else { 9 };
-                            for i in 0..grid_size {
-                                let grid_slot_index = 1 + i;
-                                let grid_slot =
-                                    screen_handler.get_behaviour().slots[grid_slot_index].clone();
-                                let grid_stack = grid_slot.get_cloned_stack().await;
-                                tracing::info!(
-                                    "Crafting Grid slot {i} (slot index {grid_slot_index}): Item ID: {}, Count: {}",
-                                    grid_stack.item.id,
-                                    grid_stack.item_count
-                                );
+                            let slots = &screen_handler.get_behaviour().slots;
+                            // Output + full grid must exist.
+                            if slots.len() <= grid_size {
+                                result = 1;
+                                break;
                             }
 
-                            let output_slot = screen_handler.get_behaviour().slots[0].clone();
-                            let output_stack = output_slot.get_cloned_stack().await;
+                            let output_slot = slots[0].clone();
+                            // Refuse if slot 0 accepts inserts (not a craft output).
+                            if Slot::can_insert(output_slot.as_ref(), ItemStack::EMPTY).await {
+                                tracing::debug!("CraftRecipe output slot is not take-only");
+                                result = 1;
+                                break;
+                            }
 
+                            let output_stack = output_slot.get_cloned_stack().await;
                             if output_stack.is_empty() {
                                 tracing::warn!("Client tried to craft, but output slot is empty!");
                                 result = 1;
                                 break;
                             }
 
+                            let mut crafted_count: u16 = 0;
+                            let expected_id = output_stack.item.id;
+                            for _ in 0..reps {
+                                let current = output_slot.get_cloned_stack().await;
+                                if current.is_empty() || current.item.id != expected_id {
+                                    break;
+                                }
+                                let batch = u16::from(current.item_count);
+                                output_slot.on_take_item(player.as_ref(), &current).await;
+                                crafted_count = crafted_count.saturating_add(batch);
+                            }
+                            if crafted_count == 0 {
+                                result = 1;
+                                break;
+                            }
                             let mut total_crafted = output_stack.clone();
-                            total_crafted.item_count =
-                                total_crafted.item_count.saturating_mul(repetitions);
+                            total_crafted.item_count = crafted_count.min(u16::from(u8::MAX)) as u8;
                             created_item = Some(total_crafted);
 
-                            for _ in 0..repetitions {
-                                output_slot
-                                    .on_take_item(player.as_ref(), &output_stack)
-                                    .await;
-                            }
-
-                            // Record updates for all grid slots so Bedrock client is notified of consumed ingredients!
-                            let is_player = screen_handler.window_type().is_none();
-                            let grid_size = if is_player { 4 } else { 9 };
                             for i in 0..grid_size {
                                 let grid_slot_index = 1 + i;
-                                let grid_slot =
-                                    screen_handler.get_behaviour().slots[grid_slot_index].clone();
+                                let grid_slot = slots[grid_slot_index].clone();
                                 let grid_stack = grid_slot.get_cloned_stack().await;
                                 record_update(
                                     &mut updates,
@@ -1845,6 +2015,126 @@ impl BedrockClient {
     }
 }
 
+/// Only the 2×2 player craft and 3×3 crafting table may run `CraftRecipe`.
+/// Any other open window would treat slots[0] as "output" and mint free
+/// stacks from chest/etc contents.
+const fn window_allows_craft_recipe(window_type: Option<pumpkin_data::screen::WindowType>) -> bool {
+    matches!(
+        window_type,
+        None | Some(pumpkin_data::screen::WindowType::Crafting)
+    )
+}
+
+/// True when a `Cursor` reference is served by the created-item mirror: the
+/// physical cursor is empty while a crafted stack is still tracked. Mirror
+/// reads are spent from `created_item`, and the remainder must never be
+/// written back into the physical cursor — it lives in exactly one place.
+async fn is_cursor_mirror(
+    screen_handler: &dyn ScreenHandler,
+    slot_info: &pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo,
+    created_item: Option<&ItemStack>,
+) -> bool {
+    slot_info.container_name.container_name == ContainerName::Cursor
+        && created_item.is_some()
+        && screen_handler
+            .get_behaviour()
+            .cursor_stack
+            .lock()
+            .await
+            .is_empty()
+}
+
+/// Destination resolution for moves. The created-item mirror is a virtual
+/// craft remainder, never a merge base, so destinations read physical
+/// state only.
+async fn get_destination_slot_stack(
+    screen_handler: &dyn ScreenHandler,
+    slot_info: &pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo,
+) -> ItemStack {
+    get_slot_stack(screen_handler, slot_info, None).await
+}
+
+/// Whether a move destination may receive the given stack. Virtual or
+/// unmapped containers accept the write-back as a no-op; a resolved slot
+/// that refuses inserts (result/output slots) rejects the move so results
+/// can never be written into for free.
+async fn destination_accepts(
+    screen_handler: &dyn ScreenHandler,
+    slot_info: &pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo,
+    stack: &ItemStack,
+) -> bool {
+    if let Some(screen_slot) = map_bedrock_container_slot(
+        screen_handler,
+        slot_info.container_name.container_name,
+        slot_info.slot_id,
+    ) {
+        return screen_handler.get_behaviour().slots[screen_slot]
+            .can_insert(stack)
+            .await;
+    }
+    true
+}
+
+/// Settles a take from a resolved slot through the slot itself, exactly once
+/// per verified take. A slot that refuses re-insertion of the stack taken
+/// from it is take-only (result/output); its `on_take_item` performs the
+/// consumption/charging (crafting grid use, trade cost, furnace XP).
+/// Ordinary inventory slots accept the stack back and need no settlement.
+/// Returns false when the slot currently refuses the take.
+async fn charge_take_only_source(
+    player: &dyn InventoryPlayer,
+    screen_handler: &dyn ScreenHandler,
+    slot_info: &pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo,
+    taken_stack: &ItemStack,
+) -> bool {
+    let Some(screen_slot) = map_bedrock_container_slot(
+        screen_handler,
+        slot_info.container_name.container_name,
+        slot_info.slot_id,
+    ) else {
+        return true;
+    };
+    let slot = &screen_handler.get_behaviour().slots[screen_slot];
+    if slot.can_insert(taken_stack).await {
+        return true;
+    }
+    if !slot.can_take_items(player).await {
+        return false;
+    }
+    slot.on_take_item(player, taken_stack).await;
+    true
+}
+
+fn consume_created_item(created_item: &mut Option<ItemStack>, count: u8) {
+    if let Some(stack) = created_item.as_mut() {
+        stack.decrement(count);
+        if stack.is_empty() {
+            *created_item = None;
+        }
+    }
+}
+
+async fn consume_created_output_source(
+    source_name: ContainerName,
+    count: u8,
+    created_item: &mut Option<ItemStack>,
+    screen_handler: &dyn ScreenHandler,
+) {
+    if source_name == ContainerName::CreatedOutput {
+        consume_created_item(created_item, count);
+    } else if source_name == ContainerName::Cursor {
+        let cursor_is_empty = screen_handler
+            .get_behaviour()
+            .cursor_stack
+            .lock()
+            .await
+            .is_empty();
+        if cursor_is_empty {
+            consume_created_item(created_item, count);
+        }
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn map_bedrock_container_slot(
     screen_handler: &dyn ScreenHandler,
@@ -1853,10 +2143,16 @@ fn map_bedrock_container_slot(
 ) -> Option<usize> {
     let container_slots = screen_handler.get_behaviour().container_slots;
     let is_player_screen = screen_handler.window_type().is_none();
+    let slot_count = screen_handler.get_behaviour().slots.len();
 
-    match container_name {
+    // Every mapped index is range-checked. No arm may return a raw usize.
+    let in_range = |idx: usize| (idx < slot_count).then_some(idx);
+
+    let raw: Option<usize> = match container_name {
         ContainerName::HotBar => {
-            if is_player_screen {
+            if slot_id >= 9 {
+                None
+            } else if is_player_screen {
                 Some(36 + slot_id as usize)
             } else {
                 Some(container_slots + 27 + slot_id as usize)
@@ -1879,9 +2175,11 @@ fn map_bedrock_container_slot(
                 None
             }
         }
-        ContainerName::Armor => (slot_id < 4).then(|| 5 + slot_id as usize),
-        ContainerName::Offhand => (slot_id == 0).then_some(45),
-        ContainerName::Cursor => None,
+        ContainerName::Armor => (slot_id < 4).then_some(5 + slot_id as usize),
+        // Player screen only; anvil/merchant etc. have <46 slots.
+        ContainerName::Offhand => (slot_id == 0 && is_player_screen).then_some(45),
+        // Cursor and virtual craft output — never real screen indices.
+        ContainerName::Cursor | ContainerName::CreatedOutput => None,
         ContainerName::CraftingInput => {
             if is_player_screen {
                 if slot_id < 4 {
@@ -1905,27 +2203,11 @@ fn map_bedrock_container_slot(
                 None
             }
         }
-        ContainerName::CraftingOutputPreview | ContainerName::CreatedOutput => {
-            if is_player_screen {
-                Some(0)
-            } else if let Some(window_type) = screen_handler.window_type() {
-                match window_type {
-                    pumpkin_data::screen::WindowType::Crafting => Some(0),
-                    pumpkin_data::screen::WindowType::Stonecutter => Some(1),
-                    pumpkin_data::screen::WindowType::Anvil
-                    | pumpkin_data::screen::WindowType::Furnace
-                    | pumpkin_data::screen::WindowType::BlastFurnace
-                    | pumpkin_data::screen::WindowType::Smoker
-                    | pumpkin_data::screen::WindowType::Grindstone
-                    | pumpkin_data::screen::WindowType::Merchant => Some(2),
-                    pumpkin_data::screen::WindowType::Loom
-                    | pumpkin_data::screen::WindowType::Smithing => Some(3),
-                    _ => None,
-                }
-            } else {
-                None
-            }
-        }
+        // Previews resolve to the real result slot; takes from them are
+        // settled through the slot's on_take_item, never served free.
+        ContainerName::CraftingOutputPreview => (is_player_screen
+            || screen_handler.window_type() == Some(pumpkin_data::screen::WindowType::Crafting))
+        .then_some(0),
         ContainerName::AnvilInput => matches!(
             screen_handler.window_type(),
             Some(pumpkin_data::screen::WindowType::Anvil)
@@ -2096,7 +2378,8 @@ fn map_bedrock_container_slot(
         )
         .then_some(2),
         _ => ((slot_id as usize) < container_slots).then_some(slot_id as usize),
-    }
+    };
+    raw.and_then(in_range)
 }
 
 struct SlotUpdate {
@@ -2135,12 +2418,17 @@ async fn get_slot_stack(
     slot_info: &pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo,
     created_item: Option<&ItemStack>,
 ) -> ItemStack {
-    if let (ContainerName::CreatedOutput, Some(stack)) =
-        (slot_info.container_name.container_name, created_item)
-    {
-        return stack.clone();
+    let name = slot_info.container_name.container_name;
+    // Virtual craft output only.
+    if name == ContainerName::CreatedOutput {
+        return created_item
+            .cloned()
+            .unwrap_or_else(|| ItemStack::EMPTY.clone());
     }
-    if slot_info.container_name.container_name == ContainerName::Cursor {
+    // Cursor reads fall back to the created-item mirror when the physical
+    // cursor is empty. Callers spending a mirror read must consume it (see
+    // is_cursor_mirror); destination reads must use get_destination_slot_stack.
+    if name == ContainerName::Cursor {
         let cursor_lock = screen_handler.get_behaviour().cursor_stack.lock().await;
         if cursor_lock.is_empty()
             && let Some(stack) = created_item
@@ -2149,11 +2437,9 @@ async fn get_slot_stack(
         }
         return cursor_lock.clone();
     }
-    if let Some(screen_slot) = map_bedrock_container_slot(
-        screen_handler,
-        slot_info.container_name.container_name,
-        slot_info.slot_id,
-    ) {
+    // Result previews resolve to the real result slot; takes from such a
+    // slot are settled through charge_take_only_source, never served free.
+    if let Some(screen_slot) = map_bedrock_container_slot(screen_handler, name, slot_info.slot_id) {
         screen_handler.get_behaviour().slots[screen_slot]
             .get_cloned_stack()
             .await
@@ -2212,5 +2498,554 @@ async fn update_slot_stack(
             .set_stack(new_stack.clone())
             .await;
         screen_handler.set_received_stack(screen_slot, new_stack);
+    }
+}
+
+#[cfg(test)]
+mod hardening_tests {
+    //! Exploit-sequence tests for Bedrock item-move authority. A full packet
+    //! round-trip needs a live `Server`/`Player`, so each test composes the
+    //! exact helpers the request arms use, in the same order; `update_slot_stack`'s
+    //! Cursor branch is a plain cursor write and is mirrored directly. Every
+    //! sequence is traced from the reviews' exploit reports.
+    use super::*;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::screen::WindowType;
+    use pumpkin_data::statistic::StatisticCategory;
+    use pumpkin_inventory::crafting::crafting_inventory::CraftingInventory;
+    use pumpkin_inventory::crafting::crafting_screen_handler::ResultSlot;
+    use pumpkin_inventory::crafting::recipes::RecipeInputInventory;
+    use pumpkin_inventory::entity_equipment::EntityEquipment;
+    use pumpkin_inventory::player::player_inventory::PlayerInventory;
+    use pumpkin_inventory::screen_handler::{
+        ItemStackFuture, PlayerFuture, ScreenHandlerBehaviour,
+    };
+    use pumpkin_inventory::slot::{BoxFuture, NormalSlot, TakeOnlySlot};
+    use pumpkin_protocol::bedrock::server::item_stack_request::ItemStackRequestSlotInfo;
+    use pumpkin_protocol::java::client::play::{
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+        CSetPlayerInventory,
+    };
+    use pumpkin_world::inventory::SimpleInventory;
+    use std::any::Any;
+    use std::collections::HashMap;
+    use std::sync::atomic::AtomicU8;
+    use tokio::sync::Mutex;
+
+    struct MockScreenHandler {
+        behaviour: ScreenHandlerBehaviour,
+    }
+
+    impl MockScreenHandler {
+        fn new(window_type: Option<WindowType>, container_slots: usize) -> Self {
+            let mut behaviour = ScreenHandlerBehaviour::new(1, window_type);
+            behaviour.container_slots = container_slots;
+            Self { behaviour }
+        }
+    }
+
+    impl ScreenHandler for MockScreenHandler {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+        fn get_behaviour(&self) -> &ScreenHandlerBehaviour {
+            &self.behaviour
+        }
+        fn get_behaviour_mut(&mut self) -> &mut ScreenHandlerBehaviour {
+            &mut self.behaviour
+        }
+        fn quick_move<'a>(
+            &'a mut self,
+            _player: &'a dyn InventoryPlayer,
+            _slot_index: i32,
+        ) -> ItemStackFuture<'a> {
+            Box::pin(async { ItemStack::EMPTY.clone() })
+        }
+    }
+
+    struct MockInventoryPlayer {
+        inventory: Arc<PlayerInventory>,
+    }
+
+    impl MockInventoryPlayer {
+        fn new() -> Self {
+            Self {
+                inventory: Arc::new(PlayerInventory::new(
+                    Arc::new(Mutex::new(EntityEquipment::new())),
+                    Arc::new(HashMap::new()),
+                )),
+            }
+        }
+    }
+
+    impl InventoryPlayer for MockInventoryPlayer {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn drop_item(&self, _item: ItemStack, _retain_ownership: bool) -> PlayerFuture<'_, ()> {
+            Box::pin(async {})
+        }
+        fn get_inventory(&self) -> Arc<PlayerInventory> {
+            self.inventory.clone()
+        }
+        fn has_infinite_materials(&self) -> bool {
+            false
+        }
+        fn is_creative(&self) -> bool {
+            false
+        }
+        fn experience_level(&self) -> i32 {
+            0
+        }
+        fn add_experience_levels(&self, _levels: i32) -> PlayerFuture<'_, ()> {
+            Box::pin(async {})
+        }
+        fn enchantment_seed(&self) -> i32 {
+            0
+        }
+        fn set_enchantment_seed(&self, _seed: i32) -> PlayerFuture<'_, ()> {
+            Box::pin(async {})
+        }
+        fn enqueue_inventory_packet<'a>(
+            &'a self,
+            _packet: &'a CSetContainerContent,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+        fn enqueue_slot_packet<'a>(
+            &'a self,
+            _packet: &'a CSetContainerSlot,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+        fn enqueue_cursor_packet<'a>(
+            &'a self,
+            _packet: &'a CSetCursorItem,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+        fn enqueue_property_packet<'a>(
+            &'a self,
+            _packet: &'a CSetContainerProperty,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+        fn enqueue_slot_set_packet<'a>(
+            &'a self,
+            _packet: &'a CSetPlayerInventory,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+        fn enqueue_set_held_item_packet<'a>(
+            &'a self,
+            _packet: &'a CSetSelectedSlot,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+        fn enqueue_equipment_change<'a>(
+            &'a self,
+            _slot: &'a EquipmentSlot,
+            _stack: &'a ItemStack,
+        ) -> PlayerFuture<'a, ()> {
+            Box::pin(async {})
+        }
+        fn award_experience(&self, _amount: i32) -> PlayerFuture<'_, ()> {
+            Box::pin(async {})
+        }
+        fn increment_stat(
+            &self,
+            _category: StatisticCategory,
+            _stat_id: i32,
+            _amount: i32,
+        ) -> PlayerFuture<'_, ()> {
+            Box::pin(async {})
+        }
+    }
+
+    /// Slot that records every `on_take_item` call; `accepts_insert` models
+    /// normal vs take-only (result/output) slots.
+    struct RecordingSlot {
+        inventory: Arc<SimpleInventory>,
+        index: usize,
+        id: AtomicU8,
+        accepts_insert: bool,
+        can_take: bool,
+        taken: Arc<Mutex<Vec<ItemStack>>>,
+    }
+
+    impl RecordingSlot {
+        fn new(
+            inventory: Arc<SimpleInventory>,
+            index: usize,
+            accepts_insert: bool,
+            can_take: bool,
+            taken: Arc<Mutex<Vec<ItemStack>>>,
+        ) -> Self {
+            Self {
+                inventory,
+                index,
+                id: AtomicU8::new(0),
+                accepts_insert,
+                can_take,
+                taken,
+            }
+        }
+    }
+
+    impl Slot for RecordingSlot {
+        fn get_inventory(&self) -> Arc<dyn Inventory> {
+            self.inventory.clone()
+        }
+        fn get_index(&self) -> usize {
+            self.index
+        }
+        fn set_id(&self, index: usize) {
+            self.id.store(index as u8, Ordering::Relaxed);
+        }
+        fn can_insert<'a>(&'a self, _stack: &'a ItemStack) -> BoxFuture<'a, bool> {
+            let accepts = self.accepts_insert;
+            Box::pin(async move { accepts })
+        }
+        fn can_take_items(&self, _player: &dyn InventoryPlayer) -> BoxFuture<'_, bool> {
+            let can_take = self.can_take;
+            Box::pin(async move { can_take })
+        }
+        fn on_take_item<'a>(
+            &'a self,
+            _player: &'a dyn InventoryPlayer,
+            stack: &'a ItemStack,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                self.taken.lock().await.push(stack.clone());
+            })
+        }
+        fn mark_dirty(&self) -> BoxFuture<'_, ()> {
+            Box::pin(async {})
+        }
+    }
+
+    fn make_slot_info(name: ContainerName, slot_id: u8) -> ItemStackRequestSlotInfo {
+        ItemStackRequestSlotInfo {
+            container_name: FullContainerName {
+                container_name: name,
+                dynamic_id: None,
+            },
+            slot_id,
+            stack_id: VarInt(0),
+        }
+    }
+
+    #[test]
+    fn consume_created_item_clears_when_empty() {
+        let mut created = Some(ItemStack::new(3, &Item::EMERALD));
+        consume_created_item(&mut created, 2);
+        assert_eq!(created.as_ref().unwrap().item_count, 1);
+        consume_created_item(&mut created, 1);
+        assert!(created.is_none());
+        // No panic when already none
+        consume_created_item(&mut created, 5);
+        assert!(created.is_none());
+    }
+
+    #[test]
+    fn craft_recipe_window_gate_rejects_non_crafting_windows() {
+        assert!(window_allows_craft_recipe(None));
+        assert!(window_allows_craft_recipe(Some(WindowType::Crafting)));
+        assert!(!window_allows_craft_recipe(Some(WindowType::Generic9x3)));
+        assert!(!window_allows_craft_recipe(Some(WindowType::Merchant)));
+        assert!(!window_allows_craft_recipe(Some(WindowType::Anvil)));
+    }
+
+    /// Sequence: [CraftRecipe{1}, Take{src=CreatedOutput, dst=Cursor, count=4}]
+    /// on a 4-output craft must leave cursor=4 and created=0, not cursor=8.
+    #[tokio::test]
+    async fn cursor_mirror_take_to_cursor_does_not_double() {
+        let handler = MockScreenHandler::new(None, 0);
+        let mut created = Some(ItemStack::new(4, &Item::STICK));
+        let source = make_slot_info(ContainerName::CreatedOutput, 0);
+        let destination = make_slot_info(ContainerName::Cursor, 0);
+
+        // Arm flow: source read sees the tracked craft...
+        let source_stack = get_slot_stack(&handler, &source, created.as_ref()).await;
+        assert_eq!(source_stack.item_count, 4);
+        // ...but the destination must resolve to physical state only.
+        let mut dest_stack = get_destination_slot_stack(&handler, &destination).await;
+        assert!(
+            dest_stack.is_empty(),
+            "created-item mirror must never be a destination merge base"
+        );
+        dest_stack = source_stack.copy_with_count(4);
+        consume_created_output_source(ContainerName::CreatedOutput, 4, &mut created, &handler)
+            .await;
+        // update_slot_stack's Cursor branch is a plain physical write.
+        *handler.get_behaviour().cursor_stack.lock().await = dest_stack;
+
+        assert!(created.is_none(), "craft spent exactly once");
+        let cursor = handler.get_behaviour().cursor_stack.lock().await;
+        assert_eq!(cursor.item_count, 4, "no 4->8 cursor doubling");
+        assert_eq!(cursor.item.id, Item::STICK.id);
+    }
+
+    /// Sequence: [CraftRecipe{1}, Swap{slot1=Cursor, slot2=Inventory}] — the
+    /// mirror read must spend `created_item` exactly once.
+    #[tokio::test]
+    async fn cursor_mirror_swap_spends_created_once() {
+        let inventory = Arc::new(SimpleInventory::new(36));
+        inventory
+            .set_stack(9, ItemStack::new(2, &Item::DIAMOND))
+            .await;
+        let mut handler = MockScreenHandler::new(None, 0);
+        for i in 0..10 {
+            handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), i)));
+        }
+        let mut created = Some(ItemStack::new(4, &Item::STICK));
+        let slot1 = make_slot_info(ContainerName::Cursor, 0);
+        let slot2 = make_slot_info(ContainerName::Inventory, 9);
+
+        let stack1 = get_slot_stack(&handler, &slot1, created.as_ref()).await;
+        let stack2 = get_slot_stack(&handler, &slot2, created.as_ref()).await;
+        assert_eq!(stack1.item_count, 4, "Cursor source reads the mirror");
+        assert_eq!(stack2.item_count, 2);
+        assert!(is_cursor_mirror(&handler, &slot1, created.as_ref()).await);
+        assert!(!is_cursor_mirror(&handler, &slot2, created.as_ref()).await);
+
+        // Arm flow: a mirror-backed Cursor side spends the craft.
+        consume_created_item(&mut created, stack1.item_count);
+        *handler.get_behaviour().cursor_stack.lock().await = stack2;
+        handler.get_behaviour().slots[9].set_stack(stack1).await;
+
+        assert!(created.is_none(), "mirror consumed exactly once");
+        assert_eq!(
+            handler.get_behaviour().cursor_stack.lock().await.item_count,
+            2
+        );
+        assert_eq!(
+            handler.get_behaviour().slots[9]
+                .get_cloned_stack()
+                .await
+                .item_count,
+            4
+        );
+    }
+
+    /// Sequence: [CraftRecipe{1}, Take{src=Cursor, dst=Inventory, count=2}]
+    /// with the physical cursor empty — the remainder must stay tracked in
+    /// exactly one place (`created_item`), not both mirror and cursor.
+    #[tokio::test]
+    async fn cursor_mirror_partial_take_leaves_single_remainder() {
+        let handler = MockScreenHandler::new(None, 0);
+        let mut created = Some(ItemStack::new(4, &Item::STICK));
+        let source = make_slot_info(ContainerName::Cursor, 0);
+
+        assert!(is_cursor_mirror(&handler, &source, created.as_ref()).await);
+        let source_stack = get_slot_stack(&handler, &source, created.as_ref()).await;
+        assert_eq!(source_stack.item_count, 4, "mirror read while cursor empty");
+
+        // Arm flow: take 2, spend the mirror, write nothing back to the cursor.
+        consume_created_output_source(ContainerName::Cursor, 2, &mut created, &handler).await;
+        *handler.get_behaviour().cursor_stack.lock().await = ItemStack::EMPTY.clone();
+
+        assert_eq!(
+            created.as_ref().unwrap().item_count,
+            2,
+            "remainder stays in created_item only"
+        );
+        assert!(
+            handler.get_behaviour().cursor_stack.lock().await.is_empty(),
+            "remainder must not materialize in the physical cursor"
+        );
+        // A follow-up Cursor read still resolves through the mirror.
+        let next = get_slot_stack(&handler, &source, created.as_ref()).await;
+        assert_eq!(next.item_count, 2);
+    }
+
+    /// Sequence: Take{src=CraftingOutputPreview, dst=Inventory} on a crafting
+    /// table — resolves to the real result slot, consumes the grid, and does
+    /// not refill for free.
+    #[tokio::test]
+    async fn preview_take_consumes_grid_without_free_refill() {
+        let player = MockInventoryPlayer::new();
+        let crafting_inv = Arc::new(CraftingInventory::new(3, 3));
+        // Stick recipe input: two planks in one column.
+        crafting_inv
+            .set_stack(0, ItemStack::new(1, &Item::OAK_PLANKS))
+            .await;
+        crafting_inv
+            .set_stack(3, ItemStack::new(1, &Item::OAK_PLANKS))
+            .await;
+        let recipe_inv: Arc<dyn RecipeInputInventory> = crafting_inv.clone();
+        let result = Arc::new(Mutex::new(ItemStack::new(4, &Item::STICK)));
+        let result_slot = Arc::new(ResultSlot {
+            inventory: recipe_inv,
+            id: AtomicU8::new(0),
+            result: result.clone(),
+            recipe_provider: None,
+        });
+        let mut handler = MockScreenHandler::new(Some(WindowType::Crafting), 10);
+        handler.add_slot(result_slot);
+
+        let source = make_slot_info(ContainerName::CraftingOutputPreview, 0);
+        // Previews resolve to the real result slot (previously rejected/empty).
+        let source_stack = get_slot_stack(&handler, &source, None).await;
+        assert_eq!(source_stack.item_count, 4);
+        assert_eq!(source_stack.item.id, Item::STICK.id);
+        // ...and the result slot refuses moves into it.
+        assert!(!destination_accepts(&handler, &source, &source_stack).await);
+
+        // Arm flow: the take is settled through the slot exactly once.
+        let taken = source_stack.copy_with_count(4);
+        assert!(charge_take_only_source(&player, &handler, &source, &taken).await);
+
+        for i in 0..crafting_inv.size() {
+            assert!(
+                crafting_inv.get_stack(i).await.lock().await.is_empty(),
+                "grid slot {i} must be consumed by the take"
+            );
+        }
+        assert!(
+            result.lock().await.is_empty(),
+            "result re-derives to empty instead of refilling for free"
+        );
+    }
+
+    /// Take-only sources are charged via `on_take_item` exactly once; ordinary
+    /// slots are not charged; a slot refusing the take rejects the move.
+    #[tokio::test]
+    async fn take_only_source_charged_exactly_once() {
+        let player = MockInventoryPlayer::new();
+        let inventory = Arc::new(SimpleInventory::new(3));
+        inventory
+            .set_stack(2, ItemStack::new(1, &Item::DIAMOND))
+            .await;
+        let mut handler = MockScreenHandler::new(Some(WindowType::Anvil), 3);
+        handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), 0)));
+        handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), 1)));
+        handler.add_slot(Arc::new(TakeOnlySlot::new(inventory.clone(), 2)));
+
+        // Previews resolve to the real take-only result slot (previously empty).
+        let source = make_slot_info(ContainerName::AnvilResultPreview, 0);
+        let stack = get_slot_stack(&handler, &source, None).await;
+        assert_eq!(
+            stack.item.id,
+            Item::DIAMOND.id,
+            "preview resolves to result"
+        );
+        assert!(!destination_accepts(&handler, &source, &stack).await);
+        assert!(charge_take_only_source(&player, &handler, &source, &stack).await);
+
+        // A take-only slot that allows the take charges exactly once.
+        let taken_log = Arc::new(Mutex::new(Vec::new()));
+        let mut handler2 = MockScreenHandler::new(Some(WindowType::Anvil), 3);
+        handler2.add_slot(Arc::new(NormalSlot::new(inventory.clone(), 0)));
+        handler2.add_slot(Arc::new(NormalSlot::new(inventory.clone(), 1)));
+        handler2.add_slot(Arc::new(RecordingSlot::new(
+            inventory.clone(),
+            2,
+            false,
+            true,
+            taken_log.clone(),
+        )));
+        let source2 = make_slot_info(ContainerName::AnvilResultPreview, 0);
+        let stack2 = get_slot_stack(&handler2, &source2, None).await;
+        assert!(charge_take_only_source(&player, &handler2, &source2, &stack2).await);
+        assert_eq!(taken_log.lock().await.len(), 1, "exactly one charge");
+
+        // A take-only slot that refuses the take rejects the move, uncharged.
+        let refused_log = Arc::new(Mutex::new(Vec::new()));
+        let mut handler3 = MockScreenHandler::new(Some(WindowType::Anvil), 3);
+        handler3.add_slot(Arc::new(RecordingSlot::new(
+            inventory.clone(),
+            0,
+            false,
+            false,
+            refused_log.clone(),
+        )));
+        let source3 = make_slot_info(ContainerName::AnvilInput, 0);
+        let stack3 = get_slot_stack(&handler3, &source3, None).await;
+        assert!(!charge_take_only_source(&player, &handler3, &source3, &stack3).await);
+        assert!(
+            refused_log.lock().await.is_empty(),
+            "refused take never charges"
+        );
+
+        // Ordinary inventory slots are not charged through the slot at all.
+        let normal_log = Arc::new(Mutex::new(Vec::new()));
+        let mut handler4 = MockScreenHandler::new(Some(WindowType::Anvil), 3);
+        handler4.add_slot(Arc::new(RecordingSlot::new(
+            inventory.clone(),
+            0,
+            true,
+            true,
+            normal_log.clone(),
+        )));
+        assert!(
+            charge_take_only_source(&player, &handler4, &source3, &stack3).await,
+            "ordinary slot allows the take"
+        );
+        assert!(
+            normal_log.lock().await.is_empty(),
+            "ordinary slot not charged"
+        );
+    }
+
+    /// Misroute guard: with `container_slots == 0` an `Inventory` source slot 9
+    /// resolves to screen slot 0; if that slot is take-only the take must be
+    /// settled through `on_take_item` — never served free (belt-and-suspenders
+    /// while per-screen `container_slots` values are fixed in pumpkin-inventory).
+    #[tokio::test]
+    async fn misrouted_take_only_source_is_charged_not_free() {
+        let player = MockInventoryPlayer::new();
+        let inventory = Arc::new(SimpleInventory::new(46));
+        inventory
+            .set_stack(0, ItemStack::new(4, &Item::STICK))
+            .await;
+        let taken_log = Arc::new(Mutex::new(Vec::new()));
+        let mut handler = MockScreenHandler::new(Some(WindowType::Crafting), 0);
+        handler.add_slot(Arc::new(RecordingSlot::new(
+            inventory.clone(),
+            0,
+            false,
+            true,
+            taken_log.clone(),
+        )));
+        for i in 1..46 {
+            handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), i)));
+        }
+
+        let source = make_slot_info(ContainerName::Inventory, 9);
+        let stack = get_slot_stack(&handler, &source, None).await;
+        assert_eq!(stack.item_count, 4, "misroute resolves to screen slot 0");
+        assert!(!destination_accepts(&handler, &source, &stack).await);
+        assert!(charge_take_only_source(&player, &handler, &source, &stack).await);
+        assert_eq!(taken_log.lock().await.len(), 1, "settled through the slot");
+    }
+
+    /// `CreatedOutput` without a tracked craft must resolve empty (arms reject).
+    #[tokio::test]
+    async fn created_output_without_tracked_craft_is_empty() {
+        let handler = MockScreenHandler::new(None, 0);
+        let source = make_slot_info(ContainerName::CreatedOutput, 0);
+        assert!(get_slot_stack(&handler, &source, None).await.is_empty());
+    }
+
+    /// Offhand/armor names on small screens must stay in range (no panic).
+    #[tokio::test]
+    async fn offhand_and_armor_on_small_screen_stay_in_range() {
+        let inventory = Arc::new(SimpleInventory::new(5));
+        let mut handler = MockScreenHandler::new(None, 0);
+        for i in 0..5 {
+            handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), i)));
+        }
+        let offhand = make_slot_info(ContainerName::Offhand, 0);
+        assert!(get_slot_stack(&handler, &offhand, None).await.is_empty());
+        let armor = make_slot_info(ContainerName::Armor, 3);
+        assert!(get_slot_stack(&handler, &armor, None).await.is_empty());
+
+        // On non-player screens Offhand never resolves at all.
+        let anvil = MockScreenHandler::new(Some(WindowType::Anvil), 3);
+        assert!(get_slot_stack(&anvil, &offhand, None).await.is_empty());
     }
 }

@@ -83,6 +83,13 @@ pub struct JavaClient {
     pub version: AtomicCell<JavaMinecraftVersion>,
     /// The client's game profile information.
     pub gameprofile: Mutex<Option<GameProfile>>,
+    /// Set only by `finish_login` after identity is accepted (online auth, offline
+    /// finish, or verified proxy). `LoginAck` without this is an auth-bypass path.
+    pub login_finished: AtomicBool,
+    /// Set once the client's first `SKnownPacks` answer has been handled. The
+    /// registry dump it triggers is expensive, so replays (and late
+    /// resource-pack responses) must not start another round-trip (F-AUTH-05).
+    pub known_packs_answered: AtomicBool,
     /// The client's configuration settings, Optional
     pub config: Mutex<Option<PlayerConfig>>,
     /// The Address used to connect to the Server, Send in the Handshake
@@ -157,6 +164,8 @@ impl JavaClient {
         Self {
             id,
             gameprofile: Mutex::new(None),
+            login_finished: AtomicBool::new(false),
+            known_packs_answered: AtomicBool::new(false),
             config: Mutex::new(None),
             server_address: Mutex::new("".into()),
             address: Mutex::new(address),
@@ -460,7 +469,10 @@ impl JavaClient {
 
     pub async fn get_packet(&self) -> Option<RawPacket> {
         let mut network_reader = self.network_reader.lock().await;
+        // Prefer the close branch so a kicked connection cannot race-process
+        // pipelined login/config packets after auth failure (F-AUTH-01 residual).
         tokio::select! {
+            biased;
             () = self.await_close_interrupt() => {
                 debug!("Canceling player packet processing");
                 None

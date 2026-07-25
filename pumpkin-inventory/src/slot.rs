@@ -6,6 +6,7 @@
 //! # Slot Types
 //!
 //! - [`NormalSlot`] - A basic inventory slot with no restrictions
+//! - [`TakeOnlySlot`] - Output/result slot: take allowed, insert and `PickupAll` sweep blocked
 //! - [`ArmorSlot`] - An armor slot that only accepts appropriate item types
 //!   (helmets in head slot, chestplates in chest slot, etc.)
 //!
@@ -371,6 +372,110 @@ impl Slot for NormalSlot {
     }
 }
 
+/// Charge logic attached to a [`TakeOnlySlot`] output (merchant/anvil result).
+///
+/// Every take path that actually removes items from a slot ends in
+/// [`Slot::on_take_item`], and every path checks [`Slot::can_take_items`]
+/// first. Putting the charge here (rather than in per-action click gates)
+/// guarantees that inputs/XP are consumed exactly once per verified take,
+/// no matter which action (pickup, shift-click, throw, swap) performed it.
+pub trait TakeSlotCharge: Send + Sync {
+    /// Whether the player may currently take from the output slot
+    /// (e.g. trade not depleted, enough XP levels).
+    fn can_take(&self, player: &dyn InventoryPlayer) -> bool;
+
+    /// Charges one taken output stack (consumes inputs, counts uses, XP).
+    fn on_take<'a>(
+        &'a self,
+        player: &'a dyn InventoryPlayer,
+        stack: &'a ItemStack,
+    ) -> BoxFuture<'a, ()>;
+}
+
+/// Result/output slot: items may be taken, but never inserted by the player.
+///
+/// `allow_modification` is `can_insert && can_take`, so with `can_insert = false`
+/// `PickupAll` skips this slot when sweeping matching stacks. That is the correct
+/// defense for merchant/anvil output steal (F-INV-03/04); a `slot_index == 2`
+/// guard cannot work because `PickupAll` is invoked on a *different* slot.
+pub struct TakeOnlySlot {
+    pub inventory: Arc<dyn Inventory>,
+    pub index: usize,
+    pub id: AtomicU8,
+    /// Optional charge logic fired on take (merchant/anvil output).
+    charge: Option<Arc<dyn TakeSlotCharge>>,
+}
+
+impl TakeOnlySlot {
+    pub fn new(inventory: Arc<dyn Inventory>, index: usize) -> Self {
+        Self {
+            inventory,
+            index,
+            id: AtomicU8::new(0),
+            charge: None,
+        }
+    }
+
+    /// Creates a take-only slot that charges via `charge` on every take.
+    pub fn with_charge(
+        inventory: Arc<dyn Inventory>,
+        index: usize,
+        charge: Arc<dyn TakeSlotCharge>,
+    ) -> Self {
+        Self {
+            inventory,
+            index,
+            id: AtomicU8::new(0),
+            charge: Some(charge),
+        }
+    }
+}
+
+impl Slot for TakeOnlySlot {
+    fn get_inventory(&self) -> Arc<dyn Inventory> {
+        self.inventory.clone()
+    }
+
+    fn get_index(&self) -> usize {
+        self.index
+    }
+
+    fn set_id(&self, id: usize) {
+        self.id.store(id as u8, Ordering::Relaxed);
+    }
+
+    fn can_insert(&self, _stack: &ItemStack) -> BoxFuture<'_, bool> {
+        Box::pin(async move { false })
+    }
+
+    fn can_take_items(&self, player: &dyn InventoryPlayer) -> BoxFuture<'_, bool> {
+        let allowed = self
+            .charge
+            .as_ref()
+            .is_none_or(|charge| charge.can_take(player));
+        Box::pin(async move { allowed })
+    }
+
+    fn on_take_item<'a>(
+        &'a self,
+        player: &'a dyn InventoryPlayer,
+        stack: &'a ItemStack,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(charge) = &self.charge {
+                charge.on_take(player, stack).await;
+            }
+            self.mark_dirty().await;
+        })
+    }
+
+    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.inventory.mark_dirty();
+        })
+    }
+}
+
 /// An armor equipment slot.
 ///
 /// Restricts which items can be placed based on the equipment slot type:
@@ -459,5 +564,33 @@ impl Slot for ArmorSlot {
             // TODO: Check enchantments
             true
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_world::inventory::SimpleInventory;
+
+    #[tokio::test]
+    async fn take_only_slot_rejects_insert() {
+        let inv = Arc::new(SimpleInventory::new(1));
+        let stack = ItemStack::new(16, &Item::EMERALD);
+        inv.set_stack(0, stack.clone()).await;
+        let slot = TakeOnlySlot::new(inv, 0);
+        assert!(
+            !slot.can_insert(&stack).await,
+            "result/output slots must not accept inserts (blocks PickupAll sweep)"
+        );
+        assert!(slot.has_stack().await);
+        assert_eq!(slot.get_cloned_stack().await.item.id, Item::EMERALD.id);
+    }
+
+    #[tokio::test]
+    async fn normal_slot_accepts_insert() {
+        let inv = Arc::new(SimpleInventory::new(1));
+        let stack = ItemStack::new(16, &Item::EMERALD);
+        let slot = NormalSlot::new(inv, 0);
+        assert!(slot.can_insert(&stack).await);
     }
 }

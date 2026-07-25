@@ -36,6 +36,12 @@ impl PacketWrite for ItemStackRequestSlotInfo {
     }
 }
 
+/// Bounds for `ItemStackRequest` wire arrays (alloc bombs from huge `VarUInt`).
+const MAX_ITEM_STACK_ACTIONS: usize = 256;
+const MAX_ITEM_STACK_REQUESTS: usize = 64;
+const MAX_RESULT_ITEMS: usize = 64;
+const MAX_FILTER_STRINGS: usize = 64;
+
 #[derive(Debug)]
 pub enum ItemStackRequestAction {
     Take {
@@ -217,8 +223,14 @@ impl PacketRead for ItemStackRequestAction {
             }),
             18 => Ok(Self::CraftNonImplemented),
             19 => {
-                let result_items_len = VarUInt::read(buf)?.0;
-                let mut result_items = Vec::with_capacity(result_items_len as usize);
+                let result_items_len = VarUInt::read(buf)?.0 as usize;
+                if result_items_len > MAX_RESULT_ITEMS {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        format!("result_items_len {result_items_len} exceeds {MAX_RESULT_ITEMS}"),
+                    ));
+                }
+                let mut result_items = Vec::with_capacity(result_items_len);
                 for _ in 0..result_items_len {
                     result_items.push(crate::bedrock::network_item::NetworkItemStack::read(buf)?);
                 }
@@ -247,13 +259,25 @@ pub struct ItemStackRequest {
 impl PacketRead for ItemStackRequest {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let request_id = VarInt::read(buf)?;
-        let actions_len = VarUInt::read(buf)?.0;
-        let mut actions = Vec::with_capacity(actions_len as usize);
+        let actions_len = VarUInt::read(buf)?.0 as usize;
+        if actions_len > MAX_ITEM_STACK_ACTIONS {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("actions_len {actions_len} exceeds {MAX_ITEM_STACK_ACTIONS}"),
+            ));
+        }
+        let mut actions = Vec::with_capacity(actions_len);
         for _ in 0..actions_len {
             actions.push(ItemStackRequestAction::read(buf)?);
         }
-        let filter_strings_len = VarUInt::read(buf)?.0;
-        let mut filter_strings = Vec::with_capacity(filter_strings_len as usize);
+        let filter_strings_len = VarUInt::read(buf)?.0 as usize;
+        if filter_strings_len > MAX_FILTER_STRINGS {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("filter_strings_len {filter_strings_len} exceeds {MAX_FILTER_STRINGS}"),
+            ));
+        }
+        let mut filter_strings = Vec::with_capacity(filter_strings_len);
         for _ in 0..filter_strings_len {
             filter_strings.push(String::read(buf)?);
         }
@@ -275,11 +299,49 @@ pub struct SItemStackRequest {
 
 impl PacketRead for SItemStackRequest {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        let requests_len = VarUInt::read(buf)?.0;
-        let mut requests = Vec::with_capacity(requests_len as usize);
+        let requests_len = VarUInt::read(buf)?.0 as usize;
+        if requests_len > MAX_ITEM_STACK_REQUESTS {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("requests_len {requests_len} exceeds {MAX_ITEM_STACK_REQUESTS}"),
+            ));
+        }
+        let mut requests = Vec::with_capacity(requests_len);
         for _ in 0..requests_len {
             requests.push(ItemStackRequest::read(buf)?);
         }
         Ok(Self { requests })
+    }
+}
+
+#[cfg(test)]
+mod alloc_cap_tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn rejects_oversize_actions_len() {
+        // request_id VarInt(0) + actions_len VarUInt huge
+        let mut buf = Vec::new();
+        // request_id = 0
+        buf.push(0);
+        // VarUInt 10000 encoded - write a large value via many continuation bits is hard;
+        // encode 300 as varuint: 300 = 0b1_00101100 with continuation
+        // Simple: write VarUInt manually for MAX+1
+        let over = (MAX_ITEM_STACK_ACTIONS + 1) as u32;
+        let mut v = over;
+        loop {
+            let mut b = (v & 0x7F) as u8;
+            v >>= 7;
+            if v != 0 {
+                b |= 0x80;
+            }
+            buf.push(b);
+            if v == 0 {
+                break;
+            }
+        }
+        let err = ItemStackRequest::read(&mut Cursor::new(buf)).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidData);
     }
 }

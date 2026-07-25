@@ -52,6 +52,8 @@ impl EnchantingTableScreenHandler {
         // Enchanting slots: 0 is item, 1 is lapis
         handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), 0)));
         handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), 1)));
+        // Container slots precede the player slots; used by Bedrock slot mapping.
+        handler.behaviour.container_slots = handler.behaviour.slots.len();
 
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         handler.add_player_slots(&player_inventory);

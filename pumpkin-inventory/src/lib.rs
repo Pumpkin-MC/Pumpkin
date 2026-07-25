@@ -49,6 +49,8 @@ pub mod screen_handler;
 pub mod slot;
 pub mod stonecutter_screen_handler;
 pub mod sync_handler;
+#[cfg(test)]
+pub(crate) mod test_util;
 pub mod window_property;
 
 use std::collections::HashMap;

@@ -18,13 +18,13 @@ use tokio::signal::ctrl_c;
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
 
+use pumpkin::PumpkinServer;
 use pumpkin::{
     CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
     crash::{CrashReport, FullBacktrace},
     data::VanillaData,
     stop_or_exit_server,
 };
-use pumpkin::{PumpkinServer, stop_server};
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_util::text::{
@@ -197,29 +197,25 @@ fn handle_interrupt() {
 }
 
 fn handle_panic(panic_info: &PanicHookInfo<'_>) {
-    // Generate a crash report.
-    let crash_report = {
-        // We capture the backtraces here, and not in the
-        // crash report, so that the backtrace doesn't show
-        // the CrashReport's `new` function.
-        let captured_backtrace = Backtrace::capture();
-        let full_backtrace = if captured_backtrace.status() == BacktraceStatus::Captured {
-            FullBacktrace::Captured
-        } else {
-            FullBacktrace::ForceCaptured(Backtrace::force_capture())
-        };
-
-        CrashReport::new(panic_info, captured_backtrace, full_backtrace)
-    };
-
     let payload = panic_info.payload();
+    let payload_str = payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("<unknown>");
+
+    // Building a crash report captures a backtrace, which is expensive. Only
+    // build one when it can actually be stored (the first panic overall);
+    // `try_set_crash_report` remains the authoritative gate, so a race between
+    // concurrent first panics merely builds one report too many.
+    let report_storable =
+        !SERVER_IS_STOPPING.load(Ordering::Acquire) && CRASH_REPORT.get().is_none();
 
     if is_main_thread() {
-        // It's the first panic;
-        // We cannot gracefully shut down as the main thread
-        // has panicked. However, we can still generate the crash report.
-
-        if let Some(crash_report) = try_set_crash_report(crash_report) {
+        // Main-thread panic is unrecoverable: write a crash report and exit.
+        if report_storable
+            && let Some(crash_report) = try_set_crash_report(build_crash_report(panic_info))
+        {
             crash_report.print_to_console();
             crash_report.save_and_log();
 
@@ -230,7 +226,6 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
                     .to_pretty_console()
             );
         } else {
-            // It's a subsequent panic.
             tracing::error!(
                 "{}: {}",
                 TextComponent::text(
@@ -239,35 +234,49 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
                 .color(Color::Named(NamedColor::Red))
                 .bold()
                 .to_pretty_console(),
-                payload
-                    .downcast_ref::<&str>()
-                    .copied()
-                    .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
-                    .unwrap_or("<unknown>")
+                payload_str
             );
         }
 
         exit(1);
     }
 
-    if try_set_crash_report(crash_report).is_some() {
-        // It's the first panic; let's stop the server.
-        stop_server();
-    } else {
-        // It's a subsequent panic; let's just alert about it.
-        tracing::error!(
-            "{}: {}",
-            TextComponent::text("Encountered panic while shutting down")
-                .color(Color::Named(NamedColor::Red))
-                .bold()
-                .to_pretty_console(),
-            payload
-                .downcast_ref::<&str>()
-                .copied()
-                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
-                .unwrap_or("<unknown>")
-        );
+    // Worker-thread panics must NOT take down the whole server. Log and let the
+    // task die; other connections keep serving.
+    // (Previously the first worker panic called stop_server(), turning every
+    // reachable unwrap into a remote kill switch.)
+    //
+    // Only the first worker panic saves a full crash report to disk — a
+    // repeatable panic primitive must not fill the disk with reports, nor burn
+    // CPU capturing a backtrace per panic; subsequent panics only get the log
+    // line below.
+    if report_storable && let Some(report) = try_set_crash_report(build_crash_report(panic_info)) {
+        report.print_to_console();
+        report.save_and_log();
     }
+
+    tracing::error!(
+        "{}: {}",
+        TextComponent::text("Worker thread panicked; task aborted, server continues running")
+            .color(Color::Named(NamedColor::Red))
+            .bold()
+            .to_pretty_console(),
+        payload_str
+    );
+}
+
+fn build_crash_report(panic_info: &PanicHookInfo<'_>) -> CrashReport {
+    // We capture the backtraces here, and not in the
+    // crash report, so that the backtrace doesn't show
+    // the CrashReport's `new` function.
+    let captured_backtrace = Backtrace::capture();
+    let full_backtrace = if captured_backtrace.status() == BacktraceStatus::Captured {
+        FullBacktrace::Captured
+    } else {
+        FullBacktrace::ForceCaptured(Backtrace::force_capture())
+    };
+
+    CrashReport::new(panic_info, captured_backtrace, full_backtrace)
 }
 
 fn is_main_thread() -> bool {

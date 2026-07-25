@@ -47,6 +47,8 @@ impl BeaconScreenHandler {
 
         // Add the single payment slot for the beacon (slot 0)
         handler.add_slot(Arc::new(NormalSlot::new(handler.inventory.clone(), 0)));
+        // Container slots precede the player slots; used by Bedrock slot mapping.
+        handler.behaviour.container_slots = handler.behaviour.slots.len();
 
         // Add the player's inventory slots (27 slots + 9 hotbar)
         let player_inventory_arc: Arc<dyn Inventory> = player_inventory.clone();

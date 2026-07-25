@@ -47,6 +47,8 @@ impl StonecutterScreenHandler {
             input_inventory as Arc<dyn Inventory>,
             0,
         )));
+        // Container slots precede the player slots; used by Bedrock slot mapping.
+        handler.behaviour.container_slots = handler.behaviour.slots.len();
 
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
 

@@ -30,15 +30,26 @@ impl Ticker {
                 .fire(ServerTickStartEvent::new(tick_number))
                 .await;
 
-            if manager.is_sprinting() {
-                manager.start_sprint_tick_work();
-                server.tick().await;
+            // Run the tick body in a child task so a panic in world/player tick
+            // cannot kill this loop and leave a silently frozen world.
+            let server_tick = server.clone();
+            let tick_join = tokio::spawn(async move {
+                let manager = &server_tick.tick_rate_manager;
+                if manager.is_sprinting() {
+                    manager.start_sprint_tick_work();
+                    server_tick.tick().await;
 
-                if manager.end_sprint_tick_work() {
-                    manager.finish_tick_sprint(server);
+                    if manager.end_sprint_tick_work() {
+                        manager.finish_tick_sprint(&server_tick);
+                    }
+                } else {
+                    server_tick.tick().await;
                 }
-            } else {
-                server.tick().await;
+            });
+            if let Err(e) = tick_join.await {
+                tracing::error!(
+                    "Server tick panicked (#{tick_number}); world tick continues next interval: {e}"
+                );
             }
 
             let tick_duration_nanos = tick_start_time.elapsed().as_nanos() as i64;

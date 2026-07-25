@@ -476,6 +476,9 @@ pub struct Player {
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
     pub bedrock_spawned: AtomicBool,
+    /// Set on first `remove()` so duplicate-login kick + connection-task cleanup
+    /// cannot double-unwatch chunks or double-count leave stats.
+    pub has_left: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
     /// Item usage tracking for bows, crossbows, etc.
@@ -673,6 +676,7 @@ impl Player {
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(false),
             bedrock_spawned: AtomicBool::new(false),
+            has_left: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(60),
             // Item usage tracking
             using_item: AtomicBool::new(false),
@@ -859,7 +863,16 @@ impl Player {
     }
 
     /// Removes the [`Player`] out of the current [`World`].
+    ///
+    /// Idempotent: safe when both a duplicate-login kick and the connection
+    /// task try to clean up the same session.
     pub async fn remove(self: &Arc<Self>) {
+        if self
+            .has_left
+            .swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            return;
+        }
         self.stats
             .lock()
             .await
