@@ -113,8 +113,20 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
         self.trying_time % 40 == 0
     }
 
-    fn start_moving_to_target(_mob: &dyn Mob) {
-        // TODO: implement when navigation is implemented
+    fn set_navigation_target(mob: &dyn Mob, destination: Vector3<f64>, speed: f64) {
+        mob.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap()
+            .set_progress(NavigatorGoal {
+                current_progress: mob.get_entity().pos.load(),
+                destination: Vector3::new(destination.x + 0.5, destination.y, destination.z + 0.5),
+                speed,
+            });
+    }
+
+    fn start_moving_to_target(&self, mob: &dyn Mob) {
+        Self::set_navigation_target(mob, self.get_target_pos().to_f64(), self.speed);
     }
 }
 
@@ -159,7 +171,7 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
-            Self::start_moving_to_target(mob);
+            self.start_moving_to_target(mob);
             self.trying_time = 0;
             let random = mob.get_random().random_range(0..MIN_WAITING_TIME);
             self.safe_waiting_time =
@@ -185,17 +197,7 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
                 self.reached = false;
                 self.trying_time += 1;
                 if self.should_reset_path() {
-                    let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
-
-                    navigator.set_progress(NavigatorGoal {
-                        current_progress: mob.get_entity().pos.load(),
-                        destination: Vector3::new(
-                            block_pos.x + 0.5,
-                            block_pos.y,
-                            block_pos.z + 0.5,
-                        ),
-                        speed: self.speed,
-                    });
+                    Self::set_navigation_target(mob, block_pos, self.speed);
                 }
             }
         })

@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    chunk::Biome,
+    chunk::{Biome, DoublePerlinNoiseParameters},
     chunk_gen_settings::{
         AboveYMaterialCondition, MaterialCondition, NoiseThresholdMaterialCondition,
         NotMaterialCondition, StoneDepthMaterialCondition, VerticalGradientMaterialCondition,
@@ -29,6 +29,14 @@ use super::{
 pub mod rule;
 pub mod terrain;
 
+const NOISE_SAMPLER_MISSING: u8 = u8::MAX;
+
+struct CachedSurfaceNoise {
+    sampler: DoublePerlinNoiseSampler,
+    last_horizontal_pos: Option<i64>,
+    value: f64,
+}
+
 pub struct MaterialRuleContext<'a> {
     pub min_y: i8,
     pub height: u16,
@@ -53,6 +61,8 @@ pub struct MaterialRuleContext<'a> {
     pub terrain_builder: &'a SurfaceTerrainBuilder,
     pub sea_level: i32,
     steep_material_condition: Option<bool>,
+    noise_sampler_indices: [u8; DoublePerlinNoiseParameters::COUNT],
+    noise_samplers: Vec<CachedSurfaceNoise>,
 }
 
 impl<'a> MaterialRuleContext<'a> {
@@ -90,6 +100,8 @@ impl<'a> MaterialRuleContext<'a> {
             stone_depth_above: 0,
             sea_level,
             steep_material_condition: None,
+            noise_sampler_indices: [NOISE_SAMPLER_MISSING; DoublePerlinNoiseParameters::COUNT],
+            noise_samplers: Vec::new(),
         }
     }
 
@@ -138,6 +150,41 @@ impl<'a> MaterialRuleContext<'a> {
 
     pub const fn set_steep_material_condition(&mut self, steep: bool) {
         self.steep_material_condition = Some(steep);
+    }
+
+    fn sample_noise(&mut self, parameters: &DoublePerlinNoiseParameters) -> f64 {
+        let x = self.block_pos_x as f64;
+        let z = self.block_pos_z as f64;
+        let random_deriver = self.random_deriver;
+        let horizontal_pos = self.unique_horizontal_pos_value;
+        let Some(&cached_index) = self.noise_sampler_indices.get(parameters.id) else {
+            return DoublePerlinNoiseBuilder::get_noise_sampler_for_id(random_deriver, parameters)
+                .sample(x, 0.0, z);
+        };
+        let cached_index = if cached_index == NOISE_SAMPLER_MISSING {
+            let index = self.noise_samplers.len();
+            self.noise_samplers.push(CachedSurfaceNoise {
+                sampler: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                    random_deriver,
+                    parameters,
+                ),
+                last_horizontal_pos: None,
+                value: 0.0,
+            });
+            self.noise_sampler_indices[parameters.id] =
+                u8::try_from(index).expect("noise sampler index must fit in u8");
+            index
+        } else {
+            usize::from(cached_index)
+        };
+        let cached = &mut self.noise_samplers[cached_index];
+
+        if cached.last_horizontal_pos != Some(horizontal_pos) {
+            cached.value = cached.sampler.sample(x, 0.0, z);
+            cached.last_horizontal_pos = Some(horizontal_pos);
+        }
+
+        cached.value
     }
 }
 
@@ -305,12 +352,7 @@ pub fn test_noise_threshold(
     condition: &NoiseThresholdMaterialCondition,
     context: &mut MaterialRuleContext,
 ) -> bool {
-    // TODO: we want to cache these
-    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
-        context.random_deriver,
-        &condition.noise,
-    );
-    let value = sampler.sample(context.block_pos_x as f64, 0.0, context.block_pos_z as f64);
+    let value = context.sample_noise(&condition.noise);
     value >= condition.min_threshold && value <= condition.max_threshold
 }
 
@@ -357,8 +399,6 @@ pub const fn test_water_material(
                 + context.run_depth * condition.surface_depth_multiplier
 }
 
-// random_deriver: ThreadLocal<RefCell<LruCache<usize, RandomDeriver>>>,
-
 pub fn test_vertical_gradient(
     condition: &VerticalGradientMaterialCondition,
     context: &MaterialRuleContext,
@@ -384,4 +424,64 @@ pub fn test_vertical_gradient(
     let mapped = pumpkin_util::math::map(block_y as f32, true_at as f32, false_at as f32, 1.0, 0.0);
     let mut random = splitter.split_pos(context.block_pos_x, block_y, context.block_pos_z);
     random.next_f32() < mapped
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::random::xoroshiro128::Xoroshiro;
+
+    use super::*;
+
+    #[test]
+    fn caches_noise_samplers_by_parameter_id() {
+        let mut random = Xoroshiro::from_seed(42);
+        let random_deriver = random.next_splitter();
+        let terrain_builder = SurfaceTerrainBuilder::new(&random_deriver);
+        let surface_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            &random_deriver,
+            &DoublePerlinNoiseParameters::SURFACE,
+        );
+        let secondary_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            &random_deriver,
+            &DoublePerlinNoiseParameters::SURFACE_SECONDARY,
+        );
+        let mut context = MaterialRuleContext::new(
+            -64,
+            384,
+            &random_deriver,
+            &terrain_builder,
+            &surface_noise,
+            &secondary_noise,
+            63,
+        );
+        context.init_horizontal(12, -34);
+
+        let first = context.sample_noise(&DoublePerlinNoiseParameters::SURFACE);
+        let second = context.sample_noise(&DoublePerlinNoiseParameters::SURFACE);
+
+        assert_eq!(first, second);
+        assert_eq!(
+            first,
+            surface_noise.sample(12.0, 0.0, -34.0),
+            "the cached sample must preserve surface output"
+        );
+        assert_eq!(
+            context.noise_samplers.len(),
+            1,
+            "repeated rules must share the sampler"
+        );
+
+        context.init_horizontal(13, -34);
+        let next = context.sample_noise(&DoublePerlinNoiseParameters::SURFACE);
+        assert_eq!(next, surface_noise.sample(13.0, 0.0, -34.0));
+
+        let gravel = context.sample_noise(&DoublePerlinNoiseParameters::GRAVEL);
+        let expected_gravel = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            &random_deriver,
+            &DoublePerlinNoiseParameters::GRAVEL,
+        )
+        .sample(13.0, 0.0, -34.0);
+        assert_eq!(gravel, expected_gravel);
+        assert_eq!(context.noise_samplers.len(), 2);
+    }
 }
