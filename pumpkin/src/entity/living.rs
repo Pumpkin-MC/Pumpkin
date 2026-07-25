@@ -388,9 +388,9 @@ impl LivingEntity {
             .map_or_else(
                 || {
                     tracing::warn!(
-                        "Entity type {:?} has no base value for attribute {:?}; falling back to default {}",
-                        entity_type,
-                        attribute.id,
+                        "Entity type {} has no base value for attribute {}; falling back to default {}",
+                        entity_type.resource_name,
+                        attribute.name,
                         attribute.default_value,
                     );
                     attribute.default_value
