@@ -393,6 +393,7 @@ mod test {
                 ],
                 enabled: vec!["vanilla".to_string()],
             },
+            enabled_features: vec!["minecraft:vanilla".to_string()],
             data_version: 4189,
             day_time: 1727,
             difficulty: Difficulty::Normal,
@@ -476,6 +477,23 @@ mod test {
         expected.data.clear_weather_time = 0;
 
         assert_eq!(level_dat_again, expected);
+    }
+
+    #[test]
+    fn round_trips_enabled_features() {
+        let mut level_dat = (*LEVEL_DAT).clone();
+        level_dat.data.enabled_features = vec![
+            "minecraft:vanilla".to_string(),
+            "minecraft:trade_rebalance".to_string(),
+        ];
+
+        let mut serialized = Vec::new();
+        to_bytes(&level_dat, &mut serialized).expect("Failed to encode level.dat");
+
+        let decoded: LevelDat =
+            from_bytes(Cursor::new(serialized)).expect("Failed to decode level.dat");
+
+        assert_eq!(decoded.data.enabled_features, level_dat.data.enabled_features);
     }
 
     #[test]
