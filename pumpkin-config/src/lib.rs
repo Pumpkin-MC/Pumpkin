@@ -81,6 +81,14 @@ impl LoadConfiguration for PumpkinConfig {
             self.advanced.networking.java.view_distance <= max_vd,
             "Java View distance must be less than 64"
         );
+        assert!(
+            self.advanced.networking.java.simulation_distance >= min_vd,
+            "Java simulation distance must be at least 2"
+        );
+        assert!(
+            self.advanced.networking.java.simulation_distance <= max_vd,
+            "Java simulation distance must be less than 64"
+        );
         if self.advanced.networking.java.online_mode {
             assert!(
                 self.advanced.networking.java.encryption,
@@ -96,6 +104,14 @@ impl LoadConfiguration for PumpkinConfig {
         assert!(
             self.advanced.networking.bedrock.view_distance <= max_vd,
             "Bedrock View distance must be less than 64"
+        );
+        assert!(
+            self.advanced.networking.bedrock.simulation_distance >= min_vd,
+            "Bedrock simulation distance must be at least 2"
+        );
+        assert!(
+            self.advanced.networking.bedrock.simulation_distance <= max_vd,
+            "Bedrock simulation distance must be less than 64"
         );
         if self.advanced.networking.bedrock.online_mode {
             assert!(
@@ -362,4 +378,26 @@ pub trait LoadConfiguration {
 
     /// Validates the configuration after loading or merging.
     fn validate(&self);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LoadConfiguration, PumpkinConfig};
+    use std::num::NonZeroU8;
+
+    #[test]
+    #[should_panic(expected = "Java simulation distance must be at least 2")]
+    fn rejects_too_small_java_simulation_distance() {
+        let mut config = PumpkinConfig::default();
+        config.advanced.networking.java.simulation_distance = NonZeroU8::new(1).unwrap();
+        config.validate();
+    }
+
+    #[test]
+    #[should_panic(expected = "Bedrock simulation distance must be less than 64")]
+    fn rejects_too_large_bedrock_simulation_distance() {
+        let mut config = PumpkinConfig::default();
+        config.advanced.networking.bedrock.simulation_distance = NonZeroU8::new(65).unwrap();
+        config.validate();
+    }
 }
