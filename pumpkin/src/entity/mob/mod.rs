@@ -141,8 +141,10 @@ impl MobEntity {
             return false;
         }
 
-        // Named mobs are persistent (vanilla custom name).
-        if entity.custom_name.load().is_some() {
+        // Vanilla `isPersistenceRequired() || requiresCustomPersistence()`.
+        let is_leashed = entity.leashed_to.lock().await.is_some();
+        let is_riding = entity.has_vehicle().await;
+        if entity.custom_name.load().is_some() || is_leashed || is_riding {
             self.despawn_counter.store(0, Relaxed);
             return false;
         }
