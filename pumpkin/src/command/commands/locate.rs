@@ -21,7 +21,7 @@ use crate::command::argument_types::resource_or_tag::{
     STRUCTURE_REGISTRY,
 };
 use crate::command::context::command_context::CommandContext;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
@@ -65,6 +65,11 @@ static POI_NOT_FOUND_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_LOCATE_POI_NOT_FOUND,
     translation::java::COMMANDS_LOCATE_POI_NOT_FOUND,
 );
+
+/// Raised if a blocking search task panics or is cancelled instead of
+/// running to completion. Purely internal, so it has no translation.
+static SEARCH_FAILED_ERROR_TYPE: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("The locate search failed unexpectedly");
 
 /// Builds the clickable green `[x, ~, z]` (or `[x, y, z]` when `absolute_y`)
 /// coordinates component used by vanilla's locate feedback.
@@ -173,14 +178,15 @@ impl CommandExecutor for LocateStructureExecutor {
 
             let origin = BlockPos::floored_v(context.source.position);
 
-            let world = context.source.world().clone();
-            let level = &world.level;
-            let seed = level.seed.0;
+            let world = context.source.world();
+            let seed = world.level.seed.0;
+            let world_gen = world.level.world_gen.clone();
 
-            let found = level
-                .world_gen
-                .global_structure_cache()
-                .and_then(|global_cache| {
+            // Scanning up to `STRUCTURE_SEARCH_RADIUS` regions of placement
+            // data is CPU-bound just like the biome spiral, so keep it off
+            // the async workers too.
+            let found = tokio::task::spawn_blocking(move || {
+                world_gen.global_structure_cache().and_then(|global_cache| {
                     find_nearest_structure(
                         origin,
                         &[&set.placement],
@@ -188,7 +194,10 @@ impl CommandExecutor for LocateStructureExecutor {
                         seed as i64,
                         global_cache,
                     )
-                });
+                })
+            })
+            .await
+            .map_err(|_| SEARCH_FAILED_ERROR_TYPE.create_without_context())?;
 
             let Some(target) = found else {
                 return Err(STRUCTURE_NOT_FOUND_ERROR_TYPE
@@ -260,7 +269,7 @@ impl CommandExecutor for LocateBiomeExecutor {
                 )
             })
             .await
-            .expect("locate biome search panicked");
+            .map_err(|_| SEARCH_FAILED_ERROR_TYPE.create_without_context())?;
 
             let Some((target, biome)) = found else {
                 return Err(not_found());
