@@ -25,6 +25,27 @@ pub fn get_view_distance(player: &Player) -> NonZeroU8 {
         .clamp(NonZeroU8::new(2).unwrap(), max_view_distance)
 }
 
+/// Server simulation distance used for entity/block ticking (vanilla
+/// `server.properties` `simulation-distance`). When both Java and Bedrock are
+/// enabled, take the max so neither platform under-ticks the shared world.
+#[must_use]
+pub fn get_simulation_distance(server: &crate::server::Server) -> NonZeroU8 {
+    let net = &server.advanced_config.networking;
+    match (net.java.enabled, net.bedrock.enabled) {
+        (true, true) => {
+            if net.java.simulation_distance.get() >= net.bedrock.simulation_distance.get() {
+                net.java.simulation_distance
+            } else {
+                net.bedrock.simulation_distance
+            }
+        }
+        (true, false) => net.java.simulation_distance,
+        (false, true) => net.bedrock.simulation_distance,
+        // Fall back to Java defaults when neither edition is enabled.
+        (false, false) => net.java.simulation_distance,
+    }
+}
+
 // Checks if the target chunk is within the view distance
 // of the center chunk. Uses Chebyshev distance.
 #[must_use]

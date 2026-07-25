@@ -28,7 +28,7 @@ pub mod portal;
 pub mod time;
 
 use crate::block::RandomTickArgs;
-use crate::world::chunker::is_within_view_distance;
+use crate::world::chunker::{get_simulation_distance, is_within_view_distance};
 use crate::world::{chunker::get_view_distance, loot::LootContextParameters};
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
@@ -365,13 +365,31 @@ impl World {
     }
 
     pub fn update_active_chunks(self: &Arc<Self>) {
+        // Vanilla: entity/block ticking uses simulation-distance; natural spawn
+        // candidate set uses a fixed radius-8 tracker (independent of sim dist).
+        let simulation_distance = self
+            .server
+            .upgrade()
+            .map(|s| i32::from(get_simulation_distance(&s).get()))
+            .unwrap_or(10);
+
         let mut active_chunks = FxHashSet::default();
+        let mut natural_spawn_chunks = FxHashSet::default();
         for player in self.players.load().iter() {
             let center = player.get_entity().chunk_pos.load();
-            // TODO: gamerule for view distance/ticking distance
-            for dx in -8..=8 {
-                for dy in -8..=8 {
+            for dx in -simulation_distance..=simulation_distance {
+                for dy in -simulation_distance..=simulation_distance {
                     active_chunks.insert(center.add_raw(dx, dy));
+                }
+            }
+            // Vanilla DistanceManager.naturalSpawnChunkCounter range = 8.
+            for dx in -natural_spawner::NATURAL_SPAWN_CHUNK_RANGE
+                ..=natural_spawner::NATURAL_SPAWN_CHUNK_RANGE
+            {
+                for dy in -natural_spawner::NATURAL_SPAWN_CHUNK_RANGE
+                    ..=natural_spawner::NATURAL_SPAWN_CHUNK_RANGE
+                {
+                    natural_spawn_chunks.insert(center.add_raw(dx, dy));
                 }
             }
         }
@@ -379,12 +397,9 @@ impl World {
             active_chunks.extend(forced.iter().copied());
         }
 
-        let mut spawnable_chunks = 0;
-        for pos in &active_chunks {
-            if self.level.is_chunk_loaded(pos) {
-                spawnable_chunks += 1;
-            }
-        }
+        // Vanilla getNaturalSpawnChunkCount: size of the radius-8 tracker, not
+        // the simulation-distance ticking set.
+        let spawnable_chunks = natural_spawn_chunks.len() as i32;
 
         self.active_chunks.store(Arc::new(active_chunks));
 
@@ -1464,9 +1479,18 @@ impl World {
         }
 
         // 5. Spawn Chunk Spawners into the SAME JoinSet
+        // Vanilla collectSpawningChunks: natural-spawn candidates (radius 8)
+        // ∩ entity-ticking (simulation distance / active_chunks)
+        // ∩ anyPlayerCloseEnoughForSpawning (< 128 blocks).
         if !spawn_list.is_empty() {
             let mut spawning_chunks = Vec::new();
             for pos in active_chunks.iter() {
+                if !natural_spawner::is_natural_spawn_candidate(self, *pos) {
+                    continue;
+                }
+                if !natural_spawner::any_player_close_enough_for_spawning(self, *pos) {
+                    continue;
+                }
                 if let Some(chunk) = self.level.read_chunk_sync(pos, std::clone::Clone::clone) {
                     spawning_chunks.push((*pos, chunk));
                 }
@@ -1828,7 +1852,7 @@ impl World {
         spawn_state: &Arc<SpawnState>,
     ) {
         // this.level.tickThunder(chunk);
-        //TODO check in simulation distance
+        // Simulation-distance gate: callers only pass active (ticking) chunks.
         let (is_raining, is_thundering) = {
             let weather = self.weather.lock().await;
             (weather.raining, weather.thundering)

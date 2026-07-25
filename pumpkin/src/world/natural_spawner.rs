@@ -27,6 +27,48 @@ use uuid::Uuid;
 
 const MAGIC_NUMBER: i32 = 17 * 17;
 
+/// Vanilla `DistanceManager` natural-spawn tracker radius
+/// (`FixedPlayerDistanceChunkTracker(8)`). Independent of simulation distance.
+pub const NATURAL_SPAWN_CHUNK_RANGE: i32 = 8;
+
+/// Vanilla `NaturalSpawner.SPAWN_DISTANCE_BLOCK` squared
+/// (`ChunkMap.playerIsCloseEnoughForSpawning` uses 128² = 16384).
+pub const SPAWN_DISTANCE_BLOCK_SQ: f64 = 128.0 * 128.0;
+
+/// Vanilla `ChunkMap.anyPlayerCloseEnoughForSpawningInternal`.
+#[must_use]
+pub fn any_player_close_enough_for_spawning(world: &World, chunk_pos: Vector2<i32>) -> bool {
+    let chunk_center_x = ((chunk_pos.x << 4) + 8) as f64;
+    let chunk_center_z = ((chunk_pos.y << 4) + 8) as f64;
+    for player in world.players.load().iter() {
+        if player.gamemode.load() == GameMode::Spectator {
+            continue;
+        }
+        let pos = player.position();
+        let dx = chunk_center_x - pos.x;
+        let dz = chunk_center_z - pos.z;
+        if dx * dx + dz * dz < SPAWN_DISTANCE_BLOCK_SQ {
+            return true;
+        }
+    }
+    false
+}
+
+/// Whether `chunk_pos` is inside vanilla natural-spawn candidate range
+/// (`FixedPlayerDistanceChunkTracker` radius 8 around any player chunk).
+#[must_use]
+pub fn is_natural_spawn_candidate(world: &World, chunk_pos: Vector2<i32>) -> bool {
+    for player in world.players.load().iter() {
+        let center = player.get_entity().chunk_pos.load();
+        if (chunk_pos.x - center.x).abs().max((chunk_pos.y - center.y).abs())
+            <= NATURAL_SPAWN_CHUNK_RANGE
+        {
+            return true;
+        }
+    }
+    false
+}
+
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
 
@@ -110,11 +152,6 @@ impl fmt::Debug for LocalMobCapCalculator {
 }
 
 impl LocalMobCapCalculator {
-    /// Squared range for "player near chunk" (vanilla ~128). Active chunks use ±8
-    /// chunk radius (~181 block diagonal); 128 left corner chunks unable to spawn.
-    /// Use 192 so the whole simulation disk can natural-spawn.
-    const PLAYER_NEAR_RANGE_SQ: f64 = 192.0 * 192.0;
-
     const fn calc_distance(chunk_pos: Vector2<i32>, player_pos: &Vector3<f64>) -> f64 {
         let dx = ((chunk_pos.x << 4) + 8) as f64 - player_pos.x;
         let dy = ((chunk_pos.y << 4) + 8) as f64 - player_pos.z;
@@ -131,7 +168,8 @@ impl LocalMobCapCalculator {
             if player.gamemode.load() == GameMode::Spectator {
                 continue;
             }
-            if Self::calc_distance(chunk_pos, &player.position()) < Self::PLAYER_NEAR_RANGE_SQ {
+            // Vanilla ChunkMap.playerIsCloseEnoughForSpawning: < 128 blocks.
+            if Self::calc_distance(chunk_pos, &player.position()) < SPAWN_DISTANCE_BLOCK_SQ {
                 players.push(player.entity_id());
             }
         }
