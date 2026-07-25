@@ -195,6 +195,9 @@ impl ActiveTargetGoal {
 
         if looking_for_player {
             for player in world.get_nearby_players(search_pos, follow_range) {
+                if player.is_spectator() || player.is_creative() {
+                    continue;
+                }
                 let entity = player.clone() as Arc<dyn EntityBase>;
                 let Some(living) = entity.get_living_entity() else {
                     continue;
