@@ -29,6 +29,8 @@ use super::{
 pub mod rule;
 pub mod terrain;
 
+const NOISE_SAMPLER_MISSING: u8 = u8::MAX;
+
 struct CachedSurfaceNoise {
     sampler: DoublePerlinNoiseSampler,
     last_horizontal_pos: Option<i64>,
@@ -59,7 +61,8 @@ pub struct MaterialRuleContext<'a> {
     pub terrain_builder: &'a SurfaceTerrainBuilder,
     pub sea_level: i32,
     steep_material_condition: Option<bool>,
-    noise_samplers: Vec<Option<CachedSurfaceNoise>>,
+    noise_sampler_indices: [u8; DoublePerlinNoiseParameters::COUNT],
+    noise_samplers: Vec<CachedSurfaceNoise>,
 }
 
 impl<'a> MaterialRuleContext<'a> {
@@ -97,9 +100,8 @@ impl<'a> MaterialRuleContext<'a> {
             stone_depth_above: 0,
             sea_level,
             steep_material_condition: None,
-            noise_samplers: (0..DoublePerlinNoiseParameters::COUNT)
-                .map(|_| None)
-                .collect(),
+            noise_sampler_indices: [NOISE_SAMPLER_MISSING; DoublePerlinNoiseParameters::COUNT],
+            noise_samplers: Vec::new(),
         }
     }
 
@@ -155,15 +157,27 @@ impl<'a> MaterialRuleContext<'a> {
         let z = self.block_pos_z as f64;
         let random_deriver = self.random_deriver;
         let horizontal_pos = self.unique_horizontal_pos_value;
-        let Some(slot) = self.noise_samplers.get_mut(parameters.id) else {
+        let Some(&cached_index) = self.noise_sampler_indices.get(parameters.id) else {
             return DoublePerlinNoiseBuilder::get_noise_sampler_for_id(random_deriver, parameters)
                 .sample(x, 0.0, z);
         };
-        let cached = slot.get_or_insert_with(|| CachedSurfaceNoise {
-            sampler: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(random_deriver, parameters),
-            last_horizontal_pos: None,
-            value: 0.0,
-        });
+        let cached_index = if cached_index == NOISE_SAMPLER_MISSING {
+            let index = self.noise_samplers.len();
+            self.noise_samplers.push(CachedSurfaceNoise {
+                sampler: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                    random_deriver,
+                    parameters,
+                ),
+                last_horizontal_pos: None,
+                value: 0.0,
+            });
+            self.noise_sampler_indices[parameters.id] =
+                u8::try_from(index).expect("noise sampler index must fit in u8");
+            index
+        } else {
+            usize::from(cached_index)
+        };
+        let cached = &mut self.noise_samplers[cached_index];
 
         if cached.last_horizontal_pos != Some(horizontal_pos) {
             cached.value = cached.sampler.sample(x, 0.0, z);
@@ -452,7 +466,7 @@ mod tests {
             "the cached sample must preserve surface output"
         );
         assert_eq!(
-            context.noise_samplers.iter().flatten().count(),
+            context.noise_samplers.len(),
             1,
             "repeated rules must share the sampler"
         );
@@ -468,6 +482,6 @@ mod tests {
         )
         .sample(13.0, 0.0, -34.0);
         assert_eq!(gravel, expected_gravel);
-        assert_eq!(context.noise_samplers.iter().flatten().count(), 2);
+        assert_eq!(context.noise_samplers.len(), 2);
     }
 }
