@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    chunk::Biome,
+    chunk::{Biome, DoublePerlinNoiseParameters},
     chunk_gen_settings::{
         AboveYMaterialCondition, MaterialCondition, NoiseThresholdMaterialCondition,
         NotMaterialCondition, StoneDepthMaterialCondition, VerticalGradientMaterialCondition,
@@ -53,10 +53,11 @@ pub struct MaterialRuleContext<'a> {
     pub terrain_builder: &'a SurfaceTerrainBuilder,
     pub sea_level: i32,
     steep_material_condition: Option<bool>,
+    noise_samplers: Vec<Option<DoublePerlinNoiseSampler>>,
 }
 
 impl<'a> MaterialRuleContext<'a> {
-    pub const fn new(
+    pub fn new(
         min_y: i8,
         height: u16,
         random_deriver: &'a XoroshiroSplitter,
@@ -90,6 +91,9 @@ impl<'a> MaterialRuleContext<'a> {
             stone_depth_above: 0,
             sea_level,
             steep_material_condition: None,
+            noise_samplers: (0..DoublePerlinNoiseParameters::COUNT)
+                .map(|_| None)
+                .collect(),
         }
     }
 
@@ -138,6 +142,17 @@ impl<'a> MaterialRuleContext<'a> {
 
     pub const fn set_steep_material_condition(&mut self, steep: bool) {
         self.steep_material_condition = Some(steep);
+    }
+
+    fn sample_noise(&mut self, parameters: &DoublePerlinNoiseParameters) -> f64 {
+        let x = self.block_pos_x as f64;
+        let z = self.block_pos_z as f64;
+        let random_deriver = self.random_deriver;
+        let sampler = self.noise_samplers[parameters.id].get_or_insert_with(|| {
+            DoublePerlinNoiseBuilder::get_noise_sampler_for_id(random_deriver, parameters)
+        });
+
+        sampler.sample(x, 0.0, z)
     }
 }
 
@@ -305,12 +320,7 @@ pub fn test_noise_threshold(
     condition: &NoiseThresholdMaterialCondition,
     context: &mut MaterialRuleContext,
 ) -> bool {
-    // TODO: we want to cache these
-    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
-        context.random_deriver,
-        &condition.noise,
-    );
-    let value = sampler.sample(context.block_pos_x as f64, 0.0, context.block_pos_z as f64);
+    let value = context.sample_noise(&condition.noise);
     value >= condition.min_threshold && value <= condition.max_threshold
 }
 
@@ -357,7 +367,50 @@ pub const fn test_water_material(
                 + context.run_depth * condition.surface_depth_multiplier
 }
 
-// random_deriver: ThreadLocal<RefCell<LruCache<usize, RandomDeriver>>>,
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::random::xoroshiro128::Xoroshiro;
+
+    use super::*;
+
+    #[test]
+    fn caches_noise_samplers_by_parameter_id() {
+        let mut random = Xoroshiro::from_seed(42);
+        let random_deriver = random.next_splitter();
+        let terrain_builder = SurfaceTerrainBuilder::new(&random_deriver);
+        let surface_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            &random_deriver,
+            &DoublePerlinNoiseParameters::SURFACE,
+        );
+        let secondary_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            &random_deriver,
+            &DoublePerlinNoiseParameters::SURFACE_SECONDARY,
+        );
+        let mut context = MaterialRuleContext::new(
+            -64,
+            384,
+            &random_deriver,
+            &terrain_builder,
+            &surface_noise,
+            &secondary_noise,
+            63,
+        );
+        context.init_horizontal(12, -34);
+
+        let first = context.sample_noise(&DoublePerlinNoiseParameters::SURFACE);
+        let second = context.sample_noise(&DoublePerlinNoiseParameters::SURFACE);
+
+        assert_eq!(first, second);
+        assert_eq!(
+            context.noise_samplers.iter().flatten().count(),
+            1,
+            "repeated rules must share the sampler"
+        );
+
+        context.sample_noise(&DoublePerlinNoiseParameters::GRAVEL);
+        assert_eq!(context.noise_samplers.iter().flatten().count(), 2);
+    }
+}
 
 pub fn test_vertical_gradient(
     condition: &VerticalGradientMaterialCondition,
