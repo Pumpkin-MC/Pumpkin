@@ -1,52 +1,70 @@
 use crate::{
     codec::var_uint::VarUInt,
-    serial::{PacketRead, PacketWrite},
+    serial::{PacketRead, PacketReadSlice, PacketWrite, read_str_slice},
 };
 use pumpkin_macros::packet;
+use std::borrow::Cow;
 use std::io::{Error, ErrorKind, Read, Write};
 
 #[derive(Debug)]
 #[packet(9)]
-pub struct SText {
+pub struct SText<'a> {
     pub needs_translation: bool,
     pub r#type: TextPacketType,
-    pub source_name: String,
-    pub message: String,
-    pub parameters: Vec<String>,
-    pub xuid: String,
-    pub platform_chat_id: String,
-    pub filtered_message: Option<String>,
+    pub source_name: Cow<'a, str>,
+    pub message: Cow<'a, str>,
+    pub parameters: Vec<Cow<'a, str>>,
+    pub xuid: Cow<'a, str>,
+    pub platform_chat_id: Cow<'a, str>,
+    pub filtered_message: Option<Cow<'a, str>>,
 }
 
-impl SText {
+impl SText<'_> {
+    const fn get_category(&self) -> u8 {
+        match self.r#type {
+            TextPacketType::Raw
+            | TextPacketType::Tip
+            | TextPacketType::System
+            | TextPacketType::JsonWhisper
+            | TextPacketType::JsonAnnouncement
+            | TextPacketType::Json => 0,
+
+            TextPacketType::Chat | TextPacketType::Whisper | TextPacketType::Announcement => 1,
+
+            TextPacketType::Translation | TextPacketType::Popup | TextPacketType::JukeboxPopup => 2,
+        }
+    }
+}
+
+impl SText<'static> {
     #[must_use]
     pub fn new(message: String, source_name: String) -> Self {
         Self {
             needs_translation: false,
             r#type: TextPacketType::Chat,
-            source_name,
-            message: if message.is_empty() {
+            source_name: Cow::Owned(source_name),
+            message: Cow::Owned(if message.is_empty() {
                 " ".to_string()
             } else {
                 message
-            },
+            }),
             parameters: Vec::new(),
-            xuid: String::new(),
-            platform_chat_id: String::new(),
+            xuid: Cow::Borrowed(""),
+            platform_chat_id: Cow::Borrowed(""),
             filtered_message: None,
         }
     }
 
     #[must_use]
-    pub const fn translation(message: String, parameters: Vec<String>) -> Self {
+    pub fn translation(message: String, parameters: Vec<String>) -> Self {
         Self {
             needs_translation: true,
             r#type: TextPacketType::Translation,
-            source_name: String::new(),
-            message,
-            parameters,
-            xuid: String::new(),
-            platform_chat_id: String::new(),
+            source_name: Cow::Borrowed(""),
+            message: Cow::Owned(message),
+            parameters: parameters.into_iter().map(Cow::Owned).collect(),
+            xuid: Cow::Borrowed(""),
+            platform_chat_id: Cow::Borrowed(""),
             filtered_message: None,
         }
     }
@@ -56,15 +74,15 @@ impl SText {
         Self {
             needs_translation: false,
             r#type: TextPacketType::System,
-            source_name: String::new(),
-            message: if message.is_empty() {
+            source_name: Cow::Borrowed(""),
+            message: Cow::Owned(if message.is_empty() {
                 " ".to_string()
             } else {
                 message
-            },
+            }),
             parameters: Vec::new(),
-            xuid: String::new(),
-            platform_chat_id: String::new(),
+            xuid: Cow::Borrowed(""),
+            platform_chat_id: Cow::Borrowed(""),
             filtered_message: None,
         }
     }
@@ -74,37 +92,72 @@ impl SText {
         Self {
             needs_translation: false,
             r#type: TextPacketType::Json,
-            source_name: String::new(),
-            message,
+            source_name: Cow::Borrowed(""),
+            message: Cow::Owned(message),
             parameters: Vec::new(),
-            xuid: String::new(),
-            platform_chat_id: String::new(),
+            xuid: Cow::Borrowed(""),
+            platform_chat_id: Cow::Borrowed(""),
             filtered_message: None,
-        }
-    }
-
-    const fn get_category(&self) -> u8 {
-        match self.r#type {
-            TextPacketType::Raw
-            | TextPacketType::Tip
-            | TextPacketType::System
-            | TextPacketType::JsonWhisper
-            | TextPacketType::JsonAnnouncement
-            | TextPacketType::Json => 0, // CATEGORY_MESSAGE_ONLY
-
-            TextPacketType::Chat | TextPacketType::Whisper | TextPacketType::Announcement => 1, // CATEGORY_AUTHORED_MESSAGE
-
-            TextPacketType::Translation | TextPacketType::Popup | TextPacketType::JukeboxPopup => 2, // CATEGORY_MESSAGE_WITH_PARAMETERS
         }
     }
 }
 
-impl PacketRead for SText {
+impl<'a> PacketReadSlice<'a> for SText<'a> {
+    fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
+        let needs_translation = bool::read_slice(buf)?;
+        let _category = u8::read_slice(buf)?;
+        let r#type = TextPacketType::read_slice(buf)?;
+
+        let mut source_name = "";
+        let message;
+        let mut parameters: Vec<Cow<'a, str>> = Vec::new();
+
+        match r#type {
+            TextPacketType::Chat | TextPacketType::Whisper | TextPacketType::Announcement => {
+                source_name = read_str_slice(buf)?;
+                message = read_str_slice(buf)?;
+            }
+            TextPacketType::Raw
+            | TextPacketType::Tip
+            | TextPacketType::System
+            | TextPacketType::JsonWhisper
+            | TextPacketType::Json
+            | TextPacketType::JsonAnnouncement => {
+                message = read_str_slice(buf)?;
+            }
+            TextPacketType::Translation | TextPacketType::Popup | TextPacketType::JukeboxPopup => {
+                message = read_str_slice(buf)?;
+                let count = VarUInt::read_slice(buf)?.0 as usize;
+                for _ in 0..count {
+                    parameters.push(Cow::Borrowed(read_str_slice(buf)?));
+                }
+            }
+        }
+
+        let xuid = read_str_slice(buf)?;
+        let platform_chat_id = read_str_slice(buf)?;
+
+        let filtered_message = bool::read_slice(buf)?
+            .then(|| read_str_slice(buf).map(Cow::Borrowed))
+            .transpose()?;
+
+        Ok(Self {
+            needs_translation,
+            r#type,
+            source_name: Cow::Borrowed(source_name),
+            message: Cow::Borrowed(message),
+            parameters,
+            xuid: Cow::Borrowed(xuid),
+            platform_chat_id: Cow::Borrowed(platform_chat_id),
+            filtered_message,
+        })
+    }
+}
+
+impl PacketRead for SText<'static> {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let needs_translation = bool::read(reader)?;
-
         let _category = u8::read(reader)?;
-
         let r#type = TextPacketType::read(reader)?;
 
         let mut source_name = String::new();
@@ -129,7 +182,7 @@ impl PacketRead for SText {
                 message = String::read(reader)?;
                 let count = VarUInt::read(reader)?.0 as usize;
                 for _ in 0..count {
-                    parameters.push(String::read(reader)?);
+                    parameters.push(Cow::Owned(String::read(reader)?));
                 }
             }
         }
@@ -138,23 +191,23 @@ impl PacketRead for SText {
         let platform_chat_id = String::read(reader)?;
 
         let filtered_message = bool::read(reader)?
-            .then(|| String::read(reader))
+            .then(|| String::read(reader).map(Cow::Owned))
             .transpose()?;
 
         Ok(Self {
             needs_translation,
             r#type,
-            source_name,
-            message,
+            source_name: Cow::Owned(source_name),
+            message: Cow::Owned(message),
             parameters,
-            xuid,
-            platform_chat_id,
+            xuid: Cow::Owned(xuid),
+            platform_chat_id: Cow::Owned(platform_chat_id),
             filtered_message,
         })
     }
 }
 
-impl PacketWrite for SText {
+impl PacketWrite for SText<'_> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.needs_translation.write(writer)?;
 
@@ -165,8 +218,8 @@ impl PacketWrite for SText {
 
         match self.r#type {
             TextPacketType::Chat | TextPacketType::Whisper | TextPacketType::Announcement => {
-                self.source_name.write(writer)?;
-                self.message.write(writer)?;
+                self.source_name.as_ref().write(writer)?;
+                self.message.as_ref().write(writer)?;
             }
             TextPacketType::Raw
             | TextPacketType::Tip
@@ -174,23 +227,23 @@ impl PacketWrite for SText {
             | TextPacketType::JsonWhisper
             | TextPacketType::Json
             | TextPacketType::JsonAnnouncement => {
-                self.message.write(writer)?;
+                self.message.as_ref().write(writer)?;
             }
             TextPacketType::Translation | TextPacketType::Popup | TextPacketType::JukeboxPopup => {
-                self.message.write(writer)?;
+                self.message.as_ref().write(writer)?;
                 VarUInt(self.parameters.len() as u32).write(writer)?;
                 for param in &self.parameters {
-                    param.write(writer)?;
+                    param.as_ref().write(writer)?;
                 }
             }
         }
 
-        self.xuid.write(writer)?;
-        self.platform_chat_id.write(writer)?;
+        self.xuid.as_ref().write(writer)?;
+        self.platform_chat_id.as_ref().write(writer)?;
 
         if let Some(msg) = &self.filtered_message {
             true.write(writer)?;
-            msg.write(writer)?;
+            msg.as_ref().write(writer)?;
         } else {
             false.write(writer)?;
         }
@@ -225,6 +278,26 @@ impl PacketWrite for TextPacketType {
 impl PacketRead for TextPacketType {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         match u8::read(reader)? {
+            0 => Ok(Self::Raw),
+            1 => Ok(Self::Chat),
+            2 => Ok(Self::Translation),
+            3 => Ok(Self::Popup),
+            4 => Ok(Self::JukeboxPopup),
+            5 => Ok(Self::Tip),
+            6 => Ok(Self::System),
+            7 => Ok(Self::Whisper),
+            8 => Ok(Self::Announcement),
+            9 => Ok(Self::JsonWhisper),
+            10 => Ok(Self::Json),
+            11 => Ok(Self::JsonAnnouncement),
+            _ => Err(Error::new(ErrorKind::InvalidData, "Unknown Text Type")),
+        }
+    }
+}
+
+impl<'a> PacketReadSlice<'a> for TextPacketType {
+    fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
+        match u8::read_slice(buf)? {
             0 => Ok(Self::Raw),
             1 => Ok(Self::Chat),
             2 => Ok(Self::Translation),
