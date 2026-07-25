@@ -60,7 +60,9 @@ pub fn any_player_close_enough_for_spawning(world: &World, chunk_pos: Vector2<i3
 pub fn is_natural_spawn_candidate(world: &World, chunk_pos: Vector2<i32>) -> bool {
     for player in world.players.load().iter() {
         let center = player.get_entity().chunk_pos.load();
-        if (chunk_pos.x - center.x).abs().max((chunk_pos.y - center.y).abs())
+        if (chunk_pos.x - center.x)
+            .abs()
+            .max((chunk_pos.y - center.y).abs())
             <= NATURAL_SPAWN_CHUNK_RANGE
         {
             return true;
