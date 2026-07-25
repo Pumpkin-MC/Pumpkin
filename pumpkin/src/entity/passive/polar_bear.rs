@@ -4,7 +4,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, EntityBase, NBTStorage,
+    Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, escape_danger::EscapeDangerGoal,
         follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
@@ -13,6 +13,7 @@ use crate::entity::{
     },
     mob::{Mob, MobEntity},
 };
+use crate::world::World;
 
 /// Polar bear — vanilla 26.2 `PolarBear.registerGoals` (CFR).
 ///
@@ -64,7 +65,7 @@ impl PolarBearEntity {
                         20,
                         true,
                         false,
-                        Some(move |_, world| {
+                        Some(move |_, world: Arc<World>| {
                             let polar_bear = polar_bear.clone();
                             async move {
                                 polar_bear
