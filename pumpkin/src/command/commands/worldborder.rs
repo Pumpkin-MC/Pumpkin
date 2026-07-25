@@ -50,11 +50,7 @@ impl CommandExecutor for GetExecutor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = sender.world_or_default(server);
             let border = world.worldborder.lock().await;
 
             let diameter = border.new_diameter.round() as i32;
@@ -81,11 +77,7 @@ impl CommandExecutor for SetExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = sender.world_or_default(server);
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
@@ -112,7 +104,7 @@ impl CommandExecutor for SetExecutor {
                 .await;
 
             let d = border.new_diameter;
-            border.set_diameter(world, distance, None);
+            border.set_diameter(&world, distance, None);
 
             Ok((distance - d) as i32)
         })
@@ -129,11 +121,7 @@ impl CommandExecutor for SetTimeExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = sender.world_or_default(server);
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance) = distance_consumer().find_arg_default_name(args)? else {
@@ -186,7 +174,7 @@ impl CommandExecutor for SetTimeExecutor {
             }
 
             let d = border.new_diameter;
-            border.set_diameter(world, distance, Some(i64::from(time) * 1000));
+            border.set_diameter(&world, distance, Some(i64::from(time) * 1000));
 
             Ok((distance - d) as i32)
         })
@@ -203,11 +191,7 @@ impl CommandExecutor for AddExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = sender.world_or_default(server);
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance_add) = distance_consumer().find_arg_default_name(args)? else {
@@ -235,7 +219,7 @@ impl CommandExecutor for AddExecutor {
                     [TextComponent::text(dist)],
                 ))
                 .await;
-            border.set_diameter(world, distance, None);
+            border.set_diameter(&world, distance, None);
             Ok(distance_add as i32)
         })
     }
@@ -251,11 +235,7 @@ impl CommandExecutor for AddTimeExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = sender.world_or_default(server);
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance_add) = distance_consumer().find_arg_default_name(args)? else {
@@ -308,7 +288,7 @@ impl CommandExecutor for AddTimeExecutor {
                 }
             }
 
-            border.set_diameter(world, distance, Some(i64::from(time) * 1000));
+            border.set_diameter(&world, distance, Some(i64::from(time) * 1000));
 
             Ok(distance_add as i32)
         })
@@ -325,11 +305,7 @@ impl CommandExecutor for CenterExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = sender.world_or_default(server);
             let mut border = world.worldborder.lock().await;
 
             let Vector2 { x, y } = Position2DArgumentConsumer.find_arg_default_name(args)?;
@@ -344,7 +320,7 @@ impl CommandExecutor for CenterExecutor {
                     ],
                 ))
                 .await;
-            border.set_center(world, x, y);
+            border.set_center(&world, x, y);
             Ok(0)
         })
     }
@@ -360,11 +336,7 @@ impl CommandExecutor for DamageAmountExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = sender.world_or_default(server);
             let mut border = world.worldborder.lock().await;
 
             let Ok(damage_per_block) = damage_per_block_consumer().find_arg_default_name(args)?
@@ -407,11 +379,7 @@ impl CommandExecutor for DamageBufferExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = sender.world_or_default(server);
             let mut border = world.worldborder.lock().await;
 
             let Ok(buffer) = damage_buffer_consumer().find_arg_default_name(args)? else {
@@ -453,11 +421,7 @@ impl CommandExecutor for WarningDistanceExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = sender.world_or_default(server);
             let mut border = world.worldborder.lock().await;
 
             let Ok(distance) = warning_distance_consumer().find_arg_default_name(args)? else {
@@ -482,7 +446,7 @@ impl CommandExecutor for WarningDistanceExecutor {
                     [TextComponent::text(distance.to_string())],
                 ))
                 .await;
-            border.set_warning_distance(world, distance);
+            border.set_warning_distance(&world, distance);
             Ok(distance)
         })
     }
@@ -498,11 +462,7 @@ impl CommandExecutor for WarningTimeExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = sender.world_or_default(server);
             let mut border = world.worldborder.lock().await;
 
             let Ok(time) = time_consumer().find_arg_default_name(args)? else {
@@ -527,7 +487,7 @@ impl CommandExecutor for WarningTimeExecutor {
                     [TextComponent::text(time.to_string())],
                 ))
                 .await;
-            border.set_warning_delay(world, time);
+            border.set_warning_delay(&world, time);
             Ok(time)
         })
     }

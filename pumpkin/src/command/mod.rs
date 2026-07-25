@@ -230,6 +230,19 @@ impl CommandSender {
         }
     }
 
+    /// Returns the sender's world, or the primary world for non-world senders.
+    #[must_use]
+    pub fn world_or_default(&self, server: &Server) -> Arc<World> {
+        self.world().unwrap_or_else(|| {
+            server
+                .worlds
+                .load()
+                .first()
+                .expect("Server should have at least one world")
+                .clone()
+        })
+    }
+
     #[must_use]
     pub fn get_locale(&self) -> Locale {
         match self {
