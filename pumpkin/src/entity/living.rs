@@ -1351,14 +1351,20 @@ impl LivingEntity {
         if damage > 0.0 {
             let check_damage = self.damage(caller, damage, DamageType::FALL).await; // Fall
             if check_damage {
-                self.entity
-                    .play_sound(Self::get_fall_sound(fall_distance as i32));
+                self.entity.play_sound(self.get_fall_sound(damage as i32));
             }
         }
     }
 
-    const fn get_fall_sound(distance: i32) -> Sound {
-        if distance > 4 {
+    const fn get_fall_sound(&self, damage: i32) -> Sound {
+        let big = damage > 4;
+        if self.entity.entity_type == &EntityType::PLAYER {
+            if big {
+                Sound::EntityPlayerBigFall
+            } else {
+                Sound::EntityPlayerSmallFall
+            }
+        } else if big {
             Sound::EntityGenericBigFall
         } else {
             Sound::EntityGenericSmallFall
