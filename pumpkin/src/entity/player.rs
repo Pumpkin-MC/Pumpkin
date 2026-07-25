@@ -531,6 +531,14 @@ struct Textures {
 #[derive(Deserialize)]
 struct SkinTexture {
     url: String,
+    #[serde(default)]
+    metadata: Option<SkinMetadata>,
+}
+
+#[derive(Deserialize)]
+struct SkinMetadata {
+    #[serde(default)]
+    model: Option<String>,
 }
 
 impl Player {
@@ -541,7 +549,13 @@ impl Player {
             .decode(textures_prop.value.as_bytes())
             .ok()?;
         let textures: TexturesProperty = serde_json::from_slice(&decoded).ok()?;
-        let url = textures.textures.skin?.url;
+        let skin_texture = textures.textures.skin?;
+        let url = skin_texture.url;
+        let is_slim = skin_texture
+            .metadata
+            .as_ref()
+            .and_then(|m| m.model.as_deref())
+            .is_some_and(|model| model == "slim");
 
         let resp = ureq::get(&url).call().ok()?;
         let mut buf = Vec::new();
@@ -563,6 +577,9 @@ impl Player {
         }
 
         let mut skin = pumpkin_protocol::bedrock::client::Skin::steve();
+        if is_slim {
+            skin.arm_size = "slim".to_string();
+        }
         skin.image_width = width;
         skin.image_height = height;
         skin.skin_data = rgba;
@@ -2983,6 +3000,14 @@ impl Player {
             &[
                 Metadata::new(
                     TrackedData::PLAYER_MODE_CUSTOMISATION,
+                    MetaDataType::BYTE,
+                    config.skin_parts,
+                ),
+                // PLAYER_MODE_CUSTOMIZATION_ID is the index for 1.21.7–1.21.11.
+                // Metadata::write skips entries where the resolved index is 255,
+                // so it is safe to emit both — exactly one will be sent per version.
+                Metadata::new(
+                    TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
                     MetaDataType::BYTE,
                     config.skin_parts,
                 ),
