@@ -1,5 +1,6 @@
 use crate::block::entities::{BlockEntity, block_entity_from_nbt};
 use dashmap::DashMap;
+use indexmap::IndexSet;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
@@ -208,7 +209,9 @@ pub struct World {
     /// Block Behaviour
     pub block_registry: Arc<BlockRegistry>,
     pub server: Weak<Server>,
-    synced_block_event_queue: Mutex<Vec<BlockEvent>>,
+    /// Vanilla's `ObjectLinkedOpenHashSet<BlockEventData>`: preserve insertion
+    /// order while coalescing duplicate events in the same tick.
+    synced_block_event_queue: Mutex<IndexSet<BlockEvent>>,
     /// Serializes block-event processing and its client packet enqueue order.
     synced_block_event_flush_lock: Mutex<()>,
     /// Dirty block positions waiting to be broadcast to clients.
@@ -318,7 +321,7 @@ impl World {
             block_registry,
             sea_level: generation_settings.sea_level,
             min_y: i32::from(generation_settings.shape.min_y),
-            synced_block_event_queue: Mutex::new(Vec::new()),
+            synced_block_event_queue: Mutex::new(IndexSet::new()),
             synced_block_event_flush_lock: Mutex::new(()),
             unsent_block_changes: Mutex::new(FxHashSet::default()),
             unsent_block_entity_updates: std::sync::Mutex::new(FxHashSet::default()),
@@ -540,8 +543,14 @@ impl World {
     }
 
     pub async fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
+        let block_id = self.get_block(&pos).id.as_u16();
         let mut queue = self.synced_block_event_queue.lock().await;
-        queue.push(BlockEvent { pos, r#type, data });
+        queue.insert(BlockEvent {
+            pos,
+            block_id,
+            r#type,
+            data,
+        });
     }
 
     pub async fn flush_synced_block_events(self: &Arc<Self>) {
@@ -560,6 +569,12 @@ impl World {
 
         for event in events {
             let block = self.get_block(&event.pos);
+            // `ServerLevel.doBlockEvent` only runs an event while its original
+            // block type is still present. Do not let a stale piston/chest event
+            // act on a replacement block after a rapid state change.
+            if block.id.as_u16() != event.block_id {
+                continue;
+            }
             if !self
                 .block_registry
                 .on_synced_block_event(block, self, &event.pos, event.r#type, event.data)
@@ -567,28 +582,30 @@ impl World {
             {
                 continue;
             }
-            let chunk_pos = event.pos.chunk_position();
             let packet = CBlockEvent::new(
                 event.pos,
                 event.r#type,
                 event.data,
                 VarInt(block.id.as_u16() as i32),
             );
-            self.enqueue_synced_block_event(chunk_pos, &packet).await;
+            self.enqueue_synced_block_event(event.pos, &packet).await;
         }
     }
 
     /// Enqueues block events reliably on the same FIFO queue as block state updates.
-    async fn enqueue_synced_block_event(&self, chunk_pos: Vector2<i32>, packet: &CBlockEvent) {
+    async fn enqueue_synced_block_event(&self, pos: BlockPos, packet: &CBlockEvent) {
+        let pos = Vector3::new(
+            f64::from(pos.0.x),
+            f64::from(pos.0.y),
+            f64::from(pos.0.z),
+        );
         let recipients = self
             .players
             .load()
             .iter()
-            .filter(|player| {
-                let center = player.get_entity().chunk_pos.load();
-                let view_distance = get_view_distance(player).get() as i32;
-                is_within_view_distance(chunk_pos, center, view_distance)
-            })
+            // Vanilla `PlayerList.broadcast` sends block events to everyone in
+            // the same dimension within a 64-block radius, not every chunk watcher.
+            .filter(|player| player.position().squared_distance_to_vec(&pos) <= 4096.0)
             .cloned()
             .collect::<Vec<_>>();
 
