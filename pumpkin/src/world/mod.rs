@@ -2010,7 +2010,7 @@ impl World {
             is_thundering,
         );
         for entity in entities {
-            self.spawn_entity(entity).await;
+            self.spawn_natural_entity(entity).await;
         }
     }
 
@@ -4447,6 +4447,13 @@ impl World {
         self.broadcast_entity_spawn(&entity);
         entity.init_data_tracker().await;
         self.add_entity_silent(entity).await;
+    }
+
+    /// Adds a natural spawn already accounted for by `SpawnState::after_spawn`.
+    async fn spawn_natural_entity(&self, entity: Arc<dyn EntityBase>) {
+        self.broadcast_entity_spawn(&entity);
+        entity.init_data_tracker().await;
+        let _ = self.entities.add(entity);
     }
 
     pub fn broadcast_entity_spawn(&self, entity: &Arc<dyn EntityBase>) {
