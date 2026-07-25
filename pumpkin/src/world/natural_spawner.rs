@@ -62,6 +62,21 @@ fn requires_custom_persistence(entity: &Entity) -> bool {
             .is_ok_and(|vehicle| vehicle.is_some())
 }
 
+/// Whether this entity contributes to the current natural-spawn cap state.
+///
+/// `SpawnState::new` only includes non-persistent mobs in entity-ticking
+/// chunks. Keep dynamic additions on the same rule; removals are instead
+/// gated by the per-state accounting set so a mob that becomes persistent (or
+/// leaves an active chunk) during the tick is still removed exactly once.
+#[must_use]
+fn counts_towards_spawn_cap(entity: &Entity, active_chunks: &FxHashSet<Vector2<i32>>) -> bool {
+    let entity_type = entity.entity_type;
+    entity_type.mob
+        && entity_type.category != &MobCategory::MISC
+        && !requires_custom_persistence(entity)
+        && active_chunks.contains(&entity.chunk_pos.load())
+}
+
 /// Vanilla `ChunkMap.anyPlayerCloseEnoughForSpawningInternal`.
 #[must_use]
 pub fn any_player_close_enough_for_spawning(world: &World, chunk_pos: Vector2<i32>) -> bool {
@@ -316,17 +331,26 @@ pub struct SpawnState {
     pub mob_category_counts: MobCounts,
     spawn_potential: PotentialCalculator,
     local_mob_cap_calculator: LocalMobCapCalculator,
+    // Entities represented by the cap counters in this state. This prevents
+    // removal of persistent/non-active mobs from decrementing a count they
+    // never contributed to during construction.
+    accounted_mobs: DashMap<Uuid, ()>,
     // unmodifiable_mob_category_counts: MobCounts, seems only for debug
     last_checked: AtomicCell<Option<(BlockPos, &'static EntityType, f64)>>,
 }
 
 impl Clone for SpawnState {
     fn clone(&self) -> Self {
+        let accounted_mobs = DashMap::new();
+        for entry in &self.accounted_mobs {
+            accounted_mobs.insert(*entry.key(), ());
+        }
         Self {
             spawnable_chunk_count: self.spawnable_chunk_count,
             mob_category_counts: self.mob_category_counts.clone(),
             spawn_potential: self.spawn_potential.clone(),
             local_mob_cap_calculator: self.local_mob_cap_calculator.clone(),
+            accounted_mobs,
             last_checked: AtomicCell::new(self.last_checked.load()),
         }
     }
@@ -339,6 +363,7 @@ impl fmt::Debug for SpawnState {
             .field("mob_category_counts", &self.mob_category_counts)
             .field("spawn_potential", &self.spawn_potential)
             .field("local_mob_cap_calculator", &self.local_mob_cap_calculator)
+            .field("accounted_mob_count", &self.accounted_mobs.len())
             .field("last_checked", &self.last_checked)
             .finish()
     }
@@ -352,6 +377,7 @@ impl SpawnState {
             mob_category_counts: MobCounts::default(),
             spawn_potential: PotentialCalculator::default(),
             local_mob_cap_calculator: LocalMobCapCalculator::default(),
+            accounted_mobs: DashMap::new(),
             last_checked: AtomicCell::new(None),
         }
     }
@@ -362,29 +388,39 @@ impl SpawnState {
 
     pub fn add_entity(&self, world: &World, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
-        let entity_type = base_entity.entity_type;
-        if !entity_type.mob || entity_type.category == &MobCategory::MISC {
+        let active_chunks = world.active_chunks.load();
+        if !counts_towards_spawn_cap(base_entity, &active_chunks)
+            || self
+                .accounted_mobs
+                .insert(base_entity.entity_uuid, ())
+                .is_some()
+        {
             return;
         }
+        let entity_type = base_entity.entity_type;
         let entity_pos = base_entity.block_pos.load();
         let biome = base_entity.current_biome.load();
         if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
             self.spawn_potential.add_charge(&entity_pos, cost.charge);
         }
-        if entity_type.mob {
-            self.local_mob_cap_calculator.add_mob(
-                base_entity.chunk_pos.load(),
-                world,
-                entity_type.category,
-            );
-            self.mob_category_counts.add(entity_type.category);
-        }
+        self.local_mob_cap_calculator.add_mob(
+            base_entity.chunk_pos.load(),
+            world,
+            entity_type.category,
+        );
+        self.mob_category_counts.add(entity_type.category);
     }
 
     pub fn remove_entity(&self, world: &World, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
         let entity_type = base_entity.entity_type;
-        if !entity_type.mob || entity_type.category == &MobCategory::MISC {
+        if !entity_type.mob
+            || entity_type.category == &MobCategory::MISC
+            || self
+                .accounted_mobs
+                .remove(&base_entity.entity_uuid)
+                .is_none()
+        {
             return;
         }
         let entity_pos = base_entity.block_pos.load();
@@ -392,14 +428,12 @@ impl SpawnState {
         if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
             self.spawn_potential.remove_charge(&entity_pos, cost.charge);
         }
-        if entity_type.mob {
-            self.local_mob_cap_calculator.remove_mob(
-                base_entity.chunk_pos.load(),
-                world,
-                entity_type.category,
-            );
-            self.mob_category_counts.remove(entity_type.category);
-        }
+        self.local_mob_cap_calculator.remove_mob(
+            base_entity.chunk_pos.load(),
+            world,
+            entity_type.category,
+        );
+        self.mob_category_counts.remove(entity_type.category);
     }
 
     pub fn new(
@@ -410,20 +444,17 @@ impl SpawnState {
         let potential = PotentialCalculator::default();
         let local_mob_cap = LocalMobCapCalculator::default();
         let counter = MobCounts::default();
+        let accounted_mobs = DashMap::new();
         let active_chunks = world.active_chunks.load();
         for entity in entities.load().iter() {
             let entity = entity.get_entity();
-            let entity_type = entity.entity_type;
-            if !entity_type.mob
-                || entity_type.category == &MobCategory::MISC
-                || requires_custom_persistence(entity)
+            if !counts_towards_spawn_cap(entity, &active_chunks)
+                || accounted_mobs.insert(entity.entity_uuid, ()).is_some()
             {
                 continue;
             }
+            let entity_type = entity.entity_type;
             let chunk_pos = entity.chunk_pos.load();
-            if !active_chunks.contains(&chunk_pos) {
-                continue;
-            }
             let entity_pos = entity.block_pos.load();
             let biome = entity.current_biome.load();
             if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
@@ -439,6 +470,7 @@ impl SpawnState {
             mob_category_counts: counter,
             spawn_potential: potential,
             local_mob_cap_calculator: local_mob_cap,
+            accounted_mobs,
             last_checked: AtomicCell::new(None),
         }
     }
@@ -493,14 +525,22 @@ impl SpawnState {
                 },
             )
     }
-    pub fn after_spawn(
-        &self,
-        entity_type: &'static EntityType,
-        pos: &BlockPos,
-        world: &Arc<World>,
-    ) {
+    pub fn after_spawn(&self, entity: &dyn EntityBase, world: &Arc<World>) {
+        let base_entity = entity.get_entity();
+        let active_chunks = world.active_chunks.load();
+        if !counts_towards_spawn_cap(base_entity, &active_chunks)
+            || self
+                .accounted_mobs
+                .insert(base_entity.entity_uuid, ())
+                .is_some()
+        {
+            return;
+        }
+
+        let entity_type = base_entity.entity_type;
+        let pos = base_entity.block_pos.load();
         let charge = if let Some((l_pos, l_type, l_charge)) = self.last_checked.load()
-            && l_pos.eq(pos)
+            && l_pos.eq(&pos)
             && l_type == entity_type
         {
             Some(l_charge)
@@ -510,14 +550,14 @@ impl SpawnState {
 
         let charge = charge.unwrap_or_else(|| {
             // TODO get biome
-            let biome = world.level.get_rough_biome(pos);
+            let biome = world.level.get_rough_biome(&pos);
             biome
                 .spawn_costs
                 .get(entity_type.resource_name)
                 .map_or(0., |cost| cost.charge)
         });
 
-        self.spawn_potential.add_charge(pos, charge);
+        self.spawn_potential.add_charge(&pos, charge);
         self.mob_category_counts.add(entity_type.category);
         self.local_mob_cap_calculator.add_mob(
             Vector2::<i32>::new(get_section_cord(pos.0.x), get_section_cord(pos.0.z)),
@@ -861,8 +901,8 @@ pub fn spawn_category_for_position(
                 .set_rotation(random.random::<f32>() * 360., 0.);
 
             spawn_cluster_size += 1;
+            spawn_state.after_spawn(entity.as_ref(), world);
             batch_buffer.push(entity);
-            spawn_state.after_spawn(entity_type, &new_pos, world);
             if spawn_cluster_size >= entity_type.limit_per_chunk {
                 break 'group_loop;
             }
