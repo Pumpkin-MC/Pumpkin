@@ -143,8 +143,18 @@ impl Goal for TrackTargetGoal {
             }
 
             if self.check_visibility {
-                // TODO: mob.getSensing().hasLineOfSight(target)
-                let has_line_of_sight = true;
+                // Vanilla's sensing check lets targets remain remembered briefly
+                // after going behind cover, but must not treat every target as
+                // visible forever. Use the same solid-block raycast used by the
+                // melee goal until collision-shape-aware sensing is available.
+                let from = mob_entity.living_entity.entity.get_eye_pos();
+                let to = target.entity.get_eye_pos();
+                let has_line_of_sight = world
+                    .raycast(from, to, async |block_pos, raycast_world| {
+                        raycast_world.get_block_state(block_pos).is_solid()
+                    })
+                    .await
+                    .is_none();
 
                 if has_line_of_sight {
                     self.time_without_visibility.store(0, Ordering::Relaxed);
