@@ -1,16 +1,19 @@
-use std::{
-    any::Any,
-    sync::{Arc, LazyLock},
-};
+use std::{any::Any, sync::Arc, sync::LazyLock};
 
-use libloading::Library;
+use tokio::sync::Mutex;
+use wasmtime::{Engine, Store};
 
 use crate::plugin::{
-    PLUGIN_API_VERSION,
-    loader::{PluginLoadFuture, PluginUnloadFuture},
+    PluginMetadata,
+    loader::{
+        PluginLoadFuture, PluginUnloadFuture,
+        wasm::wasm_host::{PluginInstance, WasmPlugin, state::PluginHostState, wit::v0_1::native},
+    },
 };
 
-use super::{LoaderError, Path, Plugin, PluginLoader, PluginMetadata};
+use super::{LoaderError, Path, Plugin, PluginLoader};
+
+static STORE_ENGINE: LazyLock<Engine> = LazyLock::new(Engine::default);
 
 pub struct NativePluginLoader;
 
@@ -19,49 +22,52 @@ impl PluginLoader for NativePluginLoader {
         Box::pin(async {
             let path = path.to_owned();
 
-            // SAFETY: Loading dynamic library from path configured by server administrator.
-            let library = unsafe { Library::new(&path) }
-                .map_err(|e| LoaderError::LibraryLoad(e.to_string()))?;
+            let plugin = native::AnyPlugin::Native(
+                // SAFETY: `Plugin::new` dlopen's `path` and looks up the symbols the
+                // `plugin` WIT world defines. Loading a shared library runs its
+                // initializers, so the caller vouches for the file being a trusted
+                // cdylib built against this WIT world; every symbol lookup inside is
+                // checked and reported as an error rather than assumed to exist.
+                unsafe { native::Plugin::new(&path) }
+                    .map_err(|e| LoaderError::LibraryLoad(e.to_string()))?,
+            );
 
-            // Ensure this plugin was built against a compatible Pumpkin plugin API version
-            // SAFETY: `PUMPKIN_API_VERSION` is an exported `u32` constant symbol created by `#[plugin_impl]`.
-            let plugin_api_version = unsafe {
-                match library.get::<*const u32>(b"PUMPKIN_API_VERSION") {
-                    Ok(symbol) => **symbol,
-                    Err(_) => return Err(LoaderError::ApiVersionMissing),
-                }
+            let mut store = Store::new(&STORE_ENGINE, PluginHostState::new());
+
+            plugin
+                .call_init_plugin(&mut store)
+                .await
+                .map_err(|e| LoaderError::InitializationFailed(e.to_string()))?;
+
+            let metadata = plugin
+                .call_get_metadata(&mut store)
+                .await
+                .map_err(|e| LoaderError::InitializationFailed(e.to_string()))?;
+
+            let metadata = PluginMetadata {
+                name: metadata.name,
+                version: metadata.version,
+                authors: metadata.authors,
+                description: metadata.description,
+                dependencies: metadata.dependencies,
+                permissions: metadata.permissions,
             };
 
-            if plugin_api_version != PLUGIN_API_VERSION {
-                return Err(LoaderError::ApiVersionMismatch {
-                    plugin_version: plugin_api_version,
-                    server_version: PLUGIN_API_VERSION,
-                });
-            }
+            store
+                .data_mut()
+                .permissions
+                .clone_from(&metadata.permissions);
 
-            // 2. Extract Metadata (METADATA)
-            // `#[plugin_impl]` exports this as a `LazyLock`, since `PluginMetadata`
-            // owns its strings and can't be built in a const.
-            // SAFETY: `METADATA` is an exported `LazyLock<PluginMetadata>` symbol created by `#[plugin_impl]`.
-            let metadata = unsafe {
-                let metadata = library
-                    .get::<*const LazyLock<PluginMetadata>>(b"METADATA")
-                    .map_err(|_| LoaderError::MetadataMissing)?;
-                (**metadata).clone()
-            };
-
-            // 3. Extract Plugin Factory (plugin)
-            // SAFETY: `plugin` is an exported constructor function symbol with signature `fn() -> Box<dyn Plugin>` created by `#[plugin_impl]`.
-            let plugin_factory = unsafe {
-                library
-                    .get::<fn() -> Box<dyn Plugin>>(b"plugin")
-                    .map_err(|_| LoaderError::EntrypointMissing)?
-            };
+            let plugin = Arc::new(WasmPlugin {
+                plugin_instance: PluginInstance::V0_1(plugin),
+                store: Mutex::new(store),
+            });
+            plugin.store.lock().await.data_mut().plugin = Some(Arc::downgrade(&plugin));
 
             Ok((
-                Arc::from(plugin_factory()),
+                plugin as Arc<dyn Plugin>,
                 metadata,
-                Box::new(library) as Box<dyn Any + Send + Sync>,
+                Box::new(()) as Box<dyn Any + Send + Sync>,
             ))
         })
     }
@@ -78,14 +84,8 @@ impl PluginLoader for NativePluginLoader {
         }
     }
 
-    fn unload(&self, data: Box<dyn Any + Send + Sync>) -> PluginUnloadFuture<'_> {
-        Box::pin(async {
-            data.downcast::<Library>()
-                .map_or(Err(LoaderError::InvalidLoaderData), |library| {
-                    drop(library);
-                    Ok(())
-                })
-        })
+    fn unload(&self, _data: Box<dyn Any + Send + Sync>) -> PluginUnloadFuture<'_> {
+        Box::pin(async { Ok(()) })
     }
 
     /// Windows specific issue: Windows locks DLLs, so we must indicate they cannot be unloaded.
