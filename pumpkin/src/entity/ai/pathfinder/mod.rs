@@ -112,6 +112,38 @@ fn known_node_g(
         .or_else(|| closed_set.get(&candidate.pos.0).map(|node| node.g))
 }
 
+fn node_center(node: &Node) -> Vector3<f64> {
+    Vector3::new(
+        f64::from(node.pos.0.x) + 0.5,
+        f64::from(node.pos.0.y),
+        f64::from(node.pos.0.z) + 0.5,
+    )
+}
+
+fn should_target_next_node_in_direction(path: &Path, mob_pos: Vector3<f64>) -> bool {
+    let index = path.get_next_node_index();
+    let (Some(current), Some(next)) = (path.get_node(index), path.get_node(index + 1)) else {
+        return false;
+    };
+
+    if matches!(
+        current.path_type,
+        PathType::DangerFire | PathType::DangerOther | PathType::WalkableDoor
+    ) {
+        return false;
+    }
+
+    let to_current = node_center(current).sub(&mob_pos);
+    let to_next = node_center(next).sub(&mob_pos);
+    let current_distance_sq =
+        to_current.x * to_current.x + to_current.y * to_current.y + to_current.z * to_current.z;
+    let next_distance_sq = to_next.x * to_next.x + to_next.y * to_next.y + to_next.z * to_next.z;
+
+    current_distance_sq < 4.0
+        && (next_distance_sq < current_distance_sq || current_distance_sq < 0.5)
+        && to_current.x * to_next.x + to_current.y * to_next.y + to_current.z * to_next.z < 0.0
+}
+
 impl Navigator {
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
         self.is_idle.store(false, Ordering::Relaxed);
@@ -391,6 +423,15 @@ impl Navigator {
                 self.path_start_pos = Some(entity.entity.pos.load());
             }
 
+            let current_pos = entity.entity.pos.load();
+            let navigation_pos =
+                Vector3::new(current_pos.x, (current_pos.y + 0.5).floor(), current_pos.z);
+            if should_target_next_node_in_direction(path, navigation_pos) {
+                path.advance();
+                self.current_goal = Some(goal);
+                return;
+            }
+
             let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
 
             if let Some(next_block) = path.get_next_node_pos() {
@@ -472,7 +513,12 @@ impl Navigator {
 
 #[cfg(test)]
 mod tests {
-    use super::{BinaryHeap, HashMap, Node, known_node_g, should_relax_node};
+    use super::{
+        BinaryHeap, HashMap, Node, Path, Vector3, known_node_g, should_relax_node,
+        should_target_next_node_in_direction,
+    };
+    use crate::entity::ai::pathfinder::node::PathType;
+    use pumpkin_util::math::position::BlockPos;
 
     #[test]
     fn only_relaxes_unseen_or_lower_cost_nodes() {
@@ -495,5 +541,61 @@ mod tests {
         let known_g = known_node_g(&BinaryHeap::new(), &closed_set, &closed_node);
         assert_eq!(known_g, Some(2.0));
         assert!(!should_relax_node(4.0, known_g));
+    }
+
+    #[test]
+    fn skips_a_waypoint_behind_the_mob() {
+        let path = Path::new(
+            vec![
+                Node::new(BlockPos::new(0, 64, 0)),
+                Node::new(BlockPos::new(1, 64, 0)),
+            ],
+            Vector3::new(1, 64, 0),
+            true,
+        );
+
+        assert!(should_target_next_node_in_direction(
+            &path,
+            Vector3::new(0.9, 64.0, 0.5)
+        ));
+    }
+
+    #[test]
+    fn skips_a_later_waypoint_behind_the_mob() {
+        let mut path = Path::new(
+            vec![
+                Node::new(BlockPos::new(0, 64, 0)),
+                Node::new(BlockPos::new(1, 64, 0)),
+                Node::new(BlockPos::new(2, 64, 0)),
+            ],
+            Vector3::new(2, 64, 0),
+            true,
+        );
+        path.set_next_node_index(1);
+
+        assert!(should_target_next_node_in_direction(
+            &path,
+            Vector3::new(2.1, 64.0, 0.5)
+        ));
+    }
+
+    #[test]
+    fn does_not_skip_a_dangerous_waypoint() {
+        let path = Path::new(
+            vec![
+                Node {
+                    path_type: PathType::DangerFire,
+                    ..Node::new(BlockPos::new(0, 64, 0))
+                },
+                Node::new(BlockPos::new(1, 64, 0)),
+            ],
+            Vector3::new(1, 64, 0),
+            true,
+        );
+
+        assert!(!should_target_next_node_in_direction(
+            &path,
+            Vector3::new(0.9, 64.0, 0.5)
+        ));
     }
 }
