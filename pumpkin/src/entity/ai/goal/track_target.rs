@@ -15,6 +15,7 @@ pub struct TrackTargetGoal {
     goal_control: Controls,
     check_visibility: bool,
     check_can_navigate: bool,
+    follow_distance_multiplier: f64,
     can_navigate_flag: AtomicI32,
     check_can_navigate_cooldown: AtomicI32,
     time_without_visibility: AtomicI32,
@@ -30,6 +31,7 @@ impl TrackTargetGoal {
             goal_control: Controls::TARGET,
             check_visibility,
             check_can_navigate,
+            follow_distance_multiplier: 1.0,
             can_navigate_flag: AtomicI32::new(UNSET),
             check_can_navigate_cooldown: AtomicI32::new(0),
             time_without_visibility: AtomicI32::new(0),
@@ -44,6 +46,11 @@ impl TrackTargetGoal {
 
     pub const fn set_unseen_memory_ticks(mut self, ticks: i32) -> Self {
         self.max_time_without_visibility = ticks;
+        self
+    }
+
+    pub const fn with_follow_distance_multiplier(mut self, multiplier: f64) -> Self {
+        self.follow_distance_multiplier = multiplier;
         self
     }
 
@@ -136,7 +143,8 @@ impl Goal for TrackTargetGoal {
             // Get follow range attribute value and check if target is within range
             let follow_range = mob_entity
                 .living_entity
-                .get_attribute_value(&Attributes::FOLLOW_RANGE);
+                .get_attribute_value(&Attributes::FOLLOW_RANGE)
+                * self.follow_distance_multiplier;
 
             if dist_sq > follow_range * follow_range {
                 return false;

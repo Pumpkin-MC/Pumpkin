@@ -1,9 +1,10 @@
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Weak, atomic::Ordering};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, escape_danger::EscapeDangerGoal,
         follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
@@ -18,7 +19,7 @@ use crate::entity::{
 /// ```text
 /// 0 Float; 1 Melee(1.25); 1 Panic(2.0); 4 FollowParent(1.25);
 /// 5 Stroll(1.0); 6 LookAt Player 6; 7 RandomLook
-/// target: HurtBy; AttackPlayers(cub) TODO; angry Player TODO; Fox; ResetAnger TODO
+/// target: HurtBy; AttackPlayers(cub); angry Player TODO; Fox; ResetAnger TODO
 /// ```
 pub struct PolarBearEntity {
     pub mob_entity: MobEntity,
@@ -53,7 +54,29 @@ impl PolarBearEntity {
 
             // PolarBearHurtByTarget + AttackPlayers (cub) + angry player + fox + ResetAnger
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            // PolarBearAttackPlayersGoal / NeutralMob anger TODO
+            let polar_bear = Arc::downgrade(&mob_arc);
+            target_selector.add_goal(
+                2,
+                Box::new(
+                    ActiveTargetGoal::new(
+                        &mob_arc.mob_entity,
+                        &EntityType::PLAYER,
+                        20,
+                        true,
+                        false,
+                        Some(move |_, world| {
+                            let polar_bear = polar_bear.clone();
+                            async move {
+                                polar_bear
+                                    .upgrade()
+                                    .is_some_and(|bear| bear.has_nearby_cub(&world))
+                            }
+                        }),
+                    )
+                    .with_follow_distance_multiplier(0.5),
+                ),
+            );
+            // NeutralMob anger TODO
             target_selector.add_goal(
                 4,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true),
@@ -62,6 +85,40 @@ impl PolarBearEntity {
 
         mob_arc
     }
+
+    fn has_nearby_cub(&self, world: &crate::world::World) -> bool {
+        let position = self.mob_entity.living_entity.entity.pos.load();
+        if self
+            .mob_entity
+            .living_entity
+            .entity
+            .age
+            .load(Ordering::Relaxed)
+            < 0
+        {
+            return false;
+        }
+
+        world
+            .get_nearby_entities(position, 12.0)
+            .into_values()
+            .any(|candidate| {
+                let entity = candidate.get_entity();
+                entity.entity_type == &EntityType::POLAR_BEAR
+                    && is_nearby_cub(
+                        position,
+                        entity.pos.load(),
+                        entity.age.load(Ordering::Relaxed),
+                    )
+            })
+    }
+}
+
+fn is_nearby_cub(bear_position: Vector3<f64>, cub_position: Vector3<f64>, cub_age: i32) -> bool {
+    cub_age < 0
+        && (cub_position.x - bear_position.x).abs() <= 8.0
+        && (cub_position.y - bear_position.y).abs() <= 4.0
+        && (cub_position.z - bear_position.z).abs() <= 8.0
 }
 
 impl NBTStorage for PolarBearEntity {}
@@ -69,5 +126,19 @@ impl NBTStorage for PolarBearEntity {}
 impl Mob for PolarBearEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_baby_polar_bears_inside_the_vanilla_search_box_trigger_player_aggression() {
+        let bear = Vector3::new(4.0, 64.0, 8.0);
+
+        assert!(is_nearby_cub(bear, Vector3::new(12.0, 68.0, 0.0), -1,));
+        assert!(!is_nearby_cub(bear, Vector3::new(12.1, 64.0, 8.0), -1,));
+        assert!(!is_nearby_cub(bear, Vector3::new(4.0, 64.0, 8.0), 0));
     }
 }

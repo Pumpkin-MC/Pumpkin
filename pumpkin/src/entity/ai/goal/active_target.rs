@@ -32,6 +32,7 @@ pub struct ActiveTargetGoal {
     reciprocal_chance: i32,
     kind: TargetKind,
     target_predicate: TargetPredicate,
+    follow_distance_multiplier: f64,
 }
 
 impl ActiveTargetGoal {
@@ -63,6 +64,7 @@ impl ActiveTargetGoal {
             reciprocal_chance: to_goal_ticks(reciprocal_chance),
             kind: TargetKind::Exact(target_type),
             target_predicate,
+            follow_distance_multiplier: 1.0,
         }
     }
 
@@ -84,6 +86,7 @@ impl ActiveTargetGoal {
             reciprocal_chance: to_goal_ticks(DEFAULT_RECIPROCAL_CHANCE),
             kind: TargetKind::Exact(target_type),
             target_predicate,
+            follow_distance_multiplier: 1.0,
         })
     }
 
@@ -113,6 +116,7 @@ impl ActiveTargetGoal {
             reciprocal_chance: to_goal_ticks(reciprocal_chance),
             kind: TargetKind::Category { category, exclude },
             target_predicate,
+            follow_distance_multiplier: 1.0,
         })
     }
 
@@ -140,6 +144,15 @@ impl ActiveTargetGoal {
         self.target = target;
     }
 
+    #[must_use]
+    pub fn with_follow_distance_multiplier(mut self, multiplier: f64) -> Self {
+        self.follow_distance_multiplier = multiplier;
+        self.track_target_goal = self
+            .track_target_goal
+            .with_follow_distance_multiplier(multiplier);
+        self
+    }
+
     fn matches_kind(&self, entity_type: &'static EntityType) -> bool {
         match self.kind {
             TargetKind::Exact(want) => entity_type.id == want.id,
@@ -156,7 +169,8 @@ impl ActiveTargetGoal {
     fn find_closest_target(&mut self, mob: &MobEntity) {
         let follow_range = mob
             .living_entity
-            .get_attribute_value(&Attributes::FOLLOW_RANGE);
+            .get_attribute_value(&Attributes::FOLLOW_RANGE)
+            * self.follow_distance_multiplier;
 
         // Vanilla updates the target conditions with the current follow distance on every search
         self.target_predicate.base_max_distance = follow_range;
