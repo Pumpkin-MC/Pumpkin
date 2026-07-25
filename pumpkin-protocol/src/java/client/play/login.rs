@@ -16,12 +16,12 @@ use crate::{
 /// initializes the player's world view, dimension settings, and local game
 /// rules. Once received, the client begins rendering the world.
 #[java_packet(PLAY_LOGIN)]
-pub struct CLogin {
+pub struct CLogin<'a> {
     /// The unique ID assigned to the player for the current session.
     pub entity_id: i32,
     pub is_hardcore: bool,
     /// A list of all dimensions present on the server (e.g., overworld, nether, end).
-    pub dimension_names: Vec<ResourceLocation>,
+    pub dimension_names: &'a [ResourceLocation],
     pub max_players: VarInt,
     /// The number of chunks the client will render in each direction.
     pub view_distance: VarInt,
@@ -38,14 +38,14 @@ pub struct CLogin {
     pub enforce_secure_chat: bool,
 }
 
-impl CLogin {
+impl<'a> CLogin<'a> {
     #[expect(clippy::too_many_arguments)]
     #[expect(clippy::fn_params_excessive_bools)]
     #[must_use]
     pub const fn new(
         entity_id: i32,
         is_hardcore: bool,
-        dimension_names: Vec<ResourceLocation>,
+        dimension_names: &'a [ResourceLocation],
         max_players: VarInt,
         view_distance: VarInt,
         simulated_distance: VarInt,
@@ -73,7 +73,7 @@ impl CLogin {
     }
 }
 
-impl ClientPacket for CLogin {
+impl ClientPacket for CLogin<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
@@ -81,7 +81,7 @@ impl ClientPacket for CLogin {
     ) -> Result<(), WritingError> {
         write.write_i32_be(self.entity_id)?;
         write.write_bool(self.is_hardcore)?;
-        write.write_list(&self.dimension_names, |write, dim| write.write_string(dim))?;
+        write.write_list(self.dimension_names, |write, dim| write.write_string(dim))?;
         write.write_var_int(&self.max_players)?;
         write.write_var_int(&self.view_distance)?;
         write.write_var_int(&self.simulated_distance)?;

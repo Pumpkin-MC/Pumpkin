@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::PLAY_SET_BEACON;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 use crate::codec::var_int::VarInt;
 
@@ -15,8 +14,8 @@ pub struct SSetBeacon {
     pub secondary_effect: Option<VarInt>,
 }
 
-impl ServerPacket for SSetBeacon {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SSetBeacon {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             primary_effect: bytebuf.get_option(NetworkReadExt::get_var_int)?,
             secondary_effect: bytebuf.get_option(NetworkReadExt::get_var_int)?,

@@ -68,7 +68,7 @@ use pumpkin_protocol::{
     },
     codec::u24,
     packet::Packet,
-    serial::PacketRead,
+    serial::{PacketRead, PacketReadSlice},
 };
 use std::net::SocketAddr;
 use tokio::{
@@ -1157,11 +1157,11 @@ impl BedrockClient {
                     .await;
             }
             SText::PACKET_ID => {
-                self.handle_chat_message(server, player, SText::read(reader)?)
+                self.handle_chat_message(server, player, SText::read_slice(reader)?)
                     .await;
             }
             SCommandRequest::PACKET_ID => {
-                self.handle_chat_command(player, server, SCommandRequest::read(reader)?)
+                self.handle_chat_command(player, server, SCommandRequest::read_slice(reader)?)
                     .await;
             }
             SSetLocalPlayerAsInitialized::PACKET_ID => {
@@ -1182,7 +1182,7 @@ impl BedrockClient {
                 self.handle_animate(player, server, &SAnimate::read(reader)?).await;
             }
             SEmote::PACKET_ID => {
-                self.handle_emote(player, server, SEmote::read(reader)?).await;
+                self.handle_emote(player, server, SEmote::read_slice(reader)?).await;
             }
             // SEmoteList::PACKET_ID => {
             //     self.handle_emote_list(player, server, SEmoteList::read(reader)?);
@@ -1191,7 +1191,7 @@ impl BedrockClient {
                 self.handle_modal_form_response(
                     player,
                     server,
-                    pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse::read(
+                    pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse::read_slice(
                         reader,
                     )?,
                 )

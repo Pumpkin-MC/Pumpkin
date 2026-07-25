@@ -19,7 +19,10 @@ pub mod serializer;
 pub mod tag;
 
 pub use compound::NbtCompound;
-pub use deserializer::{from_bytes, from_bytes_unnamed};
+pub use deserializer::{
+    from_bytes, from_bytes_bedrock, from_bytes_unnamed, from_slice, from_slice_bedrock,
+    from_slice_unnamed,
+};
 pub use serializer::{to_bytes, to_bytes_named, to_bytes_unnamed};
 
 // This NBT crate is inspired from CrabNBT
@@ -93,7 +96,7 @@ impl Nbt {
         }
     }
 
-    pub fn read<R: NbtReadHelper>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<Self, Error> {
         let tag_type_id = reader.get_u8()?;
 
         if tag_type_id != COMPOUND_ID {
@@ -101,13 +104,13 @@ impl Nbt {
         }
 
         Ok(Self {
-            name: reader.get_string()?,
+            name: reader.get_string()?.into_owned(),
             root_tag: NbtCompound::deserialize_content(reader)?,
         })
     }
 
     /// Reads an NBT tag that doesn't contain the name of the root `Compound`.
-    pub fn read_unnamed<R: NbtReadHelper>(reader: &mut R) -> Result<Self, Error> {
+    pub fn read_unnamed<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<Self, Error> {
         let tag_type_id = reader.get_u8()?;
 
         if tag_type_id != COMPOUND_ID {
@@ -254,6 +257,31 @@ mod test {
         long: i64,
         float: f32,
         string: String,
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct BorrowedTest<'a> {
+        byte: i8,
+        string: &'a str,
+    }
+
+    #[test]
+    fn zero_alloc_from_slice() {
+        let test = Test {
+            byte: 123,
+            short: 1342,
+            int: 4313,
+            long: 34,
+            float: 1.00,
+            string: "Zero alloc NBT".to_string(),
+        };
+
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&test, &mut bytes).unwrap();
+        let borrowed: BorrowedTest = crate::from_slice_unnamed(&bytes).unwrap();
+
+        assert_eq!(borrowed.byte, 123);
+        assert_eq!(borrowed.string, "Zero alloc NBT");
     }
 
     #[test]

@@ -8,7 +8,6 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(CONFIG_SELECT_KNOWN_PACKS)]
 pub struct SKnownPacks {
@@ -16,8 +15,8 @@ pub struct SKnownPacks {
     // known_packs: &'a [KnownPack]
 }
 
-impl ServerPacket for SKnownPacks {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SKnownPacks {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             known_pack_count: bytebuf.get_var_int()?,
         })

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 
 use crate::{
@@ -11,6 +11,19 @@ use crate::{
 
 pub mod plate;
 pub mod weighted;
+
+#[cfg(test)]
+mod tests;
+
+// Vanilla pressure plates detect entities in a centered 14x4x14-pixel volume.
+const PRESSURE_PLATE_DETECTION_BOX: BoundingBox = BoundingBox::new_array(
+    [1.0 / 16.0, 0.0, 1.0 / 16.0],
+    [15.0 / 16.0, 4.0 / 16.0, 15.0 / 16.0],
+);
+
+fn detection_box_at(pos: &BlockPos) -> BoundingBox {
+    PRESSURE_PLATE_DETECTION_BOX.at_pos(*pos)
+}
 
 pub(crate) trait PressurePlate {
     async fn on_entity_collision_pp(&self, args: OnEntityCollisionArgs<'_>) {

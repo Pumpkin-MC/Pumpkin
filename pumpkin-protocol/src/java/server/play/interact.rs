@@ -1,5 +1,3 @@
-use std::io::Read;
-
 use pumpkin_data::packet::serverbound::PLAY_INTERACT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
@@ -20,8 +18,8 @@ pub struct SInteract {
 }
 
 // Great job Mojang ;D
-impl ServerPacket for SInteract {
-    fn read(mut read: impl Read, version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SInteract {
+    fn read(mut read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         // 26.1+ removes the 'type' field and uses doubles for location
         if version >= &JavaMinecraftVersion::V_26_1 {
             let entity_id = read.get_var_int()?;

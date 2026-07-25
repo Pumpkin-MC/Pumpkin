@@ -7,7 +7,6 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_MOVE_PLAYER_POS)]
 pub struct SPlayerPosition {
@@ -16,8 +15,8 @@ pub struct SPlayerPosition {
     pub collision: u8,
 }
 
-impl ServerPacket for SPlayerPosition {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SPlayerPosition {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             position: Vector3::new(
                 bytebuf.get_f64_be()?,

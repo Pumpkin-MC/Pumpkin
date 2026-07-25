@@ -1,19 +1,18 @@
 use crate::{
     ServerPacket,
-    ser::{NetworkReadExt, ReadingError},
+    ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 use pumpkin_data::packet::serverbound::PLAY_SET_COMMAND_BLOCK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 use crate::codec::var_int::VarInt;
 
 #[java_packet(PLAY_SET_COMMAND_BLOCK)]
-pub struct SSetCommandBlock {
+pub struct SSetCommandBlock<'a> {
     pub pos: BlockPos,
-    pub command: String,
+    pub command: &'a str,
     pub mode: VarInt,
 
     /// Operation mode flags
@@ -23,11 +22,11 @@ pub struct SSetCommandBlock {
     pub flags: i8,
 }
 
-impl ServerPacket for SSetCommandBlock {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SSetCommandBlock<'a> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             pos: BlockPos::from_i64(bytebuf.get_i64_be()?),
-            command: bytebuf.get_str_bounded(32767)?.into_string(),
+            command: bytebuf.get_str_bounded_borrowed(32767)?,
             mode: bytebuf.get_var_int()?,
             flags: bytebuf.get_i8()?,
         })

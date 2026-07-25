@@ -8,15 +8,14 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_PLAYER_ABILITIES)]
 pub struct SPlayerAbilities {
     pub flags: i8,
 }
 
-impl ServerPacket for SPlayerAbilities {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SPlayerAbilities {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             flags: bytebuf.get_i8()?,
         })

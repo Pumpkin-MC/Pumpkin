@@ -21,6 +21,7 @@ pub use number::Number;
 pub use crate::codec::Decode;
 pub use crate::codec::Encode;
 
+pub use crate::codec::either::Either;
 pub use crate::codec::primitive::ByteBuffer;
 pub use crate::codec::primitive::IntStream;
 pub use crate::codec::primitive::LongStream;

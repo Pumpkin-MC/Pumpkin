@@ -253,8 +253,8 @@ pub trait ClientPacket: MultiVersionJavaPacket {
     ) -> Result<(), WritingError>;
 }
 
-pub trait ServerPacket: MultiVersionJavaPacket + Sized {
-    fn read(read: impl Read, version: &JavaMinecraftVersion) -> Result<Self, ReadingError>;
+pub trait ServerPacket<'a>: MultiVersionJavaPacket + Sized {
+    fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError>;
 }
 
 pub trait BClientPacket: Packet {

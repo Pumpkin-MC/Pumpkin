@@ -541,10 +541,12 @@ impl TextComponent {
     #[must_use]
     pub fn from_legacy_string(input: &str) -> Self {
         let mut root = Self::text("");
-        let parts: Vec<&str> = input.split('§').collect();
+        let mut parts = input.split('§');
 
-        if !parts[0].is_empty() {
-            root = root.add_child(Self::text(parts[0].to_string()));
+        if let Some(first) = parts.next()
+            && !first.is_empty()
+        {
+            root = root.add_child(Self::text(first.to_string()));
         }
 
         let mut current_color: Option<Color> = None;
@@ -554,39 +556,34 @@ impl TextComponent {
         let mut strikethrough = false;
         let mut obfuscated = false;
 
-        let mut i = 1;
-        while i < parts.len() {
-            let part = parts[i];
+        while let Some(part) = parts.next() {
             if part.is_empty() {
-                i += 1;
                 continue;
             }
 
-            let mut chars = part.chars();
-            let code = chars.next().unwrap_or(' ').to_ascii_lowercase();
+            let code = part.chars().next().unwrap_or(' ').to_ascii_lowercase();
             let remainder = &part[1..];
 
             match code {
-                'x' if i + 6 < parts.len() => {
-                    let mut hex = String::new();
-                    for j in 1..=6 {
-                        if let Some(c) = parts[i + j].chars().next() {
-                            hex.push(c);
+                'x' => {
+                    let mut hex = [0u8; 6];
+                    let mut valid_hex = true;
+                    for hex_byte in &mut hex {
+                        if let Some(next_part) = parts.next() {
+                            if let Some(c) = next_part.chars().next() {
+                                *hex_byte = c as u8;
+                            } else {
+                                valid_hex = false;
+                                break;
+                            }
+                        } else {
+                            valid_hex = false;
+                            break;
                         }
                     }
-                    current_color = Color::from_hex_str(&hex);
-
-                    i += 6;
-
-                    let last_part = parts[i];
-                    if last_part.len() > 1 {
-                        let mut child = Self::text(last_part[1..].to_string());
-                        if let Some(c) = current_color {
-                            child = child.color(c);
-                        }
-                        root = root.add_child(child);
+                    if valid_hex && let Ok(hex_str) = std::str::from_utf8(&hex) {
+                        current_color = Color::from_hex_str(hex_str);
                     }
-                    i += 1;
                     continue;
                 }
                 '0'..='9' | 'a'..='f' => {
@@ -635,7 +632,6 @@ impl TextComponent {
                 }
                 root = root.add_child(child);
             }
-            i += 1;
         }
 
         root

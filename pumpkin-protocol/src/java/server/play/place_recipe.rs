@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::PLAY_PLACE_RECIPE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 use crate::VarInt;
 
@@ -16,8 +15,8 @@ pub struct SPlaceRecipe {
     pub use_max_items: bool,
 }
 
-impl ServerPacket for SPlaceRecipe {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SPlaceRecipe {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             container_id: bytebuf.get_i8()?,
             recipe_display_id: bytebuf.get_var_int()?,
