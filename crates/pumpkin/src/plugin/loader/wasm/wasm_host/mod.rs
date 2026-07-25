@@ -115,7 +115,7 @@ pub struct PluginRuntime {
 }
 
 pub enum PluginInstance {
-    V0_1(wit::v0_1::Plugin),
+    V0_1(wit::v0_1::native::AnyPlugin),
 }
 
 pub struct WasmPlugin {

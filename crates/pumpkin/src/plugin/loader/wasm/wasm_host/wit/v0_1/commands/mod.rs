@@ -609,6 +609,9 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
                     WasmCommandNode::Argument(argument(name, StringArgumentType::GreedyPhrase))
                 }
             },
+            ArgumentType::Message => {
+                WasmCommandNode::Argument(argument(name, StringArgumentType::GreedyPhrase))
+            }
             ArgumentType::Entities => {
                 WasmCommandNode::Argument(argument(name, EntityArgumentType::Entities))
             }

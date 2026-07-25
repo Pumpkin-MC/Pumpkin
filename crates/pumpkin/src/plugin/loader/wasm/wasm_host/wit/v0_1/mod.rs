@@ -73,6 +73,14 @@ bindgen!({
     exports: { default: async | trappable},
 });
 
+pub mod native {
+    native_wit_wasmtime::bindgen!({
+        path: "../pumpkin-plugin-wit/v0.1",
+        world: "plugin",
+        trappable: true,
+    });
+}
+
 impl pumpkin::plugin::java_packets::Host for PluginHostState {}
 impl pumpkin::plugin::bedrock_packets::Host for PluginHostState {}
 impl pumpkin::plugin::data_components::Host for PluginHostState {}
@@ -137,7 +145,7 @@ pub async fn init_plugin(
 
     Ok((
         WasmPlugin {
-            plugin_instance: PluginInstance::V0_1(plugin),
+            plugin_instance: PluginInstance::V0_1(native::AnyPlugin::Wasm(plugin)),
             store: Mutex::new(store),
         },
         metadata,
