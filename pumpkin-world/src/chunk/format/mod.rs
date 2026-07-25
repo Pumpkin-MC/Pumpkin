@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
     sync::{
         RwLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -374,6 +374,7 @@ impl ChunkData {
             light_populated: AtomicBool::new(light_correct),
             status,
             blending_data: None,
+            inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
         })
     }
 
@@ -409,6 +410,10 @@ impl ChunkData {
         root_compound.put_int("xPos", self.x);
         root_compound.put_int("zPos", self.z);
         root_compound.put_int("yPos", section_coords::block_to_section(self.section.min_y));
+        root_compound.put_long(
+            "InhabitedTime",
+            self.inhabited_time.load(Ordering::Relaxed) as i64,
+        );
 
         let status_str = match self.status {
             ChunkStatus::Empty => "minecraft:empty",

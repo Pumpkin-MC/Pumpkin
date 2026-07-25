@@ -77,6 +77,12 @@ impl VindicatorEntity {
 
     /// Vanilla always equips an iron axe in the main hand.
     async fn equip_iron_axe(&self) {
+        if crate::entity::mob::equipment::EQUIPMENT_REGISTRY
+            .contains_key(self.get_entity().entity_type.resource_name)
+        {
+            return;
+        }
+
         let living = &self.mob_entity.living_entity;
         let axe = ItemStack::new(1, &Item::IRON_AXE);
         living

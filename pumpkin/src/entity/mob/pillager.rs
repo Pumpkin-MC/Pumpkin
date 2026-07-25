@@ -75,6 +75,12 @@ impl PillagerEntity {
     }
 
     async fn equip_crossbow(&self) {
+        if crate::entity::mob::equipment::EQUIPMENT_REGISTRY
+            .contains_key(self.get_entity().entity_type.resource_name)
+        {
+            return;
+        }
+
         let living = &self.mob_entity.living_entity;
         let stack = ItemStack::new(1, &Item::CROSSBOW);
         living
