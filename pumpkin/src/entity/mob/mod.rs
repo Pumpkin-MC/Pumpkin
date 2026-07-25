@@ -157,14 +157,19 @@ impl MobEntity {
 
         let pos = entity.pos.load();
         let mut nearest_sq = f64::MAX;
+        let mut has_non_spectator_player = false;
         for player in players.iter() {
             if player.gamemode.load() == GameMode::Spectator {
                 continue;
             }
+            has_non_spectator_player = true;
             let d = player.position().squared_distance_to_vec(&pos);
             if d < nearest_sq {
                 nearest_sq = d;
             }
+        }
+        if !has_non_spectator_player {
+            return false;
         }
 
         let despawn_range = category.despawn_distance;
