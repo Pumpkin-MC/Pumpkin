@@ -2531,6 +2531,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "native-wit-bindgen"
+version = "0.1.0"
+source = "git+https://github.com/BjornTheProgrammer/native-wit#65ace21e46e02a443eb5f40212255b495fb49887"
+dependencies = [
+ "anyhow",
+ "heck",
+ "indexmap",
+ "prettyplease",
+ "syn 2.0.119",
+ "wit-bindgen-core",
+ "wit-parser 0.254.0",
+]
+
+[[package]]
+name = "native-wit-wasmtime"
+version = "0.1.0"
+source = "git+https://github.com/BjornTheProgrammer/native-wit#65ace21e46e02a443eb5f40212255b495fb49887"
+dependencies = [
+ "anyhow",
+ "libloading",
+ "native-wit-wasmtime-macro",
+ "tokio",
+ "wasmtime",
+]
+
+[[package]]
+name = "native-wit-wasmtime-macro"
+version = "0.1.0"
+source = "git+https://github.com/BjornTheProgrammer/native-wit#65ace21e46e02a443eb5f40212255b495fb49887"
+dependencies = [
+ "anyhow",
+ "native-wit-bindgen",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+ "wit-parser 0.254.0",
+]
+
+[[package]]
 name = "nix"
 version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3275,7 +3314,7 @@ dependencies = [
  "hyper",
  "image",
  "indexmap",
- "libloading",
+ "native-wit-wasmtime",
  "notify",
  "num-bigint 0.5.1",
  "ordered-float",
@@ -5961,8 +6000,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 [[package]]
 name = "wit-bindgen"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a301904d6657d6364c758d869e5389d05d393b16d5b65db60b4f03cbe71bb80d"
+source = "git+https://github.com/BjornTheProgrammer/wit-bindgen?branch=wit-native#22aa9868aa29c1b3c5314ad5d795f0a78b635d00"
 dependencies = [
  "wit-bindgen-rust-macro",
 ]
@@ -5970,8 +6008,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-core"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48521bb96e56cbb9e031ad306c80dc20e89e69e49ada02781ee06f60fbcb545f"
+source = "git+https://github.com/BjornTheProgrammer/wit-bindgen?branch=wit-native#22aa9868aa29c1b3c5314ad5d795f0a78b635d00"
 dependencies = [
  "anyhow",
  "heck",
@@ -5981,8 +6018,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-rust"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3df3fe9b9a0066f82fd0c2f07f79d0ffc0f85c53fa5f998516d8722712479042"
+source = "git+https://github.com/BjornTheProgrammer/wit-bindgen?branch=wit-native#22aa9868aa29c1b3c5314ad5d795f0a78b635d00"
 dependencies = [
  "anyhow",
  "heck",
@@ -5997,8 +6033,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-rust-macro"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d689c4bc9d6af067c651cfba444766343c9a4bdef15fad1e2efab95c0c277af0"
+source = "git+https://github.com/BjornTheProgrammer/wit-bindgen?branch=wit-native#22aa9868aa29c1b3c5314ad5d795f0a78b635d00"
 dependencies = [
  "anyhow",
  "prettyplease",
