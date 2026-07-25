@@ -1402,7 +1402,8 @@ impl World {
         // results (sand, water, wire) reach clients this game tick — not per setBlock.
         self.flush_block_updates().await;
 
-        // ONE JoinSet for remaining chunk operations (random ticks only below)
+        // Random ticks can run independently. Natural spawning stays sequential below:
+        // SpawnState updates local caps and spawn potential as each pack succeeds.
         let mut chunk_tasks = tokio::task::JoinSet::new();
 
         // 3. Spawn Random Ticks
@@ -1476,7 +1477,7 @@ impl World {
             );
         }
 
-        // 5. Spawn Chunk Spawners into the SAME JoinSet
+        // 5. Spawn chunks in the shuffled vanilla order.
         // Vanilla collectSpawningChunks: natural-spawn candidates (radius 8)
         // ∩ entity-ticking (simulation distance / active_chunks)
         // ∩ anyPlayerCloseEnoughForSpawning (< 128 blocks).
@@ -1497,15 +1498,11 @@ impl World {
             spawning_chunks.shuffle(&mut rng());
 
             for (pos, chunk) in spawning_chunks {
-                let world = self.clone();
-                let s_list = spawn_list.clone();
-                let s_state = spawn_state.clone();
-
-                chunk_tasks.spawn(async move {
-                    world
-                        .tick_spawning_chunk(pos, &chunk, &s_list, &s_state)
-                        .await;
-                });
+                // NaturalSpawner mutates the shared SpawnState after each successful
+                // pack. Running these tasks concurrently lets several chunks all pass
+                // the same local-cap check before any of them increments it.
+                self.tick_spawning_chunk(pos, &chunk, &spawn_list, &spawn_state)
+                    .await;
             }
         }
 
