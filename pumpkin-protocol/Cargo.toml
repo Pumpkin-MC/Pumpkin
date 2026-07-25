@@ -10,8 +10,8 @@ default = ["query"]
 serverbound = []
 clientbound = []
 query = []
-# Prefer flate2 zlib-rs backend (pure Rust; feature-unified with workspace rust_backend).
-zlib-rs = ["flate2/zlib-rs"]
+# Prefer flate2 zlib-ng backend (feature-unified with workspace rust_backend fallback).
+zlib-ng = ["flate2/zlib-ng"]
 
 [dependencies]
 pumpkin-nbt.workspace = true

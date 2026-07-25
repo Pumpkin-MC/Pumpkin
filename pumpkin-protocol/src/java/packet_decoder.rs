@@ -11,7 +11,7 @@ use crate::{
 // decrypt -> decompress -> raw
 
 pub enum DecompressionReader<R: AsyncRead + Unpin> {
-    // Boxed: zlib-rs backend makes ZlibDecoder large (clippy large_enum_variant).
+    // Boxed: zlib-ng backend makes ZlibDecoder large (clippy large_enum_variant).
     Decompress(Box<ZlibDecoder<BufReader<R>>>),
     None(R),
 }

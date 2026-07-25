@@ -1,0 +1,267 @@
+# Pumpkin server configuration (English).
+# Copy this file to the server directory as pumpkin.toml, then restart the server
+# after changing it. The Chinese template has exactly the same keys and values.
+
+# World seed. Leave empty to generate a random Java-compatible seed on first start.
+seed = "1784365050908681378"
+# Default difficulty: Peaceful, Easy, Normal, or Hard.
+default_difficulty = "Normal"
+# Permission level given by /op (0 through 4).
+op_permission_level = 4
+# Enable the Nether and the End dimensions.
+allow_nether = true
+allow_end = true
+# Hardcore deletes a player's progress on death.
+hardcore = false
+# Server ticks per second. Vanilla uses 20.0.
+tps = 20.0
+# Default mode for new players: Survival, Creative, Adventure, or Spectator.
+default_gamemode = "Survival"
+# Reapply the default game mode whenever a player joins.
+force_gamemode = false
+# Hide player IP addresses in server logs.
+scrub_ips = true
+# Enable the server-list favicon when one is available.
+use_favicon = true
+# World directory name, relative to the server working directory.
+default_level_name = "world"
+# Require signed Java chat reports. This requires Java online mode.
+allow_chat_reports = false
+# Enable and enforce the whitelist.
+white_list = false
+enforce_whitelist = false
+
+[logging]
+# Enable console and file logging.
+enabled = true
+# Include thread names, ANSI colors, and timestamps in log output.
+threads = true
+color = true
+timestamp = true
+# Relative path of the active log file.
+file = "latest.log"
+# Enable verbose diagnostics for chunk loading, generation, and slow ticks.
+# Keep false in normal operation; it adds substantial log and I/O pressure.
+development = false
+# Console language: en_us, zh_cn, or zh_en (bilingual).
+locale = "en_us"
+
+[resource_pack.java]
+# Send a Java Edition resource pack to players.
+enabled = false
+# HTTPS URL and optional SHA-1 checksum (40 hexadecimal characters).
+url = ""
+sha1 = ""
+# Optional resource-pack prompt shown by the client.
+prompt_message = ""
+# Deny joining players who decline the pack.
+force = false
+
+[resource_pack.bedrock]
+# Send the packs listed below to Bedrock Edition players.
+enabled = false
+# Deny joining Bedrock players who decline the packs.
+force = false
+# Add Bedrock pack entries only when resource packs are enabled.
+packs = []
+
+[world]
+# Lighting engine: default uses Pumpkin's normal lighting implementation.
+lighting = "default"
+# Ticks between automatic world saves. Set 0 to disable automatic saves.
+autosave_ticks = 0
+
+[world.chunk]
+# Chunk storage format: anvil, linear, or pump.
+type = "anvil"
+# Write Anvil chunks in place instead of replacing their region file entries.
+write_in_place = false
+
+[world.chunk.compression]
+# Anvil chunk compression: GZip, ZLib, LZ4, or Custom.
+algorithm = "LZ4"
+# Compression level for the selected algorithm.
+level = 6
+
+[networking.query]
+# Enable the legacy UDP server-query protocol.
+enabled = false
+# Query is UDP. Do not bind it to the same UDP port as Bedrock.
+address = "0.0.0.0:25565"
+
+[networking.rcon]
+# Enable the remote-console protocol. Use a strong password before enabling it.
+enabled = false
+address = "0.0.0.0:25575"
+password = ""
+# Maximum concurrent RCON clients; 0 removes the limit.
+max_connections = 10
+
+[networking.rcon.logging]
+# Record successful/failed RCON authentication, commands, and disconnects.
+logged_successfully = true
+wrong_password = true
+commands = true
+quit = true
+
+[networking.proxy]
+# Enable a supported forwarding proxy only when it is configured below.
+enabled = false
+
+[networking.proxy.velocity]
+# Enable Velocity modern forwarding and set its shared secret.
+enabled = false
+secret = ""
+
+[networking.proxy.bungeecord]
+# Enable BungeeCord forwarding.
+enabled = false
+
+[networking.lan_broadcast]
+# Advertise this server to compatible clients on the local network.
+enabled = false
+
+[networking.java]
+# Java Edition uses TCP. It may share a port number with Bedrock's UDP listener.
+enabled = true
+address = "0.0.0.0:17307"
+# Encryption is required while Java online mode is enabled.
+encryption = true
+# Verify Java accounts with Mojang services.
+online_mode = true
+# Maximum concurrent players; 0 means unlimited.
+max_players = 1000
+# View and simulation distances must both be between 2 and 64 chunks.
+view_distance = 16
+simulation_distance = 10
+# Text shown on the multiplayer server list.
+motd = "A blazingly fast Pumpkin server!"
+
+[networking.java.compression]
+# Enable Java packet compression. Lower threshold compresses more packets.
+enabled = true
+threshold = 256
+# DEFLATE level: 1 favors speed, 9 favors size.
+level = 4
+
+[networking.java.authentication]
+# Use Mojang Java authentication services.
+enabled = true
+# Network timeouts in milliseconds.
+connect_timeout = 5000
+read_timeout = 5000
+# Reject connections detected as proxies.
+prevent_proxy_connections = false
+
+[networking.java.authentication.player_profile]
+# Allow profiles with Mojang account restrictions.
+allow_banned_players = false
+# Restrictions allowed when allow_banned_players is true.
+allowed_actions = ["FORCED_NAME_CHANGE", "USING_BANNED_SKIN"]
+
+[networking.java.authentication.textures]
+# Apply player skins, capes, and elytra textures.
+enabled = true
+# URL schemes and domain suffixes allowed for texture downloads.
+allowed_url_schemes = ["http", "https"]
+allowed_url_domains = [".minecraft.net", ".mojang.com"]
+
+[networking.java.authentication.textures.types]
+skin = true
+cape = true
+elytra = true
+
+[networking.bedrock]
+# Bedrock Edition uses UDP. It may share a port number with Java's TCP listener.
+enabled = true
+address = "0.0.0.0:17307"
+# Encryption is required while Bedrock online mode is enabled.
+encryption = true
+# Verify Bedrock accounts with Xbox Live services.
+online_mode = true
+# Maximum concurrent players; 0 means unlimited.
+max_players = 1000
+# View and simulation distances must both be between 2 and 64 chunks.
+view_distance = 16
+simulation_distance = 10
+# Text shown to Bedrock clients.
+motd = "A blazingly fast Pumpkin server!"
+
+[networking.bedrock.compression]
+# Enable Bedrock packet compression.
+enabled = true
+threshold = 256
+# DEFLATE level: 1 favors speed, 9 favors size.
+level = 4
+
+[networking.bedrock.authentication]
+# Require Bedrock authentication and set network timeouts in milliseconds.
+enabled = true
+connect_timeout = 5000
+read_timeout = 5000
+
+[commands]
+# Enable commands from the console and interactive terminal.
+use_console = true
+use_tty = true
+# Log player commands and broadcast console/RCON output to operators.
+log_console = true
+broadcast_console_to_ops = true
+# Permission level for non-operators.
+default_op_level = 0
+
+[chat]
+# Placeholders: {DISPLAYNAME} and {MESSAGE}.
+format = "<{DISPLAYNAME}> {MESSAGE}"
+
+[pvp]
+# Control player-vs-player damage and its client-visible effects.
+enabled = true
+hurt_animation = true
+protect_creative = true
+knockback = true
+swing = true
+
+[server_links]
+# Expose configured support links to compatible clients.
+enabled = true
+bug_report = "https://github.com/Pumpkin-MC/Pumpkin/issues"
+support = ""
+status = ""
+feedback = ""
+community = ""
+website = ""
+forums = ""
+news = ""
+announcements = ""
+
+[server_links.custom]
+# Add custom link_name = "https://example.invalid" entries here.
+
+[player_data]
+# Persist player data and set the periodic save interval in seconds.
+save_player_data = true
+save_player_cron_interval = 300
+
+[fun]
+# Enable seasonal April Fools behavior.
+april_fools = true
+
+[recipe]
+# Send recipes so clients can use the recipe book.
+send_recipes = true
+
+[plugins]
+# Permissions denied to all loaded plugins.
+blocked_permissions = []
+
+[advancement]
+# Persist player advancements.
+save_advancements = true
+
+[performance]
+# Requested allocator. The built binary determines the actual allocator.
+allocator = "mimalloc"
+# Requested DEFLATE backend: zlib_ng or rust. The built binary determines it.
+# Production builds use zlib-ng; legacy backend values are not supported.
+compression_backend = "zlib_ng"

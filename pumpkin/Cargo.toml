@@ -120,21 +120,21 @@ indexmap.workspace = true
 tempfile.workspace = true
 
 [features]
-# Default build uses mimalloc + zlib-rs for better multi-thread alloc and deflate.
+# Default build uses mimalloc + zlib-ng for better multi-thread alloc and deflate.
 # Disable with: cargo build --no-default-features
-# Re-enable selectively: --features mimalloc / --features zlib-rs
-default = ["mimalloc", "zlib-rs"]
+# Re-enable selectively: --features mimalloc / --features zlib-ng
+default = ["mimalloc", "zlib-ng"]
 # Tokio console subscriber for async debugging.
 console-subscriber = ["dep:console-subscriber"]
 # Use mimalloc as the global allocator (see pumpkin.toml advanced.performance.allocator).
 mimalloc = ["dep:mimalloc"]
-# Use zlib-rs for flate2 compression (network/chunk zlib paths). Pure Rust, no C
-# toolchain. Keeps rust_backend in the graph; flate2 prefers zlib-rs when both
-# are enabled. See pumpkin.toml advanced.performance.compression_backend.
-zlib-rs = [
-    "flate2/zlib-rs",
-    "pumpkin-protocol/zlib-rs",
-    "pumpkin-world/zlib-rs",
+# Use zlib-ng for flate2 compression (network/chunk zlib paths). zlib-ng is
+# built from source and requires a C toolchain. It takes priority over the
+# workspace miniz_oxide fallback. See pumpkin.toml advanced.performance.compression_backend.
+zlib-ng = [
+    "flate2/zlib-ng",
+    "pumpkin-protocol/zlib-ng",
+    "pumpkin-world/zlib-ng",
 ]
 
 [lints]

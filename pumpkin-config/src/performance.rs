@@ -4,9 +4,9 @@
 //! backend is selected at **compile time** via Cargo features:
 //!
 //! - `mimalloc` → global allocator = mimalloc
-//! - `zlib-rs`  → flate2 uses zlib-rs (else pure-Rust `miniz_oxide`)
+//! - `zlib-ng`  → flate2 uses zlib-ng (else pure-Rust `miniz_oxide`)
 //!
-//! Default config keeps vanilla-friendly defaults: system malloc + rust zlib.
+//! Default config matches Pumpkin's production performance defaults.
 
 use serde::{Deserialize, Serialize};
 
@@ -23,18 +23,18 @@ pub struct PerformanceConfig {
     /// DEFLATE / zlib implementation used by flate2 (network + some storage paths).
     ///
     /// - `rust` — pure-Rust `miniz_oxide` (`flate2` `rust_backend`, default)
-    /// - `zlib_rs` — pure-Rust zlib-rs (`flate2` `zlib-rs`); requires
-    ///   `cargo build --features zlib-rs`
+    /// - `zlib_ng` — zlib-ng (`flate2` `zlib-ng`); requires
+    ///   `cargo build --features zlib-ng`
     pub compression_backend: CompressionBackend,
 }
 
 impl Default for PerformanceConfig {
     fn default() -> Self {
-        // Matches pumpkin crate default features: mimalloc + zlib-rs.
+        // Matches pumpkin crate default features: mimalloc + zlib-ng.
         // Override in pumpkin.toml or rebuild with --no-default-features.
         Self {
             allocator: AllocatorBackend::Mimalloc,
-            compression_backend: CompressionBackend::ZlibRs,
+            compression_backend: CompressionBackend::ZlibNg,
         }
     }
 }
@@ -67,9 +67,8 @@ pub enum CompressionBackend {
     /// Pure-Rust `miniz_oxide` (`flate2` feature `rust_backend`).
     #[default]
     Rust,
-    /// Pure-Rust zlib-rs (`flate2` feature `zlib-rs`); usually faster than `miniz_oxide`,
-    /// no C toolchain required (unlike zlib-ng).
-    ZlibRs,
+    /// zlib-ng (`flate2` feature `zlib-ng`); high performance, requires a C toolchain.
+    ZlibNg,
 }
 
 impl CompressionBackend {
@@ -77,7 +76,7 @@ impl CompressionBackend {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Rust => "rust",
-            Self::ZlibRs => "zlib_rs",
+            Self::ZlibNg => "zlib_ng",
         }
     }
 }

@@ -1,0 +1,267 @@
+# Pumpkin 服务端配置（简体中文）。
+# 将此文件复制到服务端目录并命名为 pumpkin.toml；修改后需要重启服务端。
+# 英文模板与本文件的配置项和默认值完全相同，仅注释语言不同。
+
+# 世界种子。留空会在首次启动时生成兼容 Java 版的随机种子。
+seed = "1784365050908681378"
+# 默认难度：Peaceful、Easy、Normal 或 Hard。
+default_difficulty = "Normal"
+# /op 授予的权限等级（0 到 4）。
+op_permission_level = 4
+# 是否启用地狱和末地维度。
+allow_nether = true
+allow_end = true
+# 极限模式中玩家死亡后无法继续该角色。
+hardcore = false
+# 每秒服务端刻数；原版为 20.0。
+tps = 20.0
+# 新玩家默认模式：Survival、Creative、Adventure 或 Spectator。
+default_gamemode = "Survival"
+# 玩家每次加入时都强制设为默认游戏模式。
+force_gamemode = false
+# 在服务端日志中隐藏玩家 IP 地址。
+scrub_ips = true
+# 有可用图标文件时，在服务器列表中显示图标。
+use_favicon = true
+# 世界目录名称，相对于服务端工作目录。
+default_level_name = "world"
+# 是否要求 Java 版聊天报告签名；启用时必须开启 Java 在线模式。
+allow_chat_reports = false
+# 是否启用并强制执行白名单。
+white_list = false
+enforce_whitelist = false
+
+[logging]
+# 是否启用控制台和文件日志。
+enabled = true
+# 是否在日志中显示线程名、ANSI 颜色和时间戳。
+threads = true
+color = true
+timestamp = true
+# 当前日志文件的相对路径。
+file = "latest.log"
+# 输出区块加载、地形生成和慢刻的详细诊断日志。
+# 正常运行请保持 false；开启后会显著增加日志和 I/O 压力。
+development = false
+# 控制台语言：en_us、zh_cn 或 zh_en（中英双语）。
+locale = "zh_cn"
+
+[resource_pack.java]
+# 是否向 Java 版玩家发送资源包。
+enabled = false
+# HTTPS 地址和可选 SHA-1 校验值（40 个十六进制字符）。
+url = ""
+sha1 = ""
+# 客户端显示的可选资源包提示文本。
+prompt_message = ""
+# 玩家拒绝资源包时是否禁止其加入。
+force = false
+
+[resource_pack.bedrock]
+# 是否向基岩版玩家发送下方列出的资源包。
+enabled = false
+# 基岩版玩家拒绝资源包时是否禁止其加入。
+force = false
+# 仅在启用资源包后添加基岩版资源包条目。
+packs = []
+
+[world]
+# 光照引擎；default 使用 Pumpkin 的常规光照实现。
+lighting = "default"
+# 两次自动保存之间的刻数；设为 0 可关闭自动保存。
+autosave_ticks = 0
+
+[world.chunk]
+# 区块存储格式：anvil、linear 或 pump。
+type = "anvil"
+# 是否直接原位写入 Anvil 区块，而不是替换区域文件条目。
+write_in_place = false
+
+[world.chunk.compression]
+# Anvil 区块压缩算法：GZip、ZLib、LZ4 或 Custom。
+algorithm = "LZ4"
+# 所选算法的压缩等级。
+level = 6
+
+[networking.query]
+# 是否启用旧版 UDP 服务器查询协议。
+enabled = false
+# Query 使用 UDP，不能与基岩版绑定到同一个 UDP 端口。
+address = "0.0.0.0:25565"
+
+[networking.rcon]
+# 是否启用远程控制台；启用前必须设置高强度密码。
+enabled = false
+address = "0.0.0.0:25575"
+password = ""
+# 同时连接的 RCON 客户端上限；0 表示不限制。
+max_connections = 10
+
+[networking.rcon.logging]
+# 是否记录成功/失败的 RCON 认证、命令和断开事件。
+logged_successfully = true
+wrong_password = true
+commands = true
+quit = true
+
+[networking.proxy]
+# 仅在下方完成配置后才启用受支持的转发代理。
+enabled = false
+
+[networking.proxy.velocity]
+# 是否启用 Velocity 现代转发并填写共享密钥。
+enabled = false
+secret = ""
+
+[networking.proxy.bungeecord]
+# 是否启用 BungeeCord 转发。
+enabled = false
+
+[networking.lan_broadcast]
+# 是否在局域网中向兼容客户端广播本服务器。
+enabled = false
+
+[networking.java]
+# Java 版使用 TCP，可与基岩版 UDP 使用相同端口号。
+enabled = true
+address = "0.0.0.0:17307"
+# 启用 Java 在线模式时必须启用加密。
+encryption = true
+# 是否通过 Mojang 服务验证 Java 版账号。
+online_mode = true
+# 同时在线玩家上限；0 表示不限制。
+max_players = 1000
+# 视距和模拟距离都必须在 2 到 64 个区块之间。
+view_distance = 16
+simulation_distance = 10
+# 多人游戏服务器列表中显示的描述文本。
+motd = "A blazingly fast Pumpkin server!"
+
+[networking.java.compression]
+# 是否启用 Java 版数据包压缩；较低阈值会压缩更多数据包。
+enabled = true
+threshold = 256
+# DEFLATE 等级：1 优先速度，9 优先体积。
+level = 4
+
+[networking.java.authentication]
+# 是否使用 Mojang Java 版认证服务。
+enabled = true
+# 网络超时，单位为毫秒。
+connect_timeout = 5000
+read_timeout = 5000
+# 是否拒绝被识别为代理的连接。
+prevent_proxy_connections = false
+
+[networking.java.authentication.player_profile]
+# 是否允许具有 Mojang 账号限制标记的玩家资料。
+allow_banned_players = false
+# allow_banned_players 为 true 时允许的限制类型。
+allowed_actions = ["FORCED_NAME_CHANGE", "USING_BANNED_SKIN"]
+
+[networking.java.authentication.textures]
+# 是否应用玩家皮肤、披风和鞘翅纹理。
+enabled = true
+# 纹理下载允许的 URL 协议和域名后缀。
+allowed_url_schemes = ["http", "https"]
+allowed_url_domains = [".minecraft.net", ".mojang.com"]
+
+[networking.java.authentication.textures.types]
+skin = true
+cape = true
+elytra = true
+
+[networking.bedrock]
+# 基岩版使用 UDP，可与 Java 版 TCP 使用相同端口号。
+enabled = true
+address = "0.0.0.0:17307"
+# 启用基岩版在线模式时必须启用加密。
+encryption = true
+# 是否通过 Xbox Live 服务验证基岩版账号。
+online_mode = true
+# 同时在线玩家上限；0 表示不限制。
+max_players = 1000
+# 视距和模拟距离都必须在 2 到 64 个区块之间。
+view_distance = 16
+simulation_distance = 10
+# 向基岩版客户端显示的描述文本。
+motd = "A blazingly fast Pumpkin server!"
+
+[networking.bedrock.compression]
+# 是否启用基岩版数据包压缩。
+enabled = true
+threshold = 256
+# DEFLATE 等级：1 优先速度，9 优先体积。
+level = 4
+
+[networking.bedrock.authentication]
+# 是否要求基岩版认证；网络超时单位为毫秒。
+enabled = true
+connect_timeout = 5000
+read_timeout = 5000
+
+[commands]
+# 是否接受控制台和交互式终端输入的命令。
+use_console = true
+use_tty = true
+# 是否记录玩家命令，以及向管理员广播控制台/RCON 输出。
+log_console = true
+broadcast_console_to_ops = true
+# 非管理员的默认权限等级。
+default_op_level = 0
+
+[chat]
+# 可用占位符：{DISPLAYNAME} 和 {MESSAGE}。
+format = "<{DISPLAYNAME}> {MESSAGE}"
+
+[pvp]
+# 控制玩家间伤害及其客户端可见效果。
+enabled = true
+hurt_animation = true
+protect_creative = true
+knockback = true
+swing = true
+
+[server_links]
+# 是否向兼容客户端暴露下方配置的支持链接。
+enabled = true
+bug_report = "https://github.com/Pumpkin-MC/Pumpkin/issues"
+support = ""
+status = ""
+feedback = ""
+community = ""
+website = ""
+forums = ""
+news = ""
+announcements = ""
+
+[server_links.custom]
+# 可在这里添加 custom_link_name = "https://example.invalid" 条目。
+
+[player_data]
+# 是否持久化玩家数据，以及周期保存间隔（秒）。
+save_player_data = true
+save_player_cron_interval = 300
+
+[fun]
+# 是否启用愚人节季节性行为。
+april_fools = true
+
+[recipe]
+# 是否发送配方以启用客户端配方书。
+send_recipes = true
+
+[plugins]
+# 对所有已加载插件拒绝的权限。
+blocked_permissions = []
+
+[advancement]
+# 是否持久化玩家进度。
+save_advancements = true
+
+[performance]
+# 请求的内存分配器；实际分配器由构建出的二进制文件决定。
+allocator = "mimalloc"
+# 请求的 DEFLATE 后端：zlib_ng 或 rust；实际后端由二进制文件决定。
+# 生产构建使用 zlib-ng；不再支持旧的后端配置值。
+compression_backend = "zlib_ng"

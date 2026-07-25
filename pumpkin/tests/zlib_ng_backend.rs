@@ -1,11 +1,11 @@
-//! Smoke / correctness tests for the optional `zlib-rs` `flate2` backend.
+//! Smoke / correctness tests for the optional `zlib-ng` `flate2` backend.
 //!
 //! Run with:
 //! ```text
-//! cargo test -p pumpkin --features zlib-rs --test zlib_rs_backend
+//! cargo test -p pumpkin --features zlib-ng --test zlib_ng_backend
 //! ```
 
-#![cfg(feature = "zlib-rs")]
+#![cfg(feature = "zlib-ng")]
 
 use std::io::{Read, Write};
 
@@ -39,13 +39,13 @@ fn deflate_roundtrip(data: &[u8], level: Compression) {
     assert_eq!(out, data, "deflate roundtrip mismatch");
 }
 
-// This integration test is only built with `--features zlib-rs` (see `#![cfg(...)]` above).
+// This integration test is only built with `--features zlib-ng` (see `#![cfg(...)]` above).
 
 #[test]
 fn zlib_empty_and_small() {
     zlib_roundtrip(b"", Compression::default());
     zlib_roundtrip(b"a", Compression::fast());
-    zlib_roundtrip(b"hello pumpkin zlib-rs", Compression::default());
+    zlib_roundtrip(b"hello pumpkin zlib-ng", Compression::default());
 }
 
 #[test]

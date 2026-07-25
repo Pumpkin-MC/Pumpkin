@@ -164,8 +164,8 @@ pub struct AdvancedConfiguration {
     pub plugins: PluginsConfig,
     /// Advancement configuration
     pub advancement: AdvancementConfig,
-    /// Optional performance backends (allocator / zlib). Defaults preserve
-    /// system malloc + pure-Rust compression; enable Cargo features to activate.
+    /// Optional performance backends (allocator / zlib). Defaults match the
+    /// production build; Cargo features select the actual backend.
     pub performance: performance::PerformanceConfig,
 }
 

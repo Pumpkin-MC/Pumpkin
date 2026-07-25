@@ -41,6 +41,17 @@ Player clients still use their own game language. Vanilla death messages, items,
 
 玩家客户端界面仍使用各自客户端语言；原版死亡消息、物品名等由客户端语言决定。
 
+## Configuration Templates / 配置模板
+
+Use [config/pumpkin.en_us.toml](config/pumpkin.en_us.toml) or
+[config/pumpkin.zh_cn.toml](config/pumpkin.zh_cn.toml) as `pumpkin.toml`.
+Both templates contain the same settings and defaults, with comments in the
+corresponding language.
+
+使用 [config/pumpkin.en_us.toml](config/pumpkin.en_us.toml) 或
+[config/pumpkin.zh_cn.toml](config/pumpkin.zh_cn.toml) 作为 `pumpkin.toml`。
+两个模板的配置项和默认值相同，仅注释语言不同。
+
 ## Goals
 
 - **Performance**: Leveraging multi-threading for maximum speed and efficiency.

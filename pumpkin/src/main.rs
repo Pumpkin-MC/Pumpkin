@@ -380,7 +380,7 @@ fn is_main_thread() -> bool {
 /// intended choice so operators know what to rebuild with.
 fn log_performance_backends(perf: &PerformanceConfig) {
     let built_mimalloc = cfg!(feature = "mimalloc");
-    let built_zlib_rs = cfg!(feature = "zlib-rs");
+    let built_zlib_ng = cfg!(feature = "zlib-ng");
 
     match perf.allocator {
         AllocatorBackend::Mimalloc if !built_mimalloc => {
@@ -397,22 +397,22 @@ fn log_performance_backends(perf: &PerformanceConfig) {
     }
 
     match perf.compression_backend {
-        CompressionBackend::ZlibRs if !built_zlib_rs => {
+        CompressionBackend::ZlibNg if !built_zlib_ng => {
             warn!(
-                "pumpkin.toml advanced.performance.compression_backend = \"zlib_rs\" but this binary was not built with --features zlib-rs; using pure-Rust miniz_oxide"
+                "pumpkin.toml advanced.performance.compression_backend = \"zlib_ng\" but this binary was not built with --features zlib-ng; using pure-Rust miniz_oxide"
             );
         }
-        CompressionBackend::Rust if built_zlib_rs => {
+        CompressionBackend::Rust if built_zlib_ng => {
             warn!(
-                "pumpkin.toml advanced.performance.compression_backend = \"rust\" but binary was built with --features zlib-rs; zlib-rs is active (compile-time only)"
+                "pumpkin.toml advanced.performance.compression_backend = \"rust\" but binary was built with --features zlib-ng; zlib-ng is active (compile-time only)"
             );
         }
         _ => {}
     }
 
     let active_allocator = if built_mimalloc { "mimalloc" } else { "system" };
-    let active_compression = if built_zlib_rs {
-        "zlib-rs"
+    let active_compression = if built_zlib_ng {
+        "zlib-ng"
     } else {
         "rust (miniz_oxide)"
     };
