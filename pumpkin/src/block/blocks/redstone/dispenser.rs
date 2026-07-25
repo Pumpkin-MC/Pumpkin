@@ -10,6 +10,10 @@ use crate::block::{
 };
 use crate::entity::item::ItemEntity;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
+use crate::entity::projectile::egg::EggEntity;
+use crate::entity::projectile::lingering_potion::LingeringPotionEntity;
+use crate::entity::projectile::snowball::SnowballEntity;
+use crate::entity::projectile::splash_potion::SplashPotionEntity;
 use crate::entity::tnt::TNTEntity;
 use crate::entity::{Entity, EntityBase};
 
@@ -31,6 +35,108 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
+
+struct ProjectileSettings {
+    entity: &'static EntityType,
+    power: f64,
+    uncertainty: f64,
+    facing_offset: f64,
+    up_nudge: f64,
+}
+
+/// Dispenser projectile settings, keyed by item id. Mirrors each item's
+/// vanilla `ProjectileItem.Settings` (position offset, power, uncertainty).
+///
+/// NOT included, and why:
+/// - Arrows (arrow/tipped/spectral) use the `ArrowEntity` path (owner/pickup) — handled separately.
+/// - Firework rocket: custom position function + dispense sound 1004 — does not fit this table.
+/// - Experience bottle (vanilla power 1.375, uncertainty 3.0): no projectile entity exists in Pumpkin yet.
+static PROJECTILES: &[(u16, ProjectileSettings)] = &[
+    // Default settings: power 1.1, uncertainty 6.0, offset 0.7, +0.1 up.
+    (
+        Item::SNOWBALL.id,
+        ProjectileSettings {
+            entity: &EntityType::SNOWBALL,
+            power: 1.1,
+            uncertainty: 6.0,
+            facing_offset: 0.7,
+            up_nudge: 0.1,
+        },
+    ),
+    (
+        Item::EGG.id,
+        ProjectileSettings {
+            entity: &EntityType::EGG,
+            power: 1.1,
+            uncertainty: 6.0,
+            facing_offset: 0.7,
+            up_nudge: 0.1,
+        },
+    ),
+    (
+        Item::BLUE_EGG.id,
+        ProjectileSettings {
+            entity: &EntityType::EGG,
+            power: 1.1,
+            uncertainty: 6.0,
+            facing_offset: 0.7,
+            up_nudge: 0.1,
+        },
+    ),
+    (
+        Item::BROWN_EGG.id,
+        ProjectileSettings {
+            entity: &EntityType::EGG,
+            power: 1.1,
+            uncertainty: 6.0,
+            facing_offset: 0.7,
+            up_nudge: 0.1,
+        },
+    ),
+    (
+        Item::SPLASH_POTION.id,
+        ProjectileSettings {
+            entity: &EntityType::SPLASH_POTION,
+            power: 1.1,
+            uncertainty: 6.0,
+            facing_offset: 0.7,
+            up_nudge: 0.1,
+        },
+    ),
+    (
+        Item::LINGERING_POTION.id,
+        ProjectileSettings {
+            entity: &EntityType::LINGERING_POTION,
+            power: 1.1,
+            uncertainty: 6.0,
+            facing_offset: 0.7,
+            up_nudge: 0.1,
+        },
+    ),
+    // Charges: full-block offset, no up-nudge, power 1.0, uncertainty 6.6666665.
+    // NOTE: SMALL_FIREBALL and WIND_CHARGE entities currently only expose `new_shot(shooter)`;
+    // they need an ownerless constructor before these rows can actually spawn from a dispenser.
+    (
+        Item::FIRE_CHARGE.id,
+        ProjectileSettings {
+            entity: &EntityType::SMALL_FIREBALL,
+            power: 1.0,
+            uncertainty: 6.666_666_5,
+            facing_offset: 1.0,
+            up_nudge: 0.0,
+        },
+    ),
+    (
+        Item::WIND_CHARGE.id,
+        ProjectileSettings {
+            entity: &EntityType::WIND_CHARGE,
+            power: 1.0,
+            uncertainty: 6.666_666_5,
+            facing_offset: 1.0,
+            up_nudge: 0.0,
+        },
+    ),
+];
 
 struct DispenserScreenFactory(Arc<dyn Inventory>);
 
@@ -203,28 +309,96 @@ impl BlockBehaviour for DispenserBlock {
                                 .spawn_entity(Arc::new(arrow) as Arc<dyn EntityBase>)
                                 .await;
                         }
-                        _ => {
-                            let mut position = args.position.to_centered_f64().add(&(facing * 0.7));
+                        id => {
+                            if let Some((_, settings)) = PROJECTILES.iter().find(|p| p.0 == id) {
+                                let position = args.position.to_centered_f64()
+                                    + facing * settings.facing_offset
+                                    + Vector3::new(0.0, settings.up_nudge, 0.0);
 
-                            position.y -= match props.facing {
-                                Facing::Up | Facing::Down => 0.125,
-                                _ => 0.15625,
-                            };
+                                let entity =
+                                    Entity::new(args.world.clone(), position, settings.entity);
 
-                            let entity =
-                                Entity::new(args.world.clone(), position, &EntityType::ITEM);
-                            let rd = rng().random::<f64>().mul_add(0.1, 0.2);
+                                // Distinct projectile structs can't be built generically from
+                                // `&EntityType`, so match to construct the right one, then apply
+                                // the shared velocity (power/uncertainty from the table).
+                                let projectile: Option<Arc<dyn EntityBase>> = match settings.entity.id
+                                {
+                                    id if id == EntityType::SNOWBALL.id => {
+                                        let e = SnowballEntity::new(entity);
+                                        e.thrown.set_velocity(
+                                            facing.x,
+                                            facing.y,
+                                            facing.z,
+                                            settings.power,
+                                            settings.uncertainty,
+                                        );
+                                        Some(Arc::new(e) as Arc<dyn EntityBase>)
+                                    }
+                                    id if id == EntityType::EGG.id => {
+                                        let e = EggEntity::new(entity);
+                                        e.thrown.set_velocity(
+                                            facing.x,
+                                            facing.y,
+                                            facing.z,
+                                            settings.power,
+                                            settings.uncertainty,
+                                        );
+                                        Some(Arc::new(e) as Arc<dyn EntityBase>)
+                                    }
+                                    id if id == EntityType::SPLASH_POTION.id => {
+                                        let e = SplashPotionEntity::new(entity);
+                                        e.thrown.set_velocity(
+                                            facing.x,
+                                            facing.y,
+                                            facing.z,
+                                            settings.power,
+                                            settings.uncertainty,
+                                        );
+                                        Some(Arc::new(e) as Arc<dyn EntityBase>)
+                                    }
+                                    id if id == EntityType::LINGERING_POTION.id => {
+                                        let e = LingeringPotionEntity::new(entity);
+                                        e.thrown.set_velocity(
+                                            facing.x,
+                                            facing.y,
+                                            facing.z,
+                                            settings.power,
+                                            settings.uncertainty,
+                                        );
+                                        Some(Arc::new(e) as Arc<dyn EntityBase>)
+                                    }
+                                    // FIRE_CHARGE / WIND_CHARGE: entities only expose
+                                    // `new_shot(shooter)` — need an ownerless constructor first.
+                                    _ => None,
+                                };
 
-                            let velocity = Vector3::new(
-                                triangle(&mut rng(), facing.x * rd, 0.017_227_5 * 6.),
-                                triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
-                                triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
-                            );
+                                if let Some(projectile) = projectile {
+                                    args.world.spawn_entity(projectile).await;
+                                }
+                            } else {
+                                let mut position =
+                                    args.position.to_centered_f64().add(&(facing * 0.7));
 
-                            let item_entity = Arc::new(ItemEntity::new_with_velocity(
-                                entity, drop_item, velocity, 40,
-                            ));
-                            args.world.spawn_entity(item_entity).await;
+                                position.y -= match props.facing {
+                                    Facing::Up | Facing::Down => 0.125,
+                                    _ => 0.15625,
+                                };
+
+                                let entity =
+                                    Entity::new(args.world.clone(), position, &EntityType::ITEM);
+                                let rd = rng().random::<f64>().mul_add(0.1, 0.2);
+
+                                let velocity = Vector3::new(
+                                    triangle(&mut rng(), facing.x * rd, 0.017_227_5 * 6.),
+                                    triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
+                                    triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
+                                );
+
+                                let item_entity = Arc::new(ItemEntity::new_with_velocity(
+                                    entity, drop_item, velocity, 40,
+                                ));
+                                args.world.spawn_entity(item_entity).await;
+                            }
                         }
                     }
 
