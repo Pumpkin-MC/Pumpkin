@@ -51,6 +51,27 @@ fn validate_profile_actions(
     Ok(())
 }
 
+const SUPPORTED_FEATURE_FLAGS: [&str; 4] = [
+    "minecraft:vanilla",
+    "minecraft:trade_rebalance",
+    "minecraft:redstone_experiments",
+    "minecraft:minecart_improvements",
+];
+
+/// Mirrors Vanilla's feature-flag registry when serializing world metadata to clients.
+///
+/// Keep unrecognized values on disk so a newer world is not destructively rewritten,
+/// but do not advertise features Pumpkin cannot provide.
+fn supported_feature_flags(enabled_features: &[String]) -> Vec<String> {
+    let mut flags = Vec::with_capacity(enabled_features.len());
+    for feature in enabled_features {
+        if SUPPORTED_FEATURE_FLAGS.contains(&feature.as_str()) && !flags.contains(feature) {
+            flags.push(feature.clone());
+        }
+    }
+    flags
+}
+
 impl JavaClient {
     pub async fn handle_login_start(&self, server: &Server, login_start: SLoginStart) {
         debug!("login start");
@@ -437,7 +458,8 @@ impl JavaClient {
         }
 
         if self.version.load() >= JavaMinecraftVersion::V_1_20_2 {
-            let enabled_features = server.level_info.load().enabled_features.clone();
+            let enabled_features =
+                supported_feature_flags(&server.level_info.load().enabled_features);
             self.send_packet_now(&CFeatureFlags::new(&enabled_features))
                 .await;
         }
@@ -486,7 +508,7 @@ impl JavaClient {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_profile_actions;
+    use super::{supported_feature_flags, validate_profile_actions};
     use crate::net::authentication::AuthError;
     use pumpkin_config::networking::auth::PlayerProfileConfig;
     use pumpkin_util::ProfileAction;
@@ -524,5 +546,23 @@ mod tests {
             validate_profile_actions(Some(&[ProfileAction::ForcedNameChange]), &config),
             Err(AuthError::Banned)
         ));
+    }
+
+    #[test]
+    fn filters_unknown_and_duplicate_feature_flags() {
+        let enabled = vec![
+            "minecraft:vanilla".to_string(),
+            "minecraft:trade_rebalance".to_string(),
+            "example:unsupported".to_string(),
+            "minecraft:vanilla".to_string(),
+        ];
+
+        assert_eq!(
+            supported_feature_flags(&enabled),
+            vec![
+                "minecraft:vanilla".to_string(),
+                "minecraft:trade_rebalance".to_string(),
+            ]
+        );
     }
 }
