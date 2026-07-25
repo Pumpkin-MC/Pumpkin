@@ -43,6 +43,20 @@ enum QueryMode {
     Day,
 }
 
+fn resolve_world(
+    sender: &CommandSender,
+    server: &crate::server::Server,
+) -> std::sync::Arc<crate::world::World> {
+    sender.world().unwrap_or_else(|| {
+        server
+            .worlds
+            .load()
+            .first()
+            .expect("Server should have at least one world")
+            .clone()
+    })
+}
+
 struct QueryExecutor(QueryMode);
 
 impl CommandExecutor for QueryExecutor {
@@ -54,11 +68,7 @@ impl CommandExecutor for QueryExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let mode = self.0;
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = resolve_world(sender, server);
             let level_time = world.level_time.lock().await;
 
             let curr_time = match mode {
@@ -104,11 +114,7 @@ impl CommandExecutor for ChangeExecutor {
             };
 
             let mode = self.0;
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = resolve_world(sender, server);
             let mut level_time = world.level_time.lock().await;
 
             match mode {
