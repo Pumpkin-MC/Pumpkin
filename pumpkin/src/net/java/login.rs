@@ -4,7 +4,7 @@ use pumpkin_data::translation;
 use pumpkin_protocol::{
     ConnectionState, KnownPack, Label, Link, LinkType,
     java::client::{
-        config::{CConfigAddResourcePack, CConfigServerLinks, CKnownPacks},
+        config::{CConfigAddResourcePack, CConfigServerLinks, CFeatureFlags, CKnownPacks},
         login::{CLoginSuccess, CSetCompression},
     },
     java::server::config::SKnownPacks,
@@ -434,6 +434,12 @@ impl JavaClient {
             }
 
             self.send_packet_now(&CConfigServerLinks::new(&links)).await;
+        }
+
+        if self.version.load() >= JavaMinecraftVersion::V_1_20_2 {
+            let enabled_features = server.level_info.load().enabled_features.clone();
+            self.send_packet_now(&CFeatureFlags::new(&enabled_features))
+                .await;
         }
 
         let resource_config = &server.advanced_config.resource_pack.java;
