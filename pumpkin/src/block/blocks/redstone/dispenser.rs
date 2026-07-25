@@ -9,12 +9,15 @@ use crate::block::{
     OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
 use crate::entity::item::ItemEntity;
+use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
+use crate::entity::tnt::TNTEntity;
 use crate::entity::{Entity, EntityBase};
 
 use crate::block::entities::dispenser::DispenserBlockEntity;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 use pumpkin_data::translation;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_3x3;
@@ -164,29 +167,66 @@ impl BlockBehaviour for DispenserBlock {
                         args.block,
                     );
 
-                    // No specific dispenser behaviors are registered yet, so dispense item into the world
+                    // Dispatch on the item type; the default arm ejects it as an item entity.
                     let drop_item = item.split(1);
                     let facing = to_normal(props.facing);
-                    let mut position = args.position.to_centered_f64().add(&(facing * 0.7));
 
-                    position.y -= match props.facing {
-                        Facing::Up | Facing::Down => 0.125,
-                        _ => 0.15625,
-                    };
+                    match drop_item.get_item().id {
+                        id if id == Item::TNT.id => {
+                            // Vanilla: block in front of the dispenser, centered on X/Z,
+                            // at the block's bottom on Y (no +0.5 on Y).
+                            let position = Vector3::new(
+                                args.position.0.x as f64 + facing.x + 0.5,
+                                args.position.0.y as f64 + facing.y,
+                                args.position.0.z as f64 + facing.z + 0.5,
+                            );
 
-                    let entity = Entity::new(args.world.clone(), position, &EntityType::ITEM);
-                    let rd = rng().random::<f64>().mul_add(0.1, 0.2);
+                            let entity =
+                                Entity::new(args.world.clone(), position, &EntityType::TNT);
 
-                    let velocity = Vector3::new(
-                        triangle(&mut rng(), facing.x * rd, 0.017_227_5 * 6.),
-                        triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
-                        triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
-                    );
+                            let tnt_entity = Arc::new(TNTEntity::new(entity, 4.0, 80));
+                            args.world.spawn_entity(tnt_entity).await;
+                        }
+                        id if id == Item::ARROW.id => {
+                            // Vanilla: block center + 0.7 in the facing direction, nudged up 0.1.
+                            let position = args.position.to_centered_f64()
+                                + facing * 0.7
+                                + Vector3::new(0.0, 0.1, 0.0);
+                            let arrow_entity =
+                                Entity::new(args.world.clone(), position, &EntityType::ARROW);
+                            let mut arrow = ArrowEntity::new(arrow_entity, None);
+                            arrow.pickup = ArrowPickup::Allowed;
 
-                    let item_entity = Arc::new(ItemEntity::new_with_velocity(
-                        entity, drop_item, velocity, 40,
-                    ));
-                    args.world.spawn_entity(item_entity).await;
+                            arrow.set_velocity(facing.x, facing.y, facing.z, 1.1, 6.0);
+
+                            args.world
+                                .spawn_entity(Arc::new(arrow) as Arc<dyn EntityBase>)
+                                .await;
+                        }
+                        _ => {
+                            let mut position = args.position.to_centered_f64().add(&(facing * 0.7));
+
+                            position.y -= match props.facing {
+                                Facing::Up | Facing::Down => 0.125,
+                                _ => 0.15625,
+                            };
+
+                            let entity =
+                                Entity::new(args.world.clone(), position, &EntityType::ITEM);
+                            let rd = rng().random::<f64>().mul_add(0.1, 0.2);
+
+                            let velocity = Vector3::new(
+                                triangle(&mut rng(), facing.x * rd, 0.017_227_5 * 6.),
+                                triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
+                                triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
+                            );
+
+                            let item_entity = Arc::new(ItemEntity::new_with_velocity(
+                                entity, drop_item, velocity, 40,
+                            ));
+                            args.world.spawn_entity(item_entity).await;
+                        }
+                    }
 
                     args.world.sync_world_event(
                         WorldEvent::SoundDispenserDispense,
