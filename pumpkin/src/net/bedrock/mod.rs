@@ -108,7 +108,7 @@ impl OutgoingPacket {
         }
     }
 
-    pub const fn priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
+    pub const fn with_completion(data: Bytes, completion: oneshot::Sender<()>) -> Self {
         Self {
             data,
             completion: Some(completion),
@@ -129,12 +129,10 @@ pub struct BedrockClient {
 
     tasks: TaskTracker,
     rt_handle: tokio::runtime::Handle,
+    /// FIFO queue of serialized packets to send to the network.
     outgoing_packet_queue_send: Sender<OutgoingPacket>,
-    /// A queue of serialized packets to send to the network
+    /// FIFO queue of serialized packets to send to the network.
     outgoing_packet_queue_recv: Mutex<Option<Receiver<OutgoingPacket>>>,
-
-    outgoing_packet_priority_send: Sender<OutgoingPacket>,
-    outgoing_packet_priority_recv: Mutex<Option<Receiver<OutgoingPacket>>>,
 
     /// The packet encoder for outgoing packets.
     network_writer: Arc<RwLock<UDPNetworkEncoder>>,
@@ -176,7 +174,6 @@ impl BedrockClient {
         be_clients: Arc<Mutex<HashMap<SocketAddr, Arc<Self>>>>,
     ) -> Self {
         let (send, recv) = tokio::sync::mpsc::channel(4096);
-        let (priority_send, priority_recv) = tokio::sync::mpsc::channel(4096);
         let (incoming_send, incoming_recv) = tokio::sync::mpsc::channel(4096);
         let rt_handle = tokio::runtime::Handle::current();
         Self {
@@ -192,8 +189,6 @@ impl BedrockClient {
             rt_handle,
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Mutex::new(Some(recv)),
-            outgoing_packet_priority_send: priority_send,
-            outgoing_packet_priority_recv: Mutex::new(Some(priority_recv)),
             _use_frame_sets: AtomicBool::new(false),
             output_sequence_number: AtomicU32::new(0),
             output_reliable_number: AtomicU32::new(0),
@@ -236,22 +231,11 @@ impl BedrockClient {
                     .take()
                     .expect("Outgoing packet receiver was already taken")
             };
-            let mut priority_packet_receiver = {
-                let mut guard = client.outgoing_packet_priority_recv.lock().await;
-                guard
-                    .take()
-                    .expect("Outgoing packet receiver was already taken")
-            };
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
 
             while !client.close_token.is_cancelled() {
                 let mut packet = tokio::select! {
-                    biased;
                     () = client.close_token.cancelled() => break,
-                    res = priority_packet_receiver.recv() => match res {
-                        Some(p) => p,
-                        None => break,
-                    },
                     _ = interval.tick() => {
                         // Check for timeout (10 seconds)
                         if client.last_seen.load().elapsed() > std::time::Duration::from_secs(10) {
@@ -586,12 +570,12 @@ impl BedrockClient {
                 }
                 let (tx, rx) = oneshot::channel();
                 if let Err(err) = self
-                    .outgoing_packet_priority_send
-                    .send(OutgoingPacket::priority(payload, tx))
+                    .outgoing_packet_queue_send
+                    .send(OutgoingPacket::with_completion(payload, tx))
                     .await
                 {
                     if !self.is_closed() {
-                        error!("Failed to add priority packet to the outgoing packet queue: {err}");
+                        error!("Failed to add packet to the outgoing packet queue: {err}");
                     }
                 } else {
                     let _ = rx.await;
