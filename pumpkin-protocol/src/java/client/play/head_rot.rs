@@ -1,8 +1,10 @@
 use pumpkin_data::packet::clientbound::PLAY_ROTATE_HEAD;
 use pumpkin_macros::java_packet;
-use serde::{Deserialize, Serialize};
 
+use crate::ClientPacket;
 use crate::VarInt;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Rotates an entity's head to a specific yaw.
 ///
@@ -10,7 +12,6 @@ use crate::VarInt;
 /// While standard movement packets update the body, this packet is
 /// required to make an entity (like a player or a mob) look in a
 /// specific direction without necessarily turning its entire body.
-#[derive(Serialize, Deserialize)]
 #[java_packet(PLAY_ROTATE_HEAD)]
 pub struct CHeadRot {
     /// The Entity ID of the entity whose head is rotating.
@@ -26,5 +27,17 @@ impl CHeadRot {
             entity_id,
             head_yaw,
         }
+    }
+}
+
+impl ClientPacket for CHeadRot {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.entity_id)?;
+        write.write_u8(self.head_yaw)?;
+        Ok(())
     }
 }

@@ -1,6 +1,6 @@
 use heck::{ToPascalCase, ToSnakeCase};
 use std::{fs, path::Path};
-use syn::{Fields, Item};
+use syn::{Attribute, Fields, Item};
 
 pub fn build_java_mapping() -> String {
     let mut output = String::new();
@@ -43,7 +43,7 @@ pub fn build_java_mapping() -> String {
     output.push_str("}\n\n");
 
     output.push_str("#[must_use]\n");
-    output.push_str("pub fn deserialize_java_serverbound_packet(id: i32, payload: &[u8], version: JavaMinecraftVersion) -> Option<ServerboundPacket> {\n");
+    output.push_str("pub fn deserialize_java_serverbound_packet(id: i32, mut payload: &[u8], version: JavaMinecraftVersion) -> Option<ServerboundPacket> {\n");
     output.push_str("    match id {\n");
 
     for state in server_states {
@@ -188,6 +188,289 @@ enum MappingMode {
     Downcast,
 }
 
+fn has_attr(attrs: &[Attribute], attr_name: &str) -> bool {
+    attrs.iter().any(|attr| attr.path().is_ident(attr_name))
+}
+
+fn get_type_info(ty: &syn::Type) -> (String, bool, bool) {
+    match ty {
+        syn::Type::Path(tp) => (
+            tp.path.segments.last().unwrap().ident.to_string(),
+            false,
+            false,
+        ),
+        syn::Type::Reference(tr) => {
+            let (name, _, is_slice) = get_type_info(&tr.elem);
+            (name, true, is_slice)
+        }
+        syn::Type::Slice(ts) => {
+            let (name, _, _) = get_type_info(&ts.elem);
+            (name, false, true)
+        }
+        _ => (String::new(), false, false),
+    }
+}
+
+/// Generates the conversion of a value according to its type.
+/// `src` is the source expression (ex: "data.field", "self.field", "identifier")
+/// `dst` is the destination name (ex: "field_name", "wit_field") — None for unnamed (we just return the expression)
+/// Returns (prep_code, converted_expression, possible)
+fn convert_value(
+    type_ident: &str,
+    is_ref: bool,
+    is_slice: bool,
+    src: &str,
+    dst: Option<&str>,
+    mode: MappingMode,
+    prep_prefix: &str, // indentation for prefix
+) -> (String, String, bool) {
+    let mut prep = String::new();
+    let mut possible = true;
+
+    let expr = match type_ident {
+        "String" | "str" => match mode {
+            MappingMode::Serialize => {
+                if is_ref {
+                    format!("&{}", src)
+                } else {
+                    format!("{}.clone()", src)
+                }
+            }
+            MappingMode::Deserialize => format!("{}.into()", src),
+            MappingMode::ToWit => format!("{}.to_string()", src),
+            MappingMode::Downcast => String::new(),
+        },
+        "Identifier" => match mode {
+            MappingMode::Serialize => {
+                format!(
+                    "pumpkin_util::identifier::Identifier::try_from({}).unwrap()",
+                    src
+                )
+            }
+            MappingMode::Deserialize | MappingMode::ToWit => {
+                format!("{}.to_string()", src)
+            }
+            MappingMode::Downcast => String::new(),
+        },
+        "VarUInt" => match mode {
+            MappingMode::Serialize => {
+                format!(
+                    "pumpkin_protocol::codec::var_uint::VarUInt({}.try_into().unwrap())",
+                    src
+                )
+            }
+            MappingMode::Deserialize | MappingMode::ToWit => {
+                format!("{}.0.try_into().unwrap()", src)
+            }
+            MappingMode::Downcast => String::new(),
+        },
+        "VarLong" | "VarULong" => {
+            let is_ulong = type_ident == "VarULong";
+            let path = if is_ulong {
+                "pumpkin_protocol::codec::var_ulong::VarULong"
+            } else {
+                "pumpkin_protocol::codec::var_long::VarLong"
+            };
+
+            if mode == MappingMode::Serialize {
+                let tmp = dst.unwrap_or("tmp").replace('.', "_");
+                if is_slice {
+                    prep.push_str(&format!(
+                        "{}let vec_{}: Vec<{}> = {}.iter().map(|v| {}(*v as _)).collect();\n",
+                        prep_prefix, tmp, path, src, path
+                    ));
+                    if is_ref {
+                        format!("&vec_{}", tmp)
+                    } else {
+                        format!("vec_{}", tmp)
+                    }
+                } else {
+                    if is_ref {
+                        prep.push_str(&format!(
+                            "{}let var_long_{} = {}({}.try_into().unwrap());\n",
+                            prep_prefix, tmp, path, src
+                        ));
+                        format!("&var_long_{}", tmp)
+                    } else {
+                        format!("{}({}.try_into().unwrap())", path, src)
+                    }
+                }
+            } else if mode == MappingMode::Deserialize {
+                if is_slice {
+                    format!("{}.iter().map(|v| v.0 as _).collect()", src)
+                } else {
+                    format!("{}.0.try_into().unwrap()", src)
+                }
+            } else {
+                // ToWit
+                if is_slice {
+                    format!("{}.iter().map(|v| v.0 as _).collect()", src)
+                } else {
+                    format!("{}.0.try_into().unwrap()", src)
+                }
+            }
+        }
+        "TextComponent" => match mode {
+            MappingMode::Serialize => {
+                let tmp = dst.unwrap_or("tmp").replace('.', "_");
+                prep.push_str(&format!(
+                    "{}let component_{} = pumpkin_util::text::TextComponent::text({}.clone());\n",
+                    prep_prefix, tmp, src
+                ));
+                if is_ref {
+                    format!("&component_{}", tmp)
+                } else {
+                    format!("component_{}", tmp)
+                }
+            }
+            MappingMode::Deserialize | MappingMode::ToWit => {
+                format!("serde_json::to_string(&{}).unwrap_or_default()", src)
+            }
+            MappingMode::Downcast => String::new(),
+        },
+
+        "BlockPos" => match mode {
+            MappingMode::Serialize => {
+                format!(
+                    "pumpkin_util::math::position::BlockPos::new({}.0, {}.1, {}.2)",
+                    src, src, src
+                )
+            }
+            MappingMode::Deserialize | MappingMode::ToWit => {
+                format!("({}.0.x, {}.0.y, {}.0.z)", src, src, src)
+            }
+            MappingMode::Downcast => String::new(),
+        },
+
+        "Vector3" => match mode {
+            MappingMode::Serialize => {
+                format!(
+                    "pumpkin_util::math::vector3::Vector3::new({}.0 as _, {}.1 as _, {}.2 as _)",
+                    src, src, src
+                )
+            }
+            MappingMode::Deserialize | MappingMode::ToWit => {
+                format!("({}.x as _, {}.y as _, {}.z as _)", src, src, src)
+            }
+            MappingMode::Downcast => String::new(),
+        },
+
+        "Uuid" => match mode {
+            MappingMode::Serialize => {
+                let tmp = dst.unwrap_or("tmp").replace('.', "_");
+                if is_slice {
+                    prep.push_str(&format!(
+                        "{}let vec_{} = {}.iter().map(|u| uuid::Uuid::from_u64_pair(u.high, u.low)).collect::<Vec<_>>();\n",
+                        prep_prefix, tmp, src
+                    ));
+                    if is_ref {
+                        format!("&vec_{}", tmp)
+                    } else {
+                        format!("vec_{}", tmp)
+                    }
+                } else {
+                    prep.push_str(&format!(
+                        "{}let uuid_{} = uuid::Uuid::from_u64_pair({}.high, {}.low);\n",
+                        prep_prefix, tmp, src, src
+                    ));
+                    if is_ref {
+                        format!("&uuid_{}", tmp)
+                    } else {
+                        format!("uuid_{}", tmp)
+                    }
+                }
+            }
+            MappingMode::Deserialize | MappingMode::ToWit => {
+                let map_fn = format!(
+                    "crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: {{}}.as_u64_pair().1, low: {{}}.as_u64_pair().0 }}",
+                );
+                if is_slice {
+                    format!(
+                        "{}.iter().map(|u| {}).collect()",
+                        src,
+                        map_fn.replace("{}", "u")
+                    )
+                } else {
+                    format!(
+                        "crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: {}.as_u64_pair().1, low: {}.as_u64_pair().0 }}",
+                        src, src
+                    )
+                }
+            }
+            MappingMode::Downcast => String::new(),
+        },
+
+        "i32" | "u32" | "i64" | "u64" | "bool" | "f32" | "f64" | "u8" | "i8" | "u16" | "i16"
+        | "VarInt" => match mode {
+            MappingMode::Serialize => {
+                let tmp = dst.unwrap_or("tmp").replace('.', "_");
+                if is_slice {
+                    if type_ident == "u8" {
+                        if is_ref {
+                            format!("&{}", src)
+                        } else {
+                            format!("{}.clone()", src)
+                        }
+                    } else if type_ident == "VarInt" {
+                        prep.push_str(&format!(
+                            "{}let vec_{}: Vec<VarInt> = {}.iter().map(|v| VarInt(*v)).collect();\n",
+                            prep_prefix, tmp, src
+                        ));
+                        if is_ref {
+                            format!("&vec_{}", tmp)
+                        } else {
+                            format!("vec_{}", tmp)
+                        }
+                    } else {
+                        format!("{}.iter().map(|v| *v as _).collect()", src)
+                    }
+                } else if type_ident == "VarInt" {
+                    if is_ref {
+                        prep.push_str(&format!(
+                            "{}let var_int_{} = VarInt({});\n",
+                            prep_prefix, tmp, src
+                        ));
+                        format!("&var_int_{}", tmp)
+                    } else {
+                        format!("VarInt({})", src)
+                    }
+                } else {
+                    if is_ref {
+                        prep.push_str(&format!(
+                            "{}let val_{} = {}.try_into().unwrap();\n",
+                            prep_prefix, tmp, src
+                        ));
+                        format!("&val_{}", tmp)
+                    } else {
+                        format!("{}.try_into().unwrap()", src)
+                    }
+                }
+            }
+            MappingMode::Deserialize | MappingMode::ToWit => {
+                if is_slice {
+                    if type_ident == "VarInt" {
+                        format!("{}.iter().map(|v| v.0 as _).collect()", src)
+                    } else {
+                        format!("{}.iter().map(|v| *v as _).collect()", src)
+                    }
+                } else if type_ident == "VarInt" {
+                    format!("{}.0.try_into().unwrap()", src)
+                } else {
+                    format!("{}.try_into().unwrap()", src)
+                }
+            }
+            MappingMode::Downcast => String::new(),
+        },
+
+        _ => {
+            possible = false;
+            String::new()
+        }
+    };
+
+    (prep, expr, possible)
+}
+
 fn process_packets(
     dir: &str,
     state: &str,
@@ -250,487 +533,593 @@ fn parse_packet_file(
     let file = syn::parse_file(&content).expect("Failed to parse file");
 
     for item in file.items {
-        if let Item::Struct(s) = item {
-            if !s.attrs.iter().any(|attr| attr.path().is_ident(attr_name)) {
-                continue;
-            }
-
-            let struct_name = s.ident.to_string();
-            if struct_name == "CHandshake" {
-                continue;
-            } // Skip CHandshake (RakNet)
-            let wit_case = if state == "play" || state.is_empty() {
-                struct_name.to_pascal_case()
-            } else {
-                format!("{}{}", state.to_pascal_case(), struct_name.to_pascal_case())
-            };
-            let mut has_lifetime = false;
-            if !s.generics.params.is_empty() {
-                has_lifetime = true;
-            }
-            let struct_name_with_lt = if has_lifetime {
-                format!("{}<'_>", struct_name)
-            } else {
-                struct_name.clone()
-            };
-
-            let mut prep_code = String::new();
-            let mut field_inits = String::new();
-            let mut possible = true;
-
-            if let Fields::Named(fields) = s.fields {
-                for field in fields.named {
-                    if !matches!(field.vis, syn::Visibility::Public(_)) {
-                        possible = false;
-                        break;
-                    }
-                    let mut field_name = field.ident.as_ref().unwrap().to_string();
-                    let wit_field = field_name.to_snake_case();
-                    let (type_ident, is_ref, is_slice) = get_type_info(&field.ty);
-
-                    if type_ident == "DynamicRecipe" {
-                        if mode == MappingMode::Serialize {
-                            field_inits
-                                .push_str(&format!("                {}: &[],\n", field_name));
-                        } else {
-                            possible = false; // Cannot handle DynamicRecipe yet
-                        }
-                        continue;
-                    }
-
-                    if field_name == "type" {
-                        field_name = "r#type".to_string();
-                    }
-
-                    match type_ident.as_str() {
-                        "String" | "str" => {
-                            if mode == MappingMode::Serialize {
-                                if is_ref {
-                                    field_inits.push_str(&format!(
-                                        "                {}: &data.{},\n",
-                                        field_name, wit_field
-                                    ));
-                                } else {
-                                    field_inits.push_str(&format!(
-                                        "                {}: data.{}.clone(),\n",
-                                        field_name, wit_field
-                                    ));
-                                }
-                            } else if mode == MappingMode::Deserialize {
-                                field_inits.push_str(&format!(
-                                    "                {}: p.{}.into(),\n",
-                                    wit_field, field_name
-                                ));
-                            } else {
-                                // ToWit
-                                field_inits.push_str(&format!(
-                                    "                {}: self.{}.to_string(),\n",
-                                    wit_field, field_name
-                                ));
-                            }
-                        }
-                        "VarUInt" => {
-                            if mode == MappingMode::Serialize {
-                                field_inits.push_str(&format!("                {}: pumpkin_protocol::codec::var_uint::VarUInt(data.{}.try_into().unwrap()),\n", field_name, wit_field));
-                            } else if mode == MappingMode::Deserialize {
-                                field_inits.push_str(&format!(
-                                    "                {}: p.{}.0.try_into().unwrap(),\n",
-                                    wit_field, field_name
-                                ));
-                            } else {
-                                field_inits.push_str(&format!(
-                                    "                {}: self.{}.0.try_into().unwrap(),\n",
-                                    wit_field, field_name
-                                ));
-                            }
-                        }
-                        "VarLong" | "VarULong" => {
-                            let is_ulong = type_ident == "VarULong";
-                            let path = if is_ulong {
-                                "pumpkin_protocol::codec::var_ulong::VarULong"
-                            } else {
-                                "pumpkin_protocol::codec::var_long::VarLong"
-                            };
-
-                            if mode == MappingMode::Serialize {
-                                if is_slice {
-                                    prep_code.push_str(&format!(
-                                        "            let vec_{}: Vec<{}> = data.{}.iter().map(|v| {}(*v as _)).collect();\n",
-                                        wit_field, path, wit_field, path
-                                    ));
-                                    if is_ref {
-                                        field_inits.push_str(&format!(
-                                            "                {}: &vec_{},\n",
-                                            field_name, wit_field
-                                        ));
-                                    } else {
-                                        field_inits.push_str(&format!(
-                                            "                {}: vec_{},\n",
-                                            field_name, wit_field
-                                        ));
-                                    }
-                                } else {
-                                    if is_ref {
-                                        prep_code.push_str(&format!(
-                                            "            let var_long_{} = {}(data.{}.try_into().unwrap());\n",
-                                            wit_field, path, wit_field
-                                        ));
-                                        field_inits.push_str(&format!(
-                                            "                {}: &var_long_{},\n",
-                                            field_name, wit_field
-                                        ));
-                                    } else {
-                                        field_inits.push_str(&format!(
-                                            "                {}: {}(data.{}.try_into().unwrap()),\n",
-                                            field_name, path, wit_field
-                                        ));
-                                    }
-                                }
-                            } else if mode == MappingMode::Deserialize {
-                                if is_slice {
-                                    field_inits.push_str(&format!(
-                                        "                {}: p.{}.iter().map(|v| v.0 as _).collect(),\n",
-                                        wit_field, field_name
-                                    ));
-                                } else {
-                                    field_inits.push_str(&format!(
-                                        "                {}: p.{}.0.try_into().unwrap(),\n",
-                                        wit_field, field_name
-                                    ));
-                                }
-                            } else {
-                                // ToWit
-                                if is_slice {
-                                    field_inits.push_str(&format!(
-                                        "                {}: self.{}.iter().map(|v| v.0 as _).collect(),\n",
-                                        wit_field, field_name
-                                    ));
-                                } else {
-                                    field_inits.push_str(&format!(
-                                        "                {}: self.{}.0.try_into().unwrap(),\n",
-                                        wit_field, field_name
-                                    ));
-                                }
-                            }
-                        }
-                        "TextComponent" => {
-                            if mode == MappingMode::Serialize {
-                                prep_code.push_str(&format!("            let component_{} = pumpkin_util::text::TextComponent::text(data.{}.clone());\n", wit_field, wit_field));
-                                if is_ref {
-                                    field_inits.push_str(&format!(
-                                        "                {}: &component_{},\n",
-                                        field_name, wit_field
-                                    ));
-                                } else {
-                                    field_inits.push_str(&format!(
-                                        "                {}: component_{},\n",
-                                        field_name, wit_field
-                                    ));
-                                }
-                            } else if mode == MappingMode::Deserialize {
-                                field_inits.push_str(&format!("                {}: serde_json::to_string(&p.{}).unwrap_or_default(),\n", wit_field, field_name));
-                            } else {
-                                field_inits.push_str(&format!("                {}: serde_json::to_string(&self.{}).unwrap_or_default(),\n", wit_field, field_name));
-                            }
-                        }
-                        "BlockPos" => {
-                            if mode == MappingMode::Serialize {
-                                field_inits.push_str(&format!("                {}: pumpkin_util::math::position::BlockPos::new(data.{}.0, data.{}.1, data.{}.2),\n", field_name, wit_field, wit_field, wit_field));
-                            } else if mode == MappingMode::Deserialize {
-                                field_inits.push_str(&format!(
-                                    "                {}: (p.{}.0.x, p.{}.0.y, p.{}.0.z),\n",
-                                    wit_field, field_name, field_name, field_name
-                                ));
-                            } else {
-                                field_inits.push_str(&format!("                {}: (self.{}.0.x, self.{}.0.y, self.{}.0.z),\n", wit_field, field_name, field_name, field_name));
-                            }
-                        }
-                        "Vector3" => {
-                            if mode == MappingMode::Serialize {
-                                field_inits.push_str(&format!("                {}: pumpkin_util::math::vector3::Vector3::new(data.{}.0 as _, data.{}.1 as _, data.{}.2 as _),\n", field_name, wit_field, wit_field, wit_field));
-                            } else if mode == MappingMode::Deserialize {
-                                field_inits.push_str(&format!("                {}: (p.{}.x as _, p.{}.y as _, p.{}.z as _),\n", wit_field, field_name, field_name, field_name));
-                            } else {
-                                field_inits.push_str(&format!("                {}: (self.{}.x as _, self.{}.y as _, self.{}.z as _),\n", wit_field, field_name, field_name, field_name));
-                            }
-                        }
-                        "Uuid" => {
-                            if mode == MappingMode::Serialize {
-                                if is_slice {
-                                    prep_code.push_str(&format!("            let vec_{} = data.{}.iter().map(|u| uuid::Uuid::from_u64_pair(u.high, u.low)).collect::<Vec<_>>();\n", wit_field, wit_field));
-                                    if is_ref {
-                                        field_inits.push_str(&format!(
-                                            "                {}: &vec_{},\n",
-                                            field_name, wit_field
-                                        ));
-                                    } else {
-                                        field_inits.push_str(&format!(
-                                            "                {}: vec_{},\n",
-                                            field_name, wit_field
-                                        ));
-                                    }
-                                } else {
-                                    prep_code.push_str(&format!("            let uuid_{} = uuid::Uuid::from_u64_pair(data.{}.high, data.{}.low);\n", wit_field, wit_field, wit_field));
-                                    if is_ref {
-                                        field_inits.push_str(&format!(
-                                            "                {}: &uuid_{},\n",
-                                            field_name, wit_field
-                                        ));
-                                    } else {
-                                        field_inits.push_str(&format!(
-                                            "                {}: uuid_{},\n",
-                                            field_name, wit_field
-                                        ));
-                                    }
-                                }
-                            } else if mode == MappingMode::Deserialize {
-                                if is_slice {
-                                    field_inits.push_str(&format!("                {}: p.{}.iter().map(|u| crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: u.as_u64_pair().1, low: u.as_u64_pair().0 }}).collect(),\n", wit_field, field_name));
-                                } else {
-                                    field_inits.push_str(&format!("                {}: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: p.{}.as_u64_pair().1, low: p.{}.as_u64_pair().0 }},\n", wit_field, field_name, field_name));
-                                }
-                            } else {
-                                // ToWit
-                                if is_slice {
-                                    field_inits.push_str(&format!("                {}: self.{}.iter().map(|u| crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: u.as_u64_pair().1, low: u.as_u64_pair().0 }}).collect(),\n", wit_field, field_name));
-                                } else {
-                                    field_inits.push_str(&format!("                {}: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: self.{}.as_u64_pair().1, low: self.{}.as_u64_pair().0 }},\n", wit_field, field_name, field_name));
-                                }
-                            }
-                        }
-                        "i32" | "u32" | "i64" | "u64" | "bool" | "f32" | "f64" | "u8" | "i8"
-                        | "u16" | "i16" | "VarInt" => {
-                            if mode == MappingMode::Serialize {
-                                if is_slice {
-                                    if type_ident == "u8" {
-                                        if is_ref {
-                                            field_inits.push_str(&format!(
-                                                "                {}: &data.{},\n",
-                                                field_name, wit_field
-                                            ));
-                                        } else {
-                                            field_inits.push_str(&format!(
-                                                "                {}: data.{}.clone(),\n",
-                                                field_name, wit_field
-                                            ));
-                                        }
-                                    } else if type_ident == "VarInt" {
-                                        prep_code.push_str(&format!("            let vec_{}: Vec<VarInt> = data.{}.iter().map(|v| VarInt(*v)).collect();\n", wit_field, wit_field));
-                                        if is_ref {
-                                            field_inits.push_str(&format!(
-                                                "                {}: &vec_{},\n",
-                                                field_name, wit_field
-                                            ));
-                                        } else {
-                                            field_inits.push_str(&format!(
-                                                "                {}: vec_{},\n",
-                                                field_name, wit_field
-                                            ));
-                                        }
-                                    } else {
-                                        field_inits.push_str(&format!("                {}: data.{}.iter().map(|v| *v as _).collect(),\n", field_name, wit_field));
-                                    }
-                                } else if type_ident == "VarInt" {
-                                    if is_ref {
-                                        prep_code.push_str(&format!(
-                                            "            let var_int_{} = VarInt(data.{});\n",
-                                            wit_field, wit_field
-                                        ));
-                                        field_inits.push_str(&format!(
-                                            "                {}: &var_int_{},\n",
-                                            field_name, wit_field
-                                        ));
-                                    } else {
-                                        field_inits.push_str(&format!(
-                                            "                {}: VarInt(data.{}),\n",
-                                            field_name, wit_field
-                                        ));
-                                    }
-                                } else {
-                                    if is_ref {
-                                        prep_code.push_str(&format!(
-                                            "            let val_{} = data.{}.try_into().unwrap();\n",
-                                            wit_field, wit_field
-                                        ));
-                                        field_inits.push_str(&format!(
-                                            "                {}: &val_{},\n",
-                                            field_name, wit_field
-                                        ));
-                                    } else {
-                                        field_inits.push_str(&format!(
-                                            "                {}: data.{}.try_into().unwrap(),\n",
-                                            field_name, wit_field
-                                        ));
-                                    }
-                                }
-                            } else if mode == MappingMode::Deserialize {
-                                if is_slice {
-                                    if type_ident == "VarInt" {
-                                        field_inits.push_str(&format!("                {}: p.{}.iter().map(|v| v.0 as _).collect(),\n", wit_field, field_name));
-                                    } else {
-                                        field_inits.push_str(&format!("                {}: p.{}.iter().map(|v| *v as _).collect(),\n", wit_field, field_name));
-                                    }
-                                } else if type_ident == "VarInt" {
-                                    field_inits.push_str(&format!(
-                                        "                {}: p.{}.0.try_into().unwrap(),\n",
-                                        wit_field, field_name
-                                    ));
-                                } else {
-                                    field_inits.push_str(&format!(
-                                        "                {}: p.{}.try_into().unwrap(),\n",
-                                        wit_field, field_name
-                                    ));
-                                }
-                            } else {
-                                // ToWit
-                                if is_slice {
-                                    if type_ident == "VarInt" {
-                                        field_inits.push_str(&format!("                {}: self.{}.iter().map(|v| v.0 as _).collect(),\n", wit_field, field_name));
-                                    } else {
-                                        field_inits.push_str(&format!("                {}: self.{}.iter().map(|v| *v as _).collect(),\n", wit_field, field_name));
-                                    }
-                                } else if type_ident == "VarInt" {
-                                    field_inits.push_str(&format!(
-                                        "                {}: self.{}.0.try_into().unwrap(),\n",
-                                        wit_field, field_name
-                                    ));
-                                } else {
-                                    field_inits.push_str(&format!(
-                                        "                {}: self.{}.try_into().unwrap(),\n",
-                                        wit_field, field_name
-                                    ));
-                                }
-                            }
-                        }
-                        _ => {
-                            possible = false;
-                            break;
-                        }
-                    }
+        match item {
+            Item::Struct(s) if has_attr(&s.attrs, attr_name) => {
+                if s.ident == "CHandshake" {
+                    continue;
                 }
-            } else {
-                possible = false;
+                process_struct(
+                    s,
+                    state,
+                    output,
+                    attr_name,
+                    variant_prefix,
+                    rust_path_prefix,
+                    mode,
+                );
             }
-
-            if possible {
-                if mode == MappingMode::Serialize {
-                    output.push_str(&format!(
-                        "        {}::{}(data) => {{\n",
-                        variant_prefix, wit_case
-                    ));
-                    output.push_str(&prep_code);
-                    output.push_str(&format!(
-                        "            let p = {}::{} {{\n",
-                        rust_path_prefix, struct_name
-                    ));
-                    output.push_str(&field_inits);
-                    output.push_str("            };\n");
-                    output.push_str("            let mut buf = Vec::new();\n");
-                    if attr_name == "java_packet" {
-                        output.push_str("            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
-                    } else {
-                        output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
-                    }
-                    output.push_str("            Some(buf.into())\n");
-                    output.push_str("        }\n");
-                } else if mode == MappingMode::Deserialize {
-                    if rust_path_prefix.contains("java") {
-                        if rust_path_prefix.contains("client") {
-                            // Skip clientbound deserialization for Java for now
-                            continue;
-                        }
-                        output.push_str(&format!(
-                            "        id if id == {}::{}::to_id(version) => {{\n",
-                            rust_path_prefix, struct_name
-                        ));
-                        output.push_str(
-                            &"            use pumpkin_protocol::ServerPacket;\n".to_string(),
-                        );
-                        output.push_str(&format!(
-                            "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut Cursor::new(payload), &version).ok()?;\n",
-                            rust_path_prefix, struct_name
-                        ));
-                    } else {
-                        if rust_path_prefix.contains("client") {
-                            // Skip clientbound deserialization for Bedrock for now
-                            continue;
-                        }
-                        output.push_str(&format!(
-                            "        id if id == <{}::{} as pumpkin_protocol::Packet>::PACKET_ID as i32 => {{\n",
-                            rust_path_prefix, struct_name
-                        ));
-                        output.push_str(
-                            &"            use pumpkin_protocol::BServerPacket;\n".to_string(),
-                        );
-                        output.push_str(&format!(
-                            "            let p = <{}::{} as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;\n",
-                            rust_path_prefix, struct_name
-                        ));
-                    }
-                    output.push_str(&prep_code);
-                    output.push_str(&format!(
-                        "            Some({}::{}(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::{}::{} {{\n",
-                        variant_prefix, wit_case, if rust_path_prefix.contains("java") { "java_packets" } else { "bedrock_packets" }, wit_case
-                    ));
-                    output.push_str(&field_inits);
-                    output.push_str("            }))\n");
-                    output.push_str("        }\n");
-                } else if mode == MappingMode::ToWit {
-                    output.push_str(&format!(
-                        "impl ToWitClientbound{} for {}::{} {{\n",
-                        if rust_path_prefix.contains("java") {
-                            "Java"
-                        } else {
-                            "Bedrock"
-                        },
-                        rust_path_prefix,
-                        struct_name_with_lt
-                    ));
-                    output.push_str(&format!(
-                        "    fn to_wit(&self) -> {} {{\n",
-                        if rust_path_prefix.contains("java") {
-                            "ClientboundPacket"
-                        } else {
-                            "BClientboundPacket"
-                        }
-                    ));
-                    output.push_str(&prep_code);
-                    output.push_str(&format!(
-                        "        {}::{}(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::{}::{} {{\n",
-                        variant_prefix, wit_case, if rust_path_prefix.contains("java") { "java_packets" } else { "bedrock_packets" }, wit_case
-                    ));
-                    output.push_str(&field_inits);
-                    output.push_str("        })\n");
-                    output.push_str("    }\n");
-                    output.push_str("}\n\n");
-                } else if mode == MappingMode::Downcast {
-                    output.push_str(&format!(
-                        "    if let Some(p) = any.downcast_ref::<{}::{}>() {{\n",
-                        rust_path_prefix, struct_name
-                    ));
-                    output.push_str(&"        return Some(p.to_wit());\n".to_string());
-                    output.push_str("    }\n");
-                }
+            Item::Enum(e) if has_attr(&e.attrs, attr_name) => {
+                process_enum(
+                    e,
+                    state,
+                    output,
+                    attr_name,
+                    variant_prefix,
+                    rust_path_prefix,
+                    mode,
+                );
             }
+            _ => {}
         }
     }
 }
 
-fn get_type_info(ty: &syn::Type) -> (String, bool, bool) {
-    match ty {
-        syn::Type::Path(tp) => (
-            tp.path.segments.last().unwrap().ident.to_string(),
-            false,
-            false,
-        ),
-        syn::Type::Reference(tr) => {
-            let (name, _, is_slice) = get_type_info(&tr.elem);
-            (name, true, is_slice)
+fn process_struct(
+    s: syn::ItemStruct,
+    state: &str,
+    output: &mut String,
+    attr_name: &str,
+    variant_prefix: &str,
+    rust_path_prefix: &str,
+    mode: MappingMode,
+) {
+    let struct_name = s.ident.to_string();
+    let wit_case = if state == "play" {
+        struct_name.to_pascal_case()
+    } else {
+        format!("{}{}", state, struct_name).to_pascal_case()
+    };
+    let struct_name_with_lt = if !s.generics.params.is_empty() {
+        format!("{}<'_>", struct_name)
+    } else {
+        struct_name.clone()
+    };
+
+    let mut prep_code = String::new();
+    let mut field_inits = String::new();
+    let mut possible = true;
+
+    if let Fields::Named(fields) = s.fields {
+        for field in fields.named {
+            if !matches!(field.vis, syn::Visibility::Public(_)) {
+                possible = false;
+                break;
+            }
+            let mut field_name = field.ident.as_ref().unwrap().to_string();
+            let wit_field = field_name.to_snake_case();
+            let (type_ident, is_ref, is_slice) = get_type_info(&field.ty);
+
+            if type_ident == "DynamicRecipe" {
+                if mode == MappingMode::Serialize {
+                    field_inits.push_str(&format!("                {}: &[],\n", field_name));
+                } else {
+                    possible = false; // Cannot handle DynamicRecipe yet
+                }
+                continue;
+            }
+
+            if field_name == "type" {
+                field_name = "r#type".to_string();
+            }
+
+            // source that depend on the mode
+            let src = match mode {
+                MappingMode::Serialize => format!("data.{}", wit_field),
+                MappingMode::Deserialize => format!("p.{}", field_name),
+                MappingMode::ToWit => format!("self.{}", field_name),
+                MappingMode::Downcast => String::new(),
+            };
+
+            let (prep, expr, ok) = convert_value(
+                &type_ident,
+                is_ref,
+                is_slice,
+                &src,
+                Some(&wit_field),
+                mode,
+                "            ",
+            );
+
+            if !ok {
+                possible = false;
+                break;
+            }
+
+            prep_code.push_str(&prep);
+
+            // Pour les structs, on génère "dst: expr,"
+            let dst_name = match mode {
+                MappingMode::Serialize => field_name.clone(),
+                _ => wit_field.clone(),
+            };
+            field_inits.push_str(&format!("                {}: {},\n", dst_name, expr));
         }
-        syn::Type::Slice(ts) => {
-            let (name, _, _) = get_type_info(&ts.elem);
-            (name, false, true)
-        }
-        _ => (String::new(), false, false),
+    } else {
+        possible = false;
     }
+
+    if possible {
+        emit_struct_output(
+            output,
+            mode,
+            attr_name,
+            variant_prefix,
+            rust_path_prefix,
+            &struct_name,
+            &struct_name_with_lt,
+            &wit_case,
+            &prep_code,
+            &field_inits,
+        );
+    }
+}
+
+fn emit_struct_output(
+    output: &mut String,
+    mode: MappingMode,
+    attr_name: &str,
+    variant_prefix: &str,
+    rust_path_prefix: &str,
+    struct_name: &str,
+    struct_name_with_lt: &str,
+    wit_case: &str,
+    prep_code: &str,
+    field_inits: &str,
+) {
+    let packet_ns = if rust_path_prefix.contains("java") {
+        "java_packets"
+    } else {
+        "bedrock_packets"
+    };
+
+    match mode {
+        MappingMode::Serialize => {
+            output.push_str(&format!(
+                "        {}::{}(data) => {{\n",
+                variant_prefix, wit_case
+            ));
+            output.push_str(prep_code);
+            output.push_str(&format!(
+                "            let p = {}::{} {{\n",
+                rust_path_prefix, struct_name
+            ));
+            output.push_str(field_inits);
+            output.push_str("            };\n");
+            output.push_str("            let mut buf = Vec::new();\n");
+            if attr_name == "java_packet" {
+                output.push_str("            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
+            } else {
+                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
+            }
+            output.push_str("            Some(buf.into())\n");
+            output.push_str("        }\n");
+        }
+        MappingMode::Deserialize => {
+            if rust_path_prefix.contains("client") {
+                return;
+            }
+            if rust_path_prefix.contains("java") {
+                output.push_str(&format!(
+                    "        id if id == {}::{}::to_id(version) => {{\n",
+                    rust_path_prefix, struct_name
+                ));
+                output.push_str("            use pumpkin_protocol::ServerPacket;\n");
+                output.push_str(&format!(
+                    "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;\n",
+                    rust_path_prefix, struct_name
+                ));
+            } else {
+                output.push_str(&format!(
+                    "        id if id == <{}::{} as pumpkin_protocol::Packet>::PACKET_ID as i32 => {{\n",
+                    rust_path_prefix, struct_name
+                ));
+                output.push_str("            use pumpkin_protocol::BServerPacket;\n");
+                output.push_str(&format!(
+                    "            let p = <{}::{} as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;\n",
+                    rust_path_prefix, struct_name
+                ));
+            }
+            output.push_str(prep_code);
+            output.push_str(&format!(
+                "            Some({}::{}(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::{}::{} {{\n",
+                variant_prefix, wit_case, packet_ns, wit_case
+            ));
+            output.push_str(field_inits);
+            output.push_str("            }))\n");
+            output.push_str("        }\n");
+        }
+        MappingMode::ToWit => {
+            let side = if rust_path_prefix.contains("java") {
+                "Java"
+            } else {
+                "Bedrock"
+            };
+            let wit_type = if rust_path_prefix.contains("java") {
+                "ClientboundPacket"
+            } else {
+                "BClientboundPacket"
+            };
+            output.push_str(&format!(
+                "impl ToWitClientbound{} for {}::{} {{\n",
+                side, rust_path_prefix, struct_name_with_lt
+            ));
+            output.push_str(&format!("    fn to_wit(&self) -> {} {{\n", wit_type));
+            output.push_str(prep_code);
+            output.push_str(&format!(
+                "        {}::{}(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::{}::{} {{\n",
+                variant_prefix, wit_case, packet_ns, wit_case
+            ));
+            output.push_str(field_inits);
+            output.push_str("        })\n");
+            output.push_str("    }\n");
+            output.push_str("}\n\n");
+        }
+        MappingMode::Downcast => {
+            output.push_str(&format!(
+                "    if let Some(p) = any.downcast_ref::<{}::{}>() {{\n",
+                rust_path_prefix, struct_name
+            ));
+            output.push_str("        return Some(p.to_wit());\n");
+            output.push_str("    }\n");
+        }
+    }
+}
+
+fn process_enum(
+    e: syn::ItemEnum,
+    state: &str,
+    output: &mut String,
+    attr_name: &str,
+    variant_prefix: &str,
+    rust_path_prefix: &str,
+    mode: MappingMode,
+) {
+    if !matches!(e.vis, syn::Visibility::Public(_)) {
+        return;
+    }
+    let enum_name = e.ident.to_string();
+    let wit_case = if state == "play" {
+        enum_name.to_pascal_case()
+    } else {
+        format!("{}{}", state, enum_name).to_pascal_case()
+    };
+    let enum_name_with_lt = if !e.generics.params.is_empty() {
+        format!("{}<'_>", enum_name)
+    } else {
+        enum_name.clone()
+    };
+    let packet_ns = if rust_path_prefix.contains("java") {
+        "java_packets"
+    } else {
+        "bedrock_packets"
+    };
+    let wit_ns = format!(
+        "crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::{}::{}",
+        packet_ns, enum_name
+    );
+
+    match mode {
+        MappingMode::Serialize => {
+            output.push_str(&format!(
+                "        {}::{}(data) => {{\n",
+                variant_prefix, wit_case
+            ));
+            output.push_str("            let p = match data {\n");
+            for v in &e.variants {
+                if let Some(arm) = generate_serialize_arm(&enum_name, v, rust_path_prefix, &wit_ns)
+                {
+                    output.push_str(&arm);
+                } else {
+                    // variant isn't supported
+                    return;
+                }
+            }
+            output.push_str("            };\n");
+            output.push_str("            let mut buf = Vec::new();\n");
+            if attr_name == "java_packet" {
+                output.push_str("            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
+            } else {
+                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
+            }
+            output.push_str("            Some(buf.into())\n");
+            output.push_str("        }\n");
+        }
+
+        MappingMode::Deserialize => {
+            if rust_path_prefix.contains("client") {
+                return;
+            }
+            if rust_path_prefix.contains("java") {
+                output.push_str(&format!(
+                    "        id if id == {}::{}::to_id(version) => {{\n",
+                    rust_path_prefix, enum_name
+                ));
+                output.push_str("            use pumpkin_protocol::ServerPacket;\n");
+                output.push_str(&format!(
+                    "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;\n",
+                    rust_path_prefix, enum_name
+                ));
+            } else {
+                output.push_str(&format!(
+                    "        id if id == <{}::{} as pumpkin_protocol::Packet>::PACKET_ID as i32 => {{\n",
+                    rust_path_prefix, enum_name
+                ));
+                output.push_str("            use pumpkin_protocol::BServerPacket;\n");
+                output.push_str(&format!(
+                    "            let p = <{}::{} as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;\n",
+                    rust_path_prefix, enum_name
+                ));
+            }
+            output.push_str(&format!("            Some(match p {{\n"));
+            for v in &e.variants {
+                if let Some(arm) = generate_deserialize_arm(
+                    &rust_path_prefix,
+                    &enum_name,
+                    v,
+                    variant_prefix,
+                    &wit_case,
+                    &wit_ns,
+                ) {
+                    output.push_str(&arm);
+                } else {
+                    return;
+                }
+            }
+            output.push_str("            })\n");
+            output.push_str("        }\n");
+        }
+
+        MappingMode::ToWit => {
+            let side = if rust_path_prefix.contains("java") {
+                "Java"
+            } else {
+                "Bedrock"
+            };
+            let wit_type = if rust_path_prefix.contains("java") {
+                "ClientboundPacket"
+            } else {
+                "BClientboundPacket"
+            };
+            output.push_str(&format!(
+                "impl ToWitClientbound{} for {}::{} {{\n",
+                side, rust_path_prefix, enum_name_with_lt
+            ));
+            output.push_str(&format!("    fn to_wit(&self) -> {} {{\n", wit_type));
+            output.push_str("        match self {\n");
+            for v in &e.variants {
+                if let Some(arm) = generate_to_wit_arm(v, variant_prefix, &wit_case, &wit_ns) {
+                    output.push_str(&arm);
+                } else {
+                    return;
+                }
+            }
+            output.push_str("        }\n");
+            output.push_str("    }\n");
+            output.push_str("}\n\n");
+        }
+
+        MappingMode::Downcast => {
+            output.push_str(&format!(
+                "    if let Some(p) = any.downcast_ref::<{}::{}>() {{\n",
+                rust_path_prefix, enum_name
+            ));
+            output.push_str("        return Some(p.to_wit());\n");
+            output.push_str("    }\n");
+        }
+    }
+}
+
+/// return the bindings of a variant : (pattern_destruct, vec of (binding_name, syn::Type))
+fn variant_bindings(v: &syn::Variant) -> (String, Vec<(String, syn::Type)>) {
+    match &v.fields {
+        Fields::Unnamed(fields) => {
+            let bindings: Vec<(String, syn::Type)> = fields
+                .unnamed
+                .iter()
+                .map(|f| {
+                    let (type_ident, _, _) = get_type_info(&f.ty);
+                    (type_ident.to_snake_case(), f.ty.clone())
+                })
+                .collect();
+            let pattern = format!(
+                "({})",
+                bindings
+                    .iter()
+                    .map(|(n, _)| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            (pattern, bindings)
+        }
+        Fields::Named(fields) => {
+            let bindings: Vec<(String, syn::Type)> = fields
+                .named
+                .iter()
+                .map(|f| {
+                    let name = f.ident.as_ref().unwrap().to_string();
+                    (name, f.ty.clone())
+                })
+                .collect();
+            let pattern = format!(
+                "{{ {} }}",
+                bindings
+                    .iter()
+                    .map(|(n, _)| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            (pattern, bindings)
+        }
+        Fields::Unit => (String::new(), vec![]),
+    }
+}
+
+/// Serialize : WitEnum::Variant(binding) => RustEnum::Variant(converted)
+fn generate_serialize_arm(
+    enum_name: &str,
+    v: &syn::Variant,
+    rust_path_prefix: &str,
+    wit_ns: &str,
+) -> Option<String> {
+    let variant_name = v.ident.to_string();
+    let (pattern, bindings) = variant_bindings(v);
+
+    if bindings.is_empty() {
+        return Some(format!(
+            "                {}::{} => {}::{}::{},\n",
+            wit_ns, variant_name, rust_path_prefix, enum_name, variant_name
+        ));
+    }
+
+    let mut prep = String::new();
+    let mut converted = Vec::new();
+    for (binding, ty) in &bindings {
+        let (type_ident, is_ref, is_slice) = get_type_info(ty);
+        let (p, expr, ok) = convert_value(
+            &type_ident,
+            is_ref,
+            is_slice,
+            binding,
+            Some(binding),
+            MappingMode::Serialize,
+            "                ",
+        );
+        if !ok {
+            return None;
+        }
+        prep.push_str(&p);
+        converted.push(expr);
+    }
+
+    Some(format!(
+        "{}                {}::{}{} => {}::{}::{}({}),\n",
+        prep,
+        wit_ns,
+        variant_name,
+        pattern,
+        rust_path_prefix,
+        enum_name,
+        variant_name,
+        converted.join(", ")
+    ))
+}
+
+/// Deserialize : RustEnum::Variant(binding) => WitVariantPrefix::WitCase(WitNs::Variant(converted))
+fn generate_deserialize_arm(
+    rust_path_prefix: &str,
+    enum_name: &str,
+    v: &syn::Variant,
+    variant_prefix: &str,
+    wit_case: &str,
+    wit_ns: &str,
+) -> Option<String> {
+    let variant_name = v.ident.to_string();
+    let (pattern, bindings) = variant_bindings(v);
+
+    if bindings.is_empty() {
+        return Some(format!(
+            "                {}::{}::{} => {}::{}({}::{}),\n",
+            rust_path_prefix,
+            enum_name,
+            variant_name,
+            variant_prefix,
+            wit_case,
+            wit_ns,
+            variant_name
+        ));
+    }
+
+    let mut prep = String::new();
+    let mut converted = Vec::new();
+    for (binding, ty) in &bindings {
+        let (type_ident, is_ref, is_slice) = get_type_info(ty);
+        let (p, expr, ok) = convert_value(
+            &type_ident,
+            is_ref,
+            is_slice,
+            binding,
+            Some(binding),
+            MappingMode::Deserialize,
+            "                ",
+        );
+        if !ok {
+            return None;
+        }
+        prep.push_str(&p);
+        converted.push(expr);
+    }
+
+    Some(format!(
+        "{}                {}::{}::{}{} => {}::{}({}::{}({})),\n",
+        prep,
+        rust_path_prefix,
+        enum_name,
+        variant_name,
+        pattern,
+        variant_prefix,
+        wit_case,
+        wit_ns,
+        variant_name,
+        converted.join(", ")
+    ))
+}
+
+/// ToWit : RustEnum::Variant(binding) => WitVariantPrefix::WitCase(WitNs::Variant(converted))
+fn generate_to_wit_arm(
+    v: &syn::Variant,
+    variant_prefix: &str,
+    wit_case: &str,
+    wit_ns: &str,
+) -> Option<String> {
+    let variant_name = v.ident.to_string();
+    let (pattern, bindings) = variant_bindings(v);
+
+    if bindings.is_empty() {
+        return Some(format!(
+            "            Self::{} => {}::{}({}::{}),\n",
+            variant_name, variant_prefix, wit_case, wit_ns, variant_name
+        ));
+    }
+
+    let mut prep = String::new();
+    let mut converted = Vec::new();
+    for (binding, ty) in &bindings {
+        let (type_ident, is_ref, is_slice) = get_type_info(ty);
+        let (p, expr, ok) = convert_value(
+            &type_ident,
+            is_ref,
+            is_slice,
+            binding,
+            Some(binding),
+            MappingMode::ToWit,
+            "            ",
+        );
+        if !ok {
+            return None;
+        }
+        prep.push_str(&p);
+        converted.push(expr);
+    }
+
+    Some(format!(
+        "{}            Self::{}{} => {}::{}({}::{}({})),\n",
+        prep,
+        variant_name,
+        pattern,
+        variant_prefix,
+        wit_case,
+        wit_ns,
+        variant_name,
+        converted.join(", ")
+    ))
 }

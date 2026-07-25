@@ -1,9 +1,13 @@
 use crate::VarInt;
 use crate::codec::item_stack_seralizer::OptionalItemStackHash;
+use crate::{
+    ServerPacket,
+    ser::{NetworkReadExt, ReadingError},
+};
 use pumpkin_data::packet::serverbound::PLAY_CONTAINER_CLICK;
 use pumpkin_macros::java_packet;
-use serde::de::SeqAccess;
-use serde::{Deserialize, de};
+use pumpkin_util::version::JavaMinecraftVersion;
+use std::io::Read;
 
 #[derive(Debug)]
 #[java_packet(PLAY_CONTAINER_CLICK)]
@@ -18,72 +22,47 @@ pub struct SClickSlot {
     pub carried_item: OptionalItemStackHash,
 }
 
-impl<'de> Deserialize<'de> for SClickSlot {
-    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de> de::Visitor<'de> for Visitor {
-            type Value = SClickSlot;
+impl<'a> ServerPacket<'a> for SClickSlot {
+    fn read(
+        mut bytebuf: &mut &'a [u8],
+        _version: &JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
+        let sync_id = bytebuf.get_var_int()?;
+        let revision = bytebuf.get_var_int()?;
+        let slot = bytebuf.get_i16_be()?;
+        let button = bytebuf.get_i8()?;
+        let mode = SlotActionType::read(&mut bytebuf)?;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a valid VarInt encoded in a byte sequence")
-            }
-
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                let sync_id = seq
-                    .next_element::<VarInt>()?
-                    .ok_or(de::Error::custom("Failed to decode u8"))?;
-                let revision = seq
-                    .next_element::<VarInt>()?
-                    .ok_or(de::Error::custom("Failed to decode VarInt"))?;
-
-                let slot = seq
-                    .next_element::<i16>()?
-                    .ok_or(de::Error::custom("Failed to decode i16"))?;
-                let button = seq
-                    .next_element::<i8>()?
-                    .ok_or(de::Error::custom("Failed to decode i8"))?;
-                let mode = seq
-                    .next_element::<VarInt>()?
-                    .ok_or(de::Error::custom("Failed to decode VarInt"))?;
-                let length_of_array = seq
-                    .next_element::<VarInt>()?
-                    .ok_or(de::Error::custom("Failed to decode VarInt"))?;
-                let mut array_of_changed_slots = vec![];
-                for _ in 0..length_of_array.0 {
-                    let slot_number = seq
-                        .next_element::<i16>()?
-                        .ok_or(de::Error::custom("Unable to parse slot"))?;
-                    let slot = seq
-                        .next_element::<OptionalItemStackHash>()?
-                        .ok_or(de::Error::custom("Unable to parse item"))?;
-                    array_of_changed_slots.push((slot_number, slot));
-                }
-
-                let carried_item = seq
-                    .next_element::<OptionalItemStackHash>()?
-                    .ok_or(de::Error::custom("Failed to decode carried item"))?;
-
-                let mode: SlotActionType = SlotActionType::try_from(mode.0)
-                    .map_err(|_| de::Error::custom("Invalid slot action type"))?;
-
-                Ok(SClickSlot {
-                    sync_id,
-                    revision,
-                    slot,
-                    button,
-                    mode,
-                    length_of_array,
-                    array_of_changed_slots,
-                    carried_item,
-                })
-            }
+        let length_of_array = bytebuf.get_var_int()?;
+        if length_of_array.0 < 0 || length_of_array.0 > 256 {
+            return Err(ReadingError::Message(
+                "Changed slots length out of bounds".into(),
+            ));
+        }
+        let mut array_of_changed_slots = Vec::with_capacity(length_of_array.0 as usize);
+        for _ in 0..length_of_array.0 {
+            array_of_changed_slots.push((
+                bytebuf.get_i16_be()?,
+                OptionalItemStackHash::read(&mut bytebuf)?,
+            ));
         }
 
-        deserializer.deserialize_seq(Visitor)
+        let carried_item = OptionalItemStackHash::read(&mut bytebuf)?;
+
+        Ok(Self {
+            sync_id,
+            revision,
+            slot,
+            button,
+            mode,
+            length_of_array,
+            array_of_changed_slots,
+            carried_item,
+        })
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SlotActionType {
     /// Performs a normal slot click. This can pick up or place items in the slot, possibly merging the cursor stack into the slot, or swapping the slot stack with the cursor stack if they can't be merged.
     Pickup,
@@ -102,6 +81,14 @@ pub enum SlotActionType {
     QuickCraft,
     /// Replenishes the cursor stack with items from the screen handler. This is usually triggered by the player double clicking.
     PickupAll,
+}
+
+impl SlotActionType {
+    pub fn read(bytebuf: &mut impl Read) -> Result<Self, ReadingError> {
+        let mode = bytebuf.get_var_int()?;
+        Self::try_from(mode.0)
+            .map_err(|_| ReadingError::Message("Invalid slot action type".to_string()))
+    }
 }
 
 #[derive(Debug)]

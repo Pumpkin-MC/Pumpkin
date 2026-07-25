@@ -1,9 +1,10 @@
+use crate::ClientPacket;
+use crate::VarInt;
+use crate::ser::NetworkWriteExt;
 use pumpkin_data::packet::clientbound::PLAY_DAMAGE_EVENT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
-use serde::Serialize;
-
-use crate::VarInt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Notifies the client that an entity has taken damage.
 ///
@@ -11,7 +12,6 @@ use crate::VarInt;
 /// directional knockback visuals, and sound effects. It provides the client
 /// with specific details about the damage source to ensure the visual feedback
 /// matches the cause.
-#[derive(Serialize)]
 #[java_packet(PLAY_DAMAGE_EVENT)]
 pub struct CDamageEvent {
     /// The Entity ID of the entity taking damage.
@@ -46,5 +46,27 @@ impl CDamageEvent {
             source_direct_id: source_direct_id.map_or(VarInt(0), |id| VarInt(id.0 + 1)),
             source_position,
         }
+    }
+}
+
+impl ClientPacket for CDamageEvent {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.entity_id)?;
+        write.write_var_int(&self.source_type_id)?;
+        write.write_var_int(&self.source_cause_id)?;
+        write.write_var_int(&self.source_direct_id)?;
+        if let Some(pos) = &self.source_position {
+            write.write_bool(true)?;
+            write.write_f64(pos.x)?;
+            write.write_f64(pos.y)?;
+            write.write_f64(pos.z)?;
+        } else {
+            write.write_bool(false)?;
+        }
+        Ok(())
     }
 }

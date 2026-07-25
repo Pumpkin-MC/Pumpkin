@@ -1,10 +1,9 @@
 use pumpkin_data::recipes::RecipeCategoryTypes;
-use serde::Serialize;
 
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Taggable;
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub enum OwnedRecipeIngredient {
     Simple(String),
     Tagged(String),
@@ -30,14 +29,14 @@ impl OwnedRecipeIngredient {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct OwnedRecipeResult {
     pub item_id: String,
     pub count: u8,
     // TODO: Add components/enchantments if needed for the display result
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub enum OwnedCraftingRecipe {
     Shaped {
         category: RecipeCategoryTypes,
@@ -55,7 +54,7 @@ pub enum OwnedCraftingRecipe {
     },
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct OwnedCookingRecipe {
     pub recipe_id: String,
     pub category: RecipeCategoryTypes,
@@ -66,7 +65,7 @@ pub struct OwnedCookingRecipe {
     pub result: OwnedRecipeResult,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub enum OwnedCookingRecipeType {
     Blasting(OwnedCookingRecipe),
     Smelting(OwnedCookingRecipe),
@@ -74,7 +73,7 @@ pub enum OwnedCookingRecipeType {
     CampfireCooking(OwnedCookingRecipe),
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub enum DynamicRecipe {
     Crafting(OwnedCraftingRecipe),
     Cooking(OwnedCookingRecipeType),

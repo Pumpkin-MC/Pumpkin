@@ -1,8 +1,6 @@
 use std::io::Read;
 use std::io::Write;
 
-use serde::{Serialize, Serializer};
-
 use crate::ReadingError;
 use crate::WritingError;
 use crate::ser::NetworkReadExt;
@@ -32,13 +30,5 @@ impl BitSet {
             array.push(long);
         }
         Ok(Self(array.into_boxed_slice()))
-    }
-}
-
-impl Serialize for BitSet {
-    fn serialize<S: Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
-        Err(serde::ser::Error::custom(
-            "BitSet serialization not implemented",
-        ))
     }
 }

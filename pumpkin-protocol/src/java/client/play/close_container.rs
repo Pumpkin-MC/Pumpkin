@@ -1,15 +1,15 @@
+use crate::ClientPacket;
+use crate::VarInt;
+use crate::ser::NetworkWriteExt;
 use pumpkin_data::packet::clientbound::PLAY_CONTAINER_CLOSE;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
-
-use crate::VarInt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Notifies the client that a container (inventory, chest, etc.) has been closed.
 ///
 /// This is used by the server to force the player's UI to shut, for example,
 /// if the player moves too far away from a chest or if an NPC's trade window
 /// is invalidated.
-#[derive(Serialize)]
 #[java_packet(PLAY_CONTAINER_CLOSE)]
 pub struct CCloseContainer {
     /// The ID of the container window to close.
@@ -22,5 +22,16 @@ impl CCloseContainer {
     #[must_use]
     pub const fn new(window_id: VarInt) -> Self {
         Self { sync_id: window_id }
+    }
+}
+
+impl ClientPacket for CCloseContainer {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.sync_id)?;
+        Ok(())
     }
 }

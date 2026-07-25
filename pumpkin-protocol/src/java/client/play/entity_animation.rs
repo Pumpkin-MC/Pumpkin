@@ -1,14 +1,14 @@
+use crate::ClientPacket;
+use crate::VarInt;
+use crate::ser::NetworkWriteExt;
 use pumpkin_data::packet::clientbound::PLAY_ANIMATE;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
-
-use crate::VarInt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Triggers a specific animation for an entity that is visible to the client.
 ///
 /// This is primarily used for player-driven animations like swinging an arm
 /// or showing damage, but it can apply to other entities as well.
-#[derive(Serialize)]
 #[java_packet(PLAY_ANIMATE)]
 pub struct CEntityAnimation {
     /// The Entity ID of the entity performing the animation.
@@ -25,6 +25,18 @@ impl CEntityAnimation {
             entity_id,
             animation: animation as u8,
         }
+    }
+}
+
+impl ClientPacket for CEntityAnimation {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.entity_id)?;
+        write.write_u8(self.animation)?;
+        Ok(())
     }
 }
 

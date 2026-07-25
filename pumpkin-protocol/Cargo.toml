@@ -13,13 +13,13 @@ query = []
 
 [dependencies]
 pumpkin-nbt.workspace = true
-pumpkin-data = { workspace = true, features = ["packet", "item_id_remap", "entity_id_remap", "sound_id_remap", "recipes", "bedrock_creative"] }
+pumpkin-data = { workspace = true, features = ["packet", "item_id_remap", "entity_id_remap", "sound_id_remap", "particle_id_remap", "recipes", "bedrock_creative"] }
 pumpkin-macros.workspace = true
 pumpkin-world.workspace = true
 pumpkin-util.workspace = true
+serde = { workspace = true, features = ["derive"] }
 
 uuid.workspace = true
-serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["net"] }
 bytes.workspace = true

@@ -11,19 +11,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use wasmtime::component::Resource;
 
-use crate::plugin::loader::wasm::wasm_host::wit::v0_1::player::{
-    WitSeqAccess, text_component_from_resource,
-};
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::player::text_component_from_resource;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{CustomNameImpl, EnchantmentsImpl};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::data_component::{deserialize, serialize};
-use pumpkin_protocol::ser::deserializer::Deserializer;
-use pumpkin_protocol::ser::serializer::Serializer;
-use serde::ser::SerializeStruct;
-use serde::ser::Serializer as _;
 use std::borrow::Cow;
 
 pub(crate) fn to_wit_data_component(id: DataComponent) -> WitDataComponent {
@@ -426,10 +420,7 @@ impl HostItemStack for PluginHostState {
         for (id, data) in &stack.patch {
             if let Some(data) = data {
                 let mut buf = Vec::new();
-                let mut serializer = Serializer::new(&mut buf);
-                let mut struct_ser = serializer.serialize_struct("", 0).unwrap();
-                serialize(*id, data.as_ref(), &mut struct_ser).unwrap();
-                struct_ser.end().unwrap();
+                serialize(*id, data.as_ref(), &mut buf).unwrap();
 
                 components.push(WitDataComponentValue {
                     component: to_wit_data_component(*id),
@@ -449,12 +440,9 @@ impl HostItemStack for PluginHostState {
         let stack = self.get_item_stack(&res)?;
         let mut stack = stack.lock().await;
         let id = from_wit_data_component(component);
-        let mut deserializer = Deserializer::new(value.as_slice());
-        let mut seq = WitSeqAccess {
-            deserializer: &mut deserializer,
-        };
+        let mut cursor = std::io::Cursor::new(value);
 
-        if let Ok(component_impl) = deserialize(id, &mut seq) {
+        if let Ok(component_impl) = deserialize(id, &mut cursor) {
             if let Some((_, data)) = stack.patch.iter_mut().find(|(pid, _)| *pid == id) {
                 *data = Some(component_impl);
             } else {

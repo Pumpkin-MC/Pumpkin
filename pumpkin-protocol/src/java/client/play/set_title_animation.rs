@@ -1,9 +1,10 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_TITLES_ANIMATION;
 
+use crate::ClientPacket;
+use crate::ser::NetworkWriteExt;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
+use pumpkin_util::version::JavaMinecraftVersion;
 
-#[derive(Serialize)]
 #[java_packet(PLAY_SET_TITLES_ANIMATION)]
 pub struct CTitleAnimation {
     pub fade_in_ticks: i32,
@@ -19,5 +20,18 @@ impl CTitleAnimation {
             stay_ticks,
             fade_out_ticks,
         }
+    }
+}
+
+impl ClientPacket for CTitleAnimation {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_i32_be(self.fade_in_ticks)?;
+        write.write_i32_be(self.stay_ticks)?;
+        write.write_i32_be(self.fade_out_ticks)?;
+        Ok(())
     }
 }

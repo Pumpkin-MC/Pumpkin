@@ -23,7 +23,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-24.04-arm
+          - os: ubuntu-26.04-arm
             platform: linux/arm64
           - os: ubuntu-latest
             platform: linux/amd64

@@ -1,6 +1,9 @@
 use pumpkin_data::packet::clientbound::PLAY_KEEP_ALIVE;
 use pumpkin_macros::java_packet;
-use serde::{Deserialize, Serialize};
+
+use crate::ClientPacket;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Maintains the connection and measures latency (ping) between client and server.
 ///
@@ -8,7 +11,6 @@ use serde::{Deserialize, Serialize};
 /// The client must respond with the exact same ID. If the server does not receive
 /// a response within a timeout period (usually 30 seconds), it will disconnect
 /// the player with a "Timed Out" message.
-#[derive(Serialize, Deserialize)]
 #[java_packet(PLAY_KEEP_ALIVE)]
 pub struct CKeepAlive {
     /// A unique random identifier for this specific keep-alive request.
@@ -20,5 +22,16 @@ impl CKeepAlive {
     #[must_use]
     pub const fn new(keep_alive_id: i64) -> Self {
         Self { keep_alive_id }
+    }
+}
+
+impl ClientPacket for CKeepAlive {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_i64_be(self.keep_alive_id)?;
+        Ok(())
     }
 }

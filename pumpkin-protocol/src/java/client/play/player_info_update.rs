@@ -107,7 +107,9 @@ impl ClientPacket for CPlayerInfoUpdate<'_> {
                     PlayerAction::UpdateListed(listed) => p.write_bool(*listed)?,
                     PlayerAction::UpdateLatency(latency) => p.write_var_int(latency)?,
                     PlayerAction::UpdateDisplayName(display_name) => {
-                        p.write_option(display_name, crate::ser::NetworkWriteExt::write_serialize)?;
+                        p.write_option(display_name, |w, text_component| {
+                            w.write_slice(&text_component.encode())
+                        })?;
                     }
                     PlayerAction::UpdateListOrder(order) => p.write_var_int(order)?,
                 }

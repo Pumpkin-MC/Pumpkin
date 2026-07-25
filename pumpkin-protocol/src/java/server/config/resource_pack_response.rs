@@ -1,6 +1,11 @@
 use pumpkin_data::packet::serverbound::CONFIG_RESOURCE_PACK;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
+
+use crate::{
+    ServerPacket,
+    ser::{NetworkReadExt, ReadingError},
+};
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
@@ -20,14 +25,21 @@ pub enum ResourcePackResponseResult {
 ///
 /// This allows the server to know if the player is using the required textures
 /// or if the download failed.
-#[derive(serde::Deserialize, Serialize)]
 #[java_packet(CONFIG_RESOURCE_PACK)]
 pub struct SConfigResourcePack {
     /// The unique identifier of the resource pack this response refers to.
-    #[serde(with = "uuid::serde::compact")]
     pub uuid: uuid::Uuid,
     /// The status code of the operation, mapped to [`ResourcePackResponseResult`].
     pub result: VarInt,
+}
+
+impl<'a> ServerPacket<'a> for SConfigResourcePack {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        Ok(Self {
+            uuid: bytebuf.get_uuid()?,
+            result: bytebuf.get_var_int()?,
+        })
+    }
 }
 
 impl SConfigResourcePack {

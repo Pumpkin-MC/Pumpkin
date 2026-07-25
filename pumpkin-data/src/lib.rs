@@ -250,6 +250,11 @@ pub mod entity_id_remap;
 #[path = "generated/sound_id_remap.rs"]
 pub mod sound_id_remap;
 
+#[cfg(feature = "particle_id_remap")]
+#[rustfmt::skip]
+#[path = "generated/particle_id_remap.rs"]
+pub mod particle_id_remap;
+
 #[cfg(feature = "bedrock_creative")]
 #[rustfmt::skip]
 #[path = "generated/bedrock_creative.rs"]

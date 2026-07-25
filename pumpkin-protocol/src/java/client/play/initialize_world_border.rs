@@ -1,15 +1,16 @@
 use pumpkin_data::packet::clientbound::PLAY_INITIALIZE_BORDER;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
 
+use crate::ClientPacket;
+use crate::ser::NetworkWriteExt;
 use crate::{VarInt, codec::var_long::VarLong};
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Fully initializes the world border for the client.
 ///
 /// This packet is sent when a player joins the world or changes dimensions.
 /// It synchronizes the current position, size, and all warning parameters
 /// to ensure the client-side visual barrier matches the server's authority.
-#[derive(Serialize)]
 #[java_packet(PLAY_INITIALIZE_BORDER)]
 pub struct CInitializeWorldBorder {
     /// The X coordinate of the center of the world border.
@@ -55,5 +56,23 @@ impl CInitializeWorldBorder {
             warning_blocks,
             warning_time,
         }
+    }
+}
+
+impl ClientPacket for CInitializeWorldBorder {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_f64_be(self.x)?;
+        write.write_f64_be(self.z)?;
+        write.write_f64_be(self.old_diameter)?;
+        write.write_f64_be(self.new_diameter)?;
+        write.write_var_long(&self.speed)?;
+        write.write_var_int(&self.portal_teleport_boundary)?;
+        write.write_var_int(&self.warning_blocks)?;
+        write.write_var_int(&self.warning_time)?;
+        Ok(())
     }
 }

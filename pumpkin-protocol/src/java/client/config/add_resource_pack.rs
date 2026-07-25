@@ -1,14 +1,15 @@
 use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::java_packet;
-use serde::Serialize;
 
 use pumpkin_data::packet::clientbound::CONFIG_RESOURCE_PACK_PUSH;
 
-#[derive(Serialize)]
+use crate::ClientPacket;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
+
 #[java_packet(CONFIG_RESOURCE_PACK_PUSH)]
 pub struct CConfigAddResourcePack<'a> {
-    #[serde(with = "uuid::serde::compact")]
     pub uuid: &'a uuid::Uuid,
     pub url: &'a str,
     pub hash: &'a str, // max 40
@@ -32,5 +33,25 @@ impl<'a> CConfigAddResourcePack<'a> {
             forced,
             prompt_message,
         }
+    }
+}
+
+impl ClientPacket for CConfigAddResourcePack<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_uuid(self.uuid)?;
+        write.write_string(self.url)?;
+        write.write_string(self.hash)?;
+        write.write_bool(self.forced)?;
+        if let Some(_prompt) = &self.prompt_message {
+            write.write_bool(true)?;
+            // TODO
+        } else {
+            write.write_bool(false)?;
+        }
+        Ok(())
     }
 }

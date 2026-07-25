@@ -1,17 +1,17 @@
+use crate::ClientPacket;
+use crate::VarInt;
+use crate::ser::NetworkWriteExt;
 use pumpkin_data::{
     packet::clientbound::PLAY_SET_DISPLAY_OBJECTIVE, scoreboard::ScoreboardDisplaySlot,
 };
 use pumpkin_macros::java_packet;
-use serde::Serialize;
-
-use crate::VarInt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Instructs the client to display a specific scoreboard objective in a given slot.
 ///
 /// This packet is the final step in showing a scoreboard to a player. After
 /// an objective is created and populated with scores, this packet "maps"
 /// that objective to a visual location like the sidebar or the player list.
-#[derive(Serialize)]
 #[java_packet(PLAY_SET_DISPLAY_OBJECTIVE)]
 pub struct CDisplayObjective {
     /// The display slot/position for the objective.
@@ -28,5 +28,17 @@ impl CDisplayObjective {
             position: VarInt(position as i32),
             score_name,
         }
+    }
+}
+
+impl ClientPacket for CDisplayObjective {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.position)?;
+        write.write_string(&self.score_name)?;
+        Ok(())
     }
 }

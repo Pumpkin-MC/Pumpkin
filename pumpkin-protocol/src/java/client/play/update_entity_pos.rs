@@ -1,11 +1,12 @@
 use pumpkin_data::packet::clientbound::PLAY_MOVE_ENTITY_POS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
-use serde::Serialize;
 
+use crate::ClientPacket;
 use crate::VarInt;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
-#[derive(Serialize)]
 #[java_packet(PLAY_MOVE_ENTITY_POS)]
 pub struct CUpdateEntityPos {
     pub entity_id: VarInt,
@@ -21,5 +22,20 @@ impl CUpdateEntityPos {
             delta,
             on_ground,
         }
+    }
+}
+
+impl ClientPacket for CUpdateEntityPos {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.entity_id)?;
+        write.write_i16_be(self.delta.x)?;
+        write.write_i16_be(self.delta.y)?;
+        write.write_i16_be(self.delta.z)?;
+        write.write_bool(self.on_ground)?;
+        Ok(())
     }
 }

@@ -1,10 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_UPDATE_MOB_EFFECT;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
 
+use crate::ClientPacket;
 use crate::codec::var_int::VarInt;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
-#[derive(Serialize)]
 #[java_packet(PLAY_UPDATE_MOB_EFFECT)]
 pub struct CUpdateMobEffect {
     pub entity_id: VarInt,
@@ -30,5 +31,20 @@ impl CUpdateMobEffect {
             duration,
             flags,
         }
+    }
+}
+
+impl ClientPacket for CUpdateMobEffect {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.entity_id)?;
+        write.write_var_int(&self.effect_id)?;
+        write.write_var_int(&self.amplifier)?;
+        write.write_var_int(&self.duration)?;
+        write.write_i8(self.flags)?;
+        Ok(())
     }
 }

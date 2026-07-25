@@ -1,5 +1,3 @@
-use std::io::Read;
-
 use crate::{
     ClientPacket, ConnectionState, ReadingError, ServerPacket, VarInt, ser::NetworkReadExt,
     ser::NetworkWriteExt,
@@ -24,8 +22,8 @@ pub struct SHandShake {
     pub next_state: ConnectionState,
 }
 
-impl ServerPacket for SHandShake {
-    fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SHandShake {
+    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             protocol_version: read.get_var_int()?,
             server_address: read.get_str_bounded(255)?,

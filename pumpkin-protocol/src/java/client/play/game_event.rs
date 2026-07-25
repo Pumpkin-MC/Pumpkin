@@ -1,13 +1,15 @@
 use pumpkin_data::packet::clientbound::PLAY_GAME_EVENT;
 use pumpkin_macros::java_packet;
-use serde::{Deserialize, Serialize};
+
+use crate::ClientPacket;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Updates the game state or triggers specific environmental changes.
 ///
 /// This packet is the primary way the server communicates global or
 /// context-specific transitions, such as changing the weather,
 /// altering the player's gamemode, or displaying the credits.
-#[derive(Serialize, Deserialize)]
 #[java_packet(PLAY_GAME_EVENT)]
 pub struct CGameEvent {
     /// The ID of the event type.
@@ -42,4 +44,16 @@ pub enum GameEvent {
     EnabledRespawnScreen,
     LimitedCrafting,
     StartWaitingChunks,
+}
+
+impl ClientPacket for CGameEvent {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_u8(self.event)?;
+        write.write_f32_be(self.value)?;
+        Ok(())
+    }
 }

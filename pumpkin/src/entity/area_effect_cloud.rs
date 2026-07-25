@@ -13,6 +13,22 @@ type EffectEntry = (&'static StatusEffect, i32, u8, bool, bool, bool);
 use pumpkin_data::item_stack::ItemStack;
 use tokio::sync::Mutex;
 
+struct ParticleMeta<'a> {
+    particle_id: pumpkin_protocol::codec::var_int::VarInt,
+    data: &'a [u8],
+}
+
+impl pumpkin_protocol::java::client::play::MetadataSerializer for ParticleMeta<'_> {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+    ) -> Result<(), pumpkin_protocol::ser::WritingError> {
+        use pumpkin_protocol::ser::NetworkWriteExt;
+        writer.write_var_int(&self.particle_id)?;
+        writer.write_slice(self.data)
+    }
+}
+
 /// The effect cloud entity that is spawned where a lingering potion lands.
 pub struct AreaEffectCloudEntity {
     pub entity: Entity,
@@ -97,23 +113,7 @@ impl EntityBase for AreaEffectCloudEntity {
     }
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
-        // Serialize bytes to the packet without a length prefix.
-        // This matches how the Minecraft protocol encodes particle data in EntityEffect.
-        fn serialize_bytes_no_prefix<S>(data: &[u8], serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: serde::Serializer,
-        {
-            serializer.serialize_bytes(data)
-        }
-
         Box::pin(async move {
-            #[derive(serde::Serialize)]
-            struct ParticleMeta<'a> {
-                particle_id: pumpkin_protocol::codec::var_int::VarInt,
-                #[serde(serialize_with = "serialize_bytes_no_prefix")]
-                data: &'a [u8],
-            }
-
             // Send initial radius and particle (color) so clients render correctly
             let radius = *self.radius.lock().await;
 

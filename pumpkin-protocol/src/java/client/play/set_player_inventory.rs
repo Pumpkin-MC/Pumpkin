@@ -29,6 +29,6 @@ impl ClientPacket for CSetPlayerInventory<'_> {
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_var_int(&self.slot)?;
-        self.item.write_with_version(write, version)
+        self.item.write_with_version(&mut write, version)
     }
 }

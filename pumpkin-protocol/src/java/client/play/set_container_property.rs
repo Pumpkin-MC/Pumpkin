@@ -1,10 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_CONTAINER_SET_DATA;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
 
+use crate::ClientPacket;
 use crate::VarInt;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
-#[derive(Serialize)]
 #[java_packet(PLAY_CONTAINER_SET_DATA)]
 pub struct CSetContainerProperty {
     pub window_id: VarInt,
@@ -20,5 +21,18 @@ impl CSetContainerProperty {
             property,
             value,
         }
+    }
+}
+
+impl ClientPacket for CSetContainerProperty {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.window_id)?;
+        write.write_i16(self.property)?;
+        write.write_i16(self.value)?;
+        Ok(())
     }
 }

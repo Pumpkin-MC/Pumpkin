@@ -1,10 +1,10 @@
 use pumpkin_data::packet::clientbound::{PLAY_SET_CARRIED_ITEM, PLAY_SET_HELD_SLOT};
 use pumpkin_util::version::JavaMinecraftVersion;
-use serde::Serialize;
 
+use crate::ClientPacket;
 use crate::packet::MultiVersionJavaPacket;
+use crate::ser::NetworkWriteExt;
 
-#[derive(Serialize)]
 pub struct CSetSelectedSlot {
     pub slot: i8,
 }
@@ -13,6 +13,17 @@ impl CSetSelectedSlot {
     #[must_use]
     pub const fn new(slot: i8) -> Self {
         Self { slot }
+    }
+}
+
+impl ClientPacket for CSetSelectedSlot {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_i8(self.slot)?;
+        Ok(())
     }
 }
 

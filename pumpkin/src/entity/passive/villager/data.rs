@@ -26,11 +26,23 @@ pub enum GossipType {
     Trading = 4,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VillagerData {
     pub r#type: VarInt,
     pub profession: VarInt,
     pub level: VarInt,
+}
+
+impl pumpkin_protocol::java::client::play::MetadataSerializer for VillagerData {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+    ) -> Result<(), pumpkin_protocol::ser::WritingError> {
+        use pumpkin_protocol::ser::NetworkWriteExt;
+        writer.write_var_int(&self.r#type)?;
+        writer.write_var_int(&self.profession)?;
+        writer.write_var_int(&self.level)
+    }
 }
 
 impl VillagerData {

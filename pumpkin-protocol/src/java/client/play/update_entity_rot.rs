@@ -1,10 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_MOVE_ENTITY_ROT;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
 
+use crate::ClientPacket;
 use crate::VarInt;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
-#[derive(Serialize)]
 #[java_packet(PLAY_MOVE_ENTITY_ROT)]
 pub struct CUpdateEntityRot {
     pub entity_id: VarInt,
@@ -22,5 +23,19 @@ impl CUpdateEntityRot {
             pitch,
             on_ground,
         }
+    }
+}
+
+impl ClientPacket for CUpdateEntityRot {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.entity_id)?;
+        write.write_u8(self.yaw)?;
+        write.write_u8(self.pitch)?;
+        write.write_bool(self.on_ground)?;
+        Ok(())
     }
 }

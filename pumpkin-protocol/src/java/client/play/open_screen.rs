@@ -2,9 +2,11 @@ use pumpkin_data::packet::clientbound::PLAY_OPEN_SCREEN;
 use pumpkin_util::text::TextComponent;
 
 use pumpkin_macros::java_packet;
-use serde::Serialize;
 
+use crate::ClientPacket;
 use crate::VarInt;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Instructs the client to open a specific type of GUI (inventory, chest, etc.).
 ///
@@ -12,7 +14,6 @@ use crate::VarInt;
 /// or when a command/plugin forces an interface to open. It establishes a
 /// `sync_id` which must be used in all subsequent "Set Slot" or "Click Slot"
 /// packets to ensure the server and client are talking about the same window.
-#[derive(Serialize)]
 #[java_packet(PLAY_OPEN_SCREEN)]
 pub struct COpenScreen<'a> {
     /// A unique identifier for the current window session.
@@ -38,5 +39,20 @@ impl<'a> COpenScreen<'a> {
             window_type,
             window_title,
         }
+    }
+}
+
+impl ClientPacket for COpenScreen<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.sync_id)?;
+        write.write_var_int(&self.window_type)?;
+        // Write the text component as JSON string
+        let buf = self.window_title.encode();
+        write.write_slice(&buf)?;
+        Ok(())
     }
 }

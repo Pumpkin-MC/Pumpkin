@@ -20,7 +20,7 @@ pub struct BoatItem;
 
 impl BoatItem {
     /// Maps boat item to corresponding entity type
-    fn item_to_entity(item: &Item) -> &'static EntityType {
+    pub(crate) fn item_to_entity(item: &Item) -> &'static EntityType {
         match item.id {
             val if val == Item::OAK_BOAT.id => &EntityType::OAK_BOAT,
             val if val == Item::OAK_CHEST_BOAT.id => &EntityType::OAK_CHEST_BOAT,

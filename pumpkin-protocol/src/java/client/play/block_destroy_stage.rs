@@ -1,16 +1,16 @@
 use pumpkin_data::packet::clientbound::PLAY_BLOCK_DESTRUCTION;
 use pumpkin_util::math::position::BlockPos;
 
-use pumpkin_macros::java_packet;
-use serde::Serialize;
-
+use crate::ClientPacket;
 use crate::VarInt;
+use crate::ser::NetworkWriteExt;
+use pumpkin_macros::java_packet;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Updates the visual "breaking" progress of a block for all clients.
 ///
 /// This packet controls the overlay of cracks that appear on a block when
 /// it is being mined. It is often used to show other players' mining progress.
-#[derive(Serialize)]
 #[java_packet(PLAY_BLOCK_DESTRUCTION)]
 pub struct CSetBlockDestroyStage {
     /// A unique ID for this destruction instance. Usually the miner's Entity ID.
@@ -31,5 +31,18 @@ impl CSetBlockDestroyStage {
             location,
             destroy_stage,
         }
+    }
+}
+
+impl ClientPacket for CSetBlockDestroyStage {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.entity_id)?;
+        write.write_block_pos(&self.location)?;
+        write.write_i8(self.destroy_stage)?;
+        Ok(())
     }
 }

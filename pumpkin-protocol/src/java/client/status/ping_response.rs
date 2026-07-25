@@ -1,12 +1,14 @@
 use pumpkin_data::packet::clientbound::STATUS_PONG_RESPONSE;
 use pumpkin_macros::java_packet;
-use serde::{Deserialize, Serialize};
+
+use crate::ClientPacket;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sent by the server to complete a latency check initiated by a `SStatusPingRequest`.
 ///
 /// This is the final packet in the Server List Ping (SLP) sequence. It allows the
 /// client to calculate the round-trip time (ping) to the server.
-#[derive(Serialize, Deserialize)]
 #[java_packet(STATUS_PONG_RESPONSE)]
 pub struct CPingResponse {
     /// The exact 64-bit integer received from the client's ping request.
@@ -20,5 +22,16 @@ impl CPingResponse {
     #[must_use]
     pub const fn new(payload: i64) -> Self {
         Self { payload }
+    }
+}
+
+impl ClientPacket for CPingResponse {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_i64(self.payload)?;
+        Ok(())
     }
 }

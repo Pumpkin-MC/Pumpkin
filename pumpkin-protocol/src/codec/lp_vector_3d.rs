@@ -1,15 +1,8 @@
-use std::fmt::Formatter;
-
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
     VarInt,
     ser::{NetworkWriteExt, ReadingError, WritingError},
-};
-use serde::{
-    Deserializer, Serialize,
-    de::{self, Visitor},
-    ser::Serializer,
 };
 
 #[derive(Clone, Copy)]
@@ -151,42 +144,6 @@ fn from_long(quantized: i64, scale: f64) -> f64 {
     // Reverse: ((v * 0.5 + 0.5) * 32766) -> v
     let normalized = (quantized as f64 / MAX_15_BIT_VALUE) - 0.5;
     (normalized / 0.5) * scale
-}
-
-impl Serialize for LpVector3d {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut buf = Vec::new();
-        self.write(&mut buf)
-            .map_err(|e| serde::ser::Error::custom(e.to_string()))?;
-        serializer.serialize_bytes(&buf)
-    }
-}
-
-impl<'de> de::Deserialize<'de> for LpVector3d {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct VelocityVisitor;
-
-        impl Visitor<'_> for VelocityVisitor {
-            type Value = LpVector3d;
-
-            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-                formatter.write_str("a byte array representing bit-packed velocity")
-            }
-
-            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                let mut cursor = std::io::Cursor::new(v);
-                LpVector3d::read(&mut cursor).map_err(de::Error::custom)
-            }
-        }
-
-        deserializer.deserialize_bytes(VelocityVisitor)
-    }
 }
 
 #[cfg(test)]

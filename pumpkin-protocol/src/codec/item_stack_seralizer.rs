@@ -1,6 +1,6 @@
 use crate::VarInt;
 use crate::codec::data_component::{deserialize, serialize};
-use crate::ser::{NetworkReadExt, ReadingError, WritingError, deserializer, serializer};
+use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{CustomNameImpl, DataComponentImpl};
 use pumpkin_data::item::Item;
@@ -9,13 +9,8 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
-use serde::ser::SerializeStruct;
-use serde::{
-    Deserialize, Serialize, Serializer,
-    de::{self, DeserializeSeed, SeqAccess},
-};
 use std::borrow::Cow;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 
 #[derive(Clone)]
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
@@ -35,67 +30,52 @@ fn item_component_counts(stack: &ItemStack) -> (u8, u8) {
     (to_add, to_remove)
 }
 
-fn serialize_any_item_stack_with_id<S: Serializer>(
+fn serialize_any_item_stack_with_id(
     stack: &ItemStack,
     item_id: u16,
     is_template: bool,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
+    write: &mut impl NetworkWriteExt,
+) -> Result<(), WritingError> {
     if stack.is_empty() {
-        VarInt(0).serialize(serializer)
+        write.put_var_int(&VarInt(0))
     } else {
         let (to_add, to_remove) = item_component_counts(stack);
-        let mut seq = serializer.serialize_struct("", 0)?;
         if is_template {
-            seq.serialize_field("", &VarInt::from(item_id))?;
-            seq.serialize_field("", &VarInt::from(stack.item_count))?;
+            write.put_var_int(&VarInt::from(item_id))?;
+            write.put_var_int(&VarInt::from(stack.item_count))?;
         } else {
-            seq.serialize_field("", &VarInt::from(stack.item_count))?;
-            seq.serialize_field("", &VarInt::from(item_id))?;
+            write.put_var_int(&VarInt::from(stack.item_count))?;
+            write.put_var_int(&VarInt::from(item_id))?;
         }
-        seq.serialize_field::<VarInt>("", &VarInt::from(to_add))?;
-        seq.serialize_field::<VarInt>("", &VarInt::from(to_remove))?;
+        write.put_var_int(&VarInt::from(to_add))?;
+        write.put_var_int(&VarInt::from(to_remove))?;
 
         for (id, data) in &stack.patch {
             if let Some(data) = data {
-                seq.serialize_field::<VarInt>("", &VarInt::from(id.to_id()))?;
-                serialize(*id, data.as_ref(), &mut seq)?;
+                write.put_var_int(&VarInt::from(id.to_id()))?;
+                serialize(*id, data.as_ref(), write)?;
             }
         }
 
         for (id, data) in &stack.patch {
             if data.is_none() {
-                seq.serialize_field::<VarInt>("", &VarInt::from(id.to_id()))?;
+                write.put_var_int(&VarInt::from(id.to_id()))?;
             }
         }
 
-        seq.end()
+        Ok(())
     }
 }
-fn serialize_item_stack_with_id<S: Serializer>(
+
+fn serialize_item_stack_with_id(
     stack: &ItemStack,
     item_id: u16,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    serialize_any_item_stack_with_id(stack, item_id, false, serializer)
+    write: &mut impl NetworkWriteExt,
+) -> Result<(), WritingError> {
+    serialize_any_item_stack_with_id(stack, item_id, false, write)
 }
 
-struct ComponentAccess<R: Read> {
-    deserializer: deserializer::Deserializer<R>,
-}
-
-impl<'de, R: Read> SeqAccess<'de> for ComponentAccess<R> {
-    type Error = ReadingError;
-
-    fn next_element_seed<T: DeserializeSeed<'de>>(
-        &mut self,
-        seed: T,
-    ) -> Result<Option<T::Value>, Self::Error> {
-        seed.deserialize(&mut self.deserializer).map(Some)
-    }
-}
-
-fn read_component_id(read: &mut impl Read) -> Result<DataComponent, ReadingError> {
+fn read_component_id(read: &mut impl NetworkReadExt) -> Result<DataComponent, ReadingError> {
     let id_val = read.get_var_int()?.0;
     let id_u8 = id_val
         .try_into()
@@ -122,126 +102,108 @@ fn decode_custom_name(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl
 }
 
 fn read_length_prefixed_component(
-    read: &mut impl Read,
+    read: &mut impl NetworkReadExt,
 ) -> Result<(DataComponent, Box<dyn DataComponentImpl>), ReadingError> {
     let id = read_component_id(read)?;
     let byte_len = read.get_var_int()?.0;
-    let byte_len = byte_len
+    let byte_len: usize = byte_len
         .try_into()
         .map_err(|_| ReadingError::Message("Negative component data length".into()))?;
-    let component_data = read.read_boxed_slice(byte_len)?;
 
-    let component_impl = if id == DataComponent::CustomName {
-        decode_custom_name(component_data.as_ref())?
+    let component_impl = if byte_len <= 256 {
+        let mut stack_buf = [0u8; 256];
+        let slice = &mut stack_buf[..byte_len];
+        read.read_bytes_to_buf(slice)?;
+
+        if id == DataComponent::CustomName {
+            decode_custom_name(slice)?
+        } else {
+            let mut cursor = Cursor::new(slice);
+            deserialize(id, &mut cursor)?
+        }
     } else {
-        let cursor = Cursor::new(component_data);
-        let mut access = ComponentAccess {
-            deserializer: deserializer::Deserializer::new(cursor),
-        };
-        deserialize(id, &mut access)?
+        let mut component_data = vec![0u8; byte_len];
+        read.read_bytes_to_buf(&mut component_data)?;
+        if id == DataComponent::CustomName {
+            decode_custom_name(component_data.as_ref())?
+        } else {
+            let mut cursor = Cursor::new(component_data);
+            deserialize(id, &mut cursor)?
+        }
     };
 
     Ok((id, component_impl))
 }
 
-impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
-    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de> de::Visitor<'de> for Visitor {
-            type Value = ItemStackSerializer<'static>;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a valid Slot encoded in a byte sequence")
-            }
-
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                const MAX_COMPONENTS: i32 = 256;
-
-                let item_count = seq
-                    .next_element::<VarInt>()?
-                    .ok_or_else(|| de::Error::custom("Failed to decode VarInt"))?;
-
-                if item_count.0 == 0 {
-                    return Ok(ItemStackSerializer(Cow::Borrowed(ItemStack::EMPTY)));
-                }
-
-                let item_id = seq
-                    .next_element::<VarInt>()?
-                    .ok_or_else(|| de::Error::custom("No item id VarInt!"))?;
-
-                let num_to_add = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
-                let num_to_remove = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
-
-                if num_to_add < 0 || num_to_remove < 0 {
-                    return Err(de::Error::custom("Negative component count"));
-                }
-
-                let total_components = num_to_add
-                    .checked_add(num_to_remove)
-                    .ok_or_else(|| de::Error::custom("Component count overflow"))?;
-
-                if total_components > MAX_COMPONENTS {
-                    return Err(de::Error::custom("Too many components in ItemStack patch"));
-                }
-
-                let mut patch = Vec::with_capacity((num_to_add + num_to_remove) as usize);
-
-                for _ in 0..num_to_add {
-                    let id_val = seq
-                        .next_element::<VarInt>()?
-                        .ok_or_else(|| de::Error::custom("Missing component ID"))?
-                        .0;
-                    let id = DataComponent::try_from_id(id_val as u8).ok_or_else(|| {
-                        de::Error::custom(format!("Unknown component ID: {id_val}"))
-                    })?;
-
-                    // Minecraft protocol sends a byte length for the component data here
-                    let _byte_len = seq
-                        .next_element::<VarInt>()?
-                        .ok_or_else(|| de::Error::custom("No data len VarInt!"))?;
-
-                    let component_impl = deserialize(id, &mut seq)?;
-
-                    patch.push((id, Some(component_impl)));
-                }
-
-                for _ in 0..num_to_remove {
-                    let id_val = seq
-                        .next_element::<VarInt>()?
-                        .ok_or_else(|| de::Error::custom("Missing remove component ID"))?
-                        .0;
-                    let id = DataComponent::try_from_id(id_val as u8)
-                        .ok_or_else(|| de::Error::custom("Unknown component ID"))?;
-                    patch.push((id, None));
-                }
-
-                let item_id_u16: u16 = item_id
-                    .0
-                    .try_into()
-                    .map_err(|_| de::Error::custom("Invalid item id!"))?;
-
-                Ok(ItemStackSerializer(Cow::Owned(
-                    ItemStack::new_with_component(
-                        item_count.0 as u8,
-                        Item::from_id(item_id_u16).unwrap_or(&Item::AIR),
-                        patch,
-                    ),
-                )))
-            }
-        }
-        deserializer.deserialize_seq(Visitor)
-    }
-}
-
-impl Serialize for ItemStackSerializer<'_> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serialize_item_stack_with_id(self.0.as_ref(), self.0.item.id, serializer)
-    }
-}
-
 impl ItemStackSerializer<'_> {
+    pub fn read(
+        read: &mut impl NetworkReadExt,
+    ) -> Result<ItemStackSerializer<'static>, ReadingError> {
+        const MAX_COMPONENTS: i32 = 256;
+
+        let item_count = read.get_var_int()?;
+        if item_count.0 == 0 {
+            return Ok(ItemStackSerializer(Cow::Borrowed(ItemStack::EMPTY)));
+        }
+
+        let item_id = read.get_var_int()?;
+        let num_to_add = read.get_var_int()?.0;
+        let num_to_remove = read.get_var_int()?.0;
+
+        if num_to_add < 0 || num_to_remove < 0 {
+            return Err(ReadingError::Message("Negative component count".into()));
+        }
+
+        let total_components = num_to_add
+            .checked_add(num_to_remove)
+            .ok_or_else(|| ReadingError::Message("Component count overflow".into()))?;
+
+        if total_components > MAX_COMPONENTS {
+            return Err(ReadingError::Message(
+                "Too many components in ItemStack patch".into(),
+            ));
+        }
+
+        let mut patch = Vec::with_capacity((num_to_add + num_to_remove) as usize);
+
+        for _ in 0..num_to_add {
+            let id_val = read.get_var_int()?.0;
+            let id = DataComponent::try_from_id(id_val as u8)
+                .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))?;
+
+            let _byte_len = read.get_var_int()?;
+
+            let component_impl = deserialize(id, read)?;
+            patch.push((id, Some(component_impl)));
+        }
+
+        for _ in 0..num_to_remove {
+            let id_val = read.get_var_int()?.0;
+            let id = DataComponent::try_from_id(id_val as u8)
+                .ok_or_else(|| ReadingError::Message("Unknown component ID".into()))?;
+            patch.push((id, None));
+        }
+
+        let item_id_u16: u16 = item_id
+            .0
+            .try_into()
+            .map_err(|_| ReadingError::Message("Invalid item id!".into()))?;
+
+        Ok(ItemStackSerializer(Cow::Owned(
+            ItemStack::new_with_component(
+                item_count.0 as u8,
+                Item::from_id(item_id_u16).unwrap_or(&Item::AIR),
+                patch,
+            ),
+        )))
+    }
+
+    pub fn write(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        serialize_item_stack_with_id(self.0.as_ref(), self.0.item.id, write)
+    }
+
     pub fn read_length_prefixed_optional(
-        mut read: impl Read,
+        read: &mut impl NetworkReadExt,
     ) -> Result<ItemStackSerializer<'static>, ReadingError> {
         const MAX_COMPONENTS: i32 = 256;
 
@@ -275,12 +237,12 @@ impl ItemStackSerializer<'_> {
         let mut patch = Vec::with_capacity(total_components as usize);
 
         for _ in 0..num_to_add {
-            let (id, component_impl) = read_length_prefixed_component(&mut read)?;
+            let (id, component_impl) = read_length_prefixed_component(read)?;
             patch.push((id, Some(component_impl)));
         }
 
         for _ in 0..num_to_remove {
-            patch.push((read_component_id(&mut read)?, None));
+            patch.push((read_component_id(read)?, None));
         }
 
         let item_id_u16 = item_id
@@ -299,12 +261,11 @@ impl ItemStackSerializer<'_> {
 
     pub fn write_with_version(
         &self,
-        write: impl std::io::Write,
+        write: &mut impl NetworkWriteExt,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
-        let mut network_serializer = serializer::Serializer::new(write);
-        serialize_item_stack_with_id(self.0.as_ref(), remapped_item_id, &mut network_serializer)
+        serialize_item_stack_with_id(self.0.as_ref(), remapped_item_id, write)
     }
 
     #[must_use]
@@ -346,6 +307,48 @@ pub struct ItemComponentHash {
     pub removed: Vec<VarInt>,
 }
 
+impl ItemComponentHash {
+    pub fn read(read: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        const MAX_COMPONENTS: i32 = 256;
+
+        let added_length = read.get_var_int()?;
+        if added_length.0 < 0 || added_length.0 > MAX_COMPONENTS {
+            return Err(ReadingError::Message("added_length out of bounds".into()));
+        }
+        let mut added = Vec::with_capacity(added_length.0 as usize);
+        for _ in 0..added_length.0 {
+            let component_id = read.get_var_int()?;
+            let component_value = read.get_i32()?;
+            added.push((component_id, component_value));
+        }
+
+        let removed_length = read.get_var_int()?;
+        if removed_length.0 < 0 || removed_length.0 > MAX_COMPONENTS {
+            return Err(ReadingError::Message("removed_length out of bounds".into()));
+        }
+        let mut removed = Vec::with_capacity(removed_length.0 as usize);
+        for _ in 0..removed_length.0 {
+            let component_id = read.get_var_int()?;
+            removed.push(component_id);
+        }
+
+        Ok(Self { added, removed })
+    }
+
+    pub fn write(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        write.put_var_int(&VarInt::from(self.added.len() as i32))?;
+        for (id, val) in &self.added {
+            write.put_var_int(id)?;
+            write.put_i32(*val)?;
+        }
+        write.put_var_int(&VarInt::from(self.removed.len() as i32))?;
+        for id in &self.removed {
+            write.put_var_int(id)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ItemStackHash {
     item_id: VarInt,
@@ -353,7 +356,39 @@ pub struct ItemStackHash {
     components: ItemComponentHash,
 }
 
+#[derive(Debug, Clone)]
+pub struct OptionalItemStackHash(pub Option<ItemStackHash>);
+
 impl OptionalItemStackHash {
+    pub fn read(read: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let is_some = read.get_bool()?;
+        if is_some {
+            let item_id = read.get_var_int()?;
+            let count = read.get_var_int()?;
+            let components = ItemComponentHash::read(read)?;
+
+            Ok(Self(Some(ItemStackHash {
+                item_id,
+                count,
+                components,
+            })))
+        } else {
+            Ok(Self(None))
+        }
+    }
+
+    pub fn write(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        if let Some(hash) = &self.0 {
+            write.put_bool(true)?;
+            write.put_var_int(&hash.item_id)?;
+            write.put_var_int(&hash.count)?;
+            hash.components.write(write)?;
+        } else {
+            write.put_bool(false)?;
+        }
+        Ok(())
+    }
+
     #[must_use]
     pub fn hash_equals(&self, other: &ItemStack) -> bool {
         if let Some(hash) = &self.0 {
@@ -404,134 +439,30 @@ impl OptionalItemStackHash {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct OptionalItemStackHash(pub Option<ItemStackHash>);
-
-impl<'de> Deserialize<'de> for OptionalItemStackHash {
-    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de> de::Visitor<'de> for Visitor {
-            type Value = OptionalItemStackHash;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a valid Slot encoded in a byte sequence")
-            }
-
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                let is_some = seq
-                    .next_element::<bool>()?
-                    .ok_or(de::Error::custom("No is some bool!"))?;
-                if is_some {
-                    let item_id = seq
-                        .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No item id VarInt!"))?;
-                    let count = seq
-                        .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No item count VarInt!"))?;
-
-                    let hashed_components = seq
-                        .next_element::<ItemComponentHash>()?
-                        .ok_or(de::Error::custom("No item component hash!"))?;
-
-                    let item_stack_hash = ItemStackHash {
-                        item_id,
-                        count,
-                        components: hashed_components,
-                    };
-                    Ok(OptionalItemStackHash(Some(item_stack_hash)))
-                } else {
-                    Ok(OptionalItemStackHash(None))
-                }
-            }
-        }
-
-        deserializer.deserialize_seq(Visitor)
-    }
-}
-
-impl<'de> Deserialize<'de> for ItemComponentHash {
-    fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de> de::Visitor<'de> for Visitor {
-            type Value = ItemComponentHash;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a valid Slot encoded in a byte sequence")
-            }
-
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                const MAX_COMPONENTS: i32 = 256;
-
-                let mut added = Vec::new();
-                let mut removed = Vec::new();
-
-                let added_length = seq
-                    .next_element::<VarInt>()?
-                    .ok_or(de::Error::custom("No added length VarInt!"))?;
-                if added_length.0 < 0 || added_length.0 > MAX_COMPONENTS {
-                    return Err(de::Error::custom("added_length out of bounds"));
-                }
-                for _ in 0..added_length.0 {
-                    let component_id = seq
-                        .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No component id VarInt!"))?;
-                    let component_value = seq
-                        .next_element::<i32>()?
-                        .ok_or(de::Error::custom("No component value i32!"))?;
-                    added.push((component_id, component_value));
-                }
-
-                let removed_length = seq
-                    .next_element::<VarInt>()?
-                    .ok_or(de::Error::custom("No removed length VarInt!"))?;
-                if removed_length.0 < 0 || removed_length.0 > MAX_COMPONENTS {
-                    return Err(de::Error::custom("removed_length out of bounds"));
-                }
-                for _ in 0..removed_length.0 {
-                    let component_id = seq
-                        .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No component id VarInt!"))?;
-                    removed.push(component_id);
-                }
-
-                Ok(ItemComponentHash { added, removed })
-            }
-        }
-
-        deserializer.deserialize_seq(Visitor)
-    }
-}
-
 pub struct ItemStackTemplateSerializer<'a>(pub Cow<'a, ItemStack>);
 
 impl ItemStackTemplateSerializer<'_> {
     pub fn write_with_version(
         &self,
-        write: impl std::io::Write,
+        write: &mut impl NetworkWriteExt,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let remapped_item_id = remap_item_id_for_version(self.0.item.id, *version);
-        let mut network_serializer = serializer::Serializer::new(write);
         serialize_any_item_stack_with_id(
             self.0.as_ref(),
             remapped_item_id,
             *version >= JavaMinecraftVersion::V_26_1,
-            &mut network_serializer,
+            write,
         )
+    }
+
+    pub fn write(&self, write: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        serialize_any_item_stack_with_id(self.0.as_ref(), self.0.item.id, true, write)
     }
 }
 
 impl From<ItemStack> for ItemStackTemplateSerializer<'_> {
     fn from(item: ItemStack) -> Self {
         ItemStackTemplateSerializer(Cow::Owned(item))
-    }
-}
-
-impl Serialize for ItemStackTemplateSerializer<'_> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serialize_any_item_stack_with_id(self.0.as_ref(), self.0.item.id, true, serializer)
     }
 }

@@ -4,11 +4,6 @@ use std::{
     ops::Deref,
 };
 
-use serde::{
-    Deserialize, Deserializer, Serialize, Serializer,
-    de::{self, SeqAccess, Visitor},
-};
-
 use crate::{
     WritingError,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
@@ -89,53 +84,6 @@ impl Deref for VarLong {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl Serialize for VarLong {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut value = self.0 as u64;
-        let mut buf = Vec::new();
-
-        while value > 0x7F {
-            buf.push(value as u8 | 0x80);
-            value >>= 7;
-        }
-
-        buf.push(value as u8);
-
-        serializer.serialize_bytes(&buf)
-    }
-}
-
-impl<'de> Deserialize<'de> for VarLong {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct VarLongVisitor;
-
-        impl<'de> Visitor<'de> for VarLongVisitor {
-            type Value = VarLong;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a valid VarInt encoded in a byte sequence")
-            }
-
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                let mut val = 0;
-                for i in 0..VarLong::MAX_SIZE.get() {
-                    if let Some(byte) = seq.next_element::<u8>()? {
-                        val |= (i64::from(byte) & 0b0111_1111) << (i * 7);
-                        if byte & 0b1000_0000 == 0 {
-                            return Ok(VarLong(val));
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                Err(de::Error::custom("VarInt was too large"))
-            }
-        }
-
-        deserializer.deserialize_seq(VarLongVisitor)
     }
 }
 

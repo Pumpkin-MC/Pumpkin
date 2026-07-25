@@ -1,16 +1,16 @@
 use pumpkin_data::packet::clientbound::PLAY_BLOCK_EVENT;
 use pumpkin_util::math::position::BlockPos;
 
-use pumpkin_macros::java_packet;
-use serde::Serialize;
-
+use crate::ClientPacket;
 use crate::VarInt;
+use crate::ser::NetworkWriteExt;
+use pumpkin_macros::java_packet;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Triggers a physical block animation or sound effect.
 ///
 /// This is used for simple block interactions that don't necessarily change
 /// NBT data, such as chests opening/closing, pistons extending, or note blocks playing.
-#[derive(Serialize)]
 #[java_packet(PLAY_BLOCK_EVENT)]
 pub struct CBlockEvent {
     /// The coordinates where the event occurs.
@@ -38,5 +38,19 @@ impl CBlockEvent {
             action_parameter,
             block_type,
         }
+    }
+}
+
+impl ClientPacket for CBlockEvent {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_block_pos(&self.location)?;
+        write.write_u8(self.action_id)?;
+        write.write_u8(self.action_parameter)?;
+        write.write_var_int(&self.block_type)?;
+        Ok(())
     }
 }

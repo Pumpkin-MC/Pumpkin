@@ -1,6 +1,5 @@
 use std::{
     io::{Error, Read, Write},
-    marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -15,10 +14,7 @@ use pumpkin_util::{
     version::JavaMinecraftVersion,
 };
 use ser::{ReadingError, WritingError};
-use serde::{
-    Deserialize, Deserializer, Serialize, Serializer,
-    de::{DeserializeSeed, SeqAccess, Visitor},
-};
+
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
@@ -76,110 +72,41 @@ impl TryFrom<VarInt> for ConnectionState {
     }
 }
 
-struct IdOrVisitor<T>(PhantomData<T>);
-impl<'de, T: Deserialize<'de>> Visitor<'de> for IdOrVisitor<T> {
-    type Value = IdOr<T>;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("A VarInt followed by a value if the VarInt is 0")
-    }
-
-    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-        enum IdOrStateDeserializer<T> {
-            Init,
-            Id(u16),
-            Value(T),
-        }
-
-        impl<'de, T: Deserialize<'de>> DeserializeSeed<'de> for &mut IdOrStateDeserializer<T> {
-            type Value = ();
-
-            fn deserialize<D: Deserializer<'de>>(
-                self,
-                deserializer: D,
-            ) -> Result<Self::Value, D::Error> {
-                match self {
-                    IdOrStateDeserializer::Init => {
-                        // Get the VarInt
-                        let id = VarInt::deserialize(deserializer)?;
-                        *self = IdOrStateDeserializer::<T>::Id(id.0.try_into().map_err(|_| {
-                            serde::de::Error::custom(format!(
-                                "{} cannot be mapped to a registry id",
-                                id.0
-                            ))
-                        })?);
-                    }
-                    IdOrStateDeserializer::Id(id) => {
-                        debug_assert_eq!(*id, 0);
-                        // Get the data
-                        let value = T::deserialize(deserializer)?;
-                        *self = IdOrStateDeserializer::Value(value);
-                    }
-                    IdOrStateDeserializer::Value(_) => {
-                        return Err(serde::de::Error::custom("Unreachable state reached"));
-                    }
-                }
-
-                Ok(())
-            }
-        }
-
-        let mut state = IdOrStateDeserializer::<T>::Init;
-
-        let _ = seq.next_element_seed(&mut state)?;
-
-        match state {
-            IdOrStateDeserializer::Id(id) => {
-                if id > 0 {
-                    return Ok(IdOr::Id(id - 1));
-                }
-            }
-            _ => return Err(serde::de::Error::custom("Unreachable state reached")),
-        }
-
-        let _ = seq.next_element_seed(&mut state)?;
-
-        match state {
-            IdOrStateDeserializer::Value(val) => Ok(IdOr::Value(val)),
-            _ => Err(serde::de::Error::custom("Unreachable state reached")),
-        }
-    }
-}
-
 #[derive(PartialEq, Eq, Clone)]
 pub enum IdOr<T> {
     Id(u16),
     Value(T),
 }
 
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for IdOr<T> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_seq(IdOrVisitor(PhantomData))
+impl<T> IdOr<T> {
+    pub fn read<R: ser::NetworkReadExt>(
+        read: &mut R,
+        read_value: impl FnOnce(&mut R) -> Result<T, ser::ReadingError>,
+    ) -> Result<Self, ser::ReadingError> {
+        let id = read.get_var_int()?.0;
+        if id == 0 {
+            Ok(Self::Value(read_value(read)?))
+        } else {
+            Ok(Self::Id((id - 1) as u16))
+        }
     }
-}
 
-#[expect(clippy::trait_duplication_in_bounds)]
-impl<T: Serialize> Serialize for IdOr<T> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    pub fn write<W: ser::NetworkWriteExt>(
+        &self,
+        write: &mut W,
+        write_value: impl FnOnce(&mut W, &T) -> Result<(), ser::WritingError>,
+    ) -> Result<(), ser::WritingError> {
         match self {
-            Self::Id(id) => VarInt::from(*id + 1).serialize(serializer),
+            Self::Id(id) => write.write_var_int(&((*id as i32) + 1).into()),
             Self::Value(value) => {
-                #[derive(Serialize)]
-                struct NetworkRepr<T: Serialize> {
-                    zero_id: VarInt,
-                    value: T,
-                }
-                NetworkRepr {
-                    zero_id: 0.into(),
-                    value,
-                }
-                .serialize(serializer)
+                write.write_var_int(&0.into())?;
+                write_value(write, value)
             }
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct SoundEvent {
     pub sound_name: ResourceLocation,
     pub range: Option<f32>,
@@ -326,8 +253,8 @@ pub trait ClientPacket: MultiVersionJavaPacket {
     ) -> Result<(), WritingError>;
 }
 
-pub trait ServerPacket: MultiVersionJavaPacket + Sized {
-    fn read(read: impl Read, version: &JavaMinecraftVersion) -> Result<Self, ReadingError>;
+pub trait ServerPacket<'a>: MultiVersionJavaPacket + Sized {
+    fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError>;
 }
 
 pub trait BClientPacket: Packet {
@@ -375,7 +302,8 @@ impl From<ReadingError> for PacketDecodeError {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StatusResponse {
     /// The version on which the server is running. (Optional)
     pub version: Option<Version>,
@@ -388,7 +316,7 @@ pub struct StatusResponse {
     /// Whether players are forced to use secure chat.
     pub enforce_secure_chat: bool,
 }
-#[derive(Serialize, Clone)]
+#[derive(Clone, serde::Serialize)]
 pub struct Version {
     /// The name of the version (e.g. 1.21.4)
     pub name: String,
@@ -396,7 +324,7 @@ pub struct Version {
     pub protocol: u32,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Clone, serde::Serialize)]
 pub struct Players {
     /// The maximum player count that the server allows.
     pub max: u32,
@@ -407,7 +335,7 @@ pub struct Players {
     pub sample: Vec<Sample>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Clone, serde::Serialize)]
 pub struct Sample {
     /// The player's name.
     pub name: String,
@@ -415,24 +343,46 @@ pub struct Sample {
     pub id: String,
 }
 
-// basically game profile
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Property {
     pub name: Box<str>,
-    // base 64
     pub value: Box<str>,
-    // base 64
     pub signature: Option<Box<str>>,
 }
 
-#[derive(Serialize)]
+impl Property {
+    pub fn read(read: &mut impl ser::NetworkReadExt) -> Result<Self, ser::ReadingError> {
+        Ok(Self {
+            name: read.get_str()?,
+            value: read.get_str()?,
+            signature: read.get_option(ser::NetworkReadExt::get_str)?,
+        })
+    }
+
+    pub fn write(&self, write: &mut impl ser::NetworkWriteExt) -> Result<(), ser::WritingError> {
+        write.write_string(&self.name)?;
+        write.write_string(&self.value)?;
+        write.write_option(&self.signature, |w, v| w.write_string(v))?;
+        Ok(())
+    }
+}
+
 pub struct KnownPack<'a> {
     pub namespace: &'a str,
     pub id: &'a str,
     pub version: &'a str,
 }
 
-#[derive(Serialize, Clone)]
+impl KnownPack<'_> {
+    pub fn write(&self, write: &mut impl ser::NetworkWriteExt) -> Result<(), ser::WritingError> {
+        write.write_string(self.namespace)?;
+        write.write_string(self.id)?;
+        write.write_string(self.version)?;
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
 pub enum NumberFormat {
     /// Show nothing.
     Blank,
@@ -440,6 +390,24 @@ pub enum NumberFormat {
     Styled(Style),
     /// The text to be used as a placeholder.
     Fixed(TextComponent),
+}
+
+impl NumberFormat {
+    pub fn write(&self, write: &mut impl ser::NetworkWriteExt) -> Result<(), ser::WritingError> {
+        match self {
+            Self::Blank => write.write_var_int(&0.into()),
+            Self::Styled(_style) => {
+                write.write_var_int(&1.into())?;
+                // TODO: Style write
+                Ok(())
+            }
+            Self::Fixed(text) => {
+                write.write_var_int(&2.into())?;
+                write.write_slice(&text.encode())?;
+                Ok(())
+            }
+        }
+    }
 }
 
 /// For the first 8 values set means relative value while unset means absolute
@@ -482,16 +450,6 @@ pub enum Label {
     TextComponent(Box<TextComponent>),
 }
 
-impl Serialize for Label {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            Self::BuiltIn(link_type) => link_type.serialize(serializer),
-            Self::TextComponent(component) => component.serialize(serializer),
-        }
-    }
-}
-
-#[derive(Serialize)]
 pub struct Link<'a> {
     pub is_built_in: bool,
     pub label: Label,
@@ -510,6 +468,21 @@ impl<'a> Link<'a> {
             url,
         }
     }
+
+    pub fn write(&self, write: &mut impl ser::NetworkWriteExt) -> Result<(), ser::WritingError> {
+        match &self.label {
+            Label::BuiltIn(link_type) => {
+                write.write_bool(true)?;
+                write.write_var_int(&(*link_type as i32).into())?;
+            }
+            Label::TextComponent(text_component) => {
+                write.write_bool(false)?;
+                write.write_slice(&text_component.encode())?;
+            }
+        }
+        write.write_string(self.url)?;
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -525,50 +498,4 @@ pub enum LinkType {
     Forums = 7,
     News = 8,
     Announcements = 9,
-}
-
-impl Serialize for LinkType {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        VarInt(*self as i32).serialize(serializer)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use serde::{Deserialize, Serialize};
-
-    use crate::{
-        IdOr, SoundEvent,
-        ser::{deserializer::Deserializer, serializer::Serializer},
-    };
-
-    #[test]
-    fn serde_id_or_id() -> Result<(), Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-
-        let id = IdOr::<SoundEvent>::Id(0);
-        id.serialize(&mut Serializer::new(&mut buf))?;
-
-        let deser_id = IdOr::<SoundEvent>::deserialize(&mut Deserializer::new(buf.as_slice()))?;
-
-        assert!(id == deser_id);
-        Ok(())
-    }
-
-    #[test]
-    fn serde_id_or_value() -> Result<(), Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        let event = SoundEvent {
-            sound_name: "test".to_string(),
-            range: Some(1.0),
-        };
-
-        let id = IdOr::<SoundEvent>::Value(event);
-        id.serialize(&mut Serializer::new(&mut buf))?;
-
-        let deser_id = IdOr::<SoundEvent>::deserialize(&mut Deserializer::new(buf.as_slice()))?;
-
-        assert!(id == deser_id);
-        Ok(())
-    }
 }

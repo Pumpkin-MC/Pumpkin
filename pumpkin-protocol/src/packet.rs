@@ -1,12 +1,10 @@
 use std::io::{Error, Read, Write};
 
 use pumpkin_util::version::JavaMinecraftVersion;
-use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
-    BClientPacket, BServerPacket, ClientPacket, ReadingError, ServerPacket, WritingError,
+    BClientPacket, BServerPacket,
     codec::var_int::VarIntType,
-    ser::{deserializer, serializer},
     serial::{PacketRead, PacketWrite},
 };
 
@@ -17,24 +15,6 @@ pub trait Packet {
 pub trait MultiVersionJavaPacket {
     #[must_use]
     fn to_id(version: JavaMinecraftVersion) -> i32;
-}
-
-impl<P: MultiVersionJavaPacket + Serialize> ClientPacket for P {
-    fn write_packet_data(
-        &self,
-        write: impl Write,
-        _version: &JavaMinecraftVersion,
-    ) -> Result<(), WritingError> {
-        let mut serializer = serializer::Serializer::new(write);
-        self.serialize(&mut serializer)
-    }
-}
-
-impl<P: MultiVersionJavaPacket + DeserializeOwned> ServerPacket for P {
-    fn read(read: impl Read, _version: &JavaMinecraftVersion) -> Result<P, ReadingError> {
-        let mut deserializer = deserializer::Deserializer::new(read);
-        P::deserialize(&mut deserializer)
-    }
 }
 
 impl<P: Packet + PacketWrite> BClientPacket for P {

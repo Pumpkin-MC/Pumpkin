@@ -14,13 +14,13 @@ pub struct SSetCreativeSlot {
     pub clicked_item: ItemStackSerializer<'static>,
 }
 
-impl ServerPacket for SSetCreativeSlot {
+impl<'a> ServerPacket<'a> for SSetCreativeSlot {
     fn read(
-        mut read: impl std::io::Read,
+        mut read: &mut &'a [u8],
         _version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
         let slot = read.get_i16_be()?;
-        let clicked_item = ItemStackSerializer::read_length_prefixed_optional(read)?;
+        let clicked_item = ItemStackSerializer::read_length_prefixed_optional(&mut read)?;
         Ok(Self { slot, clicked_item })
     }
 }

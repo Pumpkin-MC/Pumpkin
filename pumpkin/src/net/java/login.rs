@@ -288,7 +288,7 @@ impl JavaClient {
         Ok(profile)
     }
 
-    pub fn handle_login_cookie_response(&self, packet: &SLoginCookieResponse) {
+    pub fn handle_login_cookie_response(&self, packet: &SLoginCookieResponse<'_>) {
         // TODO: allow plugins to access this
         debug!(
             "Received cookie_response[login]: key: \"{}\", payload_length: \"{:?}\"",

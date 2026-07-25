@@ -1,15 +1,18 @@
+use crate::{
+    ServerPacket,
+    ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
+};
 use pumpkin_data::packet::serverbound::PLAY_SET_COMMAND_BLOCK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
-use serde::Deserialize;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::codec::var_int::VarInt;
 
-#[derive(Deserialize)]
 #[java_packet(PLAY_SET_COMMAND_BLOCK)]
-pub struct SSetCommandBlock {
+pub struct SSetCommandBlock<'a> {
     pub pos: BlockPos,
-    pub command: String,
+    pub command: &'a str,
     pub mode: VarInt,
 
     /// Operation mode flags
@@ -17,6 +20,17 @@ pub struct SSetCommandBlock {
     /// - 0x02: Is conditional
     /// - 0x04: Automatic
     pub flags: i8,
+}
+
+impl<'a> ServerPacket<'a> for SSetCommandBlock<'a> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        Ok(Self {
+            pos: BlockPos::from_i64(bytebuf.get_i64_be()?),
+            command: bytebuf.get_str_bounded_borrowed(32767)?,
+            mode: bytebuf.get_var_int()?,
+            flags: bytebuf.get_i8()?,
+        })
+    }
 }
 
 pub enum CommandBlockMode {

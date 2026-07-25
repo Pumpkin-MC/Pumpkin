@@ -54,7 +54,7 @@ use pumpkin_protocol::{
     codec::var_ulong::VarULong,
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
-        CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata,
+        CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata, MetadataSerializer,
     },
 };
 use pumpkin_util::math::vector3::Axis;
@@ -68,7 +68,6 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
 use std::pin::Pin;
 use std::sync::{
@@ -2788,7 +2787,7 @@ impl Entity {
             .play_sound(sound, SoundCategory::Neutral, &self.pos.load());
     }
 
-    pub fn send_meta_data<T: Serialize>(
+    pub fn send_meta_data<T: MetadataSerializer>(
         &self,
         meta: &[Metadata<T>],
         bedrock_meta: Option<&EntityMetadata>,

@@ -1,13 +1,15 @@
 use pumpkin_data::packet::clientbound::LOGIN_HELLO;
 use pumpkin_macros::java_packet;
-use serde::{Deserialize, Serialize};
+
+use crate::ClientPacket;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Sent by the server to initiate the encryption handshake.
 ///
 /// This packet provides the client with the server's public key and a
 /// verification token, allowing the client to generate a shared secret
 /// for secure communication.
-#[derive(Serialize, Deserialize)]
 #[java_packet(LOGIN_HELLO)]
 pub struct CEncryptionRequest<'a> {
     /// The server's ID string. In modern Minecraft, this is usually
@@ -37,5 +39,21 @@ impl<'a> CEncryptionRequest<'a> {
             verify_token,
             should_authenticate,
         }
+    }
+}
+
+impl ClientPacket for CEncryptionRequest<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_string(self.server_id)?;
+        write.write_var_int(&crate::VarInt(self.public_key.len() as i32))?;
+        write.write_all(self.public_key)?;
+        write.write_var_int(&crate::VarInt(self.verify_token.len() as i32))?;
+        write.write_all(self.verify_token)?;
+        write.write_bool(self.should_authenticate)?;
+        Ok(())
     }
 }

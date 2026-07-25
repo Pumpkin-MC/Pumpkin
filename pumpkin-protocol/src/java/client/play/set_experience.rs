@@ -1,10 +1,11 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_EXPERIENCE;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
 
+use crate::ClientPacket;
 use crate::VarInt;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
-#[derive(Serialize)]
 #[java_packet(PLAY_SET_EXPERIENCE)]
 pub struct CSetExperience {
     pub progress: f32,
@@ -20,5 +21,18 @@ impl CSetExperience {
             level,
             total_experience,
         }
+    }
+}
+
+impl ClientPacket for CSetExperience {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_f32(self.progress)?;
+        write.write_var_int(&self.level)?;
+        write.write_var_int(&self.total_experience)?;
+        Ok(())
     }
 }

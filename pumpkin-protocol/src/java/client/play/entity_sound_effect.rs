@@ -65,12 +65,15 @@ impl ClientPacket for CEntitySoundEffect {
             IdOr::Value(value) => IdOr::Value(value.clone()),
         };
 
-        write.write_serialize(&sound_event)?;
-        write.write_serialize(&self.sound_category)?;
-        write.write_serialize(&self.entity_id)?;
-        write.write_serialize(&self.volume)?;
-        write.write_serialize(&self.pitch)?;
-        write.write_serialize(&self.seed)
+        crate::IdOr::<crate::SoundEvent>::write(&sound_event, &mut write, |w, e| {
+            w.write_string(&e.sound_name)?;
+            w.write_option(&e.range, |w2, r| w2.write_f32(*r))
+        })?;
+        write.write_var_int(&self.sound_category)?;
+        write.write_var_int(&self.entity_id)?;
+        write.write_f32(self.volume)?;
+        write.write_f32(self.pitch)?;
+        write.write_i64(self.seed)
     }
 }
 

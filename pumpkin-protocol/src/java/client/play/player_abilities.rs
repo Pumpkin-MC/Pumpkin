@@ -1,13 +1,15 @@
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_ABILITIES;
 use pumpkin_macros::java_packet;
-use serde::Serialize;
+
+use crate::ClientPacket;
+use crate::ser::NetworkWriteExt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Updates the player's movement and interaction abilities.
 ///
 /// This packet informs the client about the player's state (flying, invulnerable)
 /// and sets the movement speeds. While the client applies these visuals,
 /// the server must still validate these states to prevent cheating.
-#[derive(Serialize)]
 #[java_packet(PLAY_PLAYER_ABILITIES)]
 pub struct CPlayerAbilities {
     /// A bitmask of player states.
@@ -32,5 +34,18 @@ impl CPlayerAbilities {
             flying_speed,
             field_of_view,
         }
+    }
+}
+
+impl ClientPacket for CPlayerAbilities {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_i8(self.flags)?;
+        write.write_f32_be(self.flying_speed)?;
+        write.write_f32_be(self.field_of_view)?;
+        Ok(())
     }
 }

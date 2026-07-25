@@ -1,16 +1,34 @@
+use crate::{
+    ServerPacket,
+    ser::{NetworkReadExt, ReadingError},
+};
 use pumpkin_data::packet::serverbound::PLAY_PLAYER_ACTION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
-#[derive(serde::Deserialize)]
 #[java_packet(PLAY_PLAYER_ACTION)]
 pub struct SPlayerAction {
     pub status: VarInt,
     pub position: BlockPos,
     pub face: u8,
     pub sequence: VarInt,
+}
+
+impl<'a> ServerPacket<'a> for SPlayerAction {
+    fn read(
+        bytebuf: &mut &'a [u8],
+        _protocol_version: &JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
+        Ok(Self {
+            status: bytebuf.get_var_int()?,
+            position: BlockPos::from_i64(bytebuf.get_i64_be()?),
+            face: bytebuf.get_u8()?,
+            sequence: bytebuf.get_var_int()?,
+        })
+    }
 }
 
 #[expect(clippy::doc_markdown)]

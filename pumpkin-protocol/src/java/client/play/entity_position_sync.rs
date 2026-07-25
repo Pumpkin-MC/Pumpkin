@@ -1,9 +1,10 @@
+use crate::ClientPacket;
+use crate::VarInt;
+use crate::ser::NetworkWriteExt;
 use pumpkin_data::packet::clientbound::PLAY_ENTITY_POSITION_SYNC;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
-use serde::Serialize;
-
-use crate::VarInt;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Updates the exact position, rotation, and velocity of an entity.
 ///
@@ -14,7 +15,6 @@ use crate::VarInt;
 /// Note: This packet must NOT be used for the player receiving the packet or
 /// any entity the player is currently riding.
 #[java_packet(PLAY_ENTITY_POSITION_SYNC)]
-#[derive(Serialize)]
 pub struct CEntityPositionSync {
     /// The Entity ID of the entity being moved.
     pub entity_id: VarInt,
@@ -49,5 +49,25 @@ impl CEntityPositionSync {
             pitch,
             on_ground,
         }
+    }
+}
+
+impl ClientPacket for CEntityPositionSync {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_var_int(&self.entity_id)?;
+        write.write_f64(self.position.x)?;
+        write.write_f64(self.position.y)?;
+        write.write_f64(self.position.z)?;
+        write.write_f64(self.delta.x)?;
+        write.write_f64(self.delta.y)?;
+        write.write_f64(self.delta.z)?;
+        write.write_f32(self.yaw)?;
+        write.write_f32(self.pitch)?;
+        write.write_bool(self.on_ground)?;
+        Ok(())
     }
 }

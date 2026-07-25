@@ -10,7 +10,7 @@ use pumpkin_world::{
 
 use crate::block::{
     BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
-    UseWithItemArgs, registry::BlockActionResult,
+    RandomTickArgs, UseWithItemArgs, registry::BlockActionResult,
 };
 
 #[pumpkin_block("minecraft:snow")]
@@ -79,6 +79,18 @@ impl BlockBehaviour for LayeredSnowBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if !can_place_at(args.world.as_ref(), args.position) {
+                args.world
+                    .break_block(args.position, None, BlockFlags::empty())
+                    .await;
+            }
+        })
+    }
+
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // Snow layers melt when lit by block light above level 11,
+            // e.g. from a nearby torch.
+            if args.world.get_block_light_level(args.position).unwrap_or(0) > 11 {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;

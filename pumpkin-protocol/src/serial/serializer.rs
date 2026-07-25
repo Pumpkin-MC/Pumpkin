@@ -124,6 +124,13 @@ impl PacketWrite for String {
     }
 }
 
+impl PacketWrite for str {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        VarUInt(self.len() as _).write(writer)?;
+        writer.write_all(self.as_bytes())
+    }
+}
+
 impl<T: PacketWrite> PacketWrite for Vector3<T> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.x.write(writer)?;

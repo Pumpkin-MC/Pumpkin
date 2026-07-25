@@ -91,6 +91,11 @@ async fn main() {
             "Release"
         }
     );
+    if cfg!(debug_assertions) {
+        warn!(
+            "Pumpkin is running an unoptimized debug build. Do not use this build for performance testing; run `cargo run --release` or use a release binary."
+        );
+    }
     print_support_links_and_warning();
 
     tokio::spawn(async {

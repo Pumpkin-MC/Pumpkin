@@ -4,11 +4,6 @@ use std::{
     ops::Deref,
 };
 
-use bytes::BufMut;
-use serde::{
-    Deserialize, Deserializer, Serialize, Serializer,
-    de::{SeqAccess, Visitor},
-};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{
@@ -150,53 +145,6 @@ impl Deref for VarInt {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl Serialize for VarInt {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut value = self.0 as u32;
-        let mut buf = Vec::new();
-
-        while value > 0x7F {
-            buf.put_u8(value as u8 | 0x80);
-            value >>= 7;
-        }
-
-        buf.put_u8(value as u8);
-
-        serializer.serialize_bytes(&buf)
-    }
-}
-
-impl<'de> Deserialize<'de> for VarInt {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct VarIntVisitor;
-
-        impl<'de> Visitor<'de> for VarIntVisitor {
-            type Value = VarInt;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a valid VarInt encoded in a byte sequence")
-            }
-
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                let mut val = 0;
-                for i in 0..VarInt::MAX_SIZE.get() {
-                    if let Some(byte) = seq.next_element::<u8>()? {
-                        val |= (i32::from(byte) & 0b0111_1111) << (i * 7);
-                        if byte & 0b1000_0000 == 0 {
-                            return Ok(VarInt(val));
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                Err(serde::de::Error::custom("VarInt was too large"))
-            }
-        }
-
-        deserializer.deserialize_seq(VarIntVisitor)
     }
 }
 
