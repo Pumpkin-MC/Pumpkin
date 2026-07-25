@@ -2067,19 +2067,14 @@ impl Entity {
             if offset > 1.0e-5 {
                 let (block, state) = self.world.load().get_block_and_state(&supporting_block);
 
-                // if let Some(props) = block.properties(state.id) {
-                //     let name = props.;
-
-                //     if offset <= 0.5
-                //         && (name == "OakFenceLikeProperties"
-                //             || name == "ResinBrickWallLikeProperties"
-                //             || name == "OakFenceGateLikeProperties"
-                //                 && OakFenceGateLikeProperties::from_state_id(state.id, &block)
-                //                     .r#open)
-                //     {
-                //         return (supporting_block, Some(block), Some(state));
-                //     }
-                // }
+                // Match Entity#getOnPos: fences are kept for the small movement
+                // offset, while walls and fence gates always use their support.
+                if (offset <= 0.5 && block.has_tag(&tag::Block::MINECRAFT_FENCES))
+                    || block.has_tag(&tag::Block::MINECRAFT_WALLS)
+                    || block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES)
+                {
+                    return (supporting_block, Some(block), Some(state));
+                }
 
                 supporting_block.0.y = (self.pos.load().y - offset).floor() as i32;
 
