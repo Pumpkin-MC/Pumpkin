@@ -83,6 +83,8 @@ pub struct JavaClient {
     pub version: AtomicCell<JavaMinecraftVersion>,
     /// The client's game profile information.
     pub gameprofile: Mutex<Option<GameProfile>>,
+    /// The nonce sent with the pending encryption request.
+    pub verify_token: Mutex<Option<[u8; 4]>>,
     /// The client's configuration settings, Optional
     pub config: Mutex<Option<PlayerConfig>>,
     /// The Address used to connect to the Server, Send in the Handshake
@@ -147,6 +149,7 @@ impl JavaClient {
         Self {
             id,
             gameprofile: Mutex::new(None),
+            verify_token: Mutex::new(None),
             config: Mutex::new(None),
             server_address: Mutex::new("".into()),
             address: Mutex::new(address),

@@ -117,6 +117,7 @@ impl JavaClient {
 
             if server.advanced_config.networking.java.encryption {
                 let verify_token: [u8; 4] = rand::random();
+                *self.verify_token.lock().await = Some(verify_token);
                 // Wait until we have sent the encryption packet to the client
                 self.send_packet_now(
                     &server
@@ -141,6 +142,18 @@ impl JavaClient {
         encryption_response: SEncryptionResponse,
     ) {
         debug!("Handling encryption");
+
+        let Ok(verify_token) = server.decrypt(&encryption_response.verify_token).await else {
+            self.kick(TextComponent::text("Failed to decrypt verify token"))
+                .await;
+            return;
+        };
+        let expected_verify_token = self.verify_token.lock().await.take();
+        if expected_verify_token.as_deref() != Some(verify_token.as_slice()) {
+            self.kick(TextComponent::text("Invalid verify token")).await;
+            return;
+        }
+
         let Ok(shared_secret) = server.decrypt(&encryption_response.shared_secret).await else {
             self.kick(TextComponent::text("Failed to decrypt shared secret"))
                 .await;
