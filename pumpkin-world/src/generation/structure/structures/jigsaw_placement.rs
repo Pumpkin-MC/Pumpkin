@@ -42,7 +42,8 @@ impl MaxDistance {
     pub const fn new(horizontal: i32) -> Self {
         Self {
             horizontal,
-            vertical: 384, // Default Y_SIZE (min_y to max_y)
+            // Vanilla's scalar constructor uses this value for both axes.
+            vertical: horizontal,
         }
     }
 }
@@ -681,6 +682,18 @@ fn can_attach(source: &JigsawBlock, target: &JigsawBlock, target_rotation: Rotat
     }
 
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MaxDistance;
+
+    #[test]
+    fn scalar_max_distance_bounds_both_axes() {
+        let distance = MaxDistance::new(116);
+        assert_eq!(distance.horizontal, 116);
+        assert_eq!(distance.vertical, 116);
+    }
 }
 
 const fn rotate_direction(
