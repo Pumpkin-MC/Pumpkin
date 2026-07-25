@@ -451,12 +451,20 @@ impl Slot for ResultSlot {
                 .await;
             for i in 0..self.inventory.size() {
                 let slot = self.inventory.get_stack(i).await;
-                let mut stack = slot.lock().await;
-                if !stack.is_empty() {
-                    stack.item_count -= 1;
+                let mut grid_stack = slot.lock().await;
+                if !grid_stack.is_empty() {
+                    // Saturating so empty/underflowed grid cannot wrap.
+                    grid_stack.item_count = grid_stack.item_count.saturating_sub(1);
+                    if grid_stack.item_count == 0 {
+                        *grid_stack = ItemStack::EMPTY.clone();
+                    }
                 }
             }
             self.mark_dirty().await;
+            // Re-derive the craft result from remaining ingredients. Without
+            // this, Bedrock craft-repetition loops keep reading a stale result
+            // and mint free stacks after the grid is empty (F-GAME-16).
+            self.refill_output().await;
         })
     }
     fn can_insert(&self, _stack: &ItemStack) -> BoxFuture<'_, bool> {

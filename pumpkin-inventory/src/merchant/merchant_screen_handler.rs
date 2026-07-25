@@ -10,7 +10,7 @@ use crate::{
         InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour,
         ScreenHandlerFuture, offer_or_drop_stack,
     },
-    slot::NormalSlot,
+    slot::{NormalSlot, TakeOnlySlot},
 };
 
 pub struct MerchantScreenHandler {
@@ -38,10 +38,10 @@ impl MerchantScreenHandler {
 
         inventory.on_open().await;
 
-        // Merchant specific slots: 2 input, 1 output
-        for i in 0..3 {
-            handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), i)));
-        }
+        // Merchant: 2 input slots + take-only output (PickupAll must not sweep output).
+        handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), 0)));
+        handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), 1)));
+        handler.add_slot(Arc::new(TakeOnlySlot::new(inventory.clone(), 2)));
 
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         handler.add_player_slots(&player_inventory);
@@ -178,13 +178,26 @@ impl ScreenHandler for MerchantScreenHandler {
         player: &'a dyn InventoryPlayer,
     ) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
+            // Taking from the take-only output: charge the trade before the
+            // generic click path removes the stack. PickupAll never reaches
+            // here for the output (can_insert=false skips it in the sweep).
             if slot_index == 2 {
-                // Special handling for taking from output slot
                 let result_slot = self.get_behaviour().slots[2].clone();
                 if result_slot.has_stack().await {
                     let result_stack = result_slot.get_cloned_stack().await;
                     if !result_stack.is_empty() {
-                        // Consume inputs
+                        if self.selected_offer >= self.offers.len() {
+                            self.send_content_updates().await;
+                            return;
+                        }
+                        {
+                            let offer = &self.offers[self.selected_offer];
+                            if offer.is_disabled || offer.uses >= offer.max_uses {
+                                self.send_content_updates().await;
+                                return;
+                            }
+                        }
+
                         let (count_a, count_b, offer_xp) = {
                             let offer = &mut self.offers[self.selected_offer];
                             offer.uses += 1;
@@ -212,7 +225,6 @@ impl ScreenHandler for MerchantScreenHandler {
                             self.get_behaviour().slots[1].mark_dirty().await;
                         }
 
-                        // Award XP
                         player.award_experience(offer_xp).await;
 
                         if let Some(on_trade) = &self.on_trade {

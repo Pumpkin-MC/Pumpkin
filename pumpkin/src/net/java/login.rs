@@ -157,6 +157,10 @@ impl JavaClient {
                         e => TextComponent::text(e.to_string()),
                     })
                     .await;
+                    // Drop the client-supplied profile so a racing LoginAck cannot
+                    // spawn as the victim identity (F-AUTH-01).
+                    *gameprofile = None;
+                    return;
                 }
             }
         }
@@ -226,6 +230,9 @@ impl JavaClient {
             uuid::Uuid::new_v4(),
         );
         self.send_packet_now(&packet).await;
+        // Marks identity accepted; required before LoginAck → Config.
+        self.login_finished
+            .store(true, std::sync::atomic::Ordering::Release);
     }
 
     async fn authenticate(
@@ -323,6 +330,20 @@ impl JavaClient {
 
     pub async fn handle_login_acknowledged(&self, server: &Server) {
         debug!("Handling login acknowledgement");
+        // Reject LoginAck unless finish_login completed (auth/offline/proxy).
+        // Without this, a crafted client stores a pre-auth profile and races
+        // into Config after a failed Mojang check (F-AUTH-01 residual).
+        if !self
+            .login_finished
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            self.kick(TextComponent::text("Login not complete")).await;
+            return;
+        }
+        if self.gameprofile.lock().await.is_none() {
+            self.kick(TextComponent::text("Missing game profile")).await;
+            return;
+        }
         self.connection_state.store(ConnectionState::Config);
         self.send_packet_now(&server.get_branding()).await;
 

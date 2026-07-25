@@ -107,6 +107,40 @@ impl LoadConfiguration for PumpkinConfig {
                 "When allow_chat_reports is enabled, java.online_mode must be enabled"
             );
         }
+
+        // Fail-closed: RCON with an empty/whitespace password is full console access.
+        if self.advanced.networking.rcon.enabled {
+            assert!(
+                !self.advanced.networking.rcon.password.trim().is_empty(),
+                "RCON is enabled but password is empty. Set networking.rcon.password to a non-empty value, or disable RCON."
+            );
+        }
+
+        // Fail-closed whenever the Velocity handler can run. The plugin-response
+        // path keys only on velocity.enabled (not proxy.enabled), so require a
+        // non-empty secret whenever velocity is enabled.
+        if self.advanced.networking.proxy.velocity.enabled {
+            assert!(
+                !self
+                    .advanced
+                    .networking
+                    .proxy
+                    .velocity
+                    .secret
+                    .trim()
+                    .is_empty(),
+                "Velocity is enabled but secret is empty. Set networking.proxy.velocity.secret to the proxy forwarding secret."
+            );
+        }
+
+        // BungeeCord has no shared secret — backends must not be reachable directly.
+        if self.advanced.networking.proxy.enabled
+            && self.advanced.networking.proxy.bungeecord.enabled
+        {
+            warn!(
+                "BungeeCord proxy mode is enabled. Anyone who can reach this server directly can spoof any UUID/name. Firewall the backend so only the proxy can connect."
+            );
+        }
     }
 }
 

@@ -10,7 +10,7 @@ use crate::{
         InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour,
         ScreenHandlerFuture, offer_or_drop_stack,
     },
-    slot::NormalSlot,
+    slot::{NormalSlot, TakeOnlySlot},
     window_property::{Anvil, WindowProperty},
 };
 
@@ -35,10 +35,10 @@ impl AnvilScreenHandler {
             repair_cost: 0,
         };
 
-        // Anvil specific slots: 2 input, 1 output
-        for i in 0..3 {
-            handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), i)));
-        }
+        // Anvil: 2 input slots + take-only output (PickupAll must not sweep output).
+        handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), 0)));
+        handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), 1)));
+        handler.add_slot(Arc::new(TakeOnlySlot::new(inventory.clone(), 2)));
 
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         handler.add_player_slots(&player_inventory);
@@ -186,8 +186,10 @@ impl ScreenHandler for AnvilScreenHandler {
         player: &'a dyn InventoryPlayer,
     ) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
+            // Charge rename/XP on take from take-only output. Combining is not
+            // implemented yet — only clear the base input so a sacrifice item
+            // is not voided on rename. PickupAll cannot sweep this slot.
             if slot_index == 2 {
-                // Taking from output slot
                 let result_slot = self.get_behaviour().slots[2].clone();
                 if result_slot.has_stack().await {
                     let result_stack = result_slot.get_cloned_stack().await;
@@ -195,18 +197,16 @@ impl ScreenHandler for AnvilScreenHandler {
                         if player.experience_level() >= self.repair_cost as i32
                             || player.is_creative()
                         {
-                            // Consume experience
                             if !player.is_creative() {
                                 player
                                     .add_experience_levels(-(self.repair_cost as i32))
                                     .await;
                             }
 
-                            // Consume inputs
+                            // Rename-only path consumes the base item in slot 0.
                             self.inventory.set_stack(0, ItemStack::EMPTY.clone()).await;
                             self.get_behaviour().slots[0].mark_dirty().await;
                         } else {
-                            // Cancel click
                             self.send_content_updates().await;
                             return;
                         }

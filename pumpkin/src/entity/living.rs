@@ -285,7 +285,11 @@ impl LivingEntity {
     }
 
     pub fn heal(&self, additional_health: f32) {
-        assert!(additional_health > 0.0);
+        // Guard against overflowed potion amplifiers producing non-positive/NaN amounts
+        // (previously assert! → panic hook → full server shutdown).
+        if !additional_health.is_finite() || additional_health <= 0.0 {
+            return;
+        }
         self.set_health(self.health.load() + additional_health);
     }
 
@@ -470,10 +474,13 @@ impl LivingEntity {
     pub async fn add_effect(&self, effect: Effect) {
         // Apply instant effects immediately before storing
         if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
-            let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
+            // amplifier is u8; shift beyond 31 is UB in debug / wraps in release → NaN/negative.
+            let shift = u32::from(effect.amplifier).min(30);
+            let heal_amount = 4.0 * ((1u32 << shift) as f32);
             self.heal(heal_amount);
         } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
-            let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
+            let shift = u32::from(effect.amplifier).min(30);
+            let damage_amount = 6.0 * ((1u32 << shift) as f32);
             if let Some(dyn_self) = self
                 .entity
                 .world

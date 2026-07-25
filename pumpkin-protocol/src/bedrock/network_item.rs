@@ -10,6 +10,22 @@ use crate::{
     serial::{PacketRead, PacketWrite},
 };
 
+/// Cap for Bedrock item user-data / extra-data wire buffers.
+/// Unbounded `VarUInt` lengths allocate multi-GiB vectors from a few packet bytes.
+const MAX_ITEM_USER_DATA_LEN: u32 = 256 * 1024;
+
+fn read_capped_bytes<R: Read>(buf: &mut R, len: u32) -> Result<Vec<u8>, Error> {
+    if len > MAX_ITEM_USER_DATA_LEN {
+        return Err(Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Item data length {len} exceeds limit {MAX_ITEM_USER_DATA_LEN}"),
+        ));
+    }
+    let mut data = vec![0u8; len as usize];
+    buf.read_exact(&mut data)?;
+    Ok(data)
+}
+
 #[derive(Default, Clone, Debug)]
 pub struct NetworkItemDescriptor {
     // I hate mojang
@@ -51,8 +67,7 @@ impl PacketRead for NetworkItemDescriptor {
         let block_runtime_id = VarInt::read(buf)?;
 
         let user_data_len = VarUInt::read(buf)?.0;
-        let mut user_data = vec![0u8; user_data_len as usize];
-        buf.read_exact(&mut user_data)?;
+        let user_data = read_capped_bytes(buf, user_data_len)?;
 
         let mut nbt_data = Nbt::default();
         let mut place_on_blocks = Vec::new();
@@ -247,8 +262,7 @@ impl PacketRead for ItemStackWrapper {
         let block_runtime_id = VarInt::read(buf)?;
 
         let user_data_len = VarUInt::read(buf)?.0;
-        let mut user_data = vec![0u8; user_data_len as usize];
-        buf.read_exact(&mut user_data)?;
+        let user_data = read_capped_bytes(buf, user_data_len)?;
 
         let mut nbt_data = Nbt::default();
         let mut place_on_blocks = Vec::new();
@@ -370,8 +384,7 @@ impl PacketRead for NetworkItemStackDescriptor {
         let block_runtime_id = VarUInt::read(buf)?;
 
         let extra_data_len = VarUInt::read(buf)?.0;
-        let mut extra_data = vec![0u8; extra_data_len as usize];
-        buf.read_exact(&mut extra_data)?;
+        let extra_data = read_capped_bytes(buf, extra_data_len)?;
 
         Ok(Self {
             id,
@@ -608,8 +621,7 @@ impl PacketRead for NetworkItemStack {
         let block_runtime_id = VarInt::read(buf)?;
 
         let extra_data_len = VarUInt::read(buf)?.0;
-        let mut extra_data = vec![0u8; extra_data_len as usize];
-        buf.read_exact(&mut extra_data)?;
+        let extra_data = read_capped_bytes(buf, extra_data_len)?;
 
         Ok(Self {
             id,
@@ -618,5 +630,27 @@ impl PacketRead for NetworkItemStack {
             block_runtime_id,
             extra_data,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn capped_bytes_accepts_small_payload() {
+        let data = [1u8, 2, 3];
+        let mut cur = Cursor::new(data.as_slice());
+        let out = read_capped_bytes(&mut cur, 3).expect("small payload ok");
+        assert_eq!(out, data);
+    }
+
+    #[test]
+    fn capped_bytes_rejects_oversize_length() {
+        let mut cur = Cursor::new([0u8; 0].as_slice());
+        let err = read_capped_bytes(&mut cur, MAX_ITEM_USER_DATA_LEN + 1)
+            .expect_err("oversize must fail before allocate");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 }
