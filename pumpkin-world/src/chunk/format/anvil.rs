@@ -246,14 +246,20 @@ impl AnvilChunkData {
 
     fn from_bytes(bytes: Bytes) -> Result<Self, ChunkReadingError> {
         let mut bytes = bytes;
-        // Minus one for the compression byte
-        let length = bytes.get_u32() as usize - 1;
+        if bytes.remaining() < 5 {
+            return Err(ChunkReadingError::ParsingError(
+                ChunkParsingError::ErrorDeserializingChunk(
+                    "Chunk stream header is truncated".to_string(),
+                ),
+            ));
+        }
 
-        if length > bytes.len() {
+        let stored_length = bytes.get_u32() as usize;
+        if stored_length == 0 || stored_length > bytes.remaining() {
             return Err(ChunkReadingError::ParsingError(
                 ChunkParsingError::ErrorDeserializingChunk(format!(
-                    "Chunk length is greater than available bytes ({} vs {})",
-                    length,
+                    "Chunk length is invalid or greater than available bytes ({} vs {})",
+                    stored_length,
                     bytes.len()
                 )),
             ));
@@ -266,7 +272,7 @@ impl AnvilChunkData {
         Ok(Self {
             compression,
             // If this has padding, we need to trim it
-            compressed_data: bytes.slice(..length),
+            compressed_data: bytes.slice(..stored_length - 1),
         })
     }
 
@@ -572,16 +578,35 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                 continue;
             }
 
+            if sector_offset < 2 {
+                return Err(ChunkReadingError::ParsingError(
+                    ChunkParsingError::ErrorDeserializingChunk(format!(
+                        "Chunk {i} starts in the region header at sector {sector_offset}"
+                    )),
+                ));
+            }
+
             if end_offset > last_offset {
                 last_offset = end_offset;
             }
 
             // We always subtract 2 for the first two sectors for the timestamp and location tables
             // that we walked earlier
-            let bytes_offset = (sector_offset - 2) * SECTOR_BYTES;
+            let bytes_offset = (sector_offset - 2)
+                .checked_mul(SECTOR_BYTES)
+                .ok_or_else(|| {
+                    ChunkReadingError::ParsingError(ChunkParsingError::ErrorDeserializingChunk(
+                        format!("Chunk {i} has an invalid sector offset"),
+                    ))
+                })?;
             let bytes_count = sector_count * SECTOR_BYTES;
+            let bytes_end = bytes_offset.checked_add(bytes_count).ok_or_else(|| {
+                ChunkReadingError::ParsingError(ChunkParsingError::ErrorDeserializingChunk(
+                    format!("Chunk {i} has an invalid sector range"),
+                ))
+            })?;
 
-            if bytes_offset + bytes_count > raw_file_bytes.len() {
+            if bytes_end > raw_file_bytes.len() {
                 return Err(ChunkReadingError::ParsingError(
                     ChunkParsingError::ErrorDeserializingChunk(format!(
                         "Not enough bytes available for the chunk {} ({} vs {})",
@@ -592,9 +617,8 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                 ));
             }
 
-            let serialized_data = AnvilChunkData::from_bytes(
-                raw_file_bytes.slice(bytes_offset..bytes_offset + bytes_count),
-            )?;
+            let serialized_data =
+                AnvilChunkData::from_bytes(raw_file_bytes.slice(bytes_offset..bytes_end))?;
 
             chunk_file.chunks_data[i] = Some(AnvilChunkMetadata {
                 serialized_data,

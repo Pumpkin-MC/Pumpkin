@@ -4,7 +4,7 @@ use std::{
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tracing::error;
+use tracing::{error, warn};
 
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
@@ -26,6 +26,50 @@ pub const LEVEL_DAT_FILE_NAME: &str = "level.dat";
 pub const LEVEL_DAT_BACKUP_FILE_NAME: &str = "level.dat_old";
 
 pub struct AnvilLevelInfo;
+
+fn read_level_dat(path: &Path) -> Result<LevelData, WorldInfoError> {
+    let world_info_file = File::open(path)?;
+    let mut buf = Vec::new();
+    GzDecoder::new(world_info_file).read_to_end(&mut buf)?;
+
+    check_file_data_version(&buf)?;
+    check_file_level_version(&buf)?;
+    let info = pumpkin_nbt::from_bytes::<LevelDat>(Cursor::new(buf))
+        .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
+
+    Ok(info.data)
+}
+
+fn write_level_dat(level: &LevelDat, level_folder: &Path) -> Result<(), WorldInfoError> {
+    let current_path = level_folder.join(LEVEL_DAT_FILE_NAME);
+    let backup_path = level_folder.join(LEVEL_DAT_BACKUP_FILE_NAME);
+    let temporary_path =
+        level_folder.join(format!("{LEVEL_DAT_FILE_NAME}.{}.tmp", std::process::id()));
+
+    let temporary_file = File::create(&temporary_path)?;
+    let mut compression_writer = GzEncoder::new(temporary_file, Compression::best());
+    pumpkin_nbt::to_bytes(level, &mut compression_writer)
+        .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
+    let temporary_file = compression_writer.finish()?;
+    temporary_file.sync_all()?;
+    drop(temporary_file);
+
+    if current_path.exists() {
+        if backup_path.exists() {
+            fs::remove_file(&backup_path)?;
+        }
+        fs::rename(&current_path, &backup_path)?;
+    }
+
+    if let Err(error) = fs::rename(&temporary_path, &current_path) {
+        if !current_path.exists() && backup_path.exists() {
+            let _ = fs::rename(&backup_path, &current_path);
+        }
+        return Err(error.into());
+    }
+
+    Ok(())
+}
 
 fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
     // Define a struct that only has the data version. This is necessary because if a user tries to
@@ -88,27 +132,39 @@ fn check_file_level_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
 impl WorldInfoReader for AnvilLevelInfo {
     fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError> {
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
+        let backup_path = level_folder.join(LEVEL_DAT_BACKUP_FILE_NAME);
 
-        let world_info_file = File::open(path)?;
-        let mut buf = Vec::new();
-        GzDecoder::new(world_info_file).read_to_end(&mut buf)?;
-
-        check_file_data_version(&buf)?;
-        check_file_level_version(&buf)?;
-        let mut info = pumpkin_nbt::from_bytes::<LevelDat>(Cursor::new(buf))
-            .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
+        let mut data = match read_level_dat(&path) {
+            Ok(data) => data,
+            Err(
+                error @ (WorldInfoError::UnsupportedDataVersion(_)
+                | WorldInfoError::UnsupportedLevelVersion(_)),
+            ) => return Err(error),
+            Err(primary_error) => match read_level_dat(&backup_path) {
+                Ok(data) => {
+                    warn!(
+                        error = %primary_error,
+                        current = %path.display(),
+                        backup = %backup_path.display(),
+                        "Failed to read level.dat; using level.dat_old"
+                    );
+                    data
+                }
+                Err(_) => return Err(primary_error),
+            },
+        };
 
         // game_rules.dat – prefer the new file; fall back to level.dat values
         if minecraft_data_dir(level_folder)
             .join("game_rules.dat")
             .exists()
         {
-            info.data.game_rules = read_game_rules(level_folder);
+            data.game_rules = read_game_rules(level_folder);
         }
 
         // world_gen_settings.dat
         if let Some(wgs) = read_world_gen_settings(level_folder) {
-            info.data.world_gen_settings = wgs;
+            data.world_gen_settings = wgs;
         }
 
         // world_clocks.dat – read the overworld day_time
@@ -118,7 +174,7 @@ impl WorldInfoReader for AnvilLevelInfo {
         {
             let clocks = read_world_clocks(level_folder);
             if let Some(overworld) = clocks.clocks.get("minecraft:overworld") {
-                info.data.day_time = overworld.total_ticks;
+                data.day_time = overworld.total_ticks;
             }
         }
 
@@ -128,12 +184,12 @@ impl WorldInfoReader for AnvilLevelInfo {
             .exists()
         {
             let weather = read_weather(level_folder);
-            info.data.clear_weather_time = weather.clear_weather_time;
+            data.clear_weather_time = weather.clear_weather_time;
         }
 
         // (wandering_trader.dat is not part of LevelData; stored separately when needed)
 
-        Ok(info.data)
+        Ok(data)
     }
 }
 
@@ -153,14 +209,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
         level_data.last_played = since_the_epoch.as_millis() as i64;
         let level = LevelDat { data: level_data };
 
-        // ── Write level.dat ───────────────────────────────────────────────────
-        let path = level_folder.join(LEVEL_DAT_FILE_NAME);
-        let world_info_file = File::create(path)?;
-
-        let mut compression_writer = GzEncoder::new(world_info_file, Compression::best());
-        pumpkin_nbt::to_bytes(&level, &mut compression_writer)
-            .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
-        compression_writer.finish()?;
+        write_level_dat(&level, level_folder)?;
 
         let data_version = info.data_version;
 
@@ -196,15 +245,13 @@ impl WorldInfoWriter for AnvilLevelInfo {
         // weather.dat
         let mut weather = read_weather(level_folder);
         weather.clear_weather_time = info.clear_weather_time;
-        weather.data_version = data_version;
-        if let Err(e) = write_weather(level_folder, &weather) {
+        if let Err(e) = write_weather(level_folder, &weather, data_version) {
             error!("Failed to write weather.dat: {e}");
         }
 
         // wandering_trader.dat (stub / load-save)
-        let mut wandering_trader = read_wandering_trader(level_folder);
-        wandering_trader.data_version = data_version;
-        if let Err(e) = write_wandering_trader(level_folder, &wandering_trader) {
+        let wandering_trader = read_wandering_trader(level_folder);
+        if let Err(e) = write_wandering_trader(level_folder, &wandering_trader, data_version) {
             error!("Failed to write wandering_trader.dat: {e}");
         }
 

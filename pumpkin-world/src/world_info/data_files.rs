@@ -19,6 +19,8 @@ use crate::world_info::{WorldGenSettings, WorldInfoError};
 pub struct DataFileRoot<T> {
     #[serde(rename = "data")]
     pub data: T,
+    #[serde(rename = "DataVersion", default)]
+    pub data_version: i32,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -33,8 +35,6 @@ pub struct WeatherData {
     pub thunder_time: i32,
     #[serde(rename = "clear_weather_time", default)]
     pub clear_weather_time: i32,
-    #[serde(rename = "DataVersion", default)]
-    pub data_version: i32,
 }
 
 impl Default for WeatherData {
@@ -45,7 +45,6 @@ impl Default for WeatherData {
             thundering: false,
             thunder_time: 0,
             clear_weather_time: -1,
-            data_version: 0,
         }
     }
 }
@@ -54,8 +53,6 @@ impl Default for WeatherData {
 pub struct WorldGenSettingsData {
     #[serde(flatten)]
     pub settings: WorldGenSettings,
-    #[serde(rename = "DataVersion", default)]
-    pub data_version: i32,
     #[serde(rename = "bonus_chest", default)]
     pub bonus_chest: bool,
     #[serde(rename = "generate_structures", default = "default_true")]
@@ -68,10 +65,9 @@ const fn default_true() -> bool {
 
 impl WorldGenSettingsData {
     #[must_use]
-    pub const fn new(settings: WorldGenSettings, data_version: i32) -> Self {
+    pub const fn new(settings: WorldGenSettings) -> Self {
         Self {
             settings,
-            data_version,
             bonus_chest: false,
             generate_structures: true,
         }
@@ -95,8 +91,6 @@ pub struct WanderingTraderData {
     pub spawn_delay: i32,
     #[serde(rename = "spawn_chance", default = "default_wandering_trader_chance")]
     pub spawn_chance: i32,
-    #[serde(rename = "DataVersion", default)]
-    pub data_version: i32,
 }
 
 const fn default_wandering_trader_delay() -> i32 {
@@ -111,7 +105,6 @@ impl Default for WanderingTraderData {
         Self {
             spawn_delay: default_wandering_trader_delay(),
             spawn_chance: default_wandering_trader_chance(),
-            data_version: 0,
         }
     }
 }
@@ -148,11 +141,18 @@ pub fn read_weather(level_folder: &Path) -> WeatherData {
     }
 }
 
-pub fn write_weather(level_folder: &Path, data: &WeatherData) -> Result<(), WorldInfoError> {
+pub fn write_weather(
+    level_folder: &Path,
+    data: &WeatherData,
+    data_version: i32,
+) -> Result<(), WorldInfoError> {
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("weather.dat");
     let file = File::create(&path)?;
-    let root = DataFileRoot { data: data.clone() };
+    let root = DataFileRoot {
+        data: data.clone(),
+        data_version,
+    };
     to_gzip_bytes(&root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
@@ -185,8 +185,8 @@ pub fn write_world_gen_settings(
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("world_gen_settings.dat");
     let file = File::create(&path)?;
-    let data = WorldGenSettingsData::new(settings.clone(), data_version);
-    let root = DataFileRoot { data };
+    let data = WorldGenSettingsData::new(settings.clone());
+    let root = DataFileRoot { data, data_version };
     to_gzip_bytes(&root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
@@ -201,10 +201,9 @@ pub fn game_rules_to_nbt(rules: &GameRuleRegistry, data_version: i32) -> NbtComp
             GameRuleValue::Int(i) => inner.put(&key, NbtTag::Int(*i as i32)),
         }
     }
-    inner.put_int("DataVersion", data_version);
-
     let mut root = NbtCompound::new();
     root.put_compound("data", inner);
+    root.put_int("DataVersion", data_version);
     root
 }
 
@@ -299,12 +298,9 @@ fn world_clocks_from_nbt(root: &NbtCompound) -> WorldClocksData {
         return result;
     };
 
-    result.data_version = inner.get_int("DataVersion").unwrap_or(0);
+    result.data_version = root.get_int("DataVersion").unwrap_or(0);
 
     for (key, tag) in &inner.child_tags {
-        if key.as_ref() == "DataVersion" {
-            continue;
-        }
         if let NbtTag::Compound(dim_compound) = tag {
             let total_ticks = dim_compound.get_long("total_ticks").unwrap_or(0);
             result
@@ -329,10 +325,9 @@ pub fn write_world_clocks(
         dim_compound.put_long("total_ticks", clock.total_ticks);
         inner.put_compound(dim_name, dim_compound);
     }
-    inner.put_int("DataVersion", clocks.data_version);
-
     let mut root = NbtCompound::new();
     root.put_compound("data", inner);
+    root.put_int("DataVersion", clocks.data_version);
 
     let file = File::create(&path)?;
 
@@ -363,11 +358,15 @@ pub fn read_wandering_trader(level_folder: &Path) -> WanderingTraderData {
 pub fn write_wandering_trader(
     level_folder: &Path,
     data: &WanderingTraderData,
+    data_version: i32,
 ) -> Result<(), WorldInfoError> {
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("wandering_trader.dat");
     let file = File::create(&path)?;
-    let root = DataFileRoot { data: data.clone() };
+    let root = DataFileRoot {
+        data: data.clone(),
+        data_version,
+    };
     to_gzip_bytes(&root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
@@ -383,10 +382,10 @@ pub fn write_custom_boss_events_stub(
         return Ok(());
     }
 
-    let mut inner = NbtCompound::new();
-    inner.put_int("DataVersion", data_version);
+    let inner = NbtCompound::new();
     let mut root = NbtCompound::new();
     root.put_compound("data", inner);
+    root.put_int("DataVersion", data_version);
 
     let file = File::create(&path)?;
 
@@ -406,9 +405,9 @@ pub fn write_scheduled_events_stub(
 
     let mut inner = NbtCompound::new();
     inner.put("events", NbtTag::List(vec![]));
-    inner.put_int("DataVersion", data_version);
     let mut root = NbtCompound::new();
     root.put_compound("data", inner);
+    root.put_int("DataVersion", data_version);
 
     let file = File::create(&path)?;
 
