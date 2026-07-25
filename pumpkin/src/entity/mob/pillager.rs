@@ -6,7 +6,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, bow_attack::BowAttackGoal,
         join_anger::JoinAngerGoal, look_around::RandomLookAroundGoal,
