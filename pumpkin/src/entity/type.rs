@@ -338,6 +338,28 @@ pub fn check_spawn_rules(
         return mob::MobEntity::check_any_light_monster_spawn_rules(world, pos);
     }
 
+    // Blaze and breeze spawn through `checkAnyLightMonsterSpawnRules`, while
+    // magma cubes only check that the difficulty is not peaceful. Applying the
+    // generic darkness rule here makes lit nether fortresses and trial chambers
+    // incorrectly sterile.
+    if id == EntityType::BLAZE.id || id == EntityType::BREEZE.id || id == EntityType::MAGMA_CUBE.id
+    {
+        return mob::MobEntity::check_any_light_monster_spawn_rules(world, pos);
+    }
+
+    // Vanilla Ghast.checkGhastSpawnRules: peaceful gate plus a 1-in-20 roll.
+    // Position obstruction is checked separately by the natural spawner.
+    if id == EntityType::GHAST.id {
+        return mob::MobEntity::check_any_light_monster_spawn_rules(world, pos)
+            && rand::random_range(0..20) == 0;
+    }
+
+    // Piglins and hoglins deliberately do not use the generic monster-light
+    // predicate. Their placement rule only rejects nether wart blocks.
+    if id == EntityType::PIGLIN.id || id == EntityType::HOGLIN.id {
+        return world.get_block(&pos.down()) != &Block::NETHER_WART_BLOCK;
+    }
+
     // --- Standard monster light rules (26.2 Monster.checkMonsterSpawnRules) ---
     if id == EntityType::BOGGED.id
         || id == EntityType::CAVE_SPIDER.id
@@ -362,12 +384,7 @@ pub fn check_spawn_rules(
         || id == EntityType::WARDEN.id
         || id == EntityType::DROWNED.id
         || id == EntityType::PHANTOM.id
-        || id == EntityType::BLAZE.id
-        || id == EntityType::GHAST.id
-        || id == EntityType::MAGMA_CUBE.id
         || id == EntityType::ZOGLIN.id
-        || id == EntityType::HOGLIN.id
-        || id == EntityType::PIGLIN.id
         || id == EntityType::PIGLIN_BRUTE.id
         || id == EntityType::GUARDIAN.id
         || id == EntityType::ELDER_GUARDIAN.id
