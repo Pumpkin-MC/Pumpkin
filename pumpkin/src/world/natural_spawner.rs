@@ -1,4 +1,4 @@
-use crate::entity::EntityBase;
+use crate::entity::{Entity, EntityBase};
 use crate::entity::r#type::{check_spawn_rules, from_type};
 use crate::world::World;
 use pumpkin_data::biome::Spawner;
@@ -42,6 +42,23 @@ pub const SPAWN_DISTANCE_BLOCK_SQ: f64 = 128.0 * 128.0;
 #[must_use]
 fn is_redstone_conductor(state: &BlockState) -> bool {
     state.is_solid_block()
+}
+
+/// Vanilla `Mob.isPersistenceRequired() || Mob.requiresCustomPersistence()`.
+///
+/// These locks must remain non-blocking: `SpawnState` is rebuilt before entity
+/// ticks, and a missed lock only makes a cap conservative for one tick.
+#[must_use]
+fn requires_custom_persistence(entity: &Entity) -> bool {
+    entity.custom_name.load().is_some()
+        || entity
+            .leashed_to
+            .try_lock()
+            .is_ok_and(|holder| holder.is_some())
+        || entity
+            .vehicle
+            .try_lock()
+            .is_ok_and(|vehicle| vehicle.is_some())
 }
 
 /// Vanilla `ChunkMap.anyPlayerCloseEnoughForSpawningInternal`.
@@ -388,8 +405,10 @@ impl SpawnState {
         for entity in entities.load().iter() {
             let entity = entity.get_entity();
             let entity_type = entity.entity_type;
-            if !entity_type.mob || entity_type.category == &MobCategory::MISC {
-                // TODO (mob.isPersistenceRequired() || mob.requiresCustomPersistence())
+            if !entity_type.mob
+                || entity_type.category == &MobCategory::MISC
+                || requires_custom_persistence(entity)
+            {
                 continue;
             }
             let chunk_pos = entity.chunk_pos.load();
