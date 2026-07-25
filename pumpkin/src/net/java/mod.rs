@@ -275,13 +275,6 @@ impl JavaClient {
                     self.last_keep_alive_time.store(Instant::now());
                     let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
                     self.enqueue_packet(&packet).await;
-
-                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
-                    if seq != -1 {
-                        self
-                            .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
-                            .await;
-                    }
                 }
 
                 // INCOMING PACKETS
@@ -310,6 +303,17 @@ impl JavaClient {
                                 e
                             );
                         }
+                    }
+
+                    // Flush the block-change acknowledgement as soon as the packet that set the
+                    // sequence is handled, rather than deferring to the keep-alive tick. Otherwise
+                    // an interaction that changes no block (e.g. bone meal on a mature crop, or a
+                    // failed growth roll) leaves the client's prediction pending until the next
+                    // keep-alive, blocking further interaction with that block.
+                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
+                    if seq != -1 {
+                        self.send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
+                            .await;
                     }
                 }
             }
