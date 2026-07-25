@@ -1,5 +1,5 @@
-use crate::entity::{Entity, EntityBase};
 use crate::entity::r#type::{check_spawn_rules, from_type};
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 use pumpkin_data::biome::Spawner;
 use pumpkin_data::chunk::Biome;
@@ -20,6 +20,7 @@ use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::{RandomImpl, legacy_rand::LegacyRand};
 use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
 use pumpkin_world::generation::proto_chunk::GenerationCache;
 use rand::{Rng, RngExt, rng};
@@ -628,14 +629,18 @@ pub fn spawn_mobs_for_chunk_generation(
     let xo = chunk_x << 4;
     let zo = chunk_z << 4;
 
-    let mut random = rng();
-    while random.random::<f32>() < biome.creature_spawn_probability {
-        let Some(spawner_data) = choose_weighted_spawner(creatures, &mut random) else {
+    // Vanilla `WorldgenRandom#setDecorationSeed` uses the legacy RNG, seeded
+    // from the world seed and chunk block origin. Generation must not depend on
+    // process-local entropy or chunk scheduling order.
+    let mut random =
+        LegacyRand::from_seed(LegacyRand::get_population_seed(world.level.seed.0, xo, zo));
+    while random.next_f32() < biome.creature_spawn_probability {
+        let Some(spawner_data) = choose_weighted_spawner_with_random_impl(creatures, &mut random)
+        else {
             continue;
         };
 
-        let count = spawner_data.min_count
-            + random.random_range(0..(1 + spawner_data.max_count - spawner_data.min_count).max(1));
+        let count = random.next_inbetween_i32(spawner_data.min_count, spawner_data.max_count);
         let entity_type = EntityType::from_name(
             spawner_data
                 .r#type
@@ -644,8 +649,8 @@ pub fn spawn_mobs_for_chunk_generation(
         )
         .unwrap();
 
-        let mut x = xo + random.random_range(0..16);
-        let mut z = zo + random.random_range(0..16);
+        let mut x = xo + random.next_bounded_i32(16);
+        let mut z = zo + random.next_bounded_i32(16);
         let start_x = x;
         let start_z = z;
 
@@ -670,19 +675,19 @@ pub fn spawn_mobs_for_chunk_generation(
                     let entity = from_type(entity_type, spawn_pos_f64, world, Uuid::new_v4());
                     entity
                         .get_entity()
-                        .set_rotation(random.random::<f32>() * 360., 0.);
+                        .set_rotation(random.next_f32() * 360., 0.);
                     world.spawn_entity_non_save(&entity);
                     success = true;
                 }
 
                 // Random jitter for the next mob in the group
-                x += random.random_range(0..5) - random.random_range(0..5);
-                z += random.random_range(0..5) - random.random_range(0..5);
+                x += random.next_bounded_i32(5) - random.next_bounded_i32(5);
+                z += random.next_bounded_i32(5) - random.next_bounded_i32(5);
 
                 // Vanilla retries the jitter from the group's origin until it lands in chunk.
                 while x < xo || x >= xo + 16 || z < zo || z >= zo + 16 {
-                    x = start_x + random.random_range(0..5) - random.random_range(0..5);
-                    z = start_z + random.random_range(0..5) - random.random_range(0..5);
+                    x = start_x + random.next_bounded_i32(5) - random.next_bounded_i32(5);
+                    z = start_z + random.next_bounded_i32(5) - random.next_bounded_i32(5);
                 }
             }
         }
@@ -996,6 +1001,14 @@ fn choose_weighted_spawner<'a, R: Rng + ?Sized>(
 ) -> Option<&'a Spawner> {
     let total = total_spawner_weight(spawners)?;
     select_weighted_spawner(spawners, random.random_range(0..total))
+}
+
+fn choose_weighted_spawner_with_random_impl<'a, R: RandomImpl>(
+    spawners: &'a [Spawner],
+    random: &mut R,
+) -> Option<&'a Spawner> {
+    let total = i32::try_from(total_spawner_weight(spawners)?).ok()?;
+    select_weighted_spawner(spawners, random.next_bounded_i32(total) as u64)
 }
 
 pub fn is_valid_spawn_position_for_type(
