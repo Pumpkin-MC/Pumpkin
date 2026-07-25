@@ -81,7 +81,9 @@ impl BlockBehaviour for NetherPortalBlock {
                 return;
             }
 
-            tracing::info!(
+            // Fires for every portal block the entity touches, every tick it stands in
+            // one - far too hot for info level.
+            tracing::trace!(
                 "Nether portal collision at {:?}, targeting world {:?}",
                 args.position,
                 target_world.dimension.minecraft_name

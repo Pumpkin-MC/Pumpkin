@@ -205,6 +205,13 @@ impl Chunk {
     }
 
     fn build_level_sections(proto_chunk: &ProtoChunk, dimension: &Dimension) -> ChunkSections {
+        // The proto chunk must be allocated with the dimension's full storage height,
+        // otherwise the reads below run past the end of its block/biome buffers.
+        debug_assert_eq!(
+            proto_chunk.height() as i32,
+            dimension.height,
+            "proto chunk height does not match the dimension height"
+        );
         let total_sections = dimension.height as usize / BlockPalette::SIZE;
         let biome_min_y = biome_coords::from_block(dimension.min_y);
         let block_sections = (0..total_sections)

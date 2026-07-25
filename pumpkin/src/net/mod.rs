@@ -157,6 +157,15 @@ impl ClientPlatform {
         }
     }
 
+    /// Confirms the client's locally predicted block changes. Must run every tick,
+    /// otherwise the client keeps rendering blocks it predicted but the server rejected
+    /// or replaced (ghost blocks).
+    pub async fn ack_block_changes(&self) {
+        if let Self::Java(java) = self {
+            java.ack_block_changes().await;
+        }
+    }
+
     pub fn java_version(&self) -> JavaMinecraftVersion {
         match self {
             Self::Java(java) => java.version.load(),

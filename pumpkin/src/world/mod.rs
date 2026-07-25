@@ -1037,6 +1037,51 @@ impl World {
             .insert(position, block_state_id);
     }
 
+    /// Sets many block states without neighbor updates, registering all client updates
+    /// under a single lock so a tick cannot flush a partial fill (e.g. Nether portals).
+    pub async fn set_block_states_force_batch(
+        self: &Arc<Self>,
+        positions: &[BlockPos],
+        block_state_id: BlockStateId,
+    ) {
+        let mut changed = Vec::with_capacity(positions.len());
+        for position in positions {
+            let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+            let replaced = self
+                .level
+                .read_chunk_sync(&chunk_coordinate, |chunk| {
+                    let replaced = chunk.set_block_absolute_y(
+                        relative.x as usize,
+                        relative.y,
+                        relative.z as usize,
+                        block_state_id,
+                    );
+                    if replaced != block_state_id && !chunk.is_dirty() {
+                        chunk.mark_dirty(true);
+                    }
+                    replaced
+                })
+                .unwrap_or(Block::AIR.default_state.id);
+
+            if replaced != block_state_id {
+                changed.push(*position);
+            }
+        }
+
+        {
+            let mut unsent = self.unsent_block_changes.lock().await;
+            for position in &changed {
+                unsent.insert(*position, block_state_id);
+            }
+        }
+
+        for position in &changed {
+            self.level
+                .light_engine
+                .update_lighting_at(&self.level, *position);
+        }
+    }
+
     pub async fn flush_block_updates(&self) {
         let mut block_state_updates_by_chunk_section: HashMap<
             Vector3<i32>,
@@ -3302,6 +3347,7 @@ impl World {
         };
 
         // Get respawn position and dimension
+        let had_respawn_point = player.respawn_point.lock().await.is_some();
         let (position, yaw, pitch, respawn_dimension) =
             if let Some(respawn) = player.calculate_respawn_point().await {
                 (
@@ -3311,18 +3357,26 @@ impl World {
                     respawn.dimension,
                 )
             } else {
-                // No valid respawn point - send notification and use world spawn
-                player
-                    .client
-                    .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
-                    .await;
+                // Invalid/missing bed or anchor — notify only if one was set.
+                if had_respawn_point {
+                    player
+                        .client
+                        .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
+                        .await;
+                }
+
+                // Vanilla always falls back to the Overworld world spawn.
+                let overworld = self.server.upgrade().map_or_else(
+                    || self.clone(),
+                    |server| server.get_world_from_dimension(&Dimension::OVERWORLD),
+                );
 
                 // FIXME: This spawn position calculation is incorrect. Should use vanilla's
                 // proper spawn position calculation (see #1381). The y-level calculation
                 // needs to account for spawn radius and find a safe spawn position.
                 let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
-                self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-                let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
+                overworld.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
+                let top = overworld.get_top_block(Vector2::new(spawn_x, spawn_z));
 
                 (
                     Vector3::new(
@@ -3332,7 +3386,7 @@ impl World {
                     ),
                     spawn_yaw,
                     spawn_pitch,
-                    self.dimension.clone(),
+                    overworld.dimension.clone(),
                 )
             };
 

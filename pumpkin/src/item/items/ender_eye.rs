@@ -8,6 +8,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
 use crate::world::portal::end::EndPortal;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -21,6 +22,8 @@ use pumpkin_world::generation::generator::structure_finder::find_nearest_structu
 use pumpkin_world::world::BlockFlags;
 
 use crate::entity::player::Player;
+
+type EndPortalFrameProperties = pumpkin_data::block_properties::EndPortalFrameLikeProperties;
 
 pub struct EnderEyeItem;
 
@@ -48,25 +51,19 @@ impl ItemBehaviour for EnderEyeItem {
 
             let world = player.world();
             let state_id = world.get_block_state_id(&location);
+            let mut props = EndPortalFrameProperties::from_state_id(state_id, block);
 
             // Skip if the frame already holds an eye.
-            let props_raw = block.properties(state_id).unwrap().to_props();
-            if props_raw.iter().any(|(k, v)| *k == "eye" && *v == "true") {
+            if props.eye {
                 return;
             }
 
-            // Build new state with eye=true.
-            let props: Vec<(&str, &str)> = props_raw
-                .iter()
-                .map(|(k, v)| if *k == "eye" { (*k, "true") } else { (*k, *v) })
-                .collect();
-
-            let new_state_id = block.from_properties(&props).to_state_id(block);
+            props.eye = true;
+            let new_state_id = props.to_state_id(block);
             world
                 .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_LISTENERS)
                 .await;
-            // Consume one item.
-            item.decrement(1);
+            item.decrement_unless_creative(player.gamemode.load(), 1);
             world.sync_world_event(WorldEvent::EndPortalFrameFill, location, 0);
 
             // Try to complete the portal.
@@ -128,7 +125,12 @@ impl ItemBehaviour for EnderEyeItem {
             );
 
             player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::LaunchedEyeOfEnder).await;
-            player.inventory.held_item().lock().await.decrement(1);
+            player
+                .inventory
+                .held_item()
+                .lock()
+                .await
+                .decrement_unless_creative(player.gamemode.load(), 1);
         })
     }
 
