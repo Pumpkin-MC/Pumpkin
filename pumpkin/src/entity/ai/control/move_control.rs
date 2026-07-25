@@ -112,9 +112,16 @@ impl MoveControlTrait for MoveControl {
             let attr = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
             living_entity.set_speed(self.speed_modifier * attr);
 
-            if entity.on_ground.load(Ordering::Relaxed) {
+            // Vanilla JumpControl consumes the jump request in the same AI tick.
+            // Keep the move controller in JUMPING for its speed handling, but do
+            // not leave LivingEntity.jumping set for the whole arc.
+            living_entity.jumping.store(false, Ordering::SeqCst);
+
+            if entity.on_ground.load(Ordering::Relaxed)
+                || entity.touching_water.load(Ordering::Relaxed)
+                || entity.touching_lava.load(Ordering::Relaxed)
+            {
                 self.operation = Operation::Wait;
-                living_entity.jumping.store(false, Ordering::SeqCst);
             }
         } else {
             // Vanilla clears forward input while idle. Active navigation dispatches a
