@@ -30,11 +30,15 @@ pub mod swords;
 pub mod trident;
 pub mod wind_charge;
 
+pub mod lead;
+
 use crate::item::items::armor_stand::ArmorStandItem;
 use crate::item::items::boat::BoatItem;
 use crate::item::items::bundle::BundleItem;
 use crate::item::items::end_crystal::EndCrystalItem;
+use crate::item::items::lead::LeadItem;
 use crate::item::items::map::MapItem;
+
 use crate::item::items::minecart::MinecartItem;
 use crate::item::items::name_tag::NameTagItem;
 use crate::item::items::spawn_egg::SpawnEggItem;
@@ -108,6 +112,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(SplashPotionItem);
     manager.register(LingeringPotionItem);
     manager.register(BundleItem);
+    manager.register(LeadItem);
 
     Arc::new(manager)
 }

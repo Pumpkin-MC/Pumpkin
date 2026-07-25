@@ -2126,15 +2126,14 @@ impl Player {
         progress.clamp(0.0, 1.0)
     }
 
-    pub async fn fire_packet_sent<P: 'static + Send + Sync + std::any::Any + Clone>(
+    pub async fn fire_packet_sent<P: Send + Sync + std::any::Any>(
         self: &Arc<Self>,
-        packet: &P,
+        packet: P,
         packet_id: i32,
         payload: Bytes,
     ) -> bool {
         if let Some(server) = self.world().server.upgrade() {
-            let event =
-                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet.clone()));
+            let event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
             let event = server.plugin_manager.fire(event).await;
             return event.cancelled;
         }

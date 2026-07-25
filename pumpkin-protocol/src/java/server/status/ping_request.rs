@@ -1,6 +1,6 @@
 use crate::{
     ServerPacket,
-    ser::{NetworkReadExt, ReadingError},
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
 };
 use pumpkin_data::packet::serverbound::STATUS_PING_REQUEST;
 use pumpkin_macros::java_packet;
@@ -23,5 +23,16 @@ impl<'a> ServerPacket<'a> for SStatusPingRequest {
         Ok(Self {
             payload: bytebuf.get_i64_be()?,
         })
+    }
+}
+
+impl crate::ClientPacket for SStatusPingRequest {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        write.write_i64_be(self.payload)?;
+        Ok(())
     }
 }

@@ -389,6 +389,45 @@ impl MobEntity {
         let entity = &self.living_entity.entity;
         entity.set_on_fire_for(8.0);
     }
+
+    pub async fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        let entity = &self.living_entity.entity;
+
+        // If already leashed to player, right-clicking unleashes the mob
+        let currently_leashed = {
+            let guard = entity.leashed_to.lock().await;
+            guard.is_some()
+        };
+
+        if currently_leashed {
+            entity.unleash().await;
+            let lead_item =
+                pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
+            entity
+                .world
+                .load()
+                .drop_stack(&entity.block_pos.load(), lead_item)
+                .await;
+            return true;
+        }
+
+        // If holding a lead, leash the mob to the player
+        if item_stack.item.registry_key == "lead"
+            || item_stack.item.registry_key == "minecraft:lead"
+        {
+            let diff = entity.pos.load() - player.get_entity().pos.load();
+            let dist_sq = diff.length_squared();
+            if dist_sq <= Entity::LEASH_SNAP_DISTANCE * Entity::LEASH_SNAP_DISTANCE {
+                entity.leash_to(player.clone() as Arc<dyn EntityBase>).await;
+                if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                    item_stack.decrement(1);
+                }
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 pub trait Mob: EntityBase + Send + Sync {
@@ -479,10 +518,10 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_interact<'a>(
         &'a self,
-        _player: &'a Arc<Player>,
-        _item_stack: &'a mut ItemStack,
+        player: &'a Arc<Player>,
+        item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async { false })
+        Box::pin(async move { self.get_mob_entity().mob_interact(player, item_stack).await })
     }
 
     fn mob_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
@@ -554,6 +593,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
+            mob_entity.living_entity.entity.tick_leash().await;
             mob_entity.tick_sun_burn().await;
 
             if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
@@ -561,7 +601,19 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             }
 
             if mob_entity.love_ticks.load(Relaxed) > 0 {
-                mob_entity.love_ticks.fetch_sub(1, Relaxed);
+                let ticks = mob_entity.love_ticks.fetch_sub(1, Relaxed);
+                if ticks % 10 == 0 {
+                    let entity = &mob_entity.living_entity.entity;
+                    let pos = entity.pos.load();
+                    let world = entity.world.load();
+                    world.spawn_particle(
+                        pos + Vector3::new(0.0, f64::from(entity.height()) + 0.5, 0.0),
+                        Vector3::new(0.5, 0.5, 0.5),
+                        1.0,
+                        1,
+                        pumpkin_data::particle::Particle::Heart,
+                    );
+                }
             }
 
             self.mob_tick(caller).await;

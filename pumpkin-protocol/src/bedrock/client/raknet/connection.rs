@@ -3,6 +3,9 @@ use std::net::SocketAddr;
 use pumpkin_macros::packet;
 
 use crate::{bedrock::RAKNET_MAGIC, serial::PacketWrite};
+/// Sent in response to a `ConnectedPing` (`0x00`) to calculate round-trip latency and synchronize time across an established connection.
+///
+/// Ref: <https://minecraft.wiki/w/RakNet#Connected_Pong>
 #[derive(PacketWrite)]
 #[packet(0x03)]
 pub struct CConnectedPong {
@@ -18,6 +21,9 @@ impl CConnectedPong {
     }
 }
 
+/// Sent by the server to accept an incoming `ConnectionRequest` (`0x09`), confirming connection parameters and system addresses.
+///
+/// Ref: <https://minecraft.wiki/w/RakNet#Connection_Request_Accepted>
 #[derive(PacketWrite)]
 #[packet(0x10)]
 pub struct CConnectionRequestAccepted {
@@ -47,6 +53,9 @@ impl CConnectionRequestAccepted {
     }
 }
 
+/// Sent by the server when a client attempts to connect while already being connected.
+///
+/// Ref: <https://minecraft.wiki/w/RakNet#Already_Connected>
 #[derive(PacketWrite)]
 #[packet(0x12)]
 pub struct CAlreadyConnected {
@@ -64,6 +73,9 @@ impl CAlreadyConnected {
     }
 }
 
+/// Sent by the server when it has reached its maximum connection capacity.
+///
+/// Ref: <https://minecraft.wiki/w/RakNet#No_Free_Incoming_Connections>
 #[derive(PacketWrite)]
 #[packet(0x14)]
 pub struct CNoFreeIncomingConnections {
@@ -81,6 +93,9 @@ impl CNoFreeIncomingConnections {
     }
 }
 
+/// Sent by the server when a client attempts to connect from a banned IP address or identifier.
+///
+/// Ref: <https://minecraft.wiki/w/RakNet#Connection_Banned>
 #[derive(PacketWrite)]
 #[packet(0x17)]
 pub struct CConnectionBanned {
@@ -98,6 +113,9 @@ impl CConnectionBanned {
     }
 }
 
+/// Sent by the server when a client attempts to connect again too quickly after disconnecting.
+///
+/// Ref: <https://minecraft.wiki/w/RakNet#IP_Recently_Connected>
 #[derive(PacketWrite)]
 #[packet(0x1A)]
 pub struct CIpRecentlyConnected {
@@ -115,6 +133,9 @@ impl CIpRecentlyConnected {
     }
 }
 
+/// Sent by the server to initiate graceful termination of the connection session.
+///
+/// Ref: <https://minecraft.wiki/w/RakNet#Disconnection_Notification>
 #[derive(PacketWrite)]
 #[packet(0x15)]
 pub struct CDisconnect;

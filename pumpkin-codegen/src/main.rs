@@ -75,8 +75,6 @@ pub fn main() {
 
     fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
 
-    wit::main();
-
     let mut build_functions: Vec<(BuilderFn, &str)> = vec![
         (advancement::build, "advancement.rs"),
         (bedrock_creative::build, "bedrock_creative.rs"),
@@ -146,6 +144,7 @@ pub fn main() {
     // e.g. `cargo run -- chest_loot` only regenerates chest_loot.rs.
     let filters: Vec<String> = std::env::args().skip(1).collect();
     let build_functions: Vec<_> = if filters.is_empty() {
+        wit::main();
         build_functions
     } else {
         build_functions

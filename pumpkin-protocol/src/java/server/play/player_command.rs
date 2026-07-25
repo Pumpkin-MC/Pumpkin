@@ -15,6 +15,7 @@ pub struct SPlayerCommand {
     pub jump_boost: VarInt,
 }
 
+#[derive(PartialEq, Eq, Debug)]
 pub enum Action {
     // <=1.21.5
     StartSneaking,

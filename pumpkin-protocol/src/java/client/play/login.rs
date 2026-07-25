@@ -81,18 +81,36 @@ impl ClientPacket for CLogin<'_> {
     ) -> Result<(), WritingError> {
         write.write_i32_be(self.entity_id)?;
         write.write_bool(self.is_hardcore)?;
-        write.write_list(self.dimension_names, |write, dim| write.write_string(dim))?;
-        write.write_var_int(&self.max_players)?;
-        write.write_var_int(&self.view_distance)?;
-        write.write_var_int(&self.simulated_distance)?;
-        write.write_bool(self.reduced_debug_info)?;
-        write.write_bool(self.enabled_respawn_screen)?;
-        write.write_bool(self.limited_crafting)?;
+        if version >= &JavaMinecraftVersion::V_1_16 {
+            write.write_list(self.dimension_names, |write, dim| write.write_string(dim))?;
+        }
+        if version >= &JavaMinecraftVersion::V_1_16 {
+            write.write_var_int(&self.max_players)?;
+        } else {
+            write.write_u8(self.max_players.0 as u8)?;
+        }
+        if version >= &JavaMinecraftVersion::V_1_14 {
+            write.write_var_int(&self.view_distance)?;
+        }
+        if version >= &JavaMinecraftVersion::V_1_18 {
+            write.write_var_int(&self.simulated_distance)?;
+        }
+        if version >= &JavaMinecraftVersion::V_1_8 {
+            write.write_bool(self.reduced_debug_info)?;
+        }
+        if version >= &JavaMinecraftVersion::V_1_15 {
+            write.write_bool(self.enabled_respawn_screen)?;
+        }
+        if version >= &JavaMinecraftVersion::V_1_19_3 {
+            write.write_bool(self.limited_crafting)?;
+        }
         self.spawn_data.write_packet_data(&mut write, version)?;
         if version >= &JavaMinecraftVersion::V_26_2 {
             write.write_bool(self.online_mode)?;
         }
-        write.write_bool(self.enforce_secure_chat)?;
+        if version >= &JavaMinecraftVersion::V_1_19_1 {
+            write.write_bool(self.enforce_secure_chat)?;
+        }
         Ok(())
     }
 }
