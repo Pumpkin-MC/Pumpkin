@@ -131,6 +131,9 @@ impl JigsawPlacement {
             if let Some(sampler) = &mut context.height_sampler {
                 sampler
                     .estimate_height(center_x, center_z)
+                    // The estimator returns the highest occupied terrain Y;
+                    // JigsawPlacement uses ChunkGenerator#getFirstFreeHeight.
+                    .saturating_add(1)
                     .max(context.sea_level)
             } else {
                 adjusted_position.0.y
@@ -316,10 +319,12 @@ impl JigsawPlacement {
                                     if source_jigsaw_base_height == i32::MIN {
                                         source_jigsaw_base_height =
                                             if let Some(sampler) = &mut context.height_sampler {
-                                                let height = sampler.estimate_height(
-                                                    source_jigsaw_pos.0.x,
-                                                    source_jigsaw_pos.0.z,
-                                                );
+                                                let height = sampler
+                                                    .estimate_height(
+                                                        source_jigsaw_pos.0.x,
+                                                        source_jigsaw_pos.0.z,
+                                                    )
+                                                    .saturating_add(1);
                                                 if project_start_to_heightmap {
                                                     height.max(context.sea_level)
                                                 } else {
@@ -466,10 +471,12 @@ impl JigsawPlacement {
                                             source_jigsaw_base_height = if let Some(sampler) =
                                                 &mut context.height_sampler
                                             {
-                                                let height = sampler.estimate_height(
-                                                    source_jigsaw_pos.0.x,
-                                                    source_jigsaw_pos.0.z,
-                                                );
+                                                let height = sampler
+                                                    .estimate_height(
+                                                        source_jigsaw_pos.0.x,
+                                                        source_jigsaw_pos.0.z,
+                                                    )
+                                                    .saturating_add(1);
                                                 if project_start_to_heightmap {
                                                     height.max(context.sea_level)
                                                 } else {
