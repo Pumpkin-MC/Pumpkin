@@ -76,11 +76,22 @@ impl PolarBearEntity {
                     .with_follow_distance_multiplier(0.5),
                 ),
             );
-            // NeutralMob anger TODO
+            let polar_bear = Arc::downgrade(&mob_arc);
             target_selector.add_goal(
                 4,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true),
+                Box::new(ActiveTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    &EntityType::FOX,
+                    10,
+                    true,
+                    false,
+                    Some(move |_, _| {
+                        let polar_bear = polar_bear.clone();
+                        async move { polar_bear.upgrade().is_some_and(|bear| !bear.is_baby()) }
+                    }),
+                )),
             );
+            // NeutralMob anger TODO
         };
 
         mob_arc
@@ -88,14 +99,7 @@ impl PolarBearEntity {
 
     fn has_nearby_cub(&self, world: &crate::world::World) -> bool {
         let position = self.mob_entity.living_entity.entity.pos.load();
-        if self
-            .mob_entity
-            .living_entity
-            .entity
-            .age
-            .load(Ordering::Relaxed)
-            < 0
-        {
+        if self.is_baby() {
             return false;
         }
 
@@ -111,6 +115,15 @@ impl PolarBearEntity {
                         entity.age.load(Ordering::Relaxed),
                     )
             })
+    }
+
+    fn is_baby(&self) -> bool {
+        self.mob_entity
+            .living_entity
+            .entity
+            .age
+            .load(Ordering::Relaxed)
+            < 0
     }
 }
 
