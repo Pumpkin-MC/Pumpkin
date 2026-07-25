@@ -217,7 +217,7 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         Self: Send + Sync,
     {
         Box::pin(async move {
-            if args.moved || Block::from_state_id(args.old_state_id) == args.block {
+            if args.moved {
                 return;
             }
             RedstoneGateBlock::update_target(
