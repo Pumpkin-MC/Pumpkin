@@ -2,7 +2,10 @@ use std::sync::atomic::Ordering;
 use std::{pin::Pin, sync::Arc};
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{
+    Block, BlockDirection, BlockState,
+    block_properties::BlockProperties,
+};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
@@ -232,6 +235,29 @@ fn write_piston_fields(entity: &PistonBlockEntity, nbt: &mut NbtCompound) {
         BLOCK_STATE_ID,
         i32::from(entity.pushed_block_state.id.as_u16()),
     );
+    write_block_state(entity.pushed_block_state, nbt);
+}
+
+/// Writes the vanilla block-state codec payload used by piston block-entity updates.
+///
+/// The client renders a moving piston from `blockState`; the native palette id is
+/// useful for Pumpkin saves but is unknown to an unmodified Java client.
+fn write_block_state(state: &BlockState, nbt: &mut NbtCompound) {
+    let block = Block::from_state_id(state.id);
+    let mut block_state = NbtCompound::new();
+    block_state.put_string("Name", format!("minecraft:{}", block.name));
+
+    if let Some(properties) = block.properties(state.id) {
+        let mut state_properties = NbtCompound::new();
+        for (name, value) in properties.to_props() {
+            state_properties.put_string(name, value.to_string());
+        }
+        if !state_properties.is_empty() {
+            block_state.put_compound("Properties", state_properties);
+        }
+    }
+
+    nbt.put_compound("blockState", block_state);
 }
 
 fn read_pushed_block_state(nbt: &NbtCompound) -> &'static BlockState {
