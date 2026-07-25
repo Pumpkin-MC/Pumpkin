@@ -68,7 +68,7 @@ impl BlockBehaviour for TallPlantBlock {
             }
 
             let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_block_pos);
-            if Self::ids().contains(&other_block.id) {
+            if other_block.id == args.block.id {
                 let other_props =
                     TallSeagrassLikeProperties::from_state_id(other_state_id, other_block);
                 let opposite_half = match tall_plant_props.half {
@@ -86,6 +86,9 @@ impl BlockBehaviour for TallPlantBlock {
         Box::pin(async move {
             let mut tall_plant_props =
                 TallSeagrassLikeProperties::from_state_id(args.state_id, args.block);
+            if tall_plant_props.half != DoubleBlockHalf::Lower {
+                return;
+            }
             tall_plant_props.half = DoubleBlockHalf::Upper;
             args.world
                 .set_block_state(
@@ -107,7 +110,7 @@ impl BlockBehaviour for TallPlantBlock {
                 DoubleBlockHalf::Lower => args.position.up(),
             };
             let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_block_pos);
-            if Self::ids().contains(&other_block.id) {
+            if other_block.id == args.block.id {
                 let other_props =
                     TallSeagrassLikeProperties::from_state_id(other_state_id, other_block);
                 let opposite_half = match tall_plant_props.half {
