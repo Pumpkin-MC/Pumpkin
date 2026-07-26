@@ -31,6 +31,12 @@ impl VindicatorEntity {
         };
 
         {
+            // Vanilla Vindicator.finalizeSpawn: getNavigation().setCanOpenDoors(true).
+            let mut navigator = mob_arc.mob_entity.navigator.lock().unwrap();
+            navigator.set_can_open_doors(true);
+        }
+
+        {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             // Vanilla 26.2 Vindicator.registerGoals

@@ -29,9 +29,9 @@ use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase, NBTStorage,
     ai::goal::{
-        avoid_entity::AvoidEntityGoal, escape_danger::EscapeDangerGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        avoid_entity::AvoidEntityGoal, door_interact::OpenDoorGoal,
+        escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -98,6 +98,12 @@ impl VillagerEntity {
         };
 
         {
+            // Vanilla Villager constructor: getNavigation().setCanOpenDoors(true).
+            let mut navigator = mob_arc.mob_entity.navigator.lock().unwrap();
+            navigator.set_can_open_doors(true);
+        }
+
+        {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
@@ -150,6 +156,10 @@ impl VillagerEntity {
                 1,
                 Box::new(AvoidEntityGoal::new(&EntityType::VEX, 12.0, 0.5, 0.5)),
             );
+
+            // Vanilla villagers open doors and close them behind themselves
+            // (brain InteractWithDoor; OpenDoorGoal is the goal-based stand-in).
+            goal_selector.add_goal(2, Box::new(OpenDoorGoal::new(true)));
 
             // Basic movement and looking (Vanilla uses 0.5 speed)
             goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(0.5)));

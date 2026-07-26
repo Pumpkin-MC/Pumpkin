@@ -2,6 +2,7 @@ use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
 
+use crate::entity::ai::goal::door_interact::OpenDoorGoal;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
@@ -29,10 +30,18 @@ impl PiglinBruteEntity {
         };
 
         {
+            // Vanilla AbstractPiglin.applyOpenDoorsAbility.
+            let mut navigator = mob_arc.mob_entity.navigator.lock().unwrap();
+            navigator.set_can_open_doors(true);
+        }
+
+        {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Brain InteractWithDoor stand-in: open doors on the way through.
+            goal_selector.add_goal(2, Box::new(OpenDoorGoal::new(false)));
             // Vanilla: brutes do NOT flee zombified piglins (unlike regular piglins).
             goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.6)));
