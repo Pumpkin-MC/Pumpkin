@@ -25,10 +25,14 @@ pub struct SClickSlot {
 impl<'a> ServerPacket<'a> for SClickSlot {
     fn read(
         mut bytebuf: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
         let sync_id = bytebuf.get_var_int()?;
-        let revision = bytebuf.get_var_int()?;
+        let revision = if version >= &JavaMinecraftVersion::V_1_17_1 {
+            bytebuf.get_var_int()?
+        } else {
+            VarInt(i32::from(bytebuf.get_i16_be()?))
+        };
         let slot = bytebuf.get_i16_be()?;
         let button = bytebuf.get_i8()?;
         let mode = SlotActionType::read(&mut bytebuf)?;

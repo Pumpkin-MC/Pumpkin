@@ -780,7 +780,6 @@ impl JavaClient {
         debug!("Handling login group for id");
         let mut payload = &packet.payload[..];
         let version = self.version.load();
-
         match packet.id {
             id if id == SLoginStart::to_id(version) => {
                 self.handle_login_start(server, SLoginStart::read(&mut payload, &version)?)

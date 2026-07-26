@@ -203,7 +203,7 @@ impl Mob for CreeperEntity {
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             if item_stack.item.id != Item::FLINT_AND_STEEL.id {
-                return false;
+                return self.mob_entity.mob_interact(player, item_stack).await;
             }
 
             let entity = &self.mob_entity.living_entity.entity;

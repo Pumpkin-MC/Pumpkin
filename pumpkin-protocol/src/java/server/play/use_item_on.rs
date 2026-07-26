@@ -21,19 +21,31 @@ pub struct SUseItemOn {
 }
 
 impl<'a> ServerPacket<'a> for SUseItemOn {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let hand = bytebuf.get_var_int()?;
+        let position = BlockPos::from_i64(bytebuf.get_i64_be()?);
+        let face = bytebuf.get_var_int()?;
+        let cursor_pos = Vector3::new(
+            bytebuf.get_f32_be()?,
+            bytebuf.get_f32_be()?,
+            bytebuf.get_f32_be()?,
+        );
+        let inside_block = bytebuf.get_bool()?;
+        let is_against_world_border = if version >= &JavaMinecraftVersion::V_1_21_5 {
+            bytebuf.get_bool()?
+        } else {
+            false
+        };
+        let sequence = bytebuf.get_var_int()?;
+
         Ok(Self {
-            hand: bytebuf.get_var_int()?,
-            position: BlockPos::from_i64(bytebuf.get_i64_be()?),
-            face: bytebuf.get_var_int()?,
-            cursor_pos: Vector3::new(
-                bytebuf.get_f32_be()?,
-                bytebuf.get_f32_be()?,
-                bytebuf.get_f32_be()?,
-            ),
-            inside_block: bytebuf.get_bool()?,
-            is_against_world_border: bytebuf.get_bool()?,
-            sequence: bytebuf.get_var_int()?,
+            hand,
+            position,
+            face,
+            cursor_pos,
+            inside_block,
+            is_against_world_border,
+            sequence,
         })
     }
 }

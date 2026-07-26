@@ -771,7 +771,7 @@ pub fn deserialize_java_serverbound_packet(
             use pumpkin_protocol::ServerPacket;
             let p = <pumpkin_protocol::java::server::config::SKnownPacks as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;
             Some(ServerboundPacket::ConfigSKnownPacks(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ConfigSKnownPacks {
-                known_pack_count: p.known_pack_count.0.try_into().unwrap(),
+                known_pack_count: p.known_packs.len().try_into().unwrap(),
             }))
         }
         id if id == pumpkin_protocol::java::server::config::SConfigResourcePack::to_id(version) => {

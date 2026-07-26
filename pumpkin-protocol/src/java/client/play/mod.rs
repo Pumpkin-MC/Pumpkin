@@ -182,7 +182,10 @@ pub use set_container_content::*;
 pub use set_container_property::*;
 pub use set_container_slot::*;
 pub use set_cursor_slot::*;
+mod set_entity_link;
+pub use set_entity_link::*;
 pub use set_equipment::*;
+
 pub use set_experience::*;
 pub use set_health::*;
 pub use set_held_item::*;

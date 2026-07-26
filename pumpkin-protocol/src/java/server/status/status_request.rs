@@ -18,3 +18,13 @@ impl<'a> ServerPacket<'a> for SStatusRequest {
         Ok(Self)
     }
 }
+
+impl crate::ClientPacket for SStatusRequest {
+    fn write_packet_data(
+        &self,
+        _write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        Ok(())
+    }
+}

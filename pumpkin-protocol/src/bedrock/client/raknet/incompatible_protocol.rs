@@ -1,6 +1,9 @@
 use crate::{bedrock::RAKNET_MAGIC, serial::PacketWrite};
 use pumpkin_macros::packet;
 
+/// Sent by the server when the client's `RakNet` protocol version does not match the server's expected protocol version (`11`).
+///
+/// Ref: <https://minecraft.wiki/w/RakNet#Incompatible_Protocol_Version>
 #[derive(PacketWrite)]
 #[packet(0x19)]
 pub struct CIncompatibleProtocolVersion {

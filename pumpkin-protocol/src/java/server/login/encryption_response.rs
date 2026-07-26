@@ -25,6 +25,21 @@ impl<'a> ServerPacket<'a> for SEncryptionResponse {
     }
 }
 
+impl crate::ClientPacket for SEncryptionResponse {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&crate::VarInt(self.shared_secret.len() as i32))?;
+        write.write_all(&self.shared_secret)?;
+        write.write_var_int(&crate::VarInt(self.verify_token.len() as i32))?;
+        write.write_all(&self.verify_token)?;
+        Ok(())
+    }
+}
+
 fn read_encryption_buffer(read: &mut impl NetworkReadExt) -> Result<Box<[u8]>, ReadingError> {
     let length = read.get_var_int()?.0 as usize;
     if length > 256 {

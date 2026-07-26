@@ -1,7 +1,4 @@
-use std::{
-    num::NonZeroU8,
-    sync::{Arc, atomic::Ordering},
-};
+use std::{num::NonZeroU8, sync::atomic::Ordering};
 
 use crate::{
     entity::player::ChatMode,
@@ -16,7 +13,7 @@ use pumpkin_data::{registry::Registry, translation};
 use pumpkin_protocol::{
     ConnectionState,
     java::{
-        client::config::{CFinishConfig, CRegistryData, CUpdateTags},
+        client::config::{CFeatureFlags, CFinishConfig, CRegistryData, CUpdateTags},
         server::config::{
             ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
             SConfigResourcePack, SKeepAlive, SKnownPacks, SPluginMessage,
@@ -156,24 +153,44 @@ impl JavaClient {
 
     pub async fn handle_known_packs(
         &self,
-        _config_acknowledged: SKnownPacks,
-        server: &Arc<Server>,
+        _config_acknowledged: SKnownPacks<'_>,
+        server: &Server,
     ) -> Option<PacketHandlerResult> {
         debug!("Handling known packs");
         // let mut tags_to_send = Vec::new();
         let version = self.version.load();
-        let registry = Registry::get_synced(version);
-        for registry in registry {
-            self.send_packet_now(&CRegistryData::new(
-                &registry.registry_id,
-                &registry.registry_entries,
-            ))
-            .await;
-            // if let Some(tag) = RegistryKey::from_string(&registry.registry_id.path)
-            //     && pumpkin_data::tag::get_registry_key_tags(self.version.load(), tag).is_some()
-            // {
-            //     tags_to_send.push(tag);
-            // }
+        if version >= JavaMinecraftVersion::V_1_20_2 {
+            self.send_packet_now(&CFeatureFlags::new(&["minecraft:vanilla".to_string()]))
+                .await;
+            let registry = Registry::get_synced(version);
+            let mut sent_dimension_type = false;
+            for reg in &registry {
+                if reg.registry_id == "minecraft:dimension_type" {
+                    sent_dimension_type = true;
+                }
+                self.send_packet_now(&CRegistryData::new(&reg.registry_id, &reg.registry_entries))
+                    .await;
+            }
+            if !sent_dimension_type {
+                let dims = [
+                    &pumpkin_data::dimension::Dimension::OVERWORLD,
+                    &pumpkin_data::dimension::Dimension::OVERWORLD_CAVES,
+                    &pumpkin_data::dimension::Dimension::THE_END,
+                    &pumpkin_data::dimension::Dimension::THE_NETHER,
+                ];
+                let dim_entries: Vec<pumpkin_data::registry::RegistryEntryData> = dims
+                    .iter()
+                    .map(|dim| pumpkin_data::registry::RegistryEntryData {
+                        entry_id: dim.minecraft_name.to_string(),
+                        data: Some(build_dimension_nbt(dim).into_boxed_slice()),
+                    })
+                    .collect();
+                self.send_packet_now(&CRegistryData::new(
+                    &"minecraft:dimension_type".to_string(),
+                    &dim_entries,
+                ))
+                .await;
+            }
         }
         //self.send_packet_now(&CUpdateTags::new(&tags_to_send)).await;
         let mut tags = vec![
@@ -244,7 +261,7 @@ impl JavaClient {
         }
     }
 
-    pub async fn handle_config_acknowledged(&self, server: &Arc<Server>) -> PacketHandlerResult {
+    pub async fn handle_config_acknowledged(&self, server: &Server) -> PacketHandlerResult {
         debug!("Handling config acknowledgement");
         self.connection_state.store(ConnectionState::Play);
 
@@ -260,4 +277,39 @@ impl JavaClient {
         let config = self.config.lock().await;
         PacketHandlerResult::ReadyToPlay(profile, config.clone().unwrap_or_default())
     }
+}
+
+fn build_dimension_nbt(dim: &pumpkin_data::dimension::Dimension) -> Vec<u8> {
+    let mut compound = pumpkin_nbt::compound::NbtCompound::new();
+    compound.put_float("ambient_light", dim.ambient_light);
+    compound.put_int("height", dim.height);
+    compound.put_int("logical_height", dim.logical_height);
+    compound.put_int("min_y", dim.min_y);
+    compound.put_string("infiniburn", dim.infiniburn.to_string());
+    compound.put_int(
+        "monster_spawn_block_light_limit",
+        dim.monster_spawn_block_light_limit as i32,
+    );
+    compound.put_double("coordinate_scale", dim.coordinate_scale);
+    compound.put_byte("has_skylight", i8::from(dim.has_skylight));
+    compound.put_byte("has_ceiling", i8::from(dim.has_ceiling));
+    compound.put_byte("ultrawarm", i8::from(dim.id == 3));
+    compound.put_byte("natural", i8::from(dim.id == 0 || dim.id == 1));
+    compound.put_byte("piglin_safe", i8::from(dim.id == 3));
+    compound.put_byte("respawn_anchor_works", i8::from(dim.id == 3));
+    compound.put_byte("bed_works", i8::from(dim.id == 0 || dim.id == 1));
+    compound.put_byte("has_raids", i8::from(dim.id == 0 || dim.id == 1));
+    compound.put_string("effects", dim.minecraft_name.to_string());
+
+    let mut monster_spawn = pumpkin_nbt::compound::NbtCompound::new();
+    monster_spawn.put_string("type", "minecraft:uniform".to_string());
+    let mut value = pumpkin_nbt::compound::NbtCompound::new();
+    value.put_int("min_inclusive", 0);
+    value.put_int("max_inclusive", 7);
+    monster_spawn.put_compound("value", value);
+    compound.put_compound("monster_spawn_light_level", monster_spawn);
+
+    let mut bytes = Vec::new();
+    let _ = pumpkin_nbt::serializer::to_bytes(&compound, &mut bytes);
+    bytes
 }

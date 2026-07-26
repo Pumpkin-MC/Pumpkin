@@ -85,15 +85,45 @@ impl DataComponentImpl for EnchantmentsImpl {
     default_impl!(Enchantments);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct CanPlaceOnImpl;
+/// An adventure-mode block predicate, kept as its raw NBT (a compound or list)
+/// since Pumpkin does not yet model block predicates.
+// TODO: replace `predicate` with a typed block predicate once block predicates are modelled.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CanPlaceOnImpl {
+    pub predicate: NbtTag,
+}
+impl CanPlaceOnImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            predicate: data.clone(),
+        })
+    }
+}
 impl DataComponentImpl for CanPlaceOnImpl {
+    fn write_data(&self) -> NbtTag {
+        self.predicate.clone()
+    }
     default_impl!(CanPlaceOn);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct CanBreakImpl;
+/// An adventure-mode block predicate, kept as its raw NBT (a compound or list)
+/// since Pumpkin does not yet model block predicates.
+// TODO: replace `predicate` with a typed block predicate once block predicates are modelled.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CanBreakImpl {
+    pub predicate: NbtTag,
+}
+impl CanBreakImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            predicate: data.clone(),
+        })
+    }
+}
 impl DataComponentImpl for CanBreakImpl {
+    fn write_data(&self) -> NbtTag {
+        self.predicate.clone()
+    }
     default_impl!(CanBreak);
 }
 
@@ -105,7 +135,15 @@ impl DataComponentImpl for RepairCostImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct IntangibleProjectileImpl;
+impl IntangibleProjectileImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for IntangibleProjectileImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(NbtCompound::new())
+    }
     default_impl!(IntangibleProjectile);
 }
 
@@ -505,7 +543,15 @@ impl DataComponentImpl for RepairableImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct GliderImpl;
+impl GliderImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for GliderImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(NbtCompound::new())
+    }
     default_impl!(Glider);
 }
 
@@ -601,9 +647,30 @@ impl DataComponentImpl for OminousBottleAmplifierImpl {
     default_impl!(OminousBottleAmplifier);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct TrimImpl;
+/// An armor trim's material and pattern, kept as their raw NBT (each a registry
+/// id or an inline definition) since Pumpkin does not yet model trim registries.
+// TODO: replace `material`/`pattern` with typed trim material/pattern once those registries are modelled.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TrimImpl {
+    pub material: NbtTag,
+    pub pattern: NbtTag,
+}
+impl TrimImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        Some(Self {
+            material: compound.get("material")?.clone(),
+            pattern: compound.get("pattern")?.clone(),
+        })
+    }
+}
 impl DataComponentImpl for TrimImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put("material", self.material.clone());
+        compound.put("pattern", self.pattern.clone());
+        NbtTag::Compound(compound)
+    }
     default_impl!(Trim);
 }
 
