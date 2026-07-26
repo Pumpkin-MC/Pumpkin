@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{BlockId, HorizontalFacingExt};
 use pumpkin_util::math::position::BlockPos;
