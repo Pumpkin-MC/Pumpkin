@@ -118,7 +118,6 @@ impl Player {
      * Send a clientside only effect to the player.
      * It won't be tracked on the server.
      */
-
     pub async fn send_effect(&self, effect: Effect) {
         let mut flag: i8 = 0;
 

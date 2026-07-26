@@ -1,3 +1,4 @@
+use crate::entity::EntityBase;
 use crate::entity::{Entity, player::Player};
 use crate::net::{ClientPlatform, java::JavaClient};
 use crate::world::World;
@@ -6,7 +7,6 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::translation;
 use pumpkin_data::world::{RAW, WorldEvent};
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
@@ -18,7 +18,7 @@ use pumpkin_protocol::java::client::play::{
     GameEvent,
 };
 use pumpkin_protocol::java::server::play::SChatMessage;
-use pumpkin_protocol::{BClientPacket, ClientPacket, IdOr, SoundEvent};
+use pumpkin_protocol::{BClientPacket, ClientPacket, IdOr};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3};
 use pumpkin_util::text::TextComponent;

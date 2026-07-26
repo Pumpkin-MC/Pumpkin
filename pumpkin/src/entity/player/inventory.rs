@@ -17,7 +17,6 @@ use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_inventory::screen_handler::PlayerFuture;
-use pumpkin_inventory::screen_handler::ScreenHandler;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::CItemCooldown;

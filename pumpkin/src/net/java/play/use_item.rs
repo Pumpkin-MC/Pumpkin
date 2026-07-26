@@ -1,5 +1,4 @@
 use super::BlockPlacingError;
-use crate::block;
 use crate::block::BlockHitResult;
 use crate::block::entities::sign::SignBlockEntity;
 use crate::block::registry::BlockActionResult;

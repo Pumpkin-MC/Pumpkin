@@ -1,4 +1,5 @@
 use crate::command::client_suggestions;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::plugin::player::player_join::PlayerJoinEvent;
 use crate::server::Server;

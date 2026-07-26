@@ -1,5 +1,6 @@
 use crate::block;
 use crate::block::BlockEvent;
+use crate::entity::EntityBase;
 use crate::entity::{Entity, player::Player};
 use crate::net::{ClientPlatform, java::JavaClient};
 use crate::plugin::block::block_break::BlockBreakEvent;

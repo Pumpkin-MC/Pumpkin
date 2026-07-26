@@ -1,5 +1,4 @@
 use super::Player;
-use crate::entity::EntityBase;
 use crate::plugin::player::inventory_interact::InventoryClickEvent;
 use crate::server::Server;
 use pumpkin_data::screen::WindowType;

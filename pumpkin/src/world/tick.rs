@@ -1,6 +1,7 @@
 use crate::block::entities::BlockEntity;
 use crate::block::{OnScheduledTickArgs, RandomTickArgs};
 use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::server::Server;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use crate::world::{World, dragon_fight, natural_spawner};

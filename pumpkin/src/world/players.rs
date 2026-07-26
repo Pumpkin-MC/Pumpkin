@@ -1,5 +1,5 @@
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
-use crate::net::ClientPlatform;
 use crate::plugin::player::{
     player_change_world::PlayerChangeWorldEvent, player_leave::PlayerLeaveEvent,
     player_respawn::PlayerRespawnEvent,

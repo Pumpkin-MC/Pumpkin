@@ -1,6 +1,6 @@
 use crate::entity::EntityBase;
 use crate::world::World;
-use pumpkin_data::block_properties::{blocks_movement, is_air};
+use pumpkin_data::block_properties::blocks_movement;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
