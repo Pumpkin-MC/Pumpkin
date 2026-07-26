@@ -278,7 +278,7 @@ fn add(
 
 /// `setGenDepth` on the piece just pushed by [`add`]
 /// (EndCityPieces.java:116/136).
-fn set_last_gen_depth(pieces: &mut [CityPiece], gen_depth: i32) {
+const fn set_last_gen_depth(pieces: &mut [CityPiece], gen_depth: i32) {
     if let Some(piece) = pieces.last_mut() {
         piece.gen_depth = gen_depth;
     }
@@ -1018,7 +1018,7 @@ impl EndCityPiece {
 }
 
 /// "Chest" marker (EndCityPieces.java:245-249): the chest one block below the
-/// marker (placed by the template itself) gets the END_CITY_TREASURE loot
+/// marker (placed by the template itself) gets the `END_CITY_TREASURE` loot
 /// table via `RandomizableContainer.setBlockEntityLootTable`
 /// (RandomizableContainer.java:51-57), seeded with `random.nextLong()`.
 fn place_treasure_chest(
