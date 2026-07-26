@@ -446,7 +446,9 @@ impl ProtoChunk {
     #[inline]
     #[must_use]
     pub fn get_block_state_raw(&self, x: i32, y: i32, z: i32) -> BlockStateId {
-        let index = self.local_pos_to_block_index(x, y, z);
+        let index = self
+            .local_pos_to_block_index(x, y, z)
+            .clamp(0, self.flat_block_map.len() - 1);
         self.flat_block_map[index]
     }
 
@@ -505,7 +507,7 @@ impl ProtoChunk {
             x & biome_coords::from_block(15),
             y - biome_coords::from_block(self.bottom_y() as i32),
             z & biome_coords::from_block(15),
-        );
+        ).clamp(0, self.flat_biome_map.len() - 1);
         self.flat_biome_map[index]
     }
 

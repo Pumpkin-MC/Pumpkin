@@ -256,16 +256,11 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
     } else {
         // It's a subsequent panic; let's just alert about it.
         tracing::error!(
-            "{}: {}",
+            "{}: {panic_info}",
             TextComponent::text("Encountered panic while shutting down")
                 .color(Color::Named(NamedColor::Red))
                 .bold()
-                .to_pretty_console(),
-            payload
-                .downcast_ref::<&str>()
-                .copied()
-                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
-                .unwrap_or("<unknown>")
+                .to_pretty_console()
         );
     }
 }
