@@ -360,6 +360,73 @@ pub fn check_spawn_rules(
         return world.get_block(&pos.down()) != &Block::NETHER_WART_BLOCK;
     }
 
+    // --- Water animals (vanilla SpawnPlacements.java:97-105) ---
+    // Squid/dolphin (AgeableWaterCreature.checkSurfaceAgeableWaterCreatureSpawnRules,
+    // AgeableWaterCreature.java:70-74) and cod/salmon/pufferfish
+    // (WaterAnimal.checkSurfaceWaterAnimalSpawnRules, WaterAnimal.java:76-80)
+    // share the same body: y within [seaLevel-13, seaLevel], water fluid below
+    // and a water block above.
+    if id == EntityType::SQUID.id
+        || id == EntityType::DOLPHIN.id
+        || id == EntityType::COD.id
+        || id == EntityType::SALMON.id
+        || id == EntityType::PUFFERFISH.id
+    {
+        return check_surface_water_animal_spawn_rules(world, pos);
+    }
+    // Vanilla TropicalFish.checkTropicalFishSpawnRules (TropicalFish.java:249-251):
+    // water below+above, and either the any-height biome tag (lush caves) or the
+    // surface-water window.
+    if id == EntityType::TROPICAL_FISH.id {
+        use pumpkin_data::tag::Taggable;
+        let biome = world.level.get_rough_biome(pos);
+        return water_below_and_water_above(world, pos)
+            && (biome.has_tag(
+                &pumpkin_data::tag::WorldgenBiome::MINECRAFT_ALLOWS_TROPICAL_FISH_SPAWNS_AT_ANY_HEIGHT,
+            ) || check_surface_water_animal_spawn_rules(world, pos));
+    }
+    // Vanilla GlowSquid.checkGlowSquidSpawnRules (GlowSquid.java:117-119):
+    // deep (y <= seaLevel - 33), pitch black, inside water. Without the depth
+    // rule glow squid flood surface oceans that should hold regular squid.
+    if id == EntityType::GLOW_SQUID.id {
+        return pos.0.y <= world.sea_level - 33
+            && world.get_light_level_with_darken(pos, 0) == 0
+            && world.get_block(pos) == &Block::WATER;
+    }
+    // Vanilla Axolotl.checkAxolotlSpawnRules (Axolotl.java:528-530).
+    if id == EntityType::AXOLOTL.id {
+        use pumpkin_data::tag::Taggable;
+        return world
+            .get_block(&pos.down())
+            .has_tag(&pumpkin_data::tag::Block::MINECRAFT_AXOLOTLS_SPAWNABLE_ON);
+    }
+    // Vanilla Drowned.checkDrownedSpawnRules (Drowned.java:136-154), natural
+    // spawn path: water fluid below, monster gate (peaceful + darkness) while
+    // inside water, then a rarity roll — 1/15 in river-like biomes
+    // (MORE_FREQUENT_DROWNED_SPAWNS), else 1/40 and deeper than seaLevel - 5.
+    if id == EntityType::DROWNED.id {
+        use pumpkin_data::tag::Taggable;
+        if !world
+            .get_fluid(&pos.down())
+            .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER)
+        {
+            return false;
+        }
+        let can_monster_spawn =
+            mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering)
+                && world
+                    .get_fluid(pos)
+                    .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER);
+        let biome = world.level.get_rough_biome(pos);
+        if biome.has_tag(&pumpkin_data::tag::WorldgenBiome::MINECRAFT_MORE_FREQUENT_DROWNED_SPAWNS)
+        {
+            return rand::random_range(0..15) == 0 && can_monster_spawn;
+        }
+        return rand::random_range(0..40) == 0
+            && pos.0.y < world.sea_level - 5
+            && can_monster_spawn;
+    }
+
     // --- Standard monster light rules (26.2 Monster.checkMonsterSpawnRules) ---
     if id == EntityType::BOGGED.id
         || id == EntityType::CAVE_SPIDER.id
@@ -382,7 +449,6 @@ pub fn check_spawn_rules(
         || id == EntityType::VINDICATOR.id
         || id == EntityType::PILLAGER.id
         || id == EntityType::WARDEN.id
-        || id == EntityType::DROWNED.id
         || id == EntityType::PHANTOM.id
         || id == EntityType::ZOGLIN.id
         || id == EntityType::PIGLIN_BRUTE.id
@@ -392,16 +458,6 @@ pub fn check_spawn_rules(
         || id == EntityType::BREEZE.id
         || id == EntityType::ZOMBIFIED_PIGLIN.id
     {
-        // Drowned are MONSTER but must spawn in water (vanilla InWater restriction).
-        // Without this, ocean biomes flood the sea with unlimited drowned.
-        if id == EntityType::DROWNED.id {
-            let feet = world.get_block_state(pos);
-            let head = world.get_block_state(&pos.up());
-            let in_water = feet.is_liquid() || head.is_liquid() || feet.is_waterlogged();
-            if !in_water {
-                return false;
-            }
-        }
         // Guardians also need water.
         if id == EntityType::GUARDIAN.id || id == EntityType::ELDER_GUARDIAN.id {
             let feet = world.get_block_state(pos);
@@ -443,6 +499,25 @@ pub fn check_spawn_rules(
 /// Vanilla `Animal.isBrightEnoughToSpawn`: getRawBrightness(pos, 0) > 8.
 fn is_bright_enough_to_spawn(world: &World, pos: &BlockPos) -> bool {
     world.get_raw_brightness_no_darken(pos) > 8
+}
+
+/// Vanilla `WaterAnimal.checkSurfaceWaterAnimalSpawnRules` (WaterAnimal.java:76-80)
+/// == `AgeableWaterCreature.checkSurfaceAgeableWaterCreatureSpawnRules`
+/// (AgeableWaterCreature.java:70-74): y within [seaLevel - 13, seaLevel] plus
+/// the water-below / water-above sandwich.
+fn check_surface_water_animal_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+    let sea_level = world.sea_level;
+    pos.0.y >= sea_level - 13 && pos.0.y <= sea_level && water_below_and_water_above(world, pos)
+}
+
+/// Shared fish-rule body: water fluid below the spawn block and a water block
+/// above it (WaterAnimal.java:79).
+fn water_below_and_water_above(world: &World, pos: &BlockPos) -> bool {
+    use pumpkin_data::tag::Taggable;
+    world
+        .get_fluid(&pos.down())
+        .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER)
+        && world.get_block(&pos.up()) == &Block::WATER
 }
 
 /// Vanilla `Animal.checkAnimalSpawnRules` default: ANIMALS_SPAWNABLE_ON (grass).

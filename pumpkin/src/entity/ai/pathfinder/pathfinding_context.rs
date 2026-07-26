@@ -1,9 +1,12 @@
 use pumpkin_data::{
     Block, BlockState,
+    block_properties::{
+        BlockProperties, OakDoorLikeProperties, OakFenceGateLikeProperties, SnowLikeProperties,
+    },
     fluid::Fluid,
     tag::{self, Taggable},
 };
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{boundingbox::BoundingBox, vector3::Vector3};
 
 use crate::{
     entity::ai::pathfinder::{
@@ -20,7 +23,9 @@ pub struct PathfindingContext {
     path_type_cache: Option<PathTypeCache>,
     mob_position: Vector3<i32>,
     world: Arc<World>,
-    collision_cache: FxHashMap<Vector3<i32>, bool>,
+    /// Vanilla `WalkNodeEvaluator.collisionCache` is an `Object2BooleanMap<AABB>`
+    /// (`WalkNodeEvaluator.java:53`); we key on the AABB corner coordinate bits.
+    collision_cache: FxHashMap<[u64; 6], bool>,
 }
 
 impl PathfindingContext {
@@ -136,10 +141,16 @@ impl PathfindingContext {
         }
 
         if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
-            if state.collision_shapes.is_empty() {
+            // Vanilla WalkNodeEvaluator.java:473-479: read the door's OPEN
+            // blockstate property (collision shapes are never empty for doors —
+            // an open door still has its side panel collision).
+            if OakDoorLikeProperties::from_state_id(state.id, block).open {
                 return PathType::DoorOpen;
             }
 
+            // Vanilla WalkNodeEvaluator.java:478: `door.type().canOpenByHand()`.
+            // Iron is the only vanilla `BlockSetType` with `canOpenByHand=false`;
+            // wooden and copper doors are all hand-openable.
             return if block.id == Block::IRON_DOOR.id {
                 PathType::DoorIronClosed
             } else {
@@ -161,11 +172,17 @@ impl PathfindingContext {
             return PathType::Fence;
         }
 
-        if block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES) && !state.collision_shapes.is_empty() {
+        // Vanilla WalkNodeEvaluator.java:486: `block instanceof FenceGateBlock
+        // && !blockState.getValue(FenceGateBlock.OPEN)`.
+        if block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES)
+            && !OakFenceGateLikeProperties::from_state_id(state.id, block).open
+        {
             return PathType::Fence;
         }
 
-        if state.is_full_cube() {
+        // Vanilla WalkNodeEvaluator.java:489-491:
+        // `!blockState.isPathfindable(PathComputationType.LAND)` -> BLOCKED.
+        if !Self::is_land_pathfindable(block, state) {
             return PathType::Blocked;
         }
 
@@ -174,6 +191,68 @@ impl PathfindingContext {
         }
 
         PathType::Open
+    }
+
+    /// Vanilla `BlockBehaviour.isPathfindable(PathComputationType.LAND)`.
+    ///
+    /// The vanilla default (`BlockBehaviour.java:149-156`) is
+    /// `!state.isCollisionShapeFullBlock(...)`, but essentially every
+    /// partial-collision block a mob cannot stand inside overrides it to
+    /// `false`: stairs (`StairBlock.java:230-232`), slabs
+    /// (`SlabBlock.java:145-152`), chests (`ChestBlock.java:382`), panes,
+    /// bars and glass walls (`CrossCollisionBlock.java:89-91`), walls
+    /// (`WallBlock.java:104-106`), farmland (`FarmlandBlock.java:143-145`),
+    /// dirt paths (`DirtPathBlock.java:79-81`), soul sand
+    /// (`SoulSandBlock.java:49-51`), mud (`MudBlock.java:49-51`), beds,
+    /// anvils, hoppers, cauldrons, lecterns, etc. Doors, trapdoors and fence
+    /// gates also override it, but those are classified earlier in this chain
+    /// exactly like vanilla `WalkNodeEvaluator.getPathTypeFromState`.
+    ///
+    /// Pumpkin has no per-block `isPathfindable` hook, so the closest faithful
+    /// equivalent is: a block with any collision shape blocks land pathing.
+    /// Known deviation: a handful of no-override partial-collision blocks
+    /// (e.g. sea pickles, amethyst clusters, turtle eggs) keep the vanilla
+    /// default of pathfindable but are treated as BLOCKED here — erring on
+    /// the conservative side. Snow layers are special-cased below.
+    #[must_use]
+    fn is_land_pathfindable(block: &Block, state: &BlockState) -> bool {
+        // Vanilla SnowLayerBlock.java:51-56: LAND is pathfindable while
+        // `layers < 5`, even though layers 2..=4 already have collision.
+        if block.id == Block::SNOW.id {
+            return SnowLikeProperties::from_state_id(state.id, block).layers < 5;
+        }
+
+        state.collision_shapes.is_empty()
+    }
+
+    /// Vanilla `Level.getMinY`, the lower world bound used by the start-node
+    /// scan and the water/fall column walks.
+    #[must_use]
+    pub fn min_y(&self) -> i32 {
+        self.world.min_y
+    }
+
+    /// Water-column test used by vanilla `WalkNodeEvaluator.getStart`
+    /// (`WalkNodeEvaluator.java:81`): `state.is(Blocks.WATER) ||
+    /// state.getFluidState() == Fluids.WATER.getSource(false)`. The water
+    /// block covers both source and flowing states; waterlogged states always
+    /// hold source water.
+    #[must_use]
+    pub fn is_water_at(&self, pos: Vector3<i32>) -> bool {
+        let state_id = self.world.get_block_state_id(&pos.as_blockpos());
+        let block = Block::from_state_id(state_id);
+        block.id == Block::WATER.id || BlockState::from_id(state_id).is_waterlogged()
+    }
+
+    /// Predicate of the airborne start-node downward scan, vanilla
+    /// `WalkNodeEvaluator.getStart` (`WalkNodeEvaluator.java:93`):
+    /// `state.isAir() || state.isPathfindable(PathComputationType.LAND)`.
+    #[must_use]
+    pub fn is_air_or_land_pathfindable(&self, pos: Vector3<i32>) -> bool {
+        let state_id = self.world.get_block_state_id(&pos.as_blockpos());
+        let block = Block::from_state_id(state_id);
+        let state = BlockState::from_id(state_id);
+        state.is_air() || Self::is_land_pathfindable(block, state)
     }
 
     /// Wraps the raw block type with below-check and neighbor danger scanning for OPEN nodes.
@@ -237,17 +316,28 @@ impl PathfindingContext {
         fallback
     }
 
-    pub fn has_collisions(&mut self, pos: Vector3<i32>) -> bool {
-        if let Some(&cached) = self.collision_cache.get(&pos) {
+    /// Vanilla `WalkNodeEvaluator.hasCollisions` (`WalkNodeEvaluator.java:314-316`):
+    /// `!this.currentContext.level().noCollision(this.mob, aabb)`, cached per AABB.
+    ///
+    /// Gap: vanilla `noCollision` also honors the world border and hard entity
+    /// colliders (boats, shulkers); Pumpkin's `is_space_empty` checks block
+    /// collision shapes only.
+    pub fn has_collisions(&mut self, aabb: &BoundingBox) -> bool {
+        let key = [
+            aabb.min.x.to_bits(),
+            aabb.min.y.to_bits(),
+            aabb.min.z.to_bits(),
+            aabb.max.x.to_bits(),
+            aabb.max.y.to_bits(),
+            aabb.max.z.to_bits(),
+        ];
+        if let Some(&cached) = self.collision_cache.get(&key) {
             return cached;
         }
 
-        let block_pos = pos.as_blockpos();
-        let state_id = self.world.get_block_state_id(&block_pos);
-        let state = BlockState::from_id(state_id);
-        let has_collision = state.is_full_cube();
+        let has_collision = !self.world.is_space_empty(*aabb);
 
-        self.collision_cache.insert(pos, has_collision);
+        self.collision_cache.insert(key, has_collision);
         has_collision
     }
 
