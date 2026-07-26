@@ -16,7 +16,7 @@ use crate::block::{self};
 use crate::entity::EntityBase;
 use crate::entity::equipment_break_status;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
-use crate::entity::player::{ChatMode, ChatSession, Player};
+use crate::entity::player::{ChatMode, ChatSession, MINE_BLOCK_EXHAUSTION, Player};
 use crate::error::PumpkinError;
 use crate::log_at_level;
 use crate::net::PlayerConfig;
@@ -1981,6 +1981,7 @@ impl JavaClient {
                         // Instant break
                         if speed >= 1.0 {
                             let broken_state = world.get_block_state(&position);
+                            let can_harvest = player.can_harvest(broken_state, block).await;
                             let new_state = world
                                 .break_block(
                                     &position,
@@ -1994,6 +1995,9 @@ impl JavaClient {
                                     .broken(&world, block, player, &position, server, broken_state)
                                     .await;
                                 player.apply_tool_damage_for_block_break(broken_state).await;
+                                if can_harvest {
+                                    player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                                }
                                 let item_id = player.inventory().held_item().lock().await.item.id;
                                 player
                                     .increment_stat(StatisticCategory::Used, item_id as i32, 1)
@@ -2078,6 +2082,9 @@ impl JavaClient {
                             .await;
 
                         player.apply_tool_damage_for_block_break(state).await;
+                        if block_drop {
+                            player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                        }
                         let item_id = player.inventory().held_item().lock().await.item.id;
                         player
                             .increment_stat(StatisticCategory::Used, item_id as i32, 1)
