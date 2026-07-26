@@ -4,7 +4,7 @@ use pumpkin_protocol::java::client::play::{
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
@@ -241,9 +241,11 @@ impl JavaClient {
 
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
         let mut keep_alive_interval = tokio::time::interval(std::time::Duration::from_secs(15));
+        let mut block_ack_interval = tokio::time::interval(Duration::from_millis(50));
 
-        // Skip the immediate first tick so we don't send a keep-alive the exact millisecond they join
+        // Skip the immediate first tick for both timers.
         keep_alive_interval.tick().await;
+        block_ack_interval.tick().await;
 
         loop {
             tokio::select! {
@@ -266,11 +268,17 @@ impl JavaClient {
                     self.last_keep_alive_time.store(Instant::now());
                     let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
                     self.enqueue_packet(&packet).await;
+                }
 
+                // Vanilla sends ClientboundBlockChangedAckPacket once per server tick.
+                // Delaying this until the keep-alive interval leaves client-side block
+                // prediction active for up to 15 seconds, causing ghost blocks and stale
+                // redstone rendering even after the authoritative update was queued.
+                _ = block_ack_interval.tick() => {
                     let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
                     if seq != -1 {
                         self
-                            .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
+                            .enqueue_packet(&CAcknowledgeBlockChange::new(seq.into()))
                             .await;
                     }
                 }
