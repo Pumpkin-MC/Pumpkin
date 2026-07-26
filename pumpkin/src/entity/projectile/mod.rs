@@ -220,6 +220,21 @@ impl ThrownItemEntity {
                 return;
             }
 
+            // Vanilla Projectile.onHitBlock -> BlockBehaviour.onProjectileHit:
+            // every projectile activates target blocks, not only arrows.
+            // Thrown projectiles pulse 8gt (TargetBlock.java:63,
+            // `entity instanceof AbstractArrow ? 20 : 8`).
+            if let ProjectileHit::Block {
+                pos, face, hit_pos, ..
+            } = &h
+                && world.get_block(pos) == &pumpkin_data::Block::TARGET
+            {
+                crate::block::blocks::redstone::target_block::TargetBlock::on_projectile_hit(
+                    &world, pos, *face, *hit_pos, false,
+                )
+                .await;
+            }
+
             // Just trigger hit effects and remove
             caller.on_hit(h).await;
             entity.remove().await;

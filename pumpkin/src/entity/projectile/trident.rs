@@ -314,10 +314,22 @@ impl EntityBase for TridentEntity {
             let world = entity.world.load();
 
             match hit {
-                ProjectileHit::Block { pos, hit_pos, .. } => {
+                ProjectileHit::Block {
+                    pos, face, hit_pos, ..
+                } => {
                     self.in_ground.store(true, Ordering::Relaxed);
                     self.shake_time.store(7, Ordering::Relaxed);
                     *self.last_block_pos.write().unwrap() = Some(pos);
+
+                    // Vanilla TargetBlock.onProjectileHit: tridents are
+                    // AbstractArrow, so they pulse targets for 20gt
+                    // (TargetBlock.java:63).
+                    if world.get_block(&pos) == &pumpkin_data::Block::TARGET {
+                        crate::block::blocks::redstone::target_block::TargetBlock::on_projectile_hit(
+                            &world, &pos, face, hit_pos, true,
+                        )
+                        .await;
+                    }
 
                     // Stop the trident
                     entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
