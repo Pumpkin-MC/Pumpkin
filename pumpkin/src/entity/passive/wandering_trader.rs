@@ -12,15 +12,21 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-/// Wandering trader — panics and flees undead (vanilla AvoidEntity goals).
+/// Wandering trader — panics and flees undead (vanilla AvoidEntity goals),
+/// drinks invisibility at dusk and milk at dawn.
 pub struct WanderingTraderEntity {
     pub mob_entity: MobEntity,
+    /// Throttles the day/night potion check to once a second.
+    invisibility_check_cooldown: std::sync::atomic::AtomicU8,
 }
 
 impl WanderingTraderEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let trader = Self { mob_entity };
+        let trader = Self {
+            mob_entity,
+            invisibility_check_cooldown: std::sync::atomic::AtomicU8::new(0),
+        };
         let mob_arc = Arc::new(trader);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -114,5 +120,66 @@ impl NBTStorage for WanderingTraderEntity {
 impl Mob for WanderingTraderEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    /// Vanilla WanderingTrader UseItemGoal pair: drink an invisibility potion
+    /// at nightfall and milk at dawn (simplified to direct effect toggling with
+    /// the drink sounds).
+    fn mob_tick<'a>(
+        &'a self,
+        _caller: &'a Arc<dyn crate::entity::EntityBase>,
+    ) -> crate::entity::EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            use std::sync::atomic::Ordering;
+            let cooldown = self
+                .invisibility_check_cooldown
+                .fetch_add(1, Ordering::Relaxed);
+            if cooldown < 20 {
+                return;
+            }
+            self.invisibility_check_cooldown.store(0, Ordering::Relaxed);
+
+            let living = &self.mob_entity.living_entity;
+            let world = living.entity.world.load_full();
+            // Vanilla night window for the invisibility drink.
+            let time = world.get_time_of_day().await % 24000;
+            let is_night = (13000..23000).contains(&time);
+            let invisible = living
+                .has_effect(&pumpkin_data::effect::StatusEffect::INVISIBILITY)
+                .await;
+
+            if is_night && !invisible {
+                living
+                    .add_effect(pumpkin_data::potion::Effect {
+                        effect_type: &pumpkin_data::effect::StatusEffect::INVISIBILITY,
+                        // Covers the night; milk clears it at dawn.
+                        duration: 11000,
+                        amplifier: 0,
+                        ambient: false,
+                        show_particles: true,
+                        show_icon: true,
+                        blend: false,
+                    })
+                    .await;
+                world.play_sound_fine(
+                    pumpkin_data::sound::Sound::EntityWanderingTraderDrinkPotion,
+                    pumpkin_data::sound::SoundCategory::Neutral,
+                    &living.entity.pos.load(),
+                    1.0,
+                    1.0,
+                );
+            } else if !is_night && invisible {
+                living
+                    .remove_effect(&pumpkin_data::effect::StatusEffect::INVISIBILITY)
+                    .await;
+                world.play_sound_fine(
+                    pumpkin_data::sound::Sound::EntityWanderingTraderDrinkMilk,
+                    pumpkin_data::sound::SoundCategory::Neutral,
+                    &living.entity.pos.load(),
+                    1.0,
+                    1.0,
+                );
+            }
+        })
     }
 }
