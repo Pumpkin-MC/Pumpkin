@@ -67,7 +67,7 @@ impl TemperatureModifier {
 /// Represents weather information for a biome, including temperature and precipitation.
 #[derive(Clone, Debug)]
 pub struct Weather {
-    #[expect(dead_code)]
+    /// Whether this biome has any precipitation at all (rain or snow).
     has_precipitation: bool,
     /// Base temperature of the biome.
     temperature: f32,
@@ -135,5 +135,68 @@ impl Weather {
         } else {
             modified_temperature
         }
+    }
+
+    /// Whether it is warm enough at the given position for precipitation to fall
+    /// as rain instead of snow.
+    ///
+    /// Mirrors vanilla `Biome#warmEnoughToRain`.
+    #[must_use]
+    pub fn warm_enough_to_rain(&self, x: i32, y: i32, z: i32, sea_level: i32) -> bool {
+        self.compute_temperature(f64::from(x), y, f64::from(z), sea_level) >= 0.15
+    }
+
+    /// Whether precipitation at the given position falls as rain.
+    ///
+    /// Mirrors vanilla `Biome#getPrecipitationAt(pos, seaLevel) == Precipitation.RAIN`:
+    /// biomes without precipitation get `NONE`, cold ones get `SNOW`.
+    #[must_use]
+    pub fn is_rain_at(&self, x: i32, y: i32, z: i32, sea_level: i32) -> bool {
+        self.has_precipitation && self.warm_enough_to_rain(x, y, z, sea_level)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TemperatureModifier, Weather};
+
+    /// Sea level position in a biome with no precipitation at all.
+    fn arid() -> Weather {
+        Weather::new(false, 2.0, TemperatureModifier::None, 0.0)
+    }
+
+    /// Warm enough for rain at sea level.
+    fn temperate() -> Weather {
+        Weather::new(true, 0.8, TemperatureModifier::None, 0.4)
+    }
+
+    /// Cold enough that precipitation falls as snow.
+    fn frozen() -> Weather {
+        Weather::new(true, 0.0, TemperatureModifier::None, 0.5)
+    }
+
+    #[test]
+    fn biomes_without_precipitation_never_rain() {
+        assert!(!arid().is_rain_at(0, 64, 0, 63));
+    }
+
+    #[test]
+    fn warm_biomes_rain() {
+        assert!(temperate().is_rain_at(0, 64, 0, 63));
+    }
+
+    #[test]
+    fn cold_biomes_snow_rather_than_rain() {
+        assert!(!frozen().is_rain_at(0, 64, 0, 63));
+        assert!(!frozen().warm_enough_to_rain(0, 64, 0, 63));
+    }
+
+    #[test]
+    fn temperature_falls_with_height_so_peaks_snow() {
+        let w = temperate();
+        assert!(w.warm_enough_to_rain(0, 64, 0, 63));
+        // Far above the sea level offset the temperature drop should push a
+        // marginally warm biome below the rain threshold.
+        assert!(!w.warm_enough_to_rain(0, 2000, 0, 63));
     }
 }

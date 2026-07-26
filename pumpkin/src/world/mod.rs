@@ -163,6 +163,9 @@ type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperti
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+/// The highest light level a block position can have, vanilla `LightLayer#getMaxLightLevel`.
+const MAX_LIGHT_LEVEL: u8 = 15;
+
 impl PumpkinError for GetBlockError {
     fn is_kick(&self) -> bool {
         false
@@ -1724,6 +1727,38 @@ impl World {
             let raining = weather.raining;
             weather.set_weather_parameters(self, 0, 0, raining, thundering);
         }
+    }
+
+    /// Whether rain is currently falling onto `pos`.
+    ///
+    /// Mirrors vanilla `Level#isRainingAt`: it has to be raining, the topmost
+    /// motion blocking block has to be at or below `pos`, the position has to
+    /// see the sky, and the biome there has to have rain as its precipitation
+    /// (so not snow, and not "no precipitation").
+    pub async fn is_raining_at(&self, pos: &BlockPos) -> bool {
+        self.is_raining().await && self.is_raining_at_unchecked(pos)
+    }
+
+    /// [`Self::is_raining_at`] without re-checking that it is raining at all.
+    ///
+    /// Callers that already know the world is raining use this so a single
+    /// check does not take the weather lock once per position.
+    pub(crate) fn is_raining_at_unchecked(&self, pos: &BlockPos) -> bool {
+        // The heightmap runs first: it is cheaper than reaching into the light
+        // engine and it is maintained on every block change.
+        //
+        // `get_heightmap_height` returns the Y of the topmost matching block,
+        // whereas vanilla's `Heightmap#getFirstAvailable` returns that Y plus
+        // one, hence the `+ 1` before comparing.
+        if self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1 > pos.0.y {
+            return false;
+        }
+        if !self.can_see_sky(pos) {
+            return false;
+        }
+        self.get_biome(pos)
+            .weather
+            .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
     }
 
     /// Gets the y position of the first non air block from the top down
@@ -4420,6 +4455,23 @@ impl World {
         self.level
             .light_engine
             .get_sky_light_level(&self.level, position)
+    }
+
+    /// Whether `position` has an unobstructed view of the sky.
+    ///
+    /// Mirrors vanilla `BlockAndTintGetter#canSeeSky`, which checks the raw
+    /// (not day/night darkened) sky light against the maximum light level.
+    #[must_use]
+    pub fn can_see_sky(&self, position: &BlockPos) -> bool {
+        // Out of range lookups report full sky light, so reject them here
+        // rather than letting a position below or above the world claim to
+        // see the sky.
+        if position.0.y < self.dimension.min_y
+            || position.0.y >= self.dimension.min_y + self.dimension.height
+        {
+            return false;
+        }
+        self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
     }
 
     pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {
