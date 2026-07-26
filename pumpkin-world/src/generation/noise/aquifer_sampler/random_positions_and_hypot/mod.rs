@@ -27,8 +27,7 @@ use crate::generation::{
 };
 
 use super::{
-    AquiferSampler, CarverAquiferResult, CarverAquiferSampler, FluidLevel, SeaLevelAquiferSampler,
-    WorldAquiferSampler,
+    AquiferSampler, CarverAquiferSampler, FluidLevel, SeaLevelAquiferSampler, WorldAquiferSampler,
 };
 
 const SEED: u64 = 0;
@@ -620,6 +619,8 @@ fn moved_sampler_apis_remain_reachable() {
         FluidLevel::new(-54, &LAVA_BLOCK),
     );
     let _sea_level = SeaLevelAquiferSampler::new(sampler);
-    let _: fn(&mut CarverAquiferSampler<'_>, &Vector3<i32>, f64) -> CarverAquiferResult =
-        CarverAquiferSampler::compute;
+    // Untyped existence binding: the sampler's lifetime parameter makes the
+    // fn-item -> fn-pointer coercion fail higher-ranked lifetime inference,
+    // so assert reachability without pinning the exact signature.
+    let _ = CarverAquiferSampler::compute;
 }
