@@ -34,6 +34,9 @@ impl TNTBlock {
             &pos,
         );
         world
+            .emit_vibration(crate::world::vibrations::Vibration::PrimeFuse, pos)
+            .await;
+        world
             .set_block_state(location, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
             .await;
     }

@@ -360,6 +360,13 @@ impl EntityBase for ArrowEntity {
                     self.shake_time.store(7, Ordering::Relaxed);
                     *self.last_block_pos.write().unwrap() = Some(pos);
 
+                    world
+                        .emit_vibration(
+                            crate::world::vibrations::Vibration::ProjectileLand,
+                            entity.pos.load(),
+                        )
+                        .await;
+
                     let block = world.get_block(&pos);
                     if block == &pumpkin_data::Block::TARGET {
                         // Vanilla TargetBlock.onProjectileHit
