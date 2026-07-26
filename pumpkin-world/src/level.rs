@@ -47,6 +47,15 @@ use tokio_util::task::TaskTracker;
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
 
+/// Upper bound applied to the `randomTickSpeed` game rule before it is used for sampling.
+///
+/// A chunk section holds 16 * 16 * 16 = 4096 blocks, so sampling 4096 positions per section
+/// already gives every block roughly one expected random tick per game tick. Anything beyond
+/// that adds cost without adding behaviour, and the game rule itself is stored as an
+/// unbounded signed integer, so it has to be capped somewhere to keep the per-tick work
+/// (and the allocations it drives) bounded.
+pub const MAX_RANDOM_TICK_SPEED: u32 = 4096;
+
 /// The `Level` module provides functionality for working with chunks within or outside a Minecraft world.
 ///
 /// Key features include:
@@ -500,51 +509,66 @@ impl Level {
         });
     }
 
-    pub fn get_tick_data(&self, active_chunks: &FxHashSet<Vector2<i32>>) -> TickData {
+    /// `random_tick_speed` is the amount of positions sampled per chunk section per tick, as
+    /// controlled by the `randomTickSpeed` game rule. A value of 0 disables random ticks.
+    /// Callers are expected to have clamped it to [`MAX_RANDOM_TICK_SPEED`].
+    pub fn get_tick_data(
+        &self,
+        active_chunks: &FxHashSet<Vector2<i32>>,
+        random_tick_speed: u32,
+    ) -> TickData {
+        let samples_per_section = random_tick_speed.min(MAX_RANDOM_TICK_SPEED) as usize;
+        // No capacity hint for `random_ticks`: the number of samples that survive the
+        // `has_random_ticks` filter is not knowable up front, and any estimate derived from
+        // `random_tick_speed` would scale with a value the user controls.
         let mut ticks = TickData {
             block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
-            random_ticks: Vec::with_capacity(active_chunks.len() * 3),
+            random_ticks: Vec::new(),
         };
 
-        // 1. Process active chunks (random ticks, block entities)
-        for pos in active_chunks {
-            if let Some(chunk) = self.loaded_chunks.get(pos) {
-                let chunk = chunk.value();
-                let chunk_x_base = chunk.x * 16;
-                let chunk_z_base = chunk.z * 16;
-                let section_count = chunk.section.count;
+        // 1. Process active chunks (random ticks)
+        // A `randomTickSpeed` of 0 means no positions are sampled at all
+        if samples_per_section != 0 {
+            for pos in active_chunks {
+                if let Some(chunk) = self.loaded_chunks.get(pos) {
+                    let chunk = chunk.value();
+                    let chunk_x_base = chunk.x * 16;
+                    let chunk_z_base = chunk.z * 16;
+                    let section_count = chunk.section.count;
 
-                // Use the bitmask to skip sections
-                let mask = chunk.section.randomly_ticking_mask.load(Ordering::Relaxed);
-                if mask != 0 {
-                    let sections = chunk.section.block_sections.read().unwrap();
-                    let min_y = chunk.section.min_y;
+                    // Use the bitmask to skip sections
+                    let mask = chunk.section.randomly_ticking_mask.load(Ordering::Relaxed);
+                    if mask != 0 {
+                        let sections = chunk.section.block_sections.read().unwrap();
+                        let min_y = chunk.section.min_y;
 
-                    for i in 0..section_count {
-                        if (mask & (1 << i)) == 0 {
-                            continue;
-                        }
-                        let y_base = min_y + (i as i32 * 16);
-                        for _ in 0..3 {
-                            let r = rand::random::<u32>();
-                            let x_offset = (r & 0xF) as usize;
-                            let z_offset = (r >> 8 & 0xF) as usize;
-                            let y_in_section = ((r >> 4) & 0xF) as usize;
+                        for i in 0..section_count {
+                            if (mask & (1 << i)) == 0 {
+                                continue;
+                            }
+                            let y_base = min_y + (i as i32 * 16);
+                            for _ in 0..samples_per_section {
+                                let r = rand::random::<u32>();
+                                let x_offset = (r & 0xF) as usize;
+                                let z_offset = (r >> 8 & 0xF) as usize;
+                                let y_in_section = ((r >> 4) & 0xF) as usize;
 
-                            let block_state_id = sections[i].get(x_offset, y_in_section, z_offset);
-                            let tick_block = has_random_ticks(block_state_id);
-                            let tick_fluid = has_random_ticking_fluid(block_state_id);
-                            if tick_block || tick_fluid {
-                                ticks.random_ticks.push(RandomTickSample {
-                                    position: BlockPos::new(
-                                        chunk_x_base + x_offset as i32,
-                                        y_base + y_in_section as i32,
-                                        chunk_z_base + z_offset as i32,
-                                    ),
-                                    tick_block,
-                                    tick_fluid,
-                                });
+                                let block_state_id =
+                                    sections[i].get(x_offset, y_in_section, z_offset);
+                                let tick_block = has_random_ticks(block_state_id);
+                                let tick_fluid = has_random_ticking_fluid(block_state_id);
+                                if tick_block || tick_fluid {
+                                    ticks.random_ticks.push(RandomTickSample {
+                                        position: BlockPos::new(
+                                            chunk_x_base + x_offset as i32,
+                                            y_base + y_in_section as i32,
+                                            chunk_z_base + z_offset as i32,
+                                        ),
+                                        tick_block,
+                                        tick_fluid,
+                                    });
+                                }
                             }
                         }
                     }

@@ -135,7 +135,10 @@ use pumpkin_world::{
     CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
-use pumpkin_world::{level::Level, tick::TickPriority};
+use pumpkin_world::{
+    level::{Level, MAX_RANDOM_TICK_SPEED},
+    tick::TickPriority,
+};
 pub use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{RngExt, rng};
@@ -1177,7 +1180,16 @@ impl World {
     #[expect(clippy::too_many_lines)]
     pub async fn tick_chunks(self: &Arc<Self>) {
         let active_chunks = self.active_chunks.load();
-        let tick_data = self.level.get_tick_data(&active_chunks);
+        // The game rule is an unbounded signed integer, so clamp it: a value of 0 (or below)
+        // disables random ticks entirely, and the upper bound keeps the per-tick sampling work
+        // bounded no matter what `/gamerule randomTickSpeed` was given
+        let random_tick_speed = self
+            .level_info
+            .load()
+            .game_rules
+            .random_tick_speed
+            .clamp(0, i64::from(MAX_RANDOM_TICK_SPEED)) as u32;
+        let tick_data = self.level.get_tick_data(&active_chunks, random_tick_speed);
 
         // ONE JoinSet for all chunk operations
         let mut chunk_tasks = tokio::task::JoinSet::new();
