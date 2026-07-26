@@ -888,7 +888,17 @@ impl Level {
                 relative.z as usize,
             )
         });
-        Biome::from_id(id.flatten().unwrap_or(0)).unwrap_or(&Biome::THE_VOID)
+        let id = id.flatten().unwrap_or_else(|| {
+            // Falling back silently to id 0 (BADLANDS) makes biome-driven
+            // systems (mob spawn pools, surface rules) quietly wrong — e.g.
+            // zero fish over an ocean because badlands has an empty
+            // water_ambient pool. Keep the fallback but make it visible.
+            debug!(
+                "get_rough_biome: no biome data at {position:?} (chunk {chunk_coordinate:?}); falling back to id 0"
+            );
+            0
+        });
+        Biome::from_id(id).unwrap_or(&Biome::THE_VOID)
     }
 
     pub fn get_entity_chunk_sync(&self, pos: &Vector2<i32>) -> Option<SyncEntityChunk> {
