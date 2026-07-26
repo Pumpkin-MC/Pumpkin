@@ -1,9 +1,9 @@
 //! Minimal vanilla `VibrationSystem`: routes game-event vibrations to sculk
 //! sensors so they emit redstone like vanilla.
 //!
-//! Vanilla travel delay (1 tick per block) and amethyst resonance are still
-//! TODO; activation power, frequency, wool occlusion, and the sensor phase
-//! machine match vanilla.
+//! Covers activation power, frequencies, wool occlusion, the 1-block-per-tick
+//! travel delay, and amethyst resonance; the sensor phase machine lives in the
+//! sculk sensor block.
 
 use std::sync::Arc;
 
@@ -48,6 +48,9 @@ pub enum Vibration {
     Teleport,
     EntityDie,
     Explode,
+    /// Amethyst resonance re-emission (`GameEvent.RESONATE_1..15`): carries
+    /// the resonated frequency verbatim.
+    Resonate(u8),
 }
 
 impl Vibration {
@@ -74,8 +77,26 @@ impl Vibration {
             Self::BlockPlace => 13,
             Self::EntityPlace | Self::LightningStrike | Self::Teleport => 14,
             Self::EntityDie | Self::Explode => 15,
+            Self::Resonate(frequency) => frequency,
         }
     }
+}
+
+/// A vibration in flight toward a sensor: vanilla `VibrationInfo` travel time
+/// is one tick per block of distance.
+pub struct PendingVibration {
+    pub sensor_pos: BlockPos,
+    pub power: u8,
+    pub frequency: u8,
+    pub remaining_ticks: u32,
+}
+
+/// Vanilla `SculkSensorBlock.RESONANCE_PITCH_BEND`: note-block pitches for the
+/// tone map `[0,0,2,4,6,7,9,10,12,14,15,18,19,21,22,24]`.
+fn resonance_pitch(frequency: u8) -> f32 {
+    const TONE_MAP: [i32; 16] = [0, 0, 2, 4, 6, 7, 9, 10, 12, 14, 15, 18, 19, 21, 22, 24];
+    let tone = TONE_MAP[usize::from(frequency.min(15))];
+    ((tone as f32 - 12.0) / 12.0).exp2()
 }
 
 /// Vanilla `VibrationSystem.Listener.isOccluded`, simplified to one center ray:
@@ -195,7 +216,85 @@ impl World {
 
             // Vanilla getRedstoneStrengthForDistance.
             let power = (15 - (15.0 / radius * distance).floor() as i32).max(1) as u8;
-            SculkSensorBlock::vibrate(self, &sensor_pos, block, power, frequency).await;
+            // Vanilla vibrations travel one block per tick before arriving.
+            self.pending_vibrations
+                .lock()
+                .unwrap()
+                .push(PendingVibration {
+                    sensor_pos,
+                    power,
+                    frequency,
+                    remaining_ticks: distance.floor() as u32,
+                });
+        }
+    }
+
+    /// Advances in-flight vibrations by one game tick and delivers arrivals,
+    /// including vanilla amethyst resonance from activating sensors.
+    pub async fn tick_pending_vibrations(self: &Arc<Self>) {
+        let due: Vec<PendingVibration> = {
+            let mut pending = self.pending_vibrations.lock().unwrap();
+            if pending.is_empty() {
+                return;
+            }
+            let mut due = Vec::new();
+            pending.retain_mut(|vibration| {
+                if vibration.remaining_ticks == 0 {
+                    due.push(PendingVibration {
+                        sensor_pos: vibration.sensor_pos,
+                        power: vibration.power,
+                        frequency: vibration.frequency,
+                        remaining_ticks: 0,
+                    });
+                    false
+                } else {
+                    vibration.remaining_ticks -= 1;
+                    true
+                }
+            });
+            due
+        };
+
+        for vibration in due {
+            let block = self.get_block(&vibration.sensor_pos);
+            if block.id != BlockId::SCULK_SENSOR && block.id != BlockId::CALIBRATED_SCULK_SENSOR {
+                continue;
+            }
+            let was_inactive = SculkSensorBlock::vibrate(
+                self,
+                &vibration.sensor_pos,
+                block,
+                vibration.power,
+                vibration.frequency,
+            )
+            .await;
+            if !was_inactive {
+                continue;
+            }
+            // Vanilla SculkSensorBlock.tryResonateVibration: adjacent blocks
+            // tagged vibration_resonators re-emit the frequency as a resonance
+            // event with the amethyst chime.
+            for direction in pumpkin_data::BlockDirection::all() {
+                let resonator_pos = vibration.sensor_pos.offset(direction.to_offset());
+                if !self
+                    .get_block(&resonator_pos)
+                    .has_tag(&tag::Block::MINECRAFT_VIBRATION_RESONATORS)
+                {
+                    continue;
+                }
+                self.play_sound_fine(
+                    pumpkin_data::sound::Sound::BlockAmethystBlockResonate,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    &resonator_pos.to_centered_f64(),
+                    1.0,
+                    resonance_pitch(vibration.frequency),
+                );
+                self.emit_vibration(
+                    Vibration::Resonate(vibration.frequency),
+                    resonator_pos.to_centered_f64(),
+                )
+                .await;
+            }
         }
     }
 }

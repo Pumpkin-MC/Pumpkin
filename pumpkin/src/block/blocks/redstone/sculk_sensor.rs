@@ -26,18 +26,19 @@ impl SculkSensorBlock {
     /// Vanilla `SculkSensorBlock.activate`: flips the phase to active with the
     /// distance-derived power, records the frequency, clicks, and schedules the
     /// 30-tick active window.
+    /// Returns `true` when the sensor was inactive and actually activated.
     pub async fn vibrate(
         world: &Arc<World>,
         pos: &BlockPos,
         block: &Block,
         power: u8,
         frequency: u8,
-    ) {
+    ) -> bool {
         let state = world.get_block_state(pos);
         let waterlogged = if block.id == BlockId::SCULK_SENSOR {
             let mut props = SculkSensorLikeProperties::from_state_id(state.id, block);
             if props.sculk_sensor_phase != SculkSensorPhase::Inactive {
-                return;
+                return false;
             }
             props.sculk_sensor_phase = SculkSensorPhase::Active;
             props.power = power;
@@ -48,7 +49,7 @@ impl SculkSensorBlock {
         } else if block.id == BlockId::CALIBRATED_SCULK_SENSOR {
             let mut props = CalibratedSculkSensorLikeProperties::from_state_id(state.id, block);
             if props.sculk_sensor_phase != SculkSensorPhase::Inactive {
-                return;
+                return false;
             }
             props.sculk_sensor_phase = SculkSensorPhase::Active;
             props.power = power;
@@ -57,7 +58,7 @@ impl SculkSensorBlock {
                 .await;
             props.waterlogged
         } else {
-            return;
+            return false;
         };
 
         if let Some(block_entity) = world.get_block_entity(pos) {
@@ -84,6 +85,7 @@ impl SculkSensorBlock {
                 rand::random::<f32>().mul_add(0.2, 0.8),
             );
         }
+        true
     }
 }
 

@@ -213,6 +213,8 @@ pub struct World {
     /// Vanilla's `ObjectLinkedOpenHashSet<BlockEventData>`: preserve insertion
     /// order while coalescing duplicate events in the same tick.
     synced_block_event_queue: Mutex<IndexSet<BlockEvent>>,
+    /// Vibrations traveling toward sculk sensors (1 block per tick).
+    pub pending_vibrations: std::sync::Mutex<Vec<crate::world::vibrations::PendingVibration>>,
     /// Serializes block-event processing and its client packet enqueue order.
     synced_block_event_flush_lock: Mutex<()>,
     /// Dirty block positions waiting to be broadcast to clients.
@@ -322,6 +324,7 @@ impl World {
             sea_level: generation_settings.sea_level,
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(IndexSet::new()),
+            pending_vibrations: std::sync::Mutex::new(Vec::new()),
             synced_block_event_flush_lock: Mutex::new(()),
             unsent_block_changes: Mutex::new(FxHashSet::default()),
             unsent_block_entity_updates: std::sync::Mutex::new(FxHashSet::default()),
@@ -1043,6 +1046,7 @@ impl World {
 
         self.flush_block_updates().await;
         self.flush_synced_block_events().await;
+        self.tick_pending_vibrations().await;
         self.update_active_chunks();
         self.tick_environment().await;
 
