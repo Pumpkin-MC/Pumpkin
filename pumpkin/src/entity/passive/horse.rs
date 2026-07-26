@@ -3,8 +3,12 @@ use std::sync::{Arc, Weak};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 
+use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_protocol::java::client::play::Metadata;
+
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, NBTStorage,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -206,7 +210,18 @@ impl Mob for HorseEntity {
 
     fn mob_init_data_tracker(&self) -> crate::entity::EntityBaseFuture<'_, ()> {
         Box::pin(async move {
-            self.mob_entity.mob_init_data_tracker().await;
+            // Base Mob::mob_init_data_tracker body (baby flag), then the
+            // horse-specific flag byte.
+            if self.is_mob_baby() {
+                self.get_entity().send_meta_data(
+                    &[Metadata::new(
+                        TrackedData::BABY_ID,
+                        MetaDataType::BOOLEAN,
+                        true,
+                    )],
+                    None,
+                );
+            }
             self.sync_horse_flags();
         })
     }
