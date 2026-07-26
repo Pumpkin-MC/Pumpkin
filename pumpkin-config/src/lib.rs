@@ -421,6 +421,7 @@ pub trait LoadConfiguration {
 
     /// Commented template to write on first run instead of a bare default dump.
     /// `None` keeps the plain serialized defaults.
+    #[must_use]
     fn first_run_template() -> Option<String> {
         None
     }
