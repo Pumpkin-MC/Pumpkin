@@ -104,13 +104,10 @@ impl MoveControlTrait for MoveControl {
             let target_requires_jump =
                 yd > step_height && horizontal_distance_sq < max_jump_distance_sq;
 
-            // Vanilla's second jump condition observes the collision shape at the
-            // mob's current block position. Pumpkin updates that position only after
-            // resolving movement, so a mob stopped by the face of a raised block is
-            // still in the previous air cell. Use the recorded horizontal collision
-            // and inspect the target column to retain the same one-block-step retry.
+            // Vanilla's collision-shape branch does not require a higher waypoint.
+            // Pumpkin updates block position after movement, so inspect the blocked
+            // target column when the mob is still in the preceding air cell.
             let blocked_by_target_step = if entity.horizontal_collision.load(Ordering::Relaxed)
-                && yd > 0.0
                 && horizontal_distance_sq < max_jump_distance_sq
             {
                 let target_block_pos = BlockPos::floored(self.wanted_x, pos.y, self.wanted_z);
