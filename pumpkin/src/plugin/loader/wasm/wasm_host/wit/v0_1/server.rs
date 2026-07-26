@@ -53,17 +53,14 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         let (total_memory, used_memory, process_memory) = if need_ram {
             sys.refresh_memory();
 
-            let process_memory = match sysinfo::get_current_pid() {
-                Ok(pid) => {
-                    sys.refresh_processes_specifics(
-                        sysinfo::ProcessesToUpdate::Some(&[pid]),
-                        true,
-                        sysinfo::ProcessRefreshKind::nothing().with_memory(),
-                    );
-                    sys.process(pid).map(sysinfo::Process::memory)
-                }
-                Err(_) => None,
-            };
+            let process_memory = sysinfo::get_current_pid().map_or(None, |pid| {
+                sys.refresh_processes_specifics(
+                    sysinfo::ProcessesToUpdate::Some(&[pid]),
+                    true,
+                    sysinfo::ProcessRefreshKind::nothing().with_memory(),
+                );
+                sys.process(pid).map(sysinfo::Process::memory)
+            });
 
             (
                 Some(sys.total_memory()),
