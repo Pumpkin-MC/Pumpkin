@@ -1731,19 +1731,29 @@ impl World {
 
     /// Whether rain is currently falling onto `pos`.
     ///
-    /// Mirrors vanilla `Level#isRainingAt`: it has to be raining, the position has to
-    /// see the sky, nothing motion blocking may sit above it, and the biome there has
-    /// to have rain as its precipitation (so not snow and not "no precipitation").
+    /// Mirrors vanilla `Level#isRainingAt`: it has to be raining, the topmost
+    /// motion blocking block has to be at or below `pos`, the position has to
+    /// see the sky, and the biome there has to have rain as its precipitation
+    /// (so not snow, and not "no precipitation").
     pub async fn is_raining_at(&self, pos: &BlockPos) -> bool {
-        if !self.is_raining().await {
+        self.is_raining().await && self.is_raining_at_unchecked(pos)
+    }
+
+    /// [`Self::is_raining_at`] without re-checking that it is raining at all.
+    ///
+    /// Callers that already know the world is raining use this so a single
+    /// check does not take the weather lock once per position.
+    pub(crate) fn is_raining_at_unchecked(&self, pos: &BlockPos) -> bool {
+        // The heightmap runs first: it is cheaper than reaching into the light
+        // engine and it is maintained on every block change.
+        //
+        // `get_heightmap_height` returns the Y of the topmost matching block,
+        // whereas vanilla's `Heightmap#getFirstAvailable` returns that Y plus
+        // one, hence the `+ 1` before comparing.
+        if self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1 > pos.0.y {
             return false;
         }
         if !self.can_see_sky(pos) {
-            return false;
-        }
-        // Our heightmaps store the Y of the topmost matching block, while vanilla's
-        // `Heightmap#getFirstAvailable` stores that Y plus one, hence the `+ 1` here.
-        if self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1 > pos.0.y {
             return false;
         }
         self.get_biome(pos)
@@ -4436,10 +4446,18 @@ impl World {
 
     /// Whether `position` has an unobstructed view of the sky.
     ///
-    /// Mirrors vanilla `LevelReader#canSeeSky`, which checks the raw (not
-    /// day/night darkened) sky light against the maximum light level.
+    /// Mirrors vanilla `BlockAndTintGetter#canSeeSky`, which checks the raw
+    /// (not day/night darkened) sky light against the maximum light level.
     #[must_use]
     pub fn can_see_sky(&self, position: &BlockPos) -> bool {
+        // Out of range lookups report full sky light, so reject them here
+        // rather than letting a position below or above the world claim to
+        // see the sky.
+        if position.0.y < self.dimension.min_y
+            || position.0.y >= self.dimension.min_y + self.dimension.height
+        {
+            return false;
+        }
         self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
     }
 
