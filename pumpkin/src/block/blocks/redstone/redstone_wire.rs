@@ -251,10 +251,7 @@ impl BlockBehaviour for RedstoneWireBlock {
         })
     }
 
-    fn on_state_replaced<'a>(
-        &'a self,
-        args: OnStateReplacedArgs<'a>,
-    ) -> BlockFuture<'a, ()> {
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if args.moved {
                 return;

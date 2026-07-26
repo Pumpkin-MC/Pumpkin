@@ -75,10 +75,7 @@ async fn check_corner_change_at(world: &Arc<World>, pos: BlockPos) {
     }
 }
 
-pub(crate) async fn update_neighbors_of_neighboring_wires(
-    world: &Arc<World>,
-    pos: &BlockPos,
-) {
+pub(crate) async fn update_neighbors_of_neighboring_wires(world: &Arc<World>, pos: &BlockPos) {
     for direction in BlockDirection::horizontal() {
         let direction = direction.to_block_direction();
         check_corner_change_at(world, pos.offset(direction.to_offset())).await;
