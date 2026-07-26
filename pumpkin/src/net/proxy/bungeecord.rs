@@ -109,61 +109,103 @@ mod tests {
         Mutex::new(SocketAddr::new(ip.parse().unwrap(), port))
     }
 
-    /// Handshake with full BungeeCord data + matching BungeeGuard token.
+    /// Build a `BungeeCord` handshake string from parts joined by `\0`.
+    fn handshake(parts: &[&str]) -> String {
+        parts.join("\0")
+    }
+
+    /// Handshake with full `BungeeCord` data + matching `BungeeGuard` token.
     #[tokio::test]
     async fn secret_set_token_matches() {
         let config = make_config("mysecret");
         let addr = make_address("127.0.0.1", 25565);
-        let handshake = "localhost\0127.0.0.2\000000000-0000-0000-0000-000000000001\0\0mysecret";
+        let hs = handshake(&[
+            "localhost",
+            "127.0.0.2",
+            "00000000-0000-0000-0000-000000000001",
+            "",
+            "mysecret",
+        ]);
 
-        let result = bungeecord_login(&config, &addr, handshake, "test".into()).await;
+        let result = bungeecord_login(&config, &addr, &hs, "test".into()).await;
         assert!(result.is_ok());
         let (ip, profile) = result.unwrap();
         assert_eq!(ip, "127.0.0.2".parse::<IpAddr>().unwrap());
         assert_eq!(profile.name, "test");
     }
 
-    /// Handshake with BungeeCord data but no BungeeGuard token — should fail.
+    /// Handshake with `BungeeCord` data but no `BungeeGuard` token — should fail.
     #[tokio::test]
     async fn secret_set_no_token() {
         let config = make_config("mysecret");
         let addr = make_address("127.0.0.1", 25565);
-        let handshake = "localhost\0127.0.0.2\000000000-0000-0000-0000-000000000001\0";
+        let hs = handshake(&[
+            "localhost",
+            "127.0.0.2",
+            "00000000-0000-0000-0000-000000000001",
+            "",
+        ]);
 
-        let result = bungeecord_login(&config, &addr, handshake, "test".into()).await;
-        assert!(matches!(result, Err(BungeeCordError::BungeeGuardFailedAuth)));
+        let result = bungeecord_login(&config, &addr, &hs, "test".into()).await;
+        assert!(matches!(
+            result,
+            Err(BungeeCordError::BungeeGuardFailedAuth)
+        ));
     }
 
-    /// Handshake with wrong BungeeGuard token — should fail.
+    /// Handshake with wrong `BungeeGuard` token — should fail.
     #[tokio::test]
     async fn secret_set_wrong_token() {
         let config = make_config("mysecret");
         let addr = make_address("127.0.0.1", 25565);
-        let handshake = "localhost\0127.0.0.2\000000000-0000-0000-0000-000000000001\0\0wrong";
+        let hs = handshake(&[
+            "localhost",
+            "127.0.0.2",
+            "00000000-0000-0000-0000-000000000001",
+            "",
+            "wrong",
+        ]);
 
-        let result = bungeecord_login(&config, &addr, handshake, "test".into()).await;
-        assert!(matches!(result, Err(BungeeCordError::BungeeGuardFailedAuth)));
+        let result = bungeecord_login(&config, &addr, &hs, "test".into()).await;
+        assert!(matches!(
+            result,
+            Err(BungeeCordError::BungeeGuardFailedAuth)
+        ));
     }
 
-    /// Normal BungeeCord handshake without BungeeGuard — backward compatible.
+    /// Normal `BungeeCord` handshake without `BungeeGuard` — backward compatible.
     #[tokio::test]
     async fn secret_empty_no_token() {
         let config = make_config("");
         let addr = make_address("127.0.0.1", 25565);
-        let handshake = "localhost\0127.0.0.2\000000000-0000-0000-0000-000000000001\0";
+        let hs = handshake(&[
+            "localhost",
+            "127.0.0.2",
+            "00000000-0000-0000-0000-000000000001",
+            "",
+        ]);
 
-        let result = bungeecord_login(&config, &addr, handshake, "test".into()).await;
+        let result = bungeecord_login(&config, &addr, &hs, "test".into()).await;
         assert!(result.is_ok());
     }
 
-    /// BungeeGuard token present but server not configured — misconfiguration.
+    /// `BungeeGuard` token present but server not configured — misconfiguration.
     #[tokio::test]
     async fn secret_empty_has_token() {
         let config = make_config("");
         let addr = make_address("127.0.0.1", 25565);
-        let handshake = "localhost\0127.0.0.2\000000000-0000-0000-0000-000000000001\0\0sometoken";
+        let hs = handshake(&[
+            "localhost",
+            "127.0.0.2",
+            "00000000-0000-0000-0000-000000000001",
+            "",
+            "sometoken",
+        ]);
 
-        let result = bungeecord_login(&config, &addr, handshake, "test".into()).await;
-        assert!(matches!(result, Err(BungeeCordError::BungeeGuardFailedAuth)));
+        let result = bungeecord_login(&config, &addr, &hs, "test".into()).await;
+        assert!(matches!(
+            result,
+            Err(BungeeCordError::BungeeGuardFailedAuth)
+        ));
     }
 }
