@@ -444,7 +444,12 @@ pub async fn drop_loot(
     experience: bool,
     params: LootContextParameters,
 ) {
-    if let Some(loot_table) = &block.loot_table {
+    // Vanilla gates item drops on this rule in `Block#popResource`, but
+    // deliberately does not gate experience in `Block#popExperience`, so ore
+    // experience still drops with the rule off.
+    if world.level_info.load().game_rules.block_drops
+        && let Some(loot_table) = &block.loot_table
+    {
         for stack in loot_table.get_loot(params) {
             world.drop_stack(pos, stack).await;
         }

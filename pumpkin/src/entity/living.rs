@@ -2064,6 +2064,18 @@ impl EntityBase for LivingEntity {
                 || damage_type == DamageType::LAVA
                 || damage_type == DamageType::HOT_FLOOR;
 
+            // Like fire and drowning damage, these are gated for players only;
+            // mobs still take them.
+            if self.entity.entity_type == &EntityType::PLAYER {
+                let game_rules = &world.level_info.load().game_rules;
+                if damage_type == DamageType::FALL && !game_rules.fall_damage {
+                    return false;
+                }
+                if damage_type == DamageType::FREEZE && !game_rules.freeze_damage {
+                    return false;
+                }
+            }
+
             // Fire damage can be prevented by either game rules or fire resistance
             if is_fire_damage {
                 // Check game rule for fire damage (only for players)

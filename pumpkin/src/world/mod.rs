@@ -2532,6 +2532,7 @@ impl World {
         // This code follows the vanilla packet order
         let entity_id = player.entity_id();
         let gamemode = player.gamemode.load();
+        let level_info = self.level_info.load();
         debug!(
             "spawning player {}, entity id {}",
             player.gameprofile.name, entity_id
@@ -2567,9 +2568,9 @@ impl World {
                     .simulation_distance
                     .get()
                     .into(), // TODO: sim view dinstance
-                false,
-                true,
-                false,
+                level_info.game_rules.reduced_debug_info,
+                !level_info.game_rules.immediate_respawn,
+                level_info.game_rules.limited_crafting,
                 PlayerSpawnData::new(
                     self.dimension.clone(),
                     biome::hash_seed(self.level.seed.0), // seed
