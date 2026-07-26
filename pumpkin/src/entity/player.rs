@@ -122,6 +122,14 @@ const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
 pub const DATA_VERSION: i32 = 4903; // 26.2
 
+/// Food exhaustion applied for every block a player mines.
+///
+/// Vanilla: `Block#playerDestroy` calls `player.causeFoodExhaustion(0.005F)`.
+/// `ServerPlayerGameMode#destroyBlock` only reaches `playerDestroy` for
+/// non-creative players holding a tool that can harvest the block, so callers
+/// must apply the same gating.
+pub const MINE_BLOCK_EXHAUSTION: f32 = 0.005; // Vanilla: 0.005F
+
 struct HeapNode(i32, Vector2<i32>, Weak<ChunkData>);
 
 impl Eq for HeapNode {}
@@ -1161,6 +1169,11 @@ impl Player {
             Self::combat_weapon_durability_cost(&stack)
         })
         .await;
+
+        // Vanilla `Player#attack` ends the successful-hit branch with
+        // `causeFoodExhaustion(0.1F)`. Only landed hits exhaust; the miss/no-damage
+        // case returned early above.
+        self.add_exhaustion(0.1).await;
 
         if config.swing {}
     }
