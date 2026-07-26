@@ -60,7 +60,7 @@ impl FollowCaravanGoal {
         false
     }
 
-    async fn leave_caravan(llama: &LlamaEntity, world: &crate::world::World) {
+    fn leave_caravan(llama: &LlamaEntity, world: &crate::world::World) {
         let head_id = llama.caravan_head.swap(NO_HEAD, Ordering::Relaxed);
         if head_id != NO_HEAD
             && let Some(head) = world.get_entity_by_id(head_id)
@@ -170,7 +170,7 @@ impl Goal for FollowCaravanGoal {
             };
             let entity = mob.get_entity();
             let world = entity.world.load();
-            Self::leave_caravan(llama, &world).await;
+            Self::leave_caravan(llama, &world);
             mob.get_mob_entity().navigator.lock().unwrap().stop();
         })
     }
