@@ -34,7 +34,7 @@
 
 已核对为正确：4 基本方向 + 4 对角扩展、`is_neighbor_valid`、WALKABLE_DOOR 对角禁行、宽度<0.5 栅栏柱穿行、26 个 PathType malus 数值、门类型映射（WALKABLE_DOOR/UNPASSABLE_RAIL 规则）。
 
-**高危（修复中/待修）：**
+**高危（除 #35 外已于 2026-07-27 修复，f38f301b 全绿验证）：**
 
 | # | 问题 | Pumpkin | 原版 |
 |---|---|---|---|
@@ -54,7 +54,7 @@
 
 已核对为正确：线路功率计算（15 短路、15→0 衰减、对角上下连接）、强/弱充能区分与线尘抑制、中继器全套（延迟/锁存/脉冲缩短/三档 tick 优先级）、比较器（比较/减法、隔方块读取含物品展示框路径、容器公式 `floor(1+14·fill)`）、活塞 12 上限 + PistonStructureResolver + 粘液/蜂蜜黏连 + 活塞/发射器 QC、观察者 2gt+2gt、CollectingNeighborUpdater 更新序（W,E,D,U,N,S + 层级重入 + 0x80 wire-skip）。
 
-**高危（修复中/待修）：**
+**高危（#1-4 已修，f38f301b 全绿；#5/#6 活塞实体交互仍待做）：**
 
 | # | 问题 | Pumpkin | 原版 |
 |---|---|---|---|
@@ -91,16 +91,24 @@
 **占位/简化实现（需完整移植）：**
 - `ocean_monument.rs:66-108` —— 程序化阶梯金字塔占位，无房间网格/远古守卫者/海绵房（原版 `OceanMonumentPieces` 12 种 piece）
 - `mansion.rs:86-145` —— 只摆入口+两面墙（73 个模板只用 4 个），无 LayoutGenerator/FlagMatrix 楼层房间屋顶
-- `end_city.rs:37-41` —— 只用 5/20 模板，无桥/fat_tower/二三层/屋顶
-- `mineshaft.rs` —— 移植中（原版 `MineshaftPieces.java` 782 行：走廊铁轨/蛛网/洞穴蜘蛛刷怪笼/运输矿车宝箱/支撑柱、房间、十字、楼梯）
+- ~~end_city.rs 简化版~~ **已完整移植**（2026-07-27，8f480e7e：四个 SectionGenerator 递归、桥/飞船、19/20 模板、Chest/Sentry/Elytra 数据标记）
+- ~~mineshaft.rs 简化版~~ **已完整移植**（2026-07-27，79c3fef1：走廊铁轨/蛛网/洞穴蜘蛛刷怪笼/运输矿车实体宝箱/支撑柱、房间、十字、楼梯、mesa 变体，随机数序与原版逐抽一致）
 - `jigsaw_placement.rs:56` `PoolAliasLookup` 为 stub → 试炼密室池别名未生效
 - 模板处理器缺：`gravity`、`block_ignore`、`jigsaw_replacement`、`block_age`、`lava_submerged_block`、`blackstone_replace`；`capped` 的 limit 是 no-op（`processor.rs:149-152`）
 - `mod.rs` 两个 dispatch 函数逐字重复（drift 风险，待合并）
 
-## 6. 地形生成（用户报告，诊断中）
+## 6. 地形生成（2026-07-27 已修 6 项，018e376f）
 
-用户观察到：悬空岛、石头堆中孤立草方块、石头+沙/陶土混杂表面。怀疑方向：surface rules 的 stone-depth/floor 判定、群系采样坐标、噪声实例错配。诊断 agent 进行中，结论出来后补充本节。
-（注：beard_thin/beard_box/bury/encapsulate 地形适配已在 `proto_chunk.rs:563-` 实现，村庄悬空不是 beardifier 缺失所致。）
+用户报告的悬空岛/石中草/沙陶土混杂，诊断出 5 个根因并修复：
+- beardifier 剔除盒对 junction 误用 piece 盒（Beardifier.java:74-75）→ 结构边缘悬空
+- FindTopSurface 非原版提前返回 + 高度估算不一致（DensityFunctions.java:1068-1078）→ 草出现在封闭洞穴地板（石中草主因）
+- surface 阶段 i8 位移回绕（WAY_BELOW_MIN_Y 语义）
+- noise_threshold 丢失 is_3d 字段（SurfaceRules.java:347，硫磺洞 45 处 true）→ 带状材质变斑点
+- 区块边界群系查询 `& 3` 回绕 → 改为 clamp（残余缺口：真正的邻区块 quart 解析待做，SurfaceRules.java:754-758）
+- 陶土条带索引负数经 u64 偏移 64 条带 → rem_euclid
+
+**仍待做**：Blender（旧区块混合）整体未接线——旧存档/混版本世界接缝处悬空的主嫌，工程量大；黄金对照测试（density_function/test.rs 全被注释、proto_chunk_test 只是冒烟测试）建议恢复。
+（carver hasGrass 作用域经查与原版一致，诊断误报，未改。）
 
 ## 7. 其他已知缺口（历史）
 
@@ -117,4 +125,14 @@
 - d957a38c `fix(spawner)` 刷怪笼 BaseSpawner 对照重写
 - ea39d324 `feat(spawn)` 水生生物刷新规则全套
 - e8e266e8 `fix(build)` horse.rs 编译错误
-- 进行中：寻路高危修复（agent）、红石高危修复（agent）、矿井完整移植（agent）、地形诊断（agent）
+- e8e266e8 `fix(build)` horse.rs 编译错误
+- e25ed342 `fix(redstone)` 火把烧毁/侧输入/活塞 QC 等 7 项
+- a2494413 `fix(ai)` 寻路 10 项高危批次
+- 0b444362 `debug(world)` 群系 id-0 回退日志（零鱼嫌疑 #3）
+- 8e29479b `fix(redstone)` 标靶响应所有弹射物
+- 79c3fef1 `feat(worldgen)` 矿井完整移植 + lint 修复 —— **f38f301b 全绿（全部玩法修复验证通过）**
+- 018e376f `fix(worldgen)` 地形 6 项根因修复
+- aae5a3d0/adef798a/ba0e3e75/7cf1202c 屎山拆分（world/player/entity/net）+ f85791ba 导入修复
+- fb026e38 生成文件 include! 分片（block 592k→24 片等六文件，字节级校验）
+- 8f480e7e `feat(worldgen)` 末地城完整移植
+- 进行中：第二批 18 个 1000+ 行文件拆分（4 agent，含补测试）、第一批拆分测试补充
