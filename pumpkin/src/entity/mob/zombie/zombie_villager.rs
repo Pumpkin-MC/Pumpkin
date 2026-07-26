@@ -516,11 +516,10 @@ impl Mob for ZombieVillagerEntity {
             if player.gamemode.load() != GameMode::Creative {
                 item_stack.decrement(1);
             }
-            self.start_converting(
-                Some(player.get_entity().entity_uuid),
-                rand::rng().random_range(3600..=6000),
-            )
-            .await;
+            // Keep the (non-Send) thread rng out of the await point.
+            let conversion_time = rand::rng().random_range(3600..=6000);
+            self.start_converting(Some(player.get_entity().entity_uuid), conversion_time)
+                .await;
             true
         })
     }

@@ -65,7 +65,7 @@ impl BlockBehaviour for RedstoneWireBlock {
                 BlockDirection::Down => {
                     // A support change is a survival check, not a connection
                     // recalculation. Power is updated by neighborChanged.
-                    return if can_place_at(args.world.as_ref(), args.position) {
+                    return if can_place_at(args.world, args.position) {
                         args.state_id
                     } else {
                         Block::AIR.default_state.id

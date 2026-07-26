@@ -174,7 +174,7 @@ impl BreakDoorGoal {
 impl Goal for BreakDoorGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            if !mob.can_break_doors() {
+            if !mob.get_mob_entity().can_break_doors() {
                 return false;
             }
             let world = mob.get_entity().world.load();
@@ -231,7 +231,9 @@ impl Goal for BreakDoorGoal {
             let world = mob.get_entity().world.load_full();
             let door_pos = self.state.door_pos;
 
-            if mob.get_random().random_range(0..20) == 0 {
+            // Keep the (non-Send) thread rng out of the await points below.
+            let knock = mob.get_random().random_range(0..20) == 0;
+            if knock {
                 world.sync_world_event(WorldEvent::SoundZombieWoodenDoor, door_pos, 0);
                 mob.get_mob_entity().living_entity.swing_hand().await;
             }
