@@ -7,7 +7,7 @@ use crate::entity::{
 };
 
 pub struct HuskEntity {
-    entity: Arc<ZombieEntityBase>,
+    pub(crate) entity: Arc<ZombieEntityBase>,
 }
 
 impl HuskEntity {
@@ -37,6 +37,10 @@ impl NBTStorage for HuskEntity {
 impl Mob for HuskEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
+    }
+
+    fn is_mob_baby(&self) -> bool {
+        self.entity.is_mob_baby()
     }
 
     fn supports_break_door_goal(&self) -> bool {

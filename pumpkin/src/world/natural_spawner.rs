@@ -911,6 +911,53 @@ pub fn spawn_category_for_position(
     batch_buffer
 }
 
+/// Vanilla `Zombie.finalizeSpawn` jockey roll: 5% of baby zombies start riding
+/// a chicken. Called for freshly spawned natural entities only.
+pub async fn try_spawn_chicken_jockey(world: &Arc<World>, entity: &Arc<dyn EntityBase>) {
+    use crate::entity::mob::zombie::ZombieEntityBase;
+    use crate::entity::mob::zombie::drowned::DrownedEntity;
+    use crate::entity::mob::zombie::husk::HuskEntity;
+    use crate::entity::mob::zombie::zombie::ZombieEntity;
+    use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
+
+    let any = entity.cast_any();
+    let zombie_base: Option<&ZombieEntityBase> = any
+        .downcast_ref::<ZombieEntity>()
+        .map(|z| z.entity.as_ref())
+        .or_else(|| any.downcast_ref::<HuskEntity>().map(|z| z.entity.as_ref()))
+        .or_else(|| {
+            any.downcast_ref::<DrownedEntity>()
+                .map(|z| z.entity.as_ref())
+        })
+        .or_else(|| {
+            any.downcast_ref::<ZombieVillagerEntity>()
+                .map(|z| z.mob_entity.as_ref())
+        });
+    let Some(zombie_base) = zombie_base else {
+        return;
+    };
+    if !zombie_base
+        .is_baby
+        .load(std::sync::atomic::Ordering::Relaxed)
+        || rand::random::<f32>() >= 0.05
+    {
+        return;
+    }
+
+    let pos = entity.get_entity().pos.load();
+    let chicken = crate::entity::r#type::from_type(
+        &pumpkin_data::entity::EntityType::CHICKEN,
+        pos,
+        world,
+        uuid::Uuid::new_v4(),
+    );
+    world.spawn_entity(chicken.clone()).await;
+    chicken
+        .get_entity()
+        .add_passenger(chicken.clone(), entity.clone())
+        .await;
+}
+
 #[must_use]
 pub fn get_nearest_player(pos: &Vector3<f64>, player_positions: &[Vector3<f64>]) -> f64 {
     let mut min_dst_sq = f64::MAX;

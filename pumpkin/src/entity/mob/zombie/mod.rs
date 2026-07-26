@@ -16,6 +16,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::difficulty::Difficulty;
 use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Weak};
 
 pub mod drowned;
@@ -26,6 +27,9 @@ pub mod zombie_villager;
 
 pub struct ZombieEntityBase {
     pub mob_entity: MobEntity,
+    /// Vanilla `Zombie.DATA_BABY_ID`. Rolled at construction (5%), overridden
+    /// by the saved `IsBaby` tag on load.
+    pub is_baby: AtomicBool,
 }
 
 impl ZombieEntityBase {
@@ -36,7 +40,15 @@ impl ZombieEntityBase {
             &Attributes::SPAWN_REINFORCEMENTS,
             rand::random::<f64>() * 0.1,
         );
-        let zombie = Self { mob_entity };
+        // Vanilla getSpawnAsBabyOdds: 5% of zombie-family spawns are babies.
+        let is_baby = rand::random::<f32>() < 0.05;
+        if is_baby {
+            Self::apply_baby_speed(&mob_entity, true);
+        }
+        let zombie = Self {
+            mob_entity,
+            is_baby: AtomicBool::new(is_baby),
+        };
         let mob_arc = Arc::new(zombie);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -94,6 +106,33 @@ impl ZombieEntityBase {
 
         mob_arc
     }
+
+    /// Vanilla `SPEED_MODIFIER_BABY`: babies move 50% faster.
+    fn apply_baby_speed(mob_entity: &MobEntity, baby: bool) {
+        let living = &mob_entity.living_entity;
+        let default_speed = living
+            .entity
+            .entity_type
+            .attributes
+            .iter()
+            .find(|attribute| attribute.0.id == Attributes::MOVEMENT_SPEED.id)
+            .map_or(0.23, |attribute| attribute.1);
+        living.set_attribute_base(
+            &Attributes::MOVEMENT_SPEED,
+            if baby {
+                default_speed * 1.5
+            } else {
+                default_speed
+            },
+        );
+    }
+
+    pub fn set_baby(&self, baby: bool) {
+        use std::sync::atomic::Ordering;
+        if self.is_baby.swap(baby, Ordering::Relaxed) != baby {
+            Self::apply_baby_speed(&self.mob_entity, baby);
+        }
+    }
 }
 
 impl NBTStorage for ZombieEntityBase {
@@ -101,6 +140,10 @@ impl NBTStorage for ZombieEntityBase {
         Box::pin(async move {
             self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_bool("CanBreakDoors", self.mob_entity.can_break_doors());
+            nbt.put_bool(
+                "IsBaby",
+                self.is_baby.load(std::sync::atomic::Ordering::Relaxed),
+            );
         })
     }
 
@@ -111,6 +154,8 @@ impl NBTStorage for ZombieEntityBase {
                 self.mob_entity
                     .set_can_break_doors_from_nbt(can_break_doors);
             }
+            // Saved state wins over the construction-time baby roll.
+            self.set_baby(nbt.get_bool("IsBaby").unwrap_or(false));
         })
     }
 }
@@ -118,6 +163,10 @@ impl NBTStorage for ZombieEntityBase {
 impl Mob for ZombieEntityBase {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn is_mob_baby(&self) -> bool {
+        self.is_baby.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     fn supports_break_door_goal(&self) -> bool {

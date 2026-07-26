@@ -734,6 +734,17 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// Whether this mob renders as a baby. Age-based by default; zombies use a
+    /// permanent flag instead.
+    fn is_mob_baby(&self) -> bool {
+        self.get_mob_entity()
+            .living_entity
+            .entity
+            .age
+            .load(std::sync::atomic::Ordering::Relaxed)
+            < 0
+    }
+
     /// Whether this mob type participates in vanilla `Zombie.setCanBreakDoors`
     /// (ground-navigating zombies). Drowned navigate water and are excluded.
     fn supports_break_door_goal(&self) -> bool {
@@ -828,7 +839,7 @@ pub trait Mob: EntityBase + Send + Sync {
     fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let entity = self.get_entity();
-            let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
+            let is_baby = self.is_mob_baby();
             if is_baby {
                 entity.send_meta_data(
                     &[Metadata::new(

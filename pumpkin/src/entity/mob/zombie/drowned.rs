@@ -13,7 +13,7 @@ use crate::entity::{
 /// Drowned — vanilla addBehaviourGoals: water/trident/beach + axolotl target.
 /// Inherits shared zombie goals then adds axolotl (decompile Drowned.java).
 pub struct DrownedEntity {
-    entity: Arc<ZombieEntityBase>,
+    pub(crate) entity: Arc<ZombieEntityBase>,
 }
 
 impl DrownedEntity {
@@ -56,5 +56,9 @@ impl NBTStorage for DrownedEntity {
 impl Mob for DrownedEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
+    }
+
+    fn is_mob_baby(&self) -> bool {
+        self.entity.is_mob_baby()
     }
 }

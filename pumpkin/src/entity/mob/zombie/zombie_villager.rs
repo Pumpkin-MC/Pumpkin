@@ -444,6 +444,10 @@ impl Mob for ZombieVillagerEntity {
         &self.mob_entity.mob_entity
     }
 
+    fn is_mob_baby(&self) -> bool {
+        self.mob_entity.is_mob_baby()
+    }
+
     fn requires_custom_persistence(&self) -> bool {
         self.is_converting() || self.villager_xp.load(Ordering::Relaxed) > 0
     }

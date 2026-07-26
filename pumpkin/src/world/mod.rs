@@ -2038,7 +2038,8 @@ impl World {
             is_thundering,
         );
         for entity in entities {
-            self.spawn_natural_entity(entity).await;
+            self.spawn_natural_entity(entity.clone()).await;
+            crate::world::natural_spawner::try_spawn_chicken_jockey(self, &entity).await;
         }
     }
 
