@@ -7,12 +7,15 @@ use crate::entity::ai::goal::swim::SwimGoal;
 use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::{
-    Entity, NBTStorage, NbtFuture,
+    Entity, EntityBase, NBTStorage, NbtFuture,
     ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::difficulty::Difficulty;
+use pumpkin_util::math::position::BlockPos;
+use rand::RngExt;
 use std::sync::{Arc, Weak};
 
 pub mod drowned;
@@ -28,6 +31,11 @@ pub struct ZombieEntityBase {
 impl ZombieEntityBase {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
+        // Vanilla Zombie.randomizeReinforcementsChance: base = random * 0.1.
+        mob_entity.living_entity.set_attribute_base(
+            &Attributes::SPAWN_REINFORCEMENTS,
+            rand::random::<f64>() * 0.1,
+        );
         let zombie = Self { mob_entity };
         let mob_arc = Arc::new(zombie);
         let mob_weak: Weak<dyn Mob> = {
@@ -114,5 +122,120 @@ impl Mob for ZombieEntityBase {
 
     fn supports_break_door_goal(&self) -> bool {
         true
+    }
+
+    /// Vanilla `Zombie.hurtServer` reinforcement call: on Hard difficulty a hurt
+    /// zombie may summon another of its kind nearby, at a shrinking chance.
+    fn on_damage<'a>(
+        &'a self,
+        _damage_type: pumpkin_data::damage::DamageType,
+        source: Option<&'a dyn EntityBase>,
+    ) -> crate::entity::EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let living = &self.mob_entity.living_entity;
+            let entity = &living.entity;
+            let world = entity.world.load_full();
+
+            {
+                let level_info = world.level_info.load();
+                if level_info.difficulty != Difficulty::Hard
+                    || !level_info.game_rules.spawn_monsters
+                {
+                    return;
+                }
+            }
+
+            let chance = living.get_attribute_value(&Attributes::SPAWN_REINFORCEMENTS);
+            if f64::from(rand::random::<f32>()) >= chance {
+                return;
+            }
+
+            // Vanilla uses the current target, falling back to the attacker.
+            let target: Option<Arc<dyn EntityBase>> = {
+                let current = self.mob_entity.target.lock().await.clone();
+                match current {
+                    Some(target) => Some(target),
+                    None => source
+                        .filter(|s| s.get_living_entity().is_some())
+                        .and_then(|s| world.get_entity_by_id(s.get_entity().entity_id)),
+                }
+            };
+            let Some(target) = target else {
+                return;
+            };
+
+            let origin = entity.block_pos.load();
+            let entity_type = entity.entity_type;
+            for _ in 0..50 {
+                let mut rng = rand::rng();
+                let offset = |rng: &mut rand::rngs::ThreadRng| {
+                    rng.random_range(7..=40) * rng.random_range(-1i32..=1)
+                };
+                let spawn_pos = BlockPos::new(
+                    origin.0.x + offset(&mut rng),
+                    origin.0.y + offset(&mut rng),
+                    origin.0.z + offset(&mut rng),
+                );
+                drop(rng);
+
+                // Standable: solid floor, two passable blocks.
+                let floor = world.get_block_state(&spawn_pos.down());
+                let feet = world.get_block_state(&spawn_pos);
+                let head = world.get_block_state(&spawn_pos.up());
+                if !floor.is_side_solid(pumpkin_data::BlockDirection::Up)
+                    || feet.is_solid()
+                    || head.is_solid()
+                {
+                    continue;
+                }
+
+                let spawn_center = spawn_pos.to_f64().add_raw(0.5, 0.0, 0.5);
+                // Vanilla rejects positions with a player within 7 blocks.
+                if world.get_closest_player(spawn_center, 7.0).is_some() {
+                    continue;
+                }
+
+                let reinforcement: Arc<dyn Mob> = match entity_type.id {
+                    id if id == EntityType::HUSK.id => {
+                        husk::HuskEntity::new(Entity::new(world.clone(), spawn_center, entity_type))
+                    }
+                    id if id == EntityType::DROWNED.id => drowned::DrownedEntity::new(Entity::new(
+                        world.clone(),
+                        spawn_center,
+                        entity_type,
+                    )),
+                    id if id == EntityType::ZOMBIE_VILLAGER.id => {
+                        zombie_villager::ZombieVillagerEntity::new(Entity::new(
+                            world.clone(),
+                            spawn_center,
+                            entity_type,
+                        ))
+                    }
+                    _ => zombie::ZombieEntity::new(Entity::new(
+                        world.clone(),
+                        spawn_center,
+                        &EntityType::ZOMBIE,
+                    )),
+                };
+                reinforcement.set_mob_target(Some(target)).await;
+
+                // Both caller and callee lose 5% future reinforcement chance.
+                living.set_attribute_base(
+                    &Attributes::SPAWN_REINFORCEMENTS,
+                    (chance - 0.05).max(0.0),
+                );
+                let reinforcement_living = &reinforcement.get_mob_entity().living_entity;
+                let callee_chance =
+                    reinforcement_living.get_attribute_value(&Attributes::SPAWN_REINFORCEMENTS);
+                reinforcement_living.set_attribute_base(
+                    &Attributes::SPAWN_REINFORCEMENTS,
+                    (callee_chance - 0.05).max(0.0),
+                );
+
+                let reinforcement_base: Arc<dyn EntityBase> = reinforcement;
+                world.spawn_entity(reinforcement_base).await;
+                break;
+            }
+        })
     }
 }
