@@ -36,30 +36,55 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     async fn get_sys_info(&mut self, _res: Resource<Server>) -> wasmtime::Result<SysInfo> {
         let has_perm = |p: &str| self.permissions.iter().any(|perm| perm == p);
 
-        let mut sys = sysinfo::System::new_all();
-        sys.refresh_all();
+        let need_cpu = has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_CPU);
+        let need_ram = has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_RAM);
+        let need_os = has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_OS);
 
-        let cpu_count = (has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_CPU))
-            .then(|| sys.cpus().len() as u32);
+        // Only refresh the counters the caller is allowed to see. A full
+        // `System::new_all()` / `refresh_all()` scans every process on the host
+        // and is far too expensive for plugins that poll this on a timer.
+        let mut sys = sysinfo::System::new();
 
-        let (total_memory, used_memory) =
-            if has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_RAM) {
-                (Some(sys.total_memory()), Some(sys.used_memory()))
-            } else {
-                (None, None)
+        let cpu_count = need_cpu.then(|| {
+            sys.refresh_cpu_all();
+            sys.cpus().len() as u32
+        });
+
+        let (total_memory, used_memory, process_memory) = if need_ram {
+            sys.refresh_memory();
+
+            let process_memory = match sysinfo::get_current_pid() {
+                Ok(pid) => {
+                    sys.refresh_processes_specifics(
+                        sysinfo::ProcessesToUpdate::Some(&[pid]),
+                        true,
+                        sysinfo::ProcessRefreshKind::nothing().with_memory(),
+                    );
+                    sys.process(pid).map(sysinfo::Process::memory)
+                }
+                Err(_) => None,
             };
 
-        let (os_name, os_version) =
-            if has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_OS) {
-                (sysinfo::System::name(), sysinfo::System::os_version())
-            } else {
-                (None, None)
-            };
+            (
+                Some(sys.total_memory()),
+                Some(sys.used_memory()),
+                process_memory,
+            )
+        } else {
+            (None, None, None)
+        };
+
+        let (os_name, os_version) = if need_os {
+            (sysinfo::System::name(), sysinfo::System::os_version())
+        } else {
+            (None, None)
+        };
 
         Ok(SysInfo {
             cpu_count,
             total_memory,
             used_memory,
+            process_memory,
             os_name,
             os_version,
             pumpkin_version: env!("CARGO_PKG_VERSION").to_string(),
