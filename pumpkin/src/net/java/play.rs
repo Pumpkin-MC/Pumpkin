@@ -2226,13 +2226,9 @@ impl JavaClient {
     }
 
     async fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
-        let synced_state_id = world.get_block_state_id(&position);
-        // Keep client corrections ordered with chunk and redstone updates.
-        self.enqueue_packet(&CBlockUpdate::new(
-            position,
-            VarInt(i32::from(synced_state_id.as_u16())),
-        ))
-        .await;
+        world
+            .enqueue_block_state_corrections(self, &[position])
+            .await;
     }
 
     async fn sync_use_item_on_block_states(
@@ -2241,8 +2237,8 @@ impl JavaClient {
         position: BlockPos,
         face: BlockDirection,
     ) {
-        self.sync_block_state_to_client(world, position).await;
-        self.sync_block_state_to_client(world, position.offset(face.to_offset()))
+        world
+            .enqueue_block_state_corrections(self, &[position, position.offset(face.to_offset())])
             .await;
     }
 

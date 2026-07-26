@@ -222,8 +222,7 @@ pub struct World {
     unsent_block_changes: Mutex<FxHashSet<BlockPos>>,
     /// Block entities that need an authoritative state/data update pair.
     unsent_block_entity_updates: std::sync::Mutex<FxHashSet<BlockPos>>,
-    /// Serializes snapshots and packet enqueueing so older flushes cannot be
-    /// delivered after a newer one.
+    /// Serializes broadcasts and direct corrections to preserve block packet order.
     block_update_flush_lock: Mutex<()>,
     /// POI storage for fast portal lookups
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
@@ -1302,6 +1301,25 @@ impl World {
         };
         self.enqueue_block_entity_updates(&block_entity_updates)
             .await;
+    }
+
+    /// Enqueues Java corrections in the same order domain as normal block broadcasts.
+    /// Writes during the correction remain dirty and are broadcast afterwards.
+    pub async fn enqueue_block_state_corrections(
+        &self,
+        client: &JavaClient,
+        positions: &[BlockPos],
+    ) {
+        let _flush_guard = self.block_update_flush_lock.lock().await;
+        for position in positions {
+            let state_id = self.get_block_state_id(position);
+            client
+                .enqueue_packet(&CBlockUpdate::new(
+                    *position,
+                    VarInt(i32::from(state_id.as_u16())),
+                ))
+                .await;
+        }
     }
 
     /// Queues authoritative block updates on each client's ordered normal queue.
