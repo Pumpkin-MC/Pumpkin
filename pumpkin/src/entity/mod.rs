@@ -3878,3 +3878,65 @@ mod tests {
         }
     }
 }
+
+// Compile-time regression checks for the split of `entity/mod.rs` into the
+// `entity_*` submodules and of `living.rs` into `living/` submodules. Every
+// binding pins a moved public method to its exact signature; a compile
+// failure here means the code motion changed or dropped API surface.
+#[cfg(test)]
+mod split_reachability {
+    use crate::entity::Entity;
+    use crate::entity::living::LivingEntity;
+    use pumpkin_data::block_properties::HorizontalFacing;
+    use pumpkin_protocol::java::client::play::CSetEquipment;
+    use pumpkin_util::math::vector3::Vector3;
+
+    // Async methods cannot be named as plain `fn` pointers, so they are taken
+    // by value instead; resolution still fails if the method went missing.
+    const fn probe<F: Copy>(_: F) {}
+
+    // entity_core.rs
+    const _: fn(i32) -> i32 = Entity::reserve_ids;
+    const _: fn(&Entity) -> Vector3<f64> = Entity::get_eye_pos;
+    const _: fn(&Entity) -> f32 = Entity::width;
+
+    // entity_movement.rs
+    const _: fn(&Entity) -> Vector3<f32> = Entity::rotation;
+    const _: fn(&Entity, f64, f64, f64) = Entity::apply_knockback;
+    const _: () = probe(Entity::move_entity);
+
+    // entity_sync.rs
+    const _: fn(&Entity) -> Vector3<f64> = Entity::update_last_pos;
+    const _: fn(&Entity) = Entity::send_pos;
+
+    // entity_env.rs
+    const _: fn(&Entity) -> bool = Entity::is_freeze_immune;
+    const _: () = probe(Entity::check_out_of_world);
+
+    // entity_portal.rs
+    const _: () = probe(Entity::try_use_portal);
+
+    // entity_riding.rs
+    const _: () = probe(Entity::add_passenger);
+    const _: () = probe(Entity::unleash);
+
+    // entity_state.rs
+    const _: fn(&Entity) -> HorizontalFacing = Entity::get_horizontal_facing;
+    const _: fn(&Entity, f32, f32) = Entity::set_rotation;
+
+    // living/equipment.rs
+    const _: fn(&LivingEntity) -> Option<CSetEquipment> = LivingEntity::equipment_packet_if_any;
+    const _: fn(&LivingEntity, &Entity, u32) = LivingEntity::pickup;
+
+    // living/effects.rs
+    const _: fn(&LivingEntity, f32) = LivingEntity::heal;
+    const _: fn(&LivingEntity) -> f32 = LivingEntity::get_max_health;
+
+    // living/movement.rs
+    const _: fn(&LivingEntity) -> bool = LivingEntity::is_in_water;
+    const _: fn(&LivingEntity) -> f64 = LivingEntity::get_swim_height;
+
+    // living/death.rs
+    const _: () = probe(LivingEntity::on_death);
+    const _: () = probe(LivingEntity::get_death_message);
+}

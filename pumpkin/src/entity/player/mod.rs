@@ -754,3 +754,72 @@ impl EntityBase for Player {
         })
     }
 }
+
+// Compile-time regression checks for the split of the old `entity/player.rs`
+// into the `player/` submodules. Every binding pins a moved public method to
+// its exact signature; a compile failure here means the code motion changed
+// or dropped API surface.
+#[cfg(test)]
+mod split_reachability {
+    use super::{ChunkManager, MessageCache, Player};
+    use pumpkin_util::Hand;
+    use pumpkin_util::math::position::BlockPos;
+
+    // Async methods cannot be named as plain `fn` pointers, so they are taken
+    // by value instead; resolution still fails if the method went missing.
+    const fn probe<F: Copy>(_: F) {}
+
+    // combat.rs
+    const _: fn(&Player, f64, f64, f64) -> f64 = Player::get_attack_cooldown_progress;
+    const _: fn(&Player, Hand) = Player::start_using_item;
+    const _: () = probe(Player::attack);
+
+    // inventory.rs
+    const _: () = probe(Player::drop_item);
+    const _: () = probe(Player::has_item_in_inventory);
+
+    // movement.rs
+    const _: fn(&Player) -> f64 = Player::block_interaction_range;
+    const _: fn(&Player, &BlockPos, f64) -> bool = Player::can_interact_with_block_at;
+    const _: () = probe(Player::request_teleport);
+
+    // respawn.rs
+    const _: fn(&Player, BlockPos) = Player::sleep;
+    const _: () = probe(Player::respawn);
+    const _: () = probe(Player::calculate_respawn_point);
+
+    // abilities.rs
+    const _: fn(&Player) -> bool = Player::is_creative;
+    const _: () = probe(Player::set_gamemode);
+
+    // network.rs
+    const _: () = probe(Player::kick);
+    const _: () = probe(Player::send_stats);
+
+    // chat.rs
+    const _: fn(&mut MessageCache, &[Box<[u8]>]) = MessageCache::cache_signatures;
+    const _: () = probe(Player::send_message);
+
+    // health.rs
+    const _: fn(&Player) -> bool = Player::can_food_heal;
+    const _: fn(&Player) -> f32 = Player::get_exhaustion;
+
+    // experience.rs
+    const _: () = probe(Player::set_experience);
+    const _: () = probe(Player::apply_mending_from_xp);
+
+    // tick.rs
+    const _: fn(&Player) = Player::tick_client_load_timeout;
+    const _: () = probe(Player::tick);
+
+    // screen.rs
+    const _: fn(&Player) = Player::increment_screen_handler_sync_id;
+    const _: () = probe(Player::on_slot_click);
+
+    // display.rs
+    const _: fn(&Player, i32) = Player::set_tab_list_order;
+    const _: () = probe(Player::show_title);
+
+    // chunk_manager.rs
+    const _: fn(&ChunkManager) -> usize = ChunkManager::sent_chunks_count;
+}

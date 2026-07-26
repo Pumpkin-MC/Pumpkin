@@ -404,3 +404,46 @@ impl World {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_util::math::vector3::Vector3;
+
+    #[test]
+    fn sky_darken_matches_vanilla_reference_points() {
+        // Noon, clear weather: no darken.
+        assert_eq!(World::calculate_sky_darken(6000, 0.0, 0.0), 0);
+        // Midnight, clear weather: full darken.
+        assert_eq!(World::calculate_sky_darken(18000, 0.0, 0.0), 11);
+        // Noon with full rain: (1 - 11/16) * 11 = 3.4375 -> 3.
+        assert_eq!(World::calculate_sky_darken(6000, 1.0, 0.0), 3);
+        // Noon with full rain and thunder: (1 - (11/16)^2) * 11 = 5.8 -> 6.
+        assert_eq!(World::calculate_sky_darken(6000, 1.0, 1.0), 6);
+    }
+
+    #[test]
+    fn position_validity_bounds_match_vanilla() {
+        // Horizontal limit: -30_000_000 inclusive, 30_000_000 exclusive.
+        assert!(World::is_valid_horizontally(BlockPos(Vector3::new(
+            29_999_999,
+            0,
+            -30_000_000
+        ))));
+        assert!(!World::is_valid_horizontally(BlockPos(Vector3::new(
+            30_000_000, 0, 0
+        ))));
+        assert!(!World::is_valid_horizontally(BlockPos(Vector3::new(
+            0,
+            0,
+            -30_000_001
+        ))));
+        // Vertical limit: -20_000_000 inclusive, 20_000_000 exclusive.
+        assert!(World::is_valid_vertically(19_999_999));
+        assert!(World::is_valid_vertically(-20_000_000));
+        assert!(!World::is_valid_vertically(20_000_000));
+        // Combined check uses both limits.
+        assert!(World::is_valid(BlockPos(Vector3::new(0, 0, 0))));
+        assert!(!World::is_valid(BlockPos(Vector3::new(0, 20_000_000, 0))));
+    }
+}

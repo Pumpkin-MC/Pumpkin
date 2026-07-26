@@ -684,3 +684,16 @@ impl World {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sound_hear_distance_matches_vanilla_send_to_around() {
+        // Vanilla: volume > 1.0 ? 16.0 * volume : 16.0
+        assert!((World::sound_hear_distance(0.5) - 16.0).abs() < f64::EPSILON);
+        assert!((World::sound_hear_distance(1.0) - 16.0).abs() < f64::EPSILON);
+        assert!((World::sound_hear_distance(4.0) - 64.0).abs() < f64::EPSILON);
+    }
+}

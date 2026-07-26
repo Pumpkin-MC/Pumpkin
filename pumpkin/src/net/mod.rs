@@ -652,3 +652,68 @@ mod tests {
         );
     }
 }
+
+// Compile-time regression checks for the split of the java/bedrock play
+// handlers and the dispatch/raknet code into submodules. Every binding pins a
+// moved public method; a compile failure here means the code motion changed
+// or dropped API surface.
+#[cfg(test)]
+mod split_reachability {
+    use super::bedrock::BedrockClient;
+    use super::java::JavaClient;
+    use crate::entity::player::Player;
+
+    // Async methods cannot be named as plain `fn` pointers, so they are taken
+    // by value instead; resolution still fails if the method went missing.
+    const fn probe<F: Copy>(_: F) {}
+
+    // java/dispatch.rs
+    const _: () = probe(JavaClient::handle_login_sequence);
+    const _: () = probe(JavaClient::handle_packet);
+    const _: () = probe(JavaClient::handle_play_packet);
+
+    // java/play/chat.rs
+    const _: () = probe(JavaClient::handle_chat_message);
+
+    // java/play/interaction.rs
+    const _: fn(&JavaClient, &Player, i32) = JavaClient::update_sequence;
+    const _: () = probe(JavaClient::handle_player_action);
+
+    // java/play/movement.rs
+    const _: fn(&Player) = JavaClient::handle_player_loaded;
+    const _: () = probe(JavaClient::handle_position);
+
+    // java/play/inventory.rs
+    const _: () = probe(JavaClient::handle_set_held_item);
+
+    // java/play/misc.rs
+    const _: () = probe(JavaClient::handle_keep_alive);
+
+    // java/play/use_item.rs
+    const _: () = probe(JavaClient::handle_use_item_on);
+
+    // bedrock/dispatch.rs
+    const _: () = probe(BedrockClient::progress_player_packets);
+    const _: () = probe(BedrockClient::handle_play_packet);
+
+    // bedrock/raknet.rs
+    const _: () = probe(BedrockClient::send_framed_packet_data);
+    const _: () = probe(BedrockClient::get_packet_payload);
+    const _: () = probe(BedrockClient::handle_offline_packet);
+
+    // bedrock/play/chat.rs
+    const _: () = probe(BedrockClient::handle_chat_message);
+
+    // bedrock/play/interaction.rs
+    const _: () = probe(BedrockClient::handle_player_action);
+
+    // bedrock/play/movement.rs
+    const _: () = probe(BedrockClient::handle_player_auth_input);
+    const _: () = probe(BedrockClient::handle_set_local_player_as_initialized);
+
+    // bedrock/play/inventory.rs
+    const _: () = probe(BedrockClient::handle_container_close);
+
+    // bedrock/play/item_stack.rs
+    const _: () = probe(BedrockClient::handle_item_stack_request);
+}

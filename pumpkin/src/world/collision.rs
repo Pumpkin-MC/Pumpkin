@@ -518,3 +518,71 @@ impl World {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Ray/AABB slab test against the unit cube [0,0,0]..[1,1,1].
+    fn hit(from: Vector3<f64>, to: Vector3<f64>) -> Option<BlockDirection> {
+        World::intersects_aabb_with_direction(
+            from,
+            to,
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(1.0, 1.0, 1.0),
+        )
+    }
+
+    #[test]
+    fn ray_reports_the_entry_face_of_the_aabb() {
+        assert_eq!(
+            hit(Vector3::new(-1.0, 0.5, 0.5), Vector3::new(2.0, 0.5, 0.5)),
+            Some(BlockDirection::West)
+        );
+        assert_eq!(
+            hit(Vector3::new(2.0, 0.5, 0.5), Vector3::new(-1.0, 0.5, 0.5)),
+            Some(BlockDirection::East)
+        );
+        assert_eq!(
+            hit(Vector3::new(0.5, -1.0, 0.5), Vector3::new(0.5, 2.0, 0.5)),
+            Some(BlockDirection::Down)
+        );
+        assert_eq!(
+            hit(Vector3::new(0.5, 2.0, 0.5), Vector3::new(0.5, -1.0, 0.5)),
+            Some(BlockDirection::Up)
+        );
+        assert_eq!(
+            hit(Vector3::new(0.5, 0.5, -1.0), Vector3::new(0.5, 0.5, 2.0)),
+            Some(BlockDirection::North)
+        );
+        assert_eq!(
+            hit(Vector3::new(0.5, 0.5, 2.0), Vector3::new(0.5, 0.5, -1.0)),
+            Some(BlockDirection::South)
+        );
+    }
+
+    #[test]
+    fn slanted_ray_uses_the_latest_slab_entry_as_the_hit_face() {
+        // Enters the y slab before the x slab, so the x (west) face wins.
+        assert_eq!(
+            hit(Vector3::new(-1.0, 0.25, 0.5), Vector3::new(1.0, 0.75, 0.5)),
+            Some(BlockDirection::West)
+        );
+    }
+
+    #[test]
+    fn ray_misses_when_offset_on_a_parallel_axis() {
+        assert_eq!(
+            hit(Vector3::new(-1.0, 2.5, 0.5), Vector3::new(2.0, 2.5, 0.5)),
+            None
+        );
+    }
+
+    #[test]
+    fn segment_ending_before_the_aabb_does_not_hit() {
+        assert_eq!(
+            hit(Vector3::new(-3.0, 0.5, 0.5), Vector3::new(-2.0, 0.5, 0.5)),
+            None
+        );
+    }
+}

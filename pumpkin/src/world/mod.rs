@@ -347,3 +347,69 @@ impl WorldPortalExt for WorldPortal {
         natural_spawner::spawn_mobs_for_chunk_generation(&self.0, cache, biome, chunk_x, chunk_z);
     }
 }
+
+// Compile-time regression checks for the split of the old `world/mod.rs` into
+// submodules (tick, block_updates, blocks, broadcast, chunks, collision,
+// entities, players, player_java, player_bedrock). Every binding pins a moved
+// public method to its exact signature; if the code motion dropped or changed
+// any of these impl blocks, this module fails to compile.
+#[cfg(test)]
+mod split_reachability {
+    use super::World;
+    use crate::entity::EntityBase;
+    use crate::entity::player::Player;
+    use pumpkin_data::Block;
+    use pumpkin_util::Difficulty;
+    use pumpkin_util::math::boundingbox::BoundingBox;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_world::chunk::ChunkHeightmapType;
+    use std::sync::Arc;
+
+    // Async methods cannot be named as plain `fn` pointers, so they are taken
+    // by value instead; resolution still fails if the method went missing.
+    const fn probe<F: Copy>(_: F) {}
+
+    // tick.rs
+    const _: fn(&World) -> bool = World::should_skip_night;
+    const _: () = probe(World::tick);
+    const _: () = probe(World::tick_chunks);
+
+    // block_updates.rs
+    const _: fn(&World, &BlockPos, &Block) -> bool = World::is_block_tick_scheduled;
+    const _: () = probe(World::set_block_state);
+    const _: () = probe(World::break_block);
+
+    // blocks.rs
+    const _: fn(i64, f32, f32) -> u8 = World::calculate_sky_darken;
+    const _: fn(&World, &BlockPos) -> &'static Block = World::get_block;
+
+    // broadcast.rs
+    const _: fn(f32) -> f64 = World::sound_hear_distance;
+    const _: fn(&World, Difficulty) = World::set_difficulty;
+
+    // chunks.rs
+    const _: fn(&World, Vector2<i32>) -> i32 = World::get_top_block;
+    const _: fn(&World, ChunkHeightmapType, i32, i32) -> i32 = World::get_heightmap_height;
+
+    // collision.rs
+    const _: fn(&World, BoundingBox) -> bool = World::is_space_empty;
+    const _: fn(&World, &BlockPos) -> f64 = World::get_dismount_height;
+    const _: () = probe(World::get_block_collisions);
+
+    // entities.rs
+    const _: fn(&World, i32) -> Option<Arc<dyn EntityBase>> = World::get_entity_by_id;
+    const _: fn(&World, &BoundingBox) -> Vec<Arc<dyn EntityBase>> = World::get_all_at_box;
+
+    // players.rs
+    const _: fn(&World, Vector3<f64>, f64) -> Vec<Arc<Player>> = World::get_nearby_players;
+    const _: fn(&World, Vector3<f64>, f64) -> Option<Arc<Player>> = World::get_closest_player;
+    const _: () = probe(World::respawn_player);
+
+    // player_java.rs
+    const _: () = probe(World::spawn_java_player);
+
+    // player_bedrock.rs
+    const _: () = probe(World::spawn_bedrock_player);
+}

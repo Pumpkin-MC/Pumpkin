@@ -50,3 +50,38 @@ impl Statistics {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn increment_accumulates_and_saturates() {
+        let mut stats = Statistics::default();
+        assert_eq!(stats.get(StatisticCategory::Mined, 7), 0);
+        stats.increment(StatisticCategory::Mined, 7, 2);
+        stats.increment(StatisticCategory::Mined, 7, 3);
+        assert_eq!(stats.get(StatisticCategory::Mined, 7), 5);
+        stats.increment(StatisticCategory::Mined, 7, i32::MAX);
+        assert_eq!(stats.get(StatisticCategory::Mined, 7), i32::MAX);
+    }
+
+    #[test]
+    fn set_overwrites_and_categories_stay_independent() {
+        let mut stats = Statistics::default();
+        stats.set(StatisticCategory::Used, 1, 10);
+        stats.set(StatisticCategory::Used, 1, 4);
+        assert_eq!(stats.get(StatisticCategory::Used, 1), 4);
+        assert_eq!(stats.get(StatisticCategory::Broken, 1), 0);
+    }
+
+    #[test]
+    fn custom_statistics_land_in_the_custom_category() {
+        let mut stats = Statistics::default();
+        stats.increment_custom(CustomStatistic::Jump, 3);
+        assert_eq!(
+            stats.get(StatisticCategory::Custom, CustomStatistic::Jump as i32),
+            3
+        );
+    }
+}

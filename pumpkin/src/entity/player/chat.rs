@@ -221,3 +221,37 @@ impl MessageCache {
         self.full_cache.push_front(signature.into()); // Since recipient saw this message it will be most recent in cache
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cache_signatures_skips_duplicates() {
+        let mut cache = MessageCache::default();
+        let sig: Box<[u8]> = Box::from([1u8, 2, 3]);
+        cache.cache_signatures(&[sig.clone()]);
+        cache.cache_signatures(&[sig]);
+        assert_eq!(cache.full_cache.len(), 1);
+    }
+
+    #[test]
+    fn cache_signatures_respects_the_vanilla_cache_limit() {
+        let mut cache = MessageCache::default();
+        let signatures: Vec<Box<[u8]>> = (0u16..200).map(|i| Box::from(i.to_be_bytes())).collect();
+        cache.cache_signatures(&signatures);
+        assert_eq!(cache.full_cache.len(), usize::from(MAX_CACHED_SIGNATURES));
+    }
+
+    #[test]
+    fn last_seen_is_capped_at_the_vanilla_limit() {
+        let mut cache = MessageCache::default();
+        for i in 0u8..30 {
+            cache.add_seen_signature(&[i]);
+        }
+        assert_eq!(cache.last_seen.0.len(), usize::from(MAX_PREVIOUS_MESSAGES));
+        // The oldest entries were evicted; entries 10..=29 remain in order.
+        assert_eq!(**cache.last_seen.0.first().unwrap(), [10u8]);
+        assert_eq!(**cache.last_seen.0.last().unwrap(), [29u8]);
+    }
+}

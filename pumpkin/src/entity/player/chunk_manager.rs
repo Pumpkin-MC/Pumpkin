@@ -289,3 +289,57 @@ impl ChunkManager {
         chunks.into_boxed_slice()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cmp::Ordering;
+
+    fn node(distance: i32, pos: Vector2<i32>) -> HeapNode {
+        HeapNode(distance, pos, Weak::new())
+    }
+
+    #[test]
+    fn chunk_queue_pops_nearest_chunk_first() {
+        let mut queue = BinaryHeap::new();
+        queue.push(node(5, Vector2::new(5, 0)));
+        queue.push(node(1, Vector2::new(0, 1)));
+        queue.push(node(3, Vector2::new(3, 3)));
+
+        assert_eq!(queue.pop().unwrap().0, 1);
+        assert_eq!(queue.pop().unwrap().0, 3);
+        assert_eq!(queue.pop().unwrap().0, 5);
+        assert!(queue.pop().is_none());
+    }
+
+    #[test]
+    fn heap_node_ordering_is_reversed_and_ignores_position() {
+        // Reversed ordering: the smaller distance is the "greater" node so
+        // `BinaryHeap` (a max-heap) yields it first.
+        assert_eq!(
+            node(1, Vector2::new(9, 9)).cmp(&node(2, Vector2::new(0, 0))),
+            Ordering::Greater
+        );
+        assert_eq!(
+            node(2, Vector2::new(0, 0)).cmp(&node(1, Vector2::new(0, 0))),
+            Ordering::Less
+        );
+        assert!(node(4, Vector2::new(1, 2)) == node(4, Vector2::new(-7, 5)));
+    }
+
+    #[test]
+    fn chebyshev_distance_is_the_maximum_axis_delta() {
+        assert_eq!(
+            ChunkManager::chebyshev(Vector2::new(3, -4), Vector2::new(0, 0)),
+            4
+        );
+        assert_eq!(
+            ChunkManager::chebyshev(Vector2::new(5, 2), Vector2::new(1, 3)),
+            4
+        );
+        assert_eq!(
+            ChunkManager::chebyshev(Vector2::new(-2, 7), Vector2::new(-2, 7)),
+            0
+        );
+    }
+}
