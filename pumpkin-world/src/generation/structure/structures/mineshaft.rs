@@ -624,168 +624,52 @@ fn add_corridor_children(
     // l.334: 0-1 continue straight, 2 turn one way, 3 turn the other.
     let end_selection = random.next_bounded_i32(4);
     if let Some(direction) = facing {
-        match direction {
+        // Every vanilla branch first draws the child's Y offset,
+        // `minY - 1 + nextInt(3)`, so the draw is hoisted out of the arms.
+        let y = bb.min.y - 1 + random.next_bounded_i32(3);
+        let (x, z, child_direction) = match direction {
             BlockDirection::South => {
                 // l.350-360.
                 if end_selection <= 1 {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.min.x,
-                        y,
-                        bb.max.z + 1,
-                        direction,
-                        depth,
-                    );
+                    (bb.min.x, bb.max.z + 1, direction)
                 } else if end_selection == 2 {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.min.x - 1,
-                        y,
-                        bb.max.z - 3,
-                        BlockDirection::West,
-                        depth,
-                    );
+                    (bb.min.x - 1, bb.max.z - 3, BlockDirection::West)
                 } else {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.max.x + 1,
-                        y,
-                        bb.max.z - 3,
-                        BlockDirection::East,
-                        depth,
-                    );
+                    (bb.max.x + 1, bb.max.z - 3, BlockDirection::East)
                 }
             }
             BlockDirection::West => {
                 // l.362-372.
                 if end_selection <= 1 {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.min.x - 1,
-                        y,
-                        bb.min.z,
-                        direction,
-                        depth,
-                    );
+                    (bb.min.x - 1, bb.min.z, direction)
                 } else if end_selection == 2 {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.min.x,
-                        y,
-                        bb.min.z - 1,
-                        BlockDirection::North,
-                        depth,
-                    );
+                    (bb.min.x, bb.min.z - 1, BlockDirection::North)
                 } else {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.min.x,
-                        y,
-                        bb.max.z + 1,
-                        BlockDirection::South,
-                        depth,
-                    );
+                    (bb.min.x, bb.max.z + 1, BlockDirection::South)
                 }
             }
             BlockDirection::East => {
                 // l.374-384.
                 if end_selection <= 1 {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.max.x + 1,
-                        y,
-                        bb.min.z,
-                        direction,
-                        depth,
-                    );
+                    (bb.max.x + 1, bb.min.z, direction)
                 } else if end_selection == 2 {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.max.x - 3,
-                        y,
-                        bb.min.z - 1,
-                        BlockDirection::North,
-                        depth,
-                    );
+                    (bb.max.x - 3, bb.min.z - 1, BlockDirection::North)
                 } else {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.max.x - 3,
-                        y,
-                        bb.max.z + 1,
-                        BlockDirection::South,
-                        depth,
-                    );
+                    (bb.max.x - 3, bb.max.z + 1, BlockDirection::South)
                 }
             }
             _ => {
                 // NORTH is the `default` arm in vanilla (l.338-348).
                 if end_selection <= 1 {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.min.x,
-                        y,
-                        bb.min.z - 1,
-                        direction,
-                        depth,
-                    );
+                    (bb.min.x, bb.min.z - 1, direction)
                 } else if end_selection == 2 {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.min.x - 1,
-                        y,
-                        bb.min.z,
-                        BlockDirection::West,
-                        depth,
-                    );
+                    (bb.min.x - 1, bb.min.z, BlockDirection::West)
                 } else {
-                    let y = bb.min.y - 1 + random.next_bounded_i32(3);
-                    generate_and_add_piece(
-                        pieces,
-                        start,
-                        random,
-                        bb.max.x + 1,
-                        y,
-                        bb.min.z,
-                        BlockDirection::East,
-                        depth,
-                    );
+                    (bb.max.x + 1, bb.min.z, BlockDirection::East)
                 }
             }
-        }
+        };
+        generate_and_add_piece(pieces, start, random, x, y, z, child_direction, depth);
     }
 
     // Sideways branches every 5 blocks, 1/5 chance each side (l.387-410).
@@ -853,7 +737,10 @@ fn add_corridor_children(
 }
 
 /// `MineShaftCrossing.addChildren` (l.134-176).
+///
+/// Kept as one function to preserve the line-for-line vanilla mapping.
 #[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 fn add_crossing_children(
     pieces: &mut Vec<MineshaftPiece>,
     bb: BlockBox,
@@ -1175,6 +1062,18 @@ fn state_and_block_at(
     (id.to_state(), id.to_block())
 }
 
+/// Center of two coordinates with Java `int` semantics
+/// (`MineShaftPiece.isInInvalidLocation`, l.659: `(x0 + x1) / 2`).
+///
+/// NOT `i32::midpoint`: Java's `/ 2` truncates toward zero while
+/// `i32::midpoint` rounds toward negative infinity, and the two differ for
+/// odd negative sums (e.g. -5 and 2 -> -1 vs -2), which occur at negative
+/// world coordinates. Vanilla parity requires the truncating form.
+#[expect(clippy::manual_midpoint)]
+const fn java_center(a: i32, b: i32) -> i32 {
+    (a + b) / 2
+}
+
 fn fill_column_between(
     chunk: &mut ProtoChunk,
     state: &'static BlockState,
@@ -1190,15 +1089,15 @@ fn fill_column_between(
 }
 
 impl MineshaftPiece {
-    fn wood_state(&self) -> &'static BlockState {
+    const fn wood_state(&self) -> &'static BlockState {
         self.mineshaft_type.wood_block().default_state
     }
 
-    fn planks_state(&self) -> &'static BlockState {
+    const fn planks_state(&self) -> &'static BlockState {
         self.mineshaft_type.planks_block().default_state
     }
 
-    fn fence_state(&self) -> &'static BlockState {
+    const fn fence_state(&self) -> &'static BlockState {
         self.mineshaft_type.fence_block().default_state
     }
 
@@ -1351,8 +1250,8 @@ impl MineshaftPiece {
 
     /// `StructurePiece.isInterior` (StructurePiece.java l.192-198): the block
     /// ABOVE the given local position must be inside the chunk box and below
-    /// the OCEAN_FLOOR_WG heightmap.
-    fn is_interior(
+    /// the `OCEAN_FLOOR_WG` heightmap.
+    const fn is_interior(
         &self,
         chunk: &ProtoChunk,
         x: i32,
@@ -1399,9 +1298,9 @@ impl MineshaftPiece {
         let z1 = (bb.max.z + 1).min(chunk_box.max.z);
 
         // Biome check at the clamped-box center (l.659-661).
-        let center_x = (x0 + x1) / 2;
-        let center_y = (y0 + y1) / 2;
-        let center_z = (z0 + z1) / 2;
+        let center_x = java_center(x0, x1);
+        let center_y = java_center(y0, y1);
+        let center_z = java_center(z0, z1);
         let biome_height = (chunk.height() >> 2) as i32;
         let biome_bottom = biome_coords::from_block(i32::from(chunk.bottom_y()));
         let biome_y =
@@ -1526,6 +1425,9 @@ impl MineshaftPiece {
     // ---- Crossing ----------------------------------------------------------
 
     /// `MineShaftCrossing.postProcess` (l.178-204).
+    ///
+    /// Kept as one function to preserve the line-for-line vanilla mapping.
+    #[expect(clippy::too_many_lines)]
     fn place_crossing(&self, chunk: &mut ProtoChunk, chunk_box: &BlockBox) {
         let PieceKind::Crossing { is_two_floored, .. } = &self.kind else {
             return;
