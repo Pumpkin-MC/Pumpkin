@@ -143,6 +143,9 @@ impl BlockBehaviour for SweetBerryBushBlock {
                 return;
             }
             if rand::rng().random_range(0..5) == 0 {
+                // Resolves to this type's own `CropBlockBase::random_tick` below,
+                // not the default in `crop::mod`, so the light is only checked
+                // once and only above the bush.
                 <Self as CropBlockBase>::random_tick(self, args.world, args.position).await;
             }
         })
