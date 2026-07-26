@@ -455,18 +455,19 @@ pub async fn drop_loot(
             tool.get_enchantment_level(&pumpkin_data::Enchantment::SILK_TOUCH) > 0
         });
 
-    // Vanilla gates item drops on this rule in `Block#popResource`, but
-    // deliberately does not gate experience in `Block#popExperience`, so ore
-    // experience still drops with the rule off.
-    if world.level_info.load().game_rules.block_drops
-        && let Some(loot_table) = &block.loot_table
-    {
+    // Vanilla gates both item drops and experience on this rule, in
+    // `Block#popResource` and `Block#popExperience` respectively, so with the
+    // rule off an ore drops neither its item nor its experience orbs.
+    let block_drops = world.level_info.load().game_rules.block_drops;
+
+    if block_drops && let Some(loot_table) = &block.loot_table {
         for stack in loot_table.get_loot(params) {
             world.drop_stack(pos, stack).await;
         }
     }
 
-    if experience
+    if block_drops
+        && experience
         && !silk_touched
         && let Some(experience) = &block.experience
     {
