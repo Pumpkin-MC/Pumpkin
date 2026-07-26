@@ -2899,6 +2899,14 @@ impl Entity {
             let pose = pose as i32;
             let mut bedrock_meta = EntityMetadata::new();
             bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
+            bedrock_meta.set(
+                entity_data_key::WIDTH,
+                MetadataValue::Float(dimension.width),
+            );
+            bedrock_meta.set(
+                entity_data_key::HEIGHT,
+                MetadataValue::Float(dimension.height),
+            );
             self.send_meta_data(
                 &[Metadata::new(
                     TrackedData::POSE,

@@ -1738,12 +1738,11 @@ impl Player {
 
     async fn is_swimming(&self, flying: bool) -> bool {
         let entity = self.get_entity();
-        let swim_height = self.living_entity.get_swim_height();
+        let touching_water = entity.touching_water.load(Ordering::Relaxed);
+        let can_start_swimming = entity.water_height.load() > self.living_entity.get_swim_height();
 
-        // TODO: Replace this inferred check with vanilla-equivalent swimming state tracking
-        // (LivingEntity#updateSwimming + entity swimming flag).
-        entity.touching_water.load(Ordering::Relaxed)
-            && entity.water_height.load() > swim_height
+        touching_water
+            && (entity.swimming.load(Ordering::Relaxed) || can_start_swimming)
             && entity.is_sprinting()
             && !entity.on_ground.load(Ordering::Relaxed)
             && !flying
@@ -1773,9 +1772,11 @@ impl Player {
         }
 
         let flying = self.is_flying().await;
+        let swimming = self.is_swimming(flying).await;
+        entity.set_swimming(swimming).await;
         let desired_pose = if self.is_sleeping() {
             EntityPose::Sleeping
-        } else if self.is_swimming(flying).await {
+        } else if swimming {
             EntityPose::Swimming
         } else if entity.is_fall_flying() {
             EntityPose::FallFlying
