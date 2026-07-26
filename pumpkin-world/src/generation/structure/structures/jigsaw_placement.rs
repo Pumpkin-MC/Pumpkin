@@ -209,15 +209,27 @@ impl JigsawPlacement {
             let mut placing = BinaryHeap::new();
             let mut sequence = 0;
 
+            // Vanilla: free = maxBox minus the start piece's bounds.
+            let global_region: FreeRegionRef =
+                std::rc::Rc::new(std::cell::RefCell::new(FreeRegion {
+                    bounds: global_bounding_box,
+                    carved: vec![box_],
+                }));
+
             placing.push(PieceState {
                 piece_idx: 0,
                 depth: 0,
                 priority: 0,
                 sequence,
+                region: global_region,
             });
 
             while let Some(state) = placing.pop() {
                 let depth = state.depth;
+                let state_region = state.region.clone();
+                // Lazily created when a jigsaw targets the inside of this piece:
+                // vanilla then uses the piece's own box as the allowed region.
+                let mut interior_region: Option<FreeRegionRef> = None;
 
                 let source_piece_idx = state.piece_idx;
                 let mut source_jigsaws =
@@ -414,11 +426,31 @@ impl JigsawPlacement {
                                     target_box.max.y = target_box.min.y + new_size - 1;
                                 }
 
-                                if !is_box_inside(&global_bounding_box, &target_box) {
-                                    continue;
-                                }
+                                // Vanilla: a jigsaw whose connection point lies
+                                // inside the source piece places its child within
+                                // the source's own box (interior region); outward
+                                // jigsaws carve the region this piece came from.
+                                let inside_source = source_box.contains(
+                                    target_jigsaw_pos.0.x,
+                                    target_jigsaw_pos.0.y,
+                                    target_jigsaw_pos.0.z,
+                                );
+                                let chosen_region = if inside_source {
+                                    interior_region
+                                        .get_or_insert_with(|| {
+                                            std::rc::Rc::new(std::cell::RefCell::new(FreeRegion {
+                                                bounds: source_box,
+                                                carved: Vec::new(),
+                                            }))
+                                        })
+                                        .clone()
+                                } else {
+                                    state_region.clone()
+                                };
 
-                                if !intersects_any(&pieces, &target_box) {
+                                let fits = region_fits(&chosen_region.borrow(), &target_box);
+                                if fits {
+                                    chosen_region.borrow_mut().carved.push(target_box);
                                     let mut child_jigsaw_blocks = Vec::new();
                                     for mut cj in get_element_jigsaw_blocks(&element) {
                                         let rotated_pos =
@@ -513,6 +545,7 @@ impl JigsawPlacement {
                                             depth: depth + 1,
                                             priority: source_jigsaw.placement_priority,
                                             sequence,
+                                            region: chosen_region.clone(),
                                         });
                                     }
 
@@ -555,6 +588,26 @@ fn get_pool_max_y_size(pool_id: &str) -> i32 {
     max_y
 }
 
+/// Vanilla `JigsawPlacement` free-space semantics with boxes instead of
+/// `VoxelShape`s: a region is an allowed volume (`bounds`) minus every box
+/// already carved out of it. A candidate fits when it lies inside the bounds
+/// and does not strictly overlap any carved box — exactly vanilla's
+/// `Shapes.joinIsNotEmpty(free, candidate.deflate(0.25), ONLY_SECOND)` test.
+struct FreeRegion {
+    bounds: BlockBox,
+    carved: Vec<BlockBox>,
+}
+
+type FreeRegionRef = std::rc::Rc<std::cell::RefCell<FreeRegion>>;
+
+fn region_fits(region: &FreeRegion, candidate: &BlockBox) -> bool {
+    is_box_inside(&region.bounds, candidate)
+        && region
+            .carved
+            .iter()
+            .all(|carved| !intersects_exclusive(carved, candidate))
+}
+
 const fn is_box_inside(outer: &BlockBox, inner: &BlockBox) -> bool {
     inner.min.x >= outer.min.x
         && inner.max.x <= outer.max.x
@@ -575,17 +628,13 @@ const fn intersects_exclusive(a: &BlockBox, b: &BlockBox) -> bool {
         && a.min.z < b.max.z
 }
 
-fn intersects_any(pieces: &[Box<PoolElementStructurePiece>], box_: &BlockBox) -> bool {
-    pieces
-        .iter()
-        .any(|piece| intersects_exclusive(&piece.piece.bounding_box, box_))
-}
-
 struct PieceState {
     piece_idx: usize,
     depth: i32,
     priority: i32,
     sequence: usize,
+    /// The free-space region this piece was placed in; its children carve here.
+    region: FreeRegionRef,
 }
 
 impl PartialEq for PieceState {
