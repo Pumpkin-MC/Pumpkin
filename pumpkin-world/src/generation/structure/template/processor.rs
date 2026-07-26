@@ -117,6 +117,11 @@ impl StructureProcessor {
                 let existing = chunk.get_block_state(&pos).to_block_id();
                 (!blocks.contains(existing)).then_some(state)
             }
+            // GAP vs vanilla CappedProcessor: the limit (seed-forked random
+            // selection of at most `limit` blocks per piece) and the
+            // append_loot block_entity_modifier are not applied yet — trail
+            // ruins convert every replaceable block and suspicious blocks
+            // carry no archaeology loot. Needs per-piece processing state.
             Self::Capped { limit: _, delegate } => delegate.process(chunk, pos, state),
         }
     }
