@@ -718,12 +718,83 @@ const fn rotate_direction(
 
 #[cfg(test)]
 mod tests {
-    use super::MaxDistance;
+    use super::{DimensionPadding, JigsawPlacement, LiquidSettings, MaxDistance, PoolAliasLookup};
+    use crate::generation::structure::structures::StructureGeneratorContext;
+    use crate::generation::structure::structures::jigsaw::{
+        PoolElementKind, PoolElementStructurePiece,
+    };
+    use crate::generation::structure::structures::{HeightSampler, create_chunk_random};
+    use pumpkin_util::math::position::BlockPos;
 
     #[test]
     fn scalar_max_distance_bounds_both_axes() {
         let distance = MaxDistance::new(116);
         assert_eq!(distance.horizontal, 116);
         assert_eq!(distance.vertical, 116);
+    }
+
+    struct FlatSampler;
+    impl HeightSampler for FlatSampler {
+        fn estimate_height(&mut self, _block_x: i32, _block_z: i32) -> i32 {
+            63
+        }
+    }
+
+    /// Regression: villages once expanded into streets only. A plains village
+    /// start on flat terrain must attach both street pieces and at least one
+    /// house from the side pools.
+    #[test]
+    fn plains_village_expands_streets_and_houses() {
+        let mut sampler = FlatSampler;
+        let mut context = StructureGeneratorContext {
+            seed: 20260726,
+            chunk_x: 0,
+            chunk_z: 0,
+            random: create_chunk_random(20260726, 0, 0),
+            sea_level: 63,
+            min_y: -64,
+            height_sampler: Some(&mut sampler),
+            structure_key: None,
+        };
+
+        let position = JigsawPlacement::add_pieces(
+            &mut context,
+            "minecraft:village/plains/town_centers",
+            None,
+            6,
+            BlockPos::new(0, 64, 0),
+            true,
+            true,
+            &MaxDistance::new(80),
+            &DimensionPadding::ZERO,
+            LiquidSettings::ApplyWaterlogging,
+            &PoolAliasLookup,
+        )
+        .expect("plains village start must expand");
+
+        let collector = position.collector.lock().unwrap();
+        let mut street_pieces = 0usize;
+        let mut house_pieces = 0usize;
+        for piece in &collector.pieces {
+            let Some(pool_piece) = piece.as_any().downcast_ref::<PoolElementStructurePiece>()
+            else {
+                continue;
+            };
+            if let PoolElementKind::Single { template, .. } = &pool_piece.element.kind {
+                if template.contains("/streets/") {
+                    street_pieces += 1;
+                } else if template.contains("/houses/") {
+                    house_pieces += 1;
+                }
+            }
+        }
+        assert!(
+            street_pieces > 0,
+            "village must contain street pieces, found none"
+        );
+        assert!(
+            house_pieces > 0,
+            "village must contain house pieces, found none (streets: {street_pieces})"
+        );
     }
 }
