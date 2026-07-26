@@ -61,7 +61,23 @@ impl SkeletonEntityBase {
             );
             // 4 RangedBowAttackGoal / melee reassessWeaponGoal
             if ranged {
-                goal_selector.add_goal(4, BowAttackGoal::new(1.0, 20));
+                // Vanilla reassessWeaponGoal: minAttackInterval 20 on Hard, 40 otherwise.
+                let interval = if mob_arc
+                    .mob_entity
+                    .living_entity
+                    .entity
+                    .world
+                    .load()
+                    .level_info
+                    .load()
+                    .difficulty
+                    == pumpkin_util::Difficulty::Hard
+                {
+                    20
+                } else {
+                    40
+                };
+                goal_selector.add_goal(4, BowAttackGoal::new(1.0, interval));
             } else {
                 goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.2, false)));
             }

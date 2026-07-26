@@ -43,6 +43,9 @@ pub struct BowAttackGoal {
     strafing_backwards: bool,
     /// Ticks spent drawing the current shot (-1 = not drawing).
     draw_time: i32,
+    /// Crossbow only: ticks left in the vanilla CHARGED state before firing
+    /// (-1 = not charged).
+    charged_delay: i32,
     speed: f64,
     attack_interval: i32,
 }
@@ -57,6 +60,7 @@ impl BowAttackGoal {
             strafing_clockwise: false,
             strafing_backwards: false,
             draw_time: -1,
+            charged_delay: -1,
             speed: speed.max(0.25),
             attack_interval: attack_interval_ticks.max(MIN_ATTACK_INTERVAL),
         })
@@ -152,16 +156,30 @@ impl BowAttackGoal {
         let shooter = mob.get_entity();
         let world = shooter.world.load();
         let eye = shooter.get_eye_pos();
-        let target_eye = target.get_entity().get_eye_pos();
 
         let arrow_entity = Entity::new(world.clone(), eye, &EntityType::ARROW);
         let arrow = ArrowEntity::new_shot(arrow_entity, shooter, ArrowPickup::Disallowed);
 
-        let (yaw, pitch) = Self::look_angles(eye, target_eye);
-        let dist = eye.squared_distance_to_vec(&target_eye).sqrt();
-        let pitch_adjust = (dist * 0.2).min(1.0) as f32;
-        // Vanilla AbstractSkeleton / CrossbowAttackMob: speed ~1.6, divergence ~12.
-        arrow.set_velocity_from_rotation(pitch - pitch_adjust, yaw, 0.0, 1.6, 12.0);
+        // Vanilla AbstractSkeleton.performRangedAttack (AbstractSkeleton.java:178-190):
+        // aim at 1/3 target height, lift by horizontal distance * 0.2 BLOCKS,
+        // divergence 14 - 4 * difficulty id.
+        let target_entity = target.get_entity();
+        let target_pos = target_entity.pos.load();
+        let target_height = f64::from(target_entity.entity_dimension.load().height);
+        let arrow_pos = arrow.entity.pos.load();
+        let xd = target_pos.x - shooter.pos.load().x;
+        let yd = target_pos.y + target_height / 3.0 - arrow_pos.y;
+        let zd = target_pos.z - shooter.pos.load().z;
+        let horizontal = xd.hypot(zd);
+        let divergence = f64::from(
+            14 - 4 * match world.level_info.load().difficulty {
+                pumpkin_util::Difficulty::Peaceful => 0,
+                pumpkin_util::Difficulty::Easy => 1,
+                pumpkin_util::Difficulty::Normal => 2,
+                pumpkin_util::Difficulty::Hard => 3,
+            },
+        );
+        arrow.set_velocity(xd, horizontal.mul_add(0.2, yd), zd, 1.6, divergence);
 
         // Vanilla releases the use state before spawning the projectile.
         living.clear_active_hand().await;
@@ -170,7 +188,8 @@ impl BowAttackGoal {
         world.spawn_entity(arrow_arc).await;
 
         let pos = shooter.pos.load();
-        let pitch_sound = 1.0 / (rand::rng().random_range(0.8f32..1.2)) + 0.5;
+        // Vanilla: 1.0 / (random * 0.4 + 0.8) → 0.83..1.25.
+        let pitch_sound = 1.0 / rand::rng().random_range(0.0f32..1.0).mul_add(0.4, 0.8);
         let sound = if is_crossbow {
             Sound::ItemCrossbowShoot
         } else {
@@ -252,6 +271,7 @@ impl Goal for BowAttackGoal {
             self.strafing_time = -1;
             self.attack_time = 0;
             self.draw_time = -1;
+            self.charged_delay = -1;
         })
     }
 
@@ -261,6 +281,7 @@ impl Goal for BowAttackGoal {
             self.see_time = 0;
             self.attack_time = -1;
             self.draw_time = -1;
+            self.charged_delay = -1;
             mob.get_mob_entity().living_entity.clear_active_hand().await;
             mob.get_mob_entity().navigator.lock().unwrap().stop();
             // Clear dead targets so ActiveTarget can pick the next enemy.
@@ -340,11 +361,18 @@ impl Goal for BowAttackGoal {
                     }
                 }
 
-                // Crossbow: startUsingItem → getChargeDuration(25) → delay → shoot
+                // Crossbow: startUsingItem → getChargeDuration(25) → CHARGED
+                // for attackDelay = 20 + random(20) ticks → shoot with LOS
                 // (RangedCrossbowAttackGoal CHARGING→CHARGED→READY_TO_ATTACK).
                 self.attack_time -= 1;
                 let in_range = dist_sq <= crossbow_radius_sq && self.see_time >= 5;
-                if in_range {
+                if self.charged_delay >= 0 {
+                    self.charged_delay -= 1;
+                    if self.charged_delay < 0 && can_see {
+                        Self::shoot_arrow(mob, target.as_ref()).await;
+                        self.attack_time = 0;
+                    }
+                } else if in_range {
                     if self.draw_time < 0 && self.attack_time <= 0 && self.see_time >= 5 {
                         Self::begin_draw(mob).await;
                         self.draw_time = 0;
@@ -353,10 +381,10 @@ impl Goal for BowAttackGoal {
                     if self.draw_time >= 0 {
                         self.draw_time += 1;
                         if self.draw_time >= CROSSBOW_CHARGE_TICKS {
-                            Self::shoot_arrow(mob, target.as_ref()).await;
                             self.draw_time = -1;
-                            // Vanilla: attackDelay = 20 + random(20) after charge.
-                            self.attack_time = 20 + mob.get_random().random_range(0..20);
+                            // Vanilla sets the attack delay when the charge
+                            // completes, then fires after it elapses.
+                            self.charged_delay = 20 + mob.get_random().random_range(0..20);
                         }
                     }
                 } else if self.draw_time >= 0 && self.see_time < -10 {
