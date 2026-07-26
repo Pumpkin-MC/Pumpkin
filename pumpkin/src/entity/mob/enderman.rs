@@ -443,12 +443,19 @@ impl Mob for EndermanEntity {
                     .await;
             }
 
-            // Vanilla customServerAiStep: on a bright surface, endermen drop
-            // aggro and teleport away with a small chance each check.
-            if exposed_to_sky && !in_rain && rand::random::<f32>() < 0.008 {
+            // Vanilla EnderMan.customServerAiStep (EnderMan.java:240):
+            // isBrightOutside && canSeeSky && brightness > 0.5
+            // && random*30 < (brightness-0.4)*2 → drop target and teleport.
+            // Brightness stands in for getLightLevelDependentMagicValue via
+            // sky light / 15; the 600-tick target-change grace is not tracked.
+            if exposed_to_sky && !in_rain {
                 let time = { world.level_time.lock().await.time_of_day.rem_euclid(24000) };
                 let is_bright_day = (0..12000).contains(&time);
-                if is_bright_day {
+                let brightness = f32::from(world.get_sky_light_level(&feet)) / 15.0;
+                if is_bright_day
+                    && brightness > 0.5
+                    && rand::random::<f32>() * 30.0 < (brightness - 0.4) * 2.0
+                {
                     self.set_target(None).await;
                     self.teleport_randomly();
                 }
