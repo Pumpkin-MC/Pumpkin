@@ -2,7 +2,7 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, GrassBlockLikeProperties},
+    block_properties::{BlockProperties, GrassBlockLikeProperties, SnowLikeProperties},
     tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
@@ -111,14 +111,26 @@ fn can_be_grass(world: &World, position: &BlockPos) -> bool {
         return false;
     }
 
-    // Vanilla additionally short-circuits on `snow` with a single layer, but Pumpkin's generated
-    // opacity for `snow` layers 1..=7 is already 0, so this check covers that case identically.
+    // Vanilla short-circuits on a single snow layer, then runs the opacity
+    // through `LightEngine#getLightBlockInto`, which reports 16 when the two
+    // touching faces fully occlude each other.
     //
-    // Vanilla runs the opacity through `LightEngine#getLightBlockInto`, which reports 16 when the
-    // two touching faces fully occlude each other. Pumpkin has no face-occlusion shape lookup, so
-    // only the raw opacity is used; every vanilla block whose bottom face fully occludes also has
-    // an opacity of 15, so this matches for all current blocks.
-    world.get_block_state(&above).opacity < MAX_LIGHT_LEVEL
+    // Pumpkin has no face-occlusion lookup, so only the raw opacity is
+    // available here. That is a known divergence rather than an equivalence:
+    // blocks that occlude downwards but carry a low opacity, such as carpets,
+    // bottom slabs and snow layers of two or more, let the grass survive where
+    // vanilla would kill it. Grass under a full opaque block still dies, which
+    // is the common case. Closing the gap needs a face-occlusion flag from the
+    // data generator.
+    let (above_block, above_state) = world.get_block_and_state(&above);
+
+    // Handle the snow layers explicitly, since that is the one case the raw
+    // opacity gets wrong that vanilla calls out by name.
+    if above_block == &Block::SNOW {
+        return SnowLikeProperties::from_state_id(above_state.id, above_block).layers <= 1;
+    }
+
+    above_state.opacity < MAX_LIGHT_LEVEL
 }
 
 /// `SpreadingSnowyDirtBlock#canPropagate`: grass cannot spread into a spot that has water on top.
