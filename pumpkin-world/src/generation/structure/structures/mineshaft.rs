@@ -192,6 +192,7 @@ mod tests {
             random: create_chunk_random(123, 4, -3),
             sea_level: 63,
             min_y: -64,
+            max_y: 319,
             height_sampler,
             structure_key: None,
         }

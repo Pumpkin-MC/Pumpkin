@@ -104,12 +104,12 @@ impl StructureProcessor {
                 // template block as input and the current world block as the
                 // location; the first matching rule wins.
                 let mut random = LegacyRand::from_seed(hash_block_pos(pos.x, pos.y, pos.z) as u64);
-                let world_block = chunk.get_block_state(&pos).to_block_id();
+                let world_state = BlockState::from_id(chunk.get_block_state(&pos));
                 rules
                     .iter()
                     .find(|rule| {
-                        rule.input.matches(input_block, &mut random)
-                            && rule.location.matches(world_block, &mut random)
+                        rule.input.matches(state, &mut random)
+                            && rule.location.matches(world_state, &mut random)
                     })
                     .map_or(Some(state), |rule| Some(rule.output_state))
             }
@@ -154,6 +154,7 @@ struct RawRule {
 struct RawPredicate {
     predicate_type: Option<String>,
     block: Option<String>,
+    block_state: Option<RawOutputState>,
     tag: Option<String>,
     probability: Option<f32>,
 }
@@ -166,13 +167,35 @@ struct RawOutputState {
     properties: std::collections::BTreeMap<String, String>,
 }
 
+/// Resolves a `Name` + `Properties` pair to a concrete block state.
+fn resolve_output_state(raw: &RawOutputState) -> Option<&'static BlockState> {
+    let name = raw.name.strip_prefix("minecraft:").unwrap_or(&raw.name);
+    let block = Block::from_name(name)?;
+    if raw.properties.is_empty() {
+        return Some(block.default_state);
+    }
+    let properties = raw
+        .properties
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect::<Vec<_>>();
+    Some(BlockState::from_id(
+        block.from_properties(&properties).to_state_id(block),
+    ))
+}
+
 fn convert_predicate(raw: &RawPredicate) -> Option<RulePredicate> {
     match raw.predicate_type.as_deref() {
         Some("minecraft:always_true") | None => Some(RulePredicate::AlwaysTrue),
-        Some("minecraft:block_match" | "minecraft:blockstate_match") => {
+        Some("minecraft:block_match") => {
             let name = raw.block.as_deref()?;
             let block = Block::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?;
             Some(RulePredicate::Block(block.id))
+        }
+        Some("minecraft:blockstate_match") => {
+            // Data carries the state under `block_state` with Name+Properties.
+            let raw_state = raw.block_state.as_ref()?;
+            resolve_output_state(raw_state).map(RulePredicate::BlockState)
         }
         Some("minecraft:random_block_match") => {
             let name = raw.block.as_deref()?;
@@ -206,27 +229,7 @@ fn convert_raw_processor(raw: RawProcessor) -> Option<StructureProcessor> {
             rules
                 .into_iter()
                 .filter_map(|rule| {
-                    let output_name = rule
-                        .output_state
-                        .name
-                        .strip_prefix("minecraft:")
-                        .unwrap_or(&rule.output_state.name);
-                    let output_block = Block::from_name(output_name)?;
-                    let output_state = if rule.output_state.properties.is_empty() {
-                        output_block.default_state
-                    } else {
-                        let properties = rule
-                            .output_state
-                            .properties
-                            .iter()
-                            .map(|(key, value)| (key.as_str(), value.as_str()))
-                            .collect::<Vec<_>>();
-                        BlockState::from_id(
-                            output_block
-                                .from_properties(&properties)
-                                .to_state_id(output_block),
-                        )
-                    };
+                    let output_state = resolve_output_state(&rule.output_state)?;
 
                     Some(ProcessorRule {
                         input: convert_predicate(&rule.input_predicate)?,

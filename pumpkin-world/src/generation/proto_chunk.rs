@@ -1445,6 +1445,7 @@ impl ProtoChunk {
                                     ),
                                     sea_level: settings.sea_level,
                                     min_y: chunk_min_y,
+                                    max_y: chunk_min_y + self.height() as i32 - 1,
                                     height_sampler: Some(&mut height_sampler),
                                     structure_key: Some(entry.structure),
                                 };

@@ -707,6 +707,7 @@ mod tests {
             random: super::super::create_chunk_random(0, 0, 0),
             sea_level: 63,
             min_y: -64,
+            max_y: 319,
             height_sampler: None,
             structure_key: Some(pumpkin_data::structures::StructureKeys::AncientCity),
         };
@@ -737,6 +738,7 @@ mod tests {
             random: super::super::create_chunk_random(seed, 4, 4),
             sea_level: 63,
             min_y: -64,
+            max_y: 319,
             height_sampler: None,
             structure_key: key,
         };
@@ -779,6 +781,7 @@ mod tests {
             random: super::super::create_chunk_random(seed, 8, 8),
             sea_level: 63,
             min_y: -64,
+            max_y: 319,
             height_sampler: None,
             structure_key: None, // no Structure::use_expansion_hack fallback
         };

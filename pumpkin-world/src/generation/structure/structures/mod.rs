@@ -693,6 +693,8 @@ pub struct StructureGeneratorContext<'a> {
     pub random: RandomGenerator,
     pub sea_level: i32,
     pub min_y: i32,
+    /// Highest buildable Y (inclusive), vanilla `getMaxY()`.
+    pub max_y: i32,
     pub height_sampler: Option<&'a mut dyn HeightSampler>,
     pub structure_key: Option<pumpkin_data::structures::StructureKeys>,
 }

@@ -70,6 +70,7 @@ pub fn try_generate_structure(
         random,
         sea_level,
         min_y: chunk.bottom_y() as i32,
+        max_y: chunk.bottom_y() as i32 + chunk.height() as i32 - 1,
         height_sampler,
         structure_key: Some(*key),
     };

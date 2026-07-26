@@ -88,15 +88,23 @@ impl JigsawPlacement {
 
         let actual_start_pool_id = pool_alias_lookup.lookup(start_pool_id);
         let pool = TemplatePool::discover(actual_start_pool_id)?;
+        // Vanilla draws the start rotation BEFORE the start element
+        // (JigsawPlacement.java:76-78); the order shifts every later roll.
+        let rotation = Rotation::from_index(context.random.next_bounded_i32(4) as u8);
         let element = pool.get_random_element(&mut context.random).clone();
         let template = element.first_template()?;
-
-        let rotation = Rotation::from_index(context.random.next_bounded_i32(4) as u8);
 
         let mut anchored_position = position;
         if let Some(target_jigsaw_id) = start_jigsaw {
             let mut found_anchor = None;
-            let jigsaws = get_jigsaw_blocks(&template);
+            // Vanilla getShuffledJigsawBlocks: shuffle, then stable-sort by
+            // selection priority descending (JigsawPlacement.java:119-126).
+            let mut jigsaws = get_jigsaw_blocks(&template);
+            for i in (1..jigsaws.len()).rev() {
+                let j = context.random.next_bounded_i32(i as i32 + 1) as usize;
+                jigsaws.swap(i, j);
+            }
+            jigsaws.sort_by_key(|jigsaw| std::cmp::Reverse(jigsaw.selection_priority));
             for jigsaw in jigsaws {
                 if jigsaw.name == target_jigsaw_id {
                     let rotated_pos = rotation.transform_pos(jigsaw.pos.0, template.size);
@@ -142,26 +150,35 @@ impl JigsawPlacement {
             adjusted_position.0.y
         };
 
+        // Vanilla: piece.move(0, bottomY - (minY + getGroundLevelDelta()), 0)
+        // with delta always 1 — box AND piece position sink one block so the
+        // template's foundation layer replaces the terrain surface.
+        let placement_y = bottom_y - 1;
         let old_min_y = box_.min.y;
-        box_.move_pos(0, bottom_y - old_min_y, 0);
+        box_.move_pos(0, placement_y - old_min_y, 0);
 
-        if box_.min.y < context.min_y + dimension_padding.bottom
-            || box_.max.y > context.min_y + 320 - dimension_padding.top
+        // Vanilla isStartTooCloseToWorldHeightLimits runs only with non-zero
+        // padding (JigsawPlacement.java:110-113).
+        if (dimension_padding.top != 0 || dimension_padding.bottom != 0)
+            && (box_.min.y < context.min_y + dimension_padding.bottom
+                || box_.max.y > context.max_y - dimension_padding.top)
         {
             return None;
         }
 
         let center_y = bottom_y + local_anchor_position.y;
 
+        // Inclusive bounds: vanilla builds an exclusive-max AABB (+1) but the
+        // deflated fit test reduces to these inclusive limits.
         let global_bounding_box = BlockBox::new(
             center_x - max_distance_from_center.horizontal,
             (center_y - max_distance_from_center.vertical)
                 .max(context.min_y + dimension_padding.bottom),
             center_z - max_distance_from_center.horizontal,
-            center_x + max_distance_from_center.horizontal + 1,
-            (center_y + max_distance_from_center.vertical + 1)
-                .min(context.min_y + 320 - dimension_padding.top),
-            center_z + max_distance_from_center.horizontal + 1,
+            center_x + max_distance_from_center.horizontal,
+            (center_y + max_distance_from_center.vertical)
+                .min(context.max_y - dimension_padding.top),
+            center_z + max_distance_from_center.horizontal,
         );
 
         let mut jigsaw_blocks = Vec::new();
@@ -172,7 +189,7 @@ impl JigsawPlacement {
                 let rotated_pos = rotation.transform_pos(jigsaw.pos.0, template.size);
                 jigsaw.pos = BlockPos(rotated_pos).add(
                     adjusted_position.0.x,
-                    bottom_y,
+                    placement_y,
                     adjusted_position.0.z,
                 );
                 jigsaw.facing = rotate_direction(jigsaw.facing, rotation);
@@ -188,12 +205,13 @@ impl JigsawPlacement {
                 0,
             ),
             element: element.clone(),
-            pos: BlockPos::new(adjusted_position.0.x, bottom_y, adjusted_position.0.z),
+            pos: BlockPos::new(adjusted_position.0.x, placement_y, adjusted_position.0.z),
             rotation,
             mirror: Mirror::None,
             jigsaw_blocks,
             junctions: Vec::new(),
-            ground_level_delta: 0,
+            // Vanilla StructurePoolElement.getGroundLevelDelta() — always 1.
+            ground_level_delta: 1,
             liquid_settings,
             projection: element.projection,
         });
@@ -246,6 +264,9 @@ impl JigsawPlacement {
                 let source_rigid = source_projection == JigsawProjection::Rigid;
 
                 'jigsaw_loop: for source_jigsaw in &source_jigsaws {
+                    // Vanilla memoizes the sampled base height per source jigsaw
+                    // (JigsawPlacement.java:207) across all candidate elements.
+                    let mut source_jigsaw_base_height = i32::MIN;
                     let raw_pool_id = &source_jigsaw.pool;
                     if raw_pool_id == "minecraft:empty" || raw_pool_id.is_empty() {
                         continue;
@@ -299,6 +320,10 @@ impl JigsawPlacement {
                                 let j = context.random.next_bounded_i32(i as i32 + 1) as usize;
                                 target_jigsaws_shuffled.swap(i, j);
                             }
+                            // Vanilla stable-sorts shuffled candidates by
+                            // selection priority (SinglePoolElement.java:121-126).
+                            target_jigsaws_shuffled
+                                .sort_by_key(|jigsaw| std::cmp::Reverse(jigsaw.selection_priority));
 
                             for target_jigsaw in target_jigsaws_shuffled {
                                 if !can_attach(source_jigsaw, &target_jigsaw, target_rotation) {
@@ -323,7 +348,6 @@ impl JigsawPlacement {
                                     + source_facing.to_vector().y;
 
                                 let target_box_y;
-                                let mut source_jigsaw_base_height = i32::MIN;
 
                                 if source_rigid && target_rigid {
                                     target_box_y = source_box.min.y + delta_y;
@@ -421,9 +445,11 @@ impl JigsawPlacement {
                                 }
 
                                 if expand_to > 0 {
-                                    let new_size = (expand_to + 1)
-                                        .max(target_box.max.y - target_box.min.y + 1);
-                                    target_box.max.y = target_box.min.y + new_size - 1;
+                                    // Vanilla: p = max(expandTo + 1, maxY - minY);
+                                    // encapsulate(minY + p) → new inclusive max.
+                                    let new_size =
+                                        (expand_to + 1).max(target_box.max.y - target_box.min.y);
+                                    target_box.max.y = target_box.min.y + new_size;
                                 }
 
                                 // Vanilla: a jigsaw whose connection point lies
@@ -470,7 +496,8 @@ impl JigsawPlacement {
                                     let target_ground_level_delta = if target_rigid {
                                         source_ground_level_delta - delta_y
                                     } else {
-                                        0
+                                        // Vanilla: targetElement.getGroundLevelDelta() = 1.
+                                        1
                                     };
 
                                     let target_piece = Box::new(PoolElementStructurePiece {
@@ -618,14 +645,15 @@ const fn is_box_inside(outer: &BlockBox, inner: &BlockBox) -> bool {
 }
 
 const fn intersects_exclusive(a: &BlockBox, b: &BlockBox) -> bool {
-    // Strictly greater/less than checks perfectly emulate Vanilla's AABB deflate(0.25)
-    // by completely ignoring touching boundaries where coords are equal.
-    a.max.x > b.min.x
-        && a.min.x < b.max.x
-        && a.max.y > b.min.y
-        && a.min.y < b.max.y
-        && a.max.z > b.min.z
-        && a.min.z < b.max.z
+    // BlockBox max coords are INCLUSIVE. Vanilla's AABB.of adds +1 to max and
+    // deflates by 0.25, which reduces to: sharing even one block is an
+    // overlap, while face-adjacent boxes (a.max + 1 == b.min) are not.
+    a.max.x >= b.min.x
+        && a.min.x <= b.max.x
+        && a.max.y >= b.min.y
+        && a.min.y <= b.max.y
+        && a.max.z >= b.min.z
+        && a.min.z <= b.max.z
 }
 
 struct PieceState {
@@ -802,6 +830,7 @@ mod tests {
             random: create_chunk_random(20260726, 0, 0),
             sea_level: 63,
             min_y: -64,
+            max_y: 319,
             height_sampler: Some(&mut sampler),
             structure_key: None,
         };
