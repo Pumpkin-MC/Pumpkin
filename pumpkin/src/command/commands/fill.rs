@@ -272,7 +272,9 @@ impl CommandExecutor for Executor {
             let mut context = Context {
                 block_state_id,
                 option_filter: BlockPredicateArgumentConsumer::find_arg(args, ARG_FILTER)?,
-                world: sender.world().ok_or(CommandError::InvalidRequirement)?,
+                world: sender
+                    .world_or_first(server)
+                    .ok_or(CommandError::InvalidRequirement)?,
                 placed_blocks: 0,
                 to_update: Vec::new(),
 
