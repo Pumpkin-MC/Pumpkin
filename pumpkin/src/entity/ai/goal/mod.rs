@@ -43,6 +43,7 @@ pub mod place_block;
 pub mod ram;
 pub mod random_float;
 pub mod revenge;
+pub mod run_around_like_crazy;
 pub mod silverfish_merge;
 pub mod silverfish_wake;
 pub mod sit;
