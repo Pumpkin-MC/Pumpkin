@@ -167,16 +167,13 @@ impl Mob for ZombieEntityBase {
             let origin = entity.block_pos.load();
             let entity_type = entity.entity_type;
             for _ in 0..50 {
-                let mut rng = rand::rng();
-                let offset = |rng: &mut rand::rngs::ThreadRng| {
-                    rng.random_range(7..=40) * rng.random_range(-1i32..=1)
+                // Scope the (non-Send) thread rng away from the awaits below.
+                let (dx, dy, dz) = {
+                    let mut rng = rand::rng();
+                    let mut offset = || rng.random_range(7i32..=40) * rng.random_range(-1i32..=1);
+                    (offset(), offset(), offset())
                 };
-                let spawn_pos = BlockPos::new(
-                    origin.0.x + offset(&mut rng),
-                    origin.0.y + offset(&mut rng),
-                    origin.0.z + offset(&mut rng),
-                );
-                drop(rng);
+                let spawn_pos = BlockPos::new(origin.0.x + dx, origin.0.y + dy, origin.0.z + dz);
 
                 // Standable: solid floor, two passable blocks.
                 let floor = world.get_block_state(&spawn_pos.down());
