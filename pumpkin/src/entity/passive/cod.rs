@@ -6,8 +6,8 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         avoid_entity::AvoidEntityGoal, escape_danger::EscapeDangerGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        follow_school_leader::FollowSchoolLeaderGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     ai::pathfinder::node::PathType,
     mob::{Mob, MobEntity},
@@ -43,6 +43,8 @@ impl CodEntity {
                 Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 8.0, 1.6, 1.4)),
             );
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
+            // Vanilla AbstractSchoolingFish priority 5: FollowFlockLeaderGoal.
+            goal_selector.add_goal(5, Box::new(FollowSchoolLeaderGoal::new(1.0)));
             goal_selector.add_goal(
                 5,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),

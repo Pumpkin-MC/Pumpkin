@@ -23,6 +23,7 @@ pub mod follow_caravan;
 pub mod follow_owner;
 pub mod follow_parent;
 pub mod follow_player;
+pub mod follow_school_leader;
 pub mod freeze_when_looked;
 pub mod go_to_lava;
 pub mod goal_selector;

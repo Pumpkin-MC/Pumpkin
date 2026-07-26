@@ -105,22 +105,52 @@ impl MoveControlTrait for MoveControl {
                 yd > step_height && horizontal_distance_sq < max_jump_distance_sq;
 
             // Vanilla's collision-shape branch does not require a higher waypoint.
-            // Pumpkin updates block position after movement, so inspect the blocked
-            // target column when the mob is still in the preceding air cell.
-            let blocked_by_target_step = if entity.horizontal_collision.load(Ordering::Relaxed)
-                && horizontal_distance_sq < max_jump_distance_sq
-            {
-                let target_block_pos = BlockPos::floored(self.wanted_x, pos.y, self.wanted_z);
-                let target_state = world.get_block_state(&target_block_pos);
-                let target_block = Block::from_state_id(target_state.id);
-                !target_block.has_tag(&tag::Block::MINECRAFT_DOORS)
-                    && !target_block.has_tag(&tag::Block::MINECRAFT_FENCES)
-                    && target_state
-                        .get_block_collision_shapes()
-                        .any(|shape| pos.y < shape.max.y + f64::from(target_block_pos.0.y))
-            } else {
-                false
-            };
+            // The direct-walk fallback hands MoveControl a *far* destination, so
+            // when the mob is pressed against something it must probe the cell
+            // directly ahead along its movement direction — checking the far
+            // target column never sees the wall and fleeing pigs push it forever.
+            let blocked_by_target_step = entity.horizontal_collision.load(Ordering::Relaxed)
+                && horizontal_distance_sq > 1.0e-8
+                && {
+                    let horizontal_len = horizontal_distance_sq.sqrt();
+                    let nx = xd / horizontal_len;
+                    let nz = zd / horizontal_len;
+                    let probe = f64::from(entity.entity_dimension.load().width).mul_add(0.5, 0.35);
+                    let jumpable_step_ahead = |dx: f64, dz: f64| {
+                        let ahead_pos = BlockPos::floored(pos.x + dx, pos.y, pos.z + dz);
+                        if ahead_pos == block_pos {
+                            return false;
+                        }
+                        let ahead_state = world.get_block_state(&ahead_pos);
+                        let ahead_block = Block::from_state_id(ahead_state.id);
+                        if ahead_block.has_tag(&tag::Block::MINECRAFT_DOORS)
+                            || ahead_block.has_tag(&tag::Block::MINECRAFT_FENCES)
+                            || ahead_block.has_tag(&tag::Block::MINECRAFT_WALLS)
+                        {
+                            return false;
+                        }
+                        // Highest collision top of the obstacle cell relative to feet.
+                        let top = ahead_state
+                            .get_block_collision_shapes()
+                            .map(|shape| shape.max.y + f64::from(ahead_pos.0.y) - pos.y)
+                            .fold(f64::NEG_INFINITY, f64::max);
+                        // A jump clears ~1.25 blocks; anything at or below step
+                        // height is walked up without jumping.
+                        if !(top > step_height && top <= 1.25) {
+                            return false;
+                        }
+                        // Headroom above the step must be clear.
+                        world
+                            .get_block_state(&ahead_pos.up())
+                            .collision_shapes
+                            .is_empty()
+                    };
+                    // Probe straight ahead, then the axis-aligned cells for
+                    // diagonal approaches against a flat wall.
+                    jumpable_step_ahead(nx * probe, nz * probe)
+                        || jumpable_step_ahead(nx.signum() * probe, 0.0)
+                        || jumpable_step_ahead(0.0, nz.signum() * probe)
+                };
 
             if target_requires_jump || collision_requires_jump || blocked_by_target_step {
                 living_entity.jumping.store(true, Ordering::SeqCst);
