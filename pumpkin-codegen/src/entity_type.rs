@@ -366,11 +366,14 @@ pub fn build() -> TokenStream {
                 is_persistent: false,
                 despawn_distance: 128,
             };
+            // Vanilla MobCategory.java:19 WATER_CREATURE("water_creature", "WC", 5, true, false, 128)
+            // — NOT persistent; squid/dolphin must respawn on the every-tick
+            // cycle, not the 400-tick persistent-animal cycle.
             pub const WATER_CREATURE: MobCategory = MobCategory {
                 id: 5,
                 max: 5,
                 is_friendly: true,
-                is_persistent: true,
+                is_persistent: false,
                 despawn_distance: 128,
             };
             pub const WATER_AMBIENT: MobCategory = MobCategory {
