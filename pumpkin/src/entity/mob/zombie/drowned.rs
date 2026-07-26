@@ -25,6 +25,14 @@ impl DrownedEntity {
             nav.set_pathfinding_malus(PathType::WaterBorder, 0.0);
             nav.set_pathfinding_malus(PathType::Open, 2.0);
         }
+        {
+            // Vanilla addBehaviourGoals: DrownedTridentAttackGoal(1.0, 40, 10.0) priority 2.
+            let mut goal_selector = entity.mob_entity.goals_selector.lock().unwrap();
+            goal_selector.add_goal(
+                2,
+                crate::entity::ai::goal::trident_attack::TridentAttackGoal::new(1.0),
+            );
+        }
         // NearestAttackableTargetGoal(Axolotl) priority 3
         {
             let mut target_selector = entity.mob_entity.target_selector.lock().unwrap();

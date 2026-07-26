@@ -52,6 +52,7 @@ pub mod swim;
 pub mod teleport_towards_player;
 pub mod tempt;
 pub(crate) mod track_target;
+pub mod trident_attack;
 pub mod wander_around;
 pub mod wind_charge_attack;
 pub mod witch_attack;
