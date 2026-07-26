@@ -419,7 +419,7 @@ impl Mob for EndermanEntity {
         })
     }
 
-    // TODO: sunlight avoidance, carried block drop on death, angerable system, ambient sound override
+    // TODO: carried block drop on death, angerable system, ambient sound override
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.mob_entity.living_entity.entity;
@@ -427,12 +427,31 @@ impl Mob for EndermanEntity {
                 return;
             }
 
-            // TODO: also check rain
-            if entity.touching_water.load(Ordering::SeqCst) {
+            let world = entity.world.load();
+            let feet = entity.block_pos.load();
+            // Under open sky (nothing solid above the head column).
+            let exposed_to_sky = world.get_top_block(pumpkin_util::math::vector2::Vector2::new(
+                feet.0.x, feet.0.z,
+            )) <= feet.0.y + 1;
+
+            // Vanilla isSensitiveToWater: water AND rain hurt endermen.
+            let in_rain = exposed_to_sky && world.weather.lock().await.raining;
+            if entity.touching_water.load(Ordering::SeqCst) || in_rain {
                 self.mob_entity
                     .living_entity
                     .damage_with_context(self, 1.0, DamageType::DROWN, None, None, None)
                     .await;
+            }
+
+            // Vanilla customServerAiStep: on a bright surface, endermen drop
+            // aggro and teleport away with a small chance each check.
+            if exposed_to_sky && !in_rain && rand::random::<f32>() < 0.008 {
+                let time = { world.level_time.lock().await.time_of_day.rem_euclid(24000) };
+                let is_bright_day = (0..12000).contains(&time);
+                if is_bright_day {
+                    self.set_target(None).await;
+                    self.teleport_randomly();
+                }
             }
 
             // NOTE: Enderman ambient portal particles are intentionally NOT sent server-side.
