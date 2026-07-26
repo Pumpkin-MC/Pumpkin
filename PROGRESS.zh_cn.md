@@ -1,7 +1,8 @@
 # Pumpkin 开发进度（简体中文）
 
 > English version: [PROGRESS.en_us.md](PROGRESS.en_us.md)
-> 更新日期：2026-07-26 · 活跃分支：`fix/gameplay-ai-spawn-net`
+> 更新日期：2026-07-27 · 活跃分支：`fix/gameplay-ai-spawn-net`
+> **详细差距清单与开发规则见 [docs/PARITY_GAPS.zh_cn.md](docs/PARITY_GAPS.zh_cn.md)（给开发者与 AI agent 的共享参考）**
 
 ## 项目定位
 
@@ -45,6 +46,10 @@ Pumpkin 是用 Rust 编写的高性能 Minecraft 服务端：
 4. 振动传播延迟（1 格/tick）与紫水晶共振
 5. 行商羊驼商队状态、猪运输、蜂巢完整周期
 6. 末影人拿取方块的光照魔法值（现以天空光近似）
+
+## 近期变更（2026-07-27 批次）
+
+三轮全面审计（寻路 35 项差距、红石 23 项差距、刷怪链路）已归档至 [docs/PARITY_GAPS.zh_cn.md](docs/PARITY_GAPS.zh_cn.md)。已修：WATER_CREATURE 类别错误持久化（鱿鱼/海豚几乎不刷）、刷怪笼 BaseSpawner 对照重写（无限堆刷骷髅根因：缺 MaxNearbyEntities/RequiredPlayerRange/光照规则/位置公式偏斜）、水生生物全套原版刷新规则（发光鱿鱼深度、鱼类海平面窗口、溺尸稀有度）、horse.rs 编译错误。进行中：寻路高危修复、红石高危修复、矿井完整移植、地形生成诊断。
 
 ## 近期变更（2026-07-26 批次）
 
