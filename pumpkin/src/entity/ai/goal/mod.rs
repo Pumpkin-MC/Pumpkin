@@ -19,6 +19,7 @@ pub mod escape_danger;
 pub mod evoker_cast;
 pub mod fireball_attack;
 pub mod flee_sun;
+pub mod follow_caravan;
 pub mod follow_owner;
 pub mod follow_parent;
 pub mod follow_player;

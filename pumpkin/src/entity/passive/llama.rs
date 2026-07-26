@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, AtomicI32};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
@@ -7,8 +8,8 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
+        follow_caravan::FollowCaravanGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
         snowball_attack::SnowballAttackGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
@@ -23,12 +24,20 @@ const TEMPT_ITEMS: &[&Item] = &[&Item::HAY_BLOCK];
 /// Decompile: RangedAttackGoal interval 40; LlamaAttackWolfGoal; caravan TODO.
 pub struct LlamaEntity {
     pub mob_entity: MobEntity,
+    /// Entity id of the llama this one follows in a caravan (-1 = none).
+    pub caravan_head: AtomicI32,
+    /// Whether another llama follows this one.
+    pub caravan_tail: AtomicBool,
 }
 
 impl LlamaEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let llama = Self { mob_entity };
+        let llama = Self {
+            mob_entity,
+            caravan_head: AtomicI32::new(-1),
+            caravan_tail: AtomicBool::new(false),
+        };
         let mob_arc = Arc::new(llama);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -41,6 +50,8 @@ impl LlamaEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             // RunAroundLikeCrazyGoal TODO (untamed)
+            // Vanilla priority 2: follow a leashed caravan leader at 2.1 speed.
+            goal_selector.add_goal(2, Box::new(FollowCaravanGoal::new(2.1)));
             goal_selector.add_goal(3, SnowballAttackGoal::new(1.25)); // RangedAttack spit
             goal_selector.add_goal(3, EscapeDangerGoal::new(1.2));
             goal_selector.add_goal(4, BreedGoal::new(1.0));
