@@ -99,10 +99,12 @@ impl DaylightDetectorBlockEntity {
 
         let sky_light_level = level.light_engine.get_sky_light_level(&level, block_pos);
 
-        let mut power = sky_light_level - ambient_darkness;
+        // Signed math: underground at night ambient darkness exceeds sky light,
+        // and u8 subtraction would wrap to full power.
+        let mut power = i32::from(sky_light_level) - i32::from(ambient_darkness);
 
         if inverted {
-            power = 15 - power;
+            power = 15 - power.clamp(0, 15);
         } else if power > 0 {
             let transition_offset = if sun_angle_radians < PI {
                 0.0
@@ -111,10 +113,10 @@ impl DaylightDetectorBlockEntity {
             };
 
             sun_angle_radians += (transition_offset - sun_angle_radians) * 0.2;
-            power = (power as f32 * sun_angle_radians.cos()).round() as u8;
+            power = (power as f32 * sun_angle_radians.cos()).round() as i32;
         }
 
-        let power = power.clamp(0, 15);
+        let power = power.clamp(0, 15) as u8;
         if power != props.power {
             props.power = power;
             let state = props.to_state_id(block);
