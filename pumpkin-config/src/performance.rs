@@ -64,11 +64,15 @@ impl AllocatorBackend {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CompressionBackend {
+    /// PNX-style best-available pick: whatever backend this binary was built
+    /// with (zlib-ng in release builds, miniz_oxide otherwise) without a
+    /// mismatch warning.
+    #[default]
+    Auto,
     /// Pure-Rust `miniz_oxide` (`flate2` feature `rust_backend`).
     ///
     /// `zlib_rs` is accepted as an alias: earlier builds shipped configs with
     /// that spelling, and an unknown variant aborts startup.
-    #[default]
     #[serde(alias = "zlib_rs")]
     Rust,
     /// zlib-ng (`flate2` feature `zlib-ng`); high performance, requires a C toolchain.
@@ -79,6 +83,7 @@ impl CompressionBackend {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::Auto => "auto",
             Self::Rust => "rust",
             Self::ZlibNg => "zlib_ng",
         }

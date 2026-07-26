@@ -262,6 +262,6 @@ save_advancements = true
 [performance]
 # 请求的内存分配器；实际分配器由构建出的二进制文件决定。
 allocator = "mimalloc"
-# 请求的 DEFLATE 后端：zlib_ng 或 rust；实际后端由二进制文件决定。
-# 生产构建使用 zlib-ng；不再支持旧的后端配置值。
-compression_backend = "zlib_ng"
+# 请求的 DEFLATE 后端：auto、zlib_ng 或 rust。auto 自动使用二进制内置的
+# 最优实现（发布构建内置 zlib-ng，等价 PNX 的按设备最优选择）。
+compression_backend = "auto"

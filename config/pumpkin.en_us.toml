@@ -262,6 +262,6 @@ save_advancements = true
 [performance]
 # Requested allocator. The built binary determines the actual allocator.
 allocator = "mimalloc"
-# Requested DEFLATE backend: zlib_ng or rust. The built binary determines it.
-# Production builds use zlib-ng; legacy backend values are not supported.
-compression_backend = "zlib_ng"
+# Requested DEFLATE backend: auto, zlib_ng, or rust. auto uses the best
+# backend this binary was built with (release builds ship zlib-ng).
+compression_backend = "auto"
