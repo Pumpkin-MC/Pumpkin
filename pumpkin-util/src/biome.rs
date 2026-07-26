@@ -67,7 +67,7 @@ impl TemperatureModifier {
 /// Represents weather information for a biome, including temperature and precipitation.
 #[derive(Clone, Debug)]
 pub struct Weather {
-    #[expect(dead_code)]
+    /// Whether this biome has any precipitation at all (rain or snow).
     has_precipitation: bool,
     /// Base temperature of the biome.
     temperature: f32,
@@ -135,5 +135,23 @@ impl Weather {
         } else {
             modified_temperature
         }
+    }
+
+    /// Whether it is warm enough at the given position for precipitation to fall
+    /// as rain instead of snow.
+    ///
+    /// Mirrors vanilla `Biome#warmEnoughToRain`.
+    #[must_use]
+    pub fn warm_enough_to_rain(&self, x: i32, y: i32, z: i32, sea_level: i32) -> bool {
+        self.compute_temperature(f64::from(x), y, f64::from(z), sea_level) >= 0.15
+    }
+
+    /// Whether precipitation at the given position falls as rain.
+    ///
+    /// Mirrors vanilla `Biome#getPrecipitationAt(pos, seaLevel) == Precipitation.RAIN`:
+    /// biomes without precipitation get `NONE`, cold ones get `SNOW`.
+    #[must_use]
+    pub fn is_rain_at(&self, x: i32, y: i32, z: i32, sea_level: i32) -> bool {
+        self.has_precipitation && self.warm_enough_to_rain(x, y, z, sea_level)
     }
 }

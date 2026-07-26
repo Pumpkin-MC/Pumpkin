@@ -163,6 +163,9 @@ type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperti
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+/// The highest light level a block position can have, vanilla `LightLayer#getMaxLightLevel`.
+const MAX_LIGHT_LEVEL: u8 = 15;
+
 impl PumpkinError for GetBlockError {
     fn is_kick(&self) -> bool {
         false
@@ -1724,6 +1727,28 @@ impl World {
             let raining = weather.raining;
             weather.set_weather_parameters(self, 0, 0, raining, thundering);
         }
+    }
+
+    /// Whether rain is currently falling onto `pos`.
+    ///
+    /// Mirrors vanilla `Level#isRainingAt`: it has to be raining, the position has to
+    /// see the sky, nothing motion blocking may sit above it, and the biome there has
+    /// to have rain as its precipitation (so not snow and not "no precipitation").
+    pub async fn is_raining_at(&self, pos: &BlockPos) -> bool {
+        if !self.is_raining().await {
+            return false;
+        }
+        if !self.can_see_sky(pos) {
+            return false;
+        }
+        // Our heightmaps store the Y of the topmost matching block, while vanilla's
+        // `Heightmap#getFirstAvailable` stores that Y plus one, hence the `+ 1` here.
+        if self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1 > pos.0.y {
+            return false;
+        }
+        self.get_biome(pos)
+            .weather
+            .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
     }
 
     /// Gets the y position of the first non air block from the top down
@@ -4407,6 +4432,15 @@ impl World {
         self.level
             .light_engine
             .get_sky_light_level(&self.level, position)
+    }
+
+    /// Whether `position` has an unobstructed view of the sky.
+    ///
+    /// Mirrors vanilla `LevelReader#canSeeSky`, which checks the raw (not
+    /// day/night darkened) sky light against the maximum light level.
+    #[must_use]
+    pub fn can_see_sky(&self, position: &BlockPos) -> bool {
+        self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
     }
 
     pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {
