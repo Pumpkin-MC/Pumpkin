@@ -1,7 +1,4 @@
-use pumpkin_data::{
-    packet::{CURRENT_MC_VERSION, LOWEST_SUPPORTED_MC_VERSION},
-    translation,
-};
+use pumpkin_data::{packet::CURRENT_MC_VERSION, translation};
 use pumpkin_protocol::{ConnectionState, java::server::handshake::SHandShake};
 use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 use tracing::debug;
@@ -19,7 +16,11 @@ impl JavaClient {
         self.connection_state.store(handshake.next_state);
         if self.connection_state.load() != ConnectionState::Status {
             let protocol = version;
-            if protocol < LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32 {
+            // Single-version policy: the server targets 26.2 only. Older
+            // protocols keep working for status pings, but joining requires the
+            // current version so gameplay code does not have to carry
+            // multi-version compromises.
+            if protocol < CURRENT_MC_VERSION.protocol_version() as u32 {
                 self.kick(TextComponent::translate_cross(
                     translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_CLIENT,
                     translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_CLIENT,
