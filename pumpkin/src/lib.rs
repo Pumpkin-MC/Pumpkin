@@ -43,6 +43,7 @@ pub mod crash;
 pub mod data;
 pub mod entity;
 pub mod error;
+pub mod instance;
 pub mod item;
 pub mod logging;
 pub mod net;
@@ -191,6 +192,43 @@ pub fn stop_or_exit_server() {
     }
 }
 
+/// Errors that can occur when binding network ports for a server instance.
+#[derive(Debug, thiserror::Error)]
+pub enum NetworkBindError {
+    #[error("Address {address} is already in use. Make sure another instance of the server isn't already running")]
+    AddrInUse { address: SocketAddr },
+    #[error("Permission denied when binding to {address}. You might need sudo/admin privileges to use ports below 1024")]
+    PermissionDenied { address: SocketAddr },
+    #[error("The address {address} is not available on this machine")]
+    AddrNotAvailable { address: SocketAddr },
+    #[error("Failed to bind to {address}: {source}")]
+    Other { address: SocketAddr, source: std::io::Error },
+}
+
+async fn bind_tcp_async(address: SocketAddr) -> Result<TcpListener, NetworkBindError> {
+    match tokio::net::TcpListener::bind(address).await {
+        Ok(listener) => Ok(listener),
+        Err(e) => match e.kind() {
+            ErrorKind::AddrInUse => Err(NetworkBindError::AddrInUse { address }),
+            ErrorKind::PermissionDenied => Err(NetworkBindError::PermissionDenied { address }),
+            ErrorKind::AddrNotAvailable => Err(NetworkBindError::AddrNotAvailable { address }),
+            _ => Err(NetworkBindError::Other { address, source: e }),
+        },
+    }
+}
+
+async fn bind_udp_async(address: SocketAddr) -> Result<UdpSocket, NetworkBindError> {
+    match tokio::net::UdpSocket::bind(address).await {
+        Ok(socket) => Ok(socket),
+        Err(e) => match e.kind() {
+            ErrorKind::AddrInUse => Err(NetworkBindError::AddrInUse { address }),
+            ErrorKind::PermissionDenied => Err(NetworkBindError::PermissionDenied { address }),
+            ErrorKind::AddrNotAvailable => Err(NetworkBindError::AddrNotAvailable { address }),
+            _ => Err(NetworkBindError::Other { address, source: e }),
+        },
+    }
+}
+
 fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
     opt: Option<D>,
     func: F,
@@ -212,11 +250,30 @@ impl PumpkinServer {
     pub fn log_info(&self, message: &str) {
         tracing::info!(target: "plugin", "{}", message);
     }
+
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
     ) -> Self {
+        match Self::new_with_result(basic_config, advanced_config, vanilla_data).await {
+            Ok(server) => server,
+            Err(e) => {
+                error!("{e}");
+                std::process::exit(1);
+            }
+        }
+    }
+
+    /// Creates a new `PumpkinServer`, returning errors instead of exiting on port conflicts.
+    ///
+    /// This method is suitable for multi-instance usage where a port conflict should
+    /// not terminate the entire process.
+    pub async fn new_with_result(
+        basic_config: BasicConfiguration,
+        advanced_config: AdvancedConfiguration,
+        vanilla_data: VanillaData,
+    ) -> Result<Self, NetworkBindError> {
         let server = Server::new(basic_config, advanced_config, vanilla_data).await;
 
         let rcon = server.advanced_config.networking.rcon.clone();
@@ -233,40 +290,19 @@ impl PumpkinServer {
 
         let tcp_listener = if server.advanced_config.networking.java.enabled {
             let address = server.advanced_config.networking.java.address;
-            // Setup the TCP server socket.
-            let listener = match TcpListener::bind(address).await {
-                Ok(l) => l,
-                Err(e) => match e.kind() {
-                    ErrorKind::AddrInUse => {
-                        error!("Error: Address {address} is already in use.");
-                        error!("Make sure another instance of the server isn't already running");
-                        std::process::exit(1);
-                    }
-                    ErrorKind::PermissionDenied => {
-                        error!("Error: Permission denied when binding to {address}.");
-                        error!("You might need sudo/admin privileges to use ports below 1024");
-                        std::process::exit(1);
-                    }
-                    ErrorKind::AddrNotAvailable => {
-                        error!("Error: The address {address} is not available on this machine");
-                        std::process::exit(1);
-                    }
-                    _ => {
-                        error!("Failed to start TcpListener on {address}: {e}");
-                        std::process::exit(1);
-                    }
-                },
-            };
-            // In the event the user puts 0 for their port, this will allow us to know what port it is running on
+            let listener = bind_tcp_async(address).await?;
             let addr = listener
                 .local_addr()
                 .expect("Unable to get the address of the server!");
 
             if server.advanced_config.networking.query.enabled {
                 info!("Query protocol is enabled. Starting...");
-                server.spawn_task(query::start_query_handler(
+                let query_addr = server.advanced_config.networking.query.address;
+                let query_socket = Arc::new(bind_udp_async(query_addr).await?);
+                server.spawn_task(query::start_query_handler_with_socket(
                     server.clone(),
-                    server.advanced_config.networking.query.address,
+                    query_socket,
+                    query_addr,
                 ));
             }
 
@@ -294,20 +330,17 @@ impl PumpkinServer {
         };
 
         let udp_socket = if server.advanced_config.networking.bedrock.enabled {
-            Some(Arc::new(
-                UdpSocket::bind(server.advanced_config.networking.bedrock.address)
-                    .await
-                    .expect("Failed to bind UDP Socket"),
-            ))
+            let address = server.advanced_config.networking.bedrock.address;
+            Some(Arc::new(bind_udp_async(address).await?))
         } else {
             None
         };
 
-        Self {
+        Ok(Self {
             server,
             tcp_listener,
             udp_socket,
-        }
+        })
     }
 
     pub async fn init_plugins(&self) -> std::time::Duration {
@@ -336,7 +369,17 @@ impl PumpkinServer {
         }
     }
 
+    /// Starts the server with the global cancellation token.
     pub async fn start(&self) {
+        let token = STOP_INTERRUPT.clone();
+        self.start_with_token(token).await;
+    }
+
+    /// Starts the server with a specific cancellation token for per-instance control.
+    ///
+    /// This allows multiple server instances to run concurrently, each with their
+    /// own cancellation signal.
+    pub async fn start_with_token(&self, stop_token: CancellationToken) {
         if self.server.advanced_config.commands.use_console
             && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
         {
@@ -364,7 +407,7 @@ impl PumpkinServer {
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self
-                .unified_listener_task(&mut master_client_id, &tasks, &bedrock_clients)
+                .unified_listener_task(&mut master_client_id, &tasks, &bedrock_clients, &stop_token)
                 .await
             {
                 break;
@@ -440,6 +483,7 @@ impl PumpkinServer {
         master_client_id_counter: &mut u64,
         tasks: &Arc<TaskTracker>,
         bedrock_clients: &Arc<Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
+        stop_token: &CancellationToken,
     ) -> bool {
         let mut udp_buf = [0; 1496]; // Buffer for UDP receive
 
@@ -613,8 +657,8 @@ impl PumpkinServer {
                 }
             },
 
-            // Branch for the global stop signal
-            () = STOP_INTERRUPT.cancelled() => {
+            // Branch for the stop signal
+            () = stop_token.cancelled() => {
                 return false;
             }
         }

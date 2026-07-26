@@ -23,6 +23,14 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
             .await
             .expect("Unable to bind to address"),
     );
+    start_query_handler_with_socket(server, socket, query_addr).await;
+}
+
+pub async fn start_query_handler_with_socket(
+    server: Arc<Server>,
+    socket: Arc<UdpSocket>,
+    query_addr: SocketAddr,
+) {
 
     // Challenge tokens are bound to the IP address and port
     let valid_challenge_tokens = Arc::new(RwLock::new(HashMap::new()));
