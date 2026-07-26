@@ -1356,7 +1356,7 @@ impl LivingEntity {
         }
     }
 
-    const fn get_fall_sound(&self, damage: i32) -> Sound {
+    fn get_fall_sound(&self, damage: i32) -> Sound {
         let big = damage > 4;
         if self.entity.entity_type == &EntityType::PLAYER {
             if big {

@@ -691,18 +691,6 @@ fn can_attach(source: &JigsawBlock, target: &JigsawBlock, target_rotation: Rotat
     true
 }
 
-#[cfg(test)]
-mod tests {
-    use super::MaxDistance;
-
-    #[test]
-    fn scalar_max_distance_bounds_both_axes() {
-        let distance = MaxDistance::new(116);
-        assert_eq!(distance.horizontal, 116);
-        assert_eq!(distance.vertical, 116);
-    }
-}
-
 const fn rotate_direction(
     dir: pumpkin_util::BlockDirection,
     rotation: Rotation,
@@ -725,5 +713,17 @@ const fn rotate_direction(
             BlockDirection::East => BlockDirection::North,
             _ => dir,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MaxDistance;
+
+    #[test]
+    fn scalar_max_distance_bounds_both_axes() {
+        let distance = MaxDistance::new(116);
+        assert_eq!(distance.horizontal, 116);
+        assert_eq!(distance.vertical, 116);
     }
 }

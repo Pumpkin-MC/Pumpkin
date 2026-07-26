@@ -12,7 +12,6 @@ use crate::{
         GetRedstonePowerArgs, OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
         OnStateReplacedArgs,
     },
-    entity::EntityBase,
     world::World,
 };
 

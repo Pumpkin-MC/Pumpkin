@@ -170,7 +170,10 @@ impl JavaClient {
             return;
         };
         let expected_verify_token = self.verify_token.lock().await.take();
-        if expected_verify_token.as_deref() != Some(verify_token.as_slice()) {
+        if expected_verify_token
+            .as_ref()
+            .is_none_or(|expected| expected.as_slice() != verify_token.as_slice())
+        {
             self.kick(TextComponent::text("Invalid verify token")).await;
             return;
         }

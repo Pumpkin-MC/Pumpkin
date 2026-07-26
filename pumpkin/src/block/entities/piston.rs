@@ -2,7 +2,7 @@ use std::sync::atomic::Ordering;
 use std::{pin::Pin, sync::Arc};
 
 use crossbeam::atomic::AtomicCell;
-use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::BlockProperties};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 

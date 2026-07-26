@@ -328,26 +328,6 @@ fn transform_entity_pos(rotation: Rotation, pos: Vector3<f64>, size: Vector3<i32
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{Rotation, Vector3, transform_entity_pos};
-
-    #[test]
-    fn rotated_entity_position_stays_at_the_block_center() {
-        let size = Vector3::new(5, 4, 7);
-        let pos = Vector3::new(0.5, 1.0, 0.5);
-
-        let clockwise = transform_entity_pos(Rotation::Clockwise90, pos, size);
-        assert_eq!(clockwise, Vector3::new(6.5, 1.0, 0.5));
-
-        let reversed = transform_entity_pos(Rotation::Rotate180, pos, size);
-        assert_eq!(reversed, Vector3::new(4.5, 1.0, 6.5));
-
-        let counter_clockwise = transform_entity_pos(Rotation::CounterClockwise90, pos, size);
-        assert_eq!(counter_clockwise, Vector3::new(0.5, 1.0, 4.5));
-    }
-}
-
 /// Returns the block entity ID for blocks that require one, or None if not needed.
 pub(crate) fn get_block_entity_id(block_name: &str) -> Option<&'static str> {
     match block_name {
@@ -377,5 +357,25 @@ pub(crate) fn get_block_entity_id(block_name: &str) -> Option<&'static str> {
         | "minecraft:warped_sign" => Some("minecraft:sign"),
         "minecraft:hanging_sign" => Some("minecraft:hanging_sign"),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Rotation, Vector3, transform_entity_pos};
+
+    #[test]
+    fn rotated_entity_position_stays_at_the_block_center() {
+        let size = Vector3::new(5, 4, 7);
+        let pos = Vector3::new(0.5, 1.0, 0.5);
+
+        let clockwise = transform_entity_pos(Rotation::Clockwise90, pos, size);
+        assert_eq!(clockwise, Vector3::new(6.5, 1.0, 0.5));
+
+        let reversed = transform_entity_pos(Rotation::Rotate180, pos, size);
+        assert_eq!(reversed, Vector3::new(4.5, 1.0, 6.5));
+
+        let counter_clockwise = transform_entity_pos(Rotation::CounterClockwise90, pos, size);
+        assert_eq!(counter_clockwise, Vector3::new(0.5, 1.0, 4.5));
     }
 }
