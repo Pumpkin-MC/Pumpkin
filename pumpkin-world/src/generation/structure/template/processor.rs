@@ -123,11 +123,13 @@ impl StructureProcessor {
                 // location; the first matching rule wins.
                 let mut random = LegacyRand::from_seed(hash_block_pos(pos.x, pos.y, pos.z) as u64);
                 let world_state = BlockState::from_id(chunk.get_block_state(&pos));
-                match rules.iter().find(|rule| {
-                    rule.input.matches(state, &mut random)
-                        && rule.location.matches(world_state, &mut random)
-                }) {
-                    Some(rule) => {
+                rules
+                    .iter()
+                    .find(|rule| {
+                        rule.input.matches(state, &mut random)
+                            && rule.location.matches(world_state, &mut random)
+                    })
+                    .map_or(Some(ProcessedBlock { state, loot: None }), |rule| {
                         // AppendLoot.apply draws the seed from the same rule
                         // random after the predicate draws (AppendLoot.java:38).
                         let loot = rule
@@ -138,9 +140,7 @@ impl StructureProcessor {
                             state: rule.output_state,
                             loot,
                         })
-                    }
-                    None => Some(ProcessedBlock { state, loot: None }),
-                }
+                    })
             }
             Self::ProtectedBlocks(blocks) => {
                 let existing = chunk.get_block_state(&pos).to_block_id();
