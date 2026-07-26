@@ -270,9 +270,12 @@ impl BlockBehaviour for RedstoneWireBlock {
     }
 }
 
+/// Vanilla `RedStoneWireBlock.canSurvive`/`canSurviveOn`
+/// (`RedStoneWireBlock.java:232-241`): the floor must be face-sturdy upward
+/// `|| blockstate.is(Blocks.HOPPER)` — wire can sit on hoppers.
 fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    let floor = world.get_block_state(&block_pos.down());
-    floor.is_side_solid(BlockDirection::Up)
+    let (floor_block, floor) = world.get_block_and_state(&block_pos.down());
+    floor.is_side_solid(BlockDirection::Up) || floor_block == &Block::HOPPER
 }
 
 async fn on_use(wire: RedstoneWireProperties, world: &Arc<World>, block_pos: &BlockPos) -> bool {

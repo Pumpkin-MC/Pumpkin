@@ -286,6 +286,10 @@ pub async fn get_power<T: BlockProperties + RedstoneGateBlockProperties + Send>(
     }
 }
 
+/// Vanilla `SignalGetter.getControlInputSignal`
+/// (`SignalGetter.java:45-60`): the side inputs of repeaters and comparators
+/// only read redstone wire, redstone blocks, and the direct (strong) signal of
+/// blocks that are signal sources; anything else contributes 0.
 async fn get_power_on_side(
     world: &World,
     pos: &BlockPos,
@@ -294,18 +298,48 @@ async fn get_power_on_side(
 ) -> u8 {
     let side_pos = pos.offset(side.to_block_direction().to_offset());
     let (side_block, side_state) = world.get_block_and_state(&side_pos);
-    if !only_gate || is_diode(side_block) {
-        world
+    // SignalGetter.java:47-49: `onlyDiodes` (repeater side input) accepts
+    // diodes only, read via `getDirectSignal`.
+    if only_gate {
+        if is_diode(side_block) {
+            return world
+                .block_registry
+                .get_strong_redstone_power(
+                    side_block,
+                    world,
+                    &side_pos,
+                    side_state,
+                    side.to_block_direction(),
+                )
+                .await;
+        }
+        return 0;
+    }
+    // SignalGetter.java:50-52: a redstone block always feeds 15.
+    if side_block == &Block::REDSTONE_BLOCK {
+        return 15;
+    }
+    // SignalGetter.java:53-55: redstone wire feeds its POWER property.
+    if side_block == &Block::REDSTONE_WIRE {
+        return RedstoneWireLikeProperties::from_state_id(side_state.id, side_block).power;
+    }
+    // SignalGetter.java:56-59: other blocks feed their direct signal only when
+    // they are a signal source (`isSignalSource`).
+    if world
+        .block_registry
+        .emits_redstone_power(side_block, side_state, side.to_block_direction())
+        .await
+    {
+        return world
             .block_registry
-            .get_weak_redstone_power(
+            .get_strong_redstone_power(
                 side_block,
                 world,
                 &side_pos,
                 side_state,
                 side.to_block_direction(),
             )
-            .await
-    } else {
-        0
+            .await;
     }
+    0
 }

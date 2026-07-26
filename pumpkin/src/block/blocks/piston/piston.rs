@@ -38,14 +38,34 @@ impl BlockMetadata for PistonBlock {
 }
 
 impl PistonBlock {
-    #[must_use]
-    pub fn is_movable(
+    /// Vanilla `PistonBaseBlock.isPushable`
+    /// (`PistonBaseBlock.java:223-260`).
+    pub async fn is_movable(
+        world: &World,
         block: &Block,
         state: &BlockState,
+        pos: &BlockPos,
         dir: BlockDirection,
         can_break: bool,
         piston_dir: BlockDirection,
     ) -> bool {
+        // PistonBaseBlock.java:224-226: reject positions outside the build
+        // height or the world border. Vanilla `Level.getMaxY()` is
+        // `getMinY() + getHeight() - 1` (LevelHeightAccessor.java:14-16), and
+        // `WorldBorder.isWithinBounds(BlockPos)` tests the single (x, z) point
+        // (WorldBorder.java:62-64).
+        let min_y = world.dimension.min_y;
+        let max_y = min_y + world.dimension.height - 1;
+        if pos.0.y < min_y
+            || pos.0.y > max_y
+            || !world
+                .worldborder
+                .lock()
+                .await
+                .contains(f64::from(pos.0.x), f64::from(pos.0.z))
+        {
+            return false;
+        }
         if state.is_air() {
             return true;
         }
@@ -67,6 +87,14 @@ impl PistonBlock {
             || block == &Block::MOVING_PISTON
             || block == &Block::PISTON_HEAD
         {
+            return false;
+        }
+        // PistonBaseBlock.java:233-238: blocks resting on the bottom of the
+        // world cannot be pushed down and blocks at the top cannot be pushed up.
+        if dir == BlockDirection::Down && pos.0.y == min_y {
+            return false;
+        }
+        if dir == BlockDirection::Up && pos.0.y == max_y {
             return false;
         }
         if block == &Block::PISTON || block == &Block::STICKY_PISTON {
@@ -260,9 +288,22 @@ impl BlockBehaviour for PistonBlock {
                     false
                 };
                 if !piston_piece {
+                    // PistonBaseBlock.java:208: `isPushable(movingState, level,
+                    // twoPos, direction.getOpposite(), false, direction)` — a
+                    // sticky pull moves the block towards the piston, so the
+                    // movement direction is the opposite of the facing.
                     if r#type == 1
                         && !state.is_air()
-                        && Self::is_movable(block, state, dir, false, dir)
+                        && Self::is_movable(
+                            world,
+                            block,
+                            state,
+                            &pull_pos,
+                            dir.opposite(),
+                            false,
+                            dir,
+                        )
+                        .await
                         && (state.piston_behavior == PistonBehavior::Normal
                             || block == &Block::PISTON
                             || block == &Block::STICKY_PISTON)
@@ -303,7 +344,9 @@ impl BlockBehaviour for PistonBlock {
     }
 }
 
+/// Vanilla `PistonBaseBlock.getNeighborSignal` (`PistonBaseBlock.java:144-158`).
 async fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDirection) -> bool {
+    // PistonBaseBlock.java:145-148: every direction except the facing.
     for dir in BlockDirection::all() {
         let neighbor_pos = block_pos.offset(dir.to_offset());
         let (block, state) = world.get_block_and_state(&neighbor_pos);
@@ -315,11 +358,14 @@ async fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDir
         }
         return true;
     }
-    let neighbor_pos = block_pos.offset(BlockDirection::Down.to_offset());
-    let (block, state) = world.get_block_and_state(&neighbor_pos);
-    if is_emitting_redstone_power(block, state, world, &neighbor_pos, BlockDirection::Down).await {
+    // PistonBaseBlock.java:149-151: `level.hasSignal(pos, Direction.DOWN)` —
+    // the signal is read at the piston's own position, not the block below it.
+    let (block, state) = world.get_block_and_state(block_pos);
+    if is_emitting_redstone_power(block, state, world, block_pos, BlockDirection::Down).await {
         return true;
     }
+    // PistonBaseBlock.java:152-156: quasi-connectivity from the block above,
+    // skipping Direction.DOWN.
     for dir in BlockDirection::all() {
         let neighbor_pos = block_pos.up().offset(dir.to_offset());
         let (block, state) = world.get_block_and_state(&neighbor_pos);

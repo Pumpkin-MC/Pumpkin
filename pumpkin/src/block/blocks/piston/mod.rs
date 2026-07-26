@@ -52,12 +52,16 @@ impl<'a> PistonHandler<'a> {
         let (block, block_state) = self.world.get_block_and_state(&self.pos_to);
 
         if !PistonBlock::is_movable(
+            self.world,
             block,
             block_state,
+            &self.pos_to,
             self.motion_direction,
             false,
             self.piston_direction,
-        ) {
+        )
+        .await
+        {
             if self.retracted && block_state.piston_behavior == PistonBehavior::Destroy {
                 self.broken_blocks.push(self.pos_to);
                 return true;
@@ -98,7 +102,17 @@ impl<'a> PistonHandler<'a> {
         if block_state.is_air() {
             return true;
         }
-        if !PistonBlock::is_movable(block, block_state, self.motion_direction, false, dir) {
+        if !PistonBlock::is_movable(
+            self.world,
+            block,
+            block_state,
+            &pos,
+            self.motion_direction,
+            false,
+            dir,
+        )
+        .await
+        {
             return true;
         }
         if pos == self.pos_from {
@@ -118,12 +132,15 @@ impl<'a> PistonHandler<'a> {
             if next_state.is_air()
                 || !Self::is_adjacent_block_stuck(block2, next_block)
                 || !PistonBlock::is_movable(
+                    self.world,
                     next_block,
                     next_state,
+                    &block_pos,
                     self.motion_direction,
                     false,
                     self.motion_direction.opposite(),
                 )
+                .await
                 || block_pos == self.pos_from
             {
                 break;
@@ -161,12 +178,16 @@ impl<'a> PistonHandler<'a> {
                 return true;
             }
             if !PistonBlock::is_movable(
+                self.world,
                 block,
                 block_state,
+                &block_pos2,
                 self.motion_direction,
                 true,
                 self.motion_direction,
-            ) || block_pos2 == self.pos_from
+            )
+            .await
+                || block_pos2 == self.pos_from
             {
                 return false;
             }

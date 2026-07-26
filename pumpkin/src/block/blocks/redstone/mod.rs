@@ -179,25 +179,6 @@ async fn get_max_strong_power(world: &World, pos: &BlockPos, dust_power: bool) -
     max_power
 }
 
-async fn get_max_weak_power(world: &World, pos: &BlockPos, dust_power: bool) -> u8 {
-    let mut max_power = 0;
-    for side in BlockDirection::all() {
-        let (block, state) = world.get_block_and_state(&pos.offset(side.to_offset()));
-        max_power = max_power.max(
-            get_weak_power(
-                block,
-                state,
-                world,
-                &pos.offset(side.to_offset()),
-                side,
-                dust_power,
-            )
-            .await,
-        );
-    }
-    max_power
-}
-
 async fn get_weak_power(
     block: &Block,
     state: &BlockState,
@@ -246,14 +227,4 @@ pub async fn block_receives_redstone_power(world: &World, pos: &BlockPos) -> boo
 #[must_use]
 pub fn is_diode(block: &Block) -> bool {
     block == &Block::REPEATER || block == &Block::COMPARATOR
-}
-
-pub async fn diode_get_input_strength(world: &World, pos: &BlockPos, facing: BlockDirection) -> u8 {
-    let input_pos = pos.offset(facing.to_offset());
-    let (input_block, input_state) = world.get_block_and_state(&input_pos);
-    let power: u8 = get_redstone_power(input_block, input_state, world, &input_pos, facing).await;
-    if power == 0 && input_state.is_solid_block() {
-        return get_max_weak_power(world, &input_pos, true).await;
-    }
-    power
 }

@@ -256,6 +256,10 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
                 return level;
             }
 
+            // ComparatorBlock.java:117: `resultSignal < 15 &&
+            // targetState.isRedstoneConductor(level, targetPos)`.
+            // `is_solid_block` is Pumpkin's `isRedstoneConductor` flag (see
+            // pumpkin-data `block_state.rs` and the wire conductor checks).
             if redstone_level < 15 && source_state.is_solid_block() {
                 let deeper_source_pos = source_pos.offset(facing.to_offset());
                 let (deeper_block, deeper_state) = world.get_block_and_state(&deeper_source_pos);
