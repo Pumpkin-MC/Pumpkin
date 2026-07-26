@@ -262,7 +262,8 @@ impl TripwireHookBlock {
                 future_powered,
                 start_hook_props.attached,
                 start_hook_props.powered,
-            );
+            )
+            .await;
         }
 
         Self::play_sound(
@@ -272,7 +273,8 @@ impl TripwireHookBlock {
             future_powered,
             start_hook_props.attached,
             start_hook_props.powered,
-        );
+        )
+        .await;
 
         if !skip_state_update {
             let mut future_start_hook_state = future_hook_state;
@@ -315,7 +317,7 @@ impl TripwireHookBlock {
     }
 
     #[expect(clippy::fn_params_excessive_bools)]
-    fn play_sound(
+    async fn play_sound(
         world: &Arc<World>,
         block_pos: &BlockPos,
         attached: bool,
@@ -323,21 +325,22 @@ impl TripwireHookBlock {
         detached: bool,
         off: bool,
     ) {
+        use crate::world::vibrations::Vibration;
         let cat = SoundCategory::Blocks;
         let pos = block_pos.to_f64();
         if on && !off {
             world.play_sound_raw(Sound::BlockTripwireClickOn as u16, cat, &pos, 0.4, 0.6);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_ACTIVATE, pos);
+            world.emit_vibration(Vibration::BlockActivate, pos).await;
         } else if !on && off {
             world.play_sound_raw(Sound::BlockTripwireClickOff as u16, cat, &pos, 0.4, 0.5);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_DEACTIVATE, pos);
+            world.emit_vibration(Vibration::BlockDeactivate, pos).await;
         } else if attached && !detached {
             world.play_sound_raw(Sound::BlockTripwireAttach as u16, cat, &pos, 0.4, 0.7);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_ATTACH, pos);
+            world.emit_vibration(Vibration::BlockAttach, pos).await;
         } else if !attached && detached {
             let pitch = 1.2 / rng().random::<f32>().mul_add(0.2, 0.9);
             world.play_sound_raw(Sound::BlockTripwireDetach as u16, cat, &pos, 0.4, pitch);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_DETACH, pos);
+            world.emit_vibration(Vibration::BlockDetach, pos).await;
         }
     }
 

@@ -14,6 +14,8 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
+use std::sync::Arc;
+
 use crate::{
     block::{BlockBehaviour, OnSyncedBlockEventArgs},
     world::World,
@@ -25,9 +27,15 @@ use super::redstone::block_receives_redstone_power;
 pub struct NoteBlock;
 
 impl NoteBlock {
-    pub async fn play_note(props: &NoteBlockLikeProperties, world: &World, pos: &BlockPos) {
+    pub async fn play_note(props: &NoteBlockLikeProperties, world: &Arc<World>, pos: &BlockPos) {
         if !is_base_block(props.instrument) || world.get_block_state(&pos.up()).is_air() {
             world.add_synced_block_event(*pos, 0, 0).await;
+            world
+                .emit_vibration(
+                    crate::world::vibrations::Vibration::NoteBlockPlay,
+                    pos.to_centered_f64(),
+                )
+                .await;
         }
     }
     fn get_note_pitch(note: u16) -> f32 {

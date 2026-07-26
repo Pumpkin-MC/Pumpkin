@@ -111,7 +111,12 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
             Self::play_sound(world, position, Sound::BlockShulkerBoxOpen);
-            // TODO: this.world.emitGameEvent(player, GameEvent.CONTAINER_OPEN, this.pos);
+            world
+                .emit_vibration(
+                    crate::world::vibrations::Vibration::ContainerOpen,
+                    position.to_centered_f64(),
+                )
+                .await;
         })
     }
 
@@ -122,7 +127,12 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
             Self::play_sound(world, position, Sound::BlockShulkerBoxClose);
-            // TODO: this.world.emitGameEvent(player, GameEvent.CONTAINER_CLOSE, this.pos);
+            world
+                .emit_vibration(
+                    crate::world::vibrations::Vibration::ContainerClose,
+                    position.to_centered_f64(),
+                )
+                .await;
         })
     }
 
