@@ -20,6 +20,8 @@ use crate::{
     },
 };
 
+const INITIAL_Y: i32 = 50;
+
 pub struct MineshaftGenerator {
     pub is_mesa: bool,
 }
@@ -37,8 +39,6 @@ impl StructureGenerator for MineshaftGenerator {
         let chunk_center_x = get_center_x(context.chunk_x);
         let room_x = start_block_x(context.chunk_x) + 2;
         let room_z = start_block_z(context.chunk_z) + 2;
-        const INITIAL_Y: i32 = 50;
-
         let bounding_box = BlockBox::new(
             room_x - 12,
             INITIAL_Y,
