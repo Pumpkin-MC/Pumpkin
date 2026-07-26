@@ -767,7 +767,7 @@ mod tests {
             true,
             &MaxDistance::new(80),
             &DimensionPadding::ZERO,
-            LiquidSettings::ApplyWaterlogging,
+            LiquidSettings::ApplyWaterlog,
             &PoolAliasLookup,
         )
         .expect("plains village start must expand");
