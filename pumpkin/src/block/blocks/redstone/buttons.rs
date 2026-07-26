@@ -6,10 +6,12 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::AttachFace;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
@@ -62,6 +64,64 @@ fn button_click_sound(block: &Block, pressed: bool) -> Sound {
     } else {
         Sound::BlockWoodenButtonClickOff
     }
+}
+
+/// Vanilla `AbstractArrow` occupancy test for `ButtonBlock.checkPressed`,
+/// approximated with the button's full block space.
+fn arrow_resting_at(world: &World, block_pos: &BlockPos) -> bool {
+    let mut arrows = Vec::new();
+    world.extend_entities_in_box_where(
+        &mut arrows,
+        1,
+        BoundingBox::new(
+            block_pos.to_f64(),
+            block_pos.to_f64().add_raw(1.0, 1.0, 1.0),
+        ),
+        |entity| {
+            let entity_type = entity.get_entity().entity_type;
+            entity_type == &EntityType::ARROW
+                || entity_type == &EntityType::SPECTRAL_ARROW
+                || entity_type == &EntityType::TRIDENT
+        },
+    );
+    !arrows.is_empty()
+}
+
+/// Vanilla `ButtonBlock.press` for a non-player cause (arrows).
+pub async fn press_button_by_arrow(world: &Arc<World>, block_pos: &BlockPos) {
+    let (block, state) = world.get_block_and_state_id(block_pos);
+    if !block.has_tag(&tag::Block::MINECRAFT_BUTTONS)
+        || block.has_tag(&tag::Block::MINECRAFT_STONE_BUTTONS)
+    {
+        return;
+    }
+    let mut button_props = ButtonLikeProperties::from_state_id(state, block);
+    if button_props.powered {
+        return;
+    }
+    button_props.powered = true;
+    world
+        .set_block_state(
+            block_pos,
+            button_props.to_state_id(block),
+            BlockFlags::NOTIFY_ALL,
+        )
+        .await;
+    world.schedule_block_tick(block, *block_pos, 30, TickPriority::Normal);
+    world.play_sound_fine(
+        button_click_sound(block, true),
+        SoundCategory::Blocks,
+        &block_pos.to_centered_f64(),
+        1.0,
+        1.0,
+    );
+    world
+        .emit_vibration(
+            crate::world::vibrations::Vibration::BlockActivate,
+            block_pos.to_centered_f64(),
+        )
+        .await;
+    ButtonBlock::update_neighbors(world, block_pos, &button_props).await;
 }
 
 async fn click_button(world: &Arc<World>, block_pos: &BlockPos, player: &Player) {
@@ -119,6 +179,24 @@ impl BlockBehaviour for ButtonBlock {
         Box::pin(async move {
             let state = args.world.get_block_state(args.position);
             let mut props = ButtonLikeProperties::from_state_id(state.id, args.block);
+            if !props.powered {
+                return;
+            }
+
+            // Vanilla checkPressed: wooden-type buttons stay pressed while an
+            // arrow rests inside the button's block space.
+            if !args.block.has_tag(&tag::Block::MINECRAFT_STONE_BUTTONS)
+                && arrow_resting_at(args.world, args.position)
+            {
+                args.world.schedule_block_tick(
+                    args.block,
+                    *args.position,
+                    30,
+                    TickPriority::Normal,
+                );
+                return;
+            }
+
             props.powered = false;
             args.world
                 .set_block_state(

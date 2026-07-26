@@ -367,6 +367,10 @@ impl EntityBase for ArrowEntity {
                         )
                         .await;
 
+                    // Vanilla ButtonBlock.onProjectileHit: arrows press wooden buttons.
+                    crate::block::blocks::redstone::buttons::press_button_by_arrow(&world, &pos)
+                        .await;
+
                     let block = world.get_block(&pos);
                     if block == &pumpkin_data::Block::TARGET {
                         // Vanilla TargetBlock.onProjectileHit
