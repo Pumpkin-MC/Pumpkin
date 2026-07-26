@@ -44,6 +44,7 @@ impl PortAllocator {
     ///
     /// # Arguments
     /// * `range` - The inclusive range of ports to allocate from.
+    #[must_use]
     pub fn new(range: RangeInclusive<u16>) -> Self {
         Self {
             allocated_ports: Mutex::new(HashSet::new()),
@@ -54,6 +55,7 @@ impl PortAllocator {
     /// Creates a port allocator with a sensible default range for Minecraft servers.
     ///
     /// Default range: 25565..=25665 (100 ports for Java + Bedrock instances).
+    #[must_use]
     pub fn default_range() -> Self {
         Self::new(25565..=25665)
     }
@@ -207,7 +209,7 @@ impl PortAllocator {
     }
 
     /// Creates a `SocketAddr` from an allocated port with the given IP.
-    pub fn make_addr(&self, ip: std::net::IpAddr, port: u16) -> SocketAddr {
+    pub const fn make_addr(&self, ip: std::net::IpAddr, port: u16) -> SocketAddr {
         SocketAddr::new(ip, port)
     }
 }
@@ -217,7 +219,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_allocate_and_free() {
+    fn allocate_and_free() {
         let allocator = PortAllocator::new(30000..=30100);
         assert!(allocator.allocate(30000).is_ok());
         assert!(allocator.is_allocated(30000));
@@ -228,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn test_allocate_any() {
+    fn allocate_any() {
         let allocator = PortAllocator::new(30000..=30100);
         let port = allocator.allocate_any().unwrap();
         assert!((30000..=30100).contains(&port));
@@ -236,14 +238,14 @@ mod tests {
     }
 
     #[test]
-    fn test_out_of_range() {
+    fn out_of_range() {
         let allocator = PortAllocator::new(30000..=30100);
         assert!(allocator.allocate(29999).is_err());
         assert!(allocator.allocate(30101).is_err());
     }
 
     #[test]
-    fn test_allocate_or_any_fallback() {
+    fn allocate_or_any_fallback() {
         let allocator = PortAllocator::new(30000..=30100);
         let preferred = 30005;
         let port1 = allocator.allocate_or_any(preferred).unwrap();

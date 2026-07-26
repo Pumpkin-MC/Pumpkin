@@ -46,7 +46,7 @@ pub async fn start_query_handler_with_socket(
                 _ = interval.tick() => {
                     valid_challenge_tokens_clone.write().await.clear();
                 }
-                _ = cleanup_token.cancelled() => break,
+                () = cleanup_token.cancelled() => break,
             }
         }
     });

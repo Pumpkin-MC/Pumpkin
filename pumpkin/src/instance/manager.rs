@@ -55,7 +55,7 @@ impl std::fmt::Debug for InstanceInfo {
             .field("state", &self.state)
             .field("has_server", &self.server.is_some())
             .field("ports", &self.ports)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -67,10 +67,12 @@ pub struct InstanceManager {
 }
 
 impl InstanceManager {
+    #[must_use]
     pub fn new() -> Self {
         Self::with_port_range(25565..=25665)
     }
 
+    #[must_use]
     pub fn with_port_range(range: std::ops::RangeInclusive<u16>) -> Self {
         Self {
             instances: HashMap::new(),

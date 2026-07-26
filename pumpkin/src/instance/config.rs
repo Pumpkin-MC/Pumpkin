@@ -49,7 +49,8 @@ impl std::fmt::Debug for InstanceConfig {
 }
 
 impl InstanceConfig {
-    pub fn new(basic: BasicConfiguration, advanced: AdvancedConfiguration) -> Self {
+    #[must_use]
+    pub const fn new(basic: BasicConfiguration, advanced: AdvancedConfiguration) -> Self {
         Self {
             basic,
             advanced,
@@ -60,44 +61,52 @@ impl InstanceConfig {
         }
     }
 
+    #[must_use]
     pub fn with_config_dir(mut self, path: PathBuf) -> Self {
         self.config_dir = Some(path);
         self
     }
 
+    #[must_use]
     pub fn with_world_dir(mut self, path: PathBuf) -> Self {
         self.world_dir = Some(path);
         self
     }
 
+    #[must_use]
     pub fn with_plugin_dir(mut self, path: PathBuf) -> Self {
         self.plugin_dir = Some(path);
         self
     }
 
+    #[must_use]
     pub fn with_data_dir(mut self, path: PathBuf) -> Self {
         self.data_dir = Some(path);
         self
     }
 
+    #[must_use]
     pub fn world_path(&self) -> PathBuf {
         self.world_dir
             .clone()
             .unwrap_or_else(|| self.config_path().join(&self.basic.default_level_name))
     }
 
+    #[must_use]
     pub fn plugin_path(&self) -> PathBuf {
         self.plugin_dir
             .clone()
             .unwrap_or_else(|| self.config_path().join("plugins"))
     }
 
+    #[must_use]
     pub fn data_path(&self) -> PathBuf {
         self.data_dir
             .clone()
             .unwrap_or_else(|| self.config_path().join("data"))
     }
 
+    #[must_use]
     pub fn config_path(&self) -> PathBuf {
         self.config_dir
             .clone()
