@@ -3341,18 +3341,15 @@ mod tests {
         );
     }
 
-    /// When the type does declare the attribute, its registry value is returned.
+    /// When the type does declare the attribute, its registry value is returned and
+    /// not the attribute default. Zombies walk at 0.23, while the default movement
+    /// speed is 0.7, so the two cases can't be confused.
     #[test]
     fn registry_base_value_returns_registry_value_when_present() {
-        let expected = EntityType::ZOMBIE
-            .attributes
-            .iter()
-            .find(|a| a.0.id == Attributes::MAX_HEALTH.id)
-            .expect("zombie declares MAX_HEALTH")
-            .1;
         assert_eq!(
-            LivingEntity::registry_base_value(&EntityType::ZOMBIE, &Attributes::MAX_HEALTH),
-            expected
+            LivingEntity::registry_base_value(&EntityType::ZOMBIE, &Attributes::MOVEMENT_SPEED),
+            0.2300000041723251
         );
+        assert_eq!(Attributes::MOVEMENT_SPEED.default_value, 0.7);
     }
 }
