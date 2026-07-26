@@ -197,21 +197,26 @@ impl ClientPacket for CChunkData<'_> {
             .pending_block_entities
             .lock()
             .map_err(|_| WritingError::Message("block_entities lock poisoned".into()))?;
-        write.write_var_int(&VarInt(block_entities.len() as i32))?;
-        for (pos, nbt) in block_entities.iter() {
-            let local_xz = ((get_local_cord(pos.0.x) & 0xF) << 4) | (get_local_cord(pos.0.z) & 0xF);
-
-            write.write_u8(local_xz as u8)?;
-            write.write_i16_be(pos.0.y as i16)?;
-
-            let id = nbt.get_string("id").map_or(0, |id_str| {
+        // Resolve types first: an unresolvable id must skip the entry entirely.
+        // Writing a wrong type (old fallback: 0) desyncs the client's block
+        // entity registry and breaks strict parsers (e.g. map mods reading NBT).
+        let resolved: Vec<(_, usize, _)> = block_entities
+            .iter()
+            .filter_map(|(pos, nbt)| {
+                let id_str = nbt.get_string("id")?;
                 let name = id_str.split(':').next_back().unwrap_or(id_str);
                 pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
                     .iter()
                     .position(|&n| n == name)
-                    .unwrap_or(0)
-            });
+                    .map(|id| (pos, id, nbt))
+            })
+            .collect();
+        write.write_var_int(&VarInt(resolved.len() as i32))?;
+        for (pos, id, nbt) in resolved {
+            let local_xz = ((get_local_cord(pos.0.x) & 0xF) << 4) | (get_local_cord(pos.0.z) & 0xF);
 
+            write.write_u8(local_xz as u8)?;
+            write.write_i16_be(pos.0.y as i16)?;
             write.write_var_int(&VarInt(id as i32))?;
 
             let mut client_nbt = nbt.clone();

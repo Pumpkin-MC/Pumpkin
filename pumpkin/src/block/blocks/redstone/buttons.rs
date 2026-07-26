@@ -6,6 +6,9 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::AttachFace;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag;
+use pumpkin_data::tag::Taggable;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -25,9 +28,43 @@ use crate::block::blocks::abstract_wall_mounting::WallMountedBlock;
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, NormalUseArgs};
+use crate::entity::player::Player;
 use crate::world::World;
 
-async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
+/// Vanilla `BlockSetType.buttonClickOn/Off` per button material.
+fn button_click_sound(block: &Block, pressed: bool) -> Sound {
+    if block.has_tag(&tag::Block::MINECRAFT_STONE_BUTTONS) {
+        if pressed {
+            Sound::BlockStoneButtonClickOn
+        } else {
+            Sound::BlockStoneButtonClickOff
+        }
+    } else if block == &Block::BAMBOO_BUTTON {
+        if pressed {
+            Sound::BlockBambooWoodButtonClickOn
+        } else {
+            Sound::BlockBambooWoodButtonClickOff
+        }
+    } else if block == &Block::CHERRY_BUTTON {
+        if pressed {
+            Sound::BlockCherryWoodButtonClickOn
+        } else {
+            Sound::BlockCherryWoodButtonClickOff
+        }
+    } else if block == &Block::CRIMSON_BUTTON || block == &Block::WARPED_BUTTON {
+        if pressed {
+            Sound::BlockNetherWoodButtonClickOn
+        } else {
+            Sound::BlockNetherWoodButtonClickOff
+        }
+    } else if pressed {
+        Sound::BlockWoodenButtonClickOn
+    } else {
+        Sound::BlockWoodenButtonClickOff
+    }
+}
+
+async fn click_button(world: &Arc<World>, block_pos: &BlockPos, player: &Player) {
     let (block, state) = world.get_block_and_state_id(block_pos);
 
     let mut button_props = ButtonLikeProperties::from_state_id(state, block);
@@ -40,12 +77,22 @@ async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
                 BlockFlags::NOTIFY_ALL,
             )
             .await;
-        let delay = if block == &Block::STONE_BUTTON {
+        // Vanilla ButtonBlock.ticksToStayPressed: stone-type 20, wooden 30.
+        let delay = if block.has_tag(&tag::Block::MINECRAFT_STONE_BUTTONS) {
             20
         } else {
             30
         };
         world.schedule_block_tick(block, *block_pos, delay, TickPriority::Normal);
+        // The pressing client predicts its own click-on sound.
+        world.play_sound_raw_expect(
+            player,
+            button_click_sound(block, true) as u16,
+            SoundCategory::Blocks,
+            &block_pos.to_centered_f64(),
+            1.0,
+            1.0,
+        );
         ButtonBlock::update_neighbors(world, block_pos, &button_props).await;
     }
 }
@@ -56,7 +103,7 @@ pub struct ButtonBlock;
 impl BlockBehaviour for ButtonBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            click_button(args.world, args.position).await;
+            click_button(args.world, args.position, args.player).await;
 
             BlockActionResult::Success
         })
@@ -74,6 +121,14 @@ impl BlockBehaviour for ButtonBlock {
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;
+            // Vanilla plays click-off to everyone on release.
+            args.world.play_sound_fine(
+                button_click_sound(args.block, false),
+                SoundCategory::Blocks,
+                &args.position.to_centered_f64(),
+                1.0,
+                1.0,
+            );
             Self::update_neighbors(args.world, args.position, &props).await;
         })
     }

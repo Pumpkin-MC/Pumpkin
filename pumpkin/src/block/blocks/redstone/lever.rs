@@ -8,6 +8,7 @@ use crate::block::{
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
     block_properties::{AttachFace, BlockProperties, LeverLikeProperties},
+    sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -18,10 +19,11 @@ use crate::{
         registry::BlockActionResult,
         {BlockBehaviour, NormalUseArgs},
     },
+    entity::player::Player,
     world::World,
 };
 
-async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
+async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos, player: &Player) {
     let (block, state) = world.get_block_and_state_id(block_pos);
 
     let mut lever_props = LeverLikeProperties::from_state_id(state, block);
@@ -34,6 +36,18 @@ async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
         )
         .await;
 
+    // Vanilla LeverBlock.playSound: volume 0.3, pitch 0.6 when switched on,
+    // 0.5 when switched off; the interacting client predicts its own click.
+    let center = block_pos.to_centered_f64();
+    world.play_sound_raw_expect(
+        player,
+        Sound::BlockLeverClick as u16,
+        SoundCategory::Blocks,
+        &center,
+        0.3,
+        if lever_props.powered { 0.6 } else { 0.5 },
+    );
+
     LeverBlock::update_neighbors(world, block_pos, &lever_props).await;
 }
 
@@ -43,7 +57,7 @@ pub struct LeverBlock;
 impl BlockBehaviour for LeverBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            toggle_lever(args.world, args.position).await;
+            toggle_lever(args.world, args.position, args.player).await;
 
             BlockActionResult::Success
         })

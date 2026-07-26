@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
@@ -23,6 +25,47 @@ const PRESSURE_PLATE_DETECTION_BOX: BoundingBox = BoundingBox::new_array(
 
 fn detection_box_at(pos: &BlockPos) -> BoundingBox {
     PRESSURE_PLATE_DETECTION_BOX.at_pos(*pos)
+}
+
+/// Vanilla `BlockSetType.pressurePlateClickOn/Off` per plate material.
+fn plate_click_sound(block: &Block, pressed: bool) -> Sound {
+    if block == &Block::LIGHT_WEIGHTED_PRESSURE_PLATE
+        || block == &Block::HEAVY_WEIGHTED_PRESSURE_PLATE
+    {
+        if pressed {
+            Sound::BlockMetalPressurePlateClickOn
+        } else {
+            Sound::BlockMetalPressurePlateClickOff
+        }
+    } else if block.has_tag(&tag::Block::MINECRAFT_STONE_PRESSURE_PLATES) {
+        if pressed {
+            Sound::BlockStonePressurePlateClickOn
+        } else {
+            Sound::BlockStonePressurePlateClickOff
+        }
+    } else if block == &Block::BAMBOO_PRESSURE_PLATE {
+        if pressed {
+            Sound::BlockBambooWoodPressurePlateClickOn
+        } else {
+            Sound::BlockBambooWoodPressurePlateClickOff
+        }
+    } else if block == &Block::CHERRY_PRESSURE_PLATE {
+        if pressed {
+            Sound::BlockCherryWoodPressurePlateClickOn
+        } else {
+            Sound::BlockCherryWoodPressurePlateClickOff
+        }
+    } else if block == &Block::CRIMSON_PRESSURE_PLATE || block == &Block::WARPED_PRESSURE_PLATE {
+        if pressed {
+            Sound::BlockNetherWoodPressurePlateClickOn
+        } else {
+            Sound::BlockNetherWoodPressurePlateClickOff
+        }
+    } else if pressed {
+        Sound::BlockWoodenPressurePlateClickOn
+    } else {
+        Sound::BlockWoodenPressurePlateClickOff
+    }
 }
 
 pub(crate) trait PressurePlate {
@@ -79,6 +122,24 @@ pub(crate) trait PressurePlate {
             } else {
                 calc_output
             };
+            // Vanilla BasePressurePlateBlock plays click sounds on edge changes.
+            if output == 0 && next_output > 0 {
+                world.play_sound_fine(
+                    plate_click_sound(block, true),
+                    SoundCategory::Blocks,
+                    &pos.to_centered_f64(),
+                    1.0,
+                    1.0,
+                );
+            } else if output > 0 && next_output == 0 {
+                world.play_sound_fine(
+                    plate_click_sound(block, false),
+                    SoundCategory::Blocks,
+                    &pos.to_centered_f64(),
+                    1.0,
+                    1.0,
+                );
+            }
             let state = self.set_redstone_output(block, state, next_output);
             world
                 .set_block_state(pos, state, BlockFlags::NOTIFY_LISTENERS)
