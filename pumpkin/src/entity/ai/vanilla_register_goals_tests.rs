@@ -100,9 +100,11 @@ mod tests {
 
     #[test]
     fn piglin_brute_does_not_flee_zombified() {
+        // ZOMBIFIED_PIGLIN may appear as the zombification target; only the
+        // avoid goal would be un-vanilla.
         let src = include_str!("../mob/piglin_brute.rs");
         assert!(
-            !src.contains("ZOMBIFIED_PIGLIN"),
+            !src.contains("AvoidEntityGoal::new(&EntityType::ZOMBIFIED_PIGLIN"),
             "vanilla piglin brutes do not flee zombified piglins"
         );
     }
