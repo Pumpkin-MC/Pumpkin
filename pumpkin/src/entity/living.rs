@@ -1524,6 +1524,12 @@ impl LivingEntity {
         cause: Option<&dyn EntityBase>,
     ) {
         let world = self.entity.world.load();
+        world
+            .emit_vibration(
+                crate::world::vibrations::Vibration::EntityDie,
+                self.entity.pos.load(),
+            )
+            .await;
         // Entity may already be removed (despawn race / concurrent tick). Never
         // panicking the whole server on death — soft-skip if not in world map.
         let Some(dyn_self) = world.get_entity_by_id(self.entity.entity_id) else {

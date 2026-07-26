@@ -131,6 +131,12 @@ pub(crate) trait PressurePlate {
                     1.0,
                     1.0,
                 );
+                world
+                    .emit_vibration(
+                        crate::world::vibrations::Vibration::BlockActivate,
+                        pos.to_centered_f64(),
+                    )
+                    .await;
             } else if output > 0 && next_output == 0 {
                 world.play_sound_fine(
                     plate_click_sound(block, false),
@@ -139,6 +145,12 @@ pub(crate) trait PressurePlate {
                     1.0,
                     1.0,
                 );
+                world
+                    .emit_vibration(
+                        crate::world::vibrations::Vibration::BlockDeactivate,
+                        pos.to_centered_f64(),
+                    )
+                    .await;
             }
             let state = self.set_redstone_output(block, state, next_output);
             world

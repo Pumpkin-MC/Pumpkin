@@ -93,6 +93,12 @@ async fn click_button(world: &Arc<World>, block_pos: &BlockPos, player: &Player)
             1.0,
             1.0,
         );
+        world
+            .emit_vibration(
+                crate::world::vibrations::Vibration::BlockActivate,
+                block_pos.to_centered_f64(),
+            )
+            .await;
         ButtonBlock::update_neighbors(world, block_pos, &button_props).await;
     }
 }
@@ -129,6 +135,12 @@ impl BlockBehaviour for ButtonBlock {
                 1.0,
                 1.0,
             );
+            args.world
+                .emit_vibration(
+                    crate::world::vibrations::Vibration::BlockDeactivate,
+                    args.position.to_centered_f64(),
+                )
+                .await;
             Self::update_neighbors(args.world, args.position, &props).await;
         })
     }

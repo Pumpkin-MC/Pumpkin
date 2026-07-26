@@ -627,6 +627,13 @@ impl BlockRegistry {
             .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
             .await;
 
+        world
+            .emit_vibration(
+                crate::world::vibrations::Vibration::BlockPlace,
+                final_block_pos.to_centered_f64(),
+            )
+            .await;
+
         self.player_placed(
             &world,
             placed_block,

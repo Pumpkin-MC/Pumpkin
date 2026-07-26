@@ -27,6 +27,7 @@ pub mod loot;
 pub mod map;
 pub mod portal;
 pub mod time;
+pub mod vibrations;
 
 use crate::block::RandomTickArgs;
 use crate::world::chunker::{get_simulation_distance, is_within_view_distance};
@@ -3590,6 +3591,8 @@ impl World {
     }
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
+        self.emit_vibration(crate::world::vibrations::Vibration::Explode, position)
+            .await;
         let explosion = Explosion::new(power, position);
         let block_count = explosion.explode(self).await;
         let particle = if power < 2.0 {
@@ -4882,6 +4885,12 @@ impl World {
             };
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
+
+            self.emit_vibration(
+                crate::world::vibrations::Vibration::BlockDestroy,
+                position.to_centered_f64(),
+            )
+            .await;
 
             // Close container screens for any players viewing this block
             self.close_container_screens_at(position).await;

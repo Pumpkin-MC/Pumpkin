@@ -23,31 +23,66 @@ impl BlockMetadata for SculkSensorBlock {
 }
 
 impl SculkSensorBlock {
-    pub async fn trigger(world: &Arc<World>, pos: &BlockPos, block: &Block, power: u8) {
-        if block.id == BlockId::SCULK_SENSOR {
-            let state = world.get_block_state(pos);
+    /// Vanilla `SculkSensorBlock.activate`: flips the phase to active with the
+    /// distance-derived power, records the frequency, clicks, and schedules the
+    /// 30-tick active window.
+    pub async fn vibrate(
+        world: &Arc<World>,
+        pos: &BlockPos,
+        block: &Block,
+        power: u8,
+        frequency: u8,
+    ) {
+        let state = world.get_block_state(pos);
+        let waterlogged = if block.id == BlockId::SCULK_SENSOR {
             let mut props = SculkSensorLikeProperties::from_state_id(state.id, block);
-            if props.sculk_sensor_phase == SculkSensorPhase::Inactive {
-                props.sculk_sensor_phase = SculkSensorPhase::Active;
-                props.power = power;
-                world
-                    .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
-                    .await;
-                world.update_neighbors(pos, None).await;
-                world.schedule_block_tick(block, *pos, 30, TickPriority::Normal);
+            if props.sculk_sensor_phase != SculkSensorPhase::Inactive {
+                return;
             }
+            props.sculk_sensor_phase = SculkSensorPhase::Active;
+            props.power = power;
+            world
+                .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
+                .await;
+            props.waterlogged
         } else if block.id == BlockId::CALIBRATED_SCULK_SENSOR {
-            let state = world.get_block_state(pos);
             let mut props = CalibratedSculkSensorLikeProperties::from_state_id(state.id, block);
-            if props.sculk_sensor_phase == SculkSensorPhase::Inactive {
-                props.sculk_sensor_phase = SculkSensorPhase::Active;
-                props.power = power;
-                world
-                    .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
-                    .await;
-                world.update_neighbors(pos, None).await;
-                world.schedule_block_tick(block, *pos, 30, TickPriority::Normal);
+            if props.sculk_sensor_phase != SculkSensorPhase::Inactive {
+                return;
             }
+            props.sculk_sensor_phase = SculkSensorPhase::Active;
+            props.power = power;
+            world
+                .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
+                .await;
+            props.waterlogged
+        } else {
+            return;
+        };
+
+        if let Some(block_entity) = world.get_block_entity(pos) {
+            if let Some(sensor) = block_entity
+                .as_any()
+                .downcast_ref::<crate::block::entities::sculk_sensor::SculkSensorBlockEntity>()
+            {
+                *sensor.last_vibration_frequency.lock().await = i32::from(frequency);
+            } else if let Some(sensor) = block_entity.as_any().downcast_ref::<
+                crate::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity,
+            >() {
+                *sensor.last_vibration_frequency.lock().await = i32::from(frequency);
+            }
+        }
+
+        world.update_neighbors(pos, None).await;
+        world.schedule_block_tick(block, *pos, 30, TickPriority::Normal);
+        if !waterlogged {
+            world.play_sound_fine(
+                pumpkin_data::sound::Sound::BlockSculkSensorClicking,
+                pumpkin_data::sound::SoundCategory::Blocks,
+                &pos.to_centered_f64(),
+                1.0,
+                rand::random::<f32>().mul_add(0.2, 0.8),
+            );
         }
     }
 }

@@ -57,6 +57,16 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
         SoundCategory::Blocks,
         *block_pos,
     );
+    world
+        .emit_vibration(
+            if door_props.open {
+                crate::world::vibrations::Vibration::BlockOpen
+            } else {
+                crate::world::vibrations::Vibration::BlockClose
+            },
+            block_pos.to_centered_f64(),
+        )
+        .await;
 
     world
         .set_block_state(
@@ -116,6 +126,16 @@ pub async fn set_door_open(world: &Arc<World>, block_pos: &BlockPos, open: bool)
     other_door_props.open = open;
 
     world.play_block_sound(get_sound(block, open), SoundCategory::Blocks, *block_pos);
+    world
+        .emit_vibration(
+            if open {
+                crate::world::vibrations::Vibration::BlockOpen
+            } else {
+                crate::world::vibrations::Vibration::BlockClose
+            },
+            block_pos.to_centered_f64(),
+        )
+        .await;
     world
         .set_block_state(
             block_pos,

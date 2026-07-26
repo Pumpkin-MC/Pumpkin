@@ -48,6 +48,17 @@ async fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos, player: &Player)
         if lever_props.powered { 0.6 } else { 0.5 },
     );
 
+    world
+        .emit_vibration(
+            if lever_props.powered {
+                crate::world::vibrations::Vibration::BlockActivate
+            } else {
+                crate::world::vibrations::Vibration::BlockDeactivate
+            },
+            block_pos.to_centered_f64(),
+        )
+        .await;
+
     LeverBlock::update_neighbors(world, block_pos, &lever_props).await;
 }
 
