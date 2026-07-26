@@ -49,14 +49,43 @@ impl MoveControlTrait for MoveControl {
         let living_entity = &mob_entity.living_entity;
         let entity = &living_entity.entity;
         if self.operation == Operation::Strafe {
-            // TODO: is_walkable check
             let attr = living_entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-            living_entity.set_speed(self.speed_modifier * attr);
+            let speed = self.speed_modifier * attr;
+            living_entity.set_speed(speed);
+
+            // Vanilla MoveControl STRAFE (MoveControl.java:79-82): probe one
+            // strafe step ahead; if it is not walkable, veer forward instead —
+            // stops back-strafing bow users walking off cliffs or into lava.
+            let mut forwards = self.strafe_forwards;
+            let mut right = self.strafe_right;
+            let input_len = forwards.hypot(right).max(1.0);
+            let step = (speed / f64::from(input_len)) as f32;
+            let yaw_rad = entity.yaw.load().to_radians();
+            let (sin_yaw, cos_yaw) = yaw_rad.sin_cos();
+            // Vanilla literal: n = j*cos - k*sin, o = k*cos + j*sin
+            // (j = forwards*scale, k = right*scale).
+            let step_x = (forwards * step).mul_add(cos_yaw, -(right * step) * sin_yaw);
+            let step_z = (right * step).mul_add(cos_yaw, (forwards * step) * sin_yaw);
+            {
+                let pos = entity.pos.load();
+                let probe =
+                    BlockPos::floored(pos.x + f64::from(step_x), pos.y, pos.z + f64::from(step_z));
+                let world = entity.world.load();
+                let feet = world.get_block_state(&probe);
+                let floor = world.get_block_state(&probe.down());
+                let walkable = feet.collision_shapes.is_empty()
+                    && floor.is_side_solid(pumpkin_data::BlockDirection::Up);
+                if !walkable {
+                    forwards = 1.0;
+                    right = 0.0;
+                }
+            }
+
             // Strafe overrides axes after set_speed
             living_entity.movement_input.store(Vector3::new(
-                self.strafe_right as f64,
+                f64::from(right),
                 0.0,
-                self.strafe_forwards as f64,
+                f64::from(forwards),
             ));
             self.operation = Operation::Wait;
         } else if self.operation == Operation::MoveTo {
