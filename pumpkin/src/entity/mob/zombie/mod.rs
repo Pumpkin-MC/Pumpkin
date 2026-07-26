@@ -74,6 +74,13 @@ impl ZombieEntityBase {
             goal_selector.add_goal(3, ZombieAttackGoal::new(1.0, false));
             // ZombieAttackTurtleEggGoal priority 4
             goal_selector.add_goal(4, DestroyEggGoal::new(1.0, 3));
+            // MoveThroughVillageGoal(1.0, onlyAtNight, 4) priority 6.
+            goal_selector.add_goal(
+                6,
+                Box::new(
+                    crate::entity::ai::goal::move_through_village::MoveThroughVillageGoal::new(1.0),
+                ),
+            );
             // WaterAvoidingRandomStrollGoal priority 7
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
