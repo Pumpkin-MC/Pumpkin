@@ -1,4 +1,7 @@
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use std::future::Future;
+use std::pin::Pin;
+
+use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use rustc_hash::FxHashMap;
 
 use crate::entity::ai::pathfinder::{
@@ -32,11 +35,19 @@ impl WalkNodeEvaluator {
         self.base.can_float
     }
 
+    /// Vanilla `WalkNodeEvaluator.getFloorLevel` (`WalkNodeEvaluator.java:193-199`):
+    /// floaters and amphibious mobs treat a water cell's floor as `y + 0.5`,
+    /// everyone else uses the collision top of the block below.
     fn get_floor_level(&self, pos: Vector3<i32>) -> f64 {
-        self.base
-            .context
-            .as_ref()
-            .map_or(f64::from(pos.y), |context| context.get_floor_level(pos))
+        self.base.context.as_ref().map_or_else(
+            || f64::from(pos.y),
+            |context| {
+                if (self.base.can_float || self.is_amphibious()) && context.is_water_at(pos) {
+                    return f64::from(pos.y) + 0.5;
+                }
+                context.get_floor_level(pos)
+            },
+        )
     }
 
     fn get_mob_jump_height(&self) -> f64 {
@@ -75,6 +86,11 @@ impl WalkNodeEvaluator {
             return false;
         }
         let mob_width = self.base.mob_data.as_ref().map_or(0.6, |d| d.width);
+        // Vanilla WalkNodeEvaluator.java:160-162: wide mobs never cut a diagonal
+        // past a cell that carries any cost penalty.
+        if mob_width > 1.0 && (adj_x.cost_malus > 0.0 || adj_z.cost_malus > 0.0) {
+            return false;
+        }
         let both_fence = adj_x.path_type == PathType::Fence && adj_z.path_type == PathType::Fence;
         let fence_exception = both_fence && mob_width < 0.5;
 
@@ -88,195 +104,270 @@ impl WalkNodeEvaluator {
         })
     }
 
-    /// Returns the best path node for the given position, handling step-ups, falls, and blocked nodes.
+    /// Vanilla `WalkNodeEvaluator.getNodeAndUpdateCostToMax`
+    /// (`WalkNodeEvaluator.java:245-250`). The updated malus is written back to
+    /// the node map so repeated lookups accumulate like vanilla's shared nodes.
+    fn get_node_and_update_cost_to_max(
+        &mut self,
+        pos: Vector3<i32>,
+        path_type: PathType,
+        cost: f32,
+    ) -> Node {
+        let mut n = self.base.get_node(pos.as_blockpos());
+        n.path_type = path_type;
+        n.cost_malus = n.cost_malus.max(cost);
+        self.base.nodes.insert(pos, n);
+        n
+    }
+
+    /// Vanilla `WalkNodeEvaluator.getBlockedNode` (`WalkNodeEvaluator.java:252-257`).
+    fn get_blocked_node(&mut self, pos: Vector3<i32>) -> Node {
+        let mut n = self.base.get_node(pos.as_blockpos());
+        n.path_type = PathType::Blocked;
+        n.cost_malus = -1.0;
+        self.base.nodes.insert(pos, n);
+        n
+    }
+
+    /// Vanilla `WalkNodeEvaluator.getClosedNode` (`WalkNodeEvaluator.java:259-265`).
+    fn get_closed_node(&mut self, pos: Vector3<i32>, path_type: PathType) -> Node {
+        let mut n = self.base.get_node(pos.as_blockpos());
+        n.closed = true;
+        n.path_type = path_type;
+        n.cost_malus = path_type.get_malus();
+        self.base.nodes.insert(pos, n);
+        n
+    }
+
+    /// Vanilla `WalkNodeEvaluator.findAcceptedNode` (`WalkNodeEvaluator.java:211-239`):
+    /// returns the best path node for the given position, handling step-ups,
+    /// falls, and blocked nodes.
     async fn find_accepted_node(
         &mut self,
         pos: Vector3<i32>,
-        max_y_step: i32,
-        last_feet_y: f64,
+        jump_size: i32,
+        node_height: f64,
         facing: (i32, i32),
         current_path_type: PathType,
     ) -> Option<Node> {
-        let feet_y = self.get_floor_level(pos);
-        if feet_y - last_feet_y > self.get_mob_jump_height() {
+        // WalkNodeEvaluator.java:214-217
+        let max_y_target = self.get_floor_level(pos);
+        if max_y_target - node_height > self.get_mob_jump_height() {
             return None;
         }
 
         let path_type = self.get_cached_path_type(pos).await;
-        let penalty = self.get_mob_penalty(path_type);
+        let path_cost = self.get_mob_penalty(path_type);
 
-        let mut node = (penalty >= 0.0).then(|| {
-            let mut n = self.base.get_node(pos.as_blockpos());
-            n.path_type = path_type;
-            n.cost_malus = penalty.max(n.cost_malus);
-            n
-        });
+        // WalkNodeEvaluator.java:220-222
+        let mut best = (path_cost >= 0.0)
+            .then(|| self.get_node_and_update_cost_to_max(pos, path_type, path_cost));
 
-        // TODO: Add ray-march collision check for blocked types (fence/door)
-
-        if path_type != PathType::Walkable
-            && !(self.is_amphibious() && path_type == PathType::Water)
+        // WalkNodeEvaluator.java:223-225: leaving a partial-collision cell
+        // (fence, closed door) requires a swept-AABB collision check.
+        if Self::does_block_have_partial_collision(current_path_type)
+            && best.as_ref().is_some_and(|n| n.cost_malus >= 0.0)
+            && !self.can_reach_without_collision(pos)
         {
-            if (node.is_none() || node.as_ref().is_some_and(|n| n.cost_malus < 0.0))
-                && max_y_step > 0
-                && (path_type != PathType::Fence || self.base.can_walk_over_fences)
-                && path_type != PathType::UnpassableRail
-                && path_type != PathType::Trapdoor
-                && path_type != PathType::PowderSnow
-            {
-                let jump_node = self
-                    .get_jump_on_top_node(pos, max_y_step, last_feet_y, facing, current_path_type)
-                    .await;
-                if jump_node.is_some() {
-                    node = jump_node;
-                }
-            } else if !self.is_amphibious() && path_type == PathType::Water && !self.base.can_float
-            {
-                node = self.get_non_water_node_below(pos, node).await;
-            } else if path_type == PathType::Open {
-                node = Some(self.get_open_node(pos).await);
-            } else if Self::is_blocked_type(path_type) && node.is_none() {
-                let mut n = self.base.get_node(pos.as_blockpos());
-                n.closed = true;
-                n.path_type = path_type;
-                n.cost_malus = path_type.get_malus();
-                node = Some(n);
-            }
+            best = None;
         }
 
-        node
+        // WalkNodeEvaluator.java:226-228
+        if path_type == PathType::Walkable || (self.is_amphibious() && path_type == PathType::Water)
+        {
+            return best;
+        }
+
+        // WalkNodeEvaluator.java:229-237
+        if (best.is_none() || best.as_ref().is_some_and(|n| n.cost_malus < 0.0))
+            && jump_size > 0
+            && (path_type != PathType::Fence || self.base.can_walk_over_fences)
+            && path_type != PathType::UnpassableRail
+            && path_type != PathType::Trapdoor
+            && path_type != PathType::PowderSnow
+        {
+            best = self
+                .try_jump_on(pos, jump_size, node_height, facing, current_path_type)
+                .await;
+        } else if !self.is_amphibious() && path_type == PathType::Water && !self.base.can_float {
+            best = self.try_find_first_non_water_below(pos, best).await;
+        } else if path_type == PathType::Open {
+            best = Some(self.try_find_first_ground_node_below(pos).await);
+        } else if Self::does_block_have_partial_collision(path_type) && best.is_none() {
+            best = Some(self.get_closed_node(pos, path_type));
+        }
+
+        best
     }
 
-    /// Tries stepping up one block at a time (up to `max_y_step`).
-    async fn get_jump_on_top_node(
+    /// Type-erased recursion bridge: `find_accepted_node` -> `try_jump_on` ->
+    /// `find_accepted_node` needs one boxed link to keep the future sized.
+    fn find_accepted_node_boxed<'a>(
+        &'a mut self,
+        pos: Vector3<i32>,
+        jump_size: i32,
+        node_height: f64,
+        facing: (i32, i32),
+        current_path_type: PathType,
+    ) -> Pin<Box<dyn Future<Output = Option<Node>> + Send + 'a>> {
+        Box::pin(self.find_accepted_node(pos, jump_size, node_height, facing, current_path_type))
+    }
+
+    /// Vanilla `WalkNodeEvaluator.tryJumpOn` (`WalkNodeEvaluator.java:267-283`):
+    /// recursively evaluates the cell one block up with `jumpSize - 1`, and for
+    /// mobs narrower than one block verifies the head-room with a grown AABB
+    /// spanning from the source column to the landing node.
+    async fn try_jump_on(
         &mut self,
         pos: Vector3<i32>,
-        max_y_step: i32,
-        last_feet_y: f64,
-        _facing: (i32, i32),
-        _current_path_type: PathType,
+        jump_size: i32,
+        node_height: f64,
+        facing: (i32, i32),
+        current_path_type: PathType,
     ) -> Option<Node> {
-        for dy in 1..=max_y_step {
-            let step_pos = Vector3::new(pos.x, pos.y + dy, pos.z);
-            let remaining_steps = max_y_step - dy;
+        // WalkNodeEvaluator.java:268-271
+        let node_above = self
+            .find_accepted_node_boxed(
+                Vector3::new(pos.x, pos.y + 1, pos.z),
+                jump_size - 1,
+                node_height,
+                facing,
+                current_path_type,
+            )
+            .await?;
 
-            let feet_y = self.get_floor_level(step_pos);
-            if feet_y - last_feet_y > self.get_mob_jump_height() {
-                return None;
-            }
-
-            let path_type = self.get_cached_path_type(step_pos).await;
-            let penalty = self.get_mob_penalty(path_type);
-
-            if penalty >= 0.0
-                && (path_type == PathType::Walkable
-                    || (self.is_amphibious() && path_type == PathType::Water))
-            {
-                let mut n = self.base.get_node(step_pos.as_blockpos());
-                n.path_type = path_type;
-                n.cost_malus = penalty.max(n.cost_malus);
-                return Some(n);
-            }
-
-            if remaining_steps > 0
-                && (path_type != PathType::Fence || self.base.can_walk_over_fences)
-                && path_type != PathType::UnpassableRail
-                && path_type != PathType::Trapdoor
-                && path_type != PathType::PowderSnow
-            {
-                continue;
-            }
-
-            if path_type == PathType::Open {
-                return Some(self.get_open_node(step_pos).await);
-            }
-
-            return None;
+        // WalkNodeEvaluator.java:272-274
+        let width = self.base.mob_data.as_ref().map_or(0.6, |d| d.width);
+        if width >= 1.0 {
+            return Some(node_above);
         }
 
-        None
+        // WalkNodeEvaluator.java:275-277
+        if node_above.path_type != PathType::Open && node_above.path_type != PathType::Walkable {
+            return Some(node_above);
+        }
+
+        // WalkNodeEvaluator.java:278-282: ceiling check while jumping from the
+        // source column (pos - facing) onto the raised node.
+        let height = self.base.mob_data.as_ref().map_or(1.8, |d| d.height);
+        let center_x = f64::from(pos.x - facing.0) + 0.5;
+        let center_z = f64::from(pos.z - facing.1) + 0.5;
+        let half_width = f64::from(width) / 2.0;
+        let source_floor = self.get_floor_level(Vector3::new(
+            center_x.floor() as i32,
+            pos.y + 1,
+            center_z.floor() as i32,
+        ));
+        let target_floor = self.get_floor_level(node_above.pos.0);
+        let grow = BoundingBox::new(
+            Vector3::new(
+                center_x - half_width,
+                source_floor + 0.001,
+                center_z - half_width,
+            ),
+            Vector3::new(
+                center_x + half_width,
+                f64::from(height) + target_floor - 0.002,
+                center_z + half_width,
+            ),
+        );
+        if self.has_collisions(&grow) {
+            None
+        } else {
+            Some(node_above)
+        }
     }
 
-    /// Vanilla `WalkNodeEvaluator` open-column fall: walk down through consecutive
-    /// `OPEN` cells until a standable type within `maxFallDistance`.
-    ///
-    /// This is what connects a 1-block ledge to the floor below so A* does not
-    /// have to route halfway around the map for a single step down.
-    async fn get_open_node(&mut self, pos: Vector3<i32>) -> Node {
-        let safe_fall_distance = self
+    /// Vanilla `WalkNodeEvaluator.tryFindFirstGroundNodeBelow`
+    /// (`WalkNodeEvaluator.java:298-312`): walk down through consecutive `OPEN`
+    /// cells until a standable type within `getMaxFallDistance`.
+    async fn try_find_first_ground_node_below(&mut self, pos: Vector3<i32>) -> Node {
+        let max_fall_distance = self
             .base
             .mob_data
             .as_ref()
-            .map_or(3, |d| d.max_fall_distance as i32)
-            .max(1);
+            .map_or(3, |d| d.max_fall_distance as i32);
+        let min_y = self
+            .base
+            .context
+            .as_ref()
+            .map_or(i32::MIN, PathfindingContext::min_y);
 
-        // Vanilla: start at y, loop --y while type stays OPEN.
-        let mut check_y = pos.y;
-        let mut fell = 0i32;
-        let mut path_type = PathType::Open;
-
-        while path_type == PathType::Open {
-            check_y -= 1;
-            fell += 1;
-
-            if fell > safe_fall_distance {
-                let mut n = self.base.get_node(BlockPos::new(pos.x, check_y, pos.z));
-                n.path_type = PathType::Blocked;
-                n.cost_malus = -1.0;
-                n.closed = true;
-                return n;
+        let mut current_y = pos.y - 1;
+        while current_y >= min_y {
+            // WalkNodeEvaluator.java:300-302
+            if pos.y - current_y > max_fall_distance {
+                return self.get_blocked_node(Vector3::new(pos.x, current_y, pos.z));
             }
-
-            path_type = self
-                .get_cached_path_type(Vector3::new(pos.x, check_y, pos.z))
-                .await;
-            let penalty = self.get_mob_penalty(path_type);
-
+            let check = Vector3::new(pos.x, current_y, pos.z);
+            let path_type = self.get_cached_path_type(check).await;
+            let path_cost = self.get_mob_penalty(path_type);
             if path_type != PathType::Open {
-                if penalty >= 0.0 {
-                    let mut n = self.base.get_node(BlockPos::new(pos.x, check_y, pos.z));
-                    n.path_type = path_type;
-                    // Small falls are free in practice; do not stack extra malus so
-                    // 1-block drops stay cheaper than long detours.
-                    n.cost_malus = penalty.max(0.0);
-                    return n;
+                // WalkNodeEvaluator.java:306-309
+                if path_cost >= 0.0 {
+                    return self.get_node_and_update_cost_to_max(check, path_type, path_cost);
                 }
-                let mut n = self.base.get_node(BlockPos::new(pos.x, check_y, pos.z));
-                n.path_type = PathType::Blocked;
-                n.cost_malus = -1.0;
-                n.closed = true;
-                return n;
+                return self.get_blocked_node(check);
             }
+            current_y -= 1;
         }
 
-        let mut n = self.base.get_node(pos.as_blockpos());
-        n.path_type = PathType::Blocked;
-        n.cost_malus = -1.0;
-        n.closed = true;
-        n
+        // WalkNodeEvaluator.java:311
+        self.get_blocked_node(pos)
     }
 
-    async fn get_non_water_node_below(
+    /// Vanilla `WalkNodeEvaluator.tryFindFirstNonWaterBelow`
+    /// (`WalkNodeEvaluator.java:285-296`).
+    async fn try_find_first_non_water_below(
         &mut self,
         pos: Vector3<i32>,
-        mut node: Option<Node>,
+        mut best: Option<Node>,
     ) -> Option<Node> {
+        let min_y = self
+            .base
+            .context
+            .as_ref()
+            .map_or(i32::MIN, PathfindingContext::min_y);
         let mut y = pos.y - 1;
-        while y > pos.y - 16 {
-            let path_type = self
-                .get_cached_path_type(Vector3::new(pos.x, y, pos.z))
-                .await;
+        while y > min_y {
+            let check = Vector3::new(pos.x, y, pos.z);
+            let path_type = self.get_cached_path_type(check).await;
             if path_type != PathType::Water {
-                return node;
+                return best;
             }
-            let penalty = self.get_mob_penalty(path_type);
-            let mut n = self.base.get_node(BlockPos::new(pos.x, y, pos.z));
-            n.path_type = path_type;
-            n.cost_malus = penalty.max(n.cost_malus);
-            node = Some(n);
+            let path_cost = self.get_mob_penalty(path_type);
+            best = Some(self.get_node_and_update_cost_to_max(check, path_type, path_cost));
             y -= 1;
         }
-        node
+        best
+    }
+
+    /// Vanilla `WalkNodeEvaluator.canReachWithoutCollision`
+    /// (`WalkNodeEvaluator.java:181-191`): sweep the mob's bounding box in
+    /// steps toward the target cell and reject the move on any collision.
+    fn can_reach_without_collision(&mut self, pos: Vector3<i32>) -> bool {
+        let Some(mob_data) = self.base.mob_data else {
+            return true;
+        };
+        let mut bb = mob_data.bounding_box();
+        let delta = Vector3::new(
+            f64::from(pos.x) - mob_data.position.x + (bb.max.x - bb.min.x) / 2.0,
+            f64::from(pos.y) - mob_data.position.y + (bb.max.y - bb.min.y) / 2.0,
+            f64::from(pos.z) - mob_data.position.z + (bb.max.z - bb.min.z) / 2.0,
+        );
+        // WalkNodeEvaluator.java:184: steps = ceil(|delta| / average bb size).
+        let steps = (delta.length() / bb.get_average_side_length()).ceil() as i32;
+        if steps <= 0 {
+            return true;
+        }
+        let step_delta = delta * (1.0 / f64::from(steps));
+        for _ in 1..=steps {
+            bb = bb.shift(step_delta);
+            if self.has_collisions(&bb) {
+                return false;
+            }
+        }
+        true
     }
 
     fn get_mob_penalty(&self, path_type: PathType) -> f32 {
@@ -288,7 +379,9 @@ impl WalkNodeEvaluator {
             })
     }
 
-    const fn is_blocked_type(path_type: PathType) -> bool {
+    /// Vanilla `WalkNodeEvaluator.doesBlockHavePartialCollision`
+    /// (`WalkNodeEvaluator.java:177-179`).
+    const fn does_block_have_partial_collision(path_type: PathType) -> bool {
         matches!(
             path_type,
             PathType::Fence | PathType::DoorWoodClosed | PathType::DoorIronClosed
@@ -316,43 +409,28 @@ impl WalkNodeEvaluator {
         path_type
     }
 
-    /// Reads the path type for the block itself, before land-node classification.
-    ///
-    /// `get_cached_path_type` includes the block below so an air cell over solid
-    /// ground becomes `Walkable`. Vanilla's airborne-start scan tests that raw
-    /// block state instead and must continue through that cell.
-    fn get_raw_path_type(&mut self, pos: Vector3<i32>) -> PathType {
+    /// Vanilla `WalkNodeEvaluator.hasCollisions` (`WalkNodeEvaluator.java:314-316`).
+    fn has_collisions(&mut self, aabb: &BoundingBox) -> bool {
         self.base
             .context
             .as_mut()
-            .map_or(PathType::Blocked, |context| {
-                context.get_path_type_from_state(pos)
-            })
+            .is_some_and(|ctx| ctx.has_collisions(aabb))
     }
 
-    fn has_collisions(&mut self, center: Vector3<i32>) -> bool {
-        self.base
-            .context
-            .as_mut()
-            .is_some_and(|ctx| ctx.has_collisions(center))
-    }
-
+    /// Vanilla `WalkNodeEvaluator.canStartAt` (`WalkNodeEvaluator.java:114-117`):
+    /// `type != OPEN && getPathfindingMalus(type) >= 0`.
     async fn can_start_at(&mut self, pos: Vector3<i32>) -> bool {
         let path_type = self.get_cached_path_type(pos).await;
-        path_type.is_passable() && !self.has_collisions(pos)
+        path_type != PathType::Open && self.get_mob_penalty(path_type) >= 0.0
     }
 
-    async fn get_start_node(&mut self, pos: Vector3<i32>) -> Option<Node> {
-        if !self.can_start_at(pos).await {
-            return None;
-        }
-
+    /// Vanilla `WalkNodeEvaluator.getStartNode` (`WalkNodeEvaluator.java:107-112`).
+    async fn get_start_node(&mut self, pos: Vector3<i32>) -> Node {
         let mut node = self.base.get_node(pos.as_blockpos());
         let path_type = self.get_cached_path_type(pos).await;
         node.path_type = path_type;
         node.cost_malus = self.get_mob_penalty(path_type);
-
-        Some(node)
+        node
     }
 }
 
@@ -377,51 +455,78 @@ impl NodeEvaluator for WalkNodeEvaluator {
         self.path_types_cache.clear();
     }
 
+    /// Vanilla `WalkNodeEvaluator.getStart` (`WalkNodeEvaluator.java:70-105`).
+    ///
+    /// Gap: vanilla first handles mobs that `canStandOnFluid` (striders on
+    /// lava, `WalkNodeEvaluator.java:75-79`); Pumpkin has no such hook yet.
     async fn get_start(&mut self) -> Option<Node> {
-        let mob_data = self.base.mob_data.as_ref()?;
-        let mob_x = mob_data.position.x;
-        let mob_y_f64 = mob_data.position.y;
-        let mob_z = mob_data.position.z;
-        let on_ground = mob_data.on_ground;
+        let mob_data = *self.base.mob_data.as_ref()?;
+        let block_x = mob_data.position.x.floor() as i32;
+        let block_z = mob_data.position.z.floor() as i32;
+        let min_y = self
+            .base
+            .context
+            .as_ref()
+            .map_or(i32::MIN, PathfindingContext::min_y);
 
-        // TODO: add swimming support
-        let y = if on_ground {
-            (mob_y_f64 + 0.5).floor() as i32
+        // Vanilla WalkNodeEvaluator.java:73: `startY = mob.getBlockY()`.
+        let mut start_y = mob_data.position.y.floor() as i32;
+
+        if self.base.can_float && mob_data.is_in_water {
+            // WalkNodeEvaluator.java:80-84: floaters start at the water surface.
+            let mut check = self
+                .base
+                .context
+                .as_ref()
+                .is_some_and(|ctx| ctx.is_water_at(Vector3::new(block_x, start_y, block_z)));
+            while check {
+                start_y += 1;
+                check =
+                    self.base.context.as_ref().is_some_and(|ctx| {
+                        ctx.is_water_at(Vector3::new(block_x, start_y, block_z))
+                    });
+            }
+            start_y -= 1;
+        } else if mob_data.on_ground {
+            // WalkNodeEvaluator.java:85-86
+            start_y = (mob_data.position.y + 0.5).floor() as i32;
         } else {
-            let start_y = (mob_y_f64 + 1.0).floor() as i32;
-            let bottom_y = start_y - 64;
-            let mut found_y = start_y;
-            for check_y in (bottom_y..start_y).rev() {
-                let path_type = self.get_raw_path_type(Vector3::new(
-                    mob_x.floor() as i32,
-                    check_y,
-                    mob_z.floor() as i32,
-                ));
-                if path_type != PathType::Open && path_type != PathType::Water {
-                    found_y = check_y + 1;
+            // WalkNodeEvaluator.java:87-96: airborne — descend while the block
+            // below is air or land-pathfindable.
+            let mut check_y = (mob_data.position.y + 1.0).floor() as i32;
+            while check_y > min_y {
+                start_y = check_y;
+                check_y -= 1;
+                let passable = self.base.context.as_ref().is_some_and(|ctx| {
+                    ctx.is_air_or_land_pathfindable(Vector3::new(block_x, check_y, block_z))
+                });
+                if !passable {
                     break;
                 }
             }
-            found_y
-        };
-
-        let block_x = mob_x.floor() as i32;
-        let block_z = mob_z.floor() as i32;
-        let start_pos = Vector3::new(block_x, y, block_z);
-
-        if let Some(node) = self.get_start_node(start_pos).await {
-            return Some(node);
         }
 
-        for &(dx, dz) in &DIRECTIONS {
-            let try_pos = Vector3::new(block_x + dx, y, block_z + dz);
-            if let Some(node) = self.get_start_node(try_pos).await {
-                return Some(node);
+        // WalkNodeEvaluator.java:97-103: if the mob's own column can't start,
+        // try the four bounding-box corners.
+        let center = Vector3::new(block_x, start_y, block_z);
+        if !self.can_start_at(center).await {
+            let bb = mob_data.bounding_box();
+            let corners = [
+                (bb.min.x.floor() as i32, bb.min.z.floor() as i32),
+                (bb.min.x.floor() as i32, bb.max.z.floor() as i32),
+                (bb.max.x.floor() as i32, bb.min.z.floor() as i32),
+                (bb.max.x.floor() as i32, bb.max.z.floor() as i32),
+            ];
+            for (corner_x, corner_z) in corners {
+                let corner = Vector3::new(corner_x, start_y, corner_z);
+                if self.can_start_at(corner).await {
+                    return Some(self.get_start_node(corner).await);
+                }
             }
         }
 
-        let above_pos = Vector3::new(block_x, y + 1, block_z);
-        self.get_start_node(above_pos).await
+        // WalkNodeEvaluator.java:104: always fall back to the center node.
+        Some(self.get_start_node(center).await)
     }
 
     fn get_target(&mut self, pos: BlockPos) -> Target {

@@ -87,13 +87,15 @@ impl Default for Navigator {
     }
 }
 
-// If I counted correctly this should be equal to the number of iters that vanilla does for
-// a zombie (yes, vanilla does a different number of iterations based on the mob and some
-// other things)
-// TODO: Calculate from mob attributes like in vanilla
-const MAX_ITERS: usize = 560;
-// Vanilla PathFinder uses ~1.0 heuristic scale (some versions 1.5).
-const TARGET_DISTANCE_MULTIPLIER: f32 = 1.0;
+// Vanilla PathFinder.java:36 `FUDGING = 1.5f`, applied to the heuristic of
+// every expanded neighbor at PathFinder.java:105 (`h = getBestH(...) * 1.5f`).
+const FUDGING: f32 = 1.5;
+// Vanilla PathNavigation.java:64 `requiredPathLength = 16.0f`, the lower bound
+// of `getMaxPathLength()` (PathNavigation.java:87-89).
+const REQUIRED_PATH_LENGTH: f32 = 16.0;
+// Vanilla PathNavigation.java:178-179: `moveTo(x, y, z, speed)` creates the
+// path with `reachRange = 1`.
+const DEFAULT_REACH_RANGE: i32 = 1;
 // Vanilla GroundPathNavigation: abs(dy) < 1.0 for "on node". Exactly 1-block drops
 // sit at dy≈1.0 and fail that check — we allow a hair more so mobs step down
 // instead of orbiting the ledge and repathing the long way around.
@@ -155,12 +157,25 @@ impl Navigator {
     }
 
     /// Vanilla `PathNavigation.createPath` — used by `MeleeAttackGoal.canUse`.
+    /// Uses the `moveTo` default `reachRange = 1` (PathNavigation.java:178-187).
     pub async fn create_path_to(
         &mut self,
         entity: &LivingEntity,
         destination: Vector3<f64>,
     ) -> Option<Path> {
-        self.compute_path(entity, destination).await
+        self.compute_path(entity, destination, DEFAULT_REACH_RANGE)
+            .await
+    }
+
+    /// Vanilla `PathNavigation.createPath(pos, reachRange)` — goals that only
+    /// need to get within `reach_range` blocks (manhattan) may pass it here.
+    pub async fn create_path_to_in_range(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        reach_range: i32,
+    ) -> Option<Path> {
+        self.compute_path(entity, destination, reach_range).await
     }
 
     #[allow(clippy::too_many_lines)]
@@ -168,6 +183,7 @@ impl Navigator {
         &mut self,
         entity: &LivingEntity,
         destination: Vector3<f64>,
+        reach_range: i32,
     ) -> Option<Path> {
         let start_pos_f = entity.entity.pos.load();
         // Vanilla `Entity.blockPosition()` and `BlockPos.containing` floor world
@@ -195,13 +211,14 @@ impl Navigator {
             .max(0.6) as f32;
         let mut mob_data = MobData::new(start_pos_f, width, height, step_height);
         mob_data.on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
-        mob_data.set_pathfinding_malus(PathType::DangerFire, 16.0);
-        mob_data.set_pathfinding_malus(PathType::DamageFire, -1.0);
-        mob_data.set_pathfinding_malus(PathType::Water, 8.0);
-        mob_data.set_pathfinding_malus(PathType::Lava, -1.0);
-        mob_data.set_pathfinding_malus(PathType::DangerOther, 8.0);
+        mob_data.is_in_water = entity.entity.touching_water.load(Ordering::SeqCst);
 
-        // Apply per-mob pathfinding malus overrides
+        // Vanilla `Mob` sets no malus overrides in its constructor — the base
+        // `getPathfindingMalus` falls through to `PathType.getMalus()`
+        // (Mob.java:167, 204-210). Per-mob overrides (e.g. zombies avoiding
+        // fire, golems avoiding water) belong in the mob constructors via
+        // `Navigator::set_pathfinding_malus`, mirroring `setPathfindingMalus`
+        // (Mob.java:212-214).
         for (&path_type, &malus) in &self.path_type_overrides {
             mob_data.set_pathfinding_malus(path_type, malus);
         }
@@ -212,10 +229,18 @@ impl Navigator {
 
         let mut target = self.evaluator.get_target(BlockPos::floored_v(destination));
 
+        // Vanilla PathNavigation.java:87-89: maxPathLength =
+        // max(FOLLOW_RANGE attribute, requiredPathLength (16)).
+        let follow_range = entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32;
+        let max_path_length = follow_range.max(REQUIRED_PATH_LENGTH);
+        // Vanilla PathNavigation.java:69,77-80: maxVisitedNodes =
+        // floor(maxPathLength * 16).
+        let max_visited_nodes = (max_path_length * 16.0).floor() as usize;
+
+        // Vanilla PathFinder.java:74-75: the start node's h has no FUDGING.
         start_node.g = 0.0;
         let start_dist = start_node.distance(&target);
         target.update_best(start_dist, &start_node);
-        // Start node uses raw distance (no 1.5x multiplier - that's only for neighbors)
         start_node.h = start_dist;
         start_node.f = start_node.h;
         start_node.walked_dist = 0.0;
@@ -223,43 +248,48 @@ impl Navigator {
 
         let start_pos = start_node.pos.0;
 
-        // Map to store closed nodes for path reconstruction
+        // Popped ("closed", PathFinder.java:85) nodes, kept for path
+        // reconstruction. Vanilla marks the shared Node object; our nodes are
+        // Copy, so this map is the source of truth for the closed flag.
         let mut closed_set: HashMap<Vector3<i32>, Node> = HashMap::new();
 
         // Reuse the navigator's open_set and neighbors_buf
         self.open_set.clear();
         self.open_set.insert(start_node);
 
-        let mut iterations = 0usize;
+        let mut count = 0usize;
         let mut reached = false;
 
+        // Vanilla PathFinder.java:83: `while (!openSet.isEmpty() && ++count < max)`.
         while !self.open_set.is_empty() {
-            iterations += 1;
-            if iterations >= MAX_ITERS {
+            count += 1;
+            if count >= max_visited_nodes {
                 break;
             }
 
-            let Some(current) = self.open_set.pop() else {
+            let Some(mut current) = self.open_set.pop() else {
                 break;
             };
-            if current.distance_manhattan(&target) < 1.0 {
+            // Vanilla PathFinder.java:85: popped nodes are closed for good.
+            current.closed = true;
+            closed_set.insert(current.pos.0, current);
+
+            // Vanilla PathFinder.java:86-91: reached when within reachRange
+            // (manhattan) of the target.
+            if current.distance_manhattan(&target) <= reach_range as f32 {
                 target.reached = true;
                 reached = true;
-                target.update_best(0.0, &current);
-                closed_set.insert(current.pos.0, current);
                 break;
             }
 
+            // Vanilla PathFinder.java:95: `distanceTo(from) >= maxPathLength`.
             let euclidean_from_start = {
                 let dx = (current.pos.0.x - start_pos.x) as f32;
                 let dy = (current.pos.0.y - start_pos.y) as f32;
                 let dz = (current.pos.0.z - start_pos.z) as f32;
                 (dx * dx + dy * dy + dz * dz).sqrt()
             };
-
-            let follow_range = entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32;
-            if euclidean_from_start >= follow_range {
-                closed_set.insert(current.pos.0, current);
+            if euclidean_from_start >= max_path_length {
                 continue;
             }
 
@@ -269,26 +299,23 @@ impl Navigator {
                 .await;
 
             for mut neighbor in self.neighbors_buf.drain(..) {
-                // Prefer nearly-horizontal step-downs: charge mostly XZ distance so a
-                // 1-block drop (vanilla getClosedNode edge) beats walking around a hill.
-                // Full 3D distance alone makes drops look like √2 while a 2-long flat
-                // detour is 2 — still OK, but with malus noise detours won too often.
-                let step_cost = {
-                    let full = current.distance(&neighbor);
-                    let xz = current.distance_xz(&neighbor);
-                    let dy = (neighbor.pos.0.y - current.pos.0.y).abs() as f32;
-                    if dy > 0.0 && dy <= 1.0 && xz <= 1.5 {
-                        // 1-block step up/down: treat as flat adjacency cost.
-                        xz.max(1.0)
-                    } else {
-                        full
-                    }
-                };
-                neighbor.walked_dist = current.walked_dist + step_cost;
-                let tentative_g = current.g + step_cost + neighbor.cost_malus;
+                // Closed nodes are never re-expanded. Vanilla checks the shared
+                // node's `closed` flag inside isNeighborValid
+                // (WalkNodeEvaluator.java:149-151); with Copy nodes the
+                // closed_set map carries that flag.
+                if closed_set.contains_key(&neighbor.pos.0) {
+                    continue;
+                }
+
+                // Vanilla PathFinder.java:99,126-128: plain euclidean distance.
+                let distance = current.distance(&neighbor);
+                neighbor.walked_dist = current.walked_dist + distance;
+                // Vanilla PathFinder.java:101
+                let tentative_g = current.g + distance + neighbor.cost_malus;
 
                 let in_heap = self.open_set.contains(&neighbor);
-                if neighbor.walked_dist < follow_range
+                // Vanilla PathFinder.java:102
+                if neighbor.walked_dist < max_path_length
                     && (!in_heap
                         || self
                             .open_set
@@ -297,9 +324,10 @@ impl Navigator {
                 {
                     neighbor.came_from = Some(current.pos.0);
                     neighbor.g = tentative_g;
+                    // Vanilla PathFinder.java:105,130-138 (getBestH + FUDGING).
                     let dist_to_target = neighbor.distance(&target);
                     target.update_best(dist_to_target, &neighbor);
-                    neighbor.h = dist_to_target * TARGET_DISTANCE_MULTIPLIER;
+                    neighbor.h = dist_to_target * FUDGING;
                     neighbor.f = neighbor.g + neighbor.h;
 
                     if in_heap {
@@ -309,110 +337,32 @@ impl Navigator {
                     }
                 }
             }
-
-            closed_set.insert(current.pos.0, current);
         }
 
-        // Also store any remaining open set nodes for path reconstruction
-        for node in self.open_set.drain() {
-            closed_set.entry(node.pos.0).or_insert(node);
-        }
+        // Vanilla PathFinder.java:65: release per-search evaluator state.
+        self.evaluator.done();
 
-        if let Some(best_node) = target.best_node {
-            let mut path_nodes: Vec<Node> = Vec::new();
-            let mut current_pos = best_node.pos.0;
-            path_nodes.push(best_node);
-            let mut visited: std::collections::HashSet<Vector3<i32>> =
-                std::collections::HashSet::new();
-            visited.insert(current_pos);
-            while let Some(node) = closed_set.get(&current_pos) {
-                if let Some(prev_pos) = node.came_from {
-                    if prev_pos == current_pos || !visited.insert(prev_pos) {
-                        break; // Self-reference or cycle detected
-                    }
-                    if let Some(&prev_node) = closed_set.get(&prev_pos) {
-                        path_nodes.push(prev_node);
-                        current_pos = prev_pos;
-                    } else {
-                        break;
-                    }
-                } else {
-                    break;
-                }
+        // Vanilla PathFinder.java:114: whether the target was reached or not,
+        // reconstruct from the best node seen (min distToTarget); with a single
+        // target no further tie-breaking is needed. PathFinder.java:140-149.
+        let best_node = target.best_node?;
+        let mut path_nodes: Vec<Node> = vec![best_node];
+        let mut visited: std::collections::HashSet<Vector3<i32>> = std::collections::HashSet::new();
+        visited.insert(best_node.pos.0);
+        let mut came_from = best_node.came_from;
+        while let Some(prev_pos) = came_from {
+            if !visited.insert(prev_pos) {
+                break; // Cycle guard — should not happen, but never loop forever.
             }
-            path_nodes.reverse();
-
-            // Reject incomplete paths that get *farther* from the goal while also
-            // being much longer than the straight line. Keep incomplete paths that
-            // still move closer — better than freezing (vindicator/golem "stand and
-            // stare" when A* can't fully reach).
-            if !reached && path_nodes.len() >= 2 {
-                let start = path_nodes[0].pos.0;
-                let end = path_nodes[path_nodes.len() - 1].pos.0;
-                let goal = target.node.pos.0;
-                let path_len = {
-                    let mut len = 0.0f32;
-                    for w in path_nodes.windows(2) {
-                        len += w[0].distance(&w[1]);
-                    }
-                    len
-                };
-                let start_to_goal = {
-                    let dx = (goal.x - start.x) as f32;
-                    let dy = (goal.y - start.y) as f32;
-                    let dz = (goal.z - start.z) as f32;
-                    (dx * dx + dy * dy + dz * dz).sqrt()
-                };
-                let end_to_goal = {
-                    let dx = (goal.x - end.x) as f32;
-                    let dy = (goal.y - end.y) as f32;
-                    let dz = (goal.z - end.z) as f32;
-                    (dx * dx + dy * dy + dz * dz).sqrt()
-                };
-                // Only drop if we did not get closer and the path is a long detour.
-                if end_to_goal >= start_to_goal - 0.5 && path_len > start_to_goal.mul_add(3.0, 12.0)
-                {
-                    return None;
-                }
-            }
-
-            let path_target = target.node.pos.0;
-            return Some(Path::new(path_nodes, path_target, reached));
-        }
-
-        None
-    }
-
-    /// True when the path is much longer than the straight line to the goal —
-    /// typical of A* circling hills/water while a clear charge exists.
-    fn path_is_excessive_detour(
-        path: &Path,
-        from: Vector3<f64>,
-        destination: Vector3<f64>,
-    ) -> bool {
-        let n = path.get_node_count();
-        if n < 2 {
-            return false;
-        }
-        let mut path_len = 0.0f64;
-        for i in 0..(n - 1) {
-            let Some(a) = path.get_node_pos(i) else {
+            let Some(&prev_node) = closed_set.get(&prev_pos) else {
                 break;
             };
-            let Some(b) = path.get_node_pos(i + 1) else {
-                break;
-            };
-            let dx = f64::from(b.x - a.x);
-            let dy = f64::from(b.y - a.y);
-            let dz = f64::from(b.z - a.z);
-            path_len += (dx * dx + dy * dy + dz * dz).sqrt();
+            path_nodes.push(prev_node);
+            came_from = prev_node.came_from;
         }
-        let dx = destination.x - from.x;
-        let dy = destination.y - from.y;
-        let dz = destination.z - from.z;
-        let straight = (dx * dx + dy * dy + dz * dz).sqrt().max(0.5);
-        // > ~40% longer than straight and at least 4 blocks of waste → detour.
-        path_len > straight * 1.4 + 4.0
+        path_nodes.reverse();
+
+        Some(Path::new(path_nodes, target.node.pos.0, reached))
     }
 
     /// Advance past path nodes the mob is already standing on (vanilla
@@ -488,62 +438,6 @@ impl Navigator {
         f64::from(below.0.y) + collision_height
     }
 
-    /// Best-effort straight walk when A* fails — keeps melee chases moving instead
-    /// of freezing until the next repath luckily succeeds. This still goes through
-    /// `MoveControl`, which owns collision-triggered jumping in vanilla.
-    fn direct_walk_toward(
-        &self,
-        entity: &LivingEntity,
-        goal: &NavigatorGoal,
-        move_control: &Mutex<Box<dyn MoveControlTrait>>,
-    ) {
-        let current_pos = entity.entity.pos.load();
-
-        // Iron golem etc.: never direct-walk into water when water is impassable.
-        if self.avoids_water() {
-            let world = entity.entity.world.load();
-            let dest_block = BlockPos::floored_v(goal.destination);
-            let is_water = |p: pumpkin_util::math::position::BlockPos| {
-                use pumpkin_data::tag::Taggable;
-                let id = world.get_block_state_id(&p);
-                pumpkin_data::fluid::Fluid::from_state_id(id)
-                    .is_some_and(|f| f.has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER))
-            };
-            if is_water(dest_block) || is_water(dest_block.down()) {
-                entity.clear_speed();
-                Self::stop_move_control(move_control);
-                return;
-            }
-            // Also refuse a step that would walk off land into water immediately ahead.
-            let ahead = current_pos.add_raw(
-                (goal.destination.x - current_pos.x)
-                    .signum()
-                    .clamp(-1.0, 1.0),
-                0.0,
-                (goal.destination.z - current_pos.z)
-                    .signum()
-                    .clamp(-1.0, 1.0),
-            );
-            let ahead_block = BlockPos::floored_v(ahead);
-            if is_water(ahead_block) || is_water(ahead_block.down()) {
-                entity.clear_speed();
-                Self::stop_move_control(move_control);
-                return;
-            }
-        }
-
-        let dx = goal.destination.x - current_pos.x;
-        let dz = goal.destination.z - current_pos.z;
-        let horizontal = dx.hypot(dz);
-        if horizontal < 0.05 {
-            entity.clear_speed();
-            Self::stop_move_control(move_control);
-            return;
-        }
-
-        Self::set_wanted_position(move_control, goal.destination, goal.speed);
-    }
-
     fn needs_new_path(&self, goal: &NavigatorGoal) -> bool {
         if self.current_path.is_none() {
             return true;
@@ -597,41 +491,28 @@ impl Navigator {
         }
 
         if self.needs_new_path(&goal) {
-            self.current_path = self.compute_path(entity, goal.destination).await;
+            self.current_path = self
+                .compute_path(entity, goal.destination, DEFAULT_REACH_RANGE)
+                .await;
             self.ticks_on_current_node = 0;
             self.last_node_index = 0;
             self.path_start_pos = Some(entity.entity.pos.load());
             self.repath_cooldown = 10; // repath a bit faster during chase
-
-            // Drop long detours: iron golems / melee should charge the target, not
-            // walk behind it then turn around (vanilla MoveControl aims straight
-            // when createPath is short; long A* loops look like reverse chase).
-            if let Some(path) = self.current_path.as_ref()
-                && Self::path_is_excessive_detour(path, entity.entity.pos.load(), goal.destination)
-            {
-                self.current_path = None;
-            }
 
             // Skip start node(s) already under our feet so we don't first step
             // "backward" onto the path origin block.
             if let Some(path) = self.current_path.as_mut() {
                 Self::skip_nodes_already_reached(path, entity);
             }
-
-            // A* failed: keep the goal and walk straight toward the destination
-            // so melee mobs (vindicator/golem/zombie) don't freeze in place.
-            if self.current_path.is_none() {
-                self.is_idle.store(false, Ordering::Relaxed);
-                self.direct_walk_toward(entity, &goal, move_control);
-                self.current_goal = Some(goal);
-                return;
-            }
         }
 
+        // Vanilla `PathNavigation.moveTo` with a null path clears the current
+        // path and reports failure (PathNavigation.java:191-195); the mob
+        // stands still until a goal issues a new request.
         if self.current_path.is_none() {
-            self.is_idle.store(false, Ordering::Relaxed);
-            self.direct_walk_toward(entity, &goal, move_control);
-            self.current_goal = Some(goal);
+            self.is_idle.store(true, Ordering::Relaxed);
+            entity.clear_speed();
+            Self::stop_move_control(move_control);
             return;
         }
 

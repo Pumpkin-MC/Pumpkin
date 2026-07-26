@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
 use crate::entity::ai::pathfinder::{
     node::{Node, PATH_TYPE_COUNT, PathType, Target},
@@ -44,41 +44,24 @@ pub struct MobData {
     pub width: f32,
     pub height: f32,
     pub max_step_height: f32,
+    /// Vanilla `LivingEntity.getMaxFallDistance` default:
+    /// `getComfortableFallDistance(0)` = 3 (`LivingEntity.java:1658-1663`).
+    /// Gap: `Mob.getMaxFallDistance` (`Mob.java:860-869`) raises this while the
+    /// mob has an attack target, based on health and difficulty; Pumpkin does
+    /// not wire target/health into pathfinding yet.
     pub max_fall_distance: f32,
     pub can_swim: bool,
     pub can_walk_on_water: bool,
     pub avoids_fire: bool,
     pub avoids_water: bool,
     pub on_ground: bool,
+    /// Vanilla `Entity.isInWater` (`wasTouchingWater`), read by
+    /// `WalkNodeEvaluator.getStart` (`WalkNodeEvaluator.java:80`).
+    pub is_in_water: bool,
     pub path_type_malus: [Option<f32>; PATH_TYPE_COUNT],
 }
 
 impl MobData {
-    #[must_use]
-    pub const fn new_zombie(position: Vector3<f64>, on_ground: bool) -> Self {
-        let mut data = Self {
-            position,
-            width: 0.6,
-            height: 1.95,
-            max_step_height: 1.0,
-            max_fall_distance: 3.0,
-            can_swim: false,
-            can_walk_on_water: false,
-            avoids_fire: true,
-            avoids_water: false,
-            on_ground,
-            path_type_malus: [None; PATH_TYPE_COUNT],
-        };
-
-        data.set_pathfinding_malus(PathType::DangerFire, 16.0);
-        data.set_pathfinding_malus(PathType::DamageFire, -1.0);
-        data.set_pathfinding_malus(PathType::Water, 8.0);
-        data.set_pathfinding_malus(PathType::Lava, -1.0);
-        data.set_pathfinding_malus(PathType::DangerOther, 8.0);
-
-        data
-    }
-
     #[must_use]
     pub const fn new(
         position: Vector3<f64>,
@@ -97,6 +80,7 @@ impl MobData {
             avoids_fire: true,
             avoids_water: false,
             on_ground: true,
+            is_in_water: false,
             path_type_malus: [None; PATH_TYPE_COUNT],
         }
     }
@@ -108,6 +92,25 @@ impl MobData {
 
     pub const fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.path_type_malus[path_type as usize] = Some(malus);
+    }
+
+    /// The mob's axis-aligned bounding box, reconstructed the way vanilla
+    /// `Entity.getBoundingBox` derives it from position and dimensions.
+    #[must_use]
+    pub fn bounding_box(&self) -> BoundingBox {
+        let half_width = f64::from(self.width) / 2.0;
+        BoundingBox::new(
+            Vector3::new(
+                self.position.x - half_width,
+                self.position.y,
+                self.position.z - half_width,
+            ),
+            Vector3::new(
+                self.position.x + half_width,
+                self.position.y + f64::from(self.height),
+                self.position.z + half_width,
+            ),
+        )
     }
 
     #[must_use]
