@@ -230,7 +230,7 @@ mod tests {
     fn cache_signatures_skips_duplicates() {
         let mut cache = MessageCache::default();
         let sig: Box<[u8]> = Box::from([1u8, 2, 3]);
-        cache.cache_signatures(&[sig.clone()]);
+        cache.cache_signatures(std::slice::from_ref(&sig));
         cache.cache_signatures(&[sig]);
         assert_eq!(cache.full_cache.len(), 1);
     }

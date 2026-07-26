@@ -1,8 +1,6 @@
 use super::{BlockPlacingError, BlockRegistry};
-use crate::block::fluid::FluidBehaviour;
 use crate::block::{
-    BlockBehaviour, BlockIsReplacing, CanPlaceAtArgs, CanUpdateAtArgs, OnPlaceArgs, PlacedArgs,
-    PlayerPlacedArgs,
+    BlockIsReplacing, CanPlaceAtArgs, CanUpdateAtArgs, OnPlaceArgs, PlacedArgs, PlayerPlacedArgs,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;

@@ -21,13 +21,13 @@ pub mod loader;
 /// host features.
 pub mod permissions;
 
-mod events;
+mod handler;
 mod lifecycle;
 mod loading;
 
 use crate::{plugin::loader::wasm::WasmPluginLoader, server::Server};
 pub use api::*;
-pub use events::{DynEventHandler, EventHandler};
+pub use handler::{DynEventHandler, EventHandler};
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 

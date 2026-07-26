@@ -1,6 +1,6 @@
 use super::BlockRegistry;
 use crate::block::{
-    BlockBehaviour, EmitsRedstonePowerArgs, GetInsideCollisionShapeArgs, GetRedstonePowerArgs,
+    EmitsRedstonePowerArgs, GetInsideCollisionShapeArgs, GetRedstonePowerArgs,
     GetStateForNeighborUpdateArgs, OnNeighborUpdateArgs, PrepareArgs,
 };
 use crate::world::World;
@@ -9,7 +9,7 @@ use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 
 impl BlockRegistry {

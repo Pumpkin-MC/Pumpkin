@@ -1,7 +1,6 @@
 use super::{BlockActionResult, BlockRegistry};
-use crate::block::fluid::FluidBehaviour;
 use crate::block::{
-    BlockBehaviour, BlockHitResult, BrokenArgs, ExplodeArgs, NormalUseArgs, OnEntityCollisionArgs,
+    BlockHitResult, BrokenArgs, ExplodeArgs, NormalUseArgs, OnEntityCollisionArgs,
     OnEntityStepArgs, OnLandedUponArgs, OnStateReplacedArgs, OnSyncedBlockEventArgs,
     UpdateEntityMovementAfterFallOnArgs, UseWithItemArgs, stop_vertical_movement_after_fall,
 };

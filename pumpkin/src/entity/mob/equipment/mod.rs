@@ -27,7 +27,6 @@ mod populate;
 mod registry;
 
 pub use difficulty::*;
-pub use enchant::*;
 pub use populate::*;
 pub use registry::*;
 
