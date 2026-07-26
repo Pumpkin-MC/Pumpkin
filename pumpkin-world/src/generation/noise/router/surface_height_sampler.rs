@@ -51,8 +51,13 @@ impl SurfaceHeightSamplerBuilderOptions {
 }
 
 pub struct SurfaceHeightEstimateSampler<'a> {
+    // Kept for construction symmetry with the builder options; the vanilla
+    // preliminary-surface sample (NoiseChunk.java:215-218) no longer reads these.
+    #[allow(dead_code)]
     minimum_y: i32,
+    #[allow(dead_code)]
     maximum_y: i32,
+    #[allow(dead_code)]
     y_level_step_count: usize,
 
     component_stack: Box<[ChunkNoiseFunctionComponent<'a>]>,
@@ -81,36 +86,10 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
             ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
         let pos = Vector3::new(aligned_x, 0, aligned_z);
 
-        // If the top-most component is FindTopSurface, we want to perform a precise search
-        // rather than the coarse cell-stepping search it does internally.
-        if let Some(ChunkNoiseFunctionComponent::Dependent(
-            crate::generation::noise::router::proto_noise_router::DependentProtoNoiseFunctionComponent::FindTopSurface(fts),
-        )) = self.component_stack.last()
-        {
-            let upper = ChunkNoiseFunctionComponent::sample_from_stack(
-                &mut self.component_stack[..=fts.upper_bound_index()],
-                &pos,
-                &sample_options,
-            );
-
-            // First find the coarse cell that contains the surface
-            let cell_height = fts.cell_height();
-            let mut y = (upper / cell_height as f64).floor() as i32 * cell_height;
-            while y >= self.minimum_y {
-                let density = ChunkNoiseFunctionComponent::sample_from_stack(
-                    &mut self.component_stack[..=fts.density_index()],
-                    &Vector3::new(aligned_x, y, aligned_z),
-                    &sample_options,
-                );
-                if density > 0.0 {
-                    return y;
-                }
-                y -= cell_height;
-            }
-
-            return self.minimum_y;
-        }
-
+        // Vanilla NoiseChunk.java:215-218 (computePreliminarySurfaceLevel): sample the
+        // density function at (x, 0, z) and floor. Any FindTopSurface node in the stack
+        // performs its own vanilla cell walk (DensityFunctions.java:1068-1078), using its
+        // own lower_bound; no hand-rolled search here.
         let surface_y = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut self.component_stack,
             &pos,

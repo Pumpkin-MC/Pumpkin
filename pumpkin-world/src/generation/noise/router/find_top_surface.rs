@@ -68,20 +68,13 @@ impl StaticChunkNoiseFunctionComponentImpl for FindTopSurface {
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
+        // Vanilla DensityFunctions.java:1068-1078 (FindTopSurface.compute): always snap
+        // the upper bound to a cell boundary and walk down; no fractional early return.
         let upper = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.upper_bound_index],
             pos,
             sample_options,
         );
-
-        let density = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut component_stack[..=self.density_index],
-            &Vector3::new(pos.x, upper.floor() as i32, pos.z),
-            sample_options,
-        );
-        if density > 0.0 {
-            return upper;
-        }
 
         let cell_height = self.data.cell_height;
         let lower_bound = self.data.lower_bound;

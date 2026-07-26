@@ -648,11 +648,13 @@ impl ProtoChunk {
                                     z: j_z,
                                 }
                             );
-                            let _junction_box = BlockBox::from_pos(BlockPos::new(j_x, j.source_ground_y, j_z));
-                     any_piece_bounding_box = any_piece_bounding_box.map_or(Some(bounding_box), |mut b| {
-                            b.encompass(&bounding_box);
-                             Some(b)
-                        });
+                            // Vanilla Beardifier.java:74-75 grows the affected box with the
+                            // junction's own single-block box, not the piece's bounding box.
+                            let junction_box = BlockBox::from_pos(BlockPos::new(j_x, j.source_ground_y, j_z));
+                            any_piece_bounding_box = any_piece_bounding_box.map_or(Some(junction_box), |mut b| {
+                                b.encompass(&junction_box);
+                                Some(b)
+                            });
                         }
                     }
                 } else {
@@ -902,7 +904,25 @@ impl ProtoChunk {
             z,
         );
 
-        self.get_biome_id(seed_biome_pos.x, seed_biome_pos.y, seed_biome_pos.z)
+        // The biome-zoom fuzz can pick a quart up to one quart outside this chunk.
+        // Vanilla resolves such positions through the whole region
+        // (SurfaceRules.java:754-758, biomeGetter backed by BiomeManager), but only
+        // this chunk's biome storage is available here, so clamp to the chunk edge.
+        // Without this, `get_biome_id`'s `& 3` wrap resolved an unrelated column on
+        // the far side of the chunk (sand/terracotta speckling at chunk borders).
+        // Residual gap vs vanilla: a border quart fuzzed into a neighbor chunk uses
+        // the nearest in-chunk quart instead of the true neighbor quart.
+        let min_quart_x = biome_coords::from_block(start_block_x(self.x));
+        let min_quart_z = biome_coords::from_block(start_block_z(self.z));
+        let max_quart_offset = biome_coords::from_block(15);
+        let quart_x = seed_biome_pos
+            .x
+            .clamp(min_quart_x, min_quart_x + max_quart_offset);
+        let quart_z = seed_biome_pos
+            .z
+            .clamp(min_quart_z, min_quart_z + max_quart_offset);
+
+        self.get_biome_id(quart_x, seed_biome_pos.y, quart_z)
     }
 
     #[must_use]
@@ -976,8 +996,10 @@ impl ProtoChunk {
                         continue;
                     }
                     if min >= y {
-                        let shift = min_y << 4;
-                        min = shift as i32;
+                        // Vanilla SurfaceSystem.java:143 resets to DimensionType.WAY_BELOW_MIN_Y
+                        // (DimensionType.java:48: MIN_Y << 4 = -32512, computed in int).
+                        // `min_y << 4` on i8 would wrap (-64 << 4 overflows i8).
+                        min = crate::generation::positions::MIN_HEIGHT_CELL;
 
                         for search_y in ((min_y as i32 - 1)..y).rev() {
                             if search_y < min_y as i32 {

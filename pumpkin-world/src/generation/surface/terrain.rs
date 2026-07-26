@@ -283,8 +283,10 @@ impl SurfaceTerrainBuilder {
             * 4.0)
             .round() as i32;
         let offset = y + offset;
-        self.terracotta_bands[((offset as u64 + self.terracotta_bands.len() as u64)
-            % self.terracotta_bands.len() as u64) as usize]
-            .to_state()
+        // Vanilla SurfaceSystem.java:288-290: `(y + offset + len) % len` on ints, i.e.
+        // non-negative floor-mod for the vanilla input range. Casting a negative sum
+        // through u64 skewed the index by 2^64 % 192 = 64 bands.
+        let band_count = self.terracotta_bands.len() as i64;
+        self.terracotta_bands[i64::from(offset).rem_euclid(band_count) as usize].to_state()
     }
 }

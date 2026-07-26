@@ -33,7 +33,10 @@ const NOISE_SAMPLER_MISSING: u8 = u8::MAX;
 
 struct CachedSurfaceNoise {
     sampler: DoublePerlinNoiseSampler,
-    last_horizontal_pos: Option<i64>,
+    // For 2D samplers this holds the last column key (vanilla lastUpdateXZ,
+    // SurfaceRules.java:814-817); for 3D samplers the last Y-update key
+    // (vanilla lastUpdateY, SurfaceRules.java:838-841).
+    last_update_key: Option<i64>,
     value: f64,
 }
 
@@ -53,6 +56,9 @@ pub struct MaterialRuleContext<'a> {
     last_unique_horizontal_pos_value: i64,
     last_est_heiht_unique_horizontal_pos_value: i64,
     unique_horizontal_pos_value: i64,
+    // Vanilla SurfaceRules.java:711 `lastUpdateY`: bumped on every updateXZ and
+    // updateY (SurfaceRules.java:730-731, 738); keys the 3D noise sampler cache.
+    unique_vertical_pos_value: i64,
     surface_min_y: i32,
     pub surface_noise: &'a DoublePerlinNoiseSampler,
     pub secondary_noise: &'a DoublePerlinNoiseSampler,
@@ -62,6 +68,9 @@ pub struct MaterialRuleContext<'a> {
     pub sea_level: i32,
     steep_material_condition: Option<bool>,
     noise_sampler_indices: [u8; DoublePerlinNoiseParameters::COUNT],
+    // Separate 3D sampler table, mirroring vanilla's distinct `noiseSamplers3d`
+    // map (SurfaceRules.java:702). Both index into `noise_samplers`.
+    noise_sampler_indices_3d: [u8; DoublePerlinNoiseParameters::COUNT],
     noise_samplers: Vec<CachedSurfaceNoise>,
 }
 
@@ -83,6 +92,7 @@ impl<'a> MaterialRuleContext<'a> {
             surface_min_y: 0,
             packed_chunk_pos: i64::MAX,
             unique_horizontal_pos_value: HORIZONTAL_POS - 1, // Because pre increment
+            unique_vertical_pos_value: HORIZONTAL_POS - 1,
             last_unique_horizontal_pos_value: HORIZONTAL_POS - 1,
             last_est_heiht_unique_horizontal_pos_value: HORIZONTAL_POS - 1,
             random_deriver,
@@ -101,6 +111,7 @@ impl<'a> MaterialRuleContext<'a> {
             sea_level,
             steep_material_condition: None,
             noise_sampler_indices: [NOISE_SAMPLER_MISSING; DoublePerlinNoiseParameters::COUNT],
+            noise_sampler_indices_3d: [NOISE_SAMPLER_MISSING; DoublePerlinNoiseParameters::COUNT],
             noise_samplers: Vec::new(),
         }
     }
@@ -120,6 +131,8 @@ impl<'a> MaterialRuleContext<'a> {
 
     pub fn init_horizontal(&mut self, x: i32, z: i32) {
         self.unique_horizontal_pos_value += 1;
+        // Vanilla SurfaceRules.java:730-731: updateXZ bumps lastUpdateY as well.
+        self.unique_vertical_pos_value += 1;
         self.block_pos_x = x;
         self.block_pos_z = z;
         self.run_depth = self.sample_run_depth();
@@ -132,6 +145,8 @@ impl<'a> MaterialRuleContext<'a> {
         y: i32,
         fluid_height: i32,
     ) {
+        // Vanilla SurfaceRules.java:738: updateY bumps lastUpdateY.
+        self.unique_vertical_pos_value += 1;
         self.block_pos_y = y;
         self.fluid_height = fluid_height;
         self.stone_depth_below = stone_depth_below;
@@ -152,14 +167,28 @@ impl<'a> MaterialRuleContext<'a> {
         self.steep_material_condition = Some(steep);
     }
 
-    fn sample_noise(&mut self, parameters: &DoublePerlinNoiseParameters) -> f64 {
+    fn sample_noise(&mut self, parameters: &DoublePerlinNoiseParameters, is_3d: bool) -> f64 {
         let x = self.block_pos_x as f64;
         let z = self.block_pos_z as f64;
+        // Vanilla SurfaceRules.java:792-846: 2D samplers evaluate at (x, 0, z) and are
+        // re-evaluated per column (lastUpdateXZ); 3D samplers evaluate at
+        // (x, blockY, z) and are re-evaluated per Y update (lastUpdateY). Vanilla keeps
+        // separate 2D/3D sampler maps (SurfaceRules.java:701-702).
+        let y = if is_3d { self.block_pos_y as f64 } else { 0.0 };
+        let update_key = if is_3d {
+            self.unique_vertical_pos_value
+        } else {
+            self.unique_horizontal_pos_value
+        };
         let random_deriver = self.random_deriver;
-        let horizontal_pos = self.unique_horizontal_pos_value;
-        let Some(&cached_index) = self.noise_sampler_indices.get(parameters.id) else {
+        let cached_index = if is_3d {
+            self.noise_sampler_indices_3d.get(parameters.id).copied()
+        } else {
+            self.noise_sampler_indices.get(parameters.id).copied()
+        };
+        let Some(cached_index) = cached_index else {
             return DoublePerlinNoiseBuilder::get_noise_sampler_for_id(random_deriver, parameters)
-                .sample(x, 0.0, z);
+                .sample(x, y, z);
         };
         let cached_index = if cached_index == NOISE_SAMPLER_MISSING {
             let index = self.noise_samplers.len();
@@ -168,20 +197,24 @@ impl<'a> MaterialRuleContext<'a> {
                     random_deriver,
                     parameters,
                 ),
-                last_horizontal_pos: None,
+                last_update_key: None,
                 value: 0.0,
             });
-            self.noise_sampler_indices[parameters.id] =
-                u8::try_from(index).expect("noise sampler index must fit in u8");
+            let index_u8 = u8::try_from(index).expect("noise sampler index must fit in u8");
+            if is_3d {
+                self.noise_sampler_indices_3d[parameters.id] = index_u8;
+            } else {
+                self.noise_sampler_indices[parameters.id] = index_u8;
+            }
             index
         } else {
             usize::from(cached_index)
         };
         let cached = &mut self.noise_samplers[cached_index];
 
-        if cached.last_horizontal_pos != Some(horizontal_pos) {
-            cached.value = cached.sampler.sample(x, 0.0, z);
-            cached.last_horizontal_pos = Some(horizontal_pos);
+        if cached.last_update_key != Some(update_key) {
+            cached.value = cached.sampler.sample(x, y, z);
+            cached.last_update_key = Some(update_key);
         }
 
         cached.value
@@ -352,7 +385,8 @@ pub fn test_noise_threshold(
     condition: &NoiseThresholdMaterialCondition,
     context: &mut MaterialRuleContext,
 ) -> bool {
-    let value = context.sample_noise(&condition.noise);
+    // Vanilla SurfaceRules.java:355, 366-370: sampler selected by is_3d.
+    let value = context.sample_noise(&condition.noise, condition.is_3d);
     value >= condition.min_threshold && value <= condition.max_threshold
 }
 
@@ -456,8 +490,8 @@ mod tests {
         );
         context.init_horizontal(12, -34);
 
-        let first = context.sample_noise(&DoublePerlinNoiseParameters::SURFACE);
-        let second = context.sample_noise(&DoublePerlinNoiseParameters::SURFACE);
+        let first = context.sample_noise(&DoublePerlinNoiseParameters::SURFACE, false);
+        let second = context.sample_noise(&DoublePerlinNoiseParameters::SURFACE, false);
 
         assert_eq!(first, second);
         assert_eq!(
@@ -472,10 +506,10 @@ mod tests {
         );
 
         context.init_horizontal(13, -34);
-        let next = context.sample_noise(&DoublePerlinNoiseParameters::SURFACE);
+        let next = context.sample_noise(&DoublePerlinNoiseParameters::SURFACE, false);
         assert_eq!(next, surface_noise.sample(13.0, 0.0, -34.0));
 
-        let gravel = context.sample_noise(&DoublePerlinNoiseParameters::GRAVEL);
+        let gravel = context.sample_noise(&DoublePerlinNoiseParameters::GRAVEL, false);
         let expected_gravel = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
             &random_deriver,
             &DoublePerlinNoiseParameters::GRAVEL,

@@ -138,6 +138,10 @@ pub enum MaterialConditionStruct {
         min_threshold: f64,
         /// Maximum threshold (inclusive).
         max_threshold: f64,
+        /// Sample the noise at the block Y instead of y=0.
+        /// Vanilla SurfaceRules.java:347: `optionalFieldOf("is_3d", false)`.
+        #[serde(default)]
+        is_3d: bool,
     },
     /// True below a Y offset and false above another, with a linear gradient in between.
     #[serde(rename = "minecraft:vertical_gradient")]
@@ -320,6 +324,7 @@ impl ToTokens for MaterialConditionStruct {
                 noise,
                 min_threshold,
                 max_threshold,
+                is_3d,
             } => {
                 let noise_id = quote::format_ident!(
                     "{}",
@@ -334,6 +339,7 @@ impl ToTokens for MaterialConditionStruct {
                         noise: DoublePerlinNoiseParameters::#noise_id,
                         min_threshold: #min_threshold,
                         max_threshold: #max_threshold,
+                        is_3d: #is_3d,
                     })
                 ));
             }
@@ -583,6 +589,8 @@ pub fn build() -> TokenStream {
             pub noise: DoublePerlinNoiseParameters,
             pub min_threshold: f64,
             pub max_threshold: f64,
+            /// Vanilla SurfaceRules.java:345-347: sample at the block Y when true.
+            pub is_3d: bool,
         }
 
         pub struct VerticalGradientMaterialCondition {
