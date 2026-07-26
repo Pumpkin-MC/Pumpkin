@@ -117,7 +117,7 @@ pub fn receive_velocity_plugin_response(
         }
         let (signature, mut data_without_signature) = data.split_at(32);
 
-        if !check_integrity((signature, data_without_signature), &config.secret) {
+        if !check_integrity((signature, data_without_signature), config.secret()) {
             return Err(VelocityError::FailedVerifyIntegrity);
         }
 
@@ -147,4 +147,132 @@ pub fn receive_velocity_plugin_response(
         return Ok((profile, socket_addr));
     }
     Err(VelocityError::NoData)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{VelocityError, receive_velocity_plugin_response};
+    use hmac::{Hmac, KeyInit, Mac};
+    use pumpkin_config::networking::proxy::VelocityConfig;
+    use pumpkin_protocol::codec::var_int::VarInt;
+    use pumpkin_protocol::java::server::login::SLoginPluginResponse;
+    use pumpkin_protocol::ser::NetworkWriteExt;
+    use sha2::Sha256;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    type HmacSha256 = Hmac<Sha256>;
+
+    const SECRET: &str = "s3cret-from-disk";
+    const PLAYER_NAME: &str = "Notch";
+    const ADDRESS: &str = "127.0.0.1";
+    const PORT: u16 = 25565;
+
+    /// Builds the forwarding payload Velocity sends after a player info request,
+    /// signed with `signing_secret`.
+    ///
+    /// The layout matches what `receive_velocity_plugin_response` expects: a
+    /// 32 byte HMAC-SHA256 signature followed by the forwarding version, the
+    /// player's address, and their game profile.
+    fn forwarding_response(signing_secret: &str, id: uuid::Uuid) -> SLoginPluginResponse {
+        let mut payload = Vec::new();
+        payload
+            .write_var_int(&VarInt::from(1))
+            .expect("write forwarding version");
+        payload.write_string(ADDRESS).expect("write address");
+        payload.write_uuid(&id).expect("write profile uuid");
+        payload
+            .write_string(PLAYER_NAME)
+            .expect("write profile name");
+        payload
+            .write_var_int(&VarInt::from(1))
+            .expect("write property count");
+        payload
+            .write_string("textures")
+            .expect("write property name");
+        payload.write_string("value").expect("write property value");
+        payload
+            .write_option(&None::<String>, |writer, value: &String| {
+                writer.write_string(value)
+            })
+            .expect("write property signature");
+
+        let mut mac = HmacSha256::new_from_slice(signing_secret.as_bytes())
+            .expect("HMAC can take key of any size");
+        mac.update(&payload);
+        let signature = mac.finalize().into_bytes();
+
+        let mut data = Vec::with_capacity(signature.len() + payload.len());
+        data.extend_from_slice(&signature);
+        data.extend_from_slice(&payload);
+
+        SLoginPluginResponse {
+            message_id: VarInt::from(0),
+            data: Some(data.into_boxed_slice()),
+        }
+    }
+
+    /// A config whose secret lives in a file, referenced as `@<path>`.
+    ///
+    /// The `NamedTempFile` is returned so the caller keeps it alive; dropping it
+    /// deletes the file the config points at.
+    fn config_with_secret_file() -> (NamedTempFile, VelocityConfig) {
+        let mut file = NamedTempFile::new().expect("failed to create temp file");
+        file.write_all(format!("{SECRET}\n").as_bytes())
+            .expect("failed to write secret file");
+
+        let config = VelocityConfig::new(true, format!("@{}", file.path().display()));
+
+        (file, config)
+    }
+
+    /// The real point of the `@file` feature: a payload signed with the secret as
+    /// stored *in the file* has to pass integrity checking, proving the bytes that
+    /// reach the HMAC are the file's contents and not the literal `@path`.
+    #[test]
+    fn payload_signed_with_the_file_secret_is_accepted() {
+        let (_file, config) = config_with_secret_file();
+        let id = uuid::Uuid::from_u128(0x0123_4567_89ab_cdef_0123_4567_89ab_cdef);
+
+        let (profile, address) =
+            receive_velocity_plugin_response(PORT, &config, forwarding_response(SECRET, id))
+                .expect("a payload signed with the file's secret should be accepted");
+
+        assert_eq!(profile.name, PLAYER_NAME);
+        assert_eq!(profile.id, id);
+        assert_eq!(address.ip().to_string(), ADDRESS);
+        assert_eq!(address.port(), PORT);
+    }
+
+    /// Guards against the inverse mistake: if the literal `@path` were used as the
+    /// key, or resolution silently produced the wrong value, this would still pass.
+    #[test]
+    fn payload_signed_with_a_different_secret_is_rejected() {
+        let (_file, config) = config_with_secret_file();
+        let id = uuid::Uuid::from_u128(1);
+
+        let result = receive_velocity_plugin_response(
+            PORT,
+            &config,
+            forwarding_response("not-the-real-secret", id),
+        );
+
+        assert!(matches!(result, Err(VelocityError::FailedVerifyIntegrity)));
+    }
+
+    /// The unresolved `@path` string must never be what signs the payload.
+    #[test]
+    fn payload_signed_with_the_raw_reference_is_rejected() {
+        let (_file, config) = config_with_secret_file();
+        let id = uuid::Uuid::from_u128(2);
+        let raw_reference = config.secret.clone();
+
+        let result = receive_velocity_plugin_response(
+            PORT,
+            &config,
+            forwarding_response(&raw_reference, id),
+        );
+
+        assert!(matches!(result, Err(VelocityError::FailedVerifyIntegrity)));
+    }
 }
