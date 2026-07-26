@@ -18,21 +18,30 @@ pub enum StructureProcessor {
 
 #[derive(Clone)]
 pub struct ProcessorRule {
-    input: RuleInput,
-    probability: f32,
+    input: RulePredicate,
+    /// Vanilla `location_predicate`: tested against the block already in the
+    /// world at the target position (e.g. streets turn to planks over water).
+    location: RulePredicate,
     output_state: &'static BlockState,
 }
 
+/// Vanilla `RuleTest` subset used by the shipped processor lists.
 #[derive(Clone, Copy)]
-pub enum RuleInput {
+pub enum RulePredicate {
+    AlwaysTrue,
     Block(BlockId),
+    /// `random_block_match`: matches the block with the given probability,
+    /// consuming one random draw like vanilla `RandomBlockMatchTest`.
+    RandomBlock(BlockId, f32),
     Tag(BlockTag),
 }
 
-impl RuleInput {
-    fn matches(self, block_id: BlockId) -> bool {
+impl RulePredicate {
+    fn matches(self, block_id: BlockId, random: &mut LegacyRand) -> bool {
         match self {
+            Self::AlwaysTrue => true,
             Self::Block(id) => id == block_id,
+            Self::RandomBlock(id, probability) => id == block_id && random.next_f32() < probability,
             Self::Tag(tag) => tag.contains(block_id),
         }
     }
@@ -91,11 +100,16 @@ impl StructureProcessor {
                 (random.next_f32() <= *integrity).then_some(state)
             }
             Self::Rules(rules) => {
+                // Vanilla RuleProcessor: one random per block position, the
+                // template block as input and the current world block as the
+                // location; the first matching rule wins.
                 let mut random = LegacyRand::from_seed(hash_block_pos(pos.x, pos.y, pos.z) as u64);
+                let world_block = chunk.get_block_state(&pos).to_block_id();
                 rules
                     .iter()
                     .find(|rule| {
-                        rule.input.matches(input_block) && random.next_f32() < rule.probability
+                        rule.input.matches(input_block, &mut random)
+                            && rule.location.matches(world_block, &mut random)
                     })
                     .map_or(Some(state), |rule| Some(rule.output_state))
             }
@@ -131,12 +145,14 @@ enum RawProcessor {
 
 #[derive(Deserialize)]
 struct RawRule {
-    input_predicate: RawInputPredicate,
+    input_predicate: RawPredicate,
+    location_predicate: Option<RawPredicate>,
     output_state: RawOutputState,
 }
 
 #[derive(Deserialize)]
-struct RawInputPredicate {
+struct RawPredicate {
+    predicate_type: Option<String>,
     block: Option<String>,
     tag: Option<String>,
     probability: Option<f32>,
@@ -146,6 +162,34 @@ struct RawInputPredicate {
 struct RawOutputState {
     #[serde(rename = "Name")]
     name: String,
+    #[serde(rename = "Properties", default)]
+    properties: std::collections::BTreeMap<String, String>,
+}
+
+fn convert_predicate(raw: &RawPredicate) -> Option<RulePredicate> {
+    match raw.predicate_type.as_deref() {
+        Some("minecraft:always_true") | None => Some(RulePredicate::AlwaysTrue),
+        Some("minecraft:block_match" | "minecraft:blockstate_match") => {
+            let name = raw.block.as_deref()?;
+            let block = Block::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?;
+            Some(RulePredicate::Block(block.id))
+        }
+        Some("minecraft:random_block_match") => {
+            let name = raw.block.as_deref()?;
+            let block = Block::from_name(name.strip_prefix("minecraft:").unwrap_or(name))?;
+            Some(RulePredicate::RandomBlock(
+                block.id,
+                raw.probability.unwrap_or(1.0),
+            ))
+        }
+        Some("minecraft:tag_match") => {
+            BlockTag::from_name(raw.tag.as_deref()?).map(RulePredicate::Tag)
+        }
+        Some(other) => {
+            tracing::warn!("Unsupported structure rule predicate: {other}");
+            None
+        }
+    }
 }
 
 fn convert_raw_processor(raw: RawProcessor) -> Option<StructureProcessor> {
@@ -168,22 +212,29 @@ fn convert_raw_processor(raw: RawProcessor) -> Option<StructureProcessor> {
                         .strip_prefix("minecraft:")
                         .unwrap_or(&rule.output_state.name);
                     let output_block = Block::from_name(output_name)?;
-
-                    let input = if let Some(ref block_name) = rule.input_predicate.block {
-                        let input_name =
-                            block_name.strip_prefix("minecraft:").unwrap_or(block_name);
-                        let input_block = Block::from_name(input_name)?;
-                        RuleInput::Block(input_block.id)
+                    let output_state = if rule.output_state.properties.is_empty() {
+                        output_block.default_state
                     } else {
-                        let tag_name = rule.input_predicate.tag.as_ref()?;
-                        let tag = BlockTag::from_name(tag_name)?;
-                        RuleInput::Tag(tag)
+                        let properties = rule
+                            .output_state
+                            .properties
+                            .iter()
+                            .map(|(key, value)| (key.as_str(), value.as_str()))
+                            .collect::<Vec<_>>();
+                        BlockState::from_id(
+                            output_block
+                                .from_properties(&properties)
+                                .to_state_id(output_block),
+                        )
                     };
 
                     Some(ProcessorRule {
-                        input,
-                        probability: rule.input_predicate.probability.unwrap_or(1.0),
-                        output_state: output_block.default_state,
+                        input: convert_predicate(&rule.input_predicate)?,
+                        location: rule
+                            .location_predicate
+                            .as_ref()
+                            .map_or(Some(RulePredicate::AlwaysTrue), convert_predicate)?,
+                        output_state,
                     })
                 })
                 .collect(),
