@@ -347,10 +347,8 @@ impl JigsawPlacement {
                                 let delta_y = source_jigsaw_local_y - target_jigsaw_local_y
                                     + source_facing.to_vector().y;
 
-                                let target_box_y;
-
-                                if source_rigid && target_rigid {
-                                    target_box_y = source_box.min.y + delta_y;
+                                let target_box_y = if source_rigid && target_rigid {
+                                    source_box.min.y + delta_y
                                 } else {
                                     if source_jigsaw_base_height == i32::MIN {
                                         source_jigsaw_base_height =
@@ -370,9 +368,8 @@ impl JigsawPlacement {
                                                 source_jigsaw_pos.0.y
                                             };
                                     }
-                                    target_box_y =
-                                        source_jigsaw_base_height - target_jigsaw_local_y;
-                                }
+                                    source_jigsaw_base_height - target_jigsaw_local_y
+                                };
 
                                 let raw_target_pos = BlockPos::new(
                                     target_jigsaw_pos.0.x - target_jigsaw_local_pos.x,
