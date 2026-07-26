@@ -50,25 +50,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             sys.cpus().len() as u32
         });
 
-        let (total_memory, used_memory, process_memory) = if need_ram {
+        let (total_memory, used_memory) = if need_ram {
             sys.refresh_memory();
-
-            let process_memory = sysinfo::get_current_pid().map_or(None, |pid| {
-                sys.refresh_processes_specifics(
-                    sysinfo::ProcessesToUpdate::Some(&[pid]),
-                    true,
-                    sysinfo::ProcessRefreshKind::nothing().with_memory(),
-                );
-                sys.process(pid).map(sysinfo::Process::memory)
-            });
-
-            (
-                Some(sys.total_memory()),
-                Some(sys.used_memory()),
-                process_memory,
-            )
+            (Some(sys.total_memory()), Some(sys.used_memory()))
         } else {
-            (None, None, None)
+            (None, None)
         };
 
         let (os_name, os_version) = if need_os {
@@ -81,11 +67,35 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             cpu_count,
             total_memory,
             used_memory,
-            process_memory,
             os_name,
             os_version,
             pumpkin_version: env!("CARGO_PKG_VERSION").to_string(),
         })
+    }
+
+    async fn get_process_memory(
+        &mut self,
+        _res: Resource<Server>,
+    ) -> wasmtime::Result<Option<u64>> {
+        let has_ram = self
+            .permissions
+            .iter()
+            .any(|perm| perm == permissions::SYS_INFO || perm == permissions::SYS_INFO_RAM);
+        if !has_ram {
+            return Ok(None);
+        }
+
+        let Ok(pid) = sysinfo::get_current_pid() else {
+            return Ok(None);
+        };
+
+        let mut sys = sysinfo::System::new();
+        sys.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::Some(&[pid]),
+            true,
+            sysinfo::ProcessRefreshKind::nothing().with_memory(),
+        );
+        Ok(sys.process(pid).map(sysinfo::Process::memory))
     }
 
     async fn get_difficulty(&mut self, res: Resource<Server>) -> wasmtime::Result<Difficulty> {
