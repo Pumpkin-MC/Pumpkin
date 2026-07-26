@@ -80,6 +80,7 @@ impl JigsawBlockEntity {
                 random: RandomGenerator::Xoroshiro(Xoroshiro::from_seed(rand::rng().next_u64())),
                 sea_level: 63,
                 min_y: -64,
+                max_y: 319,
                 height_sampler: None,
                 structure_key: None,
             };
