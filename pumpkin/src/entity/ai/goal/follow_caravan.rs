@@ -18,12 +18,18 @@ const SEARCH_RADIUS: f64 = 9.0;
 
 pub struct FollowCaravanGoal {
     speed: f64,
+    /// Backoff after a failed leader search: our nearby-entity query is a
+    /// full-list scan, so idle llamas must not run it every scheduling pass.
+    search_cooldown: i32,
 }
 
 impl FollowCaravanGoal {
     #[must_use]
     pub const fn new(speed: f64) -> Self {
-        Self { speed }
+        Self {
+            speed,
+            search_cooldown: 0,
+        }
     }
 
     fn as_llama(mob: &dyn Mob) -> Option<&LlamaEntity> {
@@ -74,6 +80,10 @@ impl FollowCaravanGoal {
 impl Goal for FollowCaravanGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
+            if self.search_cooldown > 0 {
+                self.search_cooldown -= 1;
+                return false;
+            }
             let Some(llama) = Self::as_llama(mob) else {
                 return false;
             };
@@ -124,6 +134,7 @@ impl Goal for FollowCaravanGoal {
             }
 
             let Some((head, _, _)) = best else {
+                self.search_cooldown = super::to_goal_ticks(100);
                 return false;
             };
             let Some(head_llama) = Self::resolve_llama(&head) else {

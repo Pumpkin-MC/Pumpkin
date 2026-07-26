@@ -78,6 +78,12 @@ pub async fn tick_zombification(
     keep_equipment: bool,
 ) {
     let entity = mob.get_entity();
+    // Vanilla customServerAiStep only runs for living mobs; without this a
+    // corpse in its 20-tick death animation could still convert and duplicate
+    // its equipment onto the zombified twin.
+    if !mob.get_mob_entity().living_entity.is_alive() {
+        return;
+    }
     let world = entity.world.load_full();
 
     // Vanilla isConverting: !immune && !isNoAi && PIGLINS_ZOMBIFY.

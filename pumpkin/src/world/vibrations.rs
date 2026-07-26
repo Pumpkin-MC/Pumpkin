@@ -134,6 +134,13 @@ impl World {
     /// Vanilla `Level.gameEvent` reduced to vibration dispatch: wakes every
     /// sculk sensor in listening range of the event.
     pub async fn emit_vibration(self: &Arc<Self>, event: Vibration, source: Vector3<f64>) {
+        // Worlds without a single sculk sensor skip the chunk scan entirely.
+        if !self
+            .has_sculk_sensors
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return;
+        }
         let frequency = event.frequency();
         if frequency == 0 {
             return;

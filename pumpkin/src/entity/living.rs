@@ -1493,6 +1493,17 @@ impl LivingEntity {
             return false;
         };
 
+        // Same death latch as on_death: exactly one killer thread processes
+        // this villager. Losing the race means another lethal hit is already
+        // converting or running the death path — skip both here.
+        if self
+            .dead
+            .compare_exchange(false, true, Relaxed, Relaxed)
+            .is_err()
+        {
+            return true;
+        }
+
         let source_entity = villager.get_entity();
         let custom_name = source_entity.custom_name.load().as_ref().clone();
         let custom_name_visible = source_entity.custom_name_visible.load(Ordering::Relaxed);
@@ -1526,12 +1537,6 @@ impl LivingEntity {
         cause: Option<&dyn EntityBase>,
     ) {
         let world = self.entity.world.load();
-        world
-            .emit_vibration(
-                crate::world::vibrations::Vibration::EntityDie,
-                self.entity.pos.load(),
-            )
-            .await;
         // Entity may already be removed (despawn race / concurrent tick). Never
         // panicking the whole server on death — soft-skip if not in world map.
         let Some(dyn_self) = world.get_entity_by_id(self.entity.entity_id) else {
@@ -1572,6 +1577,12 @@ impl LivingEntity {
             .compare_exchange(false, true, Relaxed, Relaxed)
             .is_ok()
         {
+            world
+                .emit_vibration(
+                    crate::world::vibrations::Vibration::EntityDie,
+                    self.entity.pos.load(),
+                )
+                .await;
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 

@@ -215,6 +215,9 @@ pub struct World {
     synced_block_event_queue: Mutex<IndexSet<BlockEvent>>,
     /// Vibrations traveling toward sculk sensors (1 block per tick).
     pub pending_vibrations: std::sync::Mutex<Vec<crate::world::vibrations::PendingVibration>>,
+    /// Set once a sculk sensor block entity registers; lets `emit_vibration`
+    /// skip the 9-chunk scan entirely on the vast majority of worlds.
+    pub has_sculk_sensors: std::sync::atomic::AtomicBool,
     /// Serializes block-event processing and its client packet enqueue order.
     synced_block_event_flush_lock: Mutex<()>,
     /// Dirty block positions waiting to be broadcast to clients.
@@ -325,6 +328,7 @@ impl World {
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(IndexSet::new()),
             pending_vibrations: std::sync::Mutex::new(Vec::new()),
+            has_sculk_sensors: std::sync::atomic::AtomicBool::new(false),
             synced_block_event_flush_lock: Mutex::new(()),
             unsent_block_changes: Mutex::new(FxHashSet::default()),
             unsent_block_entity_updates: std::sync::Mutex::new(FxHashSet::default()),
@@ -4536,6 +4540,19 @@ impl World {
 
     #[allow(clippy::unused_async)]
     pub async fn remove_entity(&self, entity: &dyn EntityBase) {
+        // Sever mount links so vehicle/passenger Arc pairs (chicken jockeys,
+        // ridden mobs) can actually drop instead of keeping each other alive.
+        {
+            let base = entity.get_entity();
+            let vehicle = base.vehicle.lock().await.take();
+            if let Some(vehicle) = vehicle {
+                vehicle.get_entity().remove_passenger(base.entity_id).await;
+            }
+            let passengers: Vec<_> = base.passengers.lock().await.drain(..).collect();
+            for passenger in passengers {
+                *passenger.get_entity().vehicle.lock().await = None;
+            }
+        }
         let base_entity = entity.get_entity();
         // Ensure concurrent tick/damage paths see the entity as gone even if
         // callers forgot to call `Entity::mark_removed` first.
@@ -5361,6 +5378,16 @@ impl World {
     pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
+
+        {
+            let id = block_entity.resource_location();
+            if id == crate::block::entities::sculk_sensor::SculkSensorBlockEntity::ID
+                || id == crate::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity::ID
+            {
+                self.has_sculk_sensors
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
 
         self.block_entities
             .entry(chunk_pos)
