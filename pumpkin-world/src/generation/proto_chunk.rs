@@ -182,7 +182,10 @@ impl ProtoChunk {
     #[must_use]
     pub fn new(x: i32, z: i32, generator: &super::generator::WorldGenerator) -> Self {
         let dimension = generator.dimension();
-        let height = dimension.logical_height as u16;
+        // Chunk storage covers the dimension's complete physical build range.  In
+        // particular, the Nether has a 256-block physical height but a 128-block
+        // logical height used only for portal and entity limits.
+        let height = dimension.height as u16;
         let section_count = (height as usize) / 16;
 
         let default_block = match generator {

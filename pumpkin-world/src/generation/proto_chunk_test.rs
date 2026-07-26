@@ -104,4 +104,33 @@ mod test {
             "Top of the world must contain surface blocks (grass/dirt/sand/water)"
         );
     }
+
+    #[test]
+    fn nether_proto_chunk_uses_physical_height() {
+        let world_gen = get_world_gen(
+            Seed(0),
+            Dimension::THE_NETHER,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+        let WorldGenerator::Noise(generator) = &*world_gen else {
+            unreachable!()
+        };
+
+        assert_eq!(chunk.height(), Dimension::THE_NETHER.height as u16);
+        assert_eq!(
+            chunk.flat_block_map.len(),
+            16 * 16 * Dimension::THE_NETHER.height as usize
+        );
+
+        // Biome population visits the complete physical range, including y=255.
+        chunk.step_to_biomes(generator);
+        chunk.set_block_state(0, 255, 0, pumpkin_data::Block::NETHERRACK.default_state);
+        assert_eq!(
+            chunk.get_block_state_raw(0, 255, 0),
+            pumpkin_data::Block::NETHERRACK.default_state.id
+        );
+    }
 }

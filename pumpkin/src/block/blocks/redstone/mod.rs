@@ -4,7 +4,7 @@ use std::sync::Arc;
  * This implementation is heavily based on <https://github.com/MCHPR/MCHPRS>
  * Updated to fit pumpkin by 4lve
  */
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt};
 use pumpkin_util::math::position::BlockPos;
 
 use crate::world::World;
@@ -40,22 +40,59 @@ pub mod abstract_redstone_gate;
 pub mod dispenser;
 
 pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
-    for direction in BlockDirection::all() {
-        let neighbor_pos = pos.offset(direction.to_offset());
-        let block = world.get_block(&neighbor_pos);
-        world
-            .block_registry
-            .on_neighbor_update(world, block, &neighbor_pos, block, true)
-            .await;
+    // `RedStoneWireBlock.onPlace` only sends vertical notifications here; the
+    // regular setBlock path already notified direct horizontal neighbors.
+    for direction in BlockDirection::vertical() {
+        notify_wire_neighbors_at(world, pos.offset(direction.to_offset())).await;
+    }
 
-        for n_direction in BlockDirection::all() {
-            let n_neighbor_pos = neighbor_pos.offset(n_direction.to_offset());
-            let block = world.get_block(&n_neighbor_pos);
-            world
-                .block_registry
-                .on_neighbor_update(world, block, &n_neighbor_pos, block, true)
-                .await;
-        }
+    update_neighbors_of_neighboring_wires(world, pos).await;
+}
+
+/// `RedStoneWireBlock.affectNeighborsAfterRemoval` first notifies the six
+/// adjacent positions, then its evaluator and corner-shape notifications run.
+pub(crate) async fn notify_removed_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
+    for direction in BlockDirection::all() {
+        notify_wire_neighbors_at(world, pos.offset(direction.to_offset())).await;
+    }
+}
+
+async fn notify_wire_neighbors_at(world: &Arc<World>, pos: BlockPos) {
+    world
+        .neighbor_updater
+        .update_neighbors_at_except(world, pos, &Block::REDSTONE_WIRE, None, None)
+        .await;
+}
+
+async fn check_corner_change_at(world: &Arc<World>, pos: BlockPos) {
+    if world.get_block(&pos) != &Block::REDSTONE_WIRE {
+        return;
+    }
+
+    notify_wire_neighbors_at(world, pos).await;
+    for direction in BlockDirection::all() {
+        notify_wire_neighbors_at(world, pos.offset(direction.to_offset())).await;
+    }
+}
+
+pub(crate) async fn update_neighbors_of_neighboring_wires(
+    world: &Arc<World>,
+    pos: &BlockPos,
+) {
+    for direction in BlockDirection::horizontal() {
+        let direction = direction.to_block_direction();
+        check_corner_change_at(world, pos.offset(direction.to_offset())).await;
+    }
+
+    for direction in BlockDirection::horizontal() {
+        let direction = direction.to_block_direction();
+        let neighbor_pos = pos.offset(direction.to_offset());
+        let corner_pos = if world.get_block_state(&neighbor_pos).is_solid_block() {
+            neighbor_pos.up()
+        } else {
+            neighbor_pos.down()
+        };
+        check_corner_change_at(world, corner_pos).await;
     }
 }
 

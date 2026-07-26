@@ -12,8 +12,8 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockFuture, BrokenArgs, CanPlaceAtArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
-    OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs, PrepareArgs,
+    BlockFuture, CanPlaceAtArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, OnStateReplacedArgs, PlacedArgs, PrepareArgs,
 };
 use crate::{
     block::{BlockBehaviour, NormalUseArgs},
@@ -56,12 +56,20 @@ impl BlockBehaviour for RedstoneWireBlock {
 
             match args.direction {
                 BlockDirection::Up => {
-                    return args.state_id;
-                }
-                BlockDirection::Down => {
+                    // RedStoneWireBlock.updateShape: the block above controls
+                    // whether horizontal dust may climb, so refresh only shape.
                     return get_regulated_sides(wire, args.world, args.position)
                         .await
                         .to_state_id(args.block);
+                }
+                BlockDirection::Down => {
+                    // A support change is a survival check, not a connection
+                    // recalculation. Power is updated by neighborChanged.
+                    return if can_place_at(args.world.as_ref(), args.position) {
+                        args.state_id
+                    } else {
+                        Block::AIR.default_state.id
+                    };
                 }
                 BlockDirection::North => {
                     let side = get_side(args.world, args.position, BlockDirection::North).await;
@@ -86,7 +94,6 @@ impl BlockBehaviour for RedstoneWireBlock {
             }
 
             wire = get_regulated_sides(wire, args.world, args.position).await;
-            wire.power = calculate_power(args.world, args.position).await;
 
             if is_cross(old_state) && new_side.is_none() {
                 return wire.to_state_id(args.block);
@@ -222,8 +229,8 @@ impl BlockBehaviour for RedstoneWireBlock {
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            // After place, re-evaluate power after neighboring shape updates.
-            update_wire_neighbors(args.world, args.position).await;
+            // Match RedStoneWireBlock.onPlace: update power before its vertical
+            // and corner notifications. Shape updates must not overwrite power.
             let state = args.world.get_block_state(args.position);
             if state.id != Block::AIR.default_state.id {
                 let mut wire = RedstoneWireProperties::from_state_id(state.id, args.block);
@@ -240,12 +247,28 @@ impl BlockBehaviour for RedstoneWireBlock {
                     super::notify_after_wire_power_change(args.world, args.position).await;
                 }
             }
+            update_wire_neighbors(args.world, args.position).await;
         })
     }
 
-    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
+    fn on_state_replaced<'a>(
+        &'a self,
+        args: OnStateReplacedArgs<'a>,
+    ) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            update_wire_neighbors(args.world, args.position).await;
+            if args.moved {
+                return;
+            }
+
+            let wire = RedstoneWireProperties::from_state_id(args.old_state_id, args.block);
+            super::notify_removed_wire_neighbors(args.world, args.position).await;
+
+            // DefaultRedstoneWireEvaluator receives the old state after removal.
+            // It only emits its pos + six-neighbor pass when strength changed.
+            if wire.power != calculate_power(args.world, args.position).await {
+                super::notify_after_wire_power_change(args.world, args.position).await;
+            }
+            super::update_neighbors_of_neighboring_wires(args.world, args.position).await;
         })
     }
 }

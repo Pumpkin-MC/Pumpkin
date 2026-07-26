@@ -5,7 +5,7 @@ use pumpkin_data::{
     attributes::Attributes,
     tag::{self, Taggable},
 };
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use std::sync::atomic::Ordering;
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
@@ -100,9 +100,32 @@ impl MoveControlTrait for MoveControl {
                 && state
                     .get_block_collision_shapes()
                     .any(|shape| pos.y < shape.max.y + f64::from(block_pos.0.y));
-            let target_requires_jump = yd > step_height && xd * xd + zd * zd < max_jump_distance_sq;
+            let horizontal_distance_sq = xd * xd + zd * zd;
+            let target_requires_jump =
+                yd > step_height && horizontal_distance_sq < max_jump_distance_sq;
 
-            if target_requires_jump || collision_requires_jump {
+            // Vanilla's second jump condition observes the collision shape at the
+            // mob's current block position. Pumpkin updates that position only after
+            // resolving movement, so a mob stopped by the face of a raised block is
+            // still in the previous air cell. Use the recorded horizontal collision
+            // and inspect the target column to retain the same one-block-step retry.
+            let blocked_by_target_step = if entity.horizontal_collision.load(Ordering::Relaxed)
+                && yd > 0.0
+                && horizontal_distance_sq < max_jump_distance_sq
+            {
+                let target_block_pos = BlockPos::floored(self.wanted_x, pos.y, self.wanted_z);
+                let target_state = world.get_block_state(&target_block_pos);
+                let target_block = Block::from_state_id(target_state.id);
+                !target_block.has_tag(&tag::Block::MINECRAFT_DOORS)
+                    && !target_block.has_tag(&tag::Block::MINECRAFT_FENCES)
+                    && target_state
+                        .get_block_collision_shapes()
+                        .any(|shape| pos.y < shape.max.y + f64::from(target_block_pos.0.y))
+            } else {
+                false
+            };
+
+            if target_requires_jump || collision_requires_jump || blocked_by_target_step {
                 living_entity.jumping.store(true, Ordering::SeqCst);
                 self.operation = Operation::Jumping;
             } else {

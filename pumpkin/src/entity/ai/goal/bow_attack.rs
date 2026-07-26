@@ -163,6 +163,9 @@ impl BowAttackGoal {
         // Vanilla AbstractSkeleton / CrossbowAttackMob: speed ~1.6, divergence ~12.
         arrow.set_velocity_from_rotation(pitch - pitch_adjust, yaw, 0.0, 1.6, 12.0);
 
+        // Vanilla releases the use state before spawning the projectile.
+        living.clear_active_hand().await;
+
         let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
         world.spawn_entity(arrow_arc).await;
 
@@ -182,8 +185,6 @@ impl BowAttackGoal {
             0,
         );
         world.broadcast_to_chunk(shooter.chunk_pos.load(), &sound_packet);
-
-        living.clear_active_hand().await;
     }
 
     fn shooter_alive(mob: &dyn Mob) -> bool {

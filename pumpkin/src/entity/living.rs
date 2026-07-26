@@ -127,6 +127,7 @@ pub struct LivingEntity {
 impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
+    const ACTIVE_HAND_FLAGS: u8 = Self::USING_ITEM_FLAG | Self::OFF_HAND_ACTIVE_FLAG;
     #[expect(dead_code)]
     const USING_RIPTIDE_FLAG: u8 = 4;
 
@@ -290,53 +291,86 @@ impl LivingEntity {
 
     /// Sends the Hand animation to all others, used when Eating for example
     pub async fn set_active_hand(&self, hand: Hand, stack: ItemStack, duration: i32) {
+        let mut item_in_use = self.item_in_use.lock().await;
+        let mut active_hand = self.active_hand.lock().await;
+
+        // Vanilla `startUsingItem` ignores empty or already-active uses.
+        if stack.is_empty() || active_hand.is_some() {
+            return;
+        }
+
         self.item_use_time.store(duration, Ordering::Relaxed);
-        *self.item_in_use.lock().await = Some(stack);
-        *self.active_hand.lock().await = Some(hand);
-        self.set_living_flag(Self::USING_ITEM_FLAG, true);
-        self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left);
+        *item_in_use = Some(stack);
+        *active_hand = Some(hand);
+
+        // Emit the completed USING_ITEM/OFF_HAND state in one update.
+        self.sync_active_hand_flags(Some(hand), true);
     }
 
-    fn set_living_flag(&self, flag: u8, value: bool) {
-        let index = flag;
-        let mut b = self.livings_flags.load(Ordering::Relaxed);
-        if value {
-            b |= index;
-        } else {
-            b &= !index;
+    const fn with_active_hand_flags(flags: u8, hand: Option<Hand>) -> u8 {
+        let mut flags = flags & !Self::ACTIVE_HAND_FLAGS;
+        if let Some(hand) = hand {
+            flags |= Self::USING_ITEM_FLAG;
+            if matches!(hand, Hand::Left) {
+                flags |= Self::OFF_HAND_ACTIVE_FLAG;
+            }
         }
-        self.livings_flags.store(b, Ordering::Relaxed);
+        flags
+    }
 
-        let bedrock_meta = (flag == Self::USING_ITEM_FLAG).then(|| {
-            let mut meta = pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
-            meta.set_flag(
-                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS,
-                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM
-                    as u8,
-                value,
-            );
-            meta
-        });
-
+    fn living_flags_metadata(flags: u8) -> [Metadata<u8>; 2] {
         // `LIVING_FLAGS` = index 8 on 1.21.x; `LIVING_ENTITY_FLAGS` = index 8 on 26.x.
         // Metadata write skips TrackedId entries that resolve to 255 for the client
         // version, so send both and the correct one is applied.
         // Without this, skeleton bow-draw (using-item bit) never reaches 1.21 clients.
-        self.entity.send_meta_data(
-            &[
-                Metadata::new(TrackedData::LIVING_ENTITY_FLAGS, MetaDataType::BYTE, b),
-                Metadata::new(TrackedData::LIVING_FLAGS, MetaDataType::BYTE, b),
-            ],
-            bedrock_meta.as_ref(),
+        [
+            Metadata::new(
+                TrackedData::LIVING_ENTITY_FLAGS,
+                MetaDataType::BYTE,
+                flags,
+            ),
+            Metadata::new(TrackedData::LIVING_FLAGS, MetaDataType::BYTE, flags),
+        ]
+    }
+
+    fn sync_active_hand_flags(&self, hand: Option<Hand>, force_sync: bool) {
+        let mut current = self.livings_flags.load(SeqCst);
+        let (flags, changed) = loop {
+            let next = Self::with_active_hand_flags(current, hand);
+            match self
+                .livings_flags
+                .compare_exchange_weak(current, next, SeqCst, SeqCst)
+            {
+                Ok(_) => break (next, next != current),
+                Err(actual) => current = actual,
+            }
+        };
+
+        if !force_sync && !changed {
+            return;
+        }
+
+        let mut bedrock_meta =
+            pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
+        bedrock_meta.set_flag(
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS,
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM as u8,
+            flags & Self::USING_ITEM_FLAG != 0,
         );
+
+        self.entity
+            .send_meta_data(&Self::living_flags_metadata(flags), Some(&bedrock_meta));
     }
 
     pub async fn clear_active_hand(&self) {
-        *self.item_in_use.lock().await = None;
-        *self.active_hand.lock().await = None;
+        let mut item_in_use = self.item_in_use.lock().await;
+        let mut active_hand = self.active_hand.lock().await;
+        let had_item_in_use = item_in_use.take().is_some();
+        let had_active_hand = active_hand.take().is_some();
+        let was_using_item = had_item_in_use || had_active_hand;
         self.item_use_time.store(0, Ordering::Relaxed);
 
-        self.set_living_flag(Self::USING_ITEM_FLAG, false);
+        self.sync_active_hand_flags(None, was_using_item);
     }
 
     pub async fn is_blocking(&self) -> bool {
@@ -3071,6 +3105,84 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    fn encoded_living_flags(version: JavaMinecraftVersion, flags: u8) -> Vec<u8> {
+        let mut encoded = Vec::new();
+        for metadata in LivingEntity::living_flags_metadata(flags) {
+            metadata.write(&mut encoded, &version).unwrap();
+        }
+        encoded
+    }
+
+    #[test]
+    fn active_hand_flags_follow_vanilla_main_off_hand_and_stop_states() {
+        assert_eq!(
+            LivingEntity::with_active_hand_flags(0, Some(Hand::Right)),
+            LivingEntity::USING_ITEM_FLAG
+        );
+        assert_eq!(
+            LivingEntity::with_active_hand_flags(0, Some(Hand::Left)),
+            LivingEntity::USING_ITEM_FLAG | LivingEntity::OFF_HAND_ACTIVE_FLAG
+        );
+        assert_eq!(
+            LivingEntity::with_active_hand_flags(
+                LivingEntity::ACTIVE_HAND_FLAGS | LivingEntity::USING_RIPTIDE_FLAG,
+                None,
+            ),
+            LivingEntity::USING_RIPTIDE_FLAG
+        );
+    }
+
+    #[test]
+    fn using_item_metadata_uses_the_1_21_living_flags_accessor() {
+        for version in [
+            JavaMinecraftVersion::V_1_21,
+            JavaMinecraftVersion::V_1_21_2,
+            JavaMinecraftVersion::V_1_21_4,
+            JavaMinecraftVersion::V_1_21_5,
+            JavaMinecraftVersion::V_1_21_6,
+            JavaMinecraftVersion::V_1_21_7,
+            JavaMinecraftVersion::V_1_21_9,
+            JavaMinecraftVersion::V_1_21_11,
+        ] {
+            assert_eq!(
+                encoded_living_flags(version, LivingEntity::USING_ITEM_FLAG),
+                vec![8, 0, LivingEntity::USING_ITEM_FLAG],
+                "{version:?} should receive the living flags metadata"
+            );
+        }
+    }
+
+    #[test]
+    fn using_item_metadata_uses_the_26_living_entity_flags_accessor() {
+        for version in [
+            JavaMinecraftVersion::V_26_1,
+            JavaMinecraftVersion::V_26_2,
+        ] {
+            assert_eq!(
+                encoded_living_flags(version, LivingEntity::USING_ITEM_FLAG),
+                vec![8, 0, LivingEntity::USING_ITEM_FLAG],
+                "{version:?} should receive the living entity flags metadata"
+            );
+        }
+    }
+
+    #[test]
+    fn using_item_metadata_serializes_the_release_state() {
+        for version in [
+            JavaMinecraftVersion::V_1_21,
+            JavaMinecraftVersion::V_1_21_11,
+            JavaMinecraftVersion::V_26_1,
+            JavaMinecraftVersion::V_26_2,
+        ] {
+            assert_eq!(
+                encoded_living_flags(version, 0),
+                vec![8, 0, 0],
+                "{version:?} should receive a clear using-item flag"
+            );
+        }
+    }
 
     // ── bypasses_armor_durability ─────────────────────────────────────
 
