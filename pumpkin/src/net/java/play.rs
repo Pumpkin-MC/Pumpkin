@@ -2237,8 +2237,32 @@ impl JavaClient {
         position: BlockPos,
         face: BlockDirection,
     ) {
+        let placed_position = position.offset(face.to_offset());
+        let mut positions = [position; 14];
+        let mut position_count = 1;
+
+        if placed_position != position {
+            positions[position_count] = placed_position;
+            position_count += 1;
+        }
+
+        // The client predicts only the interacted block. Correct directly adjacent
+        // dust now so a lever, torch, or redstone-block change cannot leave its
+        // source wire visually unpowered until the next batched world update.
+        for origin in [position, placed_position] {
+            for direction in BlockDirection::all() {
+                let neighbor = origin.offset(direction.to_offset());
+                if world.get_block(&neighbor) == &Block::REDSTONE_WIRE
+                    && !positions[..position_count].contains(&neighbor)
+                {
+                    positions[position_count] = neighbor;
+                    position_count += 1;
+                }
+            }
+        }
+
         world
-            .enqueue_block_state_corrections(self, &[position, position.offset(face.to_offset())])
+            .enqueue_block_state_corrections(self, &positions[..position_count])
             .await;
     }
 
