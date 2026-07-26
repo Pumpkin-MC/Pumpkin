@@ -65,7 +65,7 @@ impl AllocatorBackend {
 #[serde(rename_all = "snake_case")]
 pub enum CompressionBackend {
     /// PNX-style best-available pick: whatever backend this binary was built
-    /// with (zlib-ng in release builds, miniz_oxide otherwise) without a
+    /// with (zlib-ng in release builds, `miniz_oxide` otherwise) without a
     /// mismatch warning.
     #[default]
     Auto,

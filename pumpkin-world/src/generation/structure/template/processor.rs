@@ -33,16 +33,22 @@ pub enum RulePredicate {
     /// `random_block_match`: matches the block with the given probability,
     /// consuming one random draw like vanilla `RandomBlockMatchTest`.
     RandomBlock(BlockId, f32),
+    /// `blockstate_match`: exact block state comparison (vanilla
+    /// `BlockStateMatchTest`), e.g. directional glass panes in zombie villages.
+    BlockState(&'static BlockState),
     Tag(BlockTag),
 }
 
 impl RulePredicate {
-    fn matches(self, block_id: BlockId, random: &mut LegacyRand) -> bool {
+    fn matches(self, state: &'static BlockState, random: &mut LegacyRand) -> bool {
         match self {
             Self::AlwaysTrue => true,
-            Self::Block(id) => id == block_id,
-            Self::RandomBlock(id, probability) => id == block_id && random.next_f32() < probability,
-            Self::Tag(tag) => tag.contains(block_id),
+            Self::Block(id) => id == state.id.to_block_id(),
+            Self::RandomBlock(id, probability) => {
+                id == state.id.to_block_id() && random.next_f32() < probability
+            }
+            Self::BlockState(expected) => expected.id == state.id,
+            Self::Tag(tag) => tag.contains(state.id.to_block_id()),
         }
     }
 }
