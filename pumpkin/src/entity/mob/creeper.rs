@@ -120,7 +120,47 @@ impl CreeperEntity {
         let world = entity.world.load();
         let pos = entity.pos.load();
         world.explode(pos, radius * multiplier).await;
-        // TODO: spawn area effect cloud with potion effects
+
+        // Vanilla Creeper.spawnLingeringCloud: active potion effects survive as
+        // an effect cloud (radius 2.5, wait 10, half duration, -0.5 on use).
+        let effects: Vec<_> = {
+            let active = self.mob_entity.living_entity.active_effects.lock().await;
+            active
+                .values()
+                .map(|effect| {
+                    (
+                        effect.effect_type,
+                        effect.duration,
+                        effect.amplifier,
+                        effect.ambient,
+                        effect.show_particles,
+                        effect.show_icon,
+                    )
+                })
+                .collect()
+        };
+        if !effects.is_empty() {
+            let cloud_entity = crate::entity::Entity::new(
+                world.clone(),
+                pos,
+                &pumpkin_data::entity::EntityType::AREA_EFFECT_CLOUD,
+            );
+            let cloud = crate::entity::area_effect_cloud::AreaEffectCloudEntity::create(
+                cloud_entity,
+                pumpkin_data::item_stack::ItemStack::new(
+                    0,
+                    &pumpkin_data::item::Item::GLASS_BOTTLE,
+                ),
+                effects,
+                300,
+                2.5,
+                20,
+                10,
+                -0.5,
+                0,
+            );
+            world.spawn_entity(cloud).await;
+        }
         entity.remove().await;
     }
 }

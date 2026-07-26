@@ -1,7 +1,8 @@
-//! Schedule movement for villagers: walk home at dusk and to the job site in
-//! the morning. Stand-in for the vanilla brain schedule (SleepInBed /
-//! WorkAtPoi walk targets); the sleeping and job logic itself lives in the
-//! villager's `mob_tick`.
+//! Schedule movement for villagers.
+//!
+//! Walk home at dusk and to the job site in the morning — a stand-in for the
+//! vanilla brain schedule (SleepInBed / WorkAtPoi walk targets); the sleeping
+//! and job logic itself lives in the villager's `mob_tick`.
 
 use pumpkin_util::math::position::BlockPos;
 
