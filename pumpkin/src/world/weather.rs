@@ -78,24 +78,34 @@ impl Weather {
     }
 
     pub fn tick_weather(&mut self, world: &World) {
-        if !self.weather_cycle_enabled {
-            self.advance_weather_cycle();
-        }
+        // Re-read the weather cycle game rule every tick so changes apply without a restart.
+        self.weather_cycle_enabled = world.level_info.load().game_rules.advance_weather;
 
-        // Update visual transitions
-        self.old_rain_level = self.rain_level;
-        self.old_thunder_level = self.thunder_level;
+        // Vanilla wraps both the cycle and the level interpolation in
+        // `if (this.dimensionType().hasSkyLight())`, so a dimension without sky light (the
+        // Nether) never rolls into rain or a thunderstorm and its levels stay frozen. The
+        // broadcasts below stay outside the gate, as in vanilla: with the levels frozen the
+        // old and new values are equal, so nothing is ever sent for such a dimension anyway.
+        if world.dimension.has_skylight {
+            if self.weather_cycle_enabled {
+                self.advance_weather_cycle(world);
+            }
 
-        if self.raining {
-            self.rain_level = (self.rain_level + WEATHER_TRANSITION_SPEED).min(1.0);
-        } else {
-            self.rain_level = (self.rain_level - WEATHER_TRANSITION_SPEED).max(0.0);
-        }
+            // Update visual transitions
+            self.old_rain_level = self.rain_level;
+            self.old_thunder_level = self.thunder_level;
 
-        if self.thundering {
-            self.thunder_level = (self.thunder_level + WEATHER_TRANSITION_SPEED).min(1.0);
-        } else {
-            self.thunder_level = (self.thunder_level - WEATHER_TRANSITION_SPEED).max(0.0);
+            if self.raining {
+                self.rain_level = (self.rain_level + WEATHER_TRANSITION_SPEED).min(1.0);
+            } else {
+                self.rain_level = (self.rain_level - WEATHER_TRANSITION_SPEED).max(0.0);
+            }
+
+            if self.thundering {
+                self.thunder_level = (self.thunder_level + WEATHER_TRANSITION_SPEED).min(1.0);
+            } else {
+                self.thunder_level = (self.thunder_level - WEATHER_TRANSITION_SPEED).max(0.0);
+            }
         }
 
         // Broadcast level changes if needed
@@ -114,8 +124,9 @@ impl Weather {
         }
     }
 
-    fn advance_weather_cycle(&mut self) {
-        // Removed async since there are no await calls
+    fn advance_weather_cycle(&mut self, world: &World) {
+        let was_raining = self.raining;
+
         if self.clear_weather_time > 0 {
             self.clear_weather_time -= 1;
             self.thunder_time = i32::from(!self.thundering);
@@ -148,10 +159,28 @@ impl Weather {
                 self.rain_time = rand::rng().random_range(RAIN_DELAY_MIN..=RAIN_DELAY_MAX);
             }
         }
+
+        // Vanilla broadcasts the rain state whenever the natural cycle flips it, otherwise
+        // clients never learn that it started or stopped raining. This uses the same
+        // transition check `set_weather_parameters` does for the `/weather` command path.
+        // The packet order is not identical to vanilla: vanilla sends the level packets, then
+        // the begin/end event, then the levels again, and it re-sends the levels
+        // unconditionally, while we send begin/end here and only send a level packet when the
+        // value actually changed. Clients handle either order.
+        if was_raining != self.raining {
+            if was_raining {
+                world.broadcast_packet_all(&CGameEvent::new(GameEvent::EndRaining, 0.0));
+            } else {
+                world.broadcast_packet_all(&CGameEvent::new(GameEvent::BeginRaining, 0.0));
+            }
+        }
     }
 
     pub fn reset_weather_cycle(&mut self, world: &World) {
-        self.set_weather_parameters(world, 0, 0, false, false);
+        // Vanilla's `resetWeatherCycle` only clears the rain and thunder state; it leaves
+        // `clearWeatherTime` alone, so sleeping through the night must not cancel an active
+        // `/weather clear <duration>`.
+        self.set_weather_parameters(world, self.clear_weather_time, 0, false, false);
     }
 }
 
