@@ -17,12 +17,17 @@ use crate::entity::{
 /// Piglin — GoalSelector stand-in for Brain (barter/hunt/celebrate TODO).
 pub struct PiglinEntity {
     pub mob_entity: MobEntity,
+    /// Vanilla overworld zombification state.
+    pub zombification: crate::entity::mob::zombification::ZombificationState,
 }
 
 impl PiglinEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let piglin = Self { mob_entity };
+        let piglin = Self {
+            mob_entity,
+            zombification: crate::entity::mob::zombification::ZombificationState::default(),
+        };
         let mob_arc = Arc::new(piglin);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -94,19 +99,46 @@ impl NBTStorage for PiglinEntity {
         &'a self,
         nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
     ) -> crate::entity::NbtFuture<'a, ()> {
-        self.get_mob_entity().living_entity.write_nbt(nbt)
+        Box::pin(async move {
+            self.get_mob_entity().living_entity.write_nbt(nbt).await;
+            self.zombification.write_nbt(nbt);
+        })
     }
 
     fn read_nbt_non_mut<'a>(
         &'a self,
         nbt: &'a pumpkin_nbt::compound::NbtCompound,
     ) -> crate::entity::NbtFuture<'a, ()> {
-        self.get_mob_entity().living_entity.read_nbt_non_mut(nbt)
+        Box::pin(async move {
+            self.get_mob_entity()
+                .living_entity
+                .read_nbt_non_mut(nbt)
+                .await;
+            self.zombification.read_nbt(nbt);
+        })
     }
 }
 
 impl Mob for PiglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    /// Vanilla overworld zombification tick.
+    fn mob_tick<'a>(
+        &'a self,
+        _caller: &'a std::sync::Arc<dyn crate::entity::EntityBase>,
+    ) -> crate::entity::EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            crate::entity::mob::zombification::tick_zombification(
+                self,
+                &self.zombification,
+                &EntityType::ZOMBIFIED_PIGLIN,
+                pumpkin_data::sound::Sound::EntityPiglinConvertedToZombified,
+                true,
+                true,
+            )
+            .await;
+        })
     }
 }

@@ -64,6 +64,7 @@ pub mod warden;
 pub mod witch;
 pub mod zoglin;
 pub mod zombie;
+pub mod zombification;
 pub mod zombified_piglin;
 
 pub struct MobEntity {
