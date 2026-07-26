@@ -2580,7 +2580,13 @@ impl EntityBase for LivingEntity {
                         let stack_arc = equipment_lock.get(&slot);
                         let mut stack = stack_arc.lock().await;
 
-                        let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
+                        // Vanilla shield blocks_attacks item_damage: threshold
+                        // 3.0, base 1.0, factor 1.0 — hits under 3 damage cost
+                        // no durability.
+                        if amount < 3.0 {
+                            return false;
+                        }
+                        let durability_damage = (1.0 + amount).floor() as i32;
                         if stack.damage_item(durability_damage) == DamageResult::Broken {
                             if let Some(player) = caller.get_player() {
                                 player
