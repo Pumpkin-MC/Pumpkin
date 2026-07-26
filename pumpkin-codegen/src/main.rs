@@ -52,6 +52,7 @@ mod registry;
 mod remap;
 mod scoreboard_slot;
 mod screen;
+mod shard;
 mod sound;
 mod sound_category;
 mod spawn_egg;
@@ -192,20 +193,33 @@ pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
 /// Writes generated source code to a file in [`OUT_DIR`], skipping the write if the
 /// content is unchanged.
 ///
+/// Files listed in [`shard::SHARDED_FILES`] are too large for a single source file
+/// and are instead written as a stub plus `<name>_parts/part_NNN.rs` files pulled
+/// in with `include!` (see [`shard`]); compilation is textually equivalent.
+///
 /// # Arguments
 /// - `new_code` – The formatted source code string to write.
 /// - `out_file` – The filename (relative to [`OUT_DIR`]) to write into.
 pub fn write_generated_file(new_code: &str, out_file: &str) {
+    if shard::SHARDED_FILES.contains(&out_file) {
+        shard::write_sharded_file(new_code, out_file);
+        return;
+    }
     let path = Path::new(OUT_DIR).join(out_file);
+    write_file_if_changed(&path, new_code);
+}
 
+/// Writes `new_code` to `path`, skipping the write (and mtime bump) if the current
+/// file content is already identical.
+pub fn write_file_if_changed(path: &Path, new_code: &str) {
     if path.exists()
-        && let Ok(existing_code) = fs::read_to_string(&path)
+        && let Ok(existing_code) = fs::read_to_string(path)
         && existing_code == new_code
     {
         return;
     }
 
-    fs::write(&path, new_code)
+    fs::write(path, new_code)
         .unwrap_or_else(|_| panic!("Failed to write to file: {}", path.display()));
 }
 
