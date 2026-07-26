@@ -15,7 +15,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 
 <div align="center">
 
-![Pumpkin Chunk Loading](./assets/pumpkin_chunk_loading.gif)
+![Pumpkin Chunk Loading](./assets/pumpkin-chunk-loading.webp)
 
 </div>
 
