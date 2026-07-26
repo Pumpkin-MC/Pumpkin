@@ -41,8 +41,8 @@ Player clients still use their own game language. Vanilla death messages, items,
 
 Use [config/pumpkin.en_us.toml](config/pumpkin.en_us.toml) or
 [config/pumpkin.zh_cn.toml](config/pumpkin.zh_cn.toml) as `pumpkin.toml`.
-Both templates contain the same settings and defaults, with comments in the
-corresponding language.
+Both templates contain the same keys (only the locale value differs), with
+comments in the corresponding language.
 
 ## Goals
 

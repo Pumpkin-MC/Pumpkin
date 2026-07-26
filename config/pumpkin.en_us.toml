@@ -1,9 +1,10 @@
 # Pumpkin server configuration (English).
 # Copy this file to the server directory as pumpkin.toml, then restart the server
-# after changing it. The Chinese template has exactly the same keys and values.
+# after changing it. The Chinese template has the same keys; only the locale
+# value and comment language differ.
 
 # World seed. Leave empty to generate a random Java-compatible seed on first start.
-seed = "1784365050908681378"
+seed = ""
 # Default difficulty: Peaceful, Easy, Normal, or Hard.
 default_difficulty = "Normal"
 # Permission level given by /op (0 through 4).
@@ -69,7 +70,7 @@ packs = []
 # Lighting engine: default uses Pumpkin's normal lighting implementation.
 lighting = "default"
 # Ticks between automatic world saves. Set 0 to disable automatic saves.
-autosave_ticks = 0
+autosave_ticks = 6000
 
 [world.chunk]
 # Chunk storage format: anvil, linear, or pump.
@@ -124,7 +125,7 @@ enabled = false
 [networking.java]
 # Java Edition uses TCP. It may share a port number with Bedrock's UDP listener.
 enabled = true
-address = "0.0.0.0:17307"
+address = "0.0.0.0:25565"
 # Encryption is required while Java online mode is enabled.
 encryption = true
 # Verify Java accounts with Mojang services.
@@ -174,7 +175,7 @@ elytra = true
 [networking.bedrock]
 # Bedrock Edition uses UDP. It may share a port number with Java's TCP listener.
 enabled = true
-address = "0.0.0.0:17307"
+address = "0.0.0.0:19132"
 # Encryption is required while Bedrock online mode is enabled.
 encryption = true
 # Verify Bedrock accounts with Xbox Live services.

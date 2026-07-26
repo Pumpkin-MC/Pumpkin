@@ -78,14 +78,29 @@ impl LoadConfiguration for PumpkinConfig {
         } else {
             include_str!("../../config/pumpkin.en_us.toml")
         };
-        // The shipped templates pin a demo seed; a fresh server must roll its own.
+        // Bake a concrete random seed so the file records the world's seed
+        // like vanilla, instead of re-rolling from an empty value every boot.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos() as u64);
+        // splitmix64 scramble of the timestamp.
+        let mut seed_value = nanos.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        seed_value = (seed_value ^ (seed_value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        seed_value = (seed_value ^ (seed_value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        seed_value ^= seed_value >> 31;
+        let seed_line = format!("seed = \"{}\"", seed_value as i64);
+
+        let mut in_top_level = true;
         let template = template
             .lines()
             .map(|line| {
-                if line.starts_with("seed = ") {
-                    "seed = \"\""
+                if in_top_level && line.starts_with('[') {
+                    in_top_level = false;
+                }
+                if in_top_level && line.starts_with("seed = ") {
+                    seed_line.clone()
                 } else {
-                    line
+                    line.to_string()
                 }
             })
             .collect::<Vec<_>>()

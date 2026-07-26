@@ -55,7 +55,7 @@ locale = "en_us"
 
 将 [config/pumpkin.zh_cn.toml](config/pumpkin.zh_cn.toml)（简体中文注释）或
 [config/pumpkin.en_us.toml](config/pumpkin.en_us.toml)（英文注释）复制为 `pumpkin.toml` 使用。
-两个模板的配置项与默认值完全一致，仅注释语言不同。
+两个模板的配置项一致（仅 locale 取值不同），注释语言不同。
 
 ## 功能一览
 

@@ -17,7 +17,8 @@ pub struct QueryConfig {
 impl Default for QueryConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            // Vanilla server.properties ships enable-query=false.
+            enabled: false,
             address: SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 25565),
         }
     }

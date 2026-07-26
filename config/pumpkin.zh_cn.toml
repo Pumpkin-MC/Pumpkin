@@ -1,9 +1,9 @@
 # Pumpkin 服务端配置（简体中文）。
 # 将此文件复制到服务端目录并命名为 pumpkin.toml；修改后需要重启服务端。
-# 英文模板与本文件的配置项和默认值完全相同，仅注释语言不同。
+# 英文模板与本文件的配置项相同；仅 locale 取值与注释语言不同。
 
 # 世界种子。留空会在首次启动时生成兼容 Java 版的随机种子。
-seed = "1784365050908681378"
+seed = ""
 # 默认难度：Peaceful、Easy、Normal 或 Hard。
 default_difficulty = "Normal"
 # /op 授予的权限等级（0 到 4）。
@@ -69,7 +69,7 @@ packs = []
 # 光照引擎；default 使用 Pumpkin 的常规光照实现。
 lighting = "default"
 # 两次自动保存之间的刻数；设为 0 可关闭自动保存。
-autosave_ticks = 0
+autosave_ticks = 6000
 
 [world.chunk]
 # 区块存储格式：anvil、linear 或 pump。
@@ -124,7 +124,7 @@ enabled = false
 [networking.java]
 # Java 版使用 TCP，可与基岩版 UDP 使用相同端口号。
 enabled = true
-address = "0.0.0.0:17307"
+address = "0.0.0.0:25565"
 # 启用 Java 在线模式时必须启用加密。
 encryption = true
 # 是否通过 Mojang 服务验证 Java 版账号。
@@ -174,7 +174,7 @@ elytra = true
 [networking.bedrock]
 # 基岩版使用 UDP，可与 Java 版 TCP 使用相同端口号。
 enabled = true
-address = "0.0.0.0:17307"
+address = "0.0.0.0:19132"
 # 启用基岩版在线模式时必须启用加密。
 encryption = true
 # 是否通过 Xbox Live 服务验证基岩版账号。
