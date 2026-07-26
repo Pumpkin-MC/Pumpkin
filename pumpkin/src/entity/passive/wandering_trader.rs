@@ -122,9 +122,11 @@ impl Mob for WanderingTraderEntity {
         &self.mob_entity
     }
 
-    /// Vanilla WanderingTrader UseItemGoal pair: drink an invisibility potion
-    /// at nightfall and milk at dawn (simplified to direct effect toggling with
-    /// the drink sounds).
+    /// Vanilla WanderingTrader.registerGoals UseItemGoal pair
+    /// (WanderingTrader.java:71-72): drink an invisibility potion when it is
+    /// dark outside, milk when bright, with the disappeared/reappeared and
+    /// drink sounds. Dark/bright is approximated by time of day until
+    /// skyDarken exists.
     fn mob_tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn crate::entity::EntityBase>,
@@ -149,11 +151,19 @@ impl Mob for WanderingTraderEntity {
                 .await;
 
             if is_night && !invisible {
+                world.play_sound_fine(
+                    pumpkin_data::sound::Sound::EntityWanderingTraderDisappeared,
+                    pumpkin_data::sound::SoundCategory::Neutral,
+                    &living.entity.pos.load(),
+                    1.0,
+                    1.0,
+                );
                 living
                     .add_effect(pumpkin_data::potion::Effect {
                         effect_type: &pumpkin_data::effect::StatusEffect::INVISIBILITY,
-                        // Covers the night; milk clears it at dawn.
-                        duration: 11000,
+                        // Standard invisibility potion (Potions.INVISIBILITY): 3600 ticks;
+                        // the goal re-drinks while it stays dark.
+                        duration: 3600,
                         amplifier: 0,
                         ambient: false,
                         show_particles: true,
@@ -169,6 +179,13 @@ impl Mob for WanderingTraderEntity {
                     1.0,
                 );
             } else if !is_night && invisible {
+                world.play_sound_fine(
+                    pumpkin_data::sound::Sound::EntityWanderingTraderReappeared,
+                    pumpkin_data::sound::SoundCategory::Neutral,
+                    &living.entity.pos.load(),
+                    1.0,
+                    1.0,
+                );
                 living
                     .remove_effect(&pumpkin_data::effect::StatusEffect::INVISIBILITY)
                     .await;
