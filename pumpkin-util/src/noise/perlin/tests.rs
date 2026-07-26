@@ -15,7 +15,7 @@ impl RandomImpl for ZeroRandom {
     }
 
     fn next_splitter(&mut self) -> RandomDeriver {
-        Xoroshiro::from_seed(0).next_splitter()
+        RandomDeriver::Xoroshiro(Xoroshiro::from_seed(0).next_splitter())
     }
 
     fn next_i32(&mut self) -> i32 {
