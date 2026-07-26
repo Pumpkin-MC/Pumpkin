@@ -184,9 +184,7 @@ mod tests {
         }
     }
 
-    fn context<'a>(
-        height_sampler: Option<&'a mut dyn HeightSampler>,
-    ) -> StructureGeneratorContext<'a> {
+    fn context(height_sampler: Option<&mut dyn HeightSampler>) -> StructureGeneratorContext<'_> {
         StructureGeneratorContext {
             seed: 123,
             chunk_x: 4,

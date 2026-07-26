@@ -133,7 +133,8 @@ impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
     const ACTIVE_HAND_FLAGS: u8 = Self::USING_ITEM_FLAG | Self::OFF_HAND_ACTIVE_FLAG;
-    #[expect(dead_code)]
+    // Only referenced by the metadata tests today.
+    #[cfg_attr(not(test), expect(dead_code))]
     const USING_RIPTIDE_FLAG: u8 = 4;
 
     const PREVENT_AREA_FALL_DAMAGE_BLOCKS: [&'static Block; 4] = [

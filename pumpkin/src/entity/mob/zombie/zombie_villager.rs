@@ -292,7 +292,8 @@ impl NBTStorage for ZombieVillagerEntity {
                     -1
                 },
             );
-            if let Some(starter) = *self.conversion_starter.lock().await {
+            let conversion_starter = *self.conversion_starter.lock().await;
+            if let Some(starter) = conversion_starter {
                 nbt.put_uuid("ConversionPlayer", starter);
             }
 
