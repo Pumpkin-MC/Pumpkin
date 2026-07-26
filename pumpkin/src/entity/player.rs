@@ -1354,8 +1354,24 @@ impl Player {
 
         let respawn_guard = self.respawn_point.lock().await;
         let respawn_point = respawn_guard.as_ref()?;
-        let world = self.world();
+
+        // Search for the world to which the spawn point is linked (not the world where the player died)
+        let world = if self.world().dimension == respawn_point.dimension {
+            self.world()
+        } else {
+            let server = self.world().server.upgrade()?;
+            let worlds = server.worlds.load();
+            worlds
+                .iter()
+                .find(|w| w.dimension == respawn_point.dimension)
+                .cloned()?
+        };
+
         let pos = &respawn_point.position;
+
+        let chunk_pos = Vector2::new(pos.0.x >> 4, pos.0.z >> 4);
+        world.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
+
         let (block, state_id) = world.get_block_and_state_id(pos);
 
         // If force is set (from /spawnpoint command), validate position is safe
