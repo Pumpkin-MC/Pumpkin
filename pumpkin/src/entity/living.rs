@@ -12,6 +12,7 @@ use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
+use pumpkin_util::difficulty::Difficulty;
 use pumpkin_util::math::position::BlockPos;
 use std::mem;
 use std::sync::Arc;
@@ -29,8 +30,11 @@ use crate::block::OnLandedUponArgs;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
+use crate::entity::mob::Mob;
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::slime::SlimeEntity;
+use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
+use crate::entity::passive::villager::VillagerEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
@@ -47,6 +51,7 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, Enchantment, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
@@ -324,11 +329,7 @@ impl LivingEntity {
         // version, so send both and the correct one is applied.
         // Without this, skeleton bow-draw (using-item bit) never reaches 1.21 clients.
         [
-            Metadata::new(
-                TrackedData::LIVING_ENTITY_FLAGS,
-                MetaDataType::BYTE,
-                flags,
-            ),
+            Metadata::new(TrackedData::LIVING_ENTITY_FLAGS, MetaDataType::BYTE, flags),
             Metadata::new(TrackedData::LIVING_FLAGS, MetaDataType::BYTE, flags),
         ]
     }
@@ -1448,6 +1449,70 @@ impl LivingEntity {
                 ))
                 .add_child(TextComponent::text("]")),
         }
+    }
+
+    async fn try_convert_villager_on_zombie_kill(
+        &self,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        if self.entity.entity_type != &EntityType::VILLAGER {
+            return false;
+        }
+
+        let Some(killer) = cause.or(source) else {
+            return false;
+        };
+        let killer_type = killer.get_entity().entity_type.id;
+        if killer_type != EntityType::ZOMBIE.id
+            && killer_type != EntityType::HUSK.id
+            && killer_type != EntityType::DROWNED.id
+            && killer_type != EntityType::ZOMBIE_VILLAGER.id
+            && killer_type != EntityType::ZOMBIFIED_PIGLIN.id
+        {
+            return false;
+        }
+
+        let world = self.entity.world.load().clone();
+        let converts = match world.level_info.load().difficulty {
+            Difficulty::Hard => true,
+            Difficulty::Normal => rand::random(),
+            Difficulty::Peaceful | Difficulty::Easy => false,
+        };
+        if !converts {
+            return false;
+        }
+
+        let Some(victim) = world.get_entity_by_id(self.entity.entity_id) else {
+            return false;
+        };
+        let Some(villager) = victim.cast_any().downcast_ref::<VillagerEntity>() else {
+            return false;
+        };
+
+        let source_entity = villager.get_entity();
+        let custom_name = source_entity.custom_name.load().as_ref().clone();
+        let custom_name_visible = source_entity.custom_name_visible.load(Ordering::Relaxed);
+        let converted = ZombieVillagerEntity::from_villager(villager).await;
+        let converted_entity = converted.get_entity();
+        let converted_base: Arc<dyn EntityBase> = converted.clone();
+        let block_pos = self.entity.block_pos.load();
+
+        // Conversion replaces the villager before normal death handling, so it
+        // neither drops villager loot nor awards experience.
+        world.remove_entity(victim.as_ref()).await;
+        world.broadcast_entity_spawn(&converted_base);
+        converted.mob_init_data_tracker().await;
+        world.add_entity_silent(converted_base).await;
+
+        if let Some(custom_name) = custom_name {
+            converted_entity.set_custom_name(custom_name);
+        }
+        if custom_name_visible {
+            converted_entity.set_custom_name_visible(true);
+        }
+        world.sync_world_event(WorldEvent::SoundZombieInfected, block_pos, 0);
+        true
     }
 
     pub async fn on_death(
@@ -2731,6 +2796,12 @@ impl EntityBase for LivingEntity {
                             "lethal damage"
                         );
                     }
+                    if self
+                        .try_convert_villager_on_zombie_kill(source, cause)
+                        .await
+                    {
+                        return true;
+                    }
                     self.on_death(damage_type, source, cause).await;
                 }
             }
@@ -3156,10 +3227,7 @@ mod tests {
 
     #[test]
     fn using_item_metadata_uses_the_26_living_entity_flags_accessor() {
-        for version in [
-            JavaMinecraftVersion::V_26_1,
-            JavaMinecraftVersion::V_26_2,
-        ] {
+        for version in [JavaMinecraftVersion::V_26_1, JavaMinecraftVersion::V_26_2] {
             assert_eq!(
                 encoded_living_flags(version, LivingEntity::USING_ITEM_FLAG),
                 vec![8, 0, LivingEntity::USING_ITEM_FLAG],

@@ -702,6 +702,12 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// Vanilla `Mob.requiresCustomPersistence`. Used by stateful conversions
+    /// such as a curing zombie villager, which must survive normal despawn checks.
+    fn requires_custom_persistence(&self) -> bool {
+        false
+    }
+
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
@@ -838,7 +844,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             mob_entity.tick_sun_burn().await;
 
             // Despawn far mobs so natural spawn caps free up (vanilla checkDespawn).
-            if mob_entity.check_despawn().await {
+            if !self.requires_custom_persistence() && mob_entity.check_despawn().await {
                 return;
             }
 
@@ -863,6 +869,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             }
 
             self.mob_tick(caller).await;
+
+            if mob_entity.living_entity.entity.is_removed() {
+                return;
+            }
 
             let age = mob_entity.living_entity.entity.age.load(Relaxed);
             let entity_id = mob_entity.living_entity.entity.entity_id;

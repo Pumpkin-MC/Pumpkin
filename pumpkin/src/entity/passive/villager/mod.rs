@@ -164,16 +164,6 @@ impl VillagerEntity {
             goal_selector.add_goal(5, Box::new(RandomLookAroundGoal::default()));
         };
 
-        // Send initial metadata
-        mob_arc.get_entity().send_meta_data(
-            &[Metadata::new(
-                TrackedData::VILLAGER_DATA,
-                MetaDataType::VILLAGER_DATA,
-                villager_data,
-            )],
-            None,
-        );
-
         mob_arc
     }
 
@@ -735,6 +725,39 @@ fn profession_matches_block(profession: VillagerProfession, block: &Block) -> bo
 impl Mob for VillagerEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_init_data_tracker(&self) -> crate::entity::EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            if entity.age.load(Ordering::Relaxed) < 0 {
+                entity.send_meta_data(
+                    &[Metadata::new(
+                        TrackedData::BABY_ID,
+                        MetaDataType::BOOLEAN,
+                        true,
+                    )],
+                    None,
+                );
+            }
+
+            let villager_data = *self.villager_data.lock().await;
+            entity.send_meta_data(
+                &[
+                    Metadata::new(
+                        TrackedData::VILLAGER_DATA,
+                        MetaDataType::VILLAGER_DATA,
+                        villager_data,
+                    ),
+                    Metadata::new(
+                        TrackedData::VILLAGER_DATA_FINALIZED,
+                        MetaDataType::BOOLEAN,
+                        true,
+                    ),
+                ],
+                None,
+            );
+        })
     }
 
     fn get_job_site(&self) -> Option<BlockPos> {

@@ -224,8 +224,13 @@ impl Goal for BowAttackGoal {
         })
     }
 
-    fn start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
+            // RangedBowAttackGoal marks bow users aggressive; the crossbow goal
+            // has a separate charging state and does not set it on start.
+            if !Self::main_hand_is_crossbow(mob).await {
+                mob.get_mob_entity().set_attacking(true);
+            }
             self.see_time = 0;
             self.strafing_time = -1;
             self.attack_time = 0;
@@ -235,6 +240,7 @@ impl Goal for BowAttackGoal {
 
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
+            mob.get_mob_entity().set_attacking(false);
             self.see_time = 0;
             self.attack_time = -1;
             self.draw_time = -1;
