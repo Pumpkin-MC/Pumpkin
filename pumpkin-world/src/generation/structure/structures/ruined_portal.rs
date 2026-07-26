@@ -103,7 +103,7 @@ impl StructurePieceBase for RuinedPortalPiece {
         chunk: &mut ProtoChunk,
         _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
-        _seed: i64,
+        seed: i64,
         chunk_box: &BlockBox,
     ) {
         let origin = self.piece.bounding_box.min;
@@ -141,6 +141,7 @@ impl StructurePieceBase for RuinedPortalPiece {
             false, // no waterlogging
             &[],
             Some(chunk_box),
+            seed,
         );
     }
 }

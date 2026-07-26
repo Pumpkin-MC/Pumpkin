@@ -469,7 +469,7 @@ impl StructurePieceBase for PoolElementStructurePiece {
         chunk: &mut crate::ProtoChunk,
         _block_registry: &dyn crate::world::WorldPortalExt,
         random: &mut pumpkin_util::random::RandomGenerator,
-        _seed: i64,
+        seed: i64,
         chunk_box: &pumpkin_util::math::block_box::BlockBox,
     ) {
         let origin =
@@ -493,6 +493,7 @@ impl StructurePieceBase for PoolElementStructurePiece {
                     self.liquid_settings == LiquidSettings::ApplyWaterlog,
                     processors.as_ref(),
                     Some(chunk_box),
+                    seed,
                 );
             });
 

@@ -191,6 +191,7 @@ impl StructurePieceBase for NetherFossilPiece {
             false,
             &[],
             Some(chunk_box),
+            seed,
         );
 
         // Vanilla: 50% chance to place a dried ghast block at the fossil base.

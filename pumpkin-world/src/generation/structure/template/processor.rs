@@ -23,6 +23,18 @@ pub struct ProcessorRule {
     /// world at the target position (e.g. streets turn to planks over water).
     location: RulePredicate,
     output_state: &'static BlockState,
+    /// Vanilla `block_entity_modifier` of type `minecraft:append_loot`
+    /// (AppendLoot.java:34-40): the matched block entity gains this loot table
+    /// plus a seed drawn from the rule random (trail-ruins archaeology).
+    append_loot: Option<Arc<str>>,
+}
+
+/// Result of running a processor over one template block.
+pub struct ProcessedBlock {
+    pub state: &'static BlockState,
+    /// `append_loot` payload: loot table id + `LootTableSeed` drawn from the
+    /// per-position rule random after the predicate draws.
+    pub loot: Option<(Arc<str>, i64)>,
 }
 
 /// Vanilla `RuleTest` subset used by the shipped processor lists.
@@ -95,15 +107,15 @@ impl StructureProcessor {
         chunk: &ProtoChunk,
         pos: Vector3<i32>,
         state: &'static BlockState,
-    ) -> Option<&'static BlockState> {
+    ) -> Option<ProcessedBlock> {
         let input_block = state.id.to_block_id();
         match self {
             Self::BlockRot { integrity, blocks } => {
                 if !blocks.contains(input_block) {
-                    return Some(state);
+                    return Some(ProcessedBlock { state, loot: None });
                 }
                 let mut random = LegacyRand::from_seed(hash_block_pos(pos.x, pos.y, pos.z) as u64);
-                (random.next_f32() <= *integrity).then_some(state)
+                (random.next_f32() <= *integrity).then_some(ProcessedBlock { state, loot: None })
             }
             Self::Rules(rules) => {
                 // Vanilla RuleProcessor: one random per block position, the
@@ -111,24 +123,34 @@ impl StructureProcessor {
                 // location; the first matching rule wins.
                 let mut random = LegacyRand::from_seed(hash_block_pos(pos.x, pos.y, pos.z) as u64);
                 let world_state = BlockState::from_id(chunk.get_block_state(&pos));
-                rules
-                    .iter()
-                    .find(|rule| {
-                        rule.input.matches(state, &mut random)
-                            && rule.location.matches(world_state, &mut random)
-                    })
-                    .map_or(Some(state), |rule| Some(rule.output_state))
+                match rules.iter().find(|rule| {
+                    rule.input.matches(state, &mut random)
+                        && rule.location.matches(world_state, &mut random)
+                }) {
+                    Some(rule) => {
+                        // AppendLoot.apply draws the seed from the same rule
+                        // random after the predicate draws (AppendLoot.java:38).
+                        let loot = rule
+                            .append_loot
+                            .as_ref()
+                            .map(|table| (Arc::clone(table), random.next_i64()));
+                        Some(ProcessedBlock {
+                            state: rule.output_state,
+                            loot,
+                        })
+                    }
+                    None => Some(ProcessedBlock { state, loot: None }),
+                }
             }
             Self::ProtectedBlocks(blocks) => {
                 let existing = chunk.get_block_state(&pos).to_block_id();
-                (!blocks.contains(existing)).then_some(state)
+                (!blocks.contains(existing)).then_some(ProcessedBlock { state, loot: None })
             }
-            // GAP vs vanilla CappedProcessor: the limit (seed-forked random
-            // selection of at most `limit` blocks per piece) and the
-            // append_loot block_entity_modifier are not applied yet — trail
-            // ruins convert every replaceable block and suspicious blocks
-            // carry no archaeology loot. Needs per-piece processing state.
-            Self::Capped { limit: _, delegate } => delegate.process(chunk, pos, state),
+            // Vanilla CappedProcessor has no per-block behavior (default
+            // StructureProcessor.processBlock passes through); its limited
+            // random selection runs in the finalize pass of template
+            // placement (CappedProcessor.java:54-80).
+            Self::Capped { .. } => Some(ProcessedBlock { state, loot: None }),
         }
     }
 }
@@ -159,6 +181,14 @@ struct RawRule {
     input_predicate: RawPredicate,
     location_predicate: Option<RawPredicate>,
     output_state: RawOutputState,
+    block_entity_modifier: Option<RawBlockEntityModifier>,
+}
+
+#[derive(Deserialize)]
+struct RawBlockEntityModifier {
+    #[serde(rename = "type")]
+    kind: String,
+    loot_table: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -241,6 +271,16 @@ fn convert_raw_processor(raw: RawProcessor) -> Option<StructureProcessor> {
                 .into_iter()
                 .filter_map(|rule| {
                     let output_state = resolve_output_state(&rule.output_state)?;
+                    let append_loot = match &rule.block_entity_modifier {
+                        Some(modifier) if modifier.kind == "minecraft:append_loot" => {
+                            Some(Arc::from(modifier.loot_table.as_deref()?))
+                        }
+                        Some(modifier) if modifier.kind != "minecraft:passthrough" => {
+                            tracing::warn!("Unsupported block entity modifier: {}", modifier.kind);
+                            None
+                        }
+                        _ => None,
+                    };
 
                     Some(ProcessorRule {
                         input: convert_predicate(&rule.input_predicate)?,
@@ -249,6 +289,7 @@ fn convert_raw_processor(raw: RawProcessor) -> Option<StructureProcessor> {
                             .as_ref()
                             .map_or(Some(RulePredicate::AlwaysTrue), convert_predicate)?,
                         output_state,
+                        append_loot,
                     })
                 })
                 .collect(),
@@ -324,5 +365,16 @@ mod tests {
             load_processor_list("minecraft:trail_ruins_houses_archaeology").len(),
             3
         );
+    }
+
+    #[test]
+    fn trail_ruins_archaeology_carries_append_loot() {
+        let list = load_processor_list("minecraft:trail_ruins_houses_archaeology");
+        let capped_with_loot = list.iter().any(|processor| {
+            matches!(processor, StructureProcessor::Capped { delegate, .. }
+                if matches!(&**delegate, StructureProcessor::Rules(rules)
+                    if rules.iter().any(|rule| rule.append_loot.is_some())))
+        });
+        assert!(capped_with_loot, "capped delegates must parse append_loot");
     }
 }

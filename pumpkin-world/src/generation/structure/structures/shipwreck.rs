@@ -111,7 +111,7 @@ impl StructurePieceBase for ShipwreckPiece {
         chunk: &mut ProtoChunk,
         _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
-        _seed: i64,
+        seed: i64,
         chunk_box: &BlockBox,
     ) {
         let origin = self.piece.bounding_box.min;
@@ -140,6 +140,7 @@ impl StructurePieceBase for ShipwreckPiece {
             !self.is_beached,
             &[],
             Some(chunk_box),
+            seed,
         );
     }
 }

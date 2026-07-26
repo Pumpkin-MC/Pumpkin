@@ -149,7 +149,7 @@ impl StructurePieceBase for IglooPiece {
         chunk: &mut ProtoChunk,
         _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
-        _seed: i64,
+        seed: i64,
         chunk_box: &BlockBox,
     ) {
         let origin = self.shiftable_structure_piece.piece.bounding_box.min;
@@ -181,6 +181,7 @@ impl StructurePieceBase for IglooPiece {
             false,
             &[],
             Some(chunk_box),
+            seed,
         );
 
         // Place basement components if present
@@ -213,6 +214,7 @@ impl StructurePieceBase for IglooPiece {
                         false,
                         &[],
                         Some(chunk_box),
+                        seed,
                     );
                 }
             }
@@ -232,6 +234,7 @@ impl StructurePieceBase for IglooPiece {
                     false,
                     &[],
                     Some(chunk_box),
+                    seed,
                 );
             }
         }

@@ -94,7 +94,7 @@ impl StructurePieceBase for EndCityPiece {
         chunk: &mut ProtoChunk,
         _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
-        _seed: i64,
+        seed: i64,
         chunk_box: &BlockBox,
     ) {
         let origin = self.piece.bounding_box.min;
@@ -114,6 +114,7 @@ impl StructurePieceBase for EndCityPiece {
             false,
             &[],
             Some(chunk_box),
+            seed,
         );
 
         // 2. Place Tower Base
@@ -128,6 +129,7 @@ impl StructurePieceBase for EndCityPiece {
             false,
             &[],
             Some(chunk_box),
+            seed,
         );
 
         // 3. Place Tower Piece
@@ -142,6 +144,7 @@ impl StructurePieceBase for EndCityPiece {
             false,
             &[],
             Some(chunk_box),
+            seed,
         );
 
         // 4. Place Tower Top
@@ -156,6 +159,7 @@ impl StructurePieceBase for EndCityPiece {
             false,
             &[],
             Some(chunk_box),
+            seed,
         );
 
         // 5. Place End Ship
@@ -171,6 +175,7 @@ impl StructurePieceBase for EndCityPiece {
                 false,
                 &[],
                 Some(chunk_box),
+                seed,
             );
         }
     }

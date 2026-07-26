@@ -30,6 +30,7 @@ pub mod processor;
 mod structure_template;
 mod template_piece;
 
+use pumpkin_data::BlockState;
 use pumpkin_data::Mirror;
 use pumpkin_data::Rotation;
 use pumpkin_nbt::compound::NbtCompound;
@@ -59,6 +60,8 @@ pub use template_piece::TemplatePiece;
 ///
 /// `origin` is the base world position (x, y, z).
 /// `offset` is the un-rotated XZ offset from origin (`x_offset`, `z_offset`) - rotation is applied automatically.
+/// `world_seed` feeds the capped-processor selection random
+/// (`CappedProcessor.java:62` forks the world random at the piece origin).
 #[allow(clippy::too_many_arguments)]
 pub fn place_template(
     chunk: &mut ProtoChunk,
@@ -70,6 +73,7 @@ pub fn place_template(
     apply_waterlogging: bool,
     processors: &[StructureProcessor],
     chunk_box: Option<&pumpkin_util::math::block_box::BlockBox>,
+    world_seed: i64,
 ) {
     let (rotated_ox, rotated_oz) = rotation.rotate_offset(offset.0, offset.1);
     let world_x = origin.x + rotated_ox;
@@ -86,10 +90,24 @@ pub fn place_template(
         apply_waterlogging,
         processors,
         chunk_box,
+        world_seed,
     );
     place_template_entities(
         chunk, template, origin, world_x, world_z, rotation, chunk_box,
     );
+}
+
+/// A template block that survived per-block processing and is waiting for the
+/// finalize + write passes (vanilla `processedBlockInfoList`).
+struct PendingBlock {
+    world_pos: Vector3<i32>,
+    /// Untransformed processed state — vanilla processors run before rotation
+    /// is applied (`StructureTemplate.java:381-386`); rotation happens at
+    /// write time.
+    state: &'static BlockState,
+    entry: PaletteEntry,
+    nbt: Option<NbtCompound>,
+    loot: Option<(std::sync::Arc<str>, i64)>,
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -104,7 +122,19 @@ fn place_template_blocks(
     apply_waterlogging: bool,
     processors: &[StructureProcessor],
     chunk_box: Option<&pumpkin_util::math::block_box::BlockBox>,
+    world_seed: i64,
 ) {
+    // Vanilla only clips to the chunk during processing when no processor
+    // evaluates the entire piece (StructureTemplate.java:373-382); a capped
+    // processor must select over the full piece so every chunk agrees on
+    // which blocks were chosen, and clipping happens at write time instead.
+    let has_capped = processors
+        .iter()
+        .any(|processor| matches!(processor, StructureProcessor::Capped { .. }));
+    let clip_early = !has_capped;
+
+    let mut pending: Vec<PendingBlock> = Vec::new();
+
     for block in &template.blocks {
         let palette_entry = &template.palette[block.state as usize];
 
@@ -134,10 +164,10 @@ fn place_template_blocks(
             block_entity_nbt = None;
         }
 
-        // Resolve block state with rotation applied to directional properties
-        let Some(mut state) =
-            BlockStateResolver::resolve(&placed_entry, rotation, Mirror::default())
-        else {
+        // Vanilla processors run on the saved template state; rotation is only
+        // applied to the surviving state at write time
+        // (StructureTemplate.java:383, placeInWorld).
+        let Some(mut state) = BlockStateResolver::resolve_simple(&placed_entry) else {
             continue;
         };
 
@@ -148,7 +178,8 @@ fn place_template_blocks(
         let wy = origin.y + local_pos.y;
         let wz = world_z + local_pos.z;
 
-        if let Some(bbox) = chunk_box
+        if clip_early
+            && let Some(bbox) = chunk_box
             && (wx < bbox.min.x
                 || wx > bbox.max.x
                 || wy < bbox.min.y
@@ -161,39 +192,151 @@ fn place_template_blocks(
 
         let world_pos = Vector3::new(wx, wy, wz);
 
-        if apply_waterlogging
-            && chunk.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
-            && let Some((_, waterlogged)) = placed_entry
-                .properties
-                .iter_mut()
-                .find(|(name, _)| name == "waterlogged")
-        {
-            *waterlogged = "true".to_string();
-            if let Some(waterlogged_state) =
-                BlockStateResolver::resolve(&placed_entry, rotation, Mirror::default())
-            {
-                state = waterlogged_state;
-            }
-        }
-
-        // Apply processors
-        let mut should_place = true;
+        // Apply per-block processors
+        let mut loot = None;
+        let mut dropped = false;
         for processor in processors {
-            let Some(processed_state) = processor.process(chunk, world_pos, state) else {
-                should_place = false;
+            let Some(processed) = processor.process(chunk, world_pos, state) else {
+                dropped = true;
                 break;
             };
-            state = processed_state;
+            state = processed.state;
+            if processed.loot.is_some() {
+                loot = processed.loot;
+            }
         }
-        if !should_place {
+        if dropped {
             continue;
         }
 
-        chunk.set_block_state(wx, wy, wz, state);
-        place_block_entity(chunk, &placed_entry, block_entity_nbt.as_ref(), wx, wy, wz);
+        pending.push(PendingBlock {
+            world_pos,
+            state,
+            entry: placed_entry,
+            nbt: block_entity_nbt,
+            loot,
+        });
+    }
+
+    finalize_capped_processors(chunk, processors, origin, world_seed, &mut pending);
+
+    for pending_block in pending {
+        let world_pos = pending_block.world_pos;
+        if let Some(bbox) = chunk_box
+            && !bbox.contains_pos(&world_pos)
+        {
+            continue;
+        }
+
+        let mut state = pumpkin_data::block_state_transform::transform_block_state(
+            pending_block.state.id,
+            Mirror::default(),
+            rotation,
+        );
+
+        // Vanilla waterlogs the final rotated state when it stands in water
+        // (StructureTemplate.placeInWorld fluid handling).
+        if apply_waterlogging
+            && chunk.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
+        {
+            state = with_waterlogged(state);
+        }
+
+        chunk.set_block_state(world_pos.x, world_pos.y, world_pos.z, state);
+        place_block_entity(
+            chunk,
+            &pending_block.entry,
+            pending_block.nbt.as_ref(),
+            world_pos.x,
+            world_pos.y,
+            world_pos.z,
+            pending_block.loot,
+            state,
+        );
     }
 }
 
+/// Vanilla `CappedProcessor.finalizeProcessing` (CappedProcessor.java:54-80):
+/// fork the world random at the piece origin, shuffle the processed block
+/// list, and run the delegate over shuffled entries until `limit` of them
+/// actually changed.
+fn finalize_capped_processors(
+    chunk: &ProtoChunk,
+    processors: &[StructureProcessor],
+    origin: Vector3<i32>,
+    world_seed: i64,
+    pending: &mut [PendingBlock],
+) {
+    for processor in processors {
+        let StructureProcessor::Capped { limit, delegate } = processor else {
+            continue;
+        };
+        if *limit == 0 || pending.is_empty() {
+            continue;
+        }
+
+        // RandomSource.createThreadLocalInstance(seed).forkPositional().at(position)
+        // (CappedProcessor.java:62, LegacyRandomSource.java:73-77).
+        let fork_seed = LegacyRand::from_seed(world_seed as u64).next_i64();
+        let mut random = LegacyRand::from_seed(
+            (hash_block_pos(origin.x, origin.y, origin.z) ^ fork_seed) as u64,
+        );
+
+        let max_to_replace = (*limit).min(pending.len() as i32);
+        if max_to_replace < 1 {
+            continue;
+        }
+
+        // Util.toShuffledList (Util.java:1013-1021).
+        let mut indices: Vec<usize> = (0..pending.len()).collect();
+        for i in (2..=indices.len()).rev() {
+            let swap_to = random.next_bounded_i32(i as i32) as usize;
+            indices.swap(i - 1, swap_to);
+        }
+
+        let mut replaced = 0;
+        for &index in &indices {
+            if replaced >= max_to_replace {
+                break;
+            }
+            let entry = &mut pending[index];
+            let Some(processed) = delegate.process(chunk, entry.world_pos, entry.state) else {
+                continue;
+            };
+            // Vanilla counts an entry only when the delegate changed it.
+            if processed.state.id == entry.state.id && processed.loot.is_none() {
+                continue;
+            }
+            entry.state = processed.state;
+            if processed.loot.is_some() {
+                entry.loot = processed.loot;
+            }
+            replaced += 1;
+        }
+    }
+}
+
+/// Returns the state with `waterlogged=true` if the block supports it.
+fn with_waterlogged(state: &'static BlockState) -> &'static BlockState {
+    let block = pumpkin_data::Block::from_state_id(state.id);
+    let Some(properties) = block.properties(state.id) else {
+        return state;
+    };
+    let mut props = properties.to_props();
+    let mut found = false;
+    for (name, value) in &mut props {
+        if *name == "waterlogged" {
+            *value = "true";
+            found = true;
+        }
+    }
+    if !found {
+        return state;
+    }
+    BlockState::from_id(block.from_properties(&props).to_state_id(block))
+}
+
+#[allow(clippy::too_many_arguments)]
 fn place_block_entity(
     chunk: &mut ProtoChunk,
     placed_entry: &PaletteEntry,
@@ -201,9 +344,17 @@ fn place_block_entity(
     wx: i32,
     wy: i32,
     wz: i32,
+    loot: Option<(std::sync::Arc<str>, i64)>,
+    placed_state: &'static BlockState,
 ) {
-    let block_entity_id = get_block_entity_id(&placed_entry.name);
-    if block_entity_nbt.is_none() && block_entity_id.is_none() {
+    // A processor may have replaced the template block with a block-entity
+    // block (append_loot turns gravel into suspicious gravel), so the id
+    // lookup must consider the placed state, not just the palette name.
+    let block_entity_id = get_block_entity_id(&placed_entry.name).or_else(|| {
+        let placed_block = pumpkin_data::Block::from_state_id(placed_state.id);
+        get_block_entity_id(&format!("minecraft:{}", placed_block.name))
+    });
+    if block_entity_nbt.is_none() && block_entity_id.is_none() && loot.is_none() {
         return;
     }
     let block_entity_id = block_entity_id.unwrap_or(&placed_entry.name);
@@ -224,6 +375,13 @@ fn place_block_entity(
                 placed_nbt.child_tags.insert(key.clone(), value.clone());
             }
         }
+    }
+
+    // Vanilla append_loot stores the table plus a seed drawn from the rule
+    // random (AppendLoot.java:34-40).
+    if let Some((table, seed)) = loot {
+        placed_nbt.put_string("LootTable", table.to_string());
+        placed_nbt.put_long("LootTableSeed", seed);
     }
 
     if placed_nbt.get_string("LootTable").is_some()
@@ -356,6 +514,9 @@ pub(crate) fn get_block_entity_id(block_name: &str) -> Option<&'static str> {
         | "minecraft:crimson_sign"
         | "minecraft:warped_sign" => Some("minecraft:sign"),
         "minecraft:hanging_sign" => Some("minecraft:hanging_sign"),
+        "minecraft:suspicious_sand" | "minecraft:suspicious_gravel" => {
+            Some("minecraft:brushable_block")
+        }
         _ => None,
     }
 }
