@@ -262,6 +262,25 @@ impl World {
                         collisions.push(shape);
                     }
                 }
+            } else if block == &Block::MOVING_PISTON {
+                // Vanilla `MovingPistonBlock.getCollisionShape`
+                // (MovingPistonBlock.java:110-116) delegates to the piston block
+                // entity: the moved state's shape offset by the animation
+                // progress. The static MOVING_PISTON state has no shape, so the
+                // dynamic boxes come from the block entity here.
+                if let Some(block_entity) = self.get_block_entity(&pos)
+                    && let Some(piston) = block_entity
+                        .as_any()
+                        .downcast_ref::<crate::block::entities::piston::PistonBlockEntity>(
+                    )
+                {
+                    for shape in piston.collision_shapes() {
+                        if shape.intersects(&bounding_box) {
+                            collided = true;
+                            collisions.push(shape);
+                        }
+                    }
+                }
             } else {
                 for shape in state.get_block_collision_shapes() {
                     let shape = shape.at_pos(pos);
