@@ -7,8 +7,8 @@
 
 use std::sync::Arc;
 
-use pumpkin_data::BlockId;
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::{BlockId, HorizontalFacingExt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -146,11 +146,29 @@ impl World {
 
         for sensor_pos in sensors {
             let block = self.get_block(&sensor_pos);
-            // Calibrated sensors keep the wider vanilla listener radius; their
-            // frequency filtering via the amethyst input is still TODO.
             let radius = match block.id {
                 BlockId::SCULK_SENSOR => 8.0f64,
-                BlockId::CALIBRATED_SCULK_SENSOR => 16.0f64,
+                BlockId::CALIBRATED_SCULK_SENSOR => {
+                    // Vanilla CalibratedSculkSensorBlockEntity: a redstone
+                    // signal into the amethyst side only accepts vibrations of
+                    // exactly that frequency.
+                    let state = self.get_block_state(&sensor_pos);
+                    let props =
+                        pumpkin_data::block_properties::CalibratedSculkSensorLikeProperties::from_state_id(
+                            state.id, block,
+                        );
+                    let back = props.facing.to_block_direction().opposite();
+                    let back_pos = sensor_pos.offset(back.to_offset());
+                    let (back_block, back_state) = self.get_block_and_state(&back_pos);
+                    let comparison = crate::block::blocks::redstone::get_redstone_power(
+                        back_block, back_state, self, &back_pos, back,
+                    )
+                    .await;
+                    if comparison != 0 && comparison != frequency {
+                        continue;
+                    }
+                    16.0f64
+                }
                 _ => continue,
             };
 
