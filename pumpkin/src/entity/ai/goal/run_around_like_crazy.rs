@@ -1,6 +1,7 @@
-//! Vanilla `RunAroundLikeCrazyGoal` (RunAroundLikeCrazyGoal.java) — an
-//! untamed horse carrying a rider bolts to random spots and each second has a
-//! 1-in-50 roll to either tame (temper check) or buck the rider off.
+//! Vanilla `RunAroundLikeCrazyGoal` (RunAroundLikeCrazyGoal.java).
+//!
+//! An untamed horse carrying a rider bolts to random spots and each second
+//! has a 1-in-50 roll to either tame (temper check) or buck the rider off.
 
 use std::sync::atomic::Ordering;
 

@@ -53,7 +53,10 @@ const RESTART_DELAY: u8 = 160;
 /// per-block map, so the equivalent lives here keyed by dimension id (Pumpkin
 /// runs one world per dimension). Guarded by a sync mutex; never held across
 /// an await point.
-static RECENT_TOGGLES: LazyLock<Mutex<FxHashMap<u8, Vec<(BlockPos, i64)>>>> =
+/// Ordered `(pos, game time)` toggle records for one dimension.
+type ToggleList = Vec<(BlockPos, i64)>;
+
+static RECENT_TOGGLES: LazyLock<Mutex<FxHashMap<u8, ToggleList>>> =
     LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
 /// Vanilla `RedstoneTorchBlock.tick` (`RedstoneTorchBlock.java:79-82`): drop

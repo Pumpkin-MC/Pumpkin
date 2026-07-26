@@ -120,7 +120,7 @@ impl HorseEntity {
 
     /// Vanilla `AbstractHorse.handleEating` food table
     /// (AbstractHorse.java:412-451). Returns true when the food was used.
-    async fn handle_eating(&self, item: &pumpkin_data::item::Item) -> bool {
+    fn handle_eating(&self, item: &pumpkin_data::item::Item) -> bool {
         use pumpkin_data::item::Item;
         let (heal, temper) = if item == &Item::WHEAT {
             (2.0f32, 3)
@@ -147,7 +147,7 @@ impl HorseEntity {
         }
         // Vanilla: temper only counts for untamed horses under max temper.
         let tamed = self.tamed.load(Ordering::Relaxed);
-        if temper > 0 && !(!used && tamed) && self.temper.load(Ordering::Relaxed) < Self::MAX_TEMPER
+        if (used || !tamed) && temper > 0 && self.temper.load(Ordering::Relaxed) < Self::MAX_TEMPER
         {
             self.modify_temper(temper);
             used = true;
@@ -251,7 +251,7 @@ impl Mob for HorseEntity {
 
             if !item_stack.is_empty() {
                 // fedFood: horse food consumes on use.
-                if self.handle_eating(item_stack.item).await {
+                if self.handle_eating(item_stack.item) {
                     if player.gamemode.load() != pumpkin_util::GameMode::Creative {
                         item_stack.decrement(1);
                     }
