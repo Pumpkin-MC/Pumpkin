@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
 pub struct ResourcePackConfig {
     pub java: JavaResourcePackConfig,
@@ -9,7 +9,7 @@ pub struct ResourcePackConfig {
 }
 
 /// Java-specific resource pack configuration (Single URL/Hash)
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
 pub struct JavaResourcePackConfig {
     /// Whether the resource pack system is enabled.
@@ -25,7 +25,7 @@ pub struct JavaResourcePackConfig {
 }
 
 /// Bedrock-specific configuration (Supports multiple local/remote packs)
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
 pub struct BedrockResourcePackConfig {
     pub enabled: bool,
@@ -35,7 +35,7 @@ pub struct BedrockResourcePackConfig {
     pub packs: Vec<BedrockPack>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct BedrockPack {
     pub uuid: Uuid,
     pub version: String,

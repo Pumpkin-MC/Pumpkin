@@ -5,7 +5,7 @@ use std::collections::HashMap;
 ///
 /// Controls default URLs for bug reports, support, community, and other resources,
 /// as well as allowing custom links.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct ServerLinksConfig {
     /// Whether server links are enabled.

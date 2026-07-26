@@ -577,6 +577,8 @@ impl PluginManager {
             .clone()
             .ok_or(ManagerError::ServerNotInitialized)?;
 
+        let data_folder = self.plugin_dir.read().await.join(&metadata.name);
+
         let context = Arc::new(Context::new(
             metadata.clone(),
             Arc::clone(
@@ -590,6 +592,7 @@ impl PluginManager {
             Arc::clone(&self.handlers),
             Arc::clone(&self_ref),
             Arc::clone(&LOGGER_IMPL),
+            data_folder,
         ));
 
         // Create the plugin structure first

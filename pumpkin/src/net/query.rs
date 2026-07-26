@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     ffi::{CString, NulError},
     net::SocketAddr,
-    sync::{Arc, atomic::Ordering},
+    sync::Arc,
     time::Duration,
 };
 
@@ -13,9 +13,10 @@ use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_world::CURRENT_MC_VERSION;
 use rand::RngExt;
 use tokio::{net::UdpSocket, sync::RwLock, time};
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
+use crate::{STOP_INTERRUPT, server::Server};
 
 pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
     let socket = Arc::new(
@@ -23,25 +24,30 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
             .await
             .expect("Unable to bind to address"),
     );
-    start_query_handler_with_socket(server, socket, query_addr).await;
+    start_query_handler_with_socket(server, socket, query_addr, STOP_INTERRUPT.clone()).await;
 }
 
 pub async fn start_query_handler_with_socket(
     server: Arc<Server>,
     socket: Arc<UdpSocket>,
     query_addr: SocketAddr,
+    stop_token: CancellationToken,
 ) {
-
     // Challenge tokens are bound to the IP address and port
     let valid_challenge_tokens = Arc::new(RwLock::new(HashMap::new()));
     let valid_challenge_tokens_clone = valid_challenge_tokens.clone();
+    let cleanup_token = stop_token.clone();
     // All challenge tokens ever created are expired every 30 seconds
     tokio::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(30));
 
         loop {
-            interval.tick().await;
-            valid_challenge_tokens_clone.write().await.clear();
+            tokio::select! {
+                _ = interval.tick() => {
+                    valid_challenge_tokens_clone.write().await.clear();
+                }
+                _ = cleanup_token.cancelled() => break,
+            }
         }
     });
 
@@ -58,7 +64,7 @@ pub async fn start_query_handler_with_socket(
         .to_pretty_console()
     );
 
-    while !SHOULD_STOP.load(Ordering::Relaxed) {
+    while !stop_token.is_cancelled() {
         let socket = socket.clone();
         let valid_challenge_tokens = valid_challenge_tokens.clone();
         let server = server.clone();
@@ -66,7 +72,7 @@ pub async fn start_query_handler_with_socket(
 
         let recv_result = tokio::select! {
             result = socket.recv_from(&mut buf) => Some(result),
-            () = STOP_INTERRUPT.cancelled() => None,
+            () = stop_token.cancelled() => None,
         };
 
         let Some(Ok((length, addr))) = recv_result else {

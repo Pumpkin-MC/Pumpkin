@@ -1,12 +1,9 @@
 use std::{net::IpAddr, str::FromStr};
 
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandResult, CommandSender,
-        args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
-        tree::{CommandTree, builder::argument},
-    },
-    data::SaveJSONConfiguration,
+use crate::command::{
+    CommandError, CommandExecutor, CommandResult, CommandSender,
+    args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
+    tree::{CommandTree, builder::argument},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
@@ -59,7 +56,7 @@ impl CommandExecutor for Executor {
                 )))
             };
 
-            lock.save();
+            server.data.save_banned_ips(&lock);
 
             result
         })

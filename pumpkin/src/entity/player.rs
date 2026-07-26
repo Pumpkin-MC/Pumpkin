@@ -94,7 +94,6 @@ use crate::block::blocks::bed::BedBlock;
 use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{CommandSender, client_suggestions};
-use crate::data::SaveJSONConfiguration;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
@@ -2792,7 +2791,7 @@ impl Player {
             ),
         );
 
-        banned_players.save();
+        server.data.save_banned_players(&banned_players);
         drop(banned_players);
 
         let kick_reason = reason.unwrap_or_else(|| {
@@ -2827,7 +2826,7 @@ impl Player {
                 string_reason,
             ));
 
-        banned_ips.save();
+        server.data.save_banned_ips(&banned_ips);
         drop(banned_ips);
 
         let kick_reason = reason.unwrap_or_else(|| {

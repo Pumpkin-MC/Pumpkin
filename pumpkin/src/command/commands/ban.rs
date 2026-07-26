@@ -9,7 +9,7 @@ use crate::{
         },
         tree::{CommandTree, builder::argument},
     },
-    data::{SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry},
+    data::banlist_serializer::BannedPlayerEntry,
     net::{DisconnectReason, GameProfile},
 };
 use CommandError::InvalidConsumption;
@@ -107,7 +107,7 @@ async fn ban_profile(
     {
         if entry.name != profile.name {
             entry.name.clone_from(&profile.name);
-            banned_players.save();
+            server.data.save_banned_players(&banned_players);
         }
         return false;
     }
@@ -119,7 +119,7 @@ async fn ban_profile(
         reason.clone(),
     ));
 
-    banned_players.save();
+    server.data.save_banned_players(&banned_players);
     drop(banned_players);
 
     // Send messages

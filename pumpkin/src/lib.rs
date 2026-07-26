@@ -8,7 +8,7 @@ use crate::net::bedrock::BedrockClient;
 use crate::net::java::JavaClient;
 use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
-use crate::server::{Server, ticker::Ticker};
+use crate::server::{Server, ServerPaths, ticker::Ticker};
 use plugin::server::server_command::ServerCommandEvent;
 use plugin::server::server_load::{LoadType, ServerLoadEvent};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
@@ -195,14 +195,21 @@ pub fn stop_or_exit_server() {
 /// Errors that can occur when binding network ports for a server instance.
 #[derive(Debug, thiserror::Error)]
 pub enum NetworkBindError {
-    #[error("Address {address} is already in use. Make sure another instance of the server isn't already running")]
+    #[error(
+        "Address {address} is already in use. Make sure another instance of the server isn't already running"
+    )]
     AddrInUse { address: SocketAddr },
-    #[error("Permission denied when binding to {address}. You might need sudo/admin privileges to use ports below 1024")]
+    #[error(
+        "Permission denied when binding to {address}. You might need sudo/admin privileges to use ports below 1024"
+    )]
     PermissionDenied { address: SocketAddr },
     #[error("The address {address} is not available on this machine")]
     AddrNotAvailable { address: SocketAddr },
     #[error("Failed to bind to {address}: {source}")]
-    Other { address: SocketAddr, source: std::io::Error },
+    Other {
+        address: SocketAddr,
+        source: std::io::Error,
+    },
 }
 
 async fn bind_tcp_async(address: SocketAddr) -> Result<TcpListener, NetworkBindError> {
@@ -274,19 +281,35 @@ impl PumpkinServer {
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
     ) -> Result<Self, NetworkBindError> {
-        let server = Server::new(basic_config, advanced_config, vanilla_data).await;
+        let paths = ServerPaths::from_basic_config(&basic_config);
+        Self::new_with_result_and_paths(
+            basic_config,
+            advanced_config,
+            vanilla_data,
+            paths,
+            STOP_INTERRUPT.clone(),
+        )
+        .await
+    }
+
+    /// Creates a server with explicit instance paths and a per-instance stop token.
+    pub async fn new_with_result_and_paths(
+        basic_config: BasicConfiguration,
+        advanced_config: AdvancedConfiguration,
+        vanilla_data: VanillaData,
+        paths: ServerPaths,
+        stop_token: CancellationToken,
+    ) -> Result<Self, NetworkBindError> {
+        let server =
+            Server::new_with_paths(basic_config, advanced_config, vanilla_data, paths).await;
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
-        if rcon.enabled {
-            warn!(
-                "RCON is enabled, but it's highly insecure as it transmits passwords and commands in plain text. This makes it vulnerable to interception and exploitation by anyone on the network"
-            );
-            let rcon_server = server.clone();
-            server.spawn_task(async move {
-                RCONServer::run(&rcon, rcon_server).await;
-            });
-        }
+        let rcon_listener = if rcon.enabled {
+            Some(bind_tcp_async(rcon.address).await?)
+        } else {
+            None
+        };
 
         let tcp_listener = if server.advanced_config.networking.java.enabled {
             let address = server.advanced_config.networking.java.address;
@@ -303,6 +326,7 @@ impl PumpkinServer {
                     server.clone(),
                     query_socket,
                     query_addr,
+                    stop_token.clone(),
                 ));
             }
 
@@ -313,7 +337,19 @@ impl PumpkinServer {
                     &server.advanced_config.networking.lan_broadcast,
                     &server.advanced_config.networking.java.motd,
                 );
-                server.spawn_task(lan_broadcast.start(addr));
+                let lan_socket =
+                    lan_broadcast
+                        .bind()
+                        .await
+                        .map_err(|source| NetworkBindError::Other {
+                            address: SocketAddr::from(([0, 0, 0, 0], 0)),
+                            source,
+                        })?;
+                server.spawn_task(lan_broadcast.start_with_socket(
+                    addr,
+                    lan_socket,
+                    stop_token.clone(),
+                ));
             }
 
             Some(listener)
@@ -324,8 +360,9 @@ impl PumpkinServer {
         // Ticker
         {
             let ticker_server = server.clone();
+            let ticker_token = stop_token.clone();
             server.spawn_task(async move {
-                Ticker::run(&ticker_server).await;
+                Ticker::run_with_token(&ticker_server, ticker_token).await;
             });
         };
 
@@ -335,6 +372,19 @@ impl PumpkinServer {
         } else {
             None
         };
+
+        if let Some(listener) = rcon_listener {
+            warn!(
+                "RCON is enabled, but it's highly insecure as it transmits passwords and commands in plain text. This makes it vulnerable to interception and exploitation by anyone on the network"
+            );
+            let rcon_server = server.clone();
+            let rcon_config = rcon.clone();
+            let rcon_token = stop_token.clone();
+            server.spawn_task(async move {
+                RCONServer::run_with_listener(listener, &rcon_config, rcon_server, rcon_token)
+                    .await;
+            });
+        }
 
         Ok(Self {
             server,
@@ -372,7 +422,7 @@ impl PumpkinServer {
     /// Starts the server with the global cancellation token.
     pub async fn start(&self) {
         let token = STOP_INTERRUPT.clone();
-        self.start_with_token(token).await;
+        self.start_with_token_and_global(token, true).await;
     }
 
     /// Starts the server with a specific cancellation token for per-instance control.
@@ -380,7 +430,16 @@ impl PumpkinServer {
     /// This allows multiple server instances to run concurrently, each with their
     /// own cancellation signal.
     pub async fn start_with_token(&self, stop_token: CancellationToken) {
-        if self.server.advanced_config.commands.use_console
+        self.start_with_token_and_global(stop_token, false).await;
+    }
+
+    async fn start_with_token_and_global(
+        &self,
+        stop_token: CancellationToken,
+        global_shutdown: bool,
+    ) {
+        if global_shutdown
+            && self.server.advanced_config.commands.use_console
             && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
         {
             if let Some(rl) = wrapper.take_readline() {
@@ -405,7 +464,11 @@ impl PumpkinServer {
             .fire(ServerLoadEvent::new(LoadType::Startup))
             .await;
 
-        while !SHOULD_STOP.load(Ordering::Relaxed) {
+        while if global_shutdown {
+            !SHOULD_STOP.load(Ordering::Relaxed)
+        } else {
+            !stop_token.is_cancelled()
+        } {
             if !self
                 .unified_listener_task(&mut master_client_id, &tasks, &bedrock_clients, &stop_token)
                 .await
@@ -414,9 +477,11 @@ impl PumpkinServer {
             }
         }
 
-        SERVER_IS_STOPPING.store(true, Ordering::Release);
+        if global_shutdown {
+            SERVER_IS_STOPPING.store(true, Ordering::Release);
+        }
 
-        if let Some(crash_report) = CRASH_REPORT.get() {
+        if global_shutdown && let Some(crash_report) = CRASH_REPORT.get() {
             crash_report.print_to_console();
             crash_report.save_and_log();
 
@@ -470,7 +535,8 @@ impl PumpkinServer {
 
         info!("Completed save!");
 
-        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
+        if global_shutdown
+            && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
             && let Some(rl) = wrapper.take_readline()
         {
             let _ = rl;

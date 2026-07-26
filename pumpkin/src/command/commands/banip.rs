@@ -6,7 +6,7 @@ use crate::{
         args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
         tree::{CommandTree, builder::argument},
     },
-    data::{SaveJSONConfiguration, banlist_serializer::BannedIpEntry},
+    data::banlist_serializer::BannedIpEntry,
     net::DisconnectReason,
     server::Server,
 };
@@ -107,7 +107,7 @@ async fn ban_ip(
         reason.clone(),
     ));
 
-    banned_ips.save();
+    server.data.save_banned_ips(&banned_ips);
     drop(banned_ips);
 
     // Send messages

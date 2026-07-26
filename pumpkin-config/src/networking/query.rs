@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for the server query protocol (legacy Minecraft query).
 ///
 /// Controls whether the query service is enabled and which address it binds to.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct QueryConfig {
     /// Whether the query protocol is enabled.

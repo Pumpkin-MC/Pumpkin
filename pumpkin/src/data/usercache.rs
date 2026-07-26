@@ -35,17 +35,18 @@ pub struct UserCache {
 }
 
 impl UserCache {
-    fn path() -> std::path::PathBuf {
-        env::current_dir()
+    #[must_use]
+    pub fn load() -> Self {
+        let data_dir = env::current_dir()
             .unwrap_or_else(|_| ".".into())
-            .join(super::DATA_FOLDER)
-            .join(USER_CACHE_PATH)
+            .join(super::DATA_FOLDER);
+        Self::load_from(data_dir)
     }
 
     #[must_use]
-    pub fn load() -> Self {
+    pub fn load_from(data_dir: impl AsRef<std::path::Path>) -> Self {
         let mut cache = Self::default();
-        let mut loaded = Self::load_entries();
+        let mut loaded = Self::load_entries(data_dir.as_ref());
         loaded.reverse();
         for entry in loaded {
             cache.safe_add(entry);
@@ -54,7 +55,14 @@ impl UserCache {
     }
 
     pub fn save(&self) {
-        let path = Self::path();
+        let data_dir = env::current_dir()
+            .unwrap_or_else(|_| ".".into())
+            .join(super::DATA_FOLDER);
+        self.save_to(data_dir);
+    }
+
+    pub fn save_to(&self, data_dir: impl AsRef<std::path::Path>) {
+        let path = data_dir.as_ref().join(USER_CACHE_PATH);
         if let Some(parent) = path.parent()
             && let Err(error) = fs::create_dir_all(parent)
         {
@@ -88,15 +96,12 @@ impl UserCache {
     pub fn get_by_name(&mut self, name: &str) -> Option<UserCacheEntry> {
         let lowercase_name = name.to_ascii_lowercase();
         let mut profile = self.profiles_by_name.get(&lowercase_name).cloned();
-        let mut needs_save = false;
-
         if let Some(entry) = &profile
             && is_expired(entry.expiration_date)
         {
             self.profiles_by_uuid.remove(&entry.uuid);
             self.profiles_by_name
                 .remove(&entry.name.to_ascii_lowercase());
-            needs_save = true;
             profile = None;
         }
 
@@ -106,10 +111,6 @@ impl UserCache {
                 .insert(entry.name.to_ascii_lowercase(), entry.clone());
             self.profiles_by_uuid.insert(entry.uuid, entry.clone());
             return Some(entry);
-        }
-
-        if needs_save {
-            self.save();
         }
 
         None
@@ -134,7 +135,6 @@ impl UserCache {
         };
 
         self.safe_add(entry.clone());
-        self.save();
         entry
     }
 
@@ -158,8 +158,8 @@ impl UserCache {
         entries
     }
 
-    fn load_entries() -> Vec<UserCacheEntry> {
-        let path = Self::path();
+    fn load_entries(data_dir: &std::path::Path) -> Vec<UserCacheEntry> {
+        let path = data_dir.join(USER_CACHE_PATH);
         let Ok(raw) = fs::read_to_string(path) else {
             return Vec::new();
         };

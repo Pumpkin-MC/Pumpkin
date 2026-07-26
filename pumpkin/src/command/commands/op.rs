@@ -6,7 +6,6 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::command::suggestion::provider::{SuggestionProvider, SuggestionProviderResult};
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
-use crate::data::SaveJSONConfiguration;
 use pumpkin_config::op::Op;
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
@@ -72,7 +71,7 @@ impl CommandExecutor for OpCommandExecutor {
             }
 
             if successes > 0 {
-                config.save();
+                server.data.save_operator_config(&config);
             }
 
             if successes == 0 {

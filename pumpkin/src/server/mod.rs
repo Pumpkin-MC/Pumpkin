@@ -45,6 +45,7 @@ use rsa::RsaPublicKey;
 use std::collections::HashSet;
 use std::fs;
 use std::net::IpAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
@@ -69,9 +70,28 @@ use crate::data::advancement_data::AdvancementManager;
 use crate::server::scheduler::TaskScheduler;
 
 /// Represents a Minecraft server instance.
+#[derive(Clone, Debug)]
+pub struct ServerPaths {
+    pub world_dir: PathBuf,
+    pub data_dir: PathBuf,
+    pub plugin_dir: PathBuf,
+}
+
+impl ServerPaths {
+    #[must_use]
+    pub fn from_basic_config(config: &BasicConfiguration) -> Self {
+        Self {
+            world_dir: config.get_world_path(),
+            data_dir: PathBuf::from("./data"),
+            plugin_dir: PathBuf::from("./plugins"),
+        }
+    }
+}
+
 pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,
+    pub paths: ServerPaths,
 
     pub data: VanillaData,
 
@@ -145,12 +165,23 @@ pub struct Server {
 }
 
 impl Server {
-    #[expect(clippy::too_many_lines)]
     #[must_use]
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
+    ) -> Arc<Self> {
+        let paths = ServerPaths::from_basic_config(&basic_config);
+        Self::new_with_paths(basic_config, advanced_config, vanilla_data, paths).await
+    }
+
+    #[expect(clippy::too_many_lines)]
+    #[must_use]
+    pub async fn new_with_paths(
+        basic_config: BasicConfiguration,
+        advanced_config: AdvancedConfiguration,
+        vanilla_data: VanillaData,
+        paths: ServerPaths,
     ) -> Arc<Self> {
         let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
         // First register the default commands. After that, plugins can put in their own.
@@ -161,7 +192,7 @@ impl Server {
             advanced_config.commands.broadcast_console_to_ops,
         );
 
-        let world_path = basic_config.get_world_path();
+        let world_path = paths.world_dir.clone();
 
         let block_registry = super::block::registry::default_registry();
 
@@ -258,7 +289,7 @@ impl Server {
             basic_config,
             advanced_config,
             data: vanilla_data,
-            plugin_manager: Arc::new(PluginManager::new()),
+            plugin_manager: Arc::new(PluginManager::with_plugin_dir(paths.plugin_dir.clone())),
             permission_manager: Arc::new(RwLock::new(PermissionManager::new(
                 permission_registry.clone(),
             ))),
@@ -293,6 +324,7 @@ impl Server {
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
+            paths,
         };
         let server = Arc::new(server);
 
@@ -423,7 +455,7 @@ impl Server {
         let server = self.clone();
         let name_clone = name.clone();
         tokio::task::spawn_blocking(move || {
-            let world_path = server.basic_config.get_world_path().join(name_clone);
+            let world_path = server.paths.world_dir.join(name_clone);
             let registry = server.block_registry.clone();
             let l_info = server.level_info.clone();
             let weak = Arc::downgrade(&server);
@@ -556,6 +588,7 @@ impl Server {
                     .is_ok() {
                     let mut user_cache = self.data.user_cache.write().await;
                     user_cache.upsert(player.gameprofile.id, player.gameprofile.name.clone());
+                    self.data.save_user_cache(&user_cache);
 
                     // TODO: Config if we want increase online
                     if let Some(config) = config {
@@ -605,10 +638,11 @@ impl Server {
 
         if let Err(err) = self
             .world_info_writer
-            .write_world_info(&level_data, &self.basic_config.get_world_path())
+            .write_world_info(&level_data, &self.paths.world_dir)
         {
             error!("Failed to save level.dat: {err}");
         }
+        self.data.save_all().await;
         info!("Completed worlds");
     }
 

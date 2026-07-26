@@ -1,15 +1,12 @@
 use crate::command::CommandResult;
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandSender,
-        args::{
-            Arg, ConsumedArgs,
-            gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
-        },
-        tree::CommandTree,
-        tree::builder::argument,
+use crate::command::{
+    CommandError, CommandExecutor, CommandSender,
+    args::{
+        Arg, ConsumedArgs,
+        gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
     },
-    data::SaveJSONConfiguration,
+    tree::CommandTree,
+    tree::builder::argument,
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
@@ -61,7 +58,7 @@ impl CommandExecutor for Executor {
             }
 
             if succeeded_deops > 0 {
-                config.save();
+                server.data.save_operator_config(&config);
             }
 
             if succeeded_deops == 0 {

@@ -1,13 +1,10 @@
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandResult, CommandSender,
-        args::{
-            Arg, ConsumedArgs,
-            gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
-        },
-        tree::{CommandTree, builder::argument},
+use crate::command::{
+    CommandError, CommandExecutor, CommandResult, CommandSender,
+    args::{
+        Arg, ConsumedArgs,
+        gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
     },
-    data::SaveJSONConfiguration,
+    tree::{CommandTree, builder::argument},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
@@ -54,7 +51,7 @@ impl CommandExecutor for Executor {
             }
 
             if successes > 0 {
-                lock.save();
+                server.data.save_banned_players(&lock);
                 Ok(successes)
             } else {
                 let err_target = targets

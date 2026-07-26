@@ -1,9 +1,10 @@
-use crate::instance::config::{InstanceConfig, InstanceId};
-use crate::instance::port_allocator::PortAllocator;
 use crate::PumpkinServer;
+use crate::instance::config::{InstanceConfig, InstanceId};
+use crate::instance::port_allocator::{PortAllocator, PortReservation};
+use crate::server::ServerPaths;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -19,8 +20,6 @@ pub enum InstanceError {
     PortAllocation(String),
     #[error("Failed to bind network: {0}")]
     NetworkBind(String),
-    #[error("Server creation failed: {0}")]
-    Creation(String),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -40,9 +39,12 @@ pub struct InstanceInfo {
     pub config: InstanceConfig,
     pub state: InstanceState,
     pub server: Option<Arc<PumpkinServer>>,
+    pub ports: Vec<PortReservation>,
     /// Per-instance cancellation token used to stop this instance without
     /// affecting other concurrent instances.
     pub stop_token: CancellationToken,
+    run_started: AtomicBool,
+    run_finished: CancellationToken,
 }
 
 impl std::fmt::Debug for InstanceInfo {
@@ -52,15 +54,12 @@ impl std::fmt::Debug for InstanceInfo {
             .field("config", &self.config)
             .field("state", &self.state)
             .field("has_server", &self.server.is_some())
+            .field("ports", &self.ports)
             .finish()
     }
 }
 
 /// Manages multiple Pumpkin server instances.
-///
-/// The `InstanceManager` provides a centralized system for creating, starting,
-/// stopping, and managing multiple isolated server instances. It handles port
-/// allocation, resource isolation, and lifecycle management.
 pub struct InstanceManager {
     instances: HashMap<InstanceId, InstanceInfo>,
     port_allocator: Arc<PortAllocator>,
@@ -69,11 +68,7 @@ pub struct InstanceManager {
 
 impl InstanceManager {
     pub fn new() -> Self {
-        Self {
-            instances: HashMap::new(),
-            port_allocator: Arc::new(PortAllocator::default_range()),
-            next_id: AtomicU64::new(1),
-        }
+        Self::with_port_range(25565..=25665)
     }
 
     pub fn with_port_range(range: std::ops::RangeInclusive<u16>) -> Self {
@@ -88,138 +83,123 @@ impl InstanceManager {
         InstanceId(self.next_id.fetch_add(1, Ordering::SeqCst))
     }
 
-    /// Creates a new server instance with the given configuration.
-    ///
-    /// The instance is created in the `Created` state. Call `start_instance`
-    /// to actually begin running it.
-    ///
-    /// # Errors
-    /// Returns an error if the configuration is invalid or if required
-    /// directories cannot be created.
+    /// Creates an instance and prepares its isolated directories.
     pub async fn create_instance(
         &mut self,
         config: InstanceConfig,
     ) -> Result<InstanceId, InstanceError> {
         let id = self.generate_id();
 
-        let config_dir = config.config_path();
-        if !config_dir.exists() {
-            tokio::fs::create_dir_all(&config_dir).await?;
+        for path in [
+            config.config_path(),
+            config.world_path(),
+            config.plugin_path(),
+            config.data_path(),
+        ] {
+            tokio::fs::create_dir_all(path).await?;
         }
 
-        let world_dir = config.world_path();
-        if !world_dir.exists() {
-            tokio::fs::create_dir_all(&world_dir).await?;
-        }
-
-        let plugin_dir = config.plugin_path();
-        if !plugin_dir.exists() {
-            tokio::fs::create_dir_all(&plugin_dir).await?;
-        }
-
-        let info = InstanceInfo {
+        self.instances.insert(
             id,
-            config,
-            state: InstanceState::Created,
-            server: None,
-            stop_token: CancellationToken::new(),
-        };
-
-        self.instances.insert(id, info);
+            InstanceInfo {
+                id,
+                config,
+                state: InstanceState::Created,
+                server: None,
+                ports: Vec::new(),
+                stop_token: CancellationToken::new(),
+                run_started: AtomicBool::new(false),
+                run_finished: CancellationToken::new(),
+            },
+        );
         info!("Created instance {id:?}");
         Ok(id)
     }
 
-    /// Starts a created instance.
-    ///
-    /// This loads vanilla data, creates the `PumpkinServer`, binds network ports,
-    /// and initializes plugins. Call [`Self::run_instance`] to begin the accept loop.
-    ///
-    /// # Errors
-    /// Returns an error if the instance is not found, already running, or
-    /// if network binding fails.
+    /// Starts an instance, including its accept loop.
     pub async fn start_instance(&mut self, id: InstanceId) -> Result<(), InstanceError> {
         let info = self
             .instances
             .get_mut(&id)
             .ok_or(InstanceError::NotFound(id))?;
 
-        if info.state == InstanceState::Running || info.state == InstanceState::Starting {
+        if matches!(info.state, InstanceState::Starting | InstanceState::Running) {
             return Err(InstanceError::AlreadyRunning(id));
         }
 
         info.state = InstanceState::Starting;
-        // Fresh token for this start cycle so a previous stop does not leave it cancelled.
         info.stop_token = CancellationToken::new();
 
-        let plugin_dir = info.config.plugin_path();
-
-        // Take ownership of the configs from the instance info.
-        // We replace with defaults temporarily so we can move the values out.
-        // Note: BasicConfiguration / AdvancedConfiguration are not Clone.
-        let basic_config = std::mem::take(&mut info.config.basic);
-        let advanced_config = std::mem::take(&mut info.config.advanced);
-
-        let vanilla_data = crate::data::VanillaData::load();
-
-        let server = match PumpkinServer::new_with_result(
-            basic_config,
-            advanced_config,
-            vanilla_data,
-        )
-        .await
-        {
-            Ok(server) => server,
-            Err(e) => {
+        let reservations = match info.config.reserve_ports(&self.port_allocator) {
+            Ok(reservations) => reservations,
+            Err(error) => {
                 info.state = InstanceState::Failed;
-                return Err(InstanceError::NetworkBind(e.to_string()));
+                return Err(InstanceError::PortAllocation(error.to_string()));
             }
         };
 
-        server.server.plugin_manager.set_plugin_dir(plugin_dir).await;
-        server.init_plugins().await;
+        let paths = ServerPaths {
+            world_dir: info.config.world_path(),
+            data_dir: info.config.data_path(),
+            plugin_dir: info.config.plugin_path(),
+        };
+        let server_result = PumpkinServer::new_with_result_and_paths(
+            info.config.basic.clone(),
+            info.config.advanced.clone(),
+            crate::data::VanillaData::load_from(&paths.data_dir),
+            paths,
+            info.stop_token.clone(),
+        )
+        .await;
 
-        info.server = Some(Arc::new(server));
+        let server = match server_result {
+            Ok(server) => Arc::new(server),
+            Err(error) => {
+                for reservation in &reservations {
+                    self.port_allocator
+                        .free_for(reservation.protocol, reservation.port);
+                }
+                info.state = InstanceState::Failed;
+                return Err(InstanceError::NetworkBind(error.to_string()));
+            }
+        };
+
+        server.init_plugins().await;
+        info.server = Some(server.clone());
+        info.ports = reservations;
         info.state = InstanceState::Running;
+        info.run_started.store(true, Ordering::Release);
+        info.run_finished = CancellationToken::new();
+
+        let stop_token = info.stop_token.clone();
+        let run_finished = info.run_finished.clone();
+        tokio::spawn(async move {
+            server.start_with_token(stop_token).await;
+            run_finished.cancel();
+        });
 
         info!("Started instance {id:?}");
         Ok(())
     }
 
-    /// Starts the main loop for a running instance.
-    ///
-    /// This method blocks until the instance is stopped. It should typically
-    /// be spawned as a task if you want to run multiple instances concurrently.
-    ///
-    /// # Errors
-    /// Returns an error if the instance is not found or not running.
+    /// Waits for a running instance to stop.
     pub async fn run_instance(&self, id: InstanceId) -> Result<(), InstanceError> {
         let info = self.instances.get(&id).ok_or(InstanceError::NotFound(id))?;
-        let server = info
-            .server
-            .clone()
-            .ok_or(InstanceError::NotRunning(id))?;
-        let stop_token = info.stop_token.clone();
-
-        server.start_with_token(stop_token).await;
+        if info.server.is_none() || !info.run_started.load(Ordering::Acquire) {
+            return Err(InstanceError::NotRunning(id));
+        }
+        info.run_finished.cancelled().await;
         Ok(())
     }
 
-    /// Stops a running instance gracefully.
-    ///
-    /// Cancels the instance's cancellation token so any active
-    /// [`Self::run_instance`] call can exit. Does not use the global
-    /// `stop_server()` path, so other instances keep running.
-    ///
-    /// # Errors
-    /// Returns an error if the instance is not found.
+    /// Stops an instance and waits for all of its server tasks to finish.
     pub async fn stop_instance(&mut self, id: InstanceId) -> Result<(), InstanceError> {
         let info = self
             .instances
             .get_mut(&id)
             .ok_or(InstanceError::NotFound(id))?;
 
-        if info.state != InstanceState::Running && info.state != InstanceState::Starting {
+        if !matches!(info.state, InstanceState::Starting | InstanceState::Running) {
             info.state = InstanceState::Stopped;
             return Ok(());
         }
@@ -227,39 +207,27 @@ impl InstanceManager {
         info.state = InstanceState::Stopping;
         info.stop_token.cancel();
 
-        if let Some(server) = info.server.take() {
+        if info.run_started.load(Ordering::Acquire) {
+            info.run_finished.cancelled().await;
+        } else if let Some(server) = info.server.as_ref() {
             server.unload_plugins().await;
-            drop(server);
+            server.server.shutdown().await;
         }
 
+        info.server = None;
+        info.run_started.store(false, Ordering::Release);
+        for reservation in info.ports.drain(..) {
+            self.port_allocator
+                .free_for(reservation.protocol, reservation.port);
+        }
         info.state = InstanceState::Stopped;
         info!("Stopped instance {id:?}");
         Ok(())
     }
 
-    /// Deletes an instance, stopping it first if it's running.
-    ///
-    /// After deletion, the instance ID is no longer valid.
-    ///
-    /// # Errors
-    /// Returns an error if the instance is not found.
+    /// Stops and deletes an instance.
     pub async fn delete_instance(&mut self, id: InstanceId) -> Result<(), InstanceError> {
-        {
-            let info = self
-                .instances
-                .get_mut(&id)
-                .ok_or(InstanceError::NotFound(id))?;
-
-            if info.state == InstanceState::Running || info.state == InstanceState::Starting {
-                info.state = InstanceState::Stopping;
-                info.stop_token.cancel();
-                if let Some(server) = info.server.take() {
-                    server.unload_plugins().await;
-                    drop(server);
-                }
-            }
-        }
-
+        self.stop_instance(id).await?;
         self.instances.remove(&id);
         info!("Deleted instance {id:?}");
         Ok(())
@@ -274,7 +242,9 @@ impl InstanceManager {
     }
 
     pub fn list_instances(&self) -> Vec<InstanceId> {
-        self.instances.keys().copied().collect()
+        let mut ids: Vec<_> = self.instances.keys().copied().collect();
+        ids.sort_unstable_by_key(|id| id.0);
+        ids
     }
 
     pub fn instance_count(&self) -> usize {

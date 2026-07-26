@@ -1,16 +1,18 @@
-use std::{net::SocketAddr, sync::atomic::Ordering};
+use std::net::SocketAddr;
 
 use packet::{ClientboundPacket, Packet, PacketError, ServerboundPacket};
 use pumpkin_config::RCONConfig;
 use std::sync::Arc;
+use tokio::net::TcpListener;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     select,
 };
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 use crate::command::CommandSender;
-use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
+use crate::{STOP_INTERRUPT, server::Server};
 
 pub mod packet;
 
@@ -18,15 +20,23 @@ pub struct RCONServer;
 
 impl RCONServer {
     pub async fn run(config: &RCONConfig, server: Arc<Server>) {
-        let listener = tokio::net::TcpListener::bind(config.address).await.unwrap();
+        let listener = TcpListener::bind(config.address).await.unwrap();
+        Self::run_with_listener(listener, config, server, STOP_INTERRUPT.clone()).await;
+    }
 
+    pub async fn run_with_listener(
+        listener: TcpListener,
+        config: &RCONConfig,
+        server: Arc<Server>,
+        stop_token: CancellationToken,
+    ) {
         let password = Arc::new(config.password.clone());
 
         let mut connections = 0;
-        while !SHOULD_STOP.load(Ordering::Relaxed) {
+        while !stop_token.is_cancelled() {
             let await_new_client = || async {
                 let t1 = listener.accept();
-                let t2 = STOP_INTERRUPT.cancelled();
+                let t2 = stop_token.cancelled();
 
                 select! {
                     client = t1 => Some(client),

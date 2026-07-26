@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Recipe-related configuration.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct RecipeConfig {
     /// Whether recipes are sent to clients, enabling the recipe book.
