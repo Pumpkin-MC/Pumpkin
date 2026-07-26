@@ -17,5 +17,13 @@ pub trait MoveControlTrait: Control {
 
     fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed_modifier: f64);
 
-    fn stop(&mut self) {}
+    /// Vanilla `MoveControl.strafe` — sideways/backwards input relative to the
+    /// mob's facing, re-armed by the owning goal every tick.
+    fn strafe(&mut self, _forwards: f32, _sideways: f32) {}
+
+    /// True while a strafe request from this tick is pending, so the navigator's
+    /// idle branch does not stomp it before the controller runs.
+    fn is_strafing(&self) -> bool {
+        false
+    }
 }

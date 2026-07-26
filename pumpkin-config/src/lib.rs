@@ -65,6 +65,34 @@ impl LoadConfiguration for PumpkinConfig {
         Path::new("pumpkin.toml")
     }
 
+    fn first_run_template() -> Option<String> {
+        // Pick the template whose comments match the operator's locale
+        // (LC_ALL > LC_MESSAGES > LANG > LANGUAGE, first that is set).
+        let locale = ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"]
+            .iter()
+            .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
+            .unwrap_or_default()
+            .to_lowercase();
+        let template = if locale.starts_with("zh") {
+            include_str!("../../config/pumpkin.zh_cn.toml")
+        } else {
+            include_str!("../../config/pumpkin.en_us.toml")
+        };
+        // The shipped templates pin a demo seed; a fresh server must roll its own.
+        let template = template
+            .lines()
+            .map(|line| {
+                if line.starts_with("seed = ") {
+                    "seed = \"\""
+                } else {
+                    line
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        Some(template + "\n")
+    }
+
     fn validate(&self) {
         self.basic.validate();
         self.advanced.validate();
@@ -300,6 +328,21 @@ pub trait LoadConfiguration {
             }
 
             merged_config
+        } else if let Some(template) = Self::first_run_template() {
+            // PowerNukkitX-style first run: write the commented template that
+            // matches the operator's system language, then load it through the
+            // normal merge path so file and memory agree.
+            if let Err(err) = fs::write(&path, &template) {
+                warn!(
+                    "Couldn't write default config to {:?}. Reason: {}",
+                    path.display(),
+                    err
+                );
+            }
+            let parsed: toml::Value = toml::from_str(&template)
+                .unwrap_or_else(|err| panic!("Built-in config template is invalid TOML: {err}"));
+            let (merged_config, _) = Self::merge_with_default_toml(parsed);
+            merged_config
         } else {
             let content = Self::default();
             if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
@@ -375,6 +418,12 @@ pub trait LoadConfiguration {
 
     /// Returns the path to the configuration file relative to the config directory.
     fn get_path() -> &'static Path;
+
+    /// Commented template to write on first run instead of a bare default dump.
+    /// `None` keeps the plain serialized defaults.
+    fn first_run_template() -> Option<String> {
+        None
+    }
 
     /// Validates the configuration after loading or merging.
     fn validate(&self);

@@ -20,6 +20,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_util::Hand;
+use pumpkin_util::math::subtract_angles;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 use std::sync::Arc;
@@ -32,7 +33,6 @@ const BOW_DRAW_TICKS: i32 = 20;
 /// Vanilla crossbow charge (~1.25s). Pillagers use RangedCrossbowAttackGoal —
 /// they do **not** use USING_ITEM bow-draw (which slows and raises the bow pose).
 const CROSSBOW_CHARGE_TICKS: i32 = 25;
-const STRAFE_CHANCE: i32 = 20;
 
 pub struct BowAttackGoal {
     /// Cooldown after a shot before drawing again (goal ticks).
@@ -190,6 +190,23 @@ impl BowAttackGoal {
     fn shooter_alive(mob: &dyn Mob) -> bool {
         mob.get_mob_entity().living_entity.is_alive()
     }
+
+    /// Vanilla `Mob.lookAt(target, 30, 30)` — rotates the body (yaw/pitch)
+    /// toward the target, clamped per tick; used while strafing.
+    fn body_look_at(mob: &dyn Mob, target: &dyn EntityBase, max_yaw: f32, max_pitch: f32) {
+        let entity = mob.get_entity();
+        let (desired_yaw, desired_pitch) =
+            Self::look_angles(entity.get_eye_pos(), target.get_entity().get_eye_pos());
+        let yaw = entity.yaw.load();
+        let new_yaw = yaw + subtract_angles(yaw, desired_yaw).clamp(-max_yaw, max_yaw);
+        entity.yaw.store(new_yaw);
+        entity.body_yaw.store(new_yaw);
+        entity.head_yaw.store(new_yaw);
+        let pitch = entity.pitch.load();
+        entity
+            .pitch
+            .store(pitch + subtract_angles(pitch, desired_pitch).clamp(-max_pitch, max_pitch));
+    }
 }
 
 impl Goal for BowAttackGoal {
@@ -284,132 +301,128 @@ impl Goal for BowAttackGoal {
             let dist_sq = mob_pos.squared_distance_to_vec(&target_pos);
 
             let can_see = Self::has_line_of_sight(mob, target.as_ref()).await;
-            if can_see {
-                self.see_time += 1;
+            // Vanilla RangedBowAttackGoal.tick: seeTime resets when LOS flips.
+            if can_see != (self.see_time > 0) {
+                self.see_time = 0;
+            }
+            self.see_time = if can_see {
+                self.see_time + 1
             } else {
-                self.see_time -= 1;
-                // Lost LOS while drawing — cancel draw.
-                if self.draw_time >= 0 {
+                self.see_time - 1
+            };
+
+            let is_crossbow = Self::main_hand_is_crossbow(mob).await;
+
+            if is_crossbow {
+                // From CFR RangedCrossbowAttackGoal (26.2): attackRadius=8 for
+                // pillager; canRun() only when UNCHARGED → half speed while
+                // pathing during charge.
+                {
+                    let eye = target.get_entity().get_eye_pos();
+                    let mut look = mob.get_mob_entity().look_control.lock().unwrap();
+                    look.look_at_with_range(eye.x, eye.y, eye.z, 30.0, 30.0);
+                }
+                let crossbow_radius_sq = 64.0f64;
+                let charging = self.draw_time >= 0;
+                {
+                    // needsToMove = dist > radius² || seeTime < 5
+                    let needs_to_move = dist_sq > crossbow_radius_sq || self.see_time < 5;
+                    let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+                    if needs_to_move {
+                        let speed = if charging {
+                            self.speed * 0.5
+                        } else {
+                            self.speed
+                        };
+                        navigator.set_progress(NavigatorGoal::new(mob_pos, target_pos, speed));
+                    } else {
+                        navigator.stop();
+                    }
+                }
+
+                // Crossbow: startUsingItem → getChargeDuration(25) → delay → shoot
+                // (RangedCrossbowAttackGoal CHARGING→CHARGED→READY_TO_ATTACK).
+                self.attack_time -= 1;
+                let in_range = dist_sq <= crossbow_radius_sq && self.see_time >= 5;
+                if in_range {
+                    if self.draw_time < 0 && self.attack_time <= 0 && self.see_time >= 5 {
+                        Self::begin_draw(mob).await;
+                        self.draw_time = 0;
+                    }
+
+                    if self.draw_time >= 0 {
+                        self.draw_time += 1;
+                        if self.draw_time >= CROSSBOW_CHARGE_TICKS {
+                            Self::shoot_arrow(mob, target.as_ref()).await;
+                            self.draw_time = -1;
+                            // Vanilla: attackDelay = 20 + random(20) after charge.
+                            self.attack_time = 20 + mob.get_random().random_range(0..20);
+                        }
+                    }
+                } else if self.draw_time >= 0 && self.see_time < -10 {
                     self.draw_time = -1;
                     mob.get_mob_entity().living_entity.clear_active_hand().await;
                 }
-            }
-
-            {
-                let eye = target.get_entity().get_eye_pos();
-                let mut look = mob.get_mob_entity().look_control.lock().unwrap();
-                look.look_at_with_range(eye.x, eye.y, eye.z, 30.0, 30.0);
-            }
-
-            // From CFR RangedCrossbowAttackGoal (26.2): attackRadius=8 for pillager.
-            let is_crossbow = Self::main_hand_is_crossbow(mob).await;
-            let crossbow_radius_sq = 64.0f64;
-            // Vanilla canRun() only when UNCHARGED → half speed while pathing during charge.
-            let charging = is_crossbow && self.draw_time >= 0;
-
-            if is_crossbow {
-                // needsToMove = dist > radius² || seeTime < 5
-                let needs_to_move = dist_sq > crossbow_radius_sq || self.see_time < 5;
-                let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
-                if needs_to_move {
-                    let speed = if charging {
-                        self.speed * 0.5
-                    } else {
-                        self.speed
-                    };
-                    navigator.set_progress(NavigatorGoal::new(mob_pos, target_pos, speed));
+            } else {
+                // Vanilla RangedBowAttackGoal.tick (RangedBowAttackGoal.java:92-137).
+                if dist_sq > ATTACK_RADIUS_SQ || self.see_time < 20 {
+                    let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+                    navigator.set_progress(NavigatorGoal::new(mob_pos, target_pos, self.speed));
+                    self.strafing_time = -1;
                 } else {
-                    navigator.stop();
+                    mob.get_mob_entity().navigator.lock().unwrap().stop();
+                    self.strafing_time += 1;
                 }
-            } else if dist_sq <= ATTACK_RADIUS_SQ && self.see_time >= 5 {
-                // Bow: stop and strafe slowly while drawing (vanilla RangedBowAttackGoal).
-                mob.get_mob_entity().navigator.lock().unwrap().stop();
 
-                self.strafing_time += 1;
                 if self.strafing_time >= 20 {
-                    if mob.get_random().random_range(0..STRAFE_CHANCE) == 0 {
+                    if mob.get_random().random_range(0.0f32..1.0) < 0.3 {
                         self.strafing_clockwise = !self.strafing_clockwise;
                     }
-                    if mob.get_random().random_range(0..STRAFE_CHANCE) == 0 {
+                    if mob.get_random().random_range(0.0f32..1.0) < 0.3 {
                         self.strafing_backwards = !self.strafing_backwards;
                     }
                     self.strafing_time = 0;
                 }
 
-                let too_close = dist_sq < 16.0;
-                let back = self.strafing_backwards || too_close;
-                let dir = {
-                    let dx = target_pos.x - mob_pos.x;
-                    let dz = target_pos.z - mob_pos.z;
-                    let len = dx.hypot(dz).max(0.001);
-                    let fx = dx / len;
-                    let fz = dz / len;
-                    let (sx, sz) = if self.strafing_clockwise {
-                        (-fz, fx)
-                    } else {
-                        (fz, -fx)
-                    };
-                    let scale = if back { -0.8 } else { 0.4 };
-                    Vector3::new(
-                        mob_pos.x + sx * 0.6 + fx * scale,
-                        mob_pos.y,
-                        mob_pos.z + sz * 0.6 + fz * scale,
-                    )
-                };
-                let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
-                navigator.set_progress(NavigatorGoal::new(mob_pos, dir, self.speed * 0.7));
-            } else {
-                let dest = {
-                    let b = target_pos.to_block_pos();
-                    Vector3::new(
-                        f64::from(b.0.x) + 0.5,
-                        f64::from(b.0.y),
-                        f64::from(b.0.z) + 0.5,
-                    )
-                };
-                let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
-                navigator.set_progress(NavigatorGoal::new(mob_pos, dest, self.speed));
-                self.strafing_time = -1;
-            }
-
-            // Bow: startUsingItem → 20 ticks → shoot (RangedBowAttackGoal).
-            // Crossbow: startUsingItem → getChargeDuration(25) → delay → shoot
-            // (RangedCrossbowAttackGoal CHARGING→CHARGED→READY_TO_ATTACK).
-            self.attack_time -= 1;
-            let charge_ticks = if is_crossbow {
-                CROSSBOW_CHARGE_TICKS
-            } else {
-                BOW_DRAW_TICKS
-            };
-            let in_range = if is_crossbow {
-                dist_sq <= crossbow_radius_sq && self.see_time >= 5
-            } else {
-                can_see && dist_sq <= ATTACK_RADIUS_SQ
-            };
-
-            if in_range {
-                // Vanilla crossbow only starts charging when !needsToMove (in range).
-                if self.draw_time < 0 && self.attack_time <= 0 && self.see_time >= 5 {
-                    Self::begin_draw(mob).await;
-                    self.draw_time = 0;
+                if self.strafing_time > -1 {
+                    if dist_sq > ATTACK_RADIUS_SQ * 0.75 {
+                        self.strafing_backwards = false;
+                    } else if dist_sq < ATTACK_RADIUS_SQ * 0.25 {
+                        self.strafing_backwards = true;
+                    }
+                    // Vanilla MoveControl.strafe: yaw-relative input, no waypoint.
+                    // Routing this through the navigator turned the body toward a
+                    // rotating side-point every tick — the 360° spin players saw.
+                    mob.get_mob_entity().move_control.lock().unwrap().strafe(
+                        if self.strafing_backwards { -0.5 } else { 0.5 },
+                        if self.strafing_clockwise { 0.5 } else { -0.5 },
+                    );
+                    Self::body_look_at(mob, target.as_ref(), 30.0, 30.0);
+                } else {
+                    let eye = target.get_entity().get_eye_pos();
+                    let mut look = mob.get_mob_entity().look_control.lock().unwrap();
+                    look.look_at_with_range(eye.x, eye.y, eye.z, 30.0, 30.0);
                 }
 
+                // Bow item use: startUsingItem → ≥20 ticks → release. The draw
+                // survives brief LOS loss; only seeTime < -60 cancels (vanilla).
                 if self.draw_time >= 0 {
                     self.draw_time += 1;
-                    if self.draw_time >= charge_ticks {
+                    if !can_see && self.see_time < -60 {
+                        self.draw_time = -1;
+                        mob.get_mob_entity().living_entity.clear_active_hand().await;
+                    } else if can_see && self.draw_time >= BOW_DRAW_TICKS {
                         Self::shoot_arrow(mob, target.as_ref()).await;
                         self.draw_time = -1;
-                        // Vanilla crossbow: attackDelay = 20 + random(20) after charge.
-                        self.attack_time = if is_crossbow {
-                            20 + mob.get_random().random_range(0..20)
-                        } else {
-                            self.attack_interval
-                        };
+                        self.attack_time = self.attack_interval;
+                    }
+                } else {
+                    self.attack_time -= 1;
+                    if self.attack_time <= 0 && self.see_time >= -60 {
+                        Self::begin_draw(mob).await;
+                        self.draw_time = 0;
                     }
                 }
-            } else if self.draw_time >= 0 && self.see_time < -10 {
-                self.draw_time = -1;
-                mob.get_mob_entity().living_entity.clear_active_hand().await;
             }
         })
     }

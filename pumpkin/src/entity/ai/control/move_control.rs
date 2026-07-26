@@ -184,6 +184,14 @@ impl MoveControlTrait for MoveControl {
         Self::set_wanted_position(self, x, y, z, speed_modifier);
     }
 
+    fn strafe(&mut self, forwards: f32, sideways: f32) {
+        Self::strafe(self, forwards, sideways);
+    }
+
+    fn is_strafing(&self) -> bool {
+        self.operation == Operation::Strafe
+    }
+
     fn stop(&mut self) {
         Self::stop(self);
     }

@@ -572,10 +572,14 @@ impl Navigator {
         move_control: &Mutex<Box<dyn MoveControlTrait>>,
     ) {
         let Some(goal) = self.current_goal.take() else {
-            // Idle: stop the mob
+            // Idle: stop the mob — unless a goal armed a strafe this tick
+            // (vanilla strafing runs with navigation stopped; clearing here
+            // would erase the request before MoveControl ticks).
             self.is_idle.store(true, Ordering::Relaxed);
-            entity.clear_speed();
-            Self::stop_move_control(move_control);
+            if !move_control.lock().unwrap().is_strafing() {
+                entity.clear_speed();
+                Self::stop_move_control(move_control);
+            }
             return;
         };
 

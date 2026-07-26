@@ -65,7 +65,11 @@ impl AllocatorBackend {
 #[serde(rename_all = "snake_case")]
 pub enum CompressionBackend {
     /// Pure-Rust `miniz_oxide` (`flate2` feature `rust_backend`).
+    ///
+    /// `zlib_rs` is accepted as an alias: earlier builds shipped configs with
+    /// that spelling, and an unknown variant aborts startup.
     #[default]
+    #[serde(alias = "zlib_rs")]
     Rust,
     /// zlib-ng (`flate2` feature `zlib-ng`); high performance, requires a C toolchain.
     ZlibNg,

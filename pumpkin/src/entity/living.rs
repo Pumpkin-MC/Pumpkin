@@ -1009,12 +1009,14 @@ impl LivingEntity {
         // and speed_param is also living_speed * friction factor — matching vanilla
         // MoveControl double-application. For players: input is -1..1, param is attribute.
         let mut movement_input = self.movement_input.load();
-        if !is_player && living_speed > 0.0 {
+        if !is_player && living_speed > 0.0 && movement_input.x == 0.0 {
             // Forward-only AI movement: use unit forward so product is speed_param * 1
             // times the zza already baked into living_speed via speed_param.
             // Vanilla multiplies (xxa,yya,zza=speed) * getSpeed()=speed → speed²*factor.
             // Keep zza = living_speed so product matches.
-            movement_input.x = 0.0;
+            // A non-zero xxa means MoveControl STRAFE set sideways input (vanilla
+            // keeps the raw ±0.5 pair and scales by getSpeed in moveRelative);
+            // forcing forward here erased strafing entirely.
             movement_input.z = living_speed;
         }
 
