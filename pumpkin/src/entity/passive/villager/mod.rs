@@ -31,7 +31,8 @@ use crate::entity::{
     ai::goal::{
         avoid_entity::AvoidEntityGoal, door_interact::OpenDoorGoal,
         escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, villager_schedule::VillagerScheduleGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -160,6 +161,8 @@ impl VillagerEntity {
             // Vanilla villagers open doors and close them behind themselves
             // (brain InteractWithDoor; OpenDoorGoal is the goal-based stand-in).
             goal_selector.add_goal(2, Box::new(OpenDoorGoal::new(true)));
+            // Brain schedule stand-in: walk home at dusk, to the job site by day.
+            goal_selector.add_goal(2, Box::new(VillagerScheduleGoal::new(0.5)));
 
             // Basic movement and looking (Vanilla uses 0.5 speed)
             goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(0.5)));
