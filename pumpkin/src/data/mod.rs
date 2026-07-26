@@ -45,7 +45,7 @@ pub trait LoadJSONConfiguration {
     {
         let exe_dir = env::current_dir().expect("Failed to get current directory");
         let data_dir = exe_dir.join(DATA_FOLDER);
-        debug!("creating new data root folder");
+        debug!("ensuring the data root folder exists");
         if let Err(err) = fs::create_dir_all(&data_dir) {
             error!(
                 "Failed to create the data directory at {}: {err}",
@@ -102,7 +102,7 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
     {
         let exe_dir = env::current_dir().expect("Failed to get current directory");
         let data_dir = exe_dir.join(DATA_FOLDER);
-        debug!("creating new data root folder");
+        debug!("ensuring the data root folder exists");
         if let Err(err) = fs::create_dir_all(&data_dir) {
             warn!(
                 "Couldn't create the data directory at {}: {err}",
