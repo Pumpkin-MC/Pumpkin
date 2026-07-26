@@ -743,18 +743,19 @@ impl Mob for VillagerEntity {
 
             let villager_data = *self.villager_data.lock().await;
             entity.send_meta_data(
-                &[
-                    Metadata::new(
-                        TrackedData::VILLAGER_DATA,
-                        MetaDataType::VILLAGER_DATA,
-                        villager_data,
-                    ),
-                    Metadata::new(
-                        TrackedData::VILLAGER_DATA_FINALIZED,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    ),
-                ],
+                &[Metadata::new(
+                    TrackedData::VILLAGER_DATA,
+                    MetaDataType::VILLAGER_DATA,
+                    villager_data,
+                )],
+                None,
+            );
+            entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::VILLAGER_DATA_FINALIZED,
+                    MetaDataType::BOOLEAN,
+                    true,
+                )],
                 None,
             );
         })

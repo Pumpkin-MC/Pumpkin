@@ -1496,7 +1496,8 @@ impl LivingEntity {
         let converted = ZombieVillagerEntity::from_villager(villager).await;
         let converted_entity = converted.get_entity();
         let converted_base: Arc<dyn EntityBase> = converted.clone();
-        let block_pos = self.entity.block_pos.load();
+        // Vanilla emits the infection event at the killing zombie's position.
+        let block_pos = killer.get_entity().block_pos.load();
 
         // Conversion replaces the villager before normal death handling, so it
         // neither drops villager loot nor awards experience.

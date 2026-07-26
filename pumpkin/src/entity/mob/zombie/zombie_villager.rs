@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use pumpkin_data::Block;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
@@ -450,29 +451,21 @@ impl Mob for ZombieVillagerEntity {
         Box::pin(async move {
             self.mob_entity.mob_init_data_tracker().await;
             let villager_data = *self.villager_data.lock().await;
+            self.sync_conversion_metadata();
             self.get_entity().send_meta_data(
-                &[
-                    Metadata::new(
-                        TrackedData::CONVERTING,
-                        MetaDataType::BOOLEAN,
-                        self.is_converting(),
-                    ),
-                    Metadata::new(
-                        TrackedData::CONVERTING_ID,
-                        MetaDataType::BOOLEAN,
-                        self.is_converting(),
-                    ),
-                    Metadata::new(
-                        TrackedData::VILLAGER_DATA,
-                        MetaDataType::VILLAGER_DATA,
-                        villager_data,
-                    ),
-                    Metadata::new(
-                        TrackedData::VILLAGER_DATA_FINALIZED,
-                        MetaDataType::BOOLEAN,
-                        self.villager_data_finalized.load(Ordering::Relaxed),
-                    ),
-                ],
+                &[Metadata::new(
+                    TrackedData::VILLAGER_DATA,
+                    MetaDataType::VILLAGER_DATA,
+                    villager_data,
+                )],
+                None,
+            );
+            self.get_entity().send_meta_data(
+                &[Metadata::new(
+                    TrackedData::VILLAGER_DATA_FINALIZED,
+                    MetaDataType::BOOLEAN,
+                    self.villager_data_finalized.load(Ordering::Relaxed),
+                )],
                 None,
             );
         })
@@ -507,9 +500,7 @@ impl Mob for ZombieVillagerEntity {
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            if item_stack.item.registry_key != "golden_apple"
-                && item_stack.item.registry_key != "minecraft:golden_apple"
-            {
+            if item_stack.item != &Item::GOLDEN_APPLE {
                 return self.mob_entity.mob_interact(player, item_stack).await;
             }
 
