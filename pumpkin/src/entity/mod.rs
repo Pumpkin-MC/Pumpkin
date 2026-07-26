@@ -1300,8 +1300,10 @@ impl Entity {
             return None;
         }
 
-        let mut axis_movement = Vector3::default();
-        axis_movement.y = vertical_movement;
+        let axis_movement = Vector3 {
+            y: vertical_movement,
+            ..Default::default()
+        };
         let mut max_time = 1.0;
         let mut supporting_block = None;
 

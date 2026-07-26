@@ -115,7 +115,7 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
     fn should_reset_path(&self) -> bool {
         self.move_to_target_pos
             .get()
-            .map_or(true, |goal| goal.should_recalculate_path(self.trying_time))
+            .is_none_or(|goal| goal.should_recalculate_path(self.trying_time))
     }
 
     fn set_navigation_target(mob: &dyn Mob, destination: Vector3<f64>, speed: f64) {
