@@ -135,7 +135,21 @@ fn is_nearby_cub(bear_position: Vector3<f64>, cub_position: Vector3<f64>, cub_ag
         && (cub_position.z - bear_position.z).abs() <= 8.0
 }
 
-impl NBTStorage for PolarBearEntity {}
+impl NBTStorage for PolarBearEntity {
+    fn write_nbt<'a>(
+        &'a self,
+        nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
+    ) -> crate::entity::NbtFuture<'a, ()> {
+        self.get_mob_entity().living_entity.write_nbt(nbt)
+    }
+
+    fn read_nbt_non_mut<'a>(
+        &'a self,
+        nbt: &'a pumpkin_nbt::compound::NbtCompound,
+    ) -> crate::entity::NbtFuture<'a, ()> {
+        self.get_mob_entity().living_entity.read_nbt_non_mut(nbt)
+    }
+}
 
 impl Mob for PolarBearEntity {
     fn get_mob_entity(&self) -> &MobEntity {

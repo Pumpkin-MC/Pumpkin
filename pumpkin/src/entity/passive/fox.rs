@@ -95,7 +95,21 @@ impl FoxEntity {
     }
 }
 
-impl NBTStorage for FoxEntity {}
+impl NBTStorage for FoxEntity {
+    fn write_nbt<'a>(
+        &'a self,
+        nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
+    ) -> crate::entity::NbtFuture<'a, ()> {
+        self.get_mob_entity().living_entity.write_nbt(nbt)
+    }
+
+    fn read_nbt_non_mut<'a>(
+        &'a self,
+        nbt: &'a pumpkin_nbt::compound::NbtCompound,
+    ) -> crate::entity::NbtFuture<'a, ()> {
+        self.get_mob_entity().living_entity.read_nbt_non_mut(nbt)
+    }
+}
 
 impl Mob for FoxEntity {
     fn get_mob_entity(&self) -> &MobEntity {

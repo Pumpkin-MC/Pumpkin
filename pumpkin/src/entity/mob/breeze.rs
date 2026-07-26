@@ -51,7 +51,21 @@ impl BreezeEntity {
     }
 }
 
-impl NBTStorage for BreezeEntity {}
+impl NBTStorage for BreezeEntity {
+    fn write_nbt<'a>(
+        &'a self,
+        nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
+    ) -> crate::entity::NbtFuture<'a, ()> {
+        self.get_mob_entity().living_entity.write_nbt(nbt)
+    }
+
+    fn read_nbt_non_mut<'a>(
+        &'a self,
+        nbt: &'a pumpkin_nbt::compound::NbtCompound,
+    ) -> crate::entity::NbtFuture<'a, ()> {
+        self.get_mob_entity().living_entity.read_nbt_non_mut(nbt)
+    }
+}
 
 impl Mob for BreezeEntity {
     fn get_mob_entity(&self) -> &MobEntity {
