@@ -74,6 +74,64 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
         .await;
 }
 
+/// Vanilla `DoorBlock.isWoodenDoor` — a door that mob AI may open or break by
+/// hand. Iron doors are excluded through the vanilla tag.
+#[must_use]
+pub fn is_mob_interactable_door(block: &Block) -> bool {
+    block.has_tag(&tag::Block::MINECRAFT_MOB_INTERACTABLE_DOORS)
+}
+
+/// Reads the `open` property of a door, or `None` when the block is not a door.
+#[must_use]
+pub fn is_door_open(world: &World, block_pos: &BlockPos) -> Option<bool> {
+    let (block, state_id) = world.get_block_and_state_id(block_pos);
+    block
+        .has_tag(&tag::Block::MINECRAFT_DOORS)
+        .then(|| DoorProperties::from_state_id(state_id, block).open)
+}
+
+/// Vanilla `DoorBlock.setOpen` for a non-player source (mob AI goals).
+/// Keeps both halves in sync and only emits sound/state when the value changes.
+pub async fn set_door_open(world: &Arc<World>, block_pos: &BlockPos, open: bool) {
+    let (block, state_id) = world.get_block_and_state_id(block_pos);
+    if !block.has_tag(&tag::Block::MINECRAFT_DOORS) {
+        return;
+    }
+    let mut door_props = DoorProperties::from_state_id(state_id, block);
+    if door_props.open == open {
+        return;
+    }
+    door_props.open = open;
+
+    let other_half = match door_props.half {
+        DoubleBlockHalf::Upper => BlockDirection::Down,
+        DoubleBlockHalf::Lower => BlockDirection::Up,
+    };
+    let other_pos = block_pos.offset(other_half.to_offset());
+    let (other_block, other_state_id) = world.get_block_and_state_id(&other_pos);
+    if other_block.id != block.id {
+        return;
+    }
+    let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
+    other_door_props.open = open;
+
+    world.play_block_sound(get_sound(block, open), SoundCategory::Blocks, *block_pos);
+    world
+        .set_block_state(
+            block_pos,
+            door_props.to_state_id(block),
+            BlockFlags::NOTIFY_LISTENERS,
+        )
+        .await;
+    world
+        .set_block_state(
+            &other_pos,
+            other_door_props.to_state_id(other_block),
+            BlockFlags::NOTIFY_LISTENERS,
+        )
+        .await;
+}
+
 fn can_open_door(block: &Block) -> bool {
     if block == &Block::IRON_DOOR {
         return false;

@@ -124,6 +124,19 @@ impl Navigator {
         // Note: living clear_speed is applied on next idle tick via current_goal=None.
     }
 
+    /// Vanilla `PathNavigation.getPath` — read-only access for goals that inspect
+    /// upcoming nodes, such as the door interaction goals.
+    #[must_use]
+    pub const fn current_path(&self) -> Option<&Path> {
+        self.current_path.as_ref()
+    }
+
+    /// Vanilla `PathNavigation.setCanOpenDoors`. Mobs that may open or break
+    /// doors are allowed to path through closed wooden ones.
+    pub fn set_can_open_doors(&mut self, can_open: bool) {
+        self.evaluator.set_can_open_doors(can_open);
+    }
+
     pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
         self.path_type_overrides.insert(path_type, malus);
     }

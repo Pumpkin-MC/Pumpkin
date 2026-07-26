@@ -28,7 +28,7 @@ use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
 use uuid::Uuid;
 
 pub mod bat;
@@ -79,6 +79,12 @@ pub struct MobEntity {
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
+    /// Vanilla `Zombie.canBreakDoors`. Kept on `MobEntity` so the shared
+    /// `BreakDoorGoal` and the pathfinder door flag stay in sync.
+    can_break_doors: AtomicBool,
+    /// Set when `CanBreakDoors` came back from NBT, so the spawn roll in
+    /// `finalizeSpawn` does not overwrite a saved value on chunk load.
+    can_break_doors_loaded: AtomicBool,
     /// Vanilla `Mob.despawnCounter` — ticks spent far enough from players to roll despawn.
     despawn_counter: AtomicI32,
     mob_flags: AtomicU8,
@@ -118,6 +124,8 @@ impl MobEntity {
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
+            can_break_doors: AtomicBool::new(false),
+            can_break_doors_loaded: AtomicBool::new(false),
             despawn_counter: AtomicI32::new(0),
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
@@ -221,6 +229,30 @@ impl MobEntity {
 
     pub fn set_left_handed(&self, left_handed: bool) {
         self.set_mob_flag(Self::LEFT_HANDED_FLAG, left_handed);
+    }
+
+    /// Vanilla `Zombie.canBreakDoors`.
+    pub fn can_break_doors(&self) -> bool {
+        self.can_break_doors.load(Relaxed)
+    }
+
+    /// Vanilla `Zombie.setCanBreakDoors` — also flips the navigation flag so the
+    /// mob is willing to path through a closed wooden door.
+    pub fn set_can_break_doors(&self, value: bool) {
+        self.can_break_doors.store(value, Relaxed);
+        if let Ok(mut navigator) = self.navigator.lock() {
+            navigator.set_can_open_doors(value);
+        }
+    }
+
+    /// Marks the door-breaking flag as restored from NBT.
+    pub fn set_can_break_doors_from_nbt(&self, value: bool) {
+        self.can_break_doors_loaded.store(true, Relaxed);
+        self.set_can_break_doors(value);
+    }
+
+    pub fn can_break_doors_loaded(&self) -> bool {
+        self.can_break_doors_loaded.load(Relaxed)
     }
 
     pub fn can_pick_up_loot(&self) -> bool {
@@ -702,6 +734,12 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// Whether this mob type participates in vanilla `Zombie.setCanBreakDoors`
+    /// (ground-navigating zombies). Drowned navigate water and are excluded.
+    fn supports_break_door_goal(&self) -> bool {
+        false
+    }
+
     /// Vanilla `Mob.requiresCustomPersistence`. Used by stateful conversions
     /// such as a curing zombie villager, which must survive normal despawn checks.
     fn requires_custom_persistence(&self) -> bool {
@@ -813,6 +851,19 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             let world = self.get_mob_entity().living_entity.entity.world.load();
             crate::entity::mob::equipment::equip_mob_on_spawn(self as &dyn EntityBase, &world)
                 .await;
+
+            // Vanilla Zombie.finalizeSpawn rolls door breaking from regional
+            // difficulty; a value restored from NBT wins.
+            let mob_entity = self.get_mob_entity();
+            if self.supports_break_door_goal() && !mob_entity.can_break_doors_loaded() {
+                let difficulty = crate::entity::mob::equipment::RegionalDifficulty::at(
+                    &world,
+                    self.get_entity().pos.load(),
+                );
+                mob_entity.set_can_break_doors(
+                    rand::random::<f32>() < difficulty.special_multiplier * 0.1,
+                );
+            }
 
             let entity_name = self.get_entity().entity_type.resource_name;
             if let Some(def) = crate::entity::mob::equipment::EQUIPMENT_REGISTRY.get(entity_name)

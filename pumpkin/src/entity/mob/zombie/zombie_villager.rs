@@ -447,6 +447,10 @@ impl Mob for ZombieVillagerEntity {
         self.is_converting() || self.villager_xp.load(Ordering::Relaxed) > 0
     }
 
+    fn supports_break_door_goal(&self) -> bool {
+        true
+    }
+
     fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             self.mob_entity.mob_init_data_tracker().await;

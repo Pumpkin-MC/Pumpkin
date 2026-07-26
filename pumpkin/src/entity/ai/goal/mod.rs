@@ -13,6 +13,7 @@ pub mod creeper_ignite;
 pub mod defend_villagers;
 pub mod destroy_egg;
 pub mod dolphin_swim_with_player;
+pub mod door_interact;
 pub mod eat_grass;
 pub mod escape_danger;
 pub mod evoker_cast;
