@@ -31,8 +31,6 @@ pub mod sculk_sensor;
 pub mod target_block;
 pub mod tripwire;
 pub mod tripwire_hook;
-pub mod turbo;
-
 // Vanilla 26.2 neighbor pipeline
 pub mod neighbor_updater;
 pub mod orientation;
@@ -67,10 +65,19 @@ pub async fn update_wire_neighbors(world: &Arc<World>, pos: &BlockPos) {
 /// Without this, lamps / repeaters / torches only re-read power when dust is broken
 /// (which runs [`update_wire_neighbors`]) — pulses and lever flips look "stuck".
 pub async fn notify_after_wire_power_change(world: &Arc<World>, pos: &BlockPos) {
-    world.update_neighbors(pos, None).await;
+    // Each call keeps the wire as the source block. `World::update_neighbors`
+    // derives its source from the target position, which is not what
+    // DefaultRedstoneWireEvaluator does for the six adjacent positions.
+    world
+        .neighbor_updater
+        .update_neighbors_at_except(world, *pos, &Block::REDSTONE_WIRE, None, None)
+        .await;
     for direction in BlockDirection::all() {
         let neighbor_pos = pos.offset(direction.to_offset());
-        world.update_neighbors(&neighbor_pos, None).await;
+        world
+            .neighbor_updater
+            .update_neighbors_at_except(world, neighbor_pos, &Block::REDSTONE_WIRE, None, None)
+            .await;
     }
     // Do NOT flush here. Vanilla marks dirty via setBlock → chunkSource.blockChanged,
     // then ServerChunkCache.broadcastChangedChunks once per tick. Per-wire flush was

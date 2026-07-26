@@ -20,7 +20,6 @@ use crate::{
     world::World,
 };
 
-use super::turbo::RedstoneWireTurbo;
 use super::{get_redstone_power_no_dust, update_wire_neighbors};
 
 type RedstoneWireProperties = RedstoneWireLikeProperties;
@@ -176,16 +175,14 @@ impl BlockBehaviour for RedstoneWireBlock {
                 let new_power = calculate_power(args.world, args.position).await;
                 if wire.power != new_power {
                     wire.power = new_power;
-                    // Vanilla DefaultRedstoneWireEvaluator: setBlock flag 2 (listeners),
-                    // turbo BFS for wire graph, then updateNeighborsAt on pos + 6 sides.
+                    // Vanilla DefaultRedstoneWireEvaluator: setBlock flag 2 (listeners)
+                    // followed by updateNeighborsAt on the wire and its six neighbors.
                     args.world
                         .set_block_state(
                             args.position,
                             wire.to_state_id(&Block::REDSTONE_WIRE),
                             BlockFlags::NOTIFY_LISTENERS,
                         )
-                        .await;
-                    RedstoneWireTurbo::update_surrounding_neighbors(args.world, *args.position)
                         .await;
                     super::notify_after_wire_power_change(args.world, args.position).await;
                 }
@@ -225,8 +222,7 @@ impl BlockBehaviour for RedstoneWireBlock {
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            // After place, re-evaluate power + turbo (on_place may run before neighbors
-            // finish shape updates).
+            // After place, re-evaluate power after neighboring shape updates.
             update_wire_neighbors(args.world, args.position).await;
             let state = args.world.get_block_state(args.position);
             if state.id != Block::AIR.default_state.id {
@@ -240,8 +236,6 @@ impl BlockBehaviour for RedstoneWireBlock {
                             wire.to_state_id(&Block::REDSTONE_WIRE),
                             BlockFlags::NOTIFY_LISTENERS,
                         )
-                        .await;
-                    RedstoneWireTurbo::update_surrounding_neighbors(args.world, *args.position)
                         .await;
                     super::notify_after_wire_power_change(args.world, args.position).await;
                 }

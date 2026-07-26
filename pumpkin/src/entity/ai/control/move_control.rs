@@ -117,10 +117,7 @@ impl MoveControlTrait for MoveControl {
             // not leave LivingEntity.jumping set for the whole arc.
             living_entity.jumping.store(false, Ordering::SeqCst);
 
-            if entity.on_ground.load(Ordering::Relaxed)
-                || entity.touching_water.load(Ordering::Relaxed)
-                || entity.touching_lava.load(Ordering::Relaxed)
-            {
+            if entity.on_ground.load(Ordering::Relaxed) {
                 self.operation = Operation::Wait;
             }
         } else {

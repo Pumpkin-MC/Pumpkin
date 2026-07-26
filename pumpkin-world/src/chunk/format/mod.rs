@@ -349,6 +349,18 @@ impl ChunkData {
             }
         }
 
+        let pending_structure_entities =
+            root_tag
+                .get_list("PumpkinStructureEntities")
+                .map_or_else(Vec::new, |list| {
+                    list.iter()
+                        .filter_map(|tag| match tag {
+                            pumpkin_nbt::tag::NbtTag::Compound(entity) => Some(entity.clone()),
+                            _ => None,
+                        })
+                        .collect()
+                });
+
         let light_correct = root_tag.get_bool("isLightOn").unwrap_or(false);
 
         let status_str = root_tag.get_string("Status").unwrap_or("minecraft:empty");
@@ -377,9 +389,9 @@ impl ChunkData {
             block_ticks: ChunkTickScheduler::from_iter(block_ticks),
             fluid_ticks: ChunkTickScheduler::from_iter(fluid_ticks),
             pending_block_entities: std::sync::Mutex::new(block_entities),
-            // Structure entities are only present on freshly generated chunks;
-            // after first load they live in the entity region files.
-            pending_structure_entities: std::sync::Mutex::new(Vec::new()),
+            // Freshly generated structure entities live here until the entity
+            // chunk is first activated, including across a save/restart.
+            pending_structure_entities: std::sync::Mutex::new(pending_structure_entities),
             light_engine: std::sync::Mutex::new(light_engine),
             light_populated: AtomicBool::new(light_correct),
             status,
@@ -407,6 +419,7 @@ impl ChunkData {
             let entities_guard = self.pending_block_entities.lock().unwrap();
             entities_guard.values().cloned().collect::<Vec<_>>()
         };
+        let pending_structure_entities = self.pending_structure_entities.lock().unwrap().clone();
 
         let light_lock = self.light_engine.lock().unwrap();
         let heightmap_lock = self.heightmap.lock().unwrap();
@@ -534,6 +547,16 @@ impl ChunkData {
             block_entities_list.push(NbtTag::Compound(entity_comp));
         }
         root_compound.put_list("block_entities", block_entities_list);
+
+        if !pending_structure_entities.is_empty() {
+            root_compound.put_list(
+                "PumpkinStructureEntities",
+                pending_structure_entities
+                    .into_iter()
+                    .map(NbtTag::Compound)
+                    .collect(),
+            );
+        }
 
         root_compound.put_bool("isLightOn", is_light_correct);
 

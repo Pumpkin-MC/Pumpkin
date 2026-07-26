@@ -64,17 +64,18 @@ fn requires_custom_persistence(entity: &Entity) -> bool {
 
 /// Whether this entity contributes to the current natural-spawn cap state.
 ///
-/// `SpawnState::new` only includes non-persistent mobs in entity-ticking
-/// chunks. Keep dynamic additions on the same rule; removals are instead
-/// gated by the per-state accounting set so a mob that becomes persistent (or
-/// leaves an active chunk) during the tick is still removed exactly once.
+/// Vanilla builds `SpawnState` from every mob in a loaded full chunk, not only
+/// chunks within simulation distance. Keep dynamic additions on the same rule;
+/// removals are instead gated by the per-state accounting set so a mob that
+/// becomes persistent (or unloads) during the tick is still removed exactly
+/// once.
 #[must_use]
-fn counts_towards_spawn_cap(entity: &Entity, active_chunks: &FxHashSet<Vector2<i32>>) -> bool {
+fn counts_towards_spawn_cap(entity: &Entity, world: &World) -> bool {
     let entity_type = entity.entity_type;
     entity_type.mob
         && entity_type.category != &MobCategory::MISC
         && !requires_custom_persistence(entity)
-        && active_chunks.contains(&entity.chunk_pos.load())
+        && world.level.is_chunk_loaded(&entity.chunk_pos.load())
 }
 
 /// Vanilla `ChunkMap.anyPlayerCloseEnoughForSpawningInternal`.
@@ -388,8 +389,7 @@ impl SpawnState {
 
     pub fn add_entity(&self, world: &World, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
-        let active_chunks = world.active_chunks.load();
-        if !counts_towards_spawn_cap(base_entity, &active_chunks)
+        if !counts_towards_spawn_cap(base_entity, world)
             || self
                 .accounted_mobs
                 .insert(base_entity.entity_uuid, ())
@@ -445,10 +445,9 @@ impl SpawnState {
         let local_mob_cap = LocalMobCapCalculator::default();
         let counter = MobCounts::default();
         let accounted_mobs = DashMap::new();
-        let active_chunks = world.active_chunks.load();
         for entity in entities.load().iter() {
             let entity = entity.get_entity();
-            if !counts_towards_spawn_cap(entity, &active_chunks)
+            if !counts_towards_spawn_cap(entity, world)
                 || accounted_mobs.insert(entity.entity_uuid, ()).is_some()
             {
                 continue;
@@ -527,8 +526,7 @@ impl SpawnState {
     }
     pub fn after_spawn(&self, entity: &dyn EntityBase, world: &Arc<World>) {
         let base_entity = entity.get_entity();
-        let active_chunks = world.active_chunks.load();
-        if !counts_towards_spawn_cap(base_entity, &active_chunks)
+        if !counts_towards_spawn_cap(base_entity, world)
             || self
                 .accounted_mobs
                 .insert(base_entity.entity_uuid, ())

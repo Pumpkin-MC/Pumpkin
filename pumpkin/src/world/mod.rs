@@ -1182,12 +1182,14 @@ impl World {
             t.elapsed()
         };
 
-        let (chunk_elapsed, player_elapsed, entity_elapsed, block_entity_elapsed) = tokio::join!(
-            chunk_future,
-            player_future,
-            entity_future,
-            block_entity_future
-        );
+        // Chunk ticking owns the natural-spawn snapshot and mutates its caps as
+        // packs are created. Run it before entity/block-entity tasks so removals,
+        // mob-spawner additions, and player movement cannot race that snapshot.
+        // Vanilla likewise performs natural spawning from the chunk-source tick
+        // before ticking entities.
+        let chunk_elapsed = chunk_future.await;
+        let (player_elapsed, entity_elapsed, block_entity_elapsed) =
+            tokio::join!(player_future, entity_future, block_entity_future);
 
         self.level.chunk_loading.lock().unwrap().send_change();
 
@@ -1566,7 +1568,7 @@ impl World {
         };
         // Vanilla ServerChunkCache: animals/persistent every 400 game ticks;
         // monsters when doMobSpawning && !peaceful && spawnMonsters.
-        let spawn_persistent = self.level_time.lock().await.time_of_day % 400 == 0;
+        let spawn_persistent = self.level_time.lock().await.world_age % 400 == 0;
         let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
 
         // Vanilla only builds the category list when doMobSpawning is true.
@@ -3927,18 +3929,6 @@ impl World {
         let world = self.clone();
 
         player.clone().spawn_task(async move {
-            // Structure templates are applied while the block chunk reaches Full.
-            // Do not create its entity chunk first, or an empty entity chunk can
-            // win the race and miss the template entities entirely.
-            let block_chunks = chunks.clone();
-            let block_loads = futures::future::join_all(block_chunks.into_iter().map(|position| {
-                let level = level.clone();
-                async move {
-                    level.get_or_fetch_chunk(position, |_| ()).await;
-                }
-            }));
-            block_loads.await;
-
             let mut entity_receiver = level.receive_entity_chunks(chunks);
             'main: loop {
                 let recv_result = tokio::select! {
@@ -3973,6 +3963,14 @@ impl World {
                 }
 
                 if first_load {
+                    // Structure templates are applied while the block chunk reaches Full.
+                    // Ensure this one chunk is ready before consuming its pending template
+                    // entities; waiting for the whole view distance here stalls entity loads.
+                    level.get_or_fetch_chunk(position, |_| ()).await;
+                    if !level.is_chunk_watched(&position) {
+                        continue 'main;
+                    }
+
                     // First watcher: consume the serialized entities and make them
                     // live. The live entity list becomes the single source of
                     // truth, so the chunk's NBT is taken (cleared) to avoid keeping
@@ -3983,7 +3981,13 @@ impl World {
                         .read_chunk_sync(&position, |block_chunk| {
                             let mut pending =
                                 block_chunk.pending_structure_entities.lock().unwrap();
-                            std::mem::take(&mut *pending)
+                            let entities = std::mem::take(&mut *pending);
+                            if !entities.is_empty() {
+                                // Persist the drained queue so a later restart does not
+                                // recreate entities that have already become live.
+                                block_chunk.mark_dirty(true);
+                            }
+                            entities
                         })
                         .unwrap_or_default();
                     entity_nbts.extend(structure_entities);
