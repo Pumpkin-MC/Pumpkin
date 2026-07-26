@@ -26,4 +26,6 @@ pub trait MoveControlTrait: Control {
     fn is_strafing(&self) -> bool {
         false
     }
+
+    fn stop(&mut self) {}
 }
