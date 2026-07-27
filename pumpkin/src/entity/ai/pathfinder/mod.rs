@@ -382,6 +382,12 @@ impl Navigator {
             return;
         }
 
+        let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+        let can_update_path = on_ground
+            || entity.entity.touching_water.load(Ordering::Relaxed)
+            || entity.entity.touching_lava.load(Ordering::Relaxed)
+            || entity.entity.has_vehicle().await;
+
         if let Some(path) = &mut self.current_path {
             if path.is_done() || !path.is_valid() {
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
@@ -426,13 +432,9 @@ impl Navigator {
             let current_pos = entity.entity.pos.load();
             let navigation_pos =
                 Vector3::new(current_pos.x, (current_pos.y + 0.5).floor(), current_pos.z);
-            if should_target_next_node_in_direction(path, navigation_pos) {
+            if can_update_path && should_target_next_node_in_direction(path, navigation_pos) {
                 path.advance();
-                self.current_goal = Some(goal);
-                return;
             }
-
-            let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
 
             if let Some(next_block) = path.get_next_node_pos() {
                 let target_pos = Vector3::new(
