@@ -62,12 +62,34 @@ impl LoadConfiguration for PumpkinConfig {
         Path::new("pumpkin.toml")
     }
 
-    fn validate(&self) {
+    fn validate(&mut self) {
         self.basic.validate();
         self.advanced.validate();
 
         let min_vd = NonZeroU8::new(2).unwrap();
         let max_vd = NonZeroU8::new(64).unwrap();
+
+        // Vanilla's simulation-distance server property accepts 3 to 32,
+        // default 10, for multiplayer:
+        //   https://minecraft.wiki/w/Server.properties (see the
+        //   `simulation-distance` row, "integer (3-32)")
+        //   https://minecraft.wiki/w/Simulation_distance#Range_of_simulation_distance
+        // Vanilla does not crash the server over an out-of-range value here.
+        // The server.properties page documents that keys with invalid
+        // values are reset to their defaults when the file is regenerated
+        // on startup, and the distance that actually gets applied to the
+        // chunk/tick system is clamped rather than rejected -- see the
+        // inherited `Mth.clamp(watchDistance, 2, 32)` call in vanilla's
+        // chunk map, visible in a Paper rename-only bugfix that touches it:
+        //   https://github.com/PaperMC/Paper/commit/fc0e6c7e086876cce9676214e726a96dc1be209c
+        // simulation_distance used to be read by almost nothing in Pumpkin,
+        // so an out-of-range value sitting in an existing config was
+        // harmless. Now that it drives World::update_active_chunks, an
+        // assert! here would turn that into a startup panic on upgrade.
+        // Clamp and warn instead, so the server still starts and the
+        // operator can fix their config on their own schedule.
+        let min_sd = NonZeroU8::new(3).unwrap();
+        let max_sd = NonZeroU8::new(32).unwrap();
 
         // Validate Java
         assert!(
@@ -77,6 +99,12 @@ impl LoadConfiguration for PumpkinConfig {
         assert!(
             self.advanced.networking.java.view_distance <= max_vd,
             "Java View distance must be less than 64"
+        );
+        clamp_simulation_distance(
+            &mut self.advanced.networking.java.simulation_distance,
+            min_sd,
+            max_sd,
+            "Java",
         );
         if self.advanced.networking.java.online_mode {
             assert!(
@@ -94,6 +122,12 @@ impl LoadConfiguration for PumpkinConfig {
             self.advanced.networking.bedrock.view_distance <= max_vd,
             "Bedrock View distance must be less than 64"
         );
+        clamp_simulation_distance(
+            &mut self.advanced.networking.bedrock.simulation_distance,
+            min_sd,
+            max_sd,
+            "Bedrock",
+        );
         if self.advanced.networking.bedrock.online_mode {
             assert!(
                 self.advanced.networking.bedrock.encryption,
@@ -107,6 +141,31 @@ impl LoadConfiguration for PumpkinConfig {
                 "When allow_chat_reports is enabled, java.online_mode must be enabled"
             );
         }
+    }
+}
+
+/// Clamps a configured `simulation_distance` into `[min, max]` in place.
+///
+/// Logs a warning naming the configured value, the clamped value, and the
+/// valid range when a change was needed, so the operator can fix their
+/// config. See the sourcing and rationale in `PumpkinConfig::validate` for
+/// why this clamps instead of asserting.
+fn clamp_simulation_distance(
+    value: &mut NonZeroU8,
+    min: NonZeroU8,
+    max: NonZeroU8,
+    platform: &str,
+) {
+    let clamped = (*value).clamp(min, max);
+    if clamped != *value {
+        warn!(
+            "{platform} simulation_distance ({}) is outside the valid range {}-{}; clamping to {}",
+            value.get(),
+            min.get(),
+            max.get(),
+            clamped.get()
+        );
+        *value = clamped;
     }
 }
 
@@ -248,7 +307,7 @@ pub trait LoadConfiguration {
         }
         let path = config_dir.join(Self::get_path());
 
-        let config = if path.exists() {
+        let mut config = if path.exists() {
             let file_content = fs::read_to_string(&path).unwrap_or_else(|_| {
                 panic!("Couldn't read configuration file at {}", path.display())
             });
@@ -355,5 +414,9 @@ pub trait LoadConfiguration {
     fn get_path() -> &'static Path;
 
     /// Validates the configuration after loading or merging.
-    fn validate(&self);
+    ///
+    /// Takes `&mut self` because validation may need to correct recoverable
+    /// out-of-range values in place (see `PumpkinConfig::validate` for an
+    /// example with `simulation_distance`) rather than panicking.
+    fn validate(&mut self);
 }
