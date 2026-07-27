@@ -149,15 +149,32 @@ fn authenticate_service(
         .build();
     let agent = agent_config.new_agent();
 
+    tracing::info!(
+        "[{name}] /hasJoined username={username} server_hash={server_hash}"
+    );
+
     let response = agent
         .get(&address)
         .call()
         .map_err(|_| AuthError::FailedResponse)?;
 
     match response.status() {
-        StatusCode::OK => {}
-        StatusCode::NO_CONTENT => Err(AuthError::UnverifiedUsername)?,
+        StatusCode::OK => {
+            tracing::info!("[{name}] /hasJoined → 200 OK");
+        }
+        StatusCode::NO_CONTENT => {
+            tracing::info!("[{name}] /hasJoined → 204 (user not found)");
+            Err(AuthError::UnverifiedUsername)?
+        }
         other => Err(AuthError::UnknownStatusCode(other))?,
+    }
+
+    // Log the canonical API location reported by Authlib-Injector services.
+    // This helps verify that the configured URL matches what the service expects.
+    if let Some(loc) = response.headers().get("x-authlib-injector-api-location") {
+        if let Ok(loc_str) = loc.to_str() {
+            tracing::info!("[{name}] x-authlib-injector-api-location: {loc_str}");
+        }
     }
 
     let profile: GameProfile = response
@@ -226,6 +243,7 @@ pub fn authenticate_chain(
     }
 
     // ── 2. Priority chain (skip services that have player_names set) ──
+    let mut attempted = 0usize;
     for name in &auth_config.services {
         let Some(service) = auth_config.service_entries.get(name) else {
             tracing::warn!(
@@ -237,18 +255,32 @@ pub fn authenticate_chain(
         if !service.player_names.is_empty() {
             continue;
         }
+        attempted += 1;
         match authenticate_service(name, username, server_hash, ip, service, auth_config) {
             Ok(profile) => return Ok(profile),
             Err(e) => {
-                tracing::debug!("{username} not authenticated by '{name}': {e}");
+                // Use warn level so individual service failures are visible
+                // in normal log output — critical for diagnosing multi-auth issues.
+                tracing::warn!("{username} not authenticated by '{name}': {e}");
             }
         }
     }
+
+    tracing::warn!(
+        "{username}: tried {attempted} auth service(s), none succeeded"
+    );
 
     Err(AuthError::UnverifiedUsername)
 }
 
 pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<(), TextureError> {
+    // Only validate the "textures" property; other properties
+    // (e.g. launcher metadata injected by Authlib-Injector) are
+    // not base64-encoded texture payloads.
+    if property.name.as_ref() != "textures" {
+        return Ok(());
+    }
+
     let from64 = general_purpose::STANDARD
         .decode(property.value.as_bytes())
         .map_err(|e| TextureError::DecodeError(e.to_string()))?;
@@ -330,9 +362,122 @@ struct MojangProfileByNameResponse {
     name: String,
 }
 
-pub fn lookup_profile_by_name(
+/// A single entry in the Yggdrasil `/api/profiles/minecraft` response.
+#[derive(Deserialize, Clone, Debug)]
+struct YggdrasilProfileEntry {
+    id: String,
+    name: String,
+}
+
+/// Derive a profile-lookup URL from a `/hasJoined` URL.
+///
+/// Strips the query string (everything after `?`) and the known hasJoined
+/// path suffix, then appends `/api/profiles/minecraft`.
+fn derive_profile_lookup_url(has_joined_url: &str) -> Option<String> {
+    // Remove query string
+    let path = has_joined_url.split('?').next()?;
+
+    // Try Authlib-Injector style: /sessionserver/session/minecraft/hasJoined
+    if let Some(base) = path.strip_suffix("/sessionserver/session/minecraft/hasJoined") {
+        return Some(format!("{base}/api/profiles/minecraft"));
+    }
+
+    // Try Mojang style: /session/minecraft/hasJoined
+    if let Some(base) = path.strip_suffix("/session/minecraft/hasJoined") {
+        return Some(format!("{base}/api/profiles/minecraft"));
+    }
+
+    None
+}
+
+/// Look up a player by name in a single Yggdrasil service.
+///
+/// Uses the POST `/api/profiles/minecraft` endpoint defined by the
+/// Authlib-Injector / Yggdrasil spec.
+fn lookup_profile_in_service(
+    username: &str,
+    service: &YggdrasilServiceConfig,
+) -> Result<Option<(Uuid, String)>, AuthError> {
+    let lookup_url = service
+        .profile_lookup_url
+        .clone()
+        .or_else(|| derive_profile_lookup_url(&service.url));
+
+    let Some(ref lookup_url) = lookup_url else {
+        return Ok(None);
+    };
+
+    // send_json automatically sets Content-Type: application/json
+    let response = ureq::post(lookup_url)
+        .send_json(&[username])
+        .map_err(|_| AuthError::FailedResponse)?;
+
+    match response.status() {
+        StatusCode::OK => {}
+        StatusCode::NO_CONTENT | StatusCode::NOT_FOUND => return Ok(None),
+        other => {
+            tracing::debug!(
+                "Profile lookup for '{username}' returned unexpected status: {other}"
+            );
+            return Ok(None);
+        }
+    }
+
+    let entries: Vec<YggdrasilProfileEntry> = response
+        .into_body()
+        .read_json()
+        .map_err(|_| AuthError::FailedParse)?;
+
+    if let Some(entry) = entries.first() {
+        let parsed_uuid = Uuid::parse_str(&entry.id).map_err(|_| AuthError::FailedParse)?;
+        tracing::debug!(
+            "Profile lookup for '{username}': found {parsed_uuid} ({})",
+            entry.name
+        );
+        Ok(Some((parsed_uuid, entry.name.clone())))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Look up a player by name across all configured Yggdrasil services
+/// (plus the legacy Mojang endpoint).
+///
+/// Tries services in order; first match wins.  Falls back to the legacy
+/// Mojang profile API when no service is configured.
+pub fn lookup_profile_by_name_chain(
     name: &str,
-    _auth_config: &AuthenticationConfig,
+    auth_config: &AuthenticationConfig,
+) -> Result<Option<(Uuid, String)>, AuthError> {
+    if auth_config.services.is_empty() {
+        return lookup_profile_by_name_legacy(name);
+    }
+
+    // Try Yggdrasil services
+    for service_name in &auth_config.services {
+        let Some(service) = auth_config.service_entries.get(service_name) else {
+            continue;
+        };
+        // Skip services with restricted player_names — those are exclusive login routes.
+        if !service.player_names.is_empty() {
+            continue;
+        }
+        match lookup_profile_in_service(name, service) {
+            Ok(Some(profile)) => return Ok(Some(profile)),
+            Ok(None) => {} // not found, try next
+            Err(e) => {
+                tracing::debug!("Profile lookup for '{name}' failed on '{service_name}': {e}");
+            }
+        }
+    }
+
+    // Fall back to legacy Mojang endpoint
+    lookup_profile_by_name_legacy(name)
+}
+
+/// Legacy Mojang-only profile lookup (GET api.mojang.com).
+fn lookup_profile_by_name_legacy(
+    name: &str,
 ) -> Result<Option<(Uuid, String)>, AuthError> {
     let url = MOJANG_PROFILE_BY_NAME_URL.replace("{username}", name);
 
@@ -353,6 +498,13 @@ pub fn lookup_profile_by_name(
 
     let parsed_uuid = Uuid::parse_str(&profile.id).map_err(|_| AuthError::FailedParse)?;
     Ok(Some((parsed_uuid, profile.name)))
+}
+
+pub fn lookup_profile_by_name(
+    name: &str,
+    auth_config: &AuthenticationConfig,
+) -> Result<Option<(Uuid, String)>, AuthError> {
+    lookup_profile_by_name_chain(name, auth_config)
 }
 
 #[derive(Error, Debug)]

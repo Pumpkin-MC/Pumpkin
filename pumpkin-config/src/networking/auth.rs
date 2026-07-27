@@ -27,6 +27,11 @@ pub struct YggdrasilServiceConfig {
     /// Per-service texture validation rules.  Falls back to the global
     /// [`AuthenticationConfig::textures`] when `None`.
     pub textures: Option<TextureConfig>,
+    /// Optional Yggdrasil profile-lookup endpoint (POST).  When empty the
+    /// URL is derived from [`Self::url`] by stripping the
+    /// `/sessionserver/session/minecraft/hasJoined` suffix and appending
+    /// `/api/profiles/minecraft`.
+    pub profile_lookup_url: Option<String>,
 }
 
 /// Configuration for server authentication.
