@@ -440,6 +440,7 @@ impl EntityBase for ArrowEntity {
         })
     }
 
+    #[expect(clippy::too_many_lines)]
     fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let entity = self.get_entity();

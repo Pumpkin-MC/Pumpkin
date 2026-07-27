@@ -4,7 +4,6 @@ use std::sync::Arc;
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::structures::{
     Structure, StructureKeys, StructurePlacementType, StructureSet, WeightedEntry,
@@ -57,8 +56,7 @@ use crate::{
     world::{BlockAccessor, WorldPortalExt},
 };
 use pumpkin_data::tag::get_tag_ids;
-use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-use uuid::Uuid;
+use pumpkin_nbt::compound::NbtCompound;
 
 use crate::generation::structure::template::BlockPlacer;
 use crate::tick::{ScheduledTick, TickPriority};
@@ -149,7 +147,6 @@ pub struct ProtoChunk {
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
-    pub pending_entities: Vec<NbtCompound>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
 }
 
@@ -244,7 +241,6 @@ impl ProtoChunk {
             blending_data: None,
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
-            pending_entities: Vec::new(),
             fluid_ticks: Vec::new(),
         }
     }
@@ -365,39 +361,6 @@ impl ProtoChunk {
 
     fn take_pending_structure_entities(&mut self) -> Vec<NbtCompound> {
         std::mem::take(&mut self.pending_structure_entities)
-    }
-
-    pub fn add_entity(
-        &mut self,
-        entity_type: &'static EntityType,
-        position: Vector3<f64>,
-        mut nbt: NbtCompound,
-    ) {
-        let uuid = Uuid::new_v4().as_u128();
-        nbt.put_string("id", format!("minecraft:{}", entity_type.resource_name));
-        nbt.put(
-            "UUID",
-            NbtTag::IntArray(vec![
-                (uuid >> 96) as i32,
-                ((uuid >> 64) & 0xFFFF_FFFF) as i32,
-                ((uuid >> 32) & 0xFFFF_FFFF) as i32,
-                (uuid & 0xFFFF_FFFF) as i32,
-            ]),
-        );
-        nbt.put(
-            "Pos",
-            NbtTag::List(vec![
-                position.x.into(),
-                position.y.into(),
-                position.z.into(),
-            ]),
-        );
-        nbt.put(
-            "Motion",
-            NbtTag::List(vec![0.0f64.into(), 0.0f64.into(), 0.0f64.into()]),
-        );
-        nbt.put("Rotation", NbtTag::List(vec![0.0f32.into(), 0.0f32.into()]));
-        self.pending_entities.push(nbt);
     }
 
     pub fn schedule_fluid_tick(&mut self, x: i32, y: i32, z: i32, fluid: &'static Fluid) {
@@ -1651,59 +1614,5 @@ impl GenerationCache for ProtoChunk {
         _cz: i32,
     ) -> Option<&crate::generation::blender::blending_data::BlendingData> {
         None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::ProtoChunk;
-    use crate::chunk::entity_uuid_from_nbt;
-    use crate::generation::get_world_gen;
-    use pumpkin_data::dimension::Dimension;
-    use pumpkin_data::entity::EntityType;
-    use pumpkin_nbt::compound::NbtCompound;
-    use pumpkin_util::math::vector3::Vector3;
-    use pumpkin_util::world_seed::Seed;
-
-    #[test]
-    fn generated_entity_contains_persistent_base_nbt() {
-        let generator = get_world_gen(
-            Seed(42),
-            Dimension::OVERWORLD,
-            false,
-            Vec::new(),
-            String::new(),
-        );
-        let mut chunk = ProtoChunk::new(0, 0, &generator);
-        let position = Vector3::new(4.5, -20.5, 7.5);
-
-        let mut data = NbtCompound::new();
-        data.put_string(
-            "LootTable",
-            "minecraft:chests/abandoned_mineshaft".to_string(),
-        );
-        data.put_long("LootTableSeed", 1234);
-        chunk.add_entity(&EntityType::CHEST_MINECART, position, data);
-
-        let [entity] = chunk.pending_entities.as_slice() else {
-            panic!("expected one generated entity");
-        };
-        assert_eq!(entity.get_string("id"), Some("minecraft:chest_minecart"));
-        assert_eq!(entity.get_long("LootTableSeed"), Some(1234));
-        assert!(entity_uuid_from_nbt(entity).is_some());
-        assert_eq!(
-            entity.get_list("Pos").unwrap()[0].extract_double(),
-            Some(4.5)
-        );
-        assert_eq!(
-            entity.get_list("Pos").unwrap()[1].extract_double(),
-            Some(-20.5)
-        );
-        assert_eq!(
-            entity.get_list("Pos").unwrap()[2].extract_double(),
-            Some(7.5)
-        );
-        assert_eq!(entity.get_list("Motion").unwrap().len(), 3);
-        assert_eq!(entity.get_list("Rotation").unwrap().len(), 2);
     }
 }
