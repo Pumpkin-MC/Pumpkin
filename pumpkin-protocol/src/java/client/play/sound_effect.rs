@@ -60,9 +60,9 @@ impl ClientPacket for CSoundEffect {
             w.write_option(&e.range, |w2, r| w2.write_f32_be(*r))
         })?;
         write.write_var_int(&self.sound_category)?;
-        write.write_i32_be(self.position.x * 8)?;
-        write.write_i32_be(self.position.y * 8)?;
-        write.write_i32_be(self.position.z * 8)?;
+        write.write_i32_be(self.position.x)?;
+        write.write_i32_be(self.position.y)?;
+        write.write_i32_be(self.position.z)?;
         write.write_f32_be(self.volume)?;
         write.write_f32_be(self.pitch)?;
         write.write_i64_be(self.seed as i64)
@@ -77,7 +77,7 @@ mod tests {
     use pumpkin_data::sound_id_remap::remap_sound_id_for_version;
     use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
-    use crate::{ClientPacket, IdOr, SoundEvent, VarInt};
+    use crate::{ClientPacket, IdOr, SoundEvent, VarInt, ser::NetworkReadExt};
 
     use super::CSoundEffect;
 
@@ -154,5 +154,38 @@ mod tests {
             .unwrap();
 
         assert_eq!(first_var_int(bytes), VarInt::from(0));
+    }
+
+    #[test]
+    fn position_scaling_is_applied_only_once() {
+        let packet = CSoundEffect::new(
+            IdOr::Id(0),
+            SoundCategory::Players,
+            &Vector3::new(2.5, 3.5, 4.5),
+            1.0,
+            1.0,
+            42.0,
+        );
+        let mut bytes = Vec::new();
+
+        packet
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_2)
+            .unwrap();
+
+        let mut cursor = Cursor::new(bytes);
+        // skip sound ID varint
+        VarInt::decode(&mut cursor).unwrap();
+        // skip sound category varint
+        VarInt::decode(&mut cursor).unwrap();
+        // read position
+        let x = cursor.get_i32_be().unwrap();
+        let y = cursor.get_i32_be().unwrap();
+        let z = cursor.get_i32_be().unwrap();
+
+        // position should be floor(input * 8), applied exactly once
+        // (2.5 * 8 = 20, 3.5 * 8 = 28, 4.5 * 8 = 36)
+        assert_eq!(x, 20);
+        assert_eq!(y, 28);
+        assert_eq!(z, 36);
     }
 }
