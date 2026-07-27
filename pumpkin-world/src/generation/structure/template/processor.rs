@@ -868,10 +868,13 @@ mod tests {
         // BlockAgeProcessor.java:71-78: with mossiness 1.0 only the mossy pool
         // {mossy_stone_bricks, mossy_stone_brick_stairs} is reachable, and the
         // keep-check drops half of all draws.
+        // One advancing stream, not fresh per-seed RNGs: the legacy LCG's
+        // first nextFloat clusters near 0.73 for small sequential seeds, which
+        // would make every draw hit the keep-check.
+        let mut random = LegacyRand::from_seed(0x5EED);
         let mut changed = 0u32;
         let mut kept = 0u32;
-        for seed in 0..200u64 {
-            let mut random = LegacyRand::from_seed(seed);
+        for _ in 0..200u32 {
             match apply_block_age(1.0, Block::STONE.default_state, &mut random) {
                 None => kept += 1,
                 Some(aged) => {
@@ -894,11 +897,13 @@ mod tests {
     fn block_age_stairs_use_the_static_non_mossy_slabs() {
         // BlockAgeProcessor.java:41+80-86: mossiness 0.0 can only produce the
         // static NON_MOSSY_REPLACEMENTS {stone_slab, stone_brick_slab}.
-        for seed in 0..200u64 {
-            let mut random = LegacyRand::from_seed(seed);
+        let mut random = LegacyRand::from_seed(0x5EED);
+        let mut replaced = 0u32;
+        for _ in 0..200u32 {
             if let Some(aged) =
                 apply_block_age(0.0, Block::STONE_BRICK_STAIRS.default_state, &mut random)
             {
+                replaced += 1;
                 let block = Block::from_state_id(aged.id);
                 assert!(
                     block.id == Block::STONE_SLAB.id || block.id == Block::STONE_BRICK_SLAB.id,
@@ -907,15 +912,20 @@ mod tests {
                 );
             }
         }
+        assert!(
+            replaced > 0,
+            "the advancing stream must replace some stairs"
+        );
     }
 
     #[test]
     fn block_age_obsidian_rate_is_fifteen_percent() {
         // BlockAgeProcessor.java:102-107: fixed 0.15 probability, independent
-        // of mossiness. 10000 fixed seeds -> deterministic count near 1500.
+        // of mossiness. One advancing stream (fresh small seeds share their
+        // first LCG float), 10000 draws -> deterministic count near 1500.
+        let mut random = LegacyRand::from_seed(0x5EED);
         let mut replaced = 0u32;
-        for seed in 0..10_000u64 {
-            let mut random = LegacyRand::from_seed(seed);
+        for _ in 0..10_000u32 {
             if let Some(aged) = apply_block_age(0.0, Block::OBSIDIAN.default_state, &mut random) {
                 assert_eq!(Block::from_state_id(aged.id).id, Block::CRYING_OBSIDIAN.id);
                 replaced += 1;
