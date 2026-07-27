@@ -1,7 +1,7 @@
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::Metadata;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
+use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
 
 use crate::entity::mob::Mob;
 
@@ -11,7 +11,6 @@ pub const FORCED_AGE_PARTICLE_TICKS: i32 = 40;
 pub struct AgeableData {
     pub forced_age: AtomicI32,
     pub forced_age_timer: AtomicI32,
-    pub age_locked: AtomicBool,
     pub age_lock_particle_timer: AtomicI32,
 }
 
@@ -20,7 +19,6 @@ impl Default for AgeableData {
         Self {
             forced_age: AtomicI32::new(0),
             forced_age_timer: AtomicI32::new(0),
-            age_locked: AtomicBool::new(false),
             age_lock_particle_timer: AtomicI32::new(0),
         }
     }
@@ -64,11 +62,22 @@ pub trait AgeableMob: Mob {
     }
 
     fn is_age_locked(&self) -> bool {
-        self.get_ageable_data().age_locked.load(Relaxed)
+        self.get_mob_entity()
+            .living_entity
+            .entity
+            .age_locked
+            .load(Relaxed)
     }
 
+    /// The lock lives next to the age on [`crate::entity::Entity`] so that the
+    /// central age progression in [`crate::entity::Entity::tick_age`] can honour
+    /// it without having to know that this entity is ageable.
     fn set_age_locked(&self, locked: bool) {
-        self.get_ageable_data().age_locked.store(locked, Relaxed);
+        self.get_mob_entity()
+            .living_entity
+            .entity
+            .age_locked
+            .store(locked, Relaxed);
     }
 
     fn can_age_up(&self) -> bool {
@@ -127,15 +136,5 @@ pub trait AgeableMob: Mob {
 
     fn can_be_a_baby(&self) -> bool {
         true
-    }
-
-    fn ageable_ai_step(&self) {
-        if self.can_age_up() {
-            let age = self.get_age() + 1;
-            self.set_age(age);
-        } else if self.get_age() > 0 {
-            let age = self.get_age() - 1;
-            self.set_age(age);
-        }
     }
 }

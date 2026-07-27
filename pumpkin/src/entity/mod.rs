@@ -792,8 +792,25 @@ pub struct Entity {
     pub leashed_to: Mutex<Option<Arc<dyn EntityBase>>>,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
-    /// The age of the entity in ticks. Negative values indicate a baby.
+    /// How many ticks this entity has been alive for, counting up from zero.
+    ///
+    /// This is vanilla's `Entity#tickCount`. Use it for anything that means
+    /// "time since I spawned"; it is not persisted and it never runs backwards.
+    /// Do not use [`Self::age`] for that — that field means something else.
+    pub tick_count: AtomicI32,
+    /// The ageable age of the entity, in ticks. This is vanilla's
+    /// `AgeableMob#age`, so it is *not* a monotonic tick counter:
+    ///
+    /// - negative means a baby, counting up towards zero,
+    /// - zero means an adult,
+    /// - positive is the breeding cooldown left behind by breeding, counting
+    ///   back down towards zero.
+    ///
+    /// It is persisted as the `Age` NBT tag. For "ticks since spawn" use
+    /// [`Self::tick_count`].
     pub age: AtomicI32,
+    /// Whether [`Self::age`] is frozen in place, from the `AgeLocked` NBT tag.
+    pub age_locked: AtomicBool,
 
     pub current_biome: ArcSwap<&'static Biome>,
     pub last_biome_update_pos: AtomicCell<BlockPos>,
@@ -936,7 +953,9 @@ impl Entity {
             leashed_to: Mutex::new(None),
 
             riding_cooldown: AtomicI32::new(0),
+            tick_count: AtomicI32::new(0),
             age: AtomicI32::new(0),
+            age_locked: AtomicBool::new(false),
             current_biome: ArcSwap::new(Arc::new(&Biome::PLAINS)),
             last_biome_update_pos: AtomicCell::new(BlockPos::new(floor_x, floor_y, floor_z)),
             portal_cooldown: AtomicU32::new(0),
@@ -1022,10 +1041,36 @@ impl Entity {
         metadata
     }
 
-    /// Sets the entity's age in ticks.
-    /// Negative values indicate that the entity is a baby.
+    /// Sets the entity's ageable age, in ticks. Negative values make it a baby.
+    ///
+    /// See [`Self::age`] for the full meaning; this is not the tick counter.
     pub fn set_age(&self, age: i32) {
         self.age.store(age, Relaxed);
+    }
+
+    /// One tick of [`Self::age`] progression, mirroring vanilla
+    /// `AgeableMob#aiStep`: a baby's negative age counts up towards zero and
+    /// the positive breeding cooldown counts back down towards zero, so an
+    /// adult that is not on cooldown stays at zero.
+    ///
+    /// Subtracting the sign does all three cases at once, and cannot overflow
+    /// because it only ever moves `age` one step closer to zero.
+    #[must_use]
+    pub const fn stepped_age(age: i32) -> i32 {
+        age - age.signum()
+    }
+
+    /// Advances [`Self::age`] by one tick unless the age is locked.
+    ///
+    /// Entities that are not ageable simply sit at an age of zero, for which
+    /// this is a no-op.
+    pub fn tick_age(&self) {
+        if self.age_locked.load(Relaxed) {
+            return;
+        }
+        let _ = self
+            .age
+            .fetch_update(Relaxed, Relaxed, |age| Some(Self::stepped_age(age)));
     }
 
     /// Adds a scoreboard tag to this entity.
@@ -2472,7 +2517,7 @@ impl Entity {
         // Vanilla parity: full-freeze damage is tick-phase based.
         if can_freeze
             && new_frozen_ticks >= Self::MAX_FROZEN_TICKS
-            && self.age.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
+            && self.tick_count.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
         {
             caller.damage(caller, 1.0, DamageType::FREEZE).await;
         }
@@ -3767,5 +3812,54 @@ mod tests {
                 "status mismatch at index {i}"
             );
         }
+    }
+
+    #[test]
+    fn stepped_age_walks_towards_adulthood() {
+        // A baby counts up towards zero, one tick at a time.
+        assert_eq!(
+            Entity::stepped_age(crate::entity::ageable::BABY_START_AGE),
+            -23999
+        );
+        assert_eq!(Entity::stepped_age(-2), -1);
+        assert_eq!(Entity::stepped_age(-1), 0);
+    }
+
+    #[test]
+    fn stepped_age_counts_the_breeding_cooldown_down() {
+        // A positive age is the cooldown left behind by breeding; vanilla walks
+        // it back down to zero rather than letting it grow.
+        assert_eq!(Entity::stepped_age(6000), 5999);
+        assert_eq!(Entity::stepped_age(2), 1);
+        assert_eq!(Entity::stepped_age(1), 0);
+    }
+
+    #[test]
+    fn stepped_age_leaves_adults_alone() {
+        // This is the regression that mattered: an adult must stay at zero
+        // instead of accumulating ticks, because the age is persisted as the
+        // `Age` NBT tag and vanilla reads a positive `Age` as a cooldown.
+        assert_eq!(Entity::stepped_age(0), 0);
+    }
+
+    #[test]
+    fn stepped_age_never_overflows_at_the_extremes() {
+        // Only ever moves one step closer to zero, so neither bound can wrap.
+        assert_eq!(Entity::stepped_age(i32::MIN), i32::MIN + 1);
+        assert_eq!(Entity::stepped_age(i32::MAX), i32::MAX - 1);
+    }
+
+    #[test]
+    fn a_baby_reaches_adulthood_in_the_vanilla_time() {
+        // 24000 ticks is 20 minutes, matching vanilla's baby duration.
+        let mut age = crate::entity::ageable::BABY_START_AGE;
+        let mut ticks = 0u32;
+        while age < 0 {
+            age = Entity::stepped_age(age);
+            ticks += 1;
+        }
+        assert_eq!(ticks, 24000);
+        // And it then stays an adult rather than drifting positive.
+        assert_eq!(Entity::stepped_age(age), 0);
     }
 }

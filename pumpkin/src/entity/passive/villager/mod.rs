@@ -741,8 +741,8 @@ impl Mob for VillagerEntity {
         _caller: &'a Arc<dyn EntityBase>,
     ) -> crate::entity::EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            let age = self.get_entity().age.load(Ordering::Relaxed);
-            if age % 20 != 0 {
+            let ticks_alive = self.get_entity().tick_count.load(Ordering::Relaxed);
+            if ticks_alive % 20 != 0 {
                 return;
             }
 
