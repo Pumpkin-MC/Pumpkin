@@ -5,6 +5,14 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
 
+/// Vanilla `PatrollingMonster.checkPatrollingMonsterSpawnRules`
+/// (`PatrollingMonster.java:88-93`) rejects block light above 8.
+const PATROLLING_MONSTER_MAX_BLOCK_LIGHT: u8 = 8;
+
+fn is_valid_patrolling_monster_block_light(block_light: Option<u8>) -> bool {
+    block_light.is_none_or(|light| light <= PATROLLING_MONSTER_MAX_BLOCK_LIGHT)
+}
+
 impl MobEntity {
     pub fn is_dark_enough_to_spawn(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
         // Vanilla: raw SKY light vs random(0..32) — no ambient darken on this check.
@@ -53,6 +61,16 @@ impl MobEntity {
         world.level_info.load().difficulty != Difficulty::Peaceful
     }
 
+    /// Vanilla `PatrollingMonster.checkPatrollingMonsterSpawnRules`.
+    ///
+    /// A pillager may spawn only with block light at most 8 and outside Peaceful.
+    /// This intentionally does not apply the normal monster sky-light/random-darkness
+    /// predicate.
+    pub fn check_patrolling_monster_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        is_valid_patrolling_monster_block_light(world.get_block_light_level(pos))
+            && Self::check_any_light_monster_spawn_rules(world, pos)
+    }
+
     /// Vanilla `Monster.checkSurfaceMonstersSpawnRules` — dark + open sky.
     /// Used by stray / parched natural spawns.
     pub fn check_surface_monster_spawn_rules(
@@ -80,6 +98,18 @@ mod tests {
         crate::entity::mob::MobEntity::check_monster_spawn_rules;
     const _: fn(&World, &BlockPos) -> bool =
         crate::entity::mob::MobEntity::check_any_light_monster_spawn_rules;
+    const _: fn(&World, &BlockPos) -> bool =
+        crate::entity::mob::MobEntity::check_patrolling_monster_spawn_rules;
     const _: fn(&World, &BlockPos, bool) -> bool =
         crate::entity::mob::MobEntity::check_surface_monster_spawn_rules;
+
+    #[test]
+    fn patrolling_monster_light_cap_matches_vanilla() {
+        // PatrollingMonster.java:89 rejects only block light greater than 8.
+        assert!(is_valid_patrolling_monster_block_light(None));
+        assert!(is_valid_patrolling_monster_block_light(Some(0)));
+        assert!(is_valid_patrolling_monster_block_light(Some(8)));
+        assert!(!is_valid_patrolling_monster_block_light(Some(9)));
+        assert!(!is_valid_patrolling_monster_block_light(Some(15)));
+    }
 }

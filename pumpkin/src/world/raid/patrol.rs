@@ -19,6 +19,7 @@ use rand::{RngExt, rng};
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
+use crate::entity::mob::MobEntity;
 use crate::entity::mob::equipment::RegionalDifficulty;
 use crate::entity::r#type::from_type;
 use crate::world::World;
@@ -52,10 +53,6 @@ pub const PATROL_CHUNK_MARGIN: i32 = 10;
 pub const PATROL_TARGET_OFFSET_BASE: i32 = -500;
 /// Span of the patrol-target offset (`PatrollingMonster.java:118`).
 pub const PATROL_TARGET_OFFSET_SPAN: i32 = 1000;
-
-/// Vanilla `PatrollingMonster.checkPatrollingMonsterSpawnRules` light cap
-/// (`PatrollingMonster.java:87-89`): block light must be at most 8.
-pub const PATROL_MAX_BLOCK_LIGHT: u8 = 8;
 
 /// Vanilla `PatrollingMonster.finalizeSpawn` natural-leader chance
 /// (`PatrollingMonster.java:74`): `random.nextFloat() < 0.06f`, and only for spawn
@@ -243,7 +240,7 @@ async fn spawn_patrol_member(world: &Arc<World>, pos: &BlockPos, is_leader: bool
         return false;
     }
     // PatrolSpawner.java:86-88 — `checkPatrollingMonsterSpawnRules`.
-    if !check_patrolling_monster_spawn_rules(world, pos) {
+    if !MobEntity::check_patrolling_monster_spawn_rules(world, pos) {
         return false;
     }
 
@@ -276,19 +273,6 @@ pub fn find_patrol_target(pos: &BlockPos) -> BlockPos {
         pos.0.y,
         pos.0.z + PATROL_TARGET_OFFSET_BASE + rng().random_range(0..PATROL_TARGET_OFFSET_SPAN),
     )
-}
-
-/// Vanilla `PatrollingMonster.checkPatrollingMonsterSpawnRules`
-/// (`PatrollingMonster.java:86-91`).
-///
-/// The block-light cap is faithful. The delegated
-/// `checkAnyLightMonsterSpawnRules` (difficulty and `isValidEmptySpawnBlock`) is
-/// already covered by the caller, which runs `is_valid_empty_spawn_block` first and
-/// only reaches here when the world is not peaceful.
-fn check_patrolling_monster_spawn_rules(world: &Arc<World>, pos: &BlockPos) -> bool {
-    world
-        .get_block_light_level(pos)
-        .is_none_or(|light| light <= PATROL_MAX_BLOCK_LIGHT)
 }
 
 #[cfg(test)]
@@ -350,9 +334,8 @@ mod tests {
         assert_eq!(PATROL_OFFSET_MIN, 24);
         assert_eq!(PATROL_OFFSET_SPAN, 24);
         assert_eq!(PATROL_CHUNK_MARGIN, 10);
-        // PatrollingMonster.java:74, 87, 118.
+        // PatrollingMonster.java:74, 118.
         assert!((NATURAL_PATROL_LEADER_CHANCE - 0.06).abs() < f32::EPSILON);
-        assert_eq!(PATROL_MAX_BLOCK_LIGHT, 8);
         assert_eq!(PATROL_TARGET_OFFSET_BASE, -500);
         assert_eq!(PATROL_TARGET_OFFSET_SPAN, 1000);
     }

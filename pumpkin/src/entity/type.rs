@@ -338,6 +338,14 @@ pub fn check_spawn_rules(
         return mob::MobEntity::check_any_light_monster_spawn_rules(world, pos);
     }
 
+    // Vanilla `PatrollingMonster.checkPatrollingMonsterSpawnRules`
+    // (`PatrollingMonster.java:88-93`): block light at most 8 plus the any-light
+    // monster predicate. Unlike `checkMonsterSpawnRules`, it deliberately skips
+    // the normal sky-light/random-darkness test.
+    if id == EntityType::PILLAGER.id {
+        return mob::MobEntity::check_patrolling_monster_spawn_rules(world, pos);
+    }
+
     // Blaze and breeze spawn through `checkAnyLightMonsterSpawnRules`, while
     // magma cubes only check that the difficulty is not peaceful. Applying the
     // generic darkness rule here makes lit nether fortresses and trial chambers
@@ -447,7 +455,6 @@ pub fn check_spawn_rules(
         || id == EntityType::ILLUSIONER.id
         || id == EntityType::VEX.id
         || id == EntityType::VINDICATOR.id
-        || id == EntityType::PILLAGER.id
         || id == EntityType::WARDEN.id
         || id == EntityType::PHANTOM.id
         || id == EntityType::ZOGLIN.id
