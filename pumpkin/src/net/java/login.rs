@@ -94,16 +94,20 @@ impl JavaClient {
 
             if server.advanced_config.networking.java.encryption {
                 let verify_token: [u8; 4] = rand::random();
+                // Multi-auth: always tell the client to join the session server
+                // when Yggdrasil services are configured, so our /hasJoined
+                // requests have a registered session to verify.
+                let should_auth = server.advanced_config.networking.java.online_mode
+                    || !server
+                        .advanced_config
+                        .networking
+                        .java
+                        .authentication
+                        .services
+                        .is_empty();
                 // Wait until we have sent the encryption packet to the client
-                self.send_packet_now(
-                    &server
-                        .encryption_request(
-                            &verify_token,
-                            server.advanced_config.networking.java.online_mode,
-                        )
-                        .await,
-                )
-                .await;
+                self.send_packet_now(&server.encryption_request(&verify_token, should_auth).await)
+                    .await;
             } else {
                 self.finish_login(&profile).await;
             }
@@ -136,8 +140,17 @@ impl JavaClient {
             return;
         };
 
-        if server.advanced_config.networking.java.online_mode {
-            // Online mode auth
+        // Authenticate when online_mode is enabled or when Yggdrasil services
+        // are configured (the chain handles the success/failure decision).
+        let should_auth = server.advanced_config.networking.java.online_mode
+            || !server
+                .advanced_config
+                .networking
+                .java
+                .authentication
+                .services
+                .is_empty();
+        if should_auth {
             match self
                 .authenticate(server, &shared_secret, &profile.name)
                 .await
@@ -243,31 +256,13 @@ impl JavaClient {
     ) -> Result<GameProfile, AuthError> {
         let hash = server.digest_secret(shared_secret).await;
         let ip = self.address.lock().await.ip();
-        let profile = authentication::authenticate(
-            username,
-            &hash,
-            &ip,
-            &server.advanced_config.networking.java.authentication,
-        )?;
+        let auth_config = &server.advanced_config.networking.java.authentication;
+        let profile = authentication::authenticate_chain(username, &hash, &ip, auth_config)?;
 
         // Check if the player should join
         if let Some(actions) = &profile.profile_actions {
-            if server
-                .advanced_config
-                .networking
-                .java
-                .authentication
-                .player_profile
-                .allow_banned_players
-            {
-                for allowed in &server
-                    .advanced_config
-                    .networking
-                    .java
-                    .authentication
-                    .player_profile
-                    .allowed_actions
-                {
+            if auth_config.player_profile.allow_banned_players {
+                for allowed in &auth_config.player_profile.allowed_actions {
                     if !actions.contains(allowed) {
                         return Err(AuthError::DisallowedAction);
                     }
@@ -279,19 +274,8 @@ impl JavaClient {
                 return Err(AuthError::Banned);
             }
         }
-        // Validate textures
-        for property in profile.properties.load().iter() {
-            authentication::validate_textures(
-                property,
-                &server
-                    .advanced_config
-                    .networking
-                    .java
-                    .authentication
-                    .textures,
-            )
-            .map_err(AuthError::TextureError)?;
-        }
+        // Texture validation is done per-service inside authenticate_chain;
+        // each service uses its own texture config (or the global one as fallback).
         Ok(profile)
     }
 

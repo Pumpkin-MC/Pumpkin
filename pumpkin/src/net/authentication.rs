@@ -1,7 +1,9 @@
 use std::{collections::HashMap, net::IpAddr};
 
 use base64::{Engine, engine::general_purpose};
-use pumpkin_config::{AuthenticationConfig, networking::auth::TextureConfig};
+use pumpkin_config::{
+    AuthenticationConfig, YggdrasilServiceConfig, networking::auth::TextureConfig,
+};
 use pumpkin_protocol::Property;
 use rsa::RsaPublicKey;
 use rsa::pkcs8::DecodePublicKey;
@@ -104,7 +106,146 @@ pub fn authenticate(
         .body_mut()
         .read_json()
         .map_err(|_| AuthError::FailedParse)?;
+
+    // Validate textures against the global config (single-auth path).
+    for property in profile.properties.load().iter() {
+        validate_textures(property, &auth_config.textures).map_err(AuthError::TextureError)?;
+    }
+
     Ok(profile)
+}
+
+/// Authenticate a player against an individual Yggdrasil service.
+fn authenticate_service(
+    name: &str,
+    username: &str,
+    server_hash: &str,
+    ip: &IpAddr,
+    service: &YggdrasilServiceConfig,
+    global_config: &AuthenticationConfig,
+) -> Result<GameProfile, AuthError> {
+    let address = service
+        .url
+        .replace("{username}", username)
+        .replace("{server_hash}", server_hash)
+        .replace("{ip}", &ip.to_string());
+
+    let connect_timeout = if service.connect_timeout > 0 {
+        service.connect_timeout
+    } else {
+        global_config.connect_timeout
+    };
+    let read_timeout = if service.read_timeout > 0 {
+        service.read_timeout
+    } else {
+        global_config.read_timeout
+    };
+
+    let agent_config = ureq::Agent::config_builder()
+        .timeout_connect(Some(std::time::Duration::from_millis(
+            connect_timeout as u64,
+        )))
+        .timeout_global(Some(std::time::Duration::from_millis(read_timeout as u64)))
+        .build();
+    let agent = agent_config.new_agent();
+
+    let response = agent
+        .get(&address)
+        .call()
+        .map_err(|_| AuthError::FailedResponse)?;
+
+    match response.status() {
+        StatusCode::OK => {}
+        StatusCode::NO_CONTENT => Err(AuthError::UnverifiedUsername)?,
+        other => Err(AuthError::UnknownStatusCode(other))?,
+    }
+
+    let profile: GameProfile = response
+        .into_body()
+        .read_json()
+        .map_err(|_| AuthError::FailedParse)?;
+
+    // Validate textures against the per-service config if present,
+    // otherwise fall back to the global texture config.
+    let texture_config = service.textures.as_ref().unwrap_or(&global_config.textures);
+    for property in profile.properties.load().iter() {
+        validate_textures(property, texture_config).map_err(AuthError::TextureError)?;
+    }
+
+    tracing::debug!("{username} authenticated by '{name}'");
+    Ok(profile)
+}
+
+/// Find the service that has `username` in its `player_names` list.
+/// Returns `None` if no service explicitly claims this player.
+fn resolve_player_service<'a>(
+    username: &str,
+    entries: &'a HashMap<String, YggdrasilServiceConfig>,
+    service_order: &'a [String],
+) -> Option<(&'a str, &'a YggdrasilServiceConfig)> {
+    for name in service_order {
+        if let Some(svc) = entries.get(name)
+            && svc
+                .player_names
+                .iter()
+                .any(|n| n.eq_ignore_ascii_case(username))
+        {
+            return Some((name.as_str(), svc));
+        }
+    }
+    None
+}
+
+/// Try every registered Yggdrasil service in order; first success wins.
+///
+/// Routing rules:
+/// 1. If a service's `player_names` contains `username`, only that service
+///    is tried — no fallback.
+/// 2. Otherwise every service without `player_names` restrictions is tried
+///    in `services` list order.
+/// 3. When `auth_config.services` is empty, the legacy single-URL path is
+///    used for backward compatibility.
+pub fn authenticate_chain(
+    username: &str,
+    server_hash: &str,
+    ip: &IpAddr,
+    auth_config: &AuthenticationConfig,
+) -> Result<GameProfile, AuthError> {
+    if auth_config.services.is_empty() {
+        return authenticate(username, server_hash, ip, auth_config);
+    }
+
+    // ── 1. Explicit routing ──
+    if let Some((name, service)) = resolve_player_service(
+        username,
+        &auth_config.service_entries,
+        &auth_config.services,
+    ) {
+        tracing::debug!("{username} routed to '{name}' (player_names match)");
+        return authenticate_service(name, username, server_hash, ip, service, auth_config);
+    }
+
+    // ── 2. Priority chain (skip services that have player_names set) ──
+    for name in &auth_config.services {
+        let Some(service) = auth_config.service_entries.get(name) else {
+            tracing::warn!(
+                "Service '{name}' appears in `services` list but has no matching config table; skipping"
+            );
+            continue;
+        };
+        // Skip services with restricted player_names — those are exclusive.
+        if !service.player_names.is_empty() {
+            continue;
+        }
+        match authenticate_service(name, username, server_hash, ip, service, auth_config) {
+            Ok(profile) => return Ok(profile),
+            Err(e) => {
+                tracing::debug!("{username} not authenticated by '{name}': {e}");
+            }
+        }
+    }
+
+    Err(AuthError::UnverifiedUsername)
 }
 
 pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<(), TextureError> {
@@ -248,7 +389,8 @@ pub enum TextureError {
 
 #[cfg(test)]
 mod tests {
-    use super::ProfileTextures;
+    use super::*;
+    use pumpkin_config::{AuthenticationConfig, YggdrasilServiceConfig};
 
     // Third-party auth servers (drasl, Blessing Skin, littleskin.cn) don't send
     // `signatureRequired`. The profile must still parse. See issue #301.
@@ -277,5 +419,32 @@ mod tests {
         let profile: ProfileTextures =
             serde_json::from_slice(json.as_bytes()).expect("profile should parse");
         assert!(profile.signature_required);
+    }
+
+    // ── Multi-auth chain tests ──
+
+    #[test]
+    fn chain_skips_failed_services_and_returns_error_when_all_fail() {
+        use std::collections::HashMap;
+
+        let mut entries = HashMap::new();
+        entries.insert(
+            "BadSvc1".to_string(),
+            YggdrasilServiceConfig {
+                url: "https://127.0.0.1:1/bad1?username={username}&serverId={server_hash}".into(),
+                ..Default::default()
+            },
+        );
+
+        let config = AuthenticationConfig {
+            services: vec!["BadSvc1".into()],
+            service_entries: entries,
+            ..Default::default()
+        };
+
+        let ip = std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST);
+        let result = authenticate_chain("TestPlayer", "fake-hash", &ip, &config);
+        // Should fail (can't connect to a non-existent service) without panicking.
+        assert!(result.is_err());
     }
 }
