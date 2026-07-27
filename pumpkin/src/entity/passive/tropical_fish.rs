@@ -9,7 +9,7 @@ use crate::entity::{
         follow_school_leader::FollowSchoolLeaderGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
-    ai::pathfinder::node::PathType,
+    ai::pathfinder::{node::PathType, node_evaluator::EvaluatorKind},
     mob::{Mob, MobEntity},
 };
 
@@ -23,6 +23,12 @@ impl TropicalFishEntity {
         let mob_entity = MobEntity::new(entity);
         {
             let mut nav = mob_entity.navigator.lock().unwrap();
+            // Vanilla AbstractFish.createNavigation (AbstractFish.java:106-108):
+            // `new WaterBoundPathNavigation(this, level)`; breaching is dolphin-only
+            // (WaterBoundPathNavigation.java:25).
+            nav.set_evaluator_kind(EvaluatorKind::Swim {
+                allow_breaching: false,
+            });
             nav.set_pathfinding_malus(PathType::Water, 0.0);
             nav.set_pathfinding_malus(PathType::WaterBorder, 0.0);
         }

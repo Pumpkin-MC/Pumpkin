@@ -9,7 +9,7 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
-    ai::pathfinder::node::PathType,
+    ai::pathfinder::{node::PathType, node_evaluator::EvaluatorKind},
     mob::{Mob, MobEntity},
 };
 
@@ -22,6 +22,11 @@ impl GuardianEntity {
         let mob_entity = MobEntity::new(entity);
         {
             let mut nav = mob_entity.navigator.lock().unwrap();
+            // Vanilla Guardian.createNavigation (Guardian.java:98-100):
+            // `new WaterBoundPathNavigation(this, level)`.
+            nav.set_evaluator_kind(EvaluatorKind::Swim {
+                allow_breaching: false,
+            });
             nav.set_pathfinding_malus(PathType::Water, 0.0);
             nav.set_pathfinding_malus(PathType::WaterBorder, 0.0);
         }

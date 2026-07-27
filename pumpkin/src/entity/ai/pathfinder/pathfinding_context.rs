@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockState, BlockStateId,
     block_properties::{
         BlockProperties, OakDoorLikeProperties, OakFenceGateLikeProperties, SnowLikeProperties,
     },
@@ -242,6 +242,73 @@ impl PathfindingContext {
         let state_id = self.world.get_block_state_id(&pos.as_blockpos());
         let block = Block::from_state_id(state_id);
         block.id == Block::WATER.id || BlockState::from_id(state_id).is_waterlogged()
+    }
+
+    /// Vanilla `BlockState.getFluidState().is(FluidTags.WATER)`, the per-cell
+    /// water test of `SwimNodeEvaluator.getPathTypeOfMob`
+    /// (`SwimNodeEvaluator.java:121,126`). Beyond the water block itself and
+    /// waterlogged states, vanilla `getFluidState` overrides return a water
+    /// source for kelp (`KelpBlock.java:87-89`), kelp plants
+    /// (`KelpPlantBlock.java:47-49`), seagrass (`SeagrassBlock.java:94-96`),
+    /// tall seagrass (`TallSeagrassBlock.java:87-89`) and bubble columns
+    /// (`BubbleColumnBlock.java:85-87`).
+    #[must_use]
+    pub fn is_water_fluid_at(&self, pos: Vector3<i32>) -> bool {
+        let state_id = self.world.get_block_state_id(&pos.as_blockpos());
+        Self::is_water_fluid_state(state_id)
+    }
+
+    fn is_water_fluid_state(state_id: BlockStateId) -> bool {
+        let block = Block::from_state_id(state_id);
+        block.id == Block::WATER.id
+            || block.id == Block::KELP.id
+            || block.id == Block::KELP_PLANT.id
+            || block.id == Block::SEAGRASS.id
+            || block.id == Block::TALL_SEAGRASS.id
+            || block.id == Block::BUBBLE_COLUMN.id
+            || BlockState::from_id(state_id).is_waterlogged()
+    }
+
+    /// Vanilla `BlockState.getFluidState().isEmpty()`, used by the swim
+    /// evaluator's breach test (`SwimNodeEvaluator.java:123`) and its
+    /// out-of-fluid node penalty (`SwimNodeEvaluator.java:98`): no water and no
+    /// lava fluid occupies the cell.
+    #[must_use]
+    pub fn is_fluid_empty_at(&self, pos: Vector3<i32>) -> bool {
+        let state_id = self.world.get_block_state_id(&pos.as_blockpos());
+        if Self::is_water_fluid_state(state_id) {
+            return false;
+        }
+        !Fluid::from_state_id(state_id).is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_LAVA))
+    }
+
+    /// Vanilla `BlockState.isAir()` (`SwimNodeEvaluator.java:123`).
+    #[must_use]
+    pub fn is_air_at(&self, pos: Vector3<i32>) -> bool {
+        let state_id = self.world.get_block_state_id(&pos.as_blockpos());
+        BlockState::from_id(state_id).is_air()
+    }
+
+    /// Vanilla `BlockState.isPathfindable(PathComputationType.WATER)`. The
+    /// default (`BlockBehaviour.java:157`) is
+    /// `state.getFluidState().is(FluidTags.WATER)`; every override — doors
+    /// (`DoorBlock.java:125-130`), fences (`FenceBlock.java:63-65`), walls,
+    /// panes, sea pickles (`SeaPickleBlock.java:170-172`), stairs, slabs,
+    /// chests, cauldrons, … — returns `false` for WATER, and all of those
+    /// carry a collision shape. Closest faithful equivalent without a
+    /// per-block hook: water fluid present and no collision shape.
+    #[must_use]
+    pub fn is_water_pathfindable(&self, pos: Vector3<i32>) -> bool {
+        let state_id = self.world.get_block_state_id(&pos.as_blockpos());
+        Self::is_water_fluid_state(state_id)
+            && BlockState::from_id(state_id).collision_shapes.is_empty()
+    }
+
+    /// Vanilla `Level.getSeaLevel`, read by the shallow-swimming penalty of
+    /// `AmphibiousNodeEvaluator.getNeighbors` (`AmphibiousNodeEvaluator.java:78`).
+    #[must_use]
+    pub fn sea_level(&self) -> i32 {
+        self.world.sea_level
     }
 
     /// Predicate of the airborne start-node downward scan, vanilla

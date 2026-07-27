@@ -16,9 +16,15 @@ const DIAGONAL_DIRECTIONS: [(i32, i32); 4] = [(1, 1), (1, -1), (-1, 1), (-1, -1)
 const DEFAULT_MOB_JUMP_HEIGHT: f64 = 1.125;
 
 pub struct WalkNodeEvaluator {
-    base: BaseNodeEvaluator,
+    pub(crate) base: BaseNodeEvaluator,
     path_types_cache: FxHashMap<Vector3<i32>, PathType>,
     reusable_neighbors: [Option<Node>; 4],
+    /// Vanilla `WalkNodeEvaluator.isAmphibious()` returns `false`; only
+    /// `AmphibiousNodeEvaluator` overrides it to `true`
+    /// (`AmphibiousNodeEvaluator.java:88-91`). The composition-based
+    /// amphibious evaluator sets this flag on its inner walk evaluator to
+    /// mirror that virtual dispatch.
+    amphibious: bool,
 }
 
 impl WalkNodeEvaluator {
@@ -28,17 +34,22 @@ impl WalkNodeEvaluator {
             base: BaseNodeEvaluator::new(),
             path_types_cache: FxHashMap::default(),
             reusable_neighbors: [None, None, None, None],
+            amphibious: false,
         }
     }
 
+    pub(crate) const fn set_amphibious(&mut self, amphibious: bool) {
+        self.amphibious = amphibious;
+    }
+
     const fn is_amphibious(&self) -> bool {
-        self.base.can_float
+        self.amphibious
     }
 
     /// Vanilla `WalkNodeEvaluator.getFloorLevel` (`WalkNodeEvaluator.java:193-199`):
     /// floaters and amphibious mobs treat a water cell's floor as `y + 0.5`,
     /// everyone else uses the collision top of the block below.
-    fn get_floor_level(&self, pos: Vector3<i32>) -> f64 {
+    pub(crate) fn get_floor_level(&self, pos: Vector3<i32>) -> f64 {
         self.base.context.as_ref().map_or_else(
             || f64::from(pos.y),
             |context| {
@@ -59,7 +70,7 @@ impl WalkNodeEvaluator {
             })
     }
 
-    fn is_neighbor_valid(neighbor: Option<&Node>, current: &Node) -> bool {
+    pub(crate) fn is_neighbor_valid(neighbor: Option<&Node>, current: &Node) -> bool {
         if let Some(neighbor) = neighbor {
             if neighbor.closed {
                 return false;
@@ -142,7 +153,7 @@ impl WalkNodeEvaluator {
     /// Vanilla `WalkNodeEvaluator.findAcceptedNode` (`WalkNodeEvaluator.java:211-239`):
     /// returns the best path node for the given position, handling step-ups,
     /// falls, and blocked nodes.
-    async fn find_accepted_node(
+    pub(crate) async fn find_accepted_node(
         &mut self,
         pos: Vector3<i32>,
         jump_size: i32,
@@ -370,7 +381,7 @@ impl WalkNodeEvaluator {
         true
     }
 
-    fn get_mob_penalty(&self, path_type: PathType) -> f32 {
+    pub(crate) fn get_mob_penalty(&self, path_type: PathType) -> f32 {
         self.base
             .mob_data
             .as_ref()
@@ -388,7 +399,7 @@ impl WalkNodeEvaluator {
         )
     }
 
-    async fn get_cached_path_type(&mut self, pos: Vector3<i32>) -> PathType {
+    pub(crate) async fn get_cached_path_type(&mut self, pos: Vector3<i32>) -> PathType {
         if let Some(&cached) = self.path_types_cache.get(&pos) {
             return cached;
         }
@@ -417,6 +428,22 @@ impl WalkNodeEvaluator {
             .is_some_and(|ctx| ctx.has_collisions(aabb))
     }
 
+    /// Per-cell classification, mirroring the virtual `getPathType` dispatch
+    /// inside vanilla `getPathTypeWithinMobBB` (`WalkNodeEvaluator.java:371`):
+    /// `AmphibiousNodeEvaluator.getPathType`
+    /// (`AmphibiousNodeEvaluator.java:93-107`) overrides it, while the walk
+    /// default is the land node type (`WalkNodeEvaluator.getPathType` ->
+    /// `getPathTypeStatic`).
+    fn cell_path_type(&self, context: &mut PathfindingContext, pos: Vector3<i32>) -> PathType {
+        if self.amphibious {
+            crate::entity::ai::pathfinder::amphibious_node_evaluator::amphibious_cell_path_type(
+                context, pos,
+            )
+        } else {
+            context.get_land_node_type(pos)
+        }
+    }
+
     /// Vanilla `WalkNodeEvaluator.canStartAt` (`WalkNodeEvaluator.java:114-117`):
     /// `type != OPEN && getPathfindingMalus(type) >= 0`.
     async fn can_start_at(&mut self, pos: Vector3<i32>) -> bool {
@@ -425,7 +452,7 @@ impl WalkNodeEvaluator {
     }
 
     /// Vanilla `WalkNodeEvaluator.getStartNode` (`WalkNodeEvaluator.java:107-112`).
-    async fn get_start_node(&mut self, pos: Vector3<i32>) -> Node {
+    pub(crate) async fn get_start_node(&mut self, pos: Vector3<i32>) -> Node {
         let mut node = self.base.get_node(pos.as_blockpos());
         let path_type = self.get_cached_path_type(pos).await;
         node.path_type = path_type;
@@ -623,7 +650,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
             for dx in 0..mob_data.get_bb_width() {
                 for dz in 0..mob_data.get_bb_width() {
                     let check_pos = pos.add_raw(dx, dy, dz);
-                    let mut cell_type = context.get_land_node_type(check_pos);
+                    let mut cell_type = self.cell_path_type(context, check_pos);
 
                     if cell_type == PathType::DoorWoodClosed
                         && self.base.can_open_doors
@@ -641,8 +668,9 @@ impl NodeEvaluator for WalkNodeEvaluator {
                             Vector3::new(mob_block_pos.0, mob_block_pos.1, mob_block_pos.2);
                         let mob_below =
                             Vector3::new(mob_block_pos.0, mob_block_pos.1 - 1, mob_block_pos.2);
-                        let mob_type = context.get_land_node_type(mob_pos);
-                        let mob_below_type = context.get_land_node_type(mob_below);
+                        // Vanilla WalkNodeEvaluator.java:380: virtual `getPathType`.
+                        let mob_type = self.cell_path_type(context, mob_pos);
+                        let mob_below_type = self.cell_path_type(context, mob_below);
                         if mob_type != PathType::Rail && mob_below_type != PathType::Rail {
                             cell_type = PathType::UnpassableRail;
                         }
@@ -681,7 +709,8 @@ impl NodeEvaluator for WalkNodeEvaluator {
             && result != PathType::Open
             && mob_data.get_pathfinding_malus(result) == 0.0
         {
-            let raw_center = context.get_land_node_type(pos);
+            // Vanilla WalkNodeEvaluator.java:346: virtual `getPathType` again.
+            let raw_center = self.cell_path_type(context, pos);
             if raw_center == PathType::Open {
                 return PathType::Open;
             }

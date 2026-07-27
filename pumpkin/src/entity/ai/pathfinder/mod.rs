@@ -6,21 +6,24 @@ use crate::entity::ai::pathfinder::binary_heap::BinaryHeap;
 use crate::entity::ai::pathfinder::node::Coordinate;
 use crate::entity::ai::pathfinder::node::Node;
 use crate::entity::ai::pathfinder::node::PathType;
-use crate::entity::ai::pathfinder::node_evaluator::{MobData, NodeEvaluator};
+use crate::entity::ai::pathfinder::node_evaluator::{
+    AnyNodeEvaluator, EvaluatorKind, MobData, NodeEvaluator,
+};
 use crate::entity::ai::pathfinder::path::Path;
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
-use crate::entity::ai::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
 use pumpkin_data::attributes::Attributes;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+pub mod amphibious_node_evaluator;
 pub mod binary_heap;
 pub mod node;
 pub mod node_evaluator;
 pub mod path;
 pub mod path_type_cache;
 pub mod pathfinding_context;
+pub mod swim_node_evaluator;
 pub mod walk_node_evaluator;
 
 pub struct NavigatorGoal {
@@ -46,7 +49,9 @@ impl NavigatorGoal {
 
 pub struct Navigator {
     current_goal: Option<NavigatorGoal>,
-    evaluator: WalkNodeEvaluator,
+    evaluator: AnyNodeEvaluator,
+    /// Which vanilla navigation this mob uses; see [`Navigator::set_evaluator_kind`].
+    evaluator_kind: EvaluatorKind,
     current_path: Option<Path>,
     // Stuck detection
     ticks_on_current_node: u32,
@@ -70,7 +75,8 @@ impl Default for Navigator {
     fn default() -> Self {
         Self {
             current_goal: None,
-            evaluator: WalkNodeEvaluator::default(),
+            evaluator: AnyNodeEvaluator::default(),
+            evaluator_kind: EvaluatorKind::default(),
             current_path: None,
             ticks_on_current_node: 0,
             last_node_index: 0,
@@ -100,6 +106,9 @@ const DEFAULT_REACH_RANGE: i32 = 1;
 // sit at dy≈1.0 and fail that check — we allow a hair more so mobs step down
 // instead of orbiting the ledge and repathing the long way around.
 const NODE_REACH_Y: f64 = 1.0;
+// Vanilla WaterBoundPathNavigation.java:66-68:
+// `getMaxVerticalDistanceToWaypoint()` returns 0.5 for swim navigation.
+const SWIM_NODE_REACH_Y: f64 = 0.5;
 const STEP_DOWN_REACH_Y: f64 = 1.05;
 const MAX_FALL_FOLLOW_Y: f64 = 3.25;
 
@@ -137,6 +146,18 @@ impl Navigator {
     /// doors are allowed to path through closed wooden ones.
     pub fn set_can_open_doors(&mut self, can_open: bool) {
         self.evaluator.set_can_open_doors(can_open);
+    }
+
+    /// Selects the navigation type, mirroring a mob's vanilla
+    /// `createNavigation` override (`Mob.java:196-198` defaults to
+    /// `GroundPathNavigation` → [`EvaluatorKind::Walk`]). Call this before any
+    /// other evaluator configuration (e.g. `set_can_open_doors`) — switching
+    /// kinds rebuilds the evaluator with that kind's vanilla defaults.
+    pub fn set_evaluator_kind(&mut self, kind: EvaluatorKind) {
+        if self.evaluator_kind != kind {
+            self.evaluator_kind = kind;
+            self.evaluator = AnyNodeEvaluator::from_kind(kind);
+        }
     }
 
     pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
@@ -490,7 +511,17 @@ impl Navigator {
             self.repath_cooldown -= 1;
         }
 
-        if self.needs_new_path(&goal) {
+        // Vanilla `PathNavigation.canUpdatePath` gate, selected per navigation
+        // kind (WaterBoundPathNavigation.java:31-34,
+        // AmphibiousPathNavigation.java:26-29). `Entity.isInLiquid()` is
+        // `isInWater() || isInLava()`.
+        let is_in_liquid = entity.entity.touching_water.load(Ordering::SeqCst)
+            || entity.entity.touching_lava.load(Ordering::SeqCst);
+        let can_update_path = self.evaluator_kind.can_update_path(is_in_liquid);
+
+        // Vanilla PathNavigation.java:157-159: `createPath` bails while
+        // `canUpdatePath()` is false — no new path for a beached swimmer.
+        if self.needs_new_path(&goal) && can_update_path {
             self.current_path = self
                 .compute_path(entity, goal.destination, DEFAULT_REACH_RANGE)
                 .await;
@@ -523,6 +554,35 @@ impl Navigator {
                 self.current_path = None;
                 entity.clear_speed();
                 Self::stop_move_control(move_control);
+                return;
+            }
+
+            if !can_update_path {
+                // Vanilla PathNavigation.tick:225-233: while the path cannot
+                // update, `followThePath` (reach checks, stuck detection) is
+                // skipped; only the falling-past-waypoint advance runs.
+                if let Some(next) = path.get_next_node_pos() {
+                    let current_pos = entity.entity.pos.load();
+                    let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+                    if current_pos.y > f64::from(next.y)
+                        && !on_ground
+                        && current_pos.x.floor() as i32 == next.x
+                        && current_pos.z.floor() as i32 == next.z
+                    {
+                        path.advance();
+                    }
+                }
+                // Vanilla PathNavigation.tick:237-238: movement toward the
+                // current waypoint continues regardless.
+                if let Some(next) = path.get_next_node_pos() {
+                    let target_pos = Vector3::new(
+                        f64::from(next.x) + 0.5,
+                        f64::from(next.y),
+                        f64::from(next.z) + 0.5,
+                    );
+                    Self::set_wanted_position(move_control, target_pos, goal.speed);
+                }
+                self.current_goal = Some(goal);
                 return;
             }
 
@@ -572,7 +632,12 @@ impl Navigator {
                     f64::from(next_block.y),
                     f64::from(next_block.z) + 0.5,
                 );
-                target_pos.y = Self::get_ground_y(entity, target_pos);
+                // Water navigations override `getGroundY` to return the target
+                // y unchanged (WaterBoundPathNavigation.java:41-44,
+                // AmphibiousPathNavigation.java:36-39).
+                if self.evaluator_kind == EvaluatorKind::Walk {
+                    target_pos.y = Self::get_ground_y(entity, target_pos);
+                }
 
                 let current_pos = entity.entity.pos.load();
                 let dx = target_pos.x - current_pos.x;
@@ -594,29 +659,42 @@ impl Navigator {
                 let horizontal_dist_sq = dx * dx + dz * dz;
                 let horizontal_dist = horizontal_dist_sq.sqrt();
 
+                // Swim navigation reaches waypoints in three dimensions:
+                // vanilla WaterBoundPathNavigation.java:66-68 tightens
+                // `getMaxVerticalDistanceToWaypoint` to 0.5 (default 1.0,
+                // PathNavigation.java:407-409), and the ground-based
+                // step-down/fall advances below do not apply in open water.
+                let is_swim = matches!(self.evaluator_kind, EvaluatorKind::Swim { .. });
+                let reach_y = if is_swim {
+                    SWIM_NODE_REACH_Y
+                } else {
+                    NODE_REACH_Y
+                };
+
                 // --- Vanilla followThePath reach checks (+ 1-block step-down fix) ---
                 // 1) Airborne above next node → consume it while falling.
-                if !on_ground && near_xz && dy < 0.0 {
+                if !is_swim && !on_ground && near_xz && dy < 0.0 {
                     path.advance();
                     self.current_goal = Some(goal);
                     return;
                 }
-                // 2) Vanilla: |dx|<wp && |dz|<wp && |dy|<1.0
-                if near_xz && dy.abs() < NODE_REACH_Y {
+                // 2) Vanilla: |dx|<wp && |dz|<wp && |dy|<getMaxVerticalDistanceToWaypoint
+                if near_xz && dy.abs() < reach_y {
                     path.advance();
                     self.current_goal = Some(goal);
                     return;
                 }
                 // 3) Exactly 1-block down: |dy|≈1.0 fails (2). Without this, mobs
                 //    orbit the ledge, stuck-detect fires, and A* repaths around.
-                if near_xz && dy < 0.0 && dy > -STEP_DOWN_REACH_Y {
+                if !is_swim && near_xz && dy < 0.0 && dy > -STEP_DOWN_REACH_Y {
                     path.advance();
                     self.current_goal = Some(goal);
                     return;
                 }
                 // 4) Still above a drop but already over the column — keep node if
                 //    we're clearly committed (close XZ, within max fall).
-                if dx.abs() < max_waypoint.max(0.6)
+                if !is_swim
+                    && dx.abs() < max_waypoint.max(0.6)
                     && dz.abs() < max_waypoint.max(0.6)
                     && dy < 0.0
                     && dy > -MAX_FALL_FOLLOW_Y

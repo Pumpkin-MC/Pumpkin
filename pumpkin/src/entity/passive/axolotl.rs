@@ -11,7 +11,7 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
-    ai::pathfinder::node::PathType,
+    ai::pathfinder::{node::PathType, node_evaluator::EvaluatorKind},
     mob::{Mob, MobEntity},
 };
 
@@ -27,6 +27,10 @@ impl AxolotlEntity {
         let mob_entity = MobEntity::new(entity);
         {
             let mut nav = mob_entity.navigator.lock().unwrap();
+            // Vanilla Axolotl.createNavigation (Axolotl.java:372-374):
+            // `new AmphibiousPathNavigation(this, level)`; its evaluator is
+            // `new AmphibiousNodeEvaluator(false)` (AmphibiousPathNavigation.java:22).
+            nav.set_evaluator_kind(EvaluatorKind::Amphibious);
             nav.set_pathfinding_malus(PathType::Water, 0.0);
             nav.set_pathfinding_malus(PathType::WaterBorder, 0.0);
         }

@@ -3,8 +3,11 @@ use rustc_hash::FxHashMap;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
 use crate::entity::ai::pathfinder::{
+    amphibious_node_evaluator::AmphibiousNodeEvaluator,
     node::{Node, PATH_TYPE_COUNT, PathType, Target},
     pathfinding_context::PathfindingContext,
+    swim_node_evaluator::SwimNodeEvaluator,
+    walk_node_evaluator::WalkNodeEvaluator,
 };
 
 pub trait NodeEvaluator {
@@ -195,5 +198,196 @@ impl BaseNodeEvaluator {
 
             dx <= self.entity_width / 2 && dy <= self.entity_height && dz <= self.entity_depth / 2
         })
+    }
+}
+
+/// Which node evaluator a mob's navigation uses, mirroring vanilla's
+/// `Mob.createNavigation` overrides (`Mob.java:196-198` defaults to
+/// `GroundPathNavigation`, i.e. the walk evaluator).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EvaluatorKind {
+    /// Vanilla `GroundPathNavigation` / `WalkNodeEvaluator` — the default for
+    /// every mob without a `createNavigation` override.
+    #[default]
+    Walk,
+    /// Vanilla `WaterBoundPathNavigation` / `SwimNodeEvaluator`
+    /// (`WaterBoundPathNavigation.java:23-29`); `allow_breaching` is true only
+    /// for dolphins (`WaterBoundPathNavigation.java:25`).
+    Swim { allow_breaching: bool },
+    /// Vanilla `AmphibiousPathNavigation` / `AmphibiousNodeEvaluator(false)`
+    /// (`AmphibiousPathNavigation.java:20-24`).
+    Amphibious,
+}
+
+impl EvaluatorKind {
+    /// Vanilla `PathNavigation.canUpdatePath` per navigation type:
+    /// - `WaterBoundPathNavigation.java:31-34`:
+    ///   `allowBreaching || mob.isInLiquid()`.
+    /// - `AmphibiousPathNavigation.java:26-29`: always `true`.
+    /// - Walk: `true`, preserving Pumpkin's pre-existing behavior for every
+    ///   land mob (vanilla `GroundPathNavigation.canUpdatePath` also gates on
+    ///   `onGround || isInLiquid || isPassenger`, which is not modeled here).
+    #[must_use]
+    pub const fn can_update_path(self, is_in_liquid: bool) -> bool {
+        match self {
+            Self::Walk | Self::Amphibious => true,
+            Self::Swim { allow_breaching } => allow_breaching || is_in_liquid,
+        }
+    }
+}
+
+/// Concrete evaluator storage for the [`EvaluatorKind`] selection. The
+/// [`NodeEvaluator`] trait returns `impl Future` and is therefore not
+/// dyn-compatible, so dispatch happens by matching this enum.
+pub enum AnyNodeEvaluator {
+    Walk(Box<WalkNodeEvaluator>),
+    Swim(Box<SwimNodeEvaluator>),
+    Amphibious(Box<AmphibiousNodeEvaluator>),
+}
+
+macro_rules! dispatch {
+    ($self:expr, $e:ident => $call:expr) => {
+        match $self {
+            AnyNodeEvaluator::Walk($e) => $call,
+            AnyNodeEvaluator::Swim($e) => $call,
+            AnyNodeEvaluator::Amphibious($e) => $call,
+        }
+    };
+}
+
+impl AnyNodeEvaluator {
+    /// Builds the evaluator a vanilla navigation would construct:
+    /// - Swim: `new SwimNodeEvaluator(allowBreaching)` with
+    ///   `setCanPassDoors(false)` (`WaterBoundPathNavigation.java:25-27`).
+    /// - Amphibious: `new AmphibiousNodeEvaluator(false)`
+    ///   (`AmphibiousPathNavigation.java:22`).
+    #[must_use]
+    pub fn from_kind(kind: EvaluatorKind) -> Self {
+        match kind {
+            EvaluatorKind::Walk => Self::Walk(Box::default()),
+            EvaluatorKind::Swim { allow_breaching } => {
+                let mut evaluator = SwimNodeEvaluator::new(allow_breaching);
+                evaluator.set_can_pass_doors(false);
+                Self::Swim(Box::new(evaluator))
+            }
+            EvaluatorKind::Amphibious => {
+                Self::Amphibious(Box::new(AmphibiousNodeEvaluator::new(false)))
+            }
+        }
+    }
+}
+
+impl Default for AnyNodeEvaluator {
+    fn default() -> Self {
+        Self::from_kind(EvaluatorKind::Walk)
+    }
+}
+
+impl NodeEvaluator for AnyNodeEvaluator {
+    fn prepare(&mut self, context: PathfindingContext, mob_data: MobData) {
+        dispatch!(self, e => e.prepare(context, mob_data));
+    }
+
+    fn done(&mut self) {
+        dispatch!(self, e => e.done());
+    }
+
+    async fn get_start(&mut self) -> Option<Node> {
+        dispatch!(self, e => e.get_start().await)
+    }
+
+    fn get_target(&mut self, pos: BlockPos) -> Target {
+        dispatch!(self, e => e.get_target(pos))
+    }
+
+    async fn get_neighbors(&mut self, current: &Node, out: &mut Vec<Node>) {
+        dispatch!(self, e => e.get_neighbors(current, out).await);
+    }
+
+    async fn get_path_type_of_mob(
+        &mut self,
+        context: &mut PathfindingContext,
+        pos: Vector3<i32>,
+        mob_data: &MobData,
+    ) -> PathType {
+        dispatch!(self, e => e.get_path_type_of_mob(context, pos, mob_data).await)
+    }
+
+    async fn get_path_type(
+        &mut self,
+        context: &mut PathfindingContext,
+        pos: Vector3<i32>,
+    ) -> PathType {
+        dispatch!(self, e => e.get_path_type(context, pos).await)
+    }
+
+    fn set_can_pass_doors(&mut self, can_pass: bool) {
+        dispatch!(self, e => e.set_can_pass_doors(can_pass));
+    }
+
+    fn set_can_open_doors(&mut self, can_open: bool) {
+        dispatch!(self, e => e.set_can_open_doors(can_open));
+    }
+
+    fn set_can_float(&mut self, can_float: bool) {
+        dispatch!(self, e => e.set_can_float(can_float));
+    }
+
+    fn set_can_walk_over_fences(&mut self, can_walk: bool) {
+        dispatch!(self, e => e.set_can_walk_over_fences(can_walk));
+    }
+
+    fn can_pass_doors(&self) -> bool {
+        dispatch!(self, e => e.can_pass_doors())
+    }
+
+    fn can_open_doors(&self) -> bool {
+        dispatch!(self, e => e.can_open_doors())
+    }
+
+    fn can_float(&self) -> bool {
+        dispatch!(self, e => e.can_float())
+    }
+
+    fn can_walk_over_fences(&self) -> bool {
+        dispatch!(self, e => e.can_walk_over_fences())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EvaluatorKind;
+
+    #[test]
+    fn default_kind_is_walk() {
+        // Mob.java:196-198: the default navigation is GroundPathNavigation.
+        assert_eq!(EvaluatorKind::default(), EvaluatorKind::Walk);
+    }
+
+    #[test]
+    fn can_update_path_matches_vanilla_navigations() {
+        // WaterBoundPathNavigation.java:31-34: allowBreaching || isInLiquid.
+        assert!(
+            !EvaluatorKind::Swim {
+                allow_breaching: false
+            }
+            .can_update_path(false)
+        );
+        assert!(
+            EvaluatorKind::Swim {
+                allow_breaching: false
+            }
+            .can_update_path(true)
+        );
+        assert!(
+            EvaluatorKind::Swim {
+                allow_breaching: true
+            }
+            .can_update_path(false)
+        );
+        // AmphibiousPathNavigation.java:26-29: always true.
+        assert!(EvaluatorKind::Amphibious.can_update_path(false));
+        // Walk preserves the pre-existing always-on behavior.
+        assert!(EvaluatorKind::Walk.can_update_path(false));
     }
 }

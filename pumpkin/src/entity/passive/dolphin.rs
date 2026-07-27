@@ -10,7 +10,7 @@ use crate::entity::{
         melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
-    ai::pathfinder::node::PathType,
+    ai::pathfinder::{node::PathType, node_evaluator::EvaluatorKind},
     mob::{Mob, MobEntity},
 };
 
@@ -24,6 +24,12 @@ impl DolphinEntity {
         let mob_entity = MobEntity::new(entity);
         {
             let mut nav = mob_entity.navigator.lock().unwrap();
+            // Vanilla Dolphin.createNavigation (Dolphin.java:181-183):
+            // `new WaterBoundPathNavigation(this, level)`; allowBreaching is
+            // `mob.is(EntityTypes.DOLPHIN)` (WaterBoundPathNavigation.java:25).
+            nav.set_evaluator_kind(EvaluatorKind::Swim {
+                allow_breaching: true,
+            });
             nav.set_pathfinding_malus(PathType::Water, 0.0);
             nav.set_pathfinding_malus(PathType::WaterBorder, 0.0);
         }
