@@ -189,12 +189,14 @@ impl Server {
         };
         let server = Arc::new(server);
 
-        // Bound chunk generation parallelism: rayon's default (one thread per
-        // core) plus tokio's per-core workers plus the per-dimension scheduler
-        // threads oversubscribes the machine during world generation.
-        // Lowering thread priority instead would be OS-specific (no clean
-        // cross-platform API without new dependencies), so we bound the pool
-        // size; operators can tune `world.chunk_generation_threads`.
+        // Vanilla sizes its background worker pool at clamp(cores - 1, 1, 255)
+        // (/root/Vanilla/src/net/minecraft/util/Util.java:262) and leaves it
+        // there: load is shed by throttling how many chunks are in execution
+        // (ThrottlingChunkTaskDispatcher), not by shrinking the pool. We match
+        // that. Shrinking the pool costs throughput without reducing the amount
+        // of resident work, which is the opposite of the intended trade.
+        // `world.chunk_generation_threads` stays available as an explicit
+        // operator override for thermally constrained hosts.
         let gen_threads = server
             .advanced_config
             .world

@@ -16,23 +16,37 @@ pub struct LevelConfig {
     pub autosave_ticks: u64,
     /// Number of threads used for chunk generation (the shared rayon pool).
     ///
-    /// `0` (default) means auto: `max(1, cores - 2)`. The generation pool is
-    /// not the only thing running — the tokio runtime spawns one network/IO
-    /// worker per core, and each dimension runs its own scheduler thread — so
-    /// sizing the pool to the full core count oversubscribes the machine and
-    /// pushes total CPU usage past `cores * 100%`. Leaving two cores of
-    /// headroom keeps networking and ticking responsive while chunks generate.
+    /// `0` (default) means auto, which mirrors vanilla's background pool.
     ///
-    /// Lower this further on thermally constrained hosts (e.g. phones or SBCs)
-    /// to cap generation CPU usage.
+    /// Vanilla runs that pool nearly maxed out — `clamp(cores - 1, 1, 255)` in
+    /// `Util.maxAllowedExecutorThreads` (`/root/Vanilla/src/net/minecraft/util/Util.java:262`,
+    /// cap from `Util.getMaxThreads` at `Util.java:279`) — and does *not*
+    /// shrink it to leave headroom. What vanilla limits instead is how many
+    /// chunks may be in execution at once
+    /// (`/root/Vanilla/src/net/minecraft/server/level/ThrottlingChunkTaskDispatcher.java:42`),
+    /// which caps queued work and resident chunk data without capping the
+    /// throughput of the workers themselves.
+    ///
+    /// Set this explicitly to pin the pool smaller on a thermally constrained
+    /// host (phones, SBCs). It only caps the pool: the in-execution bound is a
+    /// fixed constant, so a pinned pool trades chunk latency for CPU instead of
+    /// also starving the queue.
     #[serde(default)]
     pub chunk_generation_threads: usize,
     // TODO: More options
 }
 
+/// Upper bound vanilla accepts for its background pool
+/// (`/root/Vanilla/src/net/minecraft/util/Util.java:270`, default at `:279`).
+const VANILLA_MAX_BG_THREADS: usize = 255;
+
 impl LevelConfig {
-    /// Resolves `chunk_generation_threads`, applying the auto default
-    /// (`max(1, cores - 2)`) when the configured value is `0`.
+    /// Resolves `chunk_generation_threads`, applying vanilla's auto sizing.
+    ///
+    /// Auto (`0`) is `clamp(cores - 1, 1, 255)`, matching
+    /// `Util.maxAllowedExecutorThreads`
+    /// (`/root/Vanilla/src/net/minecraft/util/Util.java:262`). An explicit
+    /// value is honored verbatim as an operator cap.
     #[must_use]
     pub fn resolved_chunk_generation_threads(&self) -> usize {
         if self.chunk_generation_threads > 0 {
@@ -40,8 +54,8 @@ impl LevelConfig {
         }
         std::thread::available_parallelism()
             .map_or(1, std::num::NonZero::get)
-            .saturating_sub(2)
-            .max(1)
+            .saturating_sub(1)
+            .clamp(1, VANILLA_MAX_BG_THREADS)
     }
 }
 

@@ -25,6 +25,49 @@ mod run;
 static CHUNKS_LOADED_DISK: AtomicU64 = AtomicU64::new(0);
 static CHUNKS_GEN_FULL: AtomicU64 = AtomicU64::new(0);
 
+/// Vanilla's cap on how many distinct chunks may be in execution at once.
+///
+/// `ThrottlingChunkTaskDispatcher` stops popping work while
+/// `chunkPositionsInExecution.size() >= maxChunksInExecution`
+/// (`/root/Vanilla/src/net/minecraft/server/level/ThrottlingChunkTaskDispatcher.java:42`,
+/// with the set maintained at `:47` on schedule and `:37` on release). The
+/// value vanilla passes is `4`
+/// (`/root/Vanilla/src/net/minecraft/server/level/DistanceManager.java:90`).
+///
+/// This is vanilla's *only* chunk-load throttle: the worker pool itself is run
+/// nearly maxed out at `clamp(cores - 1, 1, 255)`
+/// (`/root/Vanilla/src/net/minecraft/util/Util.java:262`) and the worldgen
+/// dispatcher is unthrottled
+/// (`/root/Vanilla/src/net/minecraft/server/level/ChunkMap.java:214`).
+const VANILLA_MAX_CHUNKS_IN_EXECUTION: usize = 4;
+
+/// How many chunk stage tasks Pumpkin may keep in execution at once.
+///
+/// The unit differs from vanilla's, so vanilla's `4` is converted rather than
+/// copied. A vanilla slot holds one chunk for its entire status ladder: the slot
+/// is taken when the chunk is scheduled and released only once the chunk is
+/// entity-ticking (`DistanceManager.java:130`), spanning all 12 steps of
+/// `ChunkPyramid.GENERATION_PYRAMID`
+/// (`/root/Vanilla/src/net/minecraft/world/level/chunk/status/ChunkPyramid.java:20`).
+/// A Pumpkin slot holds one chunk for one stage. `StagedChunkEnum::COUNT` is
+/// also 12, so `4 * COUNT` is vanilla's four chunk-ladders expressed in
+/// per-stage slots.
+///
+/// The conversion is not exact — 48 stage slots can cover more distinct chunks
+/// at once than vanilla's 4 — but it errs on the permissive side deliberately.
+/// Vanilla's `4` throttles *player-ticket admission*; the dispatcher that
+/// actually corresponds to this scheduler is the worldgen one, and that has no
+/// throttle at all (`ChunkMap.java:214`), bounded only by the worker pool.
+///
+/// Deliberately independent of the generation pool size, matching vanilla:
+/// the throttle does not scale with `availableProcessors` there. Coupling the
+/// two starves the queue whenever an operator pins the pool down for thermal
+/// reasons — fewer threads *and* less work resident, so throughput and memory
+/// residency fall together instead of the same work simply draining more
+/// slowly. With the bound fixed, a pool pinned to 1 thread still has a full
+/// pipeline queued in front of it and never idles waiting for admission.
+const MAX_CHUNKS_IN_EXECUTION: usize = VANILLA_MAX_CHUNKS_IN_EXECUTION * StagedChunkEnum::COUNT;
+
 pub(crate) struct TaskHeapNode(i8, NodeKey);
 impl PartialEq for TaskHeapNode {
     fn eq(&self, other: &Self) -> bool {
@@ -67,8 +110,11 @@ pub struct GenerationSchedule {
     waiting_for_chunks: HashSetType<NodeKey>,
 
     io_lock: IOLock,
-    running_task_count: u16,
-    max_in_flight: u16,
+    /// Number of chunks currently in execution. Vanilla's analog is
+    /// `chunkPositionsInExecution.size()` in `ThrottlingChunkTaskDispatcher`.
+    running_task_count: usize,
+    /// Admission bound on `running_task_count`; see `MAX_CHUNKS_IN_EXECUTION`.
+    max_in_flight: usize,
     queue_dirty: bool,
     recv_chunk: crossfire::compat::MRx<(ChunkPos, RecvChunk)>,
     io_read: crossfire::compat::MTx<Vec<ChunkPos>>,
@@ -99,7 +145,14 @@ impl GenerationSchedule {
         let (send_write_io, recv_write_io) =
             crossfire::compat::spsc::bounded_tx_blocking_rx_async(500);
 
-        let (send_gen, recv_gen) = crossfire::compat::mpmc::bounded_blocking(gen_thread_count + 5);
+        // Must hold everything the admission bound lets through, plus one item
+        // per worker that has already popped its task. Undersizing it would make
+        // the scheduler thread block in `send` once the queue is deep, stalling
+        // resort/receive work — the throttle is supposed to be the only thing
+        // limiting admission.
+        let (send_gen, recv_gen) = crossfire::compat::mpmc::bounded_blocking(
+            MAX_CHUNKS_IN_EXECUTION + gen_thread_count + 5,
+        );
 
         let io_lock = Arc::new((
             Mutex::new(HashMapType::default()),
@@ -138,15 +191,6 @@ impl GenerationSchedule {
             }
         }
 
-        // Backpressure follows the actual generation pool size, not the core
-        // count: the pool may be sized smaller than the machine (see
-        // `world.chunk_generation_threads`) to leave CPU headroom for the
-        // tokio runtime and networking. 4x the pool keeps every generation
-        // thread fed without flooding the queue with swapped-out chunk data.
-        let max_in_flight = gen_pool.as_ref().map_or(gen_thread_count as u16, |pool| {
-            (pool.current_num_threads().max(1) * 4).min(usize::from(u16::MAX)) as u16
-        });
-
         let level_sched = level;
         let lighting_config = level_sched.lighting_config;
         let handle = thread::Builder::new()
@@ -163,7 +207,10 @@ impl GenerationSchedule {
                     waiting_for_chunks: HashSetType::default(),
                     io_lock,
                     running_task_count: 0,
-                    max_in_flight,
+                    // Vanilla throttles chunk *concurrency*, never the worker
+                    // pool size, so this bound is a constant: it reads neither
+                    // `gen_thread_count` nor `gen_pool.current_num_threads()`.
+                    max_in_flight: MAX_CHUNKS_IN_EXECUTION,
                     queue_dirty: false,
                     recv_chunk,
                     io_read: send_read_io,

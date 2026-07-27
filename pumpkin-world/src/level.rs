@@ -276,13 +276,15 @@ impl Level {
 
         // Generation thread budget for the fallback path (gen_pool == None,
         // e.g. runtime-created worlds that don't share the server pool).
-        // Honor `world.chunk_generation_threads` when set; otherwise halve the
-        // auto value since these dedicated threads exist per dimension.
-        let threads_per_dimension = if level_config.chunk_generation_threads > 0 {
-            level_config.chunk_generation_threads
-        } else {
-            (level_config.resolved_chunk_generation_threads() / 2).max(1)
-        };
+        // Same policy as the shared pool: vanilla's worker count is
+        // clamp(cores - 1, 1, 255) (/root/Vanilla/src/net/minecraft/util/Util.java:262)
+        // and is not divided per dimension — vanilla runs every ServerLevel off
+        // the one Util.backgroundExecutor() pool
+        // (/root/Vanilla/src/net/minecraft/server/MinecraftServer.java:379,
+        // handed to each ServerLevel at :462 and :495). Chunk concurrency is
+        // bounded separately by the scheduler, so halving here would only cost
+        // throughput.
+        let threads_per_dimension = level_config.resolved_chunk_generation_threads();
 
         GenerationSchedule::create(
             4,

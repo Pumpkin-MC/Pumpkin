@@ -349,7 +349,18 @@ impl GenerationSchedule {
                 self.queue_dirty = false;
             }
 
-            // 4. Process ready tasks in the queue (up to max_in_flight)
+            // 4. Process ready tasks in the queue (up to max_in_flight).
+            //
+            // This is Pumpkin's analog of vanilla's ThrottlingChunkTaskDispatcher:
+            // stop admitting work while the in-execution count is at the bound
+            // (/root/Vanilla/src/net/minecraft/server/level/ThrottlingChunkTaskDispatcher.java:42),
+            // increment on dispatch (:47), decrement on completion (:37).
+            // `running_task_count` is a faithful stand-in for vanilla's
+            // `chunkPositionsInExecution` LongSet without needing a separate set:
+            // dispatching a task installs `holder.occupied` as a graph predecessor
+            // of every remaining task of that chunk, so a chunk can never have two
+            // tasks counted at once and the count equals the number of distinct
+            // chunk positions in execution.
             let mut io_batch = Vec::with_capacity(16);
             'out2: while let Some(task) = self.queue.pop() {
                 if level.shut_down_chunk_system.load(Relaxed) {
