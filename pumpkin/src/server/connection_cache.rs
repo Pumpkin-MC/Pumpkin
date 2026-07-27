@@ -2,12 +2,14 @@ use crate::entity::player::Player;
 use base64::{Engine as _, engine::general_purpose};
 use core::error;
 use pumpkin_config::BasicConfiguration;
+use pumpkin_config::networking::versions::VersionsConfig;
 use pumpkin_data::packet::{CURRENT_MC_VERSION, LOWEST_SUPPORTED_MC_VERSION};
 use pumpkin_protocol::{
     Players, Sample, StatusResponse, Version,
     codec::var_int::VarInt,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::{fs, path::Path};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -77,17 +79,34 @@ impl CachedStatus {
         }
     }
 
-    pub fn get_status_packet(&self, client_protocol: i32) -> CStatusResponse {
+    pub fn get_status_packet(
+        &self,
+        client_protocol: i32,
+        versions_config: &VersionsConfig,
+    ) -> CStatusResponse {
         let mut response = self.status_response.clone();
 
         let supported_min = LOWEST_SUPPORTED_MC_VERSION.protocol_version();
         let supported_max = CURRENT_MC_VERSION.protocol_version();
 
-        if client_protocol >= supported_min
-            && client_protocol <= supported_max
-            && let Some(version) = &mut response.version
-        {
-            version.protocol = client_protocol as u32;
+        let in_supported_range =
+            client_protocol >= supported_min && client_protocol <= supported_max;
+        let client_version = JavaMinecraftVersion::from_protocol(client_protocol as u32);
+        let allowed =
+            in_supported_range && versions_config.is_allowed(client_version, CURRENT_MC_VERSION);
+
+        if let Some(version) = &mut response.version {
+            if allowed {
+                // Spoof the protocol number to the client's own, so clients on any
+                // permitted version don't see a "server out of date"/"client out of
+                // date" warning in the multiplayer list.
+                version.protocol = client_protocol as u32;
+                if let Some(name) = &versions_config.status_name {
+                    version.name.clone_from(name);
+                }
+            } else if let Some(name) = &versions_config.status_name_disallowed {
+                version.name.clone_from(name);
+            }
         }
 
         let json = serde_json::to_string(&response).expect("Failed to serialize status response");

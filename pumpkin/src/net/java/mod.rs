@@ -616,7 +616,7 @@ impl JavaClient {
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         match self.connection_state.load() {
-            ConnectionState::HandShake => self.handle_handshake_packet(packet).await,
+            ConnectionState::HandShake => self.handle_handshake_packet(server, packet).await,
             ConnectionState::Status => self.handle_status_packet(server, packet).await,
             // TODO: Check config if transfer is enabled
             ConnectionState::Login | ConnectionState::Transfer => {
@@ -629,14 +629,18 @@ impl JavaClient {
 
     async fn handle_handshake_packet(
         &self,
+        server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling handshake group");
         let mut payload = &packet.payload[..];
         match packet.id {
             0 => {
-                self.handle_handshake(SHandShake::read(&mut payload, &self.version.load())?)
-                    .await;
+                self.handle_handshake(
+                    server,
+                    SHandShake::read(&mut payload, &self.version.load())?,
+                )
+                .await;
                 Ok(None)
             }
             _ => Err(ReadingError::Message(format!(

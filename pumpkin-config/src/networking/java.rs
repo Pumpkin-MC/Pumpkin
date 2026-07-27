@@ -1,3 +1,4 @@
+use super::versions::VersionsConfig;
 use crate::{AuthenticationConfig, CompressionConfig};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -27,6 +28,9 @@ pub struct JavaConfig {
     pub motd: String,
     /// Authentication settings for client connections.
     pub authentication: AuthenticationConfig,
+    /// Which Minecraft client versions may join, and how the version is displayed in the
+    /// multiplayer server list.
+    pub versions: VersionsConfig,
 }
 
 impl Default for JavaConfig {
@@ -42,6 +46,7 @@ impl Default for JavaConfig {
             compression: CompressionConfig::default(),
             motd: "A blazingly fast Pumpkin server!".to_string(),
             authentication: AuthenticationConfig::default(),
+            versions: VersionsConfig::default(),
         }
     }
 }
