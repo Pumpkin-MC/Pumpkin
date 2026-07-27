@@ -137,11 +137,14 @@ impl GenerationSchedule {
             }
         }
 
+        // Must stay >= 1: a limit of zero would make the dispatch loop unable to
+        // ever start a task, so the scheduler could never make progress.
         let max_in_flight = if gen_pool.is_some() {
             (thread::available_parallelism().map_or(1, std::num::NonZero::get) * 4) as u16
         } else {
             gen_thread_count as u16
-        };
+        }
+        .max(1);
 
         let level_sched = level;
         let lighting_config = level_sched.lighting_config;
@@ -1076,6 +1079,10 @@ impl GenerationSchedule {
 
             // 4. Process ready tasks in the queue (up to max_in_flight)
             let mut io_batch = Vec::with_capacity(16);
+            // Set when we stop dispatching because every generation slot is busy
+            // rather than because the queue ran dry. The queue is left non-empty
+            // in that case, so the wait below has to run anyway or we spin.
+            let mut all_slots_busy = false;
             'out2: while let Some(task) = self.queue.pop() {
                 if level.shut_down_chunk_system.load(Relaxed) {
                     self.queue.push(task);
@@ -1086,6 +1093,7 @@ impl GenerationSchedule {
 
                 if self.running_task_count >= self.max_in_flight {
                     self.queue.push(task);
+                    all_slots_busy = true;
                     break 'out2;
                 }
 
@@ -1296,8 +1304,17 @@ impl GenerationSchedule {
                 self.save_all_chunk(true);
             }
 
-            // 3. If queue is empty, wait for work or results
-            if self.queue.is_empty() {
+            // 3. Nothing more can be dispatched right now, so block instead of
+            //    spinning.
+            //
+            //    `all_slots_busy` means the queue still holds work but every
+            //    generation slot is occupied. Gating this purely on
+            //    `queue.is_empty()` skipped the wait in that case, so the outer
+            //    loop re-ran as fast as the CPU allowed — re-locking
+            //    `LevelChannel` and re-polling `recv_chunk` — until a worker
+            //    reported back. That pinned one core for as long as generation
+            //    stayed saturated, which is the whole of every player join.
+            if self.queue.is_empty() || all_slots_busy {
                 // If we have tasks in flight, wait for them with timeout
                 if self.running_task_count > 0 || !self.waiting_for_chunks.is_empty() {
                     match self.recv_chunk.recv_timeout(Duration::from_millis(5)) {
@@ -1311,7 +1328,7 @@ impl GenerationSchedule {
                         }
                         Err(crossfire::compat::RecvTimeoutError::Disconnected) => break,
                     }
-                } else {
+                } else if self.queue.is_empty() {
                     // No tasks in flight, wait indefinitely for LevelChannel changes
                     let restored = Self::restore_ready_tasks(
                         &mut self.graph,
