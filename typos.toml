@@ -8,3 +8,6 @@ ba = "ba"
 fo = "fo"
 undescore = "undescore"
 replaceables = "replaceables"
+# Vanilla's genuinely misspelled method name PistonMovingBlockEntity.matchesStickyCritera,
+# cited verbatim in piston comments.
+Critera = "Critera"
