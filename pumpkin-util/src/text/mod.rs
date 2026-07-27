@@ -110,11 +110,16 @@ impl TextComponentBase {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate {
                 translate,
-                bedrock_translate,
+                bedrock_translate: _,
                 with,
             } => {
-                let key = bedrock_translate.as_ref().unwrap_or(&translate);
-                translation_to_pretty(format!("minecraft:{key}"), Locale::EnUs, with)
+                // The console is a Java-side surface, so it takes the Java key.
+                // Preferring the Bedrock key here printed Bedrock wording to the
+                // server console and to RCON, and Bedrock strings carry %s
+                // placeholders that the Java argument list does not fill, so an
+                // unknown command answered literally
+                // "Unknown command: %s. Please check that the command exists".
+                translation_to_pretty(format!("minecraft:{translate}"), Locale::EnUs, with)
             }
             TextContent::EntityNames {
                 selector,
@@ -260,11 +265,13 @@ impl TextComponentBase {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate {
                 translate,
-                bedrock_translate,
+                bedrock_translate: _,
                 with,
             } => {
-                let key = bedrock_translate.as_ref().unwrap_or(&translate);
-                get_translation_text(format!("minecraft:{key}"), locale, with)
+                // Java key for the same reason as `to_pretty_console`. This one
+                // feeds RCON replies, where the Bedrock wording and its unfilled
+                // %s placeholders were visible to anyone scripting the server.
+                get_translation_text(format!("minecraft:{translate}"), locale, with)
             }
             TextContent::EntityNames {
                 selector,
