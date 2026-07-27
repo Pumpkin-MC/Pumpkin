@@ -31,13 +31,19 @@ pub struct ItemFrameEntity {
 }
 
 impl ItemFrameEntity {
+    /// Facing used when a frame is created without NBT, matching vanilla.
+    const DEFAULT_FACING: BlockDirection = BlockDirection::South;
+
     pub fn new(entity: Entity) -> Self {
+        let facing = Self::DEFAULT_FACING.to_index();
+        // The spawn packet reads the direction from the entity data field, so
+        // it has to agree with `facing` or the frame spawns facing elsewhere.
+        entity.data.store(i32::from(facing), Ordering::Relaxed);
         Self {
             entity,
             item_stack: Mutex::new(ItemStack::EMPTY.clone()),
             rotation: AtomicU8::new(0),
-            // Vanilla frames default to south when no NBT is present.
-            facing: AtomicU8::new(BlockDirection::South.to_index()),
+            facing: AtomicU8::new(facing),
             item_drop_chance: AtomicCell::new(1.0),
             invisible: AtomicBool::new(false),
             fixed: AtomicBool::new(false),
@@ -46,7 +52,7 @@ impl ItemFrameEntity {
 
     pub fn get_facing(&self) -> BlockDirection {
         BlockDirection::from_index(self.facing.load(Ordering::Relaxed))
-            .unwrap_or(BlockDirection::South)
+            .unwrap_or(Self::DEFAULT_FACING)
     }
 
     /// The comparator signal this frame produces.
