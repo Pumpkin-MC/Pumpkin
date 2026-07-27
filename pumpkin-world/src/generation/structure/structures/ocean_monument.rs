@@ -394,11 +394,9 @@ fn generate_room_graph(random: &mut RandomGenerator) -> RoomGraph {
     // (vanilla only calls updateOpenings on grid rooms and the roof), which
     // makes their single doorway impossible to seal in the loop below.
     let mut ordered: Vec<usize> = Vec::new();
-    for slot in grid {
-        if let Some(room) = slot {
-            rooms[room].update_openings();
-            ordered.push(room);
-        }
+    for room in grid.into_iter().flatten() {
+        rooms[room].update_openings();
+        ordered.push(room);
     }
     rooms[roof].update_openings();
     // l.1230: Util.shuffle.
@@ -543,7 +541,11 @@ fn new_child(
 }
 
 /// `OceanMonumentWingRoom` ctor (OMP l.292-295).
-fn wing_child(orientation: BlockDirection, bounding_box: BlockBox, main_design: i32) -> ChildPiece {
+const fn wing_child(
+    orientation: BlockDirection,
+    bounding_box: BlockBox,
+    main_design: i32,
+) -> ChildPiece {
     let mut piece = StructurePiece::new(StructurePieceType::OceanMonumentWingRoom, bounding_box, 1);
     piece.set_facing(Some(orientation));
     ChildPiece {
@@ -770,10 +772,11 @@ impl StructureGenerator for OceanMonumentGenerator {
 // The building piece (OMP MonumentBuilding, l.1105-1579)
 // ---------------------------------------------------------------------------
 
-/// `MonumentBuilding` (OMP l.1105-1579). Vanilla registers the building as
-/// the single structure piece and renders its child rooms from inside
-/// `postProcess`; the children here live in `children`, in vanilla creation
-/// order.
+/// `MonumentBuilding` (OMP l.1105-1579).
+///
+/// Vanilla registers the building as the single structure piece and renders
+/// its child rooms from inside `postProcess`; the children here live in
+/// `children`, in vanilla creation order.
 pub struct OceanMonumentPiece {
     piece: StructurePiece,
     sea_level: i32,
