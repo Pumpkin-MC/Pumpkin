@@ -103,8 +103,10 @@ impl VersionsConfig {
             VersionAccessMode::Any => true,
             VersionAccessMode::Latest => version == latest,
             VersionAccessMode::Range => {
-                let min = non_empty(&self.min_version).and_then(|s| s.parse::<JavaMinecraftVersion>().ok());
-                let max = non_empty(&self.max_version).and_then(|s| s.parse::<JavaMinecraftVersion>().ok());
+                let min = non_empty(&self.min_version)
+                    .and_then(|s| s.parse::<JavaMinecraftVersion>().ok());
+                let max = non_empty(&self.max_version)
+                    .and_then(|s| s.parse::<JavaMinecraftVersion>().ok());
                 match (min, max) {
                     (Some(min), Some(max)) => version >= min && version <= max,
                     (Some(min), None) => version >= min,
@@ -141,8 +143,7 @@ impl VersionsConfig {
     pub fn default_disconnect_message(&self, latest: JavaMinecraftVersion) -> String {
         match self.mode {
             VersionAccessMode::Any => {
-                "This server does not accept connections from your Minecraft version."
-                    .to_string()
+                "This server does not accept connections from your Minecraft version.".to_string()
             }
             VersionAccessMode::Latest => {
                 format!("This server only accepts the latest Minecraft version ({latest}).")
