@@ -114,13 +114,15 @@ impl LoadConfiguration for PumpkinConfig {
         let versions_cfg = &self.advanced.networking.java.versions;
         match versions_cfg.mode {
             VersionAccessMode::Range => {
-                if let Some(min) = &versions_cfg.min_version {
+                let min = &versions_cfg.min_version;
+                if !min.is_empty() {
                     assert!(
                         min.parse::<JavaMinecraftVersion>().is_ok(),
                         "networking.java.versions.min_version '{min}' is not a recognized Minecraft version"
                     );
                 }
-                if let Some(max) = &versions_cfg.max_version {
+                let max = &versions_cfg.max_version;
+                if !max.is_empty() {
                     assert!(
                         max.parse::<JavaMinecraftVersion>().is_ok(),
                         "networking.java.versions.max_version '{max}' is not a recognized Minecraft version"

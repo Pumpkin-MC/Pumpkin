@@ -101,11 +101,11 @@ impl CachedStatus {
                 // permitted version don't see a "server out of date"/"client out of
                 // date" warning in the multiplayer list.
                 version.protocol = client_protocol as u32;
-                if let Some(name) = &versions_config.status_name {
-                    version.name.clone_from(name);
+                if let Some(name) = versions_config.status_name() {
+                    version.name = name.to_string();
                 }
-            } else if let Some(name) = &versions_config.status_name_disallowed {
-                version.name.clone_from(name);
+            } else if let Some(name) = versions_config.status_name_disallowed() {
+                version.name = name.to_string();
             }
         }
 
