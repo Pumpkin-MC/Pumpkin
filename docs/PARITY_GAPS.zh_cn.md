@@ -136,3 +136,29 @@
 - fb026e38 生成文件 include! 分片（block 592k→24 片等六文件，字节级校验）
 - 8f480e7e `feat(worldgen)` 末地城完整移植
 - 进行中：第二批 18 个 1000+ 行文件拆分（4 agent，含补测试）、第一批拆分测试补充
+
+## 2026-07-27 第四波：玩家反馈的运行时问题
+
+### 已修复
+
+| 问题 | 根因 | 提交 |
+|---|---|---|
+| 鱿鱼上岸到处乱跑 | 鱿鱼被接到通用 Navigator + 陆地漫游 goal。原版鱿鱼**没有** `createNavigation` 覆写，完全靠 `SquidRandomMovementGoal` 存一个冲量向量 + 自定义 `travel`（Squid.java:119-171, 203-206），出水只会沉底扑腾（Squid.java:162-170） | 51af4087 |
+| 水生生物在岸上永生 | 缺 `WaterAnimal.handleAirSupply`（WaterAnimal.java:43-53）。原版离水每 tick 扣 1 氧气，到 -20 归零并造成 2 点溺水伤害，回水重置 300 | 51af4087 |
+| 跑图 CPU 吃满（400 上限吃到 413） | rayon 生成池按核数开满 + tokio 每核 worker + 每维度调度线程 = 超订，且**没有任何配置开关**。新增 `world.chunk_generation_threads`（默认 auto = 核数-2），排队上限随池缩放 | cde612ef |
+| 恶地矿井杂乱/不相连/密度爆炸 | 三个 bug：①结构引用阶段重算候选起点时完全跳过频率检查（mineshafts 是 spacing=1/frequency=0.4%，绕过=每个合规区块都长矿井）②引用扫描半径只有 ±1 个放置区域，原版扫 8 区块，矿井能铺 100 格 → 走廊在 3×3 边界外被截断 ③四个频率 reducer 全用 Xoroshiro，原版一律 Java LCG，两个种子公式也错 | 30fbfecb |
+| `Very slow tick` 中 players(1)=369ms | **不是玩家 tick 代码问题**。玩家 tick 体内全是廉价操作（无阻塞 IO：`pull_new_chunks` 是 try_recv，`flush_dirty` 走 tokio::spawn，发区块也是 spawn）。日志显示每次慢 tick 都夹在 `StructureReferences` 1200-1300ms 的爆发中间——即上面矿井 bug ① 导致的幽灵矿井，每个未过滤候选都跑一遍完整矿道图生成、每区块 9 次，把 CPU 全占了导致 tick 线程饥饿。随 30fbfecb 一并消除 | 30fbfecb |
+
+**排除项（经核对属原版行为，不是 bug）**：
+- 恶地/陶土区出现矿井 — mesa 变体矿井（`mineshaft_mesa`，深色橡木）专属恶地，露天贴地也是原版行为，Y 逻辑（MineshaftStructure.java:67-73）逐行核对无误。
+- 离线模式同名顶号 — 离线 UUID = `MD5("OfflinePlayer:"+名字)`，与原版 `nameUUIDFromBytes` 算法一致（有 `offline_uuid_matches_vanilla` 测试钉死）。同名同 UUID 是离线模式固有设计，开正版验证即不存在。
+
+### 配置陷阱（已加启动警告，a8fe18aa）
+
+`[networking.java.authentication] enabled` 不是正版验证总开关，它只控制"服务端是否调用验证服务"（配合 `url` 做第三方验证站用）。关闭正版验证要改 `[networking.java] online_mode = false`。两者矛盾时客户端会报"无效会话"，现已在启动时警告。
+
+### 水生生物剩余缺口
+
+- 海豚用 moistness（湿度）机制而非氧气，未实现（Dolphin.java）
+- 鱿鱼 `rotate_speed` 已按原版状态机维护，但翻滚动画本身是客户端行为
+- 墨汁音量：原版 0.4（Squid.java:99-101），Pumpkin 的 `Entity::play_sound` 无音量参数，按 1.0 播放
