@@ -140,7 +140,32 @@ pub struct Structure {
     pub liquid_settings: Option<&'static str>,
     pub dimension_padding: Option<i32>,
     pub use_expansion_hack: Option<bool>,
+    pub pool_aliases: &'static [PoolAliasBinding],
     pub structure_type: StructureType,
+}
+#[derive(Clone, Copy, Debug)]
+pub enum PoolAliasBinding {
+    Direct {
+        alias: &'static str,
+        target: &'static str,
+    },
+    Random {
+        alias: &'static str,
+        targets: &'static [WeightedAliasTarget],
+    },
+    RandomGroup {
+        groups: &'static [WeightedAliasGroup],
+    },
+}
+#[derive(Clone, Copy, Debug)]
+pub struct WeightedAliasTarget {
+    pub target: &'static str,
+    pub weight: u32,
+}
+#[derive(Clone, Copy, Debug)]
+pub struct WeightedAliasGroup {
+    pub bindings: &'static [PoolAliasBinding],
+    pub weight: u32,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GenerationStep {
@@ -185,6 +210,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(false),
+        pool_aliases: &[],
         structure_type: StructureType::Jigsaw,
     };
     pub const BASTION_REMNANT: Self = Structure {
@@ -200,6 +226,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(false),
+        pool_aliases: &[],
         structure_type: StructureType::Jigsaw,
     };
     pub const BURIED_TREASURE: Self = Structure {
@@ -215,6 +242,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::BuriedTreasure,
     };
     pub const DESERT_PYRAMID: Self = Structure {
@@ -230,6 +258,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::DesertPyramid,
     };
     pub const END_CITY: Self = Structure {
@@ -245,6 +274,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::EndCity,
     };
     pub const FORTRESS: Self = Structure {
@@ -260,6 +290,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::Fortress,
     };
     pub const IGLOO: Self = Structure {
@@ -275,6 +306,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::Igloo,
     };
     pub const JUNGLE_PYRAMID: Self = Structure {
@@ -290,6 +322,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::JungleTemple,
     };
     pub const MANSION: Self = Structure {
@@ -305,6 +338,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::WoodlandMansion,
     };
     pub const MINESHAFT: Self = Structure {
@@ -320,6 +354,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::Mineshaft,
     };
     pub const MINESHAFT_MESA: Self = Structure {
@@ -335,6 +370,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::Mineshaft,
     };
     pub const MONUMENT: Self = Structure {
@@ -350,6 +386,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::OceanMonument,
     };
     pub const NETHER_FOSSIL: Self = Structure {
@@ -365,6 +402,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::NetherFossil,
     };
     pub const OCEAN_RUIN_COLD: Self = Structure {
@@ -380,6 +418,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::OceanRuin,
     };
     pub const OCEAN_RUIN_WARM: Self = Structure {
@@ -395,6 +434,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::OceanRuin,
     };
     pub const PILLAGER_OUTPOST: Self = Structure {
@@ -410,6 +450,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
         structure_type: StructureType::Jigsaw,
     };
     pub const RUINED_PORTAL: Self = Structure {
@@ -425,6 +466,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_DESERT: Self = Structure {
@@ -440,6 +482,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_JUNGLE: Self = Structure {
@@ -455,6 +498,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_MOUNTAIN: Self = Structure {
@@ -470,6 +514,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_NETHER: Self = Structure {
@@ -485,6 +530,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_OCEAN: Self = Structure {
@@ -500,6 +546,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::RuinedPortal,
     };
     pub const RUINED_PORTAL_SWAMP: Self = Structure {
@@ -515,6 +562,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::RuinedPortal,
     };
     pub const SHIPWRECK: Self = Structure {
@@ -530,6 +578,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::Shipwreck,
     };
     pub const SHIPWRECK_BEACHED: Self = Structure {
@@ -545,6 +594,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::Shipwreck,
     };
     pub const STRONGHOLD: Self = Structure {
@@ -560,6 +610,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::Stronghold,
     };
     pub const SWAMP_HUT: Self = Structure {
@@ -575,6 +626,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: None,
+        pool_aliases: &[],
         structure_type: StructureType::SwampHut,
     };
     pub const TRAIL_RUINS: Self = Structure {
@@ -590,6 +642,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(false),
+        pool_aliases: &[],
         structure_type: StructureType::Jigsaw,
     };
     pub const TRIAL_CHAMBERS: Self = Structure {
@@ -605,6 +658,89 @@ impl Structure {
         liquid_settings: Some("ignore_waterlogging"),
         dimension_padding: Some(10i32),
         use_expansion_hack: Some(false),
+        pool_aliases: &[
+            PoolAliasBinding::RandomGroup {
+                groups: &[
+                    WeightedAliasGroup {
+                        bindings: &[
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/ranged",
+                                target: "minecraft:trial_chambers/spawner/ranged/skeleton",
+                            },
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/slow_ranged",
+                                target: "minecraft:trial_chambers/spawner/slow_ranged/skeleton",
+                            },
+                        ],
+                        weight: 1u32,
+                    },
+                    WeightedAliasGroup {
+                        bindings: &[
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/ranged",
+                                target: "minecraft:trial_chambers/spawner/ranged/stray",
+                            },
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/slow_ranged",
+                                target: "minecraft:trial_chambers/spawner/slow_ranged/stray",
+                            },
+                        ],
+                        weight: 1u32,
+                    },
+                    WeightedAliasGroup {
+                        bindings: &[
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/ranged",
+                                target: "minecraft:trial_chambers/spawner/ranged/poison_skeleton",
+                            },
+                            PoolAliasBinding::Direct {
+                                alias: "minecraft:trial_chambers/spawner/contents/slow_ranged",
+                                target: "minecraft:trial_chambers/spawner/slow_ranged/poison_skeleton",
+                            },
+                        ],
+                        weight: 1u32,
+                    },
+                ],
+            },
+            PoolAliasBinding::Random {
+                alias: "minecraft:trial_chambers/spawner/contents/melee",
+                targets: &[
+                    WeightedAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/melee/zombie",
+                        weight: 1u32,
+                    },
+                    WeightedAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/melee/husk",
+                        weight: 1u32,
+                    },
+                    WeightedAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/melee/spider",
+                        weight: 1u32,
+                    },
+                ],
+            },
+            PoolAliasBinding::Random {
+                alias: "minecraft:trial_chambers/spawner/contents/small_melee",
+                targets: &[
+                    WeightedAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/small_melee/slime",
+                        weight: 1u32,
+                    },
+                    WeightedAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/small_melee/cave_spider",
+                        weight: 1u32,
+                    },
+                    WeightedAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/small_melee/silverfish",
+                        weight: 1u32,
+                    },
+                    WeightedAliasTarget {
+                        target: "minecraft:trial_chambers/spawner/small_melee/baby_zombie",
+                        weight: 1u32,
+                    },
+                ],
+            },
+        ],
         structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_DESERT: Self = Structure {
@@ -620,6 +756,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
         structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_PLAINS: Self = Structure {
@@ -635,6 +772,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
         structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_SAVANNA: Self = Structure {
@@ -650,6 +788,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
         structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_SNOWY: Self = Structure {
@@ -665,6 +804,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
         structure_type: StructureType::Jigsaw,
     };
     pub const VILLAGE_TAIGA: Self = Structure {
@@ -680,6 +820,7 @@ impl Structure {
         liquid_settings: None,
         dimension_padding: None,
         use_expansion_hack: Some(true),
+        pool_aliases: &[],
         structure_type: StructureType::Jigsaw,
     };
     #[must_use]

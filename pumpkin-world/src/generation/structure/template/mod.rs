@@ -101,6 +101,10 @@ pub fn place_template(
 /// finalize + write passes (vanilla `processedBlockInfoList`).
 struct PendingBlock {
     world_pos: Vector3<i32>,
+    /// Raw template-local position; vanilla keeps the original block infos and
+    /// hands `originalBlockInfo.pos()` to finalize delegates as the
+    /// `templateRelativePos` argument (CappedProcessor.java:73).
+    template_pos: Vector3<i32>,
     /// Untransformed processed state — vanilla processors run before rotation
     /// is applied (`StructureTemplate.java:381-386`); rotation happens at
     /// write time.
@@ -154,7 +158,9 @@ fn place_template_blocks(
         let mut placed_entry = palette_entry.clone();
 
         // Jigsaw blocks are replaced during template processing, before block entities are
-        // collected. Keeping this in the placement pipeline avoids stale jigsaw entities.
+        // collected. Keeping this in the placement pipeline avoids stale jigsaw entities
+        // and matches vanilla's processor order: JigsawReplacementProcessor runs before
+        // the data-driven list (SinglePoolElement.java:159-165).
         if palette_entry.name == "minecraft:jigsaw" {
             let final_state = block_entity_nbt
                 .as_ref()
@@ -162,6 +168,13 @@ fn place_template_blocks(
                 .unwrap_or("minecraft:air");
             placed_entry = PaletteEntry::from_string(final_state);
             block_entity_nbt = None;
+            // JigsawReplacementProcessor.java:58-60: a final_state of
+            // structure_void drops the block entirely.
+            if placed_entry.name == "minecraft:structure_void"
+                || placed_entry.name == "structure_void"
+            {
+                continue;
+            }
         }
 
         // Vanilla processors run on the saved template state; rotation is only
@@ -190,16 +203,19 @@ fn place_template_blocks(
             continue;
         }
 
-        let world_pos = Vector3::new(wx, wy, wz);
+        let mut world_pos = Vector3::new(wx, wy, wz);
 
-        // Apply per-block processors
+        // Apply per-block processors. Vanilla threads the (possibly moved)
+        // processed info through the chain while always passing the raw
+        // template-local position (StructureTemplate.java:384-387).
         let mut loot = None;
         let mut dropped = false;
         for processor in processors {
-            let Some(processed) = processor.process(chunk, world_pos, state) else {
+            let Some(processed) = processor.process(chunk, world_pos, block.pos, state) else {
                 dropped = true;
                 break;
             };
+            world_pos = processed.pos;
             state = processed.state;
             if processed.loot.is_some() {
                 loot = processed.loot;
@@ -211,6 +227,7 @@ fn place_template_blocks(
 
         pending.push(PendingBlock {
             world_pos,
+            template_pos: block.pos,
             state,
             entry: placed_entry,
             nbt: block_entity_nbt,
@@ -300,13 +317,23 @@ fn finalize_capped_processors(
                 break;
             }
             let entry = &mut pending[index];
-            let Some(processed) = delegate.process(chunk, entry.world_pos, entry.state) else {
+            // CappedProcessor.java:73: the delegate gets the original
+            // template-local position as `templateRelativePos`.
+            let Some(processed) =
+                delegate.process(chunk, entry.world_pos, entry.template_pos, entry.state)
+            else {
                 continue;
             };
-            // Vanilla counts an entry only when the delegate changed it.
-            if processed.state.id == entry.state.id && processed.loot.is_none() {
+            // Vanilla counts an entry only when the delegate changed it
+            // (CappedProcessor.java:74-77: `processedBlockInfo.equals(...)`
+            // compares position, state and nbt).
+            if processed.state.id == entry.state.id
+                && processed.pos == entry.world_pos
+                && processed.loot.is_none()
+            {
                 continue;
             }
+            entry.world_pos = processed.pos;
             entry.state = processed.state;
             if processed.loot.is_some() {
                 entry.loot = processed.loot;

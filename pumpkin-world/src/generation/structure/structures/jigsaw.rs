@@ -475,14 +475,30 @@ impl StructurePieceBase for PoolElementStructurePiece {
         let origin =
             pumpkin_util::math::vector3::Vector3::new(self.pos.0.x, self.pos.0.y, self.pos.0.z);
 
+        let projection = self.projection;
         self.element
             .for_each_template(|_name, processor_list, template| {
-                let processors = match processor_list {
+                let mut processors: Vec<_> = match processor_list {
                     ProcessorListRef::Named(name) => {
                         crate::generation::structure::template::processor::load_processor_list(name)
                     }
                     ProcessorListRef::Empty => Arc::from([]),
-                };
+                }
+                .iter()
+                .cloned()
+                .collect();
+                // Vanilla SinglePoolElement.getSettings (SinglePoolElement.java:166,
+                // via StructureTemplatePool.Projection.TERRAIN_MATCHING at
+                // StructureTemplatePool.java:115): terrain-matching elements
+                // append GravityProcessor(WORLD_SURFACE_WG, -1).
+                if projection == JigsawProjection::TerrainMatching {
+                    processors.push(
+                        crate::generation::structure::template::processor::StructureProcessor::Gravity {
+                            heightmap: pumpkin_util::HeightMap::WorldSurfaceWg,
+                            offset: -1,
+                        },
+                    );
+                }
                 crate::generation::structure::template::place_template(
                     chunk,
                     &template,

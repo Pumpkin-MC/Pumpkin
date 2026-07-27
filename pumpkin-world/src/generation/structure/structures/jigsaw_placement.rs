@@ -1,3 +1,4 @@
+use pumpkin_data::structures::PoolAliasBinding;
 use pumpkin_data::{Mirror, Rotation};
 
 use crate::generation::structure::{
@@ -6,7 +7,7 @@ use crate::generation::structure::{
 };
 use pumpkin_util::math::block_box::BlockBox;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::random::RandomImpl;
+use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
 use std::collections::BinaryHeap;
 use std::sync::Arc;
 
@@ -52,16 +53,121 @@ pub const MAX_TOTAL_STRUCTURE_RANGE: i32 = 128;
 pub const MIN_DEPTH: i32 = 0;
 pub const MAX_DEPTH: i32 = 20;
 
-/// Simple lookup for Pool Aliases introduced in 1.20+
+/// Vanilla `PoolAliasLookup`
+/// (net/minecraft/world/level/levelgen/structure/pools/alias/PoolAliasLookup.java).
+///
+/// The unit value is vanilla's `EMPTY` identity lookup (PoolAliasLookup.java:22);
+/// [`Self::resolve`] mirrors `PoolAliasLookup.create` and builds the
+/// per-structure-start alias table from the structure's `pool_aliases` data.
 pub struct PoolAliasLookup;
 
 impl PoolAliasLookup {
+    /// Identity lookup — vanilla `EMPTY` (PoolAliasLookup.java:22).
     #[must_use]
     pub const fn lookup<'a>(&self, id: &'a str) -> &'a str {
-        // In a complete implementation, this would look up the alias in the context/registry.
-        // Returning the ID directly acts as a fallback/default behavior.
         id
     }
+
+    /// Vanilla `PoolAliasLookup.create(poolAliasBindings, pos, seed)`
+    /// (PoolAliasLookup.java:26-35), called once per structure start with the
+    /// start position and the world seed
+    /// (JigsawStructure.java:114: `PoolAliasLookup.create(this.poolAliases,
+    /// startPos, context.seed())`). Bindings come from the structure's
+    /// generated `pool_aliases` data (pumpkin-data `structures.rs`).
+    fn resolve(
+        &self,
+        structure_key: Option<pumpkin_data::structures::StructureKeys>,
+        pos: &BlockPos,
+        seed: i64,
+    ) -> PoolAliasTable<'_> {
+        let mut map = std::collections::HashMap::new();
+        let bindings: &'static [PoolAliasBinding] = structure_key.map_or(&[], |key| {
+            pumpkin_data::structures::Structure::get(&key).pool_aliases
+        });
+        if !bindings.is_empty() {
+            // `RandomSource.create(seed).forkPositional().at(pos)`
+            // (PoolAliasLookup.java:30): LegacyRandomSource.forkPositional
+            // takes `nextLong()` as the fork seed and `at` reseeds with
+            // `Mth.getSeed(pos) ^ forkSeed` (LegacyRandomSource.java:73-77) —
+            // the same construction as the capped-processor random.
+            let fork_seed = LegacyRand::from_seed(seed as u64).next_i64();
+            let mut random = LegacyRand::from_seed(
+                (hash_block_pos(pos.0.x, pos.0.y, pos.0.z) ^ fork_seed) as u64,
+            );
+            // Bindings resolve in list order (PoolAliasLookup.java:32:
+            // `poolAliasBindings.forEach(binding -> binding.forEachResolved(...))`).
+            for binding in bindings {
+                resolve_binding(binding, &mut random, &mut map);
+            }
+        }
+        PoolAliasTable { base: self, map }
+    }
+}
+
+/// Alias table resolved for one structure start — vanilla builds an
+/// `ImmutableMap` and looks keys up with `getOrDefault(key, key)`
+/// (PoolAliasLookup.java:31-38); unaliased ids fall back to the base
+/// (identity) lookup the caller supplied.
+struct PoolAliasTable<'a> {
+    base: &'a PoolAliasLookup,
+    map: std::collections::HashMap<&'static str, &'static str>,
+}
+
+impl PoolAliasTable<'_> {
+    fn lookup<'a>(&self, id: &'a str) -> &'a str {
+        self.map
+            .get(id)
+            .copied()
+            .map_or_else(|| self.base.lookup(id), |target| target)
+    }
+}
+
+/// Vanilla `PoolAliasBinding.forEachResolved` per subtype:
+/// - `DirectPoolAlias.java:9-12`: fixed mapping, no random draw.
+/// - `RandomPoolAlias.java:9-12`: `targets.getRandomOrThrow(random)`.
+/// - `RandomGroupPoolAlias.java:8-11`: one weighted group draw, then the
+///   chosen group's bindings resolve in order with the same random.
+fn resolve_binding(
+    binding: &'static PoolAliasBinding,
+    random: &mut LegacyRand,
+    map: &mut std::collections::HashMap<&'static str, &'static str>,
+) {
+    match *binding {
+        PoolAliasBinding::Direct { alias, target } => {
+            map.insert(alias, target);
+        }
+        PoolAliasBinding::Random { alias, targets } => {
+            if let Some(target) = pick_weighted(targets, random, |target| target.weight) {
+                map.insert(alias, target.target);
+            }
+        }
+        PoolAliasBinding::RandomGroup { groups } => {
+            if let Some(group) = pick_weighted(groups, random, |group| group.weight) {
+                for group_binding in group.bindings {
+                    resolve_binding(group_binding, random, map);
+                }
+            }
+        }
+    }
+}
+
+/// Vanilla `WeightedList.getRandomOrThrow` (WeightedList.java:91-96): one
+/// `nextInt(totalWeight)` draw indexes the weight-expanded entry list, which
+/// is equivalent to this cumulative walk over the entries in order.
+fn pick_weighted<'a, T>(
+    items: &'a [T],
+    random: &mut impl RandomImpl,
+    weight_of: impl Fn(&T) -> u32,
+) -> Option<&'a T> {
+    let total: i32 = items.iter().map(|item| weight_of(item) as i32).sum();
+    if total <= 0 {
+        return None;
+    }
+    let mut selection = random.next_bounded_i32(total);
+    items.iter().find(|item| {
+        selection -= weight_of(item) as i32;
+        selection < 0
+    })
 }
 
 impl JigsawPlacement {
@@ -86,8 +192,14 @@ impl JigsawPlacement {
 
         let max_depth = max_depth.clamp(MIN_DEPTH, MAX_DEPTH);
 
-        let actual_start_pool_id = pool_alias_lookup.lookup(start_pool_id);
-        let pool = TemplatePool::discover(actual_start_pool_id)?;
+        // Vanilla builds the alias table once per structure start from the
+        // start position and world seed (JigsawStructure.java:114); jigsaw
+        // pool references resolve through it (JigsawPlacement.java:208).
+        let aliases = pool_alias_lookup.resolve(context.structure_key, &position, context.seed);
+
+        // The start pool is passed as a resolved holder in vanilla and does
+        // NOT go through the alias lookup (JigsawStructure.java:114).
+        let pool = TemplatePool::discover(start_pool_id)?;
         // Vanilla draws the start rotation BEFORE the start element
         // (JigsawPlacement.java:76-78); the order shifts every later roll.
         let rotation = Rotation::from_index(context.random.next_bounded_i32(4) as u8);
@@ -272,7 +384,9 @@ impl JigsawPlacement {
                         continue;
                     }
 
-                    let target_pool_id = pool_alias_lookup.lookup(raw_pool_id);
+                    // JigsawPlacement.java:208: the jigsaw's pool id resolves
+                    // through the alias lookup.
+                    let target_pool_id = aliases.lookup(raw_pool_id);
                     let Some(target_pool) = TemplatePool::discover(target_pool_id) else {
                         continue;
                     };
@@ -283,7 +397,9 @@ impl JigsawPlacement {
                             .extend(target_pool.get_shuffled_elements(&mut context.random));
                     }
 
-                    let fallback_pool_id = pool_alias_lookup.lookup(&target_pool.fallback);
+                    // JigsawPlacement.java:219: the fallback is taken from the
+                    // pool holder directly, WITHOUT alias resolution.
+                    let fallback_pool_id = target_pool.fallback.as_str();
                     if let Some(fallback_pool) = TemplatePool::discover(fallback_pool_id) {
                         target_elements
                             .extend(fallback_pool.get_shuffled_elements(&mut context.random));
@@ -420,16 +536,18 @@ impl JigsawPlacement {
                                             rotated_tj_target_pos.y,
                                             rotated_tj_target_pos.z,
                                         ) {
-                                            let child_pool_id = pool_alias_lookup.lookup(&tj.pool);
+                                            // JigsawPlacement.java:250: child pool ids
+                                            // resolve through the alias lookup; the child
+                                            // fallback (line 252) again comes from the
+                                            // holder without alias resolution.
+                                            let child_pool_id = aliases.lookup(&tj.pool);
                                             let child_pool_max_y =
                                                 get_pool_max_y_size(child_pool_id);
 
                                             let child_fallback_max_y = if let Some(cp) =
                                                 TemplatePool::discover(child_pool_id)
                                             {
-                                                get_pool_max_y_size(
-                                                    pool_alias_lookup.lookup(&cp.fallback),
-                                                )
+                                                get_pool_max_y_size(&cp.fallback)
                                             } else {
                                                 0
                                             };
@@ -805,6 +923,93 @@ mod tests {
         let distance = MaxDistance::new(116);
         assert_eq!(distance.horizontal, 116);
         assert_eq!(distance.vertical, 116);
+    }
+
+    #[test]
+    fn trial_chambers_pool_alias_data_is_extracted() {
+        // Mirrors data/minecraft/worldgen/structure/trial_chambers.json:
+        // one random_group (ranged + slow_ranged pairs) and two random
+        // bindings (melee, small_melee).
+        let structure = pumpkin_data::structures::Structure::get(
+            &pumpkin_data::structures::StructureKeys::TrialChambers,
+        );
+        assert_eq!(structure.pool_aliases.len(), 3);
+    }
+
+    #[test]
+    fn pool_alias_resolution_is_deterministic_and_grouped() {
+        use pumpkin_data::structures::StructureKeys;
+        let lookup = PoolAliasLookup;
+        let pos = BlockPos::new(16, -40, 32);
+        let table_a = lookup.resolve(Some(StructureKeys::TrialChambers), &pos, 12345);
+        let table_b = lookup.resolve(Some(StructureKeys::TrialChambers), &pos, 12345);
+
+        let ranged = table_a.lookup("minecraft:trial_chambers/spawner/contents/ranged");
+        assert_eq!(
+            ranged,
+            table_b.lookup("minecraft:trial_chambers/spawner/contents/ranged"),
+            "same seed + position must resolve identically"
+        );
+        assert!(ranged.starts_with("minecraft:trial_chambers/spawner/ranged/"));
+
+        // random_group binds ranged and slow_ranged to the SAME mob
+        // (RandomGroupPoolAlias.java:8-11 resolves a whole group together).
+        let mob = ranged.rsplit('/').next().unwrap();
+        assert_eq!(
+            table_a.lookup("minecraft:trial_chambers/spawner/contents/slow_ranged"),
+            format!("minecraft:trial_chambers/spawner/slow_ranged/{mob}")
+        );
+
+        let melee = table_a.lookup("minecraft:trial_chambers/spawner/contents/melee");
+        assert!(
+            [
+                "minecraft:trial_chambers/spawner/melee/zombie",
+                "minecraft:trial_chambers/spawner/melee/husk",
+                "minecraft:trial_chambers/spawner/melee/spider",
+            ]
+            .contains(&melee)
+        );
+
+        // Unaliased ids pass through (PoolAliasLookup.java:38 getOrDefault).
+        assert_eq!(
+            table_a.lookup("minecraft:village/plains/houses"),
+            "minecraft:village/plains/houses"
+        );
+    }
+
+    #[test]
+    fn pool_alias_resolution_varies_with_seed() {
+        use pumpkin_data::structures::StructureKeys;
+        let lookup = PoolAliasLookup;
+        let pos = BlockPos::new(0, -40, 0);
+        let mut melee_targets = std::collections::HashSet::new();
+        for seed in 0..64 {
+            let table = lookup.resolve(Some(StructureKeys::TrialChambers), &pos, seed);
+            melee_targets.insert(table.lookup("minecraft:trial_chambers/spawner/contents/melee"));
+        }
+        assert!(
+            melee_targets.len() >= 2,
+            "the per-seed melee alias draw must vary"
+        );
+    }
+
+    #[test]
+    fn structures_without_aliases_resolve_to_identity() {
+        let lookup = PoolAliasLookup;
+        let table = lookup.resolve(None, &BlockPos::new(0, 0, 0), 1);
+        assert_eq!(
+            table.lookup("minecraft:trial_chambers/spawner/contents/melee"),
+            "minecraft:trial_chambers/spawner/contents/melee"
+        );
+        let village = lookup.resolve(
+            Some(pumpkin_data::structures::StructureKeys::VillagePlains),
+            &BlockPos::new(0, 64, 0),
+            1,
+        );
+        assert_eq!(
+            village.lookup("minecraft:village/plains/houses"),
+            "minecraft:village/plains/houses"
+        );
     }
 
     struct FlatSampler;

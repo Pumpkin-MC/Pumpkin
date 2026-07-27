@@ -99,9 +99,97 @@ pub struct StructureStruct {
     pub dimension_padding: Option<i32>,
     /// Critical for villages to appropriately truncate long village streets.
     pub use_expansion_hack: Option<bool>,
+    /// Optional jigsaw pool alias bindings (vanilla `pool_aliases`, e.g. the
+    /// trial chambers spawner pools).
+    #[serde(default)]
+    pub pool_aliases: Vec<PoolAliasBindingStruct>,
     /// Defines the generation behavior (e.g. "minecraft:jigsaw").
     #[serde(rename = "type")]
     pub structure_type: String,
+}
+
+/// Deserialized vanilla `PoolAliasBinding`
+/// (net/minecraft/world/level/levelgen/structure/pools/alias/PoolAliasBinding.java).
+#[derive(Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum PoolAliasBindingStruct {
+    /// `DirectPoolAlias`: a fixed alias -> target mapping.
+    #[serde(rename = "minecraft:direct")]
+    Direct { alias: String, target: String },
+    /// `RandomPoolAlias`: one weighted target drawn per structure start.
+    #[serde(rename = "minecraft:random")]
+    Random {
+        alias: String,
+        targets: Vec<WeightedAliasTargetStruct>,
+    },
+    /// `RandomGroupPoolAlias`: one weighted group of bindings drawn per
+    /// structure start.
+    #[serde(rename = "minecraft:random_group")]
+    RandomGroup {
+        groups: Vec<WeightedAliasGroupStruct>,
+    },
+}
+
+/// Weighted entry of a `minecraft:random` pool alias binding.
+#[derive(Deserialize, Clone)]
+pub struct WeightedAliasTargetStruct {
+    /// Target template pool id.
+    pub data: String,
+    /// Relative weight.
+    pub weight: u32,
+}
+
+/// Weighted entry of a `minecraft:random_group` pool alias binding.
+#[derive(Deserialize, Clone)]
+pub struct WeightedAliasGroupStruct {
+    /// Bindings applied together when this group is drawn.
+    pub data: Vec<PoolAliasBindingStruct>,
+    /// Relative weight.
+    pub weight: u32,
+}
+
+impl ToTokens for PoolAliasBindingStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::Direct { alias, target } => tokens.extend(quote!(
+                PoolAliasBinding::Direct {
+                    alias: #alias,
+                    target: #target,
+                }
+            )),
+            Self::Random { alias, targets } => {
+                let targets = targets.iter().map(|target| {
+                    let data = &target.data;
+                    let weight = target.weight;
+                    quote!(WeightedAliasTarget {
+                        target: #data,
+                        weight: #weight,
+                    })
+                });
+                tokens.extend(quote!(
+                    PoolAliasBinding::Random {
+                        alias: #alias,
+                        targets: &[#(#targets),*],
+                    }
+                ));
+            }
+            Self::RandomGroup { groups } => {
+                let groups = groups.iter().map(|group| {
+                    let bindings = &group.data;
+                    let weight = group.weight;
+                    quote!(WeightedAliasGroup {
+                        bindings: &[#(#bindings),*],
+                        weight: #weight,
+                    })
+                });
+                tokens.extend(quote!(
+                    PoolAliasBinding::RandomGroup {
+                        groups: &[#(#groups),*],
+                    }
+                ));
+            }
+        }
+    }
 }
 
 impl ToTokens for StructureSetStruct {
@@ -266,6 +354,8 @@ impl ToTokens for StructureStruct {
             quote!(None)
         };
 
+        let pool_aliases = &self.pool_aliases;
+
         let structure_type = structure_type_to_token(&self.structure_type);
 
         let start_height = if let Some(sh) = &self.start_height {
@@ -300,6 +390,7 @@ impl ToTokens for StructureStruct {
                 liquid_settings: #liquid_settings,
                 dimension_padding: #dimension_padding,
                 use_expansion_hack: #use_expansion_hack,
+                pool_aliases: &[#(#pool_aliases),*],
                 structure_type: #structure_type,
             }
         ));
@@ -621,7 +712,35 @@ pub fn build() -> TokenStream {
             pub liquid_settings: Option<&'static str>,
             pub dimension_padding: Option<i32>,
             pub use_expansion_hack: Option<bool>,
+            pub pool_aliases: &'static [PoolAliasBinding],
             pub structure_type: StructureType,
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        pub enum PoolAliasBinding {
+            Direct {
+                alias: &'static str,
+                target: &'static str,
+            },
+            Random {
+                alias: &'static str,
+                targets: &'static [WeightedAliasTarget],
+            },
+            RandomGroup {
+                groups: &'static [WeightedAliasGroup],
+            },
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        pub struct WeightedAliasTarget {
+            pub target: &'static str,
+            pub weight: u32,
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        pub struct WeightedAliasGroup {
+            pub bindings: &'static [PoolAliasBinding],
+            pub weight: u32,
         }
 
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
