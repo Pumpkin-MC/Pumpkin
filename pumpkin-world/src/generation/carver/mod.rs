@@ -7,6 +7,7 @@ use crate::generation::GlobalRandomConfig;
 use crate::generation::generator::VanillaGenerator;
 use crate::generation::noise::aquifer_sampler::CarverAquiferSampler;
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
+use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
 use crate::generation::noise::router::surface_height_sampler::{
     SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
 };
@@ -58,6 +59,8 @@ impl CarverBlockIds {
 pub struct CarvingContext<'a> {
     pub min_y: i8,
     pub height: u16,
+    pub generator: &'a VanillaGenerator,
+    pub biome_sampler: MultiNoiseSampler<'a>,
     pub random_config: &'a GlobalRandomConfig,
     pub surface_noise: &'a DoublePerlinNoiseSampler,
     pub secondary_noise: &'a DoublePerlinNoiseSampler,
@@ -94,7 +97,12 @@ impl CarvingContext<'_> {
             self.sea_level,
         );
         context.init_horizontal(x, z);
-        context.biome = chunk.get_terrain_gen_biome(x, y, z);
+        // `SurfaceSystem#topMaterial` receives a caller-provided biome getter
+        // (SurfaceSystem.java:179-182). Match surface generation by supplying
+        // the generator's fuzzy, non-palette-clamped resolver here.
+        context.biome = self
+            .generator
+            .terrain_gen_biome_at_block(x, y, z, &mut self.biome_sampler);
         context.set_steep_material_condition(steep);
         context.init_vertical(1, 1, y, if under_fluid { y + 1 } else { i32::MIN });
 
@@ -161,6 +169,8 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
     let mut context = CarvingContext {
         min_y: generator.dimension.min_y as i8,
         height: generator.dimension.height as u16,
+        generator,
+        biome_sampler: generator.terrain_gen_biome_sampler(chunk_x, chunk_z),
         random_config: &generator.random_config,
         surface_noise: &generator.terrain_cache.surface_noise,
         secondary_noise: &generator.terrain_cache.secondary_noise,
@@ -405,6 +415,8 @@ fn with_carve_run_options<F>(
     let mut context = CarvingContext {
         min_y: generator.dimension.min_y as i8,
         height: generator.dimension.height as u16,
+        generator,
+        biome_sampler: generator.terrain_gen_biome_sampler(chunk.x, chunk.z),
         random_config: &generator.random_config,
         surface_noise: &generator.terrain_cache.surface_noise,
         secondary_noise: &generator.terrain_cache.secondary_noise,

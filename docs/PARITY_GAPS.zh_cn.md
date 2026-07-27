@@ -104,7 +104,9 @@
 - FindTopSurface 非原版提前返回 + 高度估算不一致（DensityFunctions.java:1068-1078）→ 草出现在封闭洞穴地板（石中草主因）
 - surface 阶段 i8 位移回绕（WAY_BELOW_MIN_Y 语义）
 - noise_threshold 丢失 is_3d 字段（SurfaceRules.java:347，硫磺洞 45 处 true）→ 带状材质变斑点
-- 区块边界群系查询 `& 3` 回绕 → 改为 clamp（残余缺口：真正的邻区块 quart 解析待做，SurfaceRules.java:754-758）
+- 区块边界群系查询 `& 3` 回绕 → 改为 clamp；surface material-rule、恶地柱、冰山与 carver top-material 已改用 fuzzy quart 后的无 clamp generator resolver（`BiomeManager.java:38-69`、`SurfaceSystem.java:110,119,156-157,179-182`）。
+  - **残余严格语义**：仍没有 Vanilla `LevelReader#getNoiseBiome` 的已生成邻区块 palette 优先、缺块才 `getUncachedNoiseBiome` 的 region resolver（`LevelReader.java:74-83`）；当前第一阶段始终从 generator uncached source 取值。
+  - 还需把 SURFACE 的 BIOMES 半径 1 / blockStateWriteRadius(0) 和 CARVERS 的 region 调度、palette 生命周期完整接线，不能仅把 write radius 改为 1（`ChunkPyramid.java:20`）。
 - 陶土条带索引负数经 u64 偏移 64 条带 → rem_euclid
 
 **仍待做**：Blender（旧区块混合）整体未接线——旧存档/混版本世界接缝处悬空的主嫌，工程量大；黄金对照测试（density_function/test.rs 全被注释、proto_chunk_test 只是冒烟测试）建议恢复。

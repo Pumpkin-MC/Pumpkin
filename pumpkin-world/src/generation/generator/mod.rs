@@ -1,13 +1,18 @@
-use pumpkin_data::BlockState;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::noise_router::{
     END_BASE_NOISE_ROUTER, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
 };
+use pumpkin_data::{BlockState, chunk::Biome};
 
-use super::noise::router::proto_noise_router::ProtoNoiseRouters;
+use super::noise::router::{
+    multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+    proto_noise_router::ProtoNoiseRouters,
+};
+use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
+use crate::generation::noise::CHUNK_DIM;
 use crate::generation::proto_chunk::TerrainCache;
-use crate::generation::{GlobalRandomConfig, Seed};
+use crate::generation::{GlobalRandomConfig, Seed, biome_coords};
 
 pub mod structure_finder;
 
@@ -73,6 +78,61 @@ pub struct VanillaGenerator {
     pub global_structure_cache: crate::generation::structure::placement::GlobalStructureCache,
     pub structure_calculator: StructurePlacementCalculator,
     pub structure_allowed_biomes: FxHashMap<usize, Vec<u16>>,
+}
+
+impl VanillaGenerator {
+    /// Resolves the fuzzy quart chosen by `BiomeManager#getBiome` from the
+    /// uncached generator source. This deliberately does not use a proto
+    /// chunk's local palette: a fuzzy edge lookup may select a neighbor quart.
+    ///
+    /// Vanilla references: BiomeManager.java:38-69 and
+    /// SurfaceSystem.java:110,119,156-157.
+    #[must_use]
+    pub fn terrain_gen_biome_at_block(
+        &self,
+        x: i32,
+        y: i32,
+        z: i32,
+        sampler: &mut MultiNoiseSampler<'_>,
+    ) -> &'static Biome {
+        let quart = crate::generation::biome::get_biome_blend(
+            self.dimension.min_y as i8,
+            self.dimension.height as u16,
+            self.biome_mixer_seed,
+            x,
+            y,
+            z,
+        );
+
+        if self.dimension == Dimension::THE_END {
+            TheEndBiomeSupplier.biome(quart.x, quart.y, quart.z, sampler)
+        } else if self.dimension == Dimension::THE_NETHER {
+            MultiNoiseBiomeSupplier::NETHER.biome(quart.x, quart.y, quart.z, sampler)
+        } else {
+            MultiNoiseBiomeSupplier::OVERWORLD.biome(quart.x, quart.y, quart.z, sampler)
+        }
+    }
+
+    /// Builds a sampler whose FlatCache covers the one-quart fuzzy halo around
+    /// the surface/carver chunk. Positions beyond that halo safely take
+    /// MultiNoiseSampler's uncached path; no scheduler or write radius changes
+    /// are implied by this phase-one resolver.
+    #[must_use]
+    pub fn terrain_gen_biome_sampler(&self, chunk_x: i32, chunk_z: i32) -> MultiNoiseSampler<'_> {
+        const FUZZY_QUART_HALO: i32 = 1;
+        let start_quart_x = biome_coords::from_chunk(chunk_x) - FUZZY_QUART_HALO;
+        let start_quart_z = biome_coords::from_chunk(chunk_z) - FUZZY_QUART_HALO;
+        // `horizontal_biome_end` is inclusive. With a start of -1 quart,
+        // `CHUNK_QUARTS + 1` caches exactly [-1, 4] for a 16-block chunk.
+        let cached_quart_end = biome_coords::from_block(CHUNK_DIM as i32) + FUZZY_QUART_HALO;
+        let options = MultiNoiseSamplerBuilderOptions::new(
+            start_quart_x,
+            start_quart_z,
+            cached_quart_end as usize,
+        );
+
+        MultiNoiseSampler::generate(&self.base_router.multi_noise, &options)
+    }
 }
 
 impl GeneratorInit for VanillaGenerator {

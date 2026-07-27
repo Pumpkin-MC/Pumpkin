@@ -409,14 +409,13 @@ impl ProtoChunk {
             z,
         );
 
-        // The biome-zoom fuzz can pick a quart up to one quart outside this chunk.
-        // Vanilla resolves such positions through the whole region
-        // (SurfaceRules.java:754-758, biomeGetter backed by BiomeManager), but only
-        // this chunk's biome storage is available here, so clamp to the chunk edge.
-        // Without this, `get_biome_id`'s `& 3` wrap resolved an unrelated column on
-        // the far side of the chunk (sand/terracotta speckling at chunk borders).
-        // Residual gap vs vanilla: a border quart fuzzed into a neighbor chunk uses
-        // the nearest in-chunk quart instead of the true neighbor quart.
+        // This is deliberately only the persisted-palette fallback. The fuzzy
+        // lookup can select a neighbor quart; without a region palette, clamp
+        // that lookup to prevent `get_biome_id`'s local `& 3` from wrapping to
+        // the opposite edge. Surface and carver material rules instead resolve
+        // their fuzzy quart through `VanillaGenerator::terrain_gen_biome_at_block`.
+        // Vanilla references: ChunkAccess.java:427-435 and
+        // SurfaceSystem.java:110,119,156-157,179-182.
         let min_quart_x = biome_coords::from_block(start_block_x(self.x));
         let min_quart_z = biome_coords::from_block(start_block_z(self.z));
         let max_quart_offset = biome_coords::from_block(15);
@@ -459,6 +458,11 @@ impl ProtoChunk {
             &terrain_cache.secondary_noise,
             settings.sea_level,
         );
+        // Vanilla SurfaceSystem passes `BiomeManager::getBiome` into its rule
+        // context and uses the same fuzzy lookup for badlands and frozen oceans
+        // (SurfaceSystem.java:110,119,156-157). Keep the sampler halo to the
+        // maximum one-quart edge selection; farther calls use its uncached path.
+        let mut biome_sampler = generator.terrain_gen_biome_sampler(self.x, self.z);
         for local_x in 0..16 {
             for local_z in 0..16 {
                 let x = start_x + local_x;
@@ -472,8 +476,9 @@ impl ProtoChunk {
                     top_block
                 };
 
-                let this_biome = self.get_terrain_gen_biome_id(x, biome_y, z);
-                if this_biome == Biome::ERODED_BADLANDS {
+                let surface_biome =
+                    generator.terrain_gen_biome_at_block(x, biome_y, z, &mut biome_sampler);
+                if surface_biome.id == Biome::ERODED_BADLANDS {
                     terrain_cache
                         .terrain_builder
                         .place_badlands_pillar(self, x, z, top_block);
@@ -531,10 +536,11 @@ impl ProtoChunk {
                     context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
 
                     if state.id == self.default_block.id {
-                        context.biome = self.get_terrain_gen_biome(
+                        context.biome = generator.terrain_gen_biome_at_block(
                             context.block_pos_x,
                             context.block_pos_y,
                             context.block_pos_z,
+                            &mut biome_sampler,
                         );
                         let new_state = try_apply_material_rule(
                             &settings.surface_rule,
@@ -548,13 +554,15 @@ impl ProtoChunk {
                         }
                     }
                 }
-                if this_biome == Biome::FROZEN_OCEAN || this_biome == Biome::DEEP_FROZEN_OCEAN {
+                if surface_biome.id == Biome::FROZEN_OCEAN
+                    || surface_biome.id == Biome::DEEP_FROZEN_OCEAN
+                {
                     let surface_estimate =
                         estimate_surface_height(&mut context, surface_height_estimate_sampler);
 
                     terrain_cache.terrain_builder.place_iceberg(
                         self,
-                        Biome::from_id(this_biome).unwrap_or(&Biome::PLAINS),
+                        surface_biome,
                         x,
                         z,
                         surface_estimate,

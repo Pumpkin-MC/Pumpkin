@@ -1,8 +1,11 @@
 #[cfg(test)]
 mod test {
+    use crate::biome::BiomeSupplier;
     use crate::chunk_system::chunk_state::StagedChunkEnum;
-    use crate::generation::{generator::WorldGenerator, get_world_gen, proto_chunk::ProtoChunk};
-    use pumpkin_data::dimension::Dimension;
+    use crate::generation::{
+        biome::get_biome_blend, generator::WorldGenerator, get_world_gen, proto_chunk::ProtoChunk,
+    };
+    use pumpkin_data::{chunk::Biome, dimension::Dimension};
     use pumpkin_util::world_seed::Seed;
 
     #[test]
@@ -103,6 +106,73 @@ mod test {
             has_surface_blocks,
             "Top of the world must contain surface blocks (grass/dirt/sand/water)"
         );
+    }
+
+    #[test]
+    fn fuzzy_surface_biome_resolver_crosses_each_chunk_edge() {
+        let world_gen = get_world_gen(
+            Seed(0),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let WorldGenerator::Noise(generator) = &*world_gen else {
+            unreachable!()
+        };
+        let mut sampler = generator.terrain_gen_biome_sampler(0, 0);
+
+        // Chosen edge positions all fuzz into the adjacent chunk's quart. This
+        // guards west/east/north/south against restoring a local-palette clamp
+        // or `& 3` wrap in the surface/carver resolver.
+        for (edge, x, y, z, outside_quart) in [
+            ("west", 0, 64, 5, (-1, 16, 0)),
+            ("east", 15, 64, 0, (4, 15, 0)),
+            ("north", 3, 64, 0, (0, 16, -1)),
+            ("south", 15, 64, 15, (3, 16, 4)),
+        ] {
+            let quart = get_biome_blend(
+                generator.dimension.min_y as i8,
+                generator.dimension.height as u16,
+                generator.biome_mixer_seed,
+                x,
+                y,
+                z,
+            );
+            assert_eq!(
+                (quart.x, quart.y, quart.z),
+                outside_quart,
+                "{edge} edge must select the neighbor quart"
+            );
+
+            let resolved = generator
+                .terrain_gen_biome_at_block(x, y, z, &mut sampler)
+                .id;
+            let expected = crate::biome::MultiNoiseBiomeSupplier::OVERWORLD
+                .biome(quart.x, quart.y, quart.z, &mut sampler)
+                .id;
+            assert_eq!(
+                resolved, expected,
+                "{edge} edge must use the selected global quart"
+            );
+
+            let local_fallback = if resolved == Biome::BADLANDS.id {
+                Biome::PLAINS.id
+            } else {
+                Biome::BADLANDS.id
+            };
+            let mut local_chunk = ProtoChunk::new(0, 0, &world_gen);
+            local_chunk.flat_biome_map.fill(local_fallback);
+            assert_eq!(
+                local_chunk.get_terrain_gen_biome_id(x, y, z),
+                local_fallback,
+                "{edge} keeps the local-palette fallback clamped"
+            );
+            assert_ne!(
+                resolved, local_fallback,
+                "{edge} resolver must not substitute the local palette"
+            );
+        }
     }
 
     #[test]
