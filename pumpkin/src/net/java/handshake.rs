@@ -39,12 +39,10 @@ impl JavaClient {
                 // supports. Now check the operator-configured allow/deny rules.
                 let versions_config = &server.advanced_config.networking.java.versions;
                 if !versions_config.is_allowed(parsed_version, CURRENT_MC_VERSION) {
-                    let message = versions_config
-                        .disconnect_message()
-                        .map(str::to_string)
-                        .unwrap_or_else(|| {
-                            versions_config.default_disconnect_message(CURRENT_MC_VERSION)
-                        });
+                    let message = versions_config.disconnect_message().map_or_else(
+                        || versions_config.default_disconnect_message(CURRENT_MC_VERSION),
+                        str::to_string,
+                    );
                     self.kick(TextComponent::text(message)).await;
                 }
             }
