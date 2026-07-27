@@ -80,7 +80,7 @@ impl Default for VersionsConfig {
 }
 
 /// Treats an empty string the same as "not set".
-fn non_empty(s: &str) -> Option<&str> {
+const fn non_empty(s: &str) -> Option<&str> {
     if s.is_empty() { None } else { Some(s) }
 }
 
