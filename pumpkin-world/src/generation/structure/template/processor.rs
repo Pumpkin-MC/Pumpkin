@@ -137,6 +137,9 @@ impl BlockTag {
 
 impl StructureProcessor {
     /// One-block pass-through result (vanilla default `processBlock`).
+    /// Deliberately wrapped: it is the `Some` half of `process`'s return
+    /// type, used directly in `map_or` defaults.
+    #[expect(clippy::unnecessary_wraps)]
     const fn pass(pos: Vector3<i32>, state: &'static BlockState) -> Option<ProcessedBlock> {
         Some(ProcessedBlock {
             pos,
@@ -211,7 +214,11 @@ impl StructureProcessor {
             // StructureProcessor.processBlock passes through); its limited
             // random selection runs in the finalize pass of template
             // placement (CappedProcessor.java:54-80).
-            Self::Capped { .. } => Self::pass(pos, state),
+            // Jigsaw blocks are already replaced with their `final_state`
+            // before list processors run (see `place_template_blocks`),
+            // matching vanilla's processor order (SinglePoolElement.java:159-165),
+            // so a data-driven `jigsaw_replacement` entry is a pass-through too.
+            Self::Capped { .. } | Self::JigsawReplacement => Self::pass(pos, state),
             Self::Gravity { heightmap, offset } => {
                 // GravityProcessor.java:41-46: during worldgen the `_WG`
                 // heightmap types are used as-is (the `ServerLevel` remap only
@@ -234,11 +241,6 @@ impl StructureProcessor {
                     loot: None,
                 })
             }
-            // Jigsaw blocks are already replaced with their `final_state`
-            // before list processors run (see `place_template_blocks`),
-            // matching vanilla's processor order (SinglePoolElement.java:159-165),
-            // so a data-driven `jigsaw_replacement` entry is a pass-through.
-            Self::JigsawReplacement => Self::pass(pos, state),
             Self::BlockAge { mossiness } => {
                 // BlockAgeProcessor.java:50: `settings.getRandom(pos)` with no
                 // explicit random is `RandomSource.create(Mth.getSeed(pos))`
