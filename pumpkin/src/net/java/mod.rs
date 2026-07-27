@@ -502,6 +502,12 @@ impl JavaClient {
     }
 
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
+        // If the connection is already closed, don't bother encoding the packet
+        // or firing plugin events — the outgoing task is gone and the write would
+        // fail anyway. This keeps spawn from spamming packets into a dead socket.
+        if self.close_token.is_cancelled() {
+            return;
+        }
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
         if let Err(err) = self.write_packet(packet, writer) {
@@ -525,6 +531,9 @@ impl JavaClient {
     }
 
     pub async fn send_packet_now_data(&self, packet: Bytes) {
+        if self.close_token.is_cancelled() {
+            return;
+        }
         let (completion_tx, completion_rx) = oneshot::channel();
 
         if let Err(err) = self
@@ -546,7 +555,14 @@ impl JavaClient {
         }
 
         if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
-            // The outgoing packet task dropped before confirming the write.
+            // The outgoing packet task dropped the sender before confirming the
+            // write, which means the connection broke while this packet was in
+            // flight. This is the signature of a client disconnecting mid-spawn
+            // (e.g. "Broken pipe"); log it so the failing spawn step is visible.
+            warn!(
+                "Outgoing task dropped mid-send for client {} (connection broke during spawn); closing",
+                self.id
+            );
             self.close();
         }
     }
