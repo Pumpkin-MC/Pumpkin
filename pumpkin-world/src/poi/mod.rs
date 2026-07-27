@@ -10,8 +10,36 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use serde::{Deserialize, Serialize};
 
+pub mod types;
+
+pub use types::PoiType;
+pub use types::max_tickets_of;
+
 /// POI type identifier for nether portals
 pub const POI_TYPE_NETHER_PORTAL: &str = "minecraft:nether_portal";
+
+/// Vanilla `PoiManager.Occupancy` (`PoiManager.java:259-273`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Occupancy {
+    /// `HAS_SPACE(PoiRecord::hasSpace)` (`PoiManager.java:260`).
+    HasSpace,
+    /// `IS_OCCUPIED(PoiRecord::isOccupied)` (`PoiManager.java:261`).
+    IsOccupied,
+    /// `ANY(poiRecord -> true)` (`PoiManager.java:262`).
+    Any,
+}
+
+impl Occupancy {
+    /// Vanilla `Occupancy.getTest` (`PoiManager.java:270-272`).
+    #[must_use]
+    pub fn test(self, entry: &PoiEntry) -> bool {
+        match self {
+            Self::HasSpace => entry.has_space(),
+            Self::IsOccupied => entry.is_occupied(),
+            Self::Any => true,
+        }
+    }
+}
 
 /// MCA format constants
 const SECTOR_SIZE: usize = 4096;
@@ -48,9 +76,64 @@ impl PoiEntry {
         }
     }
 
+    /// Vanilla `PoiRecord(BlockPos, Holder<PoiType>, Runnable)`
+    /// (`/root/Vanilla/src/net/minecraft/world/entity/ai/village/poi/PoiRecord.java:37-39`):
+    /// a fresh record starts with `freeTickets = poiType.maxTickets()`.
+    #[must_use]
+    pub fn new(pos: BlockPos, poi_type: &str) -> Self {
+        Self {
+            x: pos.0.x,
+            y: pos.0.y,
+            z: pos.0.z,
+            free_tickets: max_tickets_of(poi_type),
+            poi_type: poi_type.to_string(),
+        }
+    }
+
     #[must_use]
     pub const fn pos(&self) -> BlockPos {
         BlockPos(Vector3::new(self.x, self.y, self.z))
+    }
+
+    /// `PoiType.maxTickets` for this record's type
+    /// (`PoiTypes.java:91-111` via `PoiType.java:11`).
+    #[must_use]
+    pub fn max_tickets(&self) -> i32 {
+        max_tickets_of(&self.poi_type)
+    }
+
+    /// Vanilla `PoiRecord.acquireTicket` (`PoiRecord.java:51-58`).
+    ///
+    /// Fails when no tickets are free; this is what stops two villagers from
+    /// claiming the same bed, since `minecraft:home` has `maxTickets = 1`
+    /// (`PoiTypes.java:104`).
+    pub const fn acquire_ticket(&mut self) -> bool {
+        if self.free_tickets <= 0 {
+            return false;
+        }
+        self.free_tickets -= 1;
+        true
+    }
+
+    /// Vanilla `PoiRecord.releaseTicket` (`PoiRecord.java:60-67`).
+    pub fn release_ticket(&mut self) -> bool {
+        if self.free_tickets >= self.max_tickets() {
+            return false;
+        }
+        self.free_tickets += 1;
+        true
+    }
+
+    /// Vanilla `PoiRecord.hasSpace` (`PoiRecord.java:69-71`).
+    #[must_use]
+    pub const fn has_space(&self) -> bool {
+        self.free_tickets > 0
+    }
+
+    /// Vanilla `PoiRecord.isOccupied` (`PoiRecord.java:73-75`).
+    #[must_use]
+    pub fn is_occupied(&self) -> bool {
+        self.free_tickets != self.max_tickets()
     }
 }
 
@@ -106,13 +189,62 @@ impl PoiRegion {
         section_y.to_string()
     }
 
-    pub fn add(&mut self, entry: PoiEntry) {
+    /// Vanilla `PoiSection.add(PoiRecord)`
+    /// (`/root/Vanilla/src/net/minecraft/world/entity/ai/village/poi/PoiSection.java:85-99`).
+    ///
+    /// Returns `false` without touching anything when a record of the *same* type
+    /// is already registered here (`PoiSection.java:90-93`). That guard is what
+    /// keeps a re-scan of an already-known bed from silently resetting its
+    /// `freeTickets` and handing the same bed to a second villager. A record of a
+    /// *different* type replaces the old one (vanilla logs a data mismatch and
+    /// overwrites, `PoiSection.java:94-96`).
+    pub fn add(&mut self, entry: PoiEntry) -> bool {
+        let key = (entry.x, entry.y, entry.z);
+        if let Some(existing) = self.entries.get(&key)
+            && existing.poi_type == entry.poi_type
+        {
+            return false;
+        }
         let chunk_x = entry.x >> 4;
         let chunk_z = entry.z >> 4;
         self.dirty_chunks.insert((chunk_x, chunk_z));
-        let key = (entry.x, entry.y, entry.z);
         self.entries.insert(key, entry);
         self.dirty = true;
+        true
+    }
+
+    /// The record at `pos`, if one is registered (vanilla `PoiSection.getPoiRecord`,
+    /// `PoiSection.java:136-138`).
+    #[must_use]
+    pub fn get(&self, pos: &BlockPos) -> Option<&PoiEntry> {
+        self.entries.get(&Self::pos_key(pos))
+    }
+
+    /// Vanilla `PoiSection.release` (`PoiSection.java:118-126`) — hands a ticket
+    /// back. `None` when nothing is registered here; vanilla throws in that case
+    /// (`PoiManager.release`, `PoiManager.java:146-148`).
+    pub fn release(&mut self, pos: &BlockPos) -> Option<bool> {
+        let entry = self.entries.get_mut(&Self::pos_key(pos))?;
+        let released = entry.release_ticket();
+        if released {
+            self.dirty_chunks.insert((pos.0.x >> 4, pos.0.z >> 4));
+            self.dirty = true;
+        }
+        Some(released)
+    }
+
+    /// Takes a ticket at `pos` — the mutation half of vanilla `PoiManager.take`
+    /// (`PoiManager.java:134-139`, which calls `PoiRecord.acquireTicket`).
+    pub fn acquire(&mut self, pos: &BlockPos) -> bool {
+        let Some(entry) = self.entries.get_mut(&Self::pos_key(pos)) else {
+            return false;
+        };
+        let acquired = entry.acquire_ticket();
+        if acquired {
+            self.dirty_chunks.insert((pos.0.x >> 4, pos.0.z >> 4));
+            self.dirty = true;
+        }
+        acquired
     }
 
     pub fn remove(&mut self, pos: &BlockPos) -> bool {
