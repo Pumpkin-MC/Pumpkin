@@ -1,9 +1,14 @@
 use std::sync::Arc;
 
+use super::border::BorderSnapshot;
+use super::chunk_view::ChunkView;
 use super::poi;
+use super::rectangle::{RectAxis, get_largest_rectangle_around};
+use super::spiral::SpiralAround;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
+    dimension::Dimension,
     tag,
     tag::Taggable,
 };
@@ -12,8 +17,16 @@ use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
 
 use crate::world::World;
 
-const SEARCH_RADIUS_NETHER: i32 = 128;
+/// `PortalForcer.NETHER_PORTAL_RADIUS` (`PortalForcer.java:26`).
+const SEARCH_RADIUS_NETHER: i32 = 16;
+/// `PortalForcer.OVERWORLD_PORTAL_RADIUS` (`PortalForcer.java:27`).
 const SEARCH_RADIUS_OVERWORLD: i32 = 128;
+/// Both limits passed to `BlockUtil.getLargestRectangleAround` when a portal is
+/// measured (`NetherPortalBlock.java:149`, `NetherPortalBlock.java:170`).
+const PORTAL_RECTANGLE_LIMIT: i32 = 21;
+/// `PortalForcer.createPortal` spirals `BlockPos.spiralAround(origin, 16, ..)`
+/// (`PortalForcer.java:61`).
+const CREATE_PORTAL_SPIRAL_RADIUS: i32 = 16;
 
 #[derive(Debug, Clone)]
 pub struct PortalSearchResult {
@@ -272,7 +285,10 @@ impl NetherPortal {
                 .offset_dir(self.negative_direction.to_offset(), self.width as i32 - 1),
         );
 
-        let mut poi_storage = world.portal_poi.lock().await;
+        // The POI lock must not be held across `set_block_state`: that call can
+        // reach `NetherPortalBlock::on_state_replaced`, which locks `portal_poi`
+        // itself and would deadlock on this same mutex.
+        let mut placed = Vec::new();
         for pos in blocks {
             world
                 .set_block_state(
@@ -281,6 +297,11 @@ impl NetherPortal {
                     BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
                 )
                 .await;
+            placed.push(pos);
+        }
+
+        let mut poi_storage = world.portal_poi.lock().await;
+        for pos in placed {
             poi_storage.add_portal(pos);
         }
     }
@@ -463,257 +484,345 @@ impl NetherPortal {
             || block == &Block::NETHER_PORTAL
     }
 
+    /// Vanilla `PortalForcer.findClosestPortalPosition` (`PortalForcer.java:44-49`).
+    ///
+    /// Queries the portal-block index for candidates in a square of `radius`
+    /// around the approximate exit position, drops anything outside the world
+    /// border or no longer a portal block, and picks the closest one — ties
+    /// broken by lowest Y, matching vanilla's
+    /// `comparingDouble(distSqr).thenComparingInt(Vec3i::getY)`.
+    ///
+    /// Radius is 16 when the destination is the Nether and 128 otherwise
+    /// (`PortalForcer.java:46`).
+    ///
+    /// # Known gap versus vanilla
+    ///
+    /// Vanilla calls `PoiManager.ensureLoadedAndValid` first
+    /// (`PortalForcer.java:47`), which force-loads any chunk in the search square
+    /// whose POI section has not been validated. It can afford that because it
+    /// only needs `ChunkStatus.EMPTY` and because `PoiManager` re-indexes every
+    /// chunk as it loads (`PoiManager.checkConsistencyWithBlocks`).
+    ///
+    /// Pumpkin has no chunk-load POI hook and no partial-status chunk fetch, so
+    /// there is no cheap equivalent: force-loading a 128-block square would fully
+    /// generate up to 289 chunks per transit. The index is instead written
+    /// whenever Pumpkin itself lights or builds a portal
+    /// (`NetherPortal::create`, `NetherPortal::build_portal_frame`) and persists
+    /// across restarts, which covers every portal this server creates.
+    ///
+    /// Not covered: portal blocks that this server never placed — an imported
+    /// world, an externally edited region file, or a world predating the index.
+    /// Those stay invisible to the search, so a traversal near them still builds
+    /// a fresh portal. Closing it needs a POI-indexing hook on chunk load, which
+    /// lives outside this module.
     pub async fn search_for_portal(
         world: &Arc<World>,
         target_pos: BlockPos,
     ) -> Option<PortalSearchResult> {
-        tracing::debug!(
-            "Searching for portal in {:?} around {:?}",
-            world.dimension.minecraft_name,
-            target_pos
-        );
-        let min_y = world.min_y;
-        let max_y = min_y + world.dimension.height - 1;
-        let worldborder = world.worldborder.lock().await;
-
-        let search_radius = if world.dimension.has_ceiling {
+        // `toNether` in vanilla is `newLevel.dimension() == Level.NETHER`
+        // (`NetherPortalBlock.java:136`), i.e. dimension identity — not a
+        // property like `has_ceiling`, which a custom dimension could also set.
+        let to_nether = world.dimension == Dimension::THE_NETHER;
+        let search_radius = if to_nether {
             SEARCH_RADIUS_NETHER
         } else {
             SEARCH_RADIUS_OVERWORLD
         };
 
-        let search_max_y = if world.dimension.has_ceiling {
-            (min_y + world.dimension.logical_height - 1).min(max_y)
-        } else {
-            max_y
-        };
+        let candidates = Self::query_portal_index(world, target_pos, search_radius).await;
+        if candidates.is_empty() {
+            return None;
+        }
 
-        let mut poi_storage = world.portal_poi.lock().await;
-        let portal_positions =
-            poi_storage.get_in_square(target_pos, search_radius, Some(poi::POI_TYPE_NETHER_PORTAL));
-        drop(poi_storage);
+        // `worldBorder::isWithinBounds` filter (PortalForcer.java:48). The border
+        // is snapshotted so no lock is held across the block reads below.
+        let border = BorderSnapshot::capture(world).await;
+        let candidates: Vec<BlockPos> = candidates
+            .into_iter()
+            .filter(|pos| border.contains_block(pos.0.x, pos.0.z))
+            .collect();
 
-        let mut best: Option<(PortalSearchResult, f64, i32)> = None;
+        let mut view = ChunkView::new(world);
+        let mut best: Option<(BlockPos, f64)> = None;
+        let mut stale: Vec<BlockPos> = Vec::new();
 
-        for pos in portal_positions {
-            if pos.0.y < min_y || pos.0.y > search_max_y {
+        for pos in candidates {
+            // `hasProperty(HORIZONTAL_AXIS)` filter (PortalForcer.java:48):
+            // a stale index entry whose block is gone must not be reused.
+            if view.block(&pos).await != &Block::NETHER_PORTAL {
+                stale.push(pos);
                 continue;
             }
 
-            if !worldborder.contains_block(pos.0.x, pos.0.z) {
-                continue;
-            }
-
-            if world.get_block(&pos) != &Block::NETHER_PORTAL {
-                continue;
-            }
-
-            for axis in [HorizontalAxis::X, HorizontalAxis::Z] {
-                if let Some(portal) = Self::get_on_axis(world, &pos, axis)
-                    && portal.was_already_valid()
-                {
-                    // Use POI position for distance calculation (matches vanilla behavior)
-                    let dist =
-                        f64::from(target_pos.0.squared_distance_to(pos.0.x, pos.0.y, pos.0.z));
-                    let y = portal.lower_conor.0.y;
-
-                    let is_better = match &best {
-                        None => true,
-                        Some((_, best_dist, best_y)) => {
-                            dist < *best_dist
-                                || ((dist - *best_dist).abs() < f64::EPSILON && y < *best_y)
-                        }
-                    };
-
-                    if is_better {
-                        best = Some((
-                            PortalSearchResult {
-                                lower_corner: portal.lower_conor,
-                                axis: portal.axis,
-                                width: portal.width,
-                                height: portal.height,
-                            },
-                            dist,
-                            y,
-                        ));
-                    }
-                }
+            let dist = f64::from(target_pos.0.squared_distance_to(pos.0.x, pos.0.y, pos.0.z));
+            // min(comparingDouble(distSqr).thenComparingInt(getY)): keep the
+            // first minimum, so a later equal-distance candidate only wins on a
+            // strictly lower Y.
+            let is_better = best.as_ref().is_none_or(|(best_pos, best_dist)| {
+                dist < *best_dist || (dist == *best_dist && pos.0.y < best_pos.0.y)
+            });
+            if is_better {
+                best = Some((pos, dist));
             }
         }
 
-        best.map(|(result, _, _)| result)
+        // Prune index entries whose portal block is gone. `on_state_replaced`
+        // already removes broken portals, but entries can still be stale after a
+        // world edit or an unclean shutdown.
+        if !stale.is_empty() {
+            let mut poi_storage = world.portal_poi.lock().await;
+            for pos in stale {
+                poi_storage.remove(&pos);
+            }
+        }
+
+        let (found, _) = best?;
+        Some(Self::measure_portal_at(&mut view, found).await)
     }
 
-    #[allow(clippy::too_many_lines)]
+    /// Measures the portal containing `pos` the way vanilla does at
+    /// `NetherPortalBlock.java:149`: `BlockUtil.getLargestRectangleAround` over
+    /// blocks whose state equals the found portal's state, limit 21 on both axes.
+    async fn measure_portal_at(view: &mut ChunkView<'_>, pos: BlockPos) -> PortalSearchResult {
+        let state_id = view.state_id(&pos).await;
+        let axis = NetherPortalLikeProperties::from_state_id(state_id, &Block::NETHER_PORTAL).axis;
+        let axis1 = match axis {
+            HorizontalAxis::X => RectAxis::X,
+            HorizontalAxis::Z => RectAxis::Z,
+        };
+
+        // `getLargestRectangleAround` takes a synchronous predicate, so the
+        // blocks it may touch are prefetched into the view first. The scan never
+        // leaves a 21-block radius of `pos` (limits at NetherPortalBlock.java:149).
+        for d in -PORTAL_RECTANGLE_LIMIT..=PORTAL_RECTANGLE_LIMIT {
+            for dy in -PORTAL_RECTANGLE_LIMIT..=PORTAL_RECTANGLE_LIMIT {
+                let probe = axis1.relative(pos.add(0, dy, 0), d);
+                let _ = view.state_id(&probe).await;
+            }
+        }
+
+        let rect = get_largest_rectangle_around(
+            pos,
+            axis1,
+            PORTAL_RECTANGLE_LIMIT,
+            RectAxis::Y,
+            PORTAL_RECTANGLE_LIMIT,
+            &mut |probe| view.cached_state_id(&probe) == Some(state_id),
+        );
+
+        PortalSearchResult {
+            lower_corner: rect.min_corner,
+            axis,
+            width: rect.axis1_size.max(1) as u32,
+            height: rect.axis2_size.max(1) as u32,
+        }
+    }
+
+    /// Vanilla `PoiManager.getInSquare` restricted to nether portals
+    /// (`PoiManager.java:88-95`, called from `PortalForcer.java:48`).
+    async fn query_portal_index(
+        world: &Arc<World>,
+        center: BlockPos,
+        radius: i32,
+    ) -> Vec<BlockPos> {
+        let mut poi_storage = world.portal_poi.lock().await;
+        poi_storage.get_in_square(center, radius, Some(poi::POI_TYPE_NETHER_PORTAL))
+    }
+
+    /// Positive direction along `axis`, vanilla
+    /// `Direction.get(AxisDirection.POSITIVE, portalAxis)` (`PortalForcer.java:52`).
+    const fn positive_direction(axis: HorizontalAxis) -> BlockDirection {
+        match axis {
+            HorizontalAxis::X => BlockDirection::East,
+            HorizontalAxis::Z => BlockDirection::South,
+        }
+    }
+
+    /// Vanilla `Direction.getClockWise()` for the two directions used here:
+    /// EAST -> SOUTH, SOUTH -> WEST (`PortalForcer.java:98`, `PortalForcer.java:132`).
+    const fn clockwise(direction: BlockDirection) -> BlockDirection {
+        match direction {
+            BlockDirection::East => BlockDirection::South,
+            BlockDirection::South => BlockDirection::West,
+            BlockDirection::West => BlockDirection::North,
+            _ => BlockDirection::East,
+        }
+    }
+
+    /// Highest Y a portal may occupy: vanilla
+    /// `min(getMaxY(), getMinY() + getLogicalHeight() - 1)` (`PortalForcer.java:58`).
+    ///
+    /// This is unconditional in vanilla — it is not gated on `has_ceiling`.
+    fn max_placeable_y(world: &World) -> i32 {
+        let min_y = world.min_y;
+        let max_y = min_y + world.dimension.height - 1;
+        max_y.min(min_y + world.dimension.logical_height - 1)
+    }
+
+    /// Locates where to build a new portal, or reports that a forced one is needed.
+    ///
+    /// Faithful port of the search half of `PortalForcer.createPortal`
+    /// (`PortalForcer.java:51-89`) plus the forced-placement fallback
+    /// (`PortalForcer.java:90-97`). The returned bool is vanilla's
+    /// "nothing found, blow out a pocket first" case.
+    ///
+    /// Vanilla keeps the source portal's axis throughout; the axis is never
+    /// re-chosen per candidate, so it is returned unchanged.
     pub async fn find_safe_location(
         world: &Arc<World>,
         target_pos: BlockPos,
         axis: HorizontalAxis,
     ) -> Option<(BlockPos, HorizontalAxis, bool)> {
-        tracing::debug!(
-            "Finding safe location for portal in {:?} around {:?}",
-            world.dimension.minecraft_name,
-            target_pos
+        let border = BorderSnapshot::capture(world).await;
+        let mut view = ChunkView::new(world);
+
+        if let Some(found) =
+            Self::search_portal_site(world, &mut view, target_pos, axis, &border).await
+        {
+            return Some((found, axis, false));
+        }
+
+        // PortalForcer.java:90-97: no site at all, so a pocket is carved out at
+        // the target. minStartY is `max(getMinY() - -1, 70)`.
+        let max_placeable_y = Self::max_placeable_y(world);
+        let max_start_y = max_placeable_y - 9;
+        let min_start_y = (world.min_y + 1).max(70);
+        if max_start_y < min_start_y {
+            return None;
+        }
+
+        let direction = Self::positive_direction(axis).to_offset();
+        let forced = BlockPos::new(
+            target_pos.0.x - direction.x,
+            target_pos.0.y.clamp(min_start_y, max_start_y),
+            target_pos.0.z - direction.z,
         );
+        Some((border.clamp_to_bounds(forced), axis, true))
+    }
+
+    /// The spiral scan of `PortalForcer.createPortal` (`PortalForcer.java:59-89`).
+    async fn search_portal_site(
+        world: &Arc<World>,
+        view: &mut ChunkView<'_>,
+        origin: BlockPos,
+        axis: HorizontalAxis,
+        border: &BorderSnapshot,
+    ) -> Option<BlockPos> {
+        let direction = Self::positive_direction(axis);
+        let offset = direction.to_offset();
         let min_y = world.min_y;
-        let max_y = min_y + world.dimension.height - 1;
-        let worldborder = world.worldborder.lock().await;
+        let max_placeable_y = Self::max_placeable_y(world);
 
-        let top_y_limit = if world.dimension.has_ceiling {
-            (min_y + world.dimension.logical_height - 1).min(max_y)
-        } else {
-            max_y
-        };
+        let mut closest_full: Option<(BlockPos, f64)> = None;
+        let mut closest_partial: Option<(BlockPos, f64)> = None;
 
-        let direction = if axis == HorizontalAxis::X {
-            BlockDirection::East
-        } else {
-            BlockDirection::South // Fixed: positive Z direction
-        };
+        // PortalForcer.java:61 spirals with EAST/SOUTH literally — the spiral
+        // directions do not depend on the portal axis, only the frame tests do.
+        for column in SpiralAround::new(
+            origin,
+            CREATE_PORTAL_SPIRAL_RADIUS,
+            BlockDirection::East.to_offset(),
+            BlockDirection::South.to_offset(),
+        ) {
+            // PortalForcer.java:63: both the column and the block one step along
+            // `direction` must be inside the border.
+            if !border.contains_block(column.0.x, column.0.z)
+                || !border.contains_block(column.0.x + offset.x, column.0.z + offset.z)
+            {
+                continue;
+            }
 
-        let mut ideal_pos: Option<(BlockPos, HorizontalAxis, f64)> = None;
-        let mut acceptable_pos: Option<(BlockPos, HorizontalAxis, f64)> = None;
+            let surface = view
+                .heightmap_height(ChunkHeightmapType::MotionBlocking, column.0.x, column.0.z)
+                .await;
+            let mut y = max_placeable_y.min(surface);
 
-        for offset_x in -32..=32 {
-            for offset_z in -32..=32 {
-                let check_x = target_pos.0.x + offset_x;
-                let check_z = target_pos.0.z + offset_z;
-
-                if !worldborder.contains_block(check_x, check_z) {
+            while y >= min_y {
+                let pos = BlockPos::new(column.0.x, y, column.0.z);
+                if !Self::can_portal_replace(view, &pos).await {
+                    y -= 1;
                     continue;
                 }
 
-                let offset_pos = BlockPos(Vector3::new(check_x, 0, check_z))
-                    .offset_dir(direction.to_offset(), 1);
-                if !worldborder.contains_block(offset_pos.0.x, offset_pos.0.z) {
+                // Walk to the bottom of this replaceable run (PortalForcer.java:70-72).
+                let first_empty_y = y;
+                while y > min_y
+                    && Self::can_portal_replace(view, &BlockPos::new(column.0.x, y - 1, column.0.z))
+                        .await
+                {
+                    y -= 1;
+                }
+
+                // PortalForcer.java:73. Note vanilla accepts delta_y == 0: a
+                // single replaceable block is fine, the frame check decides.
+                let delta_y = first_empty_y - y;
+                if y + 4 > max_placeable_y || (delta_y > 0 && delta_y < 3) {
+                    y -= 1;
                     continue;
                 }
 
-                let heightmap_y = world
-                    .get_heightmap_height_async(
-                        ChunkHeightmapType::MotionBlocking,
-                        check_x,
-                        check_z,
-                    )
-                    .await;
-                let start_y = heightmap_y.min(top_y_limit);
+                let floor = BlockPos::new(column.0.x, y, column.0.z);
+                if Self::can_host_frame(view, floor, direction, 0).await {
+                    let distance = f64::from(origin.squared_distance(&floor));
 
-                let mut y = start_y;
-                while y >= min_y {
-                    let pos = BlockPos(Vector3::new(check_x, y, check_z));
-                    let state = world.get_block_state_async(&pos).await;
+                    // PortalForcer.java:77-80: a site with clear space on both
+                    // sides is preferred over a bare one.
+                    let full = Self::can_host_frame(view, floor, direction, -1).await
+                        && Self::can_host_frame(view, floor, direction, 1).await;
+                    if full && closest_full.as_ref().is_none_or(|(_, d)| *d > distance) {
+                        closest_full = Some((floor, distance));
+                    }
 
-                    if Self::is_valid_portal_air(state) {
-                        let mut bottom_y = y;
-                        while bottom_y > min_y {
-                            let below = BlockPos(Vector3::new(check_x, bottom_y - 1, check_z));
-                            let below_state = world.get_block_state_async(&below).await;
-                            if !Self::is_valid_portal_air(below_state) {
-                                break;
-                            }
-                            bottom_y -= 1;
-                        }
-
-                        let air_height = y - bottom_y;
-                        if air_height >= 3 && bottom_y + 4 <= top_y_limit {
-                            let floor_pos = BlockPos(Vector3::new(check_x, bottom_y, check_z));
-
-                            for check_axis in [HorizontalAxis::X, HorizontalAxis::Z] {
-                                if Self::is_valid_portal_pos_async(world, floor_pos, check_axis, 0)
-                                    .await
-                                {
-                                    let dist = f64::from(target_pos.0.squared_distance_to(
-                                        floor_pos.0.x,
-                                        floor_pos.0.y,
-                                        floor_pos.0.z,
-                                    ));
-
-                                    let is_ideal = Self::is_valid_portal_pos_async(
-                                        world, floor_pos, check_axis, -1,
-                                    )
-                                    .await
-                                        && Self::is_valid_portal_pos_async(
-                                            world, floor_pos, check_axis, 1,
-                                        )
-                                        .await;
-
-                                    if is_ideal {
-                                        if ideal_pos.is_none()
-                                            || dist < ideal_pos.as_ref().unwrap().2
-                                        {
-                                            ideal_pos = Some((floor_pos, check_axis, dist));
-                                        }
-                                    } else if ideal_pos.is_none()
-                                        && (acceptable_pos.is_none()
-                                            || dist < acceptable_pos.as_ref().unwrap().2)
-                                    {
-                                        acceptable_pos = Some((floor_pos, check_axis, dist));
-                                    }
-                                }
-                            }
-                        }
-                        y = bottom_y - 1;
-                    } else {
-                        y -= 1;
+                    // PortalForcer.java:81: once any full site exists, partial
+                    // sites stop being recorded.
+                    if closest_full.is_none()
+                        && closest_partial.as_ref().is_none_or(|(_, d)| *d > distance)
+                    {
+                        closest_partial = Some((floor, distance));
                     }
                 }
+                y -= 1;
             }
         }
 
-        if let Some((pos, result_axis, _)) = ideal_pos {
-            return Some((pos, result_axis, false));
-        }
-        if let Some((pos, result_axis, _)) = acceptable_pos {
-            return Some((pos, result_axis, false));
-        }
+        // PortalForcer.java:86-89: fall back to the partial site.
+        closest_full.or(closest_partial).map(|(pos, _)| pos)
+    }
 
-        // Vanilla: clamp between max(bottomY, 70) and topYLimit - 9
-        let fallback_y = target_pos.0.y.clamp(min_y.max(70), top_y_limit - 9);
-        let fallback_pos = BlockPos(Vector3::new(
-            target_pos.0.x - direction.to_offset().x,
-            fallback_y,
-            target_pos.0.z - direction.to_offset().z,
-        ));
-        let clamped_pos = worldborder.clamp_block(fallback_pos.0.x, fallback_pos.0.z);
-        Some((
-            BlockPos(Vector3::new(clamped_pos.0, fallback_y, clamped_pos.1)),
-            axis,
-            true,
-        ))
+    /// Vanilla `PortalForcer.canPortalReplaceBlock` (`PortalForcer.java:126-129`):
+    /// `canBeReplaced() && getFluidState().isEmpty()`.
+    async fn can_portal_replace(view: &mut ChunkView<'_>, pos: &BlockPos) -> bool {
+        Self::is_valid_portal_air(view.state(pos).await)
     }
 
     const fn is_valid_portal_air(state: &BlockState) -> bool {
         state.replaceable() && !state.is_liquid()
     }
 
-    async fn is_valid_portal_pos_async(
-        world: &Arc<World>,
-        floor_pos: BlockPos,
-        axis: HorizontalAxis,
-        perpendicular_offset: i32,
+    /// Vanilla `PortalForcer.canHostFrame` (`PortalForcer.java:131-144`).
+    ///
+    /// `offset` shifts the tested slab sideways along `direction.getClockWise()`,
+    /// which is how vanilla distinguishes a fully clear site from a bare one.
+    /// Blocks below the floor must be solid in the legacy sense (`isSolid`, not
+    /// `isSolidRender`), everything at or above it must be replaceable.
+    async fn can_host_frame(
+        view: &mut ChunkView<'_>,
+        origin: BlockPos,
+        direction: BlockDirection,
+        offset: i32,
     ) -> bool {
-        let direction = if axis == HorizontalAxis::X {
-            BlockDirection::East
-        } else {
-            BlockDirection::South // Fixed: positive Z direction
-        };
-        let perpendicular = if axis == HorizontalAxis::X {
-            BlockDirection::South // Fixed: East.rotateYClockwise()
-        } else {
-            BlockDirection::West // Fixed: South.rotateYClockwise()
-        };
-
-        for portal_dir in -1..3 {
+        let step = direction.to_offset();
+        let side = Self::clockwise(direction).to_offset();
+        for width in -1..3 {
             for height in -1..4 {
-                let pos = floor_pos
-                    .offset_dir(direction.to_offset(), portal_dir)
-                    .offset_dir(perpendicular.to_offset(), perpendicular_offset)
-                    .offset_dir(BlockDirection::Up.to_offset(), height);
-
-                let state = world.get_block_state_async(&pos).await;
-
+                let pos = BlockPos::new(
+                    origin.0.x + step.x * width + side.x * offset,
+                    origin.0.y + height,
+                    origin.0.z + step.z * width + side.z * offset,
+                );
+                let state = view.state(&pos).await;
                 if height < 0 {
-                    if !state.is_solid_block() {
+                    if !state.is_solid() {
                         return false;
                     }
                 } else if !Self::is_valid_portal_air(state) {
@@ -721,7 +830,6 @@ impl NetherPortal {
                 }
             }
         }
-
         true
     }
 
@@ -788,7 +896,10 @@ impl NetherPortal {
         props.axis = axis;
         let portal_state = props.to_state_id(&Block::NETHER_PORTAL);
 
-        let mut poi_storage = world.portal_poi.lock().await;
+        // Place every portal block first, then index them. Holding the POI lock
+        // across `set_block_state` would deadlock: replacing a block runs
+        // `NetherPortalBlock::on_state_replaced`, which locks `portal_poi` itself.
+        let mut placed = Vec::with_capacity(6);
         for x in 0..2 {
             for y in 0..3 {
                 let pos = lower_corner
@@ -801,8 +912,13 @@ impl NetherPortal {
                         BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
                     )
                     .await;
-                poi_storage.add_portal(pos);
+                placed.push(pos);
             }
+        }
+
+        let mut poi_storage = world.portal_poi.lock().await;
+        for pos in placed {
+            poi_storage.add_portal(pos);
         }
     }
 }

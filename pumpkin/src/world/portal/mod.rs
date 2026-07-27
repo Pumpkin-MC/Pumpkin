@@ -8,13 +8,27 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 
 use super::World;
+use border::BorderSnapshot;
 
+pub mod border;
+pub mod chunk_view;
 pub mod end;
 pub mod nether;
 pub mod poi;
+pub mod rectangle;
+pub mod spiral;
 
 pub use nether::{NetherPortal, PortalSearchResult};
 pub use poi::PortalPoiStorage;
+
+/// Vanilla `DimensionType.getTeleportationScale` (`DimensionType.java:77-81`).
+///
+/// The ratio of the source dimension's `coordinate_scale` to the destination's,
+/// which is 8 going overworld -> nether and 1/8 coming back.
+#[must_use]
+pub fn teleportation_scale(from: &Dimension, to: &Dimension) -> f64 {
+    from.coordinate_scale / to.coordinate_scale
+}
 
 #[derive(Clone)]
 pub struct SourcePortalInfo {
@@ -178,12 +192,16 @@ impl PortalType {
                 let pos = caller.get_entity().pos.load();
                 let current_yaw = caller.get_entity().yaw.load();
                 let dimensions = caller.get_entity().entity_dimension.load();
-                let scale_factor_new = dest_world.dimension.coordinate_scale;
-                let scale_factor_current = current_level.dimension.coordinate_scale;
-
-                let scale_factor = scale_factor_current / scale_factor_new;
-                let target_pos =
-                    BlockPos::floored(pos.x * scale_factor, pos.y, pos.z * scale_factor);
+                let scale_factor =
+                    teleportation_scale(&current_level.dimension, &dest_world.dimension);
+                // NetherPortalBlock.java:138: the scaled position is clamped to
+                // the destination world border *before* any portal search, so a
+                // transit near the border cannot aim outside it.
+                let target_pos = BorderSnapshot::capture(&dest_world).await.clamp_coords(
+                    pos.x * scale_factor,
+                    pos.y,
+                    pos.z * scale_factor,
+                );
 
                 let source_axis = source_portal.as_ref().map(|p| p.axis);
 
@@ -208,12 +226,15 @@ impl PortalType {
                     let yaw = dest_result.calculate_teleport_yaw(current_yaw, source_axis);
                     (final_pos, Some(yaw))
                 } else if let Some((build_pos, axis, is_fallback)) =
+                    // NetherPortalBlock.java:152: the new portal keeps the axis of
+                    // the portal that was entered, defaulting to X when the entry
+                    // block has no axis (e.g. it was already broken).
                     NetherPortal::find_safe_location(
-                        &dest_world,
-                        target_pos,
-                        pumpkin_data::block_properties::HorizontalAxis::X,
-                    )
-                    .await
+                            &dest_world,
+                            target_pos,
+                            source_axis.unwrap_or(HorizontalAxis::X),
+                        )
+                        .await
                 {
                     NetherPortal::build_portal_frame(&dest_world, build_pos, axis, is_fallback)
                         .await;
@@ -309,5 +330,46 @@ impl PortalProcessor {
     #[must_use]
     pub const fn has_expired(&self) -> bool {
         self.portal_time == 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::teleportation_scale;
+    use pumpkin_data::dimension::Dimension;
+
+    #[test]
+    fn overworld_to_nether_divides_by_eight() {
+        let scale = teleportation_scale(&Dimension::OVERWORLD, &Dimension::THE_NETHER);
+        assert!((scale - 0.125).abs() < f64::EPSILON);
+        // A player at x=1000 in the overworld aims at x=125 in the nether.
+        assert!((1000.0 * scale - 125.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn nether_to_overworld_multiplies_by_eight() {
+        let scale = teleportation_scale(&Dimension::THE_NETHER, &Dimension::OVERWORLD);
+        assert!((scale - 8.0).abs() < f64::EPSILON);
+        assert!((125.0 * scale - 1000.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn round_trip_scale_is_identity() {
+        let out = teleportation_scale(&Dimension::OVERWORLD, &Dimension::THE_NETHER);
+        let back = teleportation_scale(&Dimension::THE_NETHER, &Dimension::OVERWORLD);
+        assert!((out * back - 1.0).abs() < f64::EPSILON);
+        // This is the property the bug report was about: a round trip must land
+        // on the same column it started from.
+        for x in [-4096.0, -1.0, 0.0, 7.0, 30_000_000.0] {
+            let there = x * out;
+            let home = there * back;
+            assert!((home - x).abs() < 1e-9, "round trip moved {x} to {home}");
+        }
+    }
+
+    #[test]
+    fn end_keeps_coordinates() {
+        let scale = teleportation_scale(&Dimension::OVERWORLD, &Dimension::THE_END);
+        assert!((scale - 1.0).abs() < f64::EPSILON);
     }
 }
