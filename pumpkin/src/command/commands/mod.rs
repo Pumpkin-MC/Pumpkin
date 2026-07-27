@@ -6,6 +6,7 @@ use pumpkin_util::{
 };
 use tokio::sync::RwLock;
 
+mod about;
 mod advancement;
 mod attribute;
 mod ban;
@@ -170,6 +171,7 @@ pub async fn default_dispatcher(
         wrapper_dispatcher
     };
 
+    about::register(&mut dispatcher, registry);
     banlist::register(&mut dispatcher, registry);
     difficulty::register(&mut dispatcher, registry);
     dialog::register(&mut dispatcher, registry);
