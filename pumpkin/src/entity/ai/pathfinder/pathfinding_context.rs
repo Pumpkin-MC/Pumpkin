@@ -1,5 +1,6 @@
 use pumpkin_data::{
     Block, BlockState,
+    block_properties::{BlockProperties, CampfireLikeProperties},
     fluid::Fluid,
     tag::{self, Taggable},
 };
@@ -115,9 +116,16 @@ impl PathfindingContext {
         if block.id == Block::FIRE.id
             || block.id == Block::SOUL_FIRE.id
             || block.id == Block::MAGMA_BLOCK.id
-            || block.id == Block::CAMPFIRE.id
-            || block.id == Block::SOUL_CAMPFIRE.id
             || block.id == Block::LAVA_CAULDRON.id
+        {
+            return PathType::DamageFire;
+        }
+
+        // Vanilla `NodeEvaluator.isBurningBlock` gates campfires on
+        // `CampfireBlock.isLitCampfire(state)`, so an extinguished campfire is not a
+        // fire hazard and must not poison the surrounding nodes with `DangerFire`.
+        if (block.id == Block::CAMPFIRE.id || block.id == Block::SOUL_CAMPFIRE.id)
+            && CampfireLikeProperties::from_state_id(state_id, block).lit
         {
             return PathType::DamageFire;
         }
