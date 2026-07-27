@@ -60,8 +60,33 @@ impl BreedGoal {
         closest.map(|(_, e)| e)
     }
 
+    /// Which of the two partners is the one that spawns the child.
+    ///
+    /// Both partners run their own [`BreedGoal`], find each other as a mate, and
+    /// count their timers up in lockstep, so both reach the point of breeding on
+    /// the same tick and each would spawn a child of its own. Having one side
+    /// re-read the other's in-love state is not enough to stop that: the world
+    /// ticks entities concurrently on a `JoinSet`, so both sides can observe the
+    /// not-yet-bred state before either of them writes.
+    ///
+    /// Deciding it from the entity ids instead needs no shared state and cannot
+    /// race, because both sides compute the same answer from the same two ids.
+    #[must_use]
+    pub const fn spawns_the_child(entity_id: i32, mate_entity_id: i32) -> bool {
+        entity_id < mate_entity_id
+    }
+
     async fn breed(mob: &dyn Mob, mate: &dyn EntityBase) {
         let mob_entity = mob.get_mob_entity();
+
+        // `tick` keeps running on the ticks in between goal re-evaluations, so
+        // this can be reached again after the pair has already bred. Breeding
+        // consumes the in-love state and puts both parents on cooldown, so once
+        // that is gone there is nothing left to breed.
+        if !mob_entity.is_in_love() || !mob_entity.is_breeding_ready() {
+            return;
+        }
+
         let entity = mob.get_entity();
         let world = entity.world.load();
 
@@ -168,7 +193,10 @@ impl Goal for BreedGoal {
 
             self.timer += 1;
 
-            if self.timer >= 60 && dist_sq < 9.0 {
+            if self.timer >= 60
+                && dist_sq < 9.0
+                && Self::spawns_the_child(mob.get_entity().entity_id, mate.get_entity().entity_id)
+            {
                 Self::breed(mob, mate.as_ref()).await;
             }
         })
@@ -180,5 +208,47 @@ impl Goal for BreedGoal {
 
     fn controls(&self) -> Controls {
         Controls::MOVE | Controls::LOOK
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BreedGoal;
+
+    #[test]
+    fn exactly_one_partner_spawns_the_child() {
+        // The property that matters: for a pair, asking from both sides must
+        // yield exactly one "yes". Two yeses is the reported bug (two babies);
+        // two noes would mean breeding silently never produces anything.
+        let pairs = [(1, 2), (2, 1), (7, 400), (400, 7), (-5, 3), (3, -5), (0, 1)];
+        for (a, b) in pairs {
+            assert_ne!(
+                BreedGoal::spawns_the_child(a, b),
+                BreedGoal::spawns_the_child(b, a),
+                "ids {a} and {b} did not agree on a single parent"
+            );
+        }
+    }
+
+    #[test]
+    fn the_lower_entity_id_is_the_one_that_spawns() {
+        assert!(BreedGoal::spawns_the_child(1, 2));
+        assert!(!BreedGoal::spawns_the_child(2, 1));
+    }
+
+    #[test]
+    fn a_mob_is_never_its_own_partner() {
+        // `find_mate` skips candidates sharing our uuid, so equal ids should not
+        // reach this. If one ever did, declining is the safe direction: it costs
+        // a missed child rather than spawning one from a single parent.
+        assert!(!BreedGoal::spawns_the_child(42, 42));
+    }
+
+    #[test]
+    fn negative_entity_ids_still_pick_one_side() {
+        // Entity ids are i32 and Bedrock paths can hand out negatives, so the
+        // comparison must not depend on them being positive.
+        assert!(BreedGoal::spawns_the_child(i32::MIN, i32::MAX));
+        assert!(!BreedGoal::spawns_the_child(i32::MAX, i32::MIN));
     }
 }
