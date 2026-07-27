@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 
-use crate::entity::projectile::ProjectileHit;
+use crate::block::blocks::redstone::target_block::TargetBlock;
+use crate::entity::projectile::{ProjectileHit, on_target_block_hit};
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity, player::Player,
@@ -352,10 +353,7 @@ impl EntityBase for ArrowEntity {
 
             match hit {
                 ProjectileHit::Block {
-                    pos,
-                    face: _,
-                    hit_pos,
-                    ..
+                    pos, face, hit_pos, ..
                 } => {
                     // Arrow hit a block - stick into it
                     self.in_ground.store(true, Ordering::Relaxed);
@@ -364,10 +362,15 @@ impl EntityBase for ArrowEntity {
 
                     let block = world.get_block(&pos);
                     if block == &pumpkin_data::Block::TARGET {
-                        let player_opt = self.owner_id.and_then(|id| world.get_player_by_id(id));
-                        if let Some(player) = player_opt {
-                            player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::Bullseye).await;
-                        }
+                        on_target_block_hit(
+                            &world,
+                            &pos,
+                            face,
+                            hit_pos,
+                            self.owner_id,
+                            TargetBlock::PERSISTENT_PROJECTILE_DELAY,
+                        )
+                        .await;
                     }
 
                     // Stop the arrow
