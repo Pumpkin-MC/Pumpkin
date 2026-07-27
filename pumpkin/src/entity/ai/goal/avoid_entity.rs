@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::{Controls, Goal, GoalFuture};
-use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
+use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, living::LivingEntity, mob::Mob};
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use rand::RngExt;
@@ -44,12 +44,25 @@ impl AvoidEntityGoal {
         let pos = entity.pos.load();
         let world = entity.world.load();
 
+        // The validity check runs per candidate inside the search, so a nearer but invalid threat
+        // (a dead entity or a spectator) does not hide a valid one standing behind it.
         if self.flee_type == &EntityType::PLAYER {
             world
-                .get_closest_player(pos, self.flee_distance)
+                .get_closest_player_where(pos, self.flee_distance, |player| {
+                    player.living_entity.is_part_of_game()
+                })
                 .map(|p| p as Arc<dyn EntityBase>)
         } else {
-            world.get_closest_entity(pos, self.flee_distance, Some(&[self.flee_type]))
+            world.get_closest_entity_where(
+                pos,
+                self.flee_distance,
+                Some(&[self.flee_type]),
+                |entity| {
+                    entity
+                        .get_living_entity()
+                        .is_some_and(LivingEntity::is_part_of_game)
+                },
+            )
         }
     }
 

@@ -93,35 +93,30 @@ impl ActiveTargetGoal {
         let mut search_pos = mob.living_entity.entity.pos.load();
         search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
 
-        if self.target_type == &EntityType::PLAYER {
-            let potential_player = world
-                .get_closest_player(search_pos, follow_range)
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+        // Vanilla evaluates the target conditions per candidate inside the search, so the result is
+        // the nearest *valid* target. Testing only the nearest candidate would make a single
+        // invalid entity (for example an invulnerable creative player) hide every target behind it.
+        let tester = &mob.living_entity;
+        let target_predicate = &self.target_predicate;
 
-            if let Some(potential_entity) = potential_player
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
-            {
-                self.target = Some(potential_entity);
-                return;
-            }
+        self.target = if self.target_type == &EntityType::PLAYER {
+            world
+                .get_closest_player_where(search_pos, follow_range, |player| {
+                    target_predicate.test(&world, Some(tester), &player.living_entity)
+                })
+                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
         } else {
-            let potential_entity =
-                world.get_closest_entity(search_pos, follow_range, Some(&[self.target_type]));
-
-            if let Some(potential_entity) = potential_entity
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
-            {
-                self.target = Some(potential_entity);
-                return;
-            }
-        }
-        self.target = None;
+            world.get_closest_entity_where(
+                search_pos,
+                follow_range,
+                Some(&[self.target_type]),
+                |entity| {
+                    entity
+                        .get_living_entity()
+                        .is_some_and(|living| target_predicate.test(&world, Some(tester), living))
+                },
+            )
+        };
     }
 }
 

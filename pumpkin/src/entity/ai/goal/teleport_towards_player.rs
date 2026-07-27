@@ -51,20 +51,17 @@ impl TeleportTowardsPlayerGoal {
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
 
-        let player = world.get_closest_player(pos, follow_range)?;
-
-        if !player.get_entity().is_alive() {
-            return None;
-        }
-
-        let living = player.get_living_entity()?;
-        if !self.target_predicate.test(
-            &world,
-            Some(&self.enderman.mob_entity.living_entity),
-            living,
-        ) {
-            return None;
-        }
+        // The target conditions are evaluated per candidate so that a nearer but invalid player
+        // (a spectator or an invulnerable creative player) does not hide a valid one behind it.
+        // Vanilla also folds the staring check into the search, but that needs a raycast and
+        // cannot run inside the synchronous predicate, so it stays below.
+        let player = world.get_closest_player_where(pos, follow_range, |player| {
+            self.target_predicate.test(
+                &world,
+                Some(&self.enderman.mob_entity.living_entity),
+                &player.living_entity,
+            )
+        })?;
 
         if self.enderman.is_player_staring(&player).await || self.enderman.is_angry() {
             return Some(player);
