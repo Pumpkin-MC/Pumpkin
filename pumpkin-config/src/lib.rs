@@ -108,6 +108,8 @@ impl LoadConfiguration for PumpkinConfig {
         Some(template + "\n")
     }
 
+    // NOTE: Logger may not be ready during config validation.
+    #[expect(clippy::print_stderr)]
     fn validate(&self) {
         self.basic.validate();
         self.advanced.validate();
@@ -167,6 +169,22 @@ impl LoadConfiguration for PumpkinConfig {
             assert!(
                 self.advanced.networking.java.online_mode,
                 "When allow_chat_reports is enabled, java.online_mode must be enabled"
+            );
+        }
+
+        // Common misconfiguration: [networking.java.authentication].enabled is
+        // only the auth-service sub-config; the premium-verification switch is
+        // [networking.java].online_mode. If the two disagree, clients still get
+        // should_authenticate from online_mode and see "Invalid session".
+        if self.advanced.networking.java.online_mode
+            && !self.advanced.networking.java.authentication.enabled
+        {
+            eprintln!(
+                "WARNING: networking.java.online_mode = true but \
+                 networking.java.authentication.enabled = false. Premium \
+                 verification is controlled by online_mode — set \
+                 [networking.java] online_mode = false to disable it; \
+                 authentication.enabled only configures the auth service."
             );
         }
     }
