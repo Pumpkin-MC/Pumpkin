@@ -60,11 +60,40 @@ use ignite::fire_charge::FireChargeItem;
 use ignite::flint_and_steel::FlintAndSteelItem;
 use ink_sac::InkSacItem;
 use mace::MaceItem;
+use pumpkin_data::{Block, BlockStateId};
 use shovel::ShovelItem;
 use snowball::SnowBallItem;
 use std::sync::Arc;
 use swords::SwordItem;
 use trident::TridentItem;
+
+/// Returns the state of `new_block` that carries over every property it shares
+/// with `old_block` in `old_state_id`.
+///
+/// This is the equivalent of vanilla's `Block#withPropertiesOf`, which is what
+/// stripping, waxing, scraping and de-oxidizing use so the replacement block
+/// keeps its facing, waterlogging, slab type, and so on. Falls back to the
+/// default state when either block carries no properties.
+#[must_use]
+pub fn state_with_properties_of(
+    old_block: &Block,
+    old_state_id: BlockStateId,
+    new_block: &Block,
+) -> BlockStateId {
+    let default_state_id = new_block.default_state.id;
+    // `from_properties` panics for blocks without any property, so only copy
+    // when both sides actually carry state.
+    if new_block.properties(default_state_id).is_none() {
+        return default_state_id;
+    }
+    old_block
+        .properties(old_state_id)
+        .map_or(default_state_id, |properties| {
+            new_block
+                .from_properties(&properties.to_props())
+                .to_state_id(new_block)
+        })
+}
 
 #[must_use]
 pub fn default_registry() -> Arc<ItemRegistry> {
