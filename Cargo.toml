@@ -82,6 +82,15 @@ edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0"
 
+[profile.dev]
+lto = false
+opt-level = 0
+incremental = true
+debug = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
 [profile.release]
 lto = true
 strip = "debuginfo"

@@ -1,0 +1,5 @@
+[target.x86_64-unknown-linux-gnu]
+# Use LLVM's lld instead of the default for (likely) faster linking
+rustflags = [
+    "-C", "link-arg=-fuse-ld=lld",
+]
