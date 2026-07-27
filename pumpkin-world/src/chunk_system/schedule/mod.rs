@@ -143,11 +143,9 @@ impl GenerationSchedule {
         // `world.chunk_generation_threads`) to leave CPU headroom for the
         // tokio runtime and networking. 4x the pool keeps every generation
         // thread fed without flooding the queue with swapped-out chunk data.
-        let max_in_flight = if let Some(pool) = &gen_pool {
+        let max_in_flight = gen_pool.as_ref().map_or(gen_thread_count as u16, |pool| {
             (pool.current_num_threads().max(1) * 4).min(usize::from(u16::MAX)) as u16
-        } else {
-            gen_thread_count as u16
-        };
+        });
 
         let level_sched = level;
         let lighting_config = level_sched.lighting_config;
