@@ -189,8 +189,20 @@ impl Server {
         };
         let server = Arc::new(server);
 
+        // Bound chunk generation parallelism: rayon's default (one thread per
+        // core) plus tokio's per-core workers plus the per-dimension scheduler
+        // threads oversubscribes the machine during world generation.
+        // Lowering thread priority instead would be OS-specific (no clean
+        // cross-platform API without new dependencies), so we bound the pool
+        // size; operators can tune `world.chunk_generation_threads`.
+        let gen_threads = server
+            .advanced_config
+            .world
+            .resolved_chunk_generation_threads();
+        info!("Chunk generation pool: {gen_threads} threads");
         let gen_pool = Arc::new(
             rayon::ThreadPoolBuilder::new()
+                .num_threads(gen_threads)
                 .thread_name(|i| format!("Gen-Pool-{i}"))
                 .build()
                 .expect("Failed to build generation thread pool"),

@@ -138,8 +138,13 @@ impl GenerationSchedule {
             }
         }
 
-        let max_in_flight = if gen_pool.is_some() {
-            (thread::available_parallelism().map_or(1, std::num::NonZero::get) * 4) as u16
+        // Backpressure follows the actual generation pool size, not the core
+        // count: the pool may be sized smaller than the machine (see
+        // `world.chunk_generation_threads`) to leave CPU headroom for the
+        // tokio runtime and networking. 4x the pool keeps every generation
+        // thread fed without flooding the queue with swapped-out chunk data.
+        let max_in_flight = if let Some(pool) = &gen_pool {
+            (pool.current_num_threads().max(1) * 4).min(usize::from(u16::MAX)) as u16
         } else {
             gen_thread_count as u16
         };

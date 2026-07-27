@@ -274,12 +274,15 @@ impl Level {
             gen_pool: gen_pool.clone(),
         });
 
-        // TODO
-        let total_cores = thread::available_parallelism()
-            .map_or(1, std::num::NonZero::get)
-            .saturating_sub(2)
-            .max(1);
-        let threads_per_dimension = (total_cores / 2).max(1);
+        // Generation thread budget for the fallback path (gen_pool == None,
+        // e.g. runtime-created worlds that don't share the server pool).
+        // Honor `world.chunk_generation_threads` when set; otherwise halve the
+        // auto value since these dedicated threads exist per dimension.
+        let threads_per_dimension = if level_config.chunk_generation_threads > 0 {
+            level_config.chunk_generation_threads
+        } else {
+            (level_config.resolved_chunk_generation_threads() / 2).max(1)
+        };
 
         GenerationSchedule::create(
             4,
