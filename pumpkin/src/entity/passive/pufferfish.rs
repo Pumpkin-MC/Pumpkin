@@ -2,8 +2,9 @@ use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
 
+use crate::entity::water_animal::WaterAnimalAir;
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
         avoid_entity::AvoidEntityGoal, escape_danger::EscapeDangerGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -17,6 +18,9 @@ use crate::entity::{
 /// Inflate state machine / contact poison still stand-in via try_attack when melee exists.
 pub struct PufferfishEntity {
     pub mob_entity: MobEntity,
+    /// `AbstractFish` inherits `WaterAnimal`'s land-drowning air supply
+    /// (WaterAnimal.java:43-53).
+    air: WaterAnimalAir,
 }
 
 impl PufferfishEntity {
@@ -33,7 +37,10 @@ impl PufferfishEntity {
             nav.set_pathfinding_malus(PathType::Water, 0.0);
             nav.set_pathfinding_malus(PathType::WaterBorder, 0.0);
         }
-        let pufferfish = Self { mob_entity };
+        let pufferfish = Self {
+            mob_entity,
+            air: WaterAnimalAir::new(),
+        };
         let mob_arc = Arc::new(pufferfish);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -67,19 +74,36 @@ impl NBTStorage for PufferfishEntity {
         &'a self,
         nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
     ) -> crate::entity::NbtFuture<'a, ()> {
-        self.get_mob_entity().living_entity.write_nbt(nbt)
+        Box::pin(async move {
+            self.get_mob_entity().living_entity.write_nbt(nbt).await;
+            self.air.write_nbt(nbt);
+        })
     }
 
     fn read_nbt_non_mut<'a>(
         &'a self,
         nbt: &'a pumpkin_nbt::compound::NbtCompound,
     ) -> crate::entity::NbtFuture<'a, ()> {
-        self.get_mob_entity().living_entity.read_nbt_non_mut(nbt)
+        Box::pin(async move {
+            self.get_mob_entity()
+                .living_entity
+                .read_nbt_non_mut(nbt)
+                .await;
+            self.air.read_nbt(nbt);
+        })
     }
 }
 
 impl Mob for PufferfishEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    /// `WaterAnimal.baseTick` drains the air supply and drowns the fish
+    /// on land (WaterAnimal.java:56-64).
+    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.air.tick(&self.mob_entity, caller).await;
+        })
     }
 }

@@ -1,58 +1,37 @@
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::Sound;
 
+use crate::entity::water_animal::{SquidAi, WaterAnimalAir};
 use crate::entity::{
-    Entity, NBTStorage,
-    ai::goal::{
-        escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
-    },
-    ai::pathfinder::{node::PathType, node_evaluator::EvaluatorKind},
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     mob::{Mob, MobEntity},
 };
 
-/// Squid — flee when hurt; custom jet movement TODO.
+/// Squid.
+///
+/// Vanilla `Squid` registers only `SquidRandomMovementGoal` and `SquidFleeGoal`
+/// (Squid.java:64-68) and never uses the navigator: movement is an impulse
+/// vector applied in `aiStep` (Squid.java:119-171) with `travel` just applying
+/// the current delta (Squid.java:203-206). Out of water it sinks and flops
+/// instead of walking (Squid.java:162-170), and as an `AgeableWaterCreature` it
+/// drowns on land (AgeableWaterCreature.java:41-51).
 pub struct SquidEntity {
     pub mob_entity: MobEntity,
+    ai: SquidAi,
+    air: WaterAnimalAir,
 }
 
 impl SquidEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
-        {
-            let mut nav = mob_entity.navigator.lock().unwrap();
-            // Vanilla Squid has no createNavigation override (default
-            // GroundPathNavigation, Mob.java:196-198); it moves via custom travel and
-            // SquidRandomMovementGoal (Squid.java:204,232). Pumpkin drives squid
-            // wander through the Navigator, so the swim evaluator stands in until
-            // custom squid movement lands.
-            nav.set_evaluator_kind(EvaluatorKind::Swim {
-                allow_breaching: false,
-            });
-            nav.set_pathfinding_malus(PathType::Water, 0.0);
-            nav.set_pathfinding_malus(PathType::WaterBorder, 0.0);
-        }
-        let squid = Self { mob_entity };
-        let mob_arc = Arc::new(squid);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
-
-        {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.0));
-            goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(0.6)));
-            goal_selector.add_goal(
-                3,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
-            );
-            goal_selector.add_goal(4, Box::new(RandomLookAroundGoal::default()));
-        };
-
-        mob_arc
+        // No goals and no navigator setup: vanilla squid movement is entirely
+        // the custom jet AI in `SquidAi`, driven from `mob_tick` below.
+        Arc::new(Self {
+            mob_entity: MobEntity::new(entity),
+            ai: SquidAi::new(),
+            air: WaterAnimalAir::new(),
+        })
     }
 }
 
@@ -61,19 +40,58 @@ impl NBTStorage for SquidEntity {
         &'a self,
         nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
     ) -> crate::entity::NbtFuture<'a, ()> {
-        self.get_mob_entity().living_entity.write_nbt(nbt)
+        Box::pin(async move {
+            self.get_mob_entity().living_entity.write_nbt(nbt).await;
+            self.air.write_nbt(nbt);
+        })
     }
 
     fn read_nbt_non_mut<'a>(
         &'a self,
         nbt: &'a pumpkin_nbt::compound::NbtCompound,
     ) -> crate::entity::NbtFuture<'a, ()> {
-        self.get_mob_entity().living_entity.read_nbt_non_mut(nbt)
+        Box::pin(async move {
+            self.get_mob_entity()
+                .living_entity
+                .read_nbt_non_mut(nbt)
+                .await;
+            self.air.read_nbt(nbt);
+        })
     }
 }
 
 impl Mob for SquidEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.air.tick(&self.mob_entity, caller).await;
+            self.ai.tick(&self.mob_entity).await;
+        })
+    }
+
+    /// `Squid.hurtServer` (Squid.java:174-180): record the attacker for the
+    /// flee goal and burst ink.
+    fn on_damage<'a>(
+        &'a self,
+        _damage_type: pumpkin_data::damage::DamageType,
+        source: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.ai.on_hurt(
+                &self.mob_entity,
+                source,
+                Particle::SquidInk,
+                Sound::EntitySquidSquirt,
+                self.mob_entity
+                    .living_entity
+                    .entity
+                    .age
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                    < 0,
+            );
+        })
     }
 }

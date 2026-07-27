@@ -120,6 +120,14 @@ impl MobEntity {
         }
     }
 
+    /// Vanilla `Mob.getNoActionTime()` (Mob.java:265-267). Pumpkin tracks the
+    /// same counter as `despawn_counter` (yarn `despawnCounter`); vanilla
+    /// increments it in `checkDespawn` and resets it on damage/target changes.
+    #[must_use]
+    pub fn no_action_time(&self) -> i32 {
+        self.despawn_counter.load(Relaxed)
+    }
+
     pub fn is_in_position_target_range(&self) -> bool {
         self.is_in_position_target_range_pos(&self.living_entity.entity.block_pos.load())
     }

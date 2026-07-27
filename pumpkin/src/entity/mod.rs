@@ -102,6 +102,7 @@ pub mod projectile_deflection;
 pub mod tnt;
 pub mod r#type;
 pub mod vehicle;
+pub mod water_animal;
 
 mod combat;
 pub mod predicate;
