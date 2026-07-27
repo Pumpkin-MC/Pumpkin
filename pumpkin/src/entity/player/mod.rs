@@ -113,6 +113,12 @@ pub struct Player {
     pub respawn_point: Mutex<Option<RespawnPoint>>,
     /// The player's sleep status
     pub sleeping_since: AtomicCell<Option<u8>>,
+    /// Vanilla `ServerPlayer.raidOmenPosition` (`ServerPlayer.java:302`).
+    ///
+    /// Set when Bad Omen converts to Raid Omen inside a village
+    /// (`BadOmenMobEffect.applyEffectTick`, `BadOmenMobEffect.java:33`) and consumed
+    /// when Raid Omen expires and starts the raid (`RaidOmenMobEffect.java:30-32`).
+    pub raid_omen_position: AtomicCell<Option<BlockPos>>,
     /// Manages the player's breath level
     pub breath_manager: BreathManager,
     /// Manages the player's hunger level.
@@ -345,6 +351,7 @@ impl Player {
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
             respawn_point: Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
+            raid_omen_position: AtomicCell::new(None),
             // We want this to be an impossible watched section so that `chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
             // (We left shift by one so we can search around that chunk)

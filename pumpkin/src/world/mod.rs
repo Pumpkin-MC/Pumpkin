@@ -46,6 +46,7 @@ pub mod dragon_fight;
 pub mod end_podium;
 pub mod natural_spawner;
 pub mod phantom_spawner;
+pub mod raid;
 pub mod scoreboard;
 pub mod weather;
 
@@ -152,6 +153,11 @@ pub struct World {
     pub neighbor_updater: crate::block::blocks::redstone::neighbor_updater::WorldNeighborUpdater,
     /// Vanilla `PhantomSpawner` (insomnia / TIME_SINCE_REST custom spawner).
     pub phantom_spawner: phantom_spawner::PhantomSpawner,
+    /// Vanilla `PatrolSpawner` — pillager patrols with captains.
+    pub patrol_spawner: raid::patrol::PatrolSpawner,
+    /// Vanilla `ServerLevel.raids` — the per-level `Raids` saved data
+    /// (`ServerLevel.java:1341-1343`).
+    pub raids: raid::Raids,
 }
 
 impl PartialEq for World {
@@ -210,6 +216,8 @@ impl World {
             neighbor_updater:
                 crate::block::blocks::redstone::neighbor_updater::WorldNeighborUpdater::new(),
             phantom_spawner: phantom_spawner::PhantomSpawner::default(),
+            patrol_spawner: raid::patrol::PatrolSpawner::default(),
+            raids: raid::Raids::new(),
         }
     }
 

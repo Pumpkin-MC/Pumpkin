@@ -29,6 +29,13 @@ impl World {
         self.update_active_chunks();
         self.tick_environment().await;
 
+        // Vanilla `ServerLevel.tick`: the "raid" profiler section runs after the
+        // pending block/fluid ticks and **before** `chunkSource.tick`, which is
+        // what drives the custom spawners (`ServerLevel.java:371-375`). Raids are
+        // ticked here for the same ordering: a raid that ends this tick has already
+        // released its raiders before entity ticking looks at them.
+        self.raids.tick(self).await;
+
         let world_for_chunks = self.clone();
         let chunk_future = async move {
             let t = tokio::time::Instant::now();
@@ -458,8 +465,13 @@ impl World {
             }
         }
 
-        // Vanilla ServerLevel.tickCustomSpawners — PhantomSpawner (insomnia).
+        // Vanilla ServerLevel.tickCustomSpawners (ServerLevel.java:454-458), driven
+        // from ServerChunkCache.tick (ServerChunkCache.java:386-387). The overworld
+        // spawner list is PhantomSpawner, PatrolSpawner, CatSpawner, VillageSiege,
+        // WanderingTraderSpawner (MinecraftServer.java:460); Pumpkin implements the
+        // first two.
         self.phantom_spawner.tick(self, spawn_enemies).await;
+        self.patrol_spawner.tick(self, spawn_enemies).await;
 
         // Update chunk inhabited time for active chunks
         let loaded_chunks = self.level.loaded_chunks.clone();

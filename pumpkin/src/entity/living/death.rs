@@ -212,6 +212,20 @@ impl LivingEntity {
             // Statistics updates
             self.update_death_stats(&*dyn_self, cause).await;
 
+            // Vanilla `Raider.die`
+            // (`/root/Vanilla/src/net/minecraft/world/entity/raid/Raider.java:127-144`):
+            // clear the wave's leader slot, credit a player killer as a Hero of the
+            // Village, and drop the raider from its raid. Runs before the loot roll,
+            // matching vanilla's `super.die(source)` at the end of the override.
+            // Raider.java:137-139 gates the hero credit on
+            // `killer.is(EntityTypes.PLAYER)`, so only a player killer counts.
+            let killer = cause
+                .filter(|c| c.get_entity().entity_type == &EntityType::PLAYER)
+                .map(|c| c.get_entity().entity_uuid);
+            world
+                .raids
+                .on_raider_death(self.entity.entity_uuid, killer);
+
             // Plays the death sound
             world.send_entity_status(&self.entity, EntityStatus::Death);
             let looting_level;

@@ -453,6 +453,16 @@ impl LivingEntity {
         } else if effect_type == &StatusEffect::SATURATION {
             // Saturation every tick
             true
+        } else if effect_type == &StatusEffect::BAD_OMEN {
+            // Vanilla `BadOmenMobEffect.shouldApplyEffectTickThisTick` returns
+            // `true` unconditionally
+            // (`/root/Vanilla/src/net/minecraft/world/effect/BadOmenMobEffect.java:23-25`).
+            true
+        } else if effect_type == &StatusEffect::RAID_OMEN {
+            // Vanilla `RaidOmenMobEffect.shouldApplyEffectTickThisTick`:
+            // `remainingDuration == 1`, i.e. only on the final tick
+            // (`/root/Vanilla/src/net/minecraft/world/effect/RaidOmenMobEffect.java:22-24`).
+            duration == 1
         } else {
             // Other effects that don't tick
             false
@@ -516,6 +526,40 @@ impl LivingEntity {
                 player.hunger_manager.add_hunger(hunger);
                 player.hunger_manager.add_saturation(hunger as f32 * 2.0);
             }
+        } else if effect_type == &StatusEffect::BAD_OMEN {
+            self.tick_bad_omen(amplifier).await;
+        } else if effect_type == &StatusEffect::RAID_OMEN {
+            self.tick_raid_omen().await;
+        }
+    }
+
+    /// Vanilla `BadOmenMobEffect.applyEffectTick`
+    /// (`/root/Vanilla/src/net/minecraft/world/effect/BadOmenMobEffect.java:27-38`).
+    ///
+    /// On success vanilla returns `false`, which ends the Bad Omen instance; that
+    /// removal is explicit here because Pumpkin's `tick_effects` ignores the return
+    /// value. [`convert_bad_omen`](crate::world::raid::omen::convert_bad_omen) both
+    /// applies Raid Omen and records the trigger position.
+    async fn tick_bad_omen(&self, amplifier: u8) {
+        let world = self.entity.world.load();
+        let Some(player) = world.get_player_by_uuid(self.entity.entity_uuid) else {
+            return;
+        };
+        if crate::world::raid::omen::convert_bad_omen(&world, &player, amplifier).await {
+            self.remove_effect(&StatusEffect::BAD_OMEN).await;
+        }
+    }
+
+    /// Vanilla `RaidOmenMobEffect.applyEffectTick`
+    /// (`/root/Vanilla/src/net/minecraft/world/effect/RaidOmenMobEffect.java:26-38`):
+    /// on the effect's final tick, start or extend the raid at the stored position.
+    async fn tick_raid_omen(&self) {
+        let world = self.entity.world.load();
+        let Some(player) = world.get_player_by_uuid(self.entity.entity_uuid) else {
+            return;
+        };
+        if crate::world::raid::omen::trigger_raid_from_omen(&world, &player).await {
+            self.remove_effect(&StatusEffect::RAID_OMEN).await;
         }
     }
 }
