@@ -257,3 +257,94 @@ impl AttributeRegistry {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{AttributeInstance, Modifier, ModifierOperation};
+
+    fn modifier(id: &str, amount: f64, operation: ModifierOperation) -> Modifier {
+        Modifier {
+            id: id.to_string(),
+            amount,
+            operation,
+        }
+    }
+
+    #[test]
+    fn reapplying_the_same_modifier_does_not_stack() {
+        // Restoring a status effect re-applies its attribute modifiers, and that
+        // happens on both the NBT read and the player join sync. Replacing by id
+        // is what makes doing it twice safe; if it appended instead, a reloaded
+        // Speed II would come back at double strength and grow on every load.
+        let mut inst = AttributeInstance::new(0.1);
+        let speed = modifier("minecraft:effect.speed", 0.04, ModifierOperation::Add);
+
+        inst.add_or_replace_modifier(speed.clone());
+        let after_first = inst.value();
+
+        inst.add_or_replace_modifier(speed.clone());
+        inst.add_or_replace_modifier(speed);
+
+        assert_eq!(inst.modifiers.len(), 1);
+        assert!((inst.value() - after_first).abs() < f64::EPSILON);
+        assert!((inst.value() - 0.14).abs() < 1e-9);
+    }
+
+    #[test]
+    fn modifiers_with_distinct_ids_still_stack() {
+        // The idempotence above must be keyed on the id, not collapse everything.
+        let mut inst = AttributeInstance::new(0.1);
+        inst.add_or_replace_modifier(modifier("a", 0.04, ModifierOperation::Add));
+        inst.add_or_replace_modifier(modifier("b", 0.06, ModifierOperation::Add));
+
+        assert_eq!(inst.modifiers.len(), 2);
+        assert!((inst.value() - 0.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn replacing_a_modifier_uses_the_new_amount() {
+        // A restored effect at a different amplifier must overwrite, not merge.
+        let mut inst = AttributeInstance::new(0.1);
+        inst.add_or_replace_modifier(modifier("speed", 0.04, ModifierOperation::Add));
+        inst.add_or_replace_modifier(modifier("speed", 0.08, ModifierOperation::Add));
+
+        assert_eq!(inst.modifiers.len(), 1);
+        assert!((inst.value() - 0.18).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_three_operations_compose_in_vanilla_order() {
+        // value = (base + add) * (1 + multiply_base) * prod(1 + multiply_total)
+        let mut inst = AttributeInstance::new(10.0);
+        inst.add_or_replace_modifier(modifier("add", 2.0, ModifierOperation::Add));
+        inst.add_or_replace_modifier(modifier("mb", 0.5, ModifierOperation::MultiplyBase));
+        inst.add_or_replace_modifier(modifier("mt", 1.0, ModifierOperation::MultiplyTotal));
+
+        assert!((inst.value() - 36.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn removing_a_modifier_restores_the_base_value() {
+        let mut inst = AttributeInstance::new(0.1);
+        inst.add_or_replace_modifier(modifier("speed", 0.04, ModifierOperation::Add));
+        assert!((inst.value() - 0.14).abs() < 1e-9);
+
+        inst.remove_modifier("speed");
+        assert!(inst.modifiers.is_empty());
+        assert!((inst.value() - 0.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_cached_value_is_invalidated_on_every_change() {
+        // `value()` memoises into `cached_value` and only recomputes when dirty,
+        // so a modifier added after a read must still be observed.
+        let mut inst = AttributeInstance::new(1.0);
+        assert!((inst.value() - 1.0).abs() < f64::EPSILON);
+
+        inst.add_or_replace_modifier(modifier("x", 1.0, ModifierOperation::Add));
+        assert!((inst.value() - 2.0).abs() < f64::EPSILON);
+
+        inst.remove_modifier("x");
+        assert!((inst.value() - 1.0).abs() < f64::EPSILON);
+    }
+}

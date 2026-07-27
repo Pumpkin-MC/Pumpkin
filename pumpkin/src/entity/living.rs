@@ -467,6 +467,80 @@ impl LivingEntity {
         self.entity.entity_id
     }
 
+    /// Applies the state an effect implies beyond merely sitting in
+    /// `active_effects`: its attribute modifiers, and the invisibility and
+    /// glowing flags. Returns the attributes it touched, so the caller can
+    /// decide whether to tell clients about them.
+    ///
+    /// Shared by [`Self::add_effect`] and the NBT restore path in
+    /// `read_nbt_non_mut`, so an effect that comes back from disk ends up in the
+    /// same server-side state as one that was just applied. Keeping it in one
+    /// place is the point — the two paths silently diverged before.
+    ///
+    /// Deliberately does *not* grant absorption. The absorption amount is
+    /// persisted in its own `AbsorptionAmount` tag, so re-granting it here would
+    /// stack another +4 per level onto the saved value on every single load.
+    async fn apply_effect_state(
+        &self,
+        effect: &Effect,
+    ) -> Vec<pumpkin_data::attributes::Attributes> {
+        let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
+
+        for m in effect.effect_type.attribute_modifiers {
+            let op = match m.operation {
+                Operation::AddValue => ModifierOperation::Add,
+                Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+            };
+            let mod_inst = Modifier {
+                id: m.id.to_string(),
+                amount: m.base_value * (f64::from(effect.amplifier) + 1.),
+                operation: op,
+            };
+
+            self.update_attribute(m.attribute, |inst| {
+                inst.add_or_replace_modifier(mod_inst.clone());
+            });
+
+            if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
+                touched_attrs.push(m.attribute.clone());
+            }
+        }
+
+        if effect.effect_type == &StatusEffect::INVISIBILITY {
+            self.entity.set_invisible(true).await;
+        }
+
+        if effect.effect_type == &StatusEffect::GLOWING {
+            self.entity.set_glowing(true).await;
+        }
+
+        touched_attrs
+    }
+
+    /// Re-applies the state implied by every currently active effect.
+    ///
+    /// Called after effects are read back from NBT: the read only refills the
+    /// `active_effects` map, so without this a reloaded Speed II shows on the
+    /// client while the entity moves at its base speed, and a reloaded
+    /// Invisibility or Glowing has no visible effect at all.
+    ///
+    /// Returns the attributes that changed so a caller with a connected client
+    /// can sync them.
+    pub async fn reapply_active_effect_state(&self) -> Vec<pumpkin_data::attributes::Attributes> {
+        let effects: Vec<Effect> = self.active_effects.lock().await.values().cloned().collect();
+
+        let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
+        for effect in &effects {
+            for attr in self.apply_effect_state(effect).await {
+                if !touched_attrs.iter().any(|a| a.id == attr.id) {
+                    touched_attrs.push(attr);
+                }
+            }
+        }
+        touched_attrs
+    }
+
     pub async fn add_effect(&self, effect: Effect) {
         // Apply instant effects immediately before storing
         if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
@@ -493,42 +567,10 @@ impl LivingEntity {
 
             // Effects that modify attributes (ex. speed) should also update the
             // entity's attribute instances (server-side) and then notify clients.
-            if !effect.effect_type.attribute_modifiers.is_empty() {
-                // Apply each attribute modifier into the local AttributeInstance
-                for m in effect.effect_type.attribute_modifiers {
-                    let id = m.id.to_string();
-                    let op = match m.operation {
-                        Operation::AddValue => ModifierOperation::Add,
-                        Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
-                        Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
-                    };
-                    let scaled_amount = m.base_value * (f64::from(effect.amplifier) + 1.);
-                    let mod_inst = Modifier {
-                        id,
-                        amount: scaled_amount,
-                        operation: op,
-                    };
-
-                    self.update_attribute(m.attribute, |inst| {
-                        inst.add_or_replace_modifier(mod_inst.clone());
-                    });
-                }
-
-                // Recompute packet modifiers from active effects for each affected attribute
-                let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
-                for m in effect.effect_type.attribute_modifiers {
-                    if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
-                        touched_attrs.push(m.attribute.clone());
-                    }
-                }
-
-                if !touched_attrs.is_empty() {
-                    crate::entity::attributes::send_attribute_updates_for_living(
-                        self,
-                        touched_attrs,
-                    )
+            let touched_attrs = self.apply_effect_state(&effect).await;
+            if !touched_attrs.is_empty() {
+                crate::entity::attributes::send_attribute_updates_for_living(self, touched_attrs)
                     .await;
-                }
             }
 
             // Apply absorption effect (+4 absorption per level)
@@ -537,16 +579,6 @@ impl LivingEntity {
                 let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
                 let new_abs = (self.absorption.load() + added).min(max_abs);
                 self.set_absorption(new_abs).await;
-            }
-
-            // Apply invisible effect
-            if effect.effect_type == &StatusEffect::INVISIBILITY {
-                self.entity.set_invisible(true).await;
-            }
-
-            // Apply glowing effect
-            if effect.effect_type == &StatusEffect::GLOWING {
-                self.entity.set_glowing(true).await;
             }
         }
 
@@ -2061,6 +2093,14 @@ impl NBTStorage for LivingEntity {
                     }
                 }
             }
+
+            // Refilling the map is not enough: the attribute modifiers and the
+            // invisibility/glowing flags an effect implies live outside it, and
+            // are applied by `add_effect` on the live path. Re-apply them here so
+            // a restored effect actually does something. Clients are synced
+            // separately by whoever owns the join sequence, since there is no
+            // connected client to talk to at this point.
+            self.reapply_active_effect_state().await;
         })
         // todo more...
     }
