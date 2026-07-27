@@ -1,7 +1,7 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockState, BlockStateId,
     block_properties::BlockProperties,
-    tag::{self},
+    tag::{self, Taggable},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -98,9 +98,28 @@ impl PressurePlate for PressurePlateBlock {
         if props.powered { 15 } else { 0 }
     }
 
-    async fn calculate_redstone_output(&self, world: &World, _block: &Block, pos: &BlockPos) -> u8 {
-        let aabb = detection_box_at(pos);
-        if !world.get_entities_at_box(&aabb).is_empty()
+    async fn calculate_redstone_output(&self, world: &World, block: &Block, pos: &BlockPos) -> u8 {
+        // TODO: this is bad use real box
+        let aabb = BoundingBox::from_block(pos);
+
+        // Stone-family plates (stone, polished blackstone) only react to living entities
+        // (players and mobs); wooden plates react to any entity, including dropped items
+        // and projectiles like arrows.
+        // https://minecraft.wiki/w/Polished_Blackstone_Pressure_Plate:
+        // "A polished blackstone pressure plate ... can detect only players and mobs."
+        // https://minecraft.wiki/w/Wooden_Pressure_Plate:
+        // "A wooden pressure plate is activated by all entities (including players, mobs,
+        // items, arrows, experience orbs, fishing bobs, etc.)."
+        if block.has_tag(&tag::Block::MINECRAFT_STONE_PRESSURE_PLATES) {
+            if !world.get_players_at_box(&aabb).is_empty()
+                || world
+                    .get_entities_at_box(&aabb)
+                    .iter()
+                    .any(|entity| entity.get_living_entity().is_some())
+            {
+                return 15;
+            }
+        } else if !world.get_entities_at_box(&aabb).is_empty()
             || !world.get_players_at_box(&aabb).is_empty()
         {
             return 15;
