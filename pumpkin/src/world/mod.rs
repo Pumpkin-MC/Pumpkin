@@ -4179,7 +4179,7 @@ impl World {
                 config.skin_parts,
             );
             meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
-                .unwrap()
+                .unwrap();
         };
         java_meta_buf.put_u8(255);
 
