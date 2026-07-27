@@ -36,7 +36,7 @@ use super::{Raid, village};
 /// the serialiser, not restructuring this type.
 pub struct Raids {
     /// Vanilla `Raids.raidMap` (`Raids.java:54`).
-    raids: std::sync::Mutex<Vec<Arc<Raid>>>,
+    entries: std::sync::Mutex<Vec<Arc<Raid>>>,
     /// Vanilla `Raids.nextId` (`Raids.java:55`), starting at 1.
     next_id: AtomicI32,
     /// Vanilla `Raids.tick` (`Raids.java:56`).
@@ -56,7 +56,7 @@ impl Raids {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            raids: std::sync::Mutex::new(Vec::new()),
+            entries: std::sync::Mutex::new(Vec::new()),
             // Vanilla `nextId = 1` and `getUniqueId` pre-increments, so the first
             // id handed out is 2 (`Raids.java:55`, `152-154`).
             next_id: AtomicI32::new(1),
@@ -73,7 +73,7 @@ impl Raids {
     /// Snapshot of the live raids.
     #[must_use]
     pub fn snapshot(&self) -> Vec<Arc<Raid>> {
-        self.raids
+        self.entries
             .lock()
             .map_or_else(|_| Vec::new(), |raids| raids.clone())
     }
@@ -87,7 +87,7 @@ impl Raids {
     /// Number of live raids.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.raids.lock().map_or(0, |raids| raids.len())
+        self.entries.lock().map_or(0, |raids| raids.len())
     }
 
     #[must_use]
@@ -157,7 +157,7 @@ impl Raids {
         }
 
         if !retired.is_empty() {
-            if let Ok(mut raids) = self.raids.lock() {
+            if let Ok(mut raids) = self.entries.lock() {
                 raids.retain(|raid| !retired.contains(&raid.id));
             }
             // Drop the stale raid ids from raider records so a later raid reusing
@@ -211,7 +211,7 @@ impl Raids {
             Some(existing) => existing,
             None => {
                 let raid = Arc::new(Raid::new(self.unique_id(), center, difficulty));
-                if let Ok(mut raids) = self.raids.lock() {
+                if let Ok(mut raids) = self.entries.lock() {
                     raids.push(raid.clone());
                 }
                 raid
@@ -339,7 +339,7 @@ mod tests {
     fn nearby_raid_respects_the_radius_and_active_flag() {
         let raids = Raids::new();
         let raid = Arc::new(Raid::new(2, BlockPos::new(0, 64, 0), Difficulty::Normal));
-        raids.raids.lock().unwrap().push(raid.clone());
+        raids.entries.lock().unwrap().push(raid.clone());
 
         // Inside VALID_RAID_RADIUS_SQR (96 blocks).
         assert!(raids.raid_at(&BlockPos::new(50, 64, 0)).is_some());
@@ -357,7 +357,7 @@ mod tests {
         let near = Arc::new(Raid::new(2, BlockPos::new(10, 64, 0), Difficulty::Normal));
         let far = Arc::new(Raid::new(3, BlockPos::new(80, 64, 0), Difficulty::Normal));
         {
-            let mut guard = raids.raids.lock().unwrap();
+            let mut guard = raids.entries.lock().unwrap();
             guard.push(far);
             guard.push(near);
         }
@@ -378,7 +378,7 @@ mod tests {
     fn raider_death_clears_leader_and_credits_the_hero() {
         let raids = Raids::new();
         let raid = Arc::new(Raid::new(2, BlockPos::new(0, 64, 0), Difficulty::Normal));
-        raids.raids.lock().unwrap().push(raid.clone());
+        raids.entries.lock().unwrap().push(raid.clone());
 
         let raider = Uuid::from_u128(1);
         let killer = Uuid::from_u128(2);
@@ -403,7 +403,7 @@ mod tests {
     fn death_without_a_killer_adds_no_hero() {
         let raids = Raids::new();
         let raid = Arc::new(Raid::new(2, BlockPos::new(0, 64, 0), Difficulty::Normal));
-        raids.raids.lock().unwrap().push(raid.clone());
+        raids.entries.lock().unwrap().push(raid.clone());
         let raider = Uuid::from_u128(1);
         raid.add_wave_mob(1, raider, 24.0, true);
         raids.raiders.update(raider, |member| {
@@ -427,7 +427,7 @@ mod tests {
         let raids = Raids::new();
         let raid = Arc::new(Raid::new(2, BlockPos::new(0, 64, 0), Difficulty::Normal));
         raid.with(|inner| inner.state.groups_spawned = 3);
-        raids.raids.lock().unwrap().push(raid.clone());
+        raids.entries.lock().unwrap().push(raid.clone());
 
         let raider = Uuid::from_u128(9);
         let joined = raids.try_join_nearby_raid(&BlockPos::new(20, 64, 0), raider);
@@ -443,7 +443,7 @@ mod tests {
     fn joining_far_from_any_raid_fails() {
         let raids = Raids::new();
         let raid = Arc::new(Raid::new(2, BlockPos::new(0, 64, 0), Difficulty::Normal));
-        raids.raids.lock().unwrap().push(raid);
+        raids.entries.lock().unwrap().push(raid);
         assert!(
             raids
                 .try_join_nearby_raid(&BlockPos::new(1000, 64, 0), Uuid::from_u128(9))

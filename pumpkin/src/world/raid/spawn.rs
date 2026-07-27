@@ -284,7 +284,7 @@ pub async fn tick_raid(world: &Arc<World>, raid: &Arc<Raid>) {
     // Raid.java:303-305 — `updateRaiders` runs on the same once-a-second beat.
     if plan.refresh_players {
         refresh_bossbar_audience(world, raid).await;
-        prune_raiders(world, raid).await;
+        prune_raiders(world, raid);
     }
 
     // Raid.java:319-336 — spawn the scheduled waves, tracking failed attempts.
@@ -366,7 +366,7 @@ async fn refresh_bossbar_audience(world: &Arc<World>, raid: &Arc<Raid>) {
             .filter(|uuid| !current.contains(uuid))
             .copied()
             .collect();
-        inner.bossbar_players = current.clone();
+        inner.bossbar_players.clone_from(&current);
         (added, removed)
     });
 
@@ -383,7 +383,7 @@ async fn refresh_bossbar_audience(world: &Arc<World>, raid: &Arc<Raid>) {
 }
 
 /// Vanilla `Raid.updateRaiders` (`Raid.java:411-438`), against the live world.
-async fn prune_raiders(world: &Arc<World>, raid: &Arc<Raid>) {
+fn prune_raiders(world: &Arc<World>, raid: &Arc<Raid>) {
     let center = raid.center();
     let members = raid.all_raiders();
     if members.is_empty() {

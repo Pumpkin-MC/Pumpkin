@@ -295,11 +295,9 @@ impl Raid {
 
             // Raid.java:265-274 — relocate, then give up if still not a village.
             let mut is_village = facts.center_is_village;
-            if !is_village {
-                if let Some(new_center) = facts.relocated_center {
-                    inner.set_center(new_center);
-                    is_village = facts.relocated_is_village;
-                }
+            if !is_village && let Some(new_center) = facts.relocated_center {
+                inner.set_center(new_center);
+                is_village = facts.relocated_is_village;
             }
             if !is_village {
                 if inner.state.groups_spawned > 0 {
