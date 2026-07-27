@@ -60,6 +60,28 @@ pub type LoggerOption = Option<(ReadlineLogWrapper, LevelFilter, LoggingConfig)>
 pub static LOGGER_IMPL: LazyLock<Arc<OnceLock<LoggerOption>>> =
     LazyLock::new(|| Arc::new(OnceLock::new()));
 
+/// Builds the rolling file logger, or `None` if it is disabled or cannot be set up.
+///
+/// This runs before any subscriber is installed, so a panic here would reach the
+/// operator as a bare backtrace with no message. Report the cause on stderr and keep
+/// the console logger instead, which is still enough to run a server.
+#[expect(clippy::print_stderr)]
+fn init_file_logger(level: LevelFilter, file: &str) -> Option<GzipRollingLogger> {
+    if file.is_empty() {
+        return None;
+    }
+
+    match GzipRollingLogger::new(level, file.to_string()) {
+        Ok(file_logger) => Some(file_logger),
+        Err(e) => {
+            eprintln!(
+                "Failed to initialize the file logger 'logs/{file}' ({e}); continuing with console logging only"
+            );
+            None
+        }
+    }
+}
+
 #[expect(clippy::print_stderr)]
 pub fn init_logger(advanced_config: &AdvancedConfiguration) {
     use tracing_subscriber::EnvFilter;
@@ -85,14 +107,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             EnvFilter::new(level_str)
         });
 
-        let file_logger: Option<GzipRollingLogger> = if advanced_config.logging.file.is_empty() {
-            None
-        } else {
-            Some(
-                GzipRollingLogger::new(level, advanced_config.logging.file.clone())
-                    .expect("Failed to initialize file logger."),
-            )
-        };
+        let file_logger = init_file_logger(level, &advanced_config.logging.file);
 
         let (logger, rl): (
             Box<dyn std::io::Write + Send + 'static>,

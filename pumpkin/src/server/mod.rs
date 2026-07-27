@@ -184,7 +184,11 @@ impl Server {
             let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
             if dat_path.exists() {
                 let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
-                fs::copy(dat_path, backup_path).unwrap();
+                // A failed backup is not fatal: the real level.dat is untouched, so keep
+                // going rather than aborting startup on e.g. an unwritable world directory.
+                if let Err(err) = fs::copy(dat_path, backup_path) {
+                    warn!("Failed to back up level.dat: {err}");
+                }
             }
         }
         let level_info = level_info.unwrap_or_else(|err| {

@@ -378,9 +378,19 @@ impl ChunkData {
     fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
         use pumpkin_nbt::tag::NbtTag;
 
-        fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
+        /// Encodes a light container into the nibble array Anvil stores per section.
+        ///
+        /// An absent array on disk carries no value of its own, so a uniform container
+        /// can only be omitted when it holds the value the reader assumes for a missing
+        /// tag. Any other uniform value has to be materialized, otherwise it is silently
+        /// replaced by that assumed value on the next load.
+        fn light_to_disk(light: Option<&LightContainer>) -> Option<Box<[i8]>> {
             match light {
-                Some(LightContainer::Full(data)) => Some(data.as_ref()),
+                Some(LightContainer::Full(data)) => Some(data.iter().map(|&x| x as i8).collect()),
+                Some(LightContainer::Empty(value)) if *value != 0 => {
+                    let nibbles = (value << 4 | value) as i8;
+                    Some(vec![nibbles; LightContainer::ARRAY_SIZE].into_boxed_slice())
+                }
                 _ => None,
             }
         }
@@ -470,14 +480,12 @@ impl ChunkData {
             section_comp.put_compound("biomes", b_comp);
 
             // block_light
-            if let Some(light_data) = extract_light_ref(light_lock.block_light.get(i)) {
-                let bytes: Box<[i8]> = light_data.iter().map(|&x| x as i8).collect();
+            if let Some(bytes) = light_to_disk(light_lock.block_light.get(i)) {
                 section_comp.put("BlockLight", NbtTag::ByteArray(bytes));
             }
 
             // sky_light
-            if let Some(light_data) = extract_light_ref(light_lock.sky_light.get(i)) {
-                let bytes: Box<[i8]> = light_data.iter().map(|&x| x as i8).collect();
+            if let Some(bytes) = light_to_disk(light_lock.sky_light.get(i)) {
                 section_comp.put("SkyLight", NbtTag::ByteArray(bytes));
             }
 
