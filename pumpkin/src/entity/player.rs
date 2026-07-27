@@ -2945,17 +2945,29 @@ impl Player {
                     matches!(gamemode, GameMode::Creative | GameMode::Spectator),
                     Ordering::Relaxed,
                 );
-                self.living_entity
-                    .entity
-                    .world
-                    .load()
-                    .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                        PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
-                        &[pumpkin_protocol::java::client::play::Player {
-                            uuid: self.gameprofile.id,
-                            actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],
-                        }],
-                    ));
+
+                let world = self.living_entity.entity.world.load();
+
+                // Spectators must be fully invisible to non-spectators. Since this player
+                // was already spawned to everyone as a normal entity, switching gamemode
+                // at runtime (e.g. via /gamemode) needs to explicitly hide/show them for
+                // non-spectator clients rather than relying on join-time spawn logic.
+                let previous_gamemode = event.previous_gamemode;
+                if previous_gamemode != GameMode::Spectator && gamemode == GameMode::Spectator {
+                    world.hide_spectator_from_non_spectators(self);
+                } else if previous_gamemode == GameMode::Spectator
+                    && gamemode != GameMode::Spectator
+                {
+                    world.show_former_spectator_to_non_spectators(self);
+                }
+
+                world.broadcast_packet_all(&CPlayerInfoUpdate::new(
+                    PlayerInfoFlags::UPDATE_GAME_MODE.bits(),
+                    &[pumpkin_protocol::java::client::play::Player {
+                        uuid: self.gameprofile.id,
+                        actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],
+                    }],
+                ));
 
                 self.client
                     .enqueue_packet_editioned(
