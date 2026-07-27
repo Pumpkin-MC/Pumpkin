@@ -9,15 +9,18 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize, Clone, Default, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum VersionAccessMode {
-    /// Only allow clients that are on the newest version the server supports. Whenever a
-    /// new Minecraft version is added to the server, the "allowed" version moves forward
-    /// with it automatically.
-    #[default]
-    Latest,
     /// Allow every version the server protocol implementation supports
-    /// (`LOWEST_SUPPORTED_MC_VERSION`..=`CURRENT_MC_VERSION`). This is the old/vanilla-like
-    /// behaviour: no restriction beyond what the server can already talk to.
+    /// (`LOWEST_SUPPORTED_MC_VERSION`..=`CURRENT_MC_VERSION`). This is the vanilla-like
+    /// default: no restriction beyond what the server can already talk to.
+    #[default]
     Any,
+    /// Only allow clients that are on `CURRENT_MC_VERSION` -- the newest version *this
+    /// server build* implements. Note this is tied to the server software's own version,
+    /// not necessarily the newest version publicly available to players; if the server
+    /// hasn't been updated yet (or was built against an upcoming/snapshot target), players
+    /// on an officially "latest" client can still get rejected here. Prefer `range` with an
+    /// explicit `min_version` if you want "recent versions only" without that surprise.
+    Latest,
     /// Only allow clients whose version falls within `min_version`..=`max_version`.
     Range,
     /// Only allow the versions listed in `versions`.
@@ -36,7 +39,7 @@ pub enum VersionAccessMode {
 #[serde(default)]
 pub struct VersionsConfig {
     /// Which strategy to use to decide whether a client may join:
-    /// `latest` (default) | `any` | `range` | `allowlist` | `denylist`.
+    /// `any` (default) | `latest` | `range` | `allowlist` | `denylist`.
     /// See [`VersionAccessMode`] for what each one does.
     pub mode: VersionAccessMode,
     /// The list of versions used by `allowlist`/`denylist` mode, e.g. `["1.21", "1.20.5"]`.
@@ -65,7 +68,7 @@ pub struct VersionsConfig {
 impl Default for VersionsConfig {
     fn default() -> Self {
         Self {
-            mode: VersionAccessMode::Latest,
+            mode: VersionAccessMode::Any,
             versions: Vec::new(),
             min_version: String::new(),
             max_version: String::new(),
@@ -170,26 +173,26 @@ mod tests {
     }
 
     #[test]
-    fn latest_is_the_default_mode() {
-        assert_eq!(VersionsConfig::default().mode, VersionAccessMode::Latest);
-    }
-
-    #[test]
-    fn latest_mode_only_allows_latest() {
-        let cfg = VersionsConfig::default();
-        let latest = v("1.21.9");
-        assert!(cfg.is_allowed(latest, latest));
-        assert!(!cfg.is_allowed(v("1.21.7"), latest));
+    fn any_is_the_default_mode() {
+        assert_eq!(VersionsConfig::default().mode, VersionAccessMode::Any);
     }
 
     #[test]
     fn any_mode_allows_everything() {
-        let cfg = VersionsConfig {
-            mode: VersionAccessMode::Any,
-            ..Default::default()
-        };
+        let cfg = VersionsConfig::default();
         assert!(cfg.is_allowed(v("1.20.5"), v("1.21.9")));
         assert!(cfg.is_allowed(v("1.21.9"), v("1.21.9")));
+    }
+
+    #[test]
+    fn latest_mode_only_allows_latest() {
+        let cfg = VersionsConfig {
+            mode: VersionAccessMode::Latest,
+            ..Default::default()
+        };
+        let latest = v("1.21.9");
+        assert!(cfg.is_allowed(latest, latest));
+        assert!(!cfg.is_allowed(v("1.21.7"), latest));
     }
 
     #[test]
@@ -267,7 +270,10 @@ mod tests {
         assert!(range.default_disconnect_message(latest).contains("1.8"));
         assert!(range.default_disconnect_message(latest).contains("1.12"));
 
-        let latest_only = VersionsConfig::default();
+        let latest_only = VersionsConfig {
+            mode: VersionAccessMode::Latest,
+            ..Default::default()
+        };
         assert!(
             latest_only
                 .default_disconnect_message(latest)
