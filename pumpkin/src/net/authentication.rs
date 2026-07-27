@@ -149,9 +149,7 @@ fn authenticate_service(
         .build();
     let agent = agent_config.new_agent();
 
-    tracing::info!(
-        "[{name}] /hasJoined username={username} server_hash={server_hash}"
-    );
+    tracing::info!("[{name}] /hasJoined username={username} server_hash={server_hash}");
 
     let response = agent
         .get(&address)
@@ -164,17 +162,17 @@ fn authenticate_service(
         }
         StatusCode::NO_CONTENT => {
             tracing::info!("[{name}] /hasJoined → 204 (user not found)");
-            Err(AuthError::UnverifiedUsername)?
+            Err(AuthError::UnverifiedUsername)?;
         }
         other => Err(AuthError::UnknownStatusCode(other))?,
     }
 
     // Log the canonical API location reported by Authlib-Injector services.
     // This helps verify that the configured URL matches what the service expects.
-    if let Some(loc) = response.headers().get("x-authlib-injector-api-location") {
-        if let Ok(loc_str) = loc.to_str() {
-            tracing::info!("[{name}] x-authlib-injector-api-location: {loc_str}");
-        }
+    if let Some(loc) = response.headers().get("x-authlib-injector-api-location")
+        && let Ok(loc_str) = loc.to_str()
+    {
+        tracing::info!("[{name}] x-authlib-injector-api-location: {loc_str}");
     }
 
     let profile: GameProfile = response
@@ -266,9 +264,7 @@ pub fn authenticate_chain(
         }
     }
 
-    tracing::warn!(
-        "{username}: tried {attempted} auth service(s), none succeeded"
-    );
+    tracing::warn!("{username}: tried {attempted} auth service(s), none succeeded");
 
     Err(AuthError::UnverifiedUsername)
 }
@@ -409,16 +405,14 @@ fn lookup_profile_in_service(
 
     // send_json automatically sets Content-Type: application/json
     let response = ureq::post(lookup_url)
-        .send_json(&[username])
+        .send_json([username])
         .map_err(|_| AuthError::FailedResponse)?;
 
     match response.status() {
         StatusCode::OK => {}
         StatusCode::NO_CONTENT | StatusCode::NOT_FOUND => return Ok(None),
         other => {
-            tracing::debug!(
-                "Profile lookup for '{username}' returned unexpected status: {other}"
-            );
+            tracing::debug!("Profile lookup for '{username}' returned unexpected status: {other}");
             return Ok(None);
         }
     }
@@ -476,9 +470,7 @@ pub fn lookup_profile_by_name_chain(
 }
 
 /// Legacy Mojang-only profile lookup (GET api.mojang.com).
-fn lookup_profile_by_name_legacy(
-    name: &str,
-) -> Result<Option<(Uuid, String)>, AuthError> {
+fn lookup_profile_by_name_legacy(name: &str) -> Result<Option<(Uuid, String)>, AuthError> {
     let url = MOJANG_PROFILE_BY_NAME_URL.replace("{username}", name);
 
     let mut response = ureq::get(url)
