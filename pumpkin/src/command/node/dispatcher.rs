@@ -952,7 +952,11 @@ mod test {
     use crate::command::context::command_source::CommandSource;
     use crate::command::errors::error_types::DISPATCHER_UNKNOWN_COMMAND;
     use crate::command::node::dispatcher::CommandDispatcher;
-    use crate::command::node::{CommandExecutor, CommandExecutorResult};
+    use crate::command::node::{
+        CommandExecutor, CommandExecutorResult, RedirectModifier, RedirectModifierResult,
+        Redirection,
+    };
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn unknown_command() {
@@ -1088,6 +1092,46 @@ mod test {
         let source = CommandSource::dummy();
         assert_eq!(dispatcher.execute_input("a 5", &source).await, Ok(5));
         assert_eq!(dispatcher.execute_input("b 7", &source).await, Ok(7));
+    }
+
+    /// A redirect modifier which yields no sources must stop the redirected
+    /// command from running at all. This is what gates `execute if ...`.
+    #[tokio::test]
+    async fn conditional_redirect_gates_execution() {
+        fn satisfied<'a>(context: &'a CommandContext) -> RedirectModifierResult<'a> {
+            Box::pin(async move { Ok(vec![context.source.clone()]) })
+        }
+
+        fn unsatisfied<'a>(_context: &'a CommandContext) -> RedirectModifierResult<'a> {
+            Box::pin(async move { Ok(vec![]) })
+        }
+
+        let executor: for<'c> fn(&'c CommandContext) -> CommandExecutorResult<'c> =
+            |_| Box::pin(async move { Ok(1) });
+
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher.register(CommandArgumentBuilder::new("target", "A command").executes(executor));
+        dispatcher.register(
+            CommandArgumentBuilder::new("gate", "A command gating what follows it")
+                .then(LiteralArgumentBuilder::new("open").redirect_with_modifier(
+                    Redirection::Root,
+                    RedirectModifier::Custom(Arc::new(satisfied)),
+                ))
+                .then(LiteralArgumentBuilder::new("shut").redirect_with_modifier(
+                    Redirection::Root,
+                    RedirectModifier::Custom(Arc::new(unsatisfied)),
+                )),
+        );
+
+        let source = CommandSource::dummy();
+        assert_eq!(
+            dispatcher.execute_input("gate open target", &source).await,
+            Ok(1)
+        );
+        assert_eq!(
+            dispatcher.execute_input("gate shut target", &source).await,
+            Ok(0)
+        );
     }
 
     #[tokio::test]
