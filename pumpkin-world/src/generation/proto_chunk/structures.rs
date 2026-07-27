@@ -374,17 +374,29 @@ impl ProtoChunk {
         // Constant across every chunk in the dimension, so hoist it out of the loop
         // and out of the (cached) structure-start computation below.
         let chunk_min_y = self.bottom_y() as i32;
+        let calculator = &generator.structure_calculator;
 
-        for set in StructureSet::ALL {
+        for (set_index, set) in StructureSet::ALL.iter().enumerate() {
+            let set_allowed_biomes = &generator.structure_allowed_biomes[&set_index];
             let mut candidate_chunks = Vec::new();
 
             match &set.placement.placement_type {
                 StructurePlacementType::RandomSpread(spread) => {
-                    let region_x = pumpkin_util::math::floor_div(self.x, spread.spacing);
-                    let region_z = pumpkin_util::math::floor_div(self.z, spread.spacing);
+                    // Vanilla ChunkGenerator.createReferences (ChunkGenerator.java
+                    // l.450-458) scans the actual starts of every chunk within 8
+                    // chunks of this one. Cover every placement region that can
+                    // contain a candidate chunk inside that window: for spacing-1
+                    // sets (minecraft:mineshafts, spacing 1) this is the full
+                    // 17x17 chunk neighborhood, where a region +-1 scan would
+                    // only reach chunks +-1 away and truncate sprawling
+                    // structures at that boundary.
+                    let region_min_x = pumpkin_util::math::floor_div(self.x - 8, spread.spacing);
+                    let region_max_x = pumpkin_util::math::floor_div(self.x + 8, spread.spacing);
+                    let region_min_z = pumpkin_util::math::floor_div(self.z - 8, spread.spacing);
+                    let region_max_z = pumpkin_util::math::floor_div(self.z + 8, spread.spacing);
 
-                    for rx in (region_x - 1)..=(region_x + 1) {
-                        for rz in (region_z - 1)..=(region_z + 1) {
+                    for rx in region_min_x..=region_max_x {
+                        for rz in region_min_z..=region_max_z {
                             candidate_chunks.push(
                                 crate::generation::structure::placement::get_structure_chunk_in_region(
                                     spread,
@@ -417,6 +429,26 @@ impl ProtoChunk {
                 if (candidate_chunk_x - self.x).abs() <= 8
                     && (candidate_chunk_z - self.z).abs() <= 8
                 {
+                    // Vanilla only ever creates a start where
+                    // StructurePlacement.isStructureChunk passes (placement chunk
+                    // AND frequency reduction, StructurePlacement.java l.77-83;
+                    // gated in ChunkGenerator.createStructures l.398), and
+                    // createReferences propagates only those actual starts. The
+                    // same gate must apply to recomputed candidates here:
+                    // minecraft:mineshafts has spacing 1 / frequency 0.004, so
+                    // without it every biome-valid chunk becomes a phantom
+                    // mineshaft start.
+                    if !should_generate_structure(
+                        &set.placement,
+                        calculator,
+                        candidate_chunk_x,
+                        candidate_chunk_z,
+                        global_cache,
+                        self,
+                        set_allowed_biomes,
+                    ) {
+                        continue;
+                    }
                     for entry in set.structures {
                         let structure = Structure::get(&entry.structure);
 

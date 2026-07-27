@@ -4,10 +4,7 @@ use pumpkin_data::structures::{
 };
 use pumpkin_util::{
     math::floor_div,
-    random::{
-        RandomGenerator, RandomImpl, get_carver_seed, get_region_seed, legacy_rand::LegacyRand,
-        xoroshiro128::Xoroshiro,
-    },
+    random::{RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand},
 };
 use std::f64::consts::PI;
 use std::sync::OnceLock;
@@ -16,7 +13,7 @@ use crate::ProtoChunk;
 use dashmap::DashMap;
 use pumpkin_data::structures::StructureKeys;
 
-use super::structures::StructurePosition;
+use super::structures::{StructurePosition, create_chunk_random};
 /// A thread-safe global cache for structures that require world-wide placement calculations
 /// rather than localized chunk-based math (e.g., Strongholds using Concentric Rings).
 ///
@@ -218,6 +215,19 @@ fn apply_frequency_reduction(
     should_generate_frequency(method, seed, chunk_x, chunk_z, salt, frequency)
 }
 
+/// `WorldgenRandom.setLargeFeatureWithSalt` (WorldgenRandom.java l.77-80):
+/// `x * 341873128712 + z * 132897987541 + seed + blend`, fed to
+/// `LegacyRandomSource.setSeed` (the `from_seed` scramble).
+const fn large_feature_with_salt_seed(seed: i64, x: i64, z: i64, blend: i64) -> u64 {
+    x.wrapping_mul(341_873_128_712)
+        .wrapping_add(z.wrapping_mul(132_897_987_541))
+        .wrapping_add(seed)
+        .wrapping_add(blend) as u64
+}
+
+/// The four vanilla frequency reducers (StructurePlacement.java l.97-129). All
+/// of them run on `WorldgenRandom(new LegacyRandomSource(0))` — a Java LCG —
+/// never on Xoroshiro, regardless of the world's RNG algorithm.
 fn should_generate_frequency(
     method: FrequencyReductionMethod,
     seed: i64,
@@ -228,26 +238,45 @@ fn should_generate_frequency(
 ) -> bool {
     match method {
         FrequencyReductionMethod::Default => {
-            let region_seed = get_region_seed(seed as u64, chunk_x, chunk_z, salt);
-            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(region_seed));
+            // probabilityReducer (l.97-101): setLargeFeatureWithSalt(seed, salt,
+            // chunkX, chunkZ) — vanilla passes the SALT as the x multiplicand,
+            // chunkX as z, and chunkZ as the additive blend term.
+            let mut random = LegacyRand::from_seed(large_feature_with_salt_seed(
+                seed,
+                i64::from(salt),
+                i64::from(chunk_x),
+                i64::from(chunk_z),
+            ));
             random.next_f32() < frequency
         }
         FrequencyReductionMethod::LegacyType1 => {
+            // legacyPillagerOutpostReducer (l.115-122): cx = chunkX >> 4,
+            // cz = chunkZ >> 4; setSeed((cx ^ cz << 4) ^ seed); nextInt();
+            // nextInt(1 / frequency) == 0.
             let x = chunk_x >> 4;
             let z = chunk_z >> 4;
-            let mut random =
-                RandomGenerator::Xoroshiro(Xoroshiro::from_seed((x ^ z << 4) as u64 ^ seed as u64));
+            let mut random = LegacyRand::from_seed((i64::from(x ^ z << 4) ^ seed) as u64);
             random.next_i32();
             random.next_bounded_i32((1.0 / frequency) as i32) == 0
         }
         FrequencyReductionMethod::LegacyType2 => {
-            let region_seed = get_region_seed(seed as u64, chunk_x, chunk_z, 10387320);
-            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(region_seed));
+            // legacyArbitrarySaltProbabilityReducer (l.109-113):
+            // setLargeFeatureWithSalt(seed, chunkX, chunkZ, 10387320); nextFloat.
+            let mut random = LegacyRand::from_seed(large_feature_with_salt_seed(
+                seed,
+                i64::from(chunk_x),
+                i64::from(chunk_z),
+                10_387_320,
+            ));
             random.next_f32() < frequency
         }
         FrequencyReductionMethod::LegacyType3 => {
-            let carver_seed = get_carver_seed(seed as u64, chunk_x, chunk_z);
-            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed));
+            // legacyProbabilityReducerWithDouble (l.103-107):
+            // setLargeFeatureSeed(seed, chunkX, chunkZ) — the multiplier-XOR
+            // form (WorldgenRandom.java l.69-75), identical to
+            // create_chunk_random — then nextDouble() < frequency. Used by
+            // minecraft:mineshafts (frequency 0.004).
+            let mut random = create_chunk_random(seed, chunk_x, chunk_z);
             random.next_f64() < f64::from(frequency)
         }
     }
