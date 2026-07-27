@@ -7,15 +7,13 @@ use crate::block::entities::BlockEntity;
 use crate::block::entities::sign::SignBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
+use crate::item::items::state_with_properties_of;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::OakDoorLikeProperties;
+use pumpkin_data::Block;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{Block, tag};
 use pumpkin_data::{BlockDirection, BlockId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -32,7 +30,7 @@ impl ItemMetadata for HoneyCombItem {
 impl ItemBehaviour for HoneyCombItem {
     fn use_on_block<'a>(
         &'a self,
-        _item: &'a mut ItemStack,
+        item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -43,39 +41,27 @@ impl ItemBehaviour for HoneyCombItem {
         Box::pin(async move {
             let world = player.world();
 
-            // First we try to strip the block. by getting his equivalent and applying it the axis.
+            // We wax the block by getting its waxed equivalent.
             let replacement = get_waxed_equivalent(block.id);
-            // If there is a strip equivalent.
-            if let Some(replacement) = replacement {
-                // get block state of the old log.
-                // get the log properties
-                // create new properties for the new log.
+            // If there is a waxed equivalent.
+            let changed = if let Some(replacement) = replacement {
                 let new_block = replacement.to_block();
-
-                let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS)
-                    && block.has_tag(&tag::Block::MINECRAFT_DOORS)
-                {
-                    // get block state of the old log.
-                    let door_information = world.get_block_state_id(&location);
-                    // get the log properties
-                    let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
-                    // create new properties for the new log.
-                    let mut new_door_properties = OakDoorLikeProperties::default(new_block);
-                    // Set old axis to the new log.
-                    new_door_properties.facing = door_props.facing;
-                    new_door_properties.open = door_props.open;
-                    new_door_properties.half = door_props.half;
-                    new_door_properties.hinge = door_props.hinge;
-                    new_door_properties.powered = door_props.powered;
-                    new_door_properties.to_state_id(new_block)
-                } else {
-                    new_block.default_state.id
-                };
-
-                // TODO Implements trapdoors
+                // A waxed block always has the same property set as its unwaxed
+                // counterpart, so carrying the state over keeps the facing of a
+                // stair, the type of a slab, the lit state of a bulb,
+                // waterlogging, and so on.
+                let old_state_id = world.get_block_state_id(&location);
+                let new_state_id = state_with_properties_of(block, old_state_id, new_block);
                 world
                     .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
+                true
+            } else {
+                false
+            };
+
+            if changed {
+                item.decrement_unless_creative(player.gamemode.load(), 1);
             }
         })
     }
