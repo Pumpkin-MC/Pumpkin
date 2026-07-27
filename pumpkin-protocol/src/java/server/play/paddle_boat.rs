@@ -6,7 +6,6 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_PADDLE_BOAT)]
 pub struct SPaddleBoat {
@@ -14,8 +13,8 @@ pub struct SPaddleBoat {
     pub right_paddle: bool,
 }
 
-impl ServerPacket for SPaddleBoat {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SPaddleBoat {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             left_paddle: bytebuf.get_bool()?,
             right_paddle: bytebuf.get_bool()?,

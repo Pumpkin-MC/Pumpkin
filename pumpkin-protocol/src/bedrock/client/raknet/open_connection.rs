@@ -4,6 +4,9 @@ use pumpkin_macros::packet;
 
 use crate::{bedrock::RAKNET_MAGIC, serial::PacketWrite};
 
+/// Sent by the server in response to `OpenConnectionRequest1` (`0x05`), negotiating security options, server GUID, and MTU.
+///
+/// Ref: <https://minecraft.wiki/w/RakNet#Open_Connection_Reply_1>
 #[derive(PacketWrite)]
 #[packet(0x06)]
 pub struct COpenConnectionReply1 {
@@ -28,6 +31,9 @@ impl COpenConnectionReply1 {
     }
 }
 
+/// Sent by the server in response to `OpenConnectionRequest2` (`0x07`), confirming the connection setup and client address before establishing session state.
+///
+/// Ref: <https://minecraft.wiki/w/RakNet#Open_Connection_Reply_2>
 #[derive(PacketWrite)]
 #[packet(0x08)]
 pub struct COpenConnectionReply2 {

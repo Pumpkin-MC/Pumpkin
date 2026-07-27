@@ -3,7 +3,7 @@ use pumpkin_data::{
     block_properties::BlockProperties,
     tag::{self, Taggable},
 };
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
     world::World,
 };
 
-use super::PressurePlate;
+use super::{PressurePlate, detection_box_at};
 
 /// This is for Normal Pressure plates, so not Gold or Iron
 pub struct PressurePlateBlock;

@@ -1,274 +1,93 @@
-// use std::{fs, path::PathBuf, sync::Arc};
-//
-//
-// use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-// use pumpkin_data::BlockDirection;
-// use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
-// use pumpkin_world::{
-//     chunk::ChunkData,
-//     dimension::Dimension,
-//     global_path,
-//     level::Level,
-//     world::{BlockAccessor, BlockRegistryExt},
-// };
-// use tokio::{runtime::Runtime, sync::RwLock};
-//
-// #[ignore]
-// async fn reads(level: &Arc<Level>, positions: Vec<Vector2<i32>>) {
-//     // let level = level.clone();
-//     // let mut receiver = level.receive_chunks(positions);
-//     //
-//     // while let Some(x) = receiver.recv().await {
-//     //     // Don't compile me away!
-//     //     let _ = x;
-//     // }
-// }
-//
-// /*
-// async fn reads_parallel(level: &Arc<Level>, positions: Vec<Vector2<i32>>, threads: usize) {
-//     let mut tasks = JoinSet::new();
-//
-//     // we write non overlapping chunks to avoid conflicts or level cache
-//     // also we use `.rev()` to get the external radius first, avoiding
-//     // multiple files on the same request.
-//     for positions in positions.chunks(CHUNKS_ON_PARALLEL).rev().take(threads) {
-//         let level = level.clone();
-//         let positions = positions.to_vec();
-//         tasks.spawn(async move {
-//             test_reads(&level, positions.clone()).await;
-//         });
-//     }
-//
-//     let _ = tasks.join_all().await;
-// }
-// */
-//
-// async fn writes(level: &Arc<Level>, chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>) {
-//     level.write_chunks(chunks).await;
-// }
-//
-// /*
-// async fn writes_parallel(
-//     level: &Arc<Level>,
-//     chunks: Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)>,
-//     threads: usize,
-// ) {
-//     let mut tasks = JoinSet::new();
-//
-//     // we write non overlapping chunks to avoid conflicts or level cache
-//     // also we use `.rev()` to get the external radius first, avoiding
-//     // multiple files on the same request.
-//     for chunks in chunks.chunks(CHUNKS_ON_PARALLEL).rev().take(threads) {
-//         let level = level.clone();
-//         let chunks = chunks.to_vec();
-//         tasks.spawn(async move {
-//             test_writes(&level, chunks).await;
-//         });
-//     }
-//
-//     let _ = tasks.join_all().await;
-// }
-// */
-//
-// // -16..16 == 32 chunks, 32*32 == 1024 chunks
-// const MIN_CHUNK: i32 = -16;
-// const MAX_CHUNK: i32 = 16;
-//
-// // How many chunks to use on parallel tests
-// //const CHUNKS_ON_PARALLEL: usize = 32;
-//
-// struct BlockRegistry;
-//
-// impl BlockRegistryExt for BlockRegistry {
-//     fn can_place_at(
-//         &self,
-//         _block: &pumpkin_data::Block,
-//         _block_accessor: &dyn BlockAccessor,
-//         _block_pos: &BlockPos,
-//         _face: BlockDirection,
-//     ) -> bool {
-//         true
-//     }
-// }
-//
-// #[ignore]
-// fn initialize_level(
-//     async_handler: &Runtime,
-//     root_dir: PathBuf,
-// ) -> Vec<(Vector2<i32>, Arc<RwLock<ChunkData>>)> {
-//     println!("Initializing data...");
-//     // Initial writes
-//     let mut chunks = Vec::new();
-//     async_handler.block_on(async {
-//         let block_registry = Arc::new(BlockRegistry);
-//
-//         // Our data dir is empty, so we're generating new chunks here
-//         let level_to_save = Arc::new(Level::from_root_folder(
-//             root_dir.clone(),
-//             block_registry,
-//             123,
-//             Dimension::Overworld,
-//         ));
-//         println!("Level Seed is: {}", level_to_save.seed.0);
-//
-//         let level_to_fetch = level_to_save.clone();
-//         let chunks_to_generate = (MIN_CHUNK..MAX_CHUNK)
-//             .flat_map(|x| (MIN_CHUNK..MAX_CHUNK).map(move |z| Vector2::new(x, z)))
-//             .collect::<Vec<_>>();
-//         // let mut receiver = level_to_fetch.receive_chunks(chunks_to_generate);
-//
-//         // while let Some((chunk, _)) = receiver.recv().await {
-//         //     let pos = chunk.read().await.position;
-//         //     chunks.push((pos, chunk));
-//         // }
-//         level_to_save.write_chunks(chunks.clone()).await;
-//     });
-//
-//     // Sort by distance from origin to ensure a fair selection
-//     // when using a subset of the total chunks for the benchmarks
-//     chunks.sort_unstable_by_key(|chunk| (chunk.0.x * chunk.0.x) + (chunk.0.y * chunk.0.y));
-//     chunks
-// }
-//
-// // Depends on config options from `./config`
-// /*
-// // This doesn't really test anything...
-// fn bench_chunk_io_parallel(c: &mut Criterion) {
-//     // System temp dirs are in-memory, so we can't use temp_dir
-//     let root_dir = global_path!("./bench_root_tmp");
-//     let _ = fs::remove_dir_all(&root_dir); // delete if it exists
-//     fs::create_dir(&root_dir).unwrap(); // create the directory
-//
-//     let async_handler = tokio::runtime::Builder::new_multi_thread().build().unwrap();
-//
-//     let chunks = initialize_level(&async_handler, root_dir.clone());
-//     let positions = chunks.iter().map(|(pos, _)| *pos).collect::<Vec<_>>();
-//
-//     let iters = [1, 2, 8, 32];
-//
-//     let mut write_group_parallel = c.benchmark_group("write_chunks");
-//     for n_requests in iters {
-//         let root_dir = root_dir.clone();
-//
-//         write_group_parallel.bench_with_input(
-//             BenchmarkId::new("Parallel", n_requests),
-//             &chunks,
-//             |b, parallel_chunks| {
-//                 let chunks = parallel_chunks.to_vec();
-//                 b.to_async(&async_handler).iter(async || {
-//                     let level = Arc::new(Level::from_root_folder(root_dir.clone()));
-//                     test_writes_parallel(&level, chunks.clone(), n_requests).await
-//                 })
-//             },
-//         );
-//     }
-//     write_group_parallel.finish();
-//
-//     let mut read_group = c.benchmark_group("read_chunks");
-//     for n_requests in iters {
-//         let root_dir = root_dir.clone();
-//
-//
-//         read_group.bench_with_input(
-//             BenchmarkId::new("Parallel", n_requests),
-//             &positions,
-//             |b, positions| {
-//                 let positions = positions.to_vec();
-//                 b.to_async(&async_handler).iter(async || {
-//                     let level = Arc::new(Level::from_root_folder(root_dir.clone()));
-//                     test_reads_parallel(&level, positions.clone(), n_requests).await
-//                 })
-//             },
-//         );
-//     }
-//     read_group.finish();
-//
-//     fs::remove_dir_all(&root_dir).unwrap(); // cleanup
-//
-// }
-// */
-//
-// // Depends on config options from `./config`
-// fn bench_chunk_io(c: &mut Criterion) {
-//     // System temp dirs are in-memory, so we can't use temp_dir
-//     let root_dir = global_path!("./bench_root_tmp");
-//     let _ = fs::remove_dir_all(&root_dir); // delete it if it exists
-//     fs::create_dir(&root_dir).unwrap(); // create the directory
-//
-//     let async_handler = tokio::runtime::Builder::new_current_thread()
-//         .build()
-//         .unwrap();
-//
-//     let chunks = initialize_level(&async_handler, root_dir.clone());
-//     let positions = chunks.iter().map(|(pos, _)| *pos).collect::<Vec<_>>();
-//
-//     let iters = [16, 64, 256, 512];
-//     // These test worst case: no caching done by `Level`
-//     // testing with 16, 64, 256 chunks
-//     let mut write_group = c.benchmark_group("write_chunks");
-//     for n_chunks in iters {
-//         let chunks = &chunks[..n_chunks];
-//         let root_dir = root_dir.clone();
-//         assert!(
-//             chunks.len() == n_chunks,
-//             "Expected {} chunks, got {}",
-//             n_chunks,
-//             chunks.len()
-//         );
-//         let block_registry = Arc::new(BlockRegistry);
-//
-//         write_group.bench_with_input(
-//             BenchmarkId::new("Single", n_chunks),
-//             &chunks,
-//             |b, chunks| {
-//                 b.to_async(&async_handler).iter(async || {
-//                     let level = Arc::new(Level::from_root_folder(
-//                         root_dir.clone(),
-//                         block_registry.clone(),
-//                         123,
-//                         Dimension::Overworld,
-//                     ));
-//                     test_writes(&level, chunks.to_vec()).await
-//                 })
-//             },
-//         );
-//     }
-//     write_group.finish();
-//
-//     // These test worst case: no caching done by `Level`
-//     // testing with 16, 64, 256 chunks
-//     let mut read_group = c.benchmark_group("read_chunks");
-//     for n_chunks in iters {
-//         let positions = &positions[..n_chunks];
-//         let root_dir = root_dir.clone();
-//         assert!(
-//             positions.len() == n_chunks,
-//             "Expected {} chunks, got {}",
-//             n_chunks,
-//             positions.len()
-//         );
-//         let block_registry = Arc::new(BlockRegistry);
-//
-//         read_group.bench_with_input(
-//             BenchmarkId::new("Single", n_chunks),
-//             &positions,
-//             |b, positions| {
-//                 b.to_async(&async_handler).iter(async || {
-//                     let level = Arc::new(Level::from_root_folder(
-//                         root_dir.clone(),
-//                         block_registry.clone(),
-//                         123,
-//                         Dimension::Overworld,
-//                     ));
-//                     test_reads(&level, positions.to_vec()).await
-//                 })
-//             },
-//         );
-//     }
-//     read_group.finish();
-//
-//     fs::remove_dir_all(&root_dir).unwrap(); // cleanup
-// }
-//
-// criterion_group!(benches, bench_chunk_io);
-// criterion_main!(benches);
+use criterion::{Criterion, criterion_group, criterion_main};
+use pumpkin_data::{BlockStateId, dimension::Dimension};
+use pumpkin_util::{math::vector2::Vector2, world_seed::Seed};
+use pumpkin_world::{
+    chunk::{ChunkData, format::anvil::SingleChunkDataSerializer},
+    chunk_system::{Chunk, StagedChunkEnum, generate_single_chunk},
+    generation::get_world_gen,
+    world::WorldPortalExt,
+};
+use std::hint::black_box;
+
+struct BlockRegistry;
+
+impl WorldPortalExt for BlockRegistry {
+    fn can_place_at(
+        &self,
+        _block: &pumpkin_data::Block,
+        _state: &pumpkin_data::BlockState,
+        _block_accessor: &dyn pumpkin_world::world::BlockAccessor,
+        _block_pos: &pumpkin_util::math::position::BlockPos,
+    ) -> bool {
+        true
+    }
+
+    fn mirror(
+        &self,
+        block: &pumpkin_data::Block,
+        state_id: BlockStateId,
+        mirror: pumpkin_data::Mirror,
+    ) -> &'static pumpkin_data::BlockState {
+        block.mirror(state_id, mirror)
+    }
+
+    fn rotate(
+        &self,
+        block: &pumpkin_data::Block,
+        state_id: BlockStateId,
+        rotation: pumpkin_data::Rotation,
+    ) -> &'static pumpkin_data::BlockState {
+        block.rotate(state_id, rotation)
+    }
+
+    fn spawn_mobs_for_chunk_generation(
+        &self,
+        _cache: &mut dyn pumpkin_world::generation::proto_chunk::GenerationCache,
+        _biome: &'static pumpkin_data::chunk::Biome,
+        _chunk_x: i32,
+        _chunk_z: i32,
+    ) {
+    }
+}
+
+fn bench_chunk_deserialization(c: &mut Criterion) {
+    let dimension = Dimension::OVERWORLD;
+    let world_gen = get_world_gen(
+        Seed(42),
+        dimension.clone(),
+        false,
+        Vec::new(),
+        String::new(),
+    );
+    let chunk = generate_single_chunk(
+        &dimension,
+        0,
+        &world_gen,
+        &BlockRegistry,
+        0,
+        0,
+        StagedChunkEnum::Full,
+    );
+    let Chunk::Level(chunk) = chunk else {
+        panic!("full generation must return a level chunk");
+    };
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .expect("failed to create benchmark runtime");
+    let bytes = runtime
+        .block_on(chunk.to_bytes())
+        .expect("failed to serialize benchmark chunk");
+    let position = Vector2::new(chunk.x, chunk.z);
+
+    c.bench_function("chunk_nbt_deserialization", |b| {
+        b.iter(|| {
+            black_box(
+                ChunkData::from_bytes(black_box(&bytes), position)
+                    .expect("failed to deserialize benchmark chunk"),
+            );
+        });
+    });
+}
+
+criterion_group!(benches, bench_chunk_deserialization);
+criterion_main!(benches);

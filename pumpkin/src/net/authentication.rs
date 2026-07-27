@@ -19,6 +19,9 @@ pub struct ProfileTextures {
     timestamp: i64,
     profile_id: Uuid,
     profile_name: String,
+    // Mojang always sends this, but third-party auth servers (drasl, Blessing Skin, ...)
+    // omit it. It is unused here, so default it instead of failing to parse the profile.
+    #[serde(default)]
     signature_required: bool,
     textures: HashMap<String, Texture>,
 }
@@ -241,4 +244,38 @@ pub enum TextureError {
     DecodeError(String),
     #[error("Failed to parse JSON from player texture: {0}")]
     JSONError(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ProfileTextures;
+
+    // Third-party auth servers (drasl, Blessing Skin, littleskin.cn) don't send
+    // `signatureRequired`. The profile must still parse. See issue #301.
+    #[test]
+    fn parses_profile_without_signature_required() {
+        let json = r#"{
+            "timestamp": 0,
+            "profileId": "069a79f444e94726a5befca90e38aaf5",
+            "profileName": "Notch",
+            "textures": {}
+        }"#;
+        let profile: ProfileTextures =
+            serde_json::from_slice(json.as_bytes()).expect("profile should parse");
+        assert!(!profile.signature_required);
+    }
+
+    #[test]
+    fn parses_profile_with_signature_required() {
+        let json = r#"{
+            "timestamp": 0,
+            "profileId": "069a79f444e94726a5befca90e38aaf5",
+            "profileName": "Notch",
+            "signatureRequired": true,
+            "textures": {}
+        }"#;
+        let profile: ProfileTextures =
+            serde_json::from_slice(json.as_bytes()).expect("profile should parse");
+        assert!(profile.signature_required);
+    }
 }

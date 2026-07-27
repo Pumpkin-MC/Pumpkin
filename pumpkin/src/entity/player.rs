@@ -2126,15 +2126,14 @@ impl Player {
         progress.clamp(0.0, 1.0)
     }
 
-    pub async fn fire_packet_sent<P: 'static + Send + Sync + std::any::Any + Clone>(
+    pub async fn fire_packet_sent<P: Send + Sync + std::any::Any>(
         self: &Arc<Self>,
-        packet: &P,
+        packet: P,
         packet_id: i32,
         payload: Bytes,
     ) -> bool {
         if let Some(server) = self.world().server.upgrade() {
-            let event =
-                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet.clone()));
+            let event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
             let event = server.plugin_manager.fire(event).await;
             return event.cancelled;
         }
@@ -3609,7 +3608,7 @@ impl Player {
             .await;
     }
 
-    pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem) {
+    pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem<'_>) {
         self.update_last_action_time();
         let screen_handler_arc = self.current_screen_handler.lock().await.clone();
         let mut screen_handler = screen_handler_arc.lock().await;
@@ -3618,7 +3617,9 @@ impl Player {
             .as_any_mut()
             .downcast_mut::<pumpkin_inventory::anvil::AnvilScreenHandler>()
         {
-            anvil_handler.update_item_name(packet.item_name).await;
+            anvil_handler
+                .update_item_name(packet.item_name.to_string())
+                .await;
         }
     }
 

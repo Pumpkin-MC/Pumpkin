@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::PLAY_ATTACK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 use crate::codec::var_int::VarInt;
 
@@ -14,9 +13,9 @@ pub struct SAttack {
     pub entity_id: VarInt,
 }
 
-impl ServerPacket for SAttack {
+impl<'a> ServerPacket<'a> for SAttack {
     fn read(
-        mut bytebuf: impl Read,
+        bytebuf: &mut &'a [u8],
         _protocol_version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
         Ok(Self {

@@ -1,4 +1,5 @@
 pub mod allay;
+pub mod animal;
 pub mod armadillo;
 pub mod axolotl;
 pub mod bee;

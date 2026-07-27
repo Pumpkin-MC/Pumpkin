@@ -61,8 +61,12 @@ impl PlayerSpawnData {
     ) -> Result<(), WritingError> {
         if version >= &JavaMinecraftVersion::V_1_21_2 {
             write.write_var_int(&VarInt(self.dimension.id as i32))?;
+        } else if version >= &JavaMinecraftVersion::V_1_16 {
+            write.write_string(self.dimension.minecraft_name)?;
+        } else if version >= &JavaMinecraftVersion::V_1_9 {
+            write.write_i32_be(self.dimension.id as i32)?;
         } else {
-            write.write_string("")?;
+            write.write_i8(self.dimension.id as i8)?;
         }
         write.write_string(self.dimension.minecraft_name)?;
         write.write_i64_be(self.hashed_seed)?;
@@ -70,12 +74,16 @@ impl PlayerSpawnData {
         write.write_i8(self.previous_gamemode)?;
         write.write_bool(self.debug)?;
         write.write_bool(self.is_flat)?;
-        write.write_option(&self.death_dimension_name, |write, (dim, pos)| {
-            write.write_string(dim)?;
-            write.write_block_pos(pos)?;
-            Ok(())
-        })?;
-        write.write_var_int(&self.portal_cooldown)?;
+        if version >= &JavaMinecraftVersion::V_1_19 {
+            write.write_option(&self.death_dimension_name, |write, (dim, pos)| {
+                write.write_string(dim)?;
+                write.write_block_pos(pos)?;
+                Ok(())
+            })?;
+        }
+        if version >= &JavaMinecraftVersion::V_1_20 {
+            write.write_var_int(&self.portal_cooldown)?;
+        }
         if version >= &JavaMinecraftVersion::V_1_21_2 {
             write.write_var_int(&self.sealevel)?;
         }

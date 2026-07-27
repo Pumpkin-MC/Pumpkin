@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
     sync::{
         RwLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -222,12 +222,22 @@ impl ChunkData {
                     let block_light = section_compound
                         .get("BlockLight")
                         .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| arr.iter().map(|&x| x as u8).collect::<Box<[u8]>>());
+                        .map(|arr| unsafe {
+                            Box::from(std::slice::from_raw_parts(
+                                arr.as_ptr().cast::<u8>(),
+                                arr.len(),
+                            ))
+                        });
 
                     let sky_light = section_compound
                         .get("SkyLight")
                         .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| arr.iter().map(|&x| x as u8).collect::<Box<[u8]>>());
+                        .map(|arr| unsafe {
+                            Box::from(std::slice::from_raw_parts(
+                                arr.as_ptr().cast::<u8>(),
+                                arr.len(),
+                            ))
+                        });
 
                     block_lights[index] =
                         block_light.map_or(LightContainer::Empty(0), LightContainer::Full);
@@ -371,6 +381,7 @@ impl ChunkData {
             light_populated: AtomicBool::new(light_correct),
             status,
             blending_data: None,
+            inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
         })
     }
 

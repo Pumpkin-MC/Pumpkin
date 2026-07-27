@@ -3,20 +3,19 @@ use pumpkin_macros::java_packet;
 
 use crate::{
     ServerPacket,
-    ser::{NetworkReadExt, ReadingError},
+    ser::{NetworkReadSliceExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_CHAT_COMMAND)]
-pub struct SChatCommand {
-    pub command: String,
+pub struct SChatCommand<'a> {
+    pub command: &'a str,
 }
 
-impl ServerPacket for SChatCommand {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SChatCommand<'a> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
-            command: bytebuf.get_str()?.into_string(),
+            command: bytebuf.get_str_borrowed()?,
         })
     }
 }

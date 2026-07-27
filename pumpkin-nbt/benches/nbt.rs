@@ -106,7 +106,7 @@ pub fn bench_nbt(c: &mut Criterion) {
 
     c.bench_function("nbt/java/deserialize/raw", |b| {
         b.iter(|| {
-            let mut cursor = Cursor::new(&wrapper_bytes_java);
+            let mut cursor = Cursor::new(&wrapper_bytes_java[..]);
             let mut reader = deserializer::NbtReadHelperJava::new(&mut cursor);
             Nbt::read(&mut reader).unwrap();
         });
@@ -135,7 +135,7 @@ pub fn bench_nbt(c: &mut Criterion) {
 
     c.bench_function("nbt/bedrock/deserialize/raw", |b| {
         b.iter(|| {
-            let mut cursor = Cursor::new(&wrapper_bytes_bedrock);
+            let mut cursor = Cursor::new(&wrapper_bytes_bedrock[..]);
             let mut reader = deserializer::NbtReadHelperBedrock::new(&mut cursor);
             Nbt::read(&mut reader).unwrap();
         });

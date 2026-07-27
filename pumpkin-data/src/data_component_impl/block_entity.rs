@@ -138,8 +138,25 @@ impl DataComponentImpl for BeesImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ContainerLootImpl;
+pub struct ContainerLootImpl {
+    pub loot_table: String,
+    pub seed: i64,
+}
+impl ContainerLootImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let loot_table = compound.get_string("loot_table")?.to_string();
+        let seed = compound.get_long("seed").unwrap_or(0);
+        Some(Self { loot_table, seed })
+    }
+}
 impl DataComponentImpl for ContainerLootImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("loot_table", self.loot_table.clone());
+        compound.put_long("seed", self.seed);
+        NbtTag::Compound(compound)
+    }
     default_impl!(ContainerLoot);
 }
 
