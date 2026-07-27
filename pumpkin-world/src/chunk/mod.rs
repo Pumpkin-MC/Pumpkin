@@ -16,7 +16,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 pub mod format;
 pub mod io;
@@ -78,7 +77,6 @@ pub struct ChunkData {
     pub block_ticks: ChunkTickScheduler<&'static Block>,
     pub fluid_ticks: ChunkTickScheduler<&'static Fluid>,
     pub pending_block_entities: std::sync::Mutex<FxHashMap<BlockPos, NbtCompound>>,
-    pub pending_entities: std::sync::Mutex<Vec<NbtCompound>>,
     pub light_engine: std::sync::Mutex<ChunkLight>,
     pub light_populated: AtomicBool,
     pub status: ChunkStatus,
@@ -95,30 +93,6 @@ pub struct ChunkEntityData {
     pub data: Mutex<Vec<NbtCompound>>,
 
     pub dirty: AtomicBool,
-}
-
-#[must_use]
-pub fn entity_uuid_from_nbt(nbt: &NbtCompound) -> Option<Uuid> {
-    let uuid = if let Some([most, more, less, least]) = nbt.get_int_array("UUID") {
-        [*most, *more, *less, *least]
-    } else {
-        let [most, more, less, least] = nbt.get_list("UUID")? else {
-            return None;
-        };
-        [
-            most.extract_int()?,
-            more.extract_int()?,
-            less.extract_int()?,
-            least.extract_int()?,
-        ]
-    };
-
-    Some(Uuid::from_u128(
-        (uuid[0] as u32 as u128) << 96
-            | (uuid[1] as u32 as u128) << 64
-            | (uuid[2] as u32 as u128) << 32
-            | uuid[3] as u32 as u128,
-    ))
 }
 
 /// Represents pure block data for a chunk.
@@ -824,80 +798,9 @@ pub enum ChunkSerializingError {
 
 #[cfg(test)]
 mod tests {
-    use super::{ChunkEntityData, ChunkSections, entity_uuid_from_nbt};
-    use crate::chunk::format::anvil::SingleChunkDataSerializer;
+    use super::ChunkSections;
     use crate::chunk::palette::BlockPalette;
     use pumpkin_data::{Block, block_properties::has_random_ticks};
-    use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-    use pumpkin_util::math::vector2::Vector2;
-    use std::sync::atomic::AtomicBool;
-    use tokio::sync::Mutex;
-    use uuid::Uuid;
-
-    #[test]
-    fn reads_signed_uuid_int_array_without_sign_extension() {
-        let expected = Uuid::from_u128(0xFEDC_BA98_7654_3210_89AB_CDEF_0123_4567);
-        let value = expected.as_u128();
-        let mut nbt = NbtCompound::new();
-        nbt.put(
-            "UUID",
-            NbtTag::IntArray(vec![
-                (value >> 96) as i32,
-                (value >> 64) as i32,
-                (value >> 32) as i32,
-                value as i32,
-            ]),
-        );
-
-        assert_eq!(entity_uuid_from_nbt(&nbt), Some(expected));
-    }
-
-    #[test]
-    fn reads_uuid_integer_list_from_entity_region() {
-        let expected = Uuid::from_u128(0xFEDC_BA98_7654_3210_89AB_CDEF_0123_4567);
-        let value = expected.as_u128();
-        let mut nbt = NbtCompound::new();
-        nbt.put(
-            "UUID",
-            NbtTag::List(vec![
-                NbtTag::Int((value >> 96) as i32),
-                NbtTag::Int((value >> 64) as i32),
-                NbtTag::Int((value >> 32) as i32),
-                NbtTag::Int(value as i32),
-            ]),
-        );
-
-        assert_eq!(entity_uuid_from_nbt(&nbt), Some(expected));
-    }
-
-    #[tokio::test]
-    async fn entity_region_round_trip_recovers_uuid() {
-        let uuid = Uuid::from_u128(42);
-        let value = uuid.as_u128();
-        let mut nbt = NbtCompound::new();
-        nbt.put(
-            "UUID",
-            NbtTag::IntArray(vec![
-                (value >> 96) as i32,
-                (value >> 64) as i32,
-                (value >> 32) as i32,
-                value as i32,
-            ]),
-        );
-        let chunk = ChunkEntityData {
-            x: 1,
-            z: 1,
-            data: Mutex::new(vec![nbt]),
-            dirty: AtomicBool::new(true),
-        };
-
-        let bytes = chunk.to_bytes().await.unwrap();
-        let restored = ChunkEntityData::from_bytes(&bytes, Vector2::new(1, 1)).unwrap();
-        let entities = restored.data.lock().await;
-
-        assert_eq!(entities.len(), 1);
-        assert_eq!(entity_uuid_from_nbt(&entities[0]), Some(uuid));
-    }
 
     #[test]
     fn random_tick_cache_initializes_from_palette_contents() {
