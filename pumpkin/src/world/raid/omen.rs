@@ -44,6 +44,7 @@ use pumpkin_data::potion::Effect;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::position::BlockPos;
 
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
 

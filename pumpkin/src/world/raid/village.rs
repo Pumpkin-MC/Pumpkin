@@ -38,7 +38,6 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::entity::EntityBase;
 use crate::world::World;
 
 /// Vanilla `ServerLevel.isCloseToVillage` rejects any request above 6 sections

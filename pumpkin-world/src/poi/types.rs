@@ -165,19 +165,11 @@ pub fn by_name(name: &str) -> Option<&'static PoiType> {
 /// because only beds distinguish states, via `BedBlock.PART == HEAD`
 /// (`PoiTypes.java:53`).
 #[must_use]
-#[expect(
-    clippy::cognitive_complexity,
-    reason = "flat mirror of the PoiTypes.bootstrap table; splitting it would obscure the 1:1 mapping"
-)]
 pub fn for_state(block: &Block, state_id: BlockStateId) -> Option<&'static PoiType> {
     // `PoiTypes.java:53` — only the HEAD half of a bed is a HOME POI.
     if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
         let props = WhiteBedLikeProperties::from_state_id(state_id, block);
-        return if props.part == BedPart::Head {
-            Some(&HOME)
-        } else {
-            None
-        };
+        return (props.part == BedPart::Head).then_some(&HOME);
     }
 
     // `PoiTypes.java:91-103`, in registration order.
@@ -351,16 +343,13 @@ mod tests {
         let mut feet = 0;
         for state in block.states {
             let props = WhiteBedLikeProperties::from_state_id(state.id, block);
-            match for_state(block, state.id) {
-                Some(t) => {
-                    assert_eq!(t.name, "minecraft:home");
-                    assert_eq!(props.part, BedPart::Head);
-                    heads += 1;
-                }
-                None => {
-                    assert_eq!(props.part, BedPart::Foot);
-                    feet += 1;
-                }
+            if let Some(t) = for_state(block, state.id) {
+                assert_eq!(t.name, "minecraft:home");
+                assert_eq!(props.part, BedPart::Head);
+                heads += 1;
+            } else {
+                assert_eq!(props.part, BedPart::Foot);
+                feet += 1;
             }
         }
         assert!(heads > 0 && feet > 0);

@@ -33,23 +33,20 @@ fn main() {
 
     // Whether the working tree had uncommitted changes at build time. A build
     // without git reports "unknown" rather than pretending to be clean.
-    let git_dirty = match capture("git", &["status", "--porcelain", "--untracked-files=no"]) {
-        Some(changes) => {
-            if changes.is_empty() {
-                "clean"
-            } else {
-                "dirty"
-            }
-        }
-        // `git status` prints nothing when the tree is clean, so `capture`
-        // returns `None` both for "clean" and for "git unavailable". Only treat
-        // it as clean when we know we are inside a work tree.
-        None => match capture("git", &["rev-parse", "--is-inside-work-tree"]) {
-            Some(inside) if inside == "true" => "clean",
-            _ => "unknown",
-        },
-    }
-    .to_string();
+    let git_dirty = capture("git", &["status", "--porcelain", "--untracked-files=no"])
+        .map_or_else(
+            || {
+                // `git status` prints nothing when the tree is clean, so `capture`
+                // returns `None` both for "clean" and for "git unavailable". Only
+                // treat it as clean when we know we are inside a work tree.
+                match capture("git", &["rev-parse", "--is-inside-work-tree"]) {
+                    Some(inside) if inside == "true" => "clean",
+                    _ => "unknown",
+                }
+            },
+            |changes| if changes.is_empty() { "clean" } else { "dirty" },
+        )
+        .to_string();
 
     // Compiler that produced this binary, e.g. "rustc 1.90.0 (...)".
     let rustc = std::env::var("RUSTC").unwrap_or_else(|_| "rustc".to_string());

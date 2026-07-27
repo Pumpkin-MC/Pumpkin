@@ -235,7 +235,7 @@ impl Raid {
     /// (`Raider.java:140`) and by `updateRaiders` (`Raid.java:411-438`).
     #[must_use]
     pub fn total_raiders_alive(&self) -> i32 {
-        self.with(RaidInner::total_raiders_alive)
+        self.with(|inner| inner.total_raiders_alive())
     }
 
     /// Vanilla `Raid.getAllRaiders` (`Raid.java:180-186`).

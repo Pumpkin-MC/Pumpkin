@@ -25,7 +25,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use uuid::Uuid;
 
-use crate::entity::EntityBase;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::world::World;
 

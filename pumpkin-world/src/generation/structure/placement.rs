@@ -165,7 +165,7 @@ impl GlobalStructureCache {
         compute: impl FnOnce() -> Option<StructurePosition>,
     ) -> Option<StructurePosition> {
         self.structure_starts
-            .get_or_init(BoundedCache::new)
+            .get_or_init(BoundedCache::default)
             .get_or_insert_with((key, chunk_x, chunk_z), compute)
     }
 
@@ -493,7 +493,7 @@ mod tests {
 
     #[test]
     fn bounded_cache_memoizes_and_computes_once() {
-        let cache: BoundedCache<u32, u32> = BoundedCache::new();
+        let cache: BoundedCache<u32, u32> = BoundedCache::default();
         let mut calls = 0;
         assert_eq!(cache.get_or_insert_with(7, || 70), 70);
         cache.get_or_insert_with(7, || {
@@ -505,7 +505,7 @@ mod tests {
 
     #[test]
     fn bounded_cache_respects_its_capacity() {
-        let cache: BoundedCache<u32, u32> = BoundedCache::new();
+        let cache: BoundedCache<u32, u32> = BoundedCache::default();
         let total = u32::try_from(MAX_STRUCTURE_STARTS * 3).expect("fits in u32");
         for key in 0..total {
             cache.get_or_insert_with(key, || key);
@@ -519,7 +519,7 @@ mod tests {
 
     #[test]
     fn bounded_cache_evicts_the_oldest_keys_first() {
-        let cache: BoundedCache<u32, u32> = BoundedCache::new();
+        let cache: BoundedCache<u32, u32> = BoundedCache::default();
         let total = u32::try_from(MAX_STRUCTURE_STARTS + 1).expect("fits in u32");
         for key in 0..total {
             cache.get_or_insert_with(key, || key);
