@@ -109,8 +109,7 @@ impl<K: Eq + Hash, V: Clone> BoundedCache<K, V> {
         }
         let mut stamps: Vec<u64> = self.entries.iter().map(|entry| entry.value().0).collect();
         if let Some(threshold) = retain_threshold(&mut stamps, KEEP_STRUCTURE_STARTS) {
-            self.entries
-                .retain(|_, (stamp, _)| *stamp >= threshold);
+            self.entries.retain(|_, (stamp, _)| *stamp >= threshold);
         }
         self.trimming.store(false, Ordering::Release);
     }

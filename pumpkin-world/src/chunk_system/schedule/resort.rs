@@ -1,8 +1,8 @@
 use super::{GenerationSchedule, TaskHeapNode};
 use crate::chunk::io::Dirtiable;
 use crate::chunk_system::channel::LevelChange;
-use crate::chunk_system::chunk_state::{Chunk, StagedChunkEnum};
 use crate::chunk_system::chunk_holder::ChunkHolder;
+use crate::chunk_system::chunk_state::{Chunk, StagedChunkEnum};
 use crate::chunk_system::dag::{DAG, EdgeKey, Node, NodeKey};
 use crate::chunk_system::{ChunkLoading, ChunkPos, HashSetType};
 use slotmap::Key;

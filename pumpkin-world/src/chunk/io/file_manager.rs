@@ -288,7 +288,9 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
             if locks.len() <= MAX_CACHE_SIZE {
                 break;
             }
-            let removable = locks.get(&path).is_some_and(ChunkSerializerLazyLoader::can_remove);
+            let removable = locks
+                .get(&path)
+                .is_some_and(ChunkSerializerLazyLoader::can_remove);
             if removable {
                 locks.remove(&path);
                 trace!("Evicted LRU serializer cache entry {}", path.display());

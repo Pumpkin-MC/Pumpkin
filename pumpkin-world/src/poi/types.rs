@@ -295,11 +295,7 @@ mod tests {
     #[test]
     fn village_tag_matches_the_datapack() {
         // village.json = #acquirable_job_site + home + meeting
-        let village: Vec<&str> = ALL
-            .iter()
-            .filter(|t| t.village)
-            .map(|t| t.name)
-            .collect();
+        let village: Vec<&str> = ALL.iter().filter(|t| t.village).map(|t| t.name).collect();
         assert_eq!(village.len(), 15);
         assert!(village.contains(&"minecraft:home"));
         assert!(village.contains(&"minecraft:meeting"));
@@ -317,11 +313,7 @@ mod tests {
 
     #[test]
     fn bee_home_tag_has_hive_and_nest() {
-        let bee: Vec<&str> = ALL
-            .iter()
-            .filter(|t| t.bee_home)
-            .map(|t| t.name)
-            .collect();
+        let bee: Vec<&str> = ALL.iter().filter(|t| t.bee_home).map(|t| t.name).collect();
         assert_eq!(bee, vec!["minecraft:beehive", "minecraft:bee_nest"]);
     }
 
