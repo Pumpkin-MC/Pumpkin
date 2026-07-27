@@ -18,13 +18,13 @@ use tokio::signal::ctrl_c;
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
 
+use pumpkin::PumpkinServer;
 use pumpkin::{
     CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
     crash::{CrashReport, FullBacktrace},
     data::VanillaData,
     stop_or_exit_server,
 };
-use pumpkin::{PumpkinServer, stop_server};
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_util::text::{
@@ -213,12 +213,14 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
     };
 
     let payload = panic_info.payload();
+    let payload_str = payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("<unknown>");
 
     if is_main_thread() {
-        // It's the first panic;
-        // We cannot gracefully shut down as the main thread
-        // has panicked. However, we can still generate the crash report.
-
+        // Main-thread panic is unrecoverable: write a crash report and exit.
         if let Some(crash_report) = try_set_crash_report(crash_report) {
             crash_report.print_to_console();
             crash_report.save_and_log();
@@ -230,7 +232,6 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
                     .to_pretty_console()
             );
         } else {
-            // It's a subsequent panic.
             tracing::error!(
                 "{}: {}",
                 TextComponent::text(
@@ -239,35 +240,30 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
                 .color(Color::Named(NamedColor::Red))
                 .bold()
                 .to_pretty_console(),
-                payload
-                    .downcast_ref::<&str>()
-                    .copied()
-                    .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
-                    .unwrap_or("<unknown>")
+                payload_str
             );
         }
 
         exit(1);
     }
 
-    if try_set_crash_report(crash_report).is_some() {
-        // It's the first panic; let's stop the server.
-        stop_server();
-    } else {
-        // It's a subsequent panic; let's just alert about it.
-        tracing::error!(
-            "{}: {}",
-            TextComponent::text("Encountered panic while shutting down")
-                .color(Color::Named(NamedColor::Red))
-                .bold()
-                .to_pretty_console(),
-            payload
-                .downcast_ref::<&str>()
-                .copied()
-                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
-                .unwrap_or("<unknown>")
-        );
-    }
+    // Worker-thread panics must NOT take down the whole server. Log a crash
+    // report and let the task die; other connections keep serving.
+    // (Previously the first worker panic called stop_server(), turning every
+    // reachable unwrap into a remote kill switch.)
+    crash_report.print_to_console();
+    crash_report.save_and_log();
+    // Keep the first report for process exit status if the server later stops.
+    let _ = try_set_crash_report(crash_report);
+
+    tracing::error!(
+        "{}: {}",
+        TextComponent::text("Worker thread panicked; task aborted, server continues running")
+            .color(Color::Named(NamedColor::Red))
+            .bold()
+            .to_pretty_console(),
+        payload_str
+    );
 }
 
 fn is_main_thread() -> bool {

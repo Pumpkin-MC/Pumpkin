@@ -186,6 +186,15 @@ impl ScreenHandler for AnvilScreenHandler {
         player: &'a dyn InventoryPlayer,
     ) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
+            use pumpkin_protocol::java::server::play::SlotActionType;
+
+            // PickupAll on the result slot steals the renamed output without
+            // consuming the input / charging XP (stackable rename dupe).
+            if slot_index == 2 && action_type == SlotActionType::PickupAll {
+                self.send_content_updates().await;
+                return;
+            }
+
             if slot_index == 2 {
                 // Taking from output slot
                 let result_slot = self.get_behaviour().slots[2].clone();
@@ -202,9 +211,11 @@ impl ScreenHandler for AnvilScreenHandler {
                                     .await;
                             }
 
-                            // Consume inputs
+                            // Consume both input slots (base + sacrifice).
                             self.inventory.set_stack(0, ItemStack::EMPTY.clone()).await;
                             self.get_behaviour().slots[0].mark_dirty().await;
+                            self.inventory.set_stack(1, ItemStack::EMPTY.clone()).await;
+                            self.get_behaviour().slots[1].mark_dirty().await;
                         } else {
                             // Cancel click
                             self.send_content_updates().await;

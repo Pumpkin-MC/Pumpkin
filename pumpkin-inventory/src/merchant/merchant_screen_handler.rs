@@ -178,12 +178,34 @@ impl ScreenHandler for MerchantScreenHandler {
         player: &'a dyn InventoryPlayer,
     ) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
+            use pumpkin_protocol::java::server::play::SlotActionType;
+
+            // PickupAll on the result slot is a free-item dupe: it sweeps the
+            // output without going through the consume/uses path cleanly.
+            if slot_index == 2 && action_type == SlotActionType::PickupAll {
+                self.send_content_updates().await;
+                return;
+            }
+
             if slot_index == 2 {
                 // Special handling for taking from output slot
                 let result_slot = self.get_behaviour().slots[2].clone();
                 if result_slot.has_stack().await {
                     let result_stack = result_slot.get_cloned_stack().await;
                     if !result_stack.is_empty() {
+                        // Enforce trade limits before consuming.
+                        if self.selected_offer >= self.offers.len() {
+                            self.send_content_updates().await;
+                            return;
+                        }
+                        {
+                            let offer = &self.offers[self.selected_offer];
+                            if offer.is_disabled || offer.uses >= offer.max_uses {
+                                self.send_content_updates().await;
+                                return;
+                            }
+                        }
+
                         // Consume inputs
                         let (count_a, count_b, offer_xp) = {
                             let offer = &mut self.offers[self.selected_offer];

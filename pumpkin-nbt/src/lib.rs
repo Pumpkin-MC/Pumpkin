@@ -42,6 +42,12 @@ pub const INT_ARRAY_ID: u8 = 0x0B;
 pub const LONG_ARRAY_ID: u8 = 0x0C;
 
 pub const MAX_ARRAY_LENGTH: usize = 2_000_000;
+/// Maximum nesting depth for NBT compounds/lists (vanilla documents 512).
+///
+/// Each nesting level costs two Rust frames in this parser; 128 is far above
+/// any legitimate item/world payload and keeps the worker stack safely clear
+/// of the guard page (the pre-fix kill was ~3.5k).
+pub const MAX_NBT_DEPTH: u32 = 128;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -63,6 +69,8 @@ pub enum Error {
     NegativeLength(i32),
     #[error("Length too large: {0}")]
     LargeLength(usize),
+    #[error("NBT nesting depth exceeded limit ({MAX_NBT_DEPTH})")]
+    DepthLimitExceeded,
     #[error("Failed to decode varint - value too large")]
     VarIntTooLarge,
     #[error("Failed to decode varlong - value too large")]
@@ -1000,4 +1008,42 @@ mod test {
     }
 
     // TODO: More robust tests
+
+    #[test]
+    fn nested_compound_depth_limit() {
+        use crate::deserializer::NbtReadHelperJava;
+        use crate::{COMPOUND_ID, END_ID, MAX_NBT_DEPTH, Nbt};
+
+        // Nested compounds deeper than MAX_NBT_DEPTH must error, not overflow the stack.
+        let depth = (MAX_NBT_DEPTH + 8) as usize;
+        let mut bytes = Vec::new();
+        // root compound id + empty name (Java: u16 BE length)
+        bytes.push(COMPOUND_ID);
+        bytes.extend_from_slice(&0u16.to_be_bytes());
+        for _ in 0..depth {
+            bytes.push(COMPOUND_ID);
+            bytes.extend_from_slice(&0u16.to_be_bytes()); // empty field name
+        }
+        bytes.extend(std::iter::repeat_n(END_ID, depth + 1));
+
+        let err = Nbt::read(&mut NbtReadHelperJava::new(Cursor::new(bytes)));
+        assert!(
+            matches!(err, Err(Error::DepthLimitExceeded)),
+            "expected DepthLimitExceeded, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn end_typed_nonempty_list_rejected() {
+        use crate::deserializer::NbtReadHelperJava;
+        use crate::{END_ID, LIST_ID};
+
+        // LIST of END with length 100 must be rejected (not allocate 100 unit tags).
+        let mut bytes = Vec::new();
+        bytes.push(END_ID);
+        bytes.extend_from_slice(&100i32.to_be_bytes());
+        let err =
+            NbtTag::deserialize_data(&mut NbtReadHelperJava::new(Cursor::new(bytes)), LIST_ID);
+        assert!(err.is_err(), "non-empty END list must be rejected");
+    }
 }
