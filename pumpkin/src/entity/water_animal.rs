@@ -17,6 +17,7 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::particle::Particle;
+use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
@@ -27,7 +28,6 @@ use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::EntityBase;
-use crate::entity::effect::Effect;
 use crate::entity::mob::MobEntity;
 
 /// Vanilla max/reset air supply: `Entity.getMaxAirSupply()` default, and the
@@ -499,7 +499,7 @@ impl SquidAi {
             // offset into a direction (Squid.java:195).
             world.spawn_particle(
                 Vector3::new(base.x, base.y + 0.5, base.z),
-                offset.to_f32(),
+                offset.to_f32_lossy(),
                 0.1,
                 0,
                 ink_particle,
