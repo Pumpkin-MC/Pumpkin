@@ -4064,19 +4064,6 @@ impl World {
         Ok(())
     }
 
-    /// Removes a player from the world and broadcasts a disconnect message if enabled.
-    ///
-    /// This function removes a player from the world based on their `Player` reference.
-    /// It performs the following actions:
-    ///
-    /// 1. Removes the player from the `current_players` map using their UUID.
-    /// 2. Broadcasts a `CRemovePlayerInfo` packet to all connected players to inform them about the player leaving.
-    /// 3. Removes the player's entity from the world using its entity ID.
-    /// 4. Optionally sends a disconnect message to all other players notifying them about the player leaving.
-    ///
-    /// # Arguments
-    ///
-    /// * `player`: A reference to the `Player` object to be removed.
     /// Removes `player`'s in-world entity from every currently-connected client that
     /// is not itself a spectator. Used when a player switches into Spectator mode
     /// mid-game (e.g. via `/gamemode`): they were already spawned to everyone as a
@@ -4192,8 +4179,8 @@ impl World {
                 config.skin_parts,
             );
             meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
-                .unwrap();
-        }
+                .unwrap()
+        };
         java_meta_buf.put_u8(255);
 
         self.broadcast_packet_except_editioned_sync(
@@ -4211,6 +4198,19 @@ impl World {
         );
     }
 
+    /// Removes a player from the world and broadcasts a disconnect message if enabled.
+    ///
+    /// This function removes a player from the world based on their `Player` reference.
+    /// It performs the following actions:
+    ///
+    /// 1. Removes the player from the `current_players` map using their UUID.
+    /// 2. Broadcasts a `CRemovePlayerInfo` packet to all connected players to inform them about the player leaving.
+    /// 3. Removes the player's entity from the world using its entity ID.
+    /// 4. Optionally sends a disconnect message to all other players notifying them about the player leaving.
+    ///
+    /// # Arguments
+    ///
+    /// * `player`: A reference to the `Player` object to be removed.
     /// * `fire_event`: A boolean flag indicating whether to fire a `PlayerLeaveEvent` event.
     ///
     /// # Notes
