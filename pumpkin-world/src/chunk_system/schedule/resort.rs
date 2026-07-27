@@ -2,7 +2,8 @@ use super::{GenerationSchedule, TaskHeapNode};
 use crate::chunk::io::Dirtiable;
 use crate::chunk_system::channel::LevelChange;
 use crate::chunk_system::chunk_state::{Chunk, StagedChunkEnum};
-use crate::chunk_system::dag::{EdgeKey, Node, NodeKey};
+use crate::chunk_system::chunk_holder::ChunkHolder;
+use crate::chunk_system::dag::{DAG, EdgeKey, Node, NodeKey};
 use crate::chunk_system::{ChunkLoading, ChunkPos, HashSetType};
 use slotmap::Key;
 use std::mem::swap;
@@ -184,6 +185,57 @@ impl GenerationSchedule {
         }
     }
 
+    /// Prepares a holder that has no chunk data for removal from `chunk_map`.
+    ///
+    /// Returns `false` when the holder must stay: a live task or dependency edge
+    /// still names this position, and both `receive_chunk` and the dispatch loop
+    /// index `chunk_map` with `unwrap`, so removing it would panic later.
+    ///
+    /// On success the holder's now-unreachable `occupied_by` edge list is freed —
+    /// those edges are owned by the holder, not by any node, so dropping the
+    /// holder without draining them would leak `graph.edges` slots instead.
+    fn release_stranded_holder(graph: &mut DAG, holder: &mut ChunkHolder) -> bool {
+        debug_assert!(holder.chunk.is_none());
+
+        // A non-null key whose node is already gone is stale and does not pin the
+        // holder; only a task that still exists in the graph can be dispatched.
+        if holder
+            .tasks
+            .iter()
+            .any(|task| graph.nodes.contains_key(*task))
+        {
+            return false;
+        }
+        if !holder.occupied.is_null() && graph.nodes.contains_key(holder.occupied) {
+            return false;
+        }
+
+        let mut cur_edge = holder.occupied_by;
+        while !cur_edge.is_null() {
+            let Some(edge) = graph.edges.get(cur_edge) else {
+                break;
+            };
+            // A dependent task still waiting on this position would never be
+            // released if we dropped the holder, so keep it.
+            if graph.nodes.contains_key(edge.to) {
+                return false;
+            }
+            cur_edge = edge.next;
+        }
+
+        // Every remaining edge points at an already-dropped node; reclaim them.
+        let mut cur_edge = holder.occupied_by;
+        while !cur_edge.is_null() {
+            let Some(edge) = graph.edges.remove(cur_edge) else {
+                break;
+            };
+            cur_edge = edge.next;
+        }
+        holder.occupied_by = EdgeKey::null();
+        holder.occupied = NodeKey::null();
+        true
+    }
+
     pub(super) fn process_unload_queue(&mut self) {
         if self.unload_chunks.is_empty() {
             return;
@@ -199,6 +251,29 @@ impl GenerationSchedule {
                 let mut tmp = None;
                 swap(&mut holder.chunk, &mut tmp);
                 let Some(tmp) = tmp else {
+                    // No chunk data to write back. The holder itself still has to
+                    // go, otherwise `chunk_map` accumulates one dead entry per
+                    // unload of a chunk whose data never arrived, and never
+                    // shrinks again.
+                    //
+                    // It may only be dropped once nothing can still address it:
+                    // `receive_chunk` does `chunk_map.remove(&pos).unwrap()` and
+                    // the dispatch path in `run.rs` does `get_mut(&pos).unwrap()`,
+                    // so a holder that still owns scheduled tasks must stay. Such
+                    // holders keep their `unload_chunks` slot below and are
+                    // retried once their tasks resolve.
+                    let was_public = holder.public;
+                    if Self::release_stranded_holder(&mut self.graph, holder) {
+                        if was_public {
+                            // `chunk == None` together with `public` is already
+                            // inconsistent, but do not leave a strong reference
+                            // behind in the public map if it happens.
+                            self.public_chunk_map.remove(&pos);
+                        }
+                        self.chunk_map.remove(&pos);
+                    } else {
+                        self.unload_chunks.insert(pos);
+                    }
                     continue;
                 };
                 match tmp {
@@ -287,5 +362,106 @@ impl GenerationSchedule {
         if let Err(e) = self.io_write.send(chunks) {
             error!("Failed to send chunks to io write thread: {:?}", e);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ChunkHolder, DAG, EdgeKey, GenerationSchedule, NodeKey, StagedChunkEnum};
+    use crate::chunk_system::ChunkPos;
+    use crate::chunk_system::dag::{Edge, Node};
+    use slotmap::Key;
+
+    #[test]
+    fn stranded_holder_without_tasks_is_released() {
+        let mut graph = DAG::default();
+        let mut holder = ChunkHolder::default();
+
+        assert!(GenerationSchedule::release_stranded_holder(
+            &mut graph,
+            &mut holder
+        ));
+        assert!(holder.occupied.is_null());
+        assert!(holder.occupied_by.is_null());
+    }
+
+    #[test]
+    fn stranded_holder_with_a_live_task_is_kept() {
+        let mut graph = DAG::default();
+        let task = graph
+            .nodes
+            .insert(Node::new(ChunkPos::new(0, 0), StagedChunkEnum::Empty));
+        let mut tasks = [NodeKey::null(); StagedChunkEnum::COUNT];
+        tasks[StagedChunkEnum::Empty as usize] = task;
+        let mut holder = ChunkHolder {
+            tasks,
+            ..ChunkHolder::default()
+        };
+
+        assert!(!GenerationSchedule::release_stranded_holder(
+            &mut graph,
+            &mut holder
+        ));
+    }
+
+    #[test]
+    fn stranded_holder_occupied_by_a_live_node_is_kept() {
+        let mut graph = DAG::default();
+        let occupied = graph
+            .nodes
+            .insert(Node::new(ChunkPos::new(0, 0), StagedChunkEnum::None));
+        let mut holder = ChunkHolder {
+            occupied,
+            ..ChunkHolder::default()
+        };
+
+        assert!(!GenerationSchedule::release_stranded_holder(
+            &mut graph,
+            &mut holder
+        ));
+    }
+
+    #[test]
+    fn stranded_holder_with_a_waiting_dependent_is_kept() {
+        let mut graph = DAG::default();
+        let dependent = graph
+            .nodes
+            .insert(Node::new(ChunkPos::new(1, 0), StagedChunkEnum::Biomes));
+        let occupied_by = graph.edges.insert(Edge::new(dependent, EdgeKey::null()));
+        let mut holder = ChunkHolder {
+            occupied_by,
+            ..ChunkHolder::default()
+        };
+
+        assert!(!GenerationSchedule::release_stranded_holder(
+            &mut graph,
+            &mut holder
+        ));
+        assert_eq!(graph.edges.len(), 1, "edge must be kept for the dependent");
+    }
+
+    #[test]
+    fn releasing_a_stranded_holder_frees_its_dead_edges() {
+        let mut graph = DAG::default();
+
+        // Two edges pointing at a node that has already been dropped.
+        let dead = graph
+            .nodes
+            .insert(Node::new(ChunkPos::new(1, 0), StagedChunkEnum::Biomes));
+        graph.nodes.remove(dead);
+        let first = graph.edges.insert(Edge::new(dead, EdgeKey::null()));
+        let occupied_by = graph.edges.insert(Edge::new(dead, first));
+        assert_eq!(graph.edges.len(), 2);
+
+        let mut holder = ChunkHolder {
+            occupied_by,
+            ..ChunkHolder::default()
+        };
+        assert!(GenerationSchedule::release_stranded_holder(
+            &mut graph,
+            &mut holder
+        ));
+        assert_eq!(graph.edges.len(), 0, "dead edges must be reclaimed");
+        assert!(holder.occupied_by.is_null());
     }
 }

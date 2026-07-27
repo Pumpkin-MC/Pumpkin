@@ -7,13 +7,115 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand},
 };
 use std::f64::consts::PI;
+use std::hash::Hash;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::ProtoChunk;
 use dashmap::DashMap;
 use pumpkin_data::structures::StructureKeys;
 
 use super::structures::{StructurePosition, create_chunk_random};
+
+/// How many memoized structure starts may stay resident.
+///
+/// # Deviation from vanilla
+///
+/// Vanilla has no global structure-start memo at all: starts are owned by the
+/// `ChunkHolder` and die with the chunk, and `StructureCheck.loadedChunks`
+/// (`/root/Vanilla/src/net/minecraft/world/level/levelgen/structure/StructureCheck.java:74`)
+/// caches only per-chunk reference *counts* (`Object2IntMap<Structure>`), never
+/// piece lists. Pumpkin memoizes the starts themselves because its reference
+/// scan recomputes a start for every neighbouring chunk that overlaps it, which
+/// would re-run the full jigsaw expansion many times over.
+///
+/// The bound is therefore Pumpkin's own, not a vanilla constant. A start is only
+/// useful while chunks within 8 of it are still generating
+/// (`ChunkGenerator.createReferences`, the +-8 window mirrored in
+/// `proto_chunk/structures.rs`), i.e. one 17x17 chunk neighbourhood per start,
+/// so a few hundred entries covers every start any in-flight chunk can reach.
+const MAX_STRUCTURE_STARTS: usize = 512;
+
+/// How many entries a trim leaves behind.
+///
+/// Trimming below the bound rather than exactly to it amortises the cost: the
+/// next `MAX_STRUCTURE_STARTS - KEEP_STRUCTURE_STARTS` insertions are free.
+const KEEP_STRUCTURE_STARTS: usize = MAX_STRUCTURE_STARTS * 3 / 4;
+
+/// Returns the stamp to retain from, keeping the `keep` newest entries.
+///
+/// `stamps` is reordered in place. `None` means nothing needs evicting.
+fn retain_threshold(stamps: &mut [u64], keep: usize) -> Option<u64> {
+    if stamps.len() <= keep {
+        return None;
+    }
+    // The keep-th newest stamp sits at `len - keep` once partially ordered.
+    let index = stamps.len() - keep;
+    let (_, threshold, _) = stamps.select_nth_unstable(index);
+    Some(*threshold)
+}
+
+/// A capacity-bounded concurrent memo that discards its oldest entries.
+///
+/// Entries are stamped with a monotonic counter on insert; a trim keeps the
+/// newest [`KEEP_STRUCTURE_STARTS`] and drops the rest. Reads never block on the
+/// trim beyond a single `DashMap` shard, which matters because this is hit from
+/// the rayon generation pool.
+struct BoundedCache<K, V> {
+    entries: DashMap<K, (u64, V)>,
+    clock: AtomicU64,
+    /// Guards the trim so concurrent inserters do not all scan the map.
+    trimming: AtomicBool,
+}
+
+impl<K: Eq + Hash, V> Default for BoundedCache<K, V> {
+    fn default() -> Self {
+        Self {
+            entries: DashMap::new(),
+            clock: AtomicU64::new(0),
+            trimming: AtomicBool::new(false),
+        }
+    }
+}
+
+impl<K: Eq + Hash, V: Clone> BoundedCache<K, V> {
+    /// Returns the memoized value for `key`, computing and storing it on a miss.
+    ///
+    /// Two threads racing on the same missing key may both run `compute`; the
+    /// last write wins. That is harmless here because the computation is a pure
+    /// function of the key and the world seed.
+    fn get_or_insert_with(&self, key: K, compute: impl FnOnce() -> V) -> V {
+        // Clone out of the guard immediately: holding a `Ref` across the trim
+        // below would deadlock against our own `retain`.
+        let cached = self.entries.get(&key).map(|entry| entry.value().1.clone());
+        if let Some(value) = cached {
+            return value;
+        }
+
+        let computed = compute();
+        let stamp = self.clock.fetch_add(1, Ordering::Relaxed);
+        self.entries.insert(key, (stamp, computed.clone()));
+        self.trim();
+        computed
+    }
+
+    fn trim(&self) {
+        if self.entries.len() <= MAX_STRUCTURE_STARTS {
+            return;
+        }
+        // Another thread is already trimming; the bound is soft, so skip.
+        if self.trimming.swap(true, Ordering::Acquire) {
+            return;
+        }
+        let mut stamps: Vec<u64> = self.entries.iter().map(|entry| entry.value().0).collect();
+        if let Some(threshold) = retain_threshold(&mut stamps, KEEP_STRUCTURE_STARTS) {
+            self.entries
+                .retain(|_, (stamp, _)| *stamp >= threshold);
+        }
+        self.trimming.store(false, Ordering::Release);
+    }
+}
+
 /// A thread-safe global cache for structures that require world-wide placement calculations
 /// rather than localized chunk-based math (e.g., Strongholds using Concentric Rings).
 ///
@@ -27,7 +129,12 @@ pub struct GlobalStructureCache {
     /// A jigsaw structure's placement is fully determined by its start chunk and the
     /// world seed, so it is computed once here instead of being recomputed for every
     /// surrounding chunk whose structure references overlap it.
-    structure_starts: OnceLock<DashMap<(StructureKeys, i32, i32), Option<StructurePosition>>>,
+    ///
+    /// Bounded at [`MAX_STRUCTURE_STARTS`] — each value owns a
+    /// `StructurePiecesCollector` with up to hundreds of boxed pieces, and this
+    /// cache lives as long as the generator (i.e. the whole server run). See the
+    /// constant for why vanilla needs no such bound.
+    structure_starts: OnceLock<BoundedCache<(StructureKeys, i32, i32), Option<StructurePosition>>>,
 }
 impl GlobalStructureCache {
     /// Creates a new, empty global structure cache.
@@ -58,13 +165,9 @@ impl GlobalStructureCache {
         chunk_z: i32,
         compute: impl FnOnce() -> Option<StructurePosition>,
     ) -> Option<StructurePosition> {
-        let cache = self.structure_starts.get_or_init(DashMap::new);
-        if let Some(cached) = cache.get(&(key, chunk_x, chunk_z)) {
-            return cached.value().clone();
-        }
-        let computed = compute();
-        cache.insert((key, chunk_x, chunk_z), computed.clone());
-        computed
+        self.structure_starts
+            .get_or_init(BoundedCache::new)
+            .get_or_insert_with((key, chunk_x, chunk_z), compute)
     }
 
     /// Retrieves the list of chunk coordinates for Concentric Ring structures.
@@ -365,7 +468,71 @@ mod tests {
         RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand,
     };
 
-    use crate::generation::structure::placement::get_start_chunk_random_spread;
+    use crate::generation::structure::placement::{
+        BoundedCache, KEEP_STRUCTURE_STARTS, MAX_STRUCTURE_STARTS, get_start_chunk_random_spread,
+        retain_threshold,
+    };
+
+    #[test]
+    fn retain_threshold_is_none_below_the_bound() {
+        let mut stamps = [1, 2, 3];
+        assert_eq!(retain_threshold(&mut stamps, 3), None);
+        assert_eq!(retain_threshold(&mut stamps, 4), None);
+    }
+
+    #[test]
+    fn retain_threshold_keeps_the_newest_entries() {
+        let mut stamps = [5, 1, 4, 2, 3];
+        // Keep 2 -> threshold must admit exactly {4, 5}.
+        let threshold = retain_threshold(&mut stamps, 2).expect("over the bound");
+        assert_eq!(threshold, 4);
+        assert_eq!(
+            [5, 1, 4, 2, 3].iter().filter(|s| **s >= threshold).count(),
+            2
+        );
+    }
+
+    #[test]
+    fn bounded_cache_memoizes_and_computes_once() {
+        let cache: BoundedCache<u32, u32> = BoundedCache::new();
+        let mut calls = 0;
+        assert_eq!(cache.get_or_insert_with(7, || 70), 70);
+        cache.get_or_insert_with(7, || {
+            calls += 1;
+            0
+        });
+        assert_eq!(calls, 0, "second lookup must hit the memo");
+    }
+
+    #[test]
+    fn bounded_cache_respects_its_capacity() {
+        let cache: BoundedCache<u32, u32> = BoundedCache::new();
+        let total = u32::try_from(MAX_STRUCTURE_STARTS * 3).expect("fits in u32");
+        for key in 0..total {
+            cache.get_or_insert_with(key, || key);
+        }
+        assert!(
+            cache.entries.len() <= MAX_STRUCTURE_STARTS,
+            "cache grew to {} entries",
+            cache.entries.len()
+        );
+    }
+
+    #[test]
+    fn bounded_cache_evicts_the_oldest_keys_first() {
+        let cache: BoundedCache<u32, u32> = BoundedCache::new();
+        let total = u32::try_from(MAX_STRUCTURE_STARTS + 1).expect("fits in u32");
+        for key in 0..total {
+            cache.get_or_insert_with(key, || key);
+        }
+        // One trim has run, leaving the KEEP newest insertions.
+        assert_eq!(cache.entries.len(), KEEP_STRUCTURE_STARTS);
+        assert!(!cache.entries.contains_key(&0), "oldest key survived");
+        assert!(
+            cache.entries.contains_key(&(total - 1)),
+            "newest key was evicted"
+        );
+    }
 
     #[test]
     fn get_start_chunk_random() {
