@@ -6,6 +6,8 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::AttachFace;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::tag;
+use pumpkin_data::tag::Taggable;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -40,7 +42,9 @@ async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
                 BlockFlags::NOTIFY_ALL,
             )
             .await;
-        let delay = if block == &Block::STONE_BUTTON {
+        // Vanilla presses stone-like buttons (stone and polished blackstone) for
+        // 20 ticks and every wooden button for 30.
+        let delay = if block.has_tag(&tag::Block::MINECRAFT_STONE_BUTTONS) {
             20
         } else {
             30
