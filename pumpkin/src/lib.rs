@@ -719,7 +719,15 @@ impl PumpkinServer {
                             }
                         }
                     }
-                    Err(e) => error!("UDP socket error: {e}"),
+                    Err(e) => {
+                        error!("UDP socket error: {e}");
+                        // Back off like the TCP arm above. `recv_from` can fail
+                        // repeatedly and immediately — on Linux a surfaced ICMP
+                        // "port unreachable" from an earlier send does exactly
+                        // that — and without this the select loop spins at full
+                        // speed on one worker.
+                        sleep(Duration::from_millis(50)).await;
+                    }
                 }
             },
 
