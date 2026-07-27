@@ -19,6 +19,7 @@ use style::Style;
 pub mod click;
 pub mod color;
 pub mod hover;
+pub mod legacy;
 pub mod style;
 
 /// Represents a Minecraft chat component.
@@ -523,118 +524,6 @@ impl TextComponent {
             style: Box::new(Style::default()),
             extra: vec![],
         })
-    }
-
-    /// Parses a legacy Minecraft formatted string (using section signs '§') into a text component.
-    ///
-    /// Legacy formatting uses the section sign (§) followed by a formatting code:
-    /// - Colors: 0-9, a-f
-    /// - Styles: l (bold), o (italic), n (underline), m (strikethrough), k (obfuscated)
-    /// - Reset: r
-    /// - RGB hex colors: §x§R§R§G§G§B§B
-    ///
-    /// # Arguments
-    /// - `input` – The legacy formatted string.
-    ///
-    /// # Returns
-    /// A `TextComponent` with the parsed formatting applied.
-    #[must_use]
-    pub fn from_legacy_string(input: &str) -> Self {
-        let mut root = Self::text("");
-        let mut parts = input.split('§');
-
-        if let Some(first) = parts.next()
-            && !first.is_empty()
-        {
-            root = root.add_child(Self::text(first.to_string()));
-        }
-
-        let mut current_color: Option<Color> = None;
-        let mut bold = false;
-        let mut italic = false;
-        let mut underlined = false;
-        let mut strikethrough = false;
-        let mut obfuscated = false;
-
-        while let Some(part) = parts.next() {
-            if part.is_empty() {
-                continue;
-            }
-
-            let code = part.chars().next().unwrap_or(' ').to_ascii_lowercase();
-            let remainder = &part[1..];
-
-            match code {
-                'x' => {
-                    let mut hex = [0u8; 6];
-                    let mut valid_hex = true;
-                    for hex_byte in &mut hex {
-                        if let Some(next_part) = parts.next() {
-                            if let Some(c) = next_part.chars().next() {
-                                *hex_byte = c as u8;
-                            } else {
-                                valid_hex = false;
-                                break;
-                            }
-                        } else {
-                            valid_hex = false;
-                            break;
-                        }
-                    }
-                    if valid_hex && let Ok(hex_str) = std::str::from_utf8(&hex) {
-                        current_color = Color::from_hex_str(hex_str);
-                    }
-                    continue;
-                }
-                '0'..='9' | 'a'..='f' => {
-                    current_color = Color::from_legacy_code(code);
-                    bold = false;
-                    italic = false;
-                    underlined = false;
-                    strikethrough = false;
-                    obfuscated = false;
-                }
-                'l' => bold = true,
-                'o' => italic = true,
-                'n' => underlined = true,
-                'm' => strikethrough = true,
-                'k' => obfuscated = true,
-                'r' => {
-                    current_color = None;
-                    bold = false;
-                    italic = false;
-                    underlined = false;
-                    strikethrough = false;
-                    obfuscated = false;
-                }
-                _ => {}
-            }
-
-            if !remainder.is_empty() {
-                let mut child = Self::text(remainder.to_string());
-                if let Some(c) = current_color {
-                    child = child.color(c);
-                }
-                if bold {
-                    child = child.bold();
-                }
-                if italic {
-                    child = child.italic();
-                }
-                if underlined {
-                    child = child.underlined();
-                }
-                if strikethrough {
-                    child = child.strikethrough();
-                }
-                if obfuscated {
-                    child = child.obfuscated();
-                }
-                root = root.add_child(child);
-            }
-        }
-
-        root
     }
 
     /// Appends a child component to this component.
