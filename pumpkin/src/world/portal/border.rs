@@ -121,7 +121,9 @@ mod tests {
         let clamped = b.clamp_coords(0.0, 64.0, 0.0);
         assert!(b.contains_block(clamped.0.x, clamped.0.z));
         assert_eq!(clamped.0.x, 984);
-        assert_eq!(clamped.0.z, -2016);
+        // Z is above the offset border's upper edge (-1984), so Vanilla clamps
+        // to `max_z - 1e-5` and floors to the nearest legal block, -1985.
+        assert_eq!(clamped.0.z, -1985);
     }
 
     #[test]
