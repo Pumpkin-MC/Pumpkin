@@ -180,6 +180,14 @@ impl BedrockClient {
         let real_name = player_data.display_name;
         // IMPORTANT: Bedrock allows spaces in names. While we could support this, it would significantly complicate parsing player arguments in commands, so we don't
         let under_score_name = real_name.replace(' ', "_");
+        // Reject empty/NUL/control names (query CString panic, log injection, etc.).
+        if under_score_name.is_empty()
+            || under_score_name.contains('\0')
+            || under_score_name.chars().any(char::is_control)
+            || under_score_name.len() > 16
+        {
+            return Err(LoginError::InvalidUsername);
+        }
 
         let profile = GameProfile {
             id: Uuid::parse_str(&player_data.uuid).map_err(|_| LoginError::InvalidUuid)?,

@@ -44,6 +44,16 @@ impl NbtCompound {
     }
 
     pub fn skip_content<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<(), Error> {
+        Self::skip_content_depth(reader, 0)
+    }
+
+    pub(crate) fn skip_content_depth<'a, R: NbtReadHelper<'a>>(
+        reader: &mut R,
+        depth: u32,
+    ) -> Result<(), Error> {
+        if depth >= crate::MAX_NBT_DEPTH {
+            return Err(Error::DepthLimitExceeded);
+        }
         loop {
             let tag_id = match reader.get_u8() {
                 Ok(id) => id,
@@ -58,13 +68,23 @@ impl NbtCompound {
             reader.skip_string()?;
 
             // Skip Value
-            NbtTag::skip_data(reader, tag_id)?;
+            NbtTag::skip_data_depth(reader, tag_id, depth + 1)?;
         }
 
         Ok(())
     }
 
     pub fn deserialize_content<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<Self, Error> {
+        Self::deserialize_content_depth(reader, 0)
+    }
+
+    pub(crate) fn deserialize_content_depth<'a, R: NbtReadHelper<'a>>(
+        reader: &mut R,
+        depth: u32,
+    ) -> Result<Self, Error> {
+        if depth >= crate::MAX_NBT_DEPTH {
+            return Err(Error::DepthLimitExceeded);
+        }
         let mut compound = Self::new();
 
         loop {
@@ -79,7 +99,7 @@ impl NbtCompound {
             }
 
             let name = reader.get_string()?;
-            let tag = NbtTag::deserialize_data(reader, tag_id)?;
+            let tag = NbtTag::deserialize_data_depth(reader, tag_id, depth + 1)?;
 
             compound.child_tags.insert(name.into(), tag);
         }

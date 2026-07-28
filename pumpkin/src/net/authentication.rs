@@ -47,10 +47,19 @@ pub struct MojangPublicKeys {
 }
 
 const MOJANG_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
-const MOJANG_PREVENT_PROXY_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
+const MOJANG_PREVENT_PROXY_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}&ip={ip}";
 const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
 const MOJANG_PROFILE_BY_NAME_URL: &str =
     "https://api.mojang.com/users/profiles/minecraft/{username}";
+
+/// ureq 3 defaults to no timeouts; always use a bounded agent for Mojang HTTP.
+fn mojang_http_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_connect(Some(std::time::Duration::from_secs(5)))
+        .timeout_recv_response(Some(std::time::Duration::from_secs(5)))
+        .build()
+        .into()
+}
 
 /// Sends a GET request to Mojang's authentication servers to verify a client's Minecraft account.
 ///
@@ -92,7 +101,8 @@ pub fn authenticate(
             .replace("{server_hash}", server_hash)
     };
 
-    let mut response = ureq::get(address)
+    let mut response = mojang_http_agent()
+        .get(address)
         .call()
         .map_err(|_| AuthError::FailedResponse)?;
     match response.status() {
@@ -154,7 +164,8 @@ pub fn fetch_mojang_public_keys(
 
     let url = format!("{services_url}/publickeys");
 
-    let mut response = ureq::get(url)
+    let mut response = mojang_http_agent()
+        .get(url)
         .call()
         .map_err(|_| AuthError::FailedResponse)?;
 
@@ -195,7 +206,8 @@ pub fn lookup_profile_by_name(
 ) -> Result<Option<(Uuid, String)>, AuthError> {
     let url = MOJANG_PROFILE_BY_NAME_URL.replace("{username}", name);
 
-    let mut response = ureq::get(url)
+    let mut response = mojang_http_agent()
+        .get(url)
         .call()
         .map_err(|_| AuthError::FailedResponse)?;
 

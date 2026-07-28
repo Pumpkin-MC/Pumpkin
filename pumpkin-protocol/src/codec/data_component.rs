@@ -24,6 +24,9 @@ use pumpkin_data::sound::Sound;
 use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 
 const MAX_STATUS_EFFECTS: usize = 128;
+const MAX_IDSET_ELEMENTS: i32 = 4096;
+const MAX_CONSUMABLE_EFFECTS: i32 = 256;
+const MAX_EFFECT_NESTING: u32 = 16;
 
 #[must_use]
 pub fn data_to_proto_sound(id_or: &IdOr<SoundEvent>) -> crate::IdOr<crate::SoundEvent> {
@@ -62,6 +65,9 @@ fn deserialize_idset<T: IDSetContent>(
         }
         std::cmp::Ordering::Greater => {
             let len = id_type - 1;
+            if len > MAX_IDSET_ELEMENTS {
+                return Err(ReadingError::TooLarge("IDSet elements".into()));
+            }
             let mut content_vec = Vec::with_capacity(len as usize);
 
             for _ in 0..len {
@@ -125,7 +131,7 @@ fn deserialize_status_effects(
         let has_hidden = seq.get_bool()?;
         if has_hidden {
             // Skip hidden effect parameters recursively
-            skip_effect_parameters(seq)?;
+            skip_effect_parameters(seq, 0)?;
         }
 
         custom_effects.push(StatusEffectInstance {
@@ -392,6 +398,9 @@ impl DataComponentCodec<Self> for ConsumableImpl {
             "Invalid sound in ConsumableImpl".into(),
         ))?;
         let effects_len = seq.get_var_int()?.0;
+        if !(0..=MAX_CONSUMABLE_EFFECTS).contains(&effects_len) {
+            return Err(ReadingError::TooLarge("ConsumableImpl effects".into()));
+        }
         let mut effects_vec = Vec::with_capacity(effects_len as usize);
 
         for _ in 0..effects_len {
@@ -579,7 +588,12 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
 }
 
 /// Helper to skip hidden effect parameters recursively
-fn skip_effect_parameters(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
+fn skip_effect_parameters(seq: &mut impl NetworkReadExt, depth: u32) -> Result<(), ReadingError> {
+    if depth >= MAX_EFFECT_NESTING {
+        return Err(ReadingError::TooLarge(
+            "PotionContents hidden effect nesting".into(),
+        ));
+    }
     // amplifier
     seq.get_var_int()?;
     // duration
@@ -593,7 +607,7 @@ fn skip_effect_parameters(seq: &mut impl NetworkReadExt) -> Result<(), ReadingEr
     // has_hidden (recursive)
     let has_hidden = seq.get_bool()?;
     if has_hidden {
-        skip_effect_parameters(seq)?;
+        skip_effect_parameters(seq, depth + 1)?;
     }
     Ok(())
 }
