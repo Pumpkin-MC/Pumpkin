@@ -853,7 +853,6 @@ impl LivingEntity {
                 && !self.entity.on_ground.load(SeqCst)
                 && self.entity.water_height.load() > self.get_swim_height();
             self.entity.set_swimming(should_swim).await;
-            
         } else if self.entity.swimming.load(SeqCst) {
             self.entity.set_swimming(false).await;
         }
