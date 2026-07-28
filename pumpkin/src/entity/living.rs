@@ -844,6 +844,21 @@ impl LivingEntity {
 
         let touching_water = self.entity.touching_water.load(SeqCst);
 
+        // Update swimming state: entity is swimming when in water with movement input
+        // and not on ground (matches vanilla LivingEntity#updateSwimming)
+        if touching_water {
+            let input = self.movement_input.load();
+            let has_forward_input = (input.x * input.x + input.z * input.z) > 0.0;
+            let should_swim = has_forward_input
+                && !self.entity.on_ground.load(SeqCst)
+                && self.entity.water_height.load() > self.get_swim_height();
+            self.entity
+                .set_swimming(should_swim)
+                .await;
+        } else if self.entity.swimming.load(SeqCst) {
+            self.entity.set_swimming(false).await;
+        }
+
         // Strider is the only entity that has canWalkOnFluid = false
 
         if (touching_water || self.entity.touching_lava.load(SeqCst))
