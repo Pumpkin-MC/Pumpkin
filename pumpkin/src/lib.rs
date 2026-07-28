@@ -8,7 +8,7 @@ use crate::net::bedrock::BedrockClient;
 use crate::net::java::JavaClient;
 use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
-use crate::server::{Server, ticker::Ticker};
+use crate::server::{Server, ServerPaths, ticker::Ticker};
 use plugin::server::server_command::ServerCommandEvent;
 use plugin::server::server_load::{LoadType, ServerLoadEvent};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
@@ -43,6 +43,7 @@ pub mod crash;
 pub mod data;
 pub mod entity;
 pub mod error;
+pub mod instance;
 pub mod item;
 pub mod logging;
 pub mod net;
@@ -191,6 +192,50 @@ pub fn stop_or_exit_server() {
     }
 }
 
+/// Errors that can occur when binding network ports for a server instance.
+#[derive(Debug, thiserror::Error)]
+pub enum NetworkBindError {
+    #[error(
+        "Address {address} is already in use. Make sure another instance of the server isn't already running"
+    )]
+    AddrInUse { address: SocketAddr },
+    #[error(
+        "Permission denied when binding to {address}. You might need sudo/admin privileges to use ports below 1024"
+    )]
+    PermissionDenied { address: SocketAddr },
+    #[error("The address {address} is not available on this machine")]
+    AddrNotAvailable { address: SocketAddr },
+    #[error("Failed to bind to {address}: {source}")]
+    Other {
+        address: SocketAddr,
+        source: std::io::Error,
+    },
+}
+
+async fn bind_tcp_async(address: SocketAddr) -> Result<TcpListener, NetworkBindError> {
+    match tokio::net::TcpListener::bind(address).await {
+        Ok(listener) => Ok(listener),
+        Err(e) => match e.kind() {
+            ErrorKind::AddrInUse => Err(NetworkBindError::AddrInUse { address }),
+            ErrorKind::PermissionDenied => Err(NetworkBindError::PermissionDenied { address }),
+            ErrorKind::AddrNotAvailable => Err(NetworkBindError::AddrNotAvailable { address }),
+            _ => Err(NetworkBindError::Other { address, source: e }),
+        },
+    }
+}
+
+async fn bind_udp_async(address: SocketAddr) -> Result<UdpSocket, NetworkBindError> {
+    match tokio::net::UdpSocket::bind(address).await {
+        Ok(socket) => Ok(socket),
+        Err(e) => match e.kind() {
+            ErrorKind::AddrInUse => Err(NetworkBindError::AddrInUse { address }),
+            ErrorKind::PermissionDenied => Err(NetworkBindError::PermissionDenied { address }),
+            ErrorKind::AddrNotAvailable => Err(NetworkBindError::AddrNotAvailable { address }),
+            _ => Err(NetworkBindError::Other { address, source: e }),
+        },
+    }
+}
+
 fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
     opt: Option<D>,
     func: F,
@@ -212,61 +257,76 @@ impl PumpkinServer {
     pub fn log_info(&self, message: &str) {
         tracing::info!(target: "plugin", "{}", message);
     }
+
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
     ) -> Self {
-        let server = Server::new(basic_config, advanced_config, vanilla_data).await;
+        match Self::new_with_result(basic_config, advanced_config, vanilla_data).await {
+            Ok(server) => server,
+            Err(e) => {
+                error!("{e}");
+                std::process::exit(1);
+            }
+        }
+    }
+
+    /// Creates a new `PumpkinServer`, returning errors instead of exiting on port conflicts.
+    ///
+    /// This method is suitable for multi-instance usage where a port conflict should
+    /// not terminate the entire process.
+    pub async fn new_with_result(
+        basic_config: BasicConfiguration,
+        advanced_config: AdvancedConfiguration,
+        vanilla_data: VanillaData,
+    ) -> Result<Self, NetworkBindError> {
+        let paths = ServerPaths::from_basic_config(&basic_config);
+        Self::new_with_result_and_paths(
+            basic_config,
+            advanced_config,
+            vanilla_data,
+            paths,
+            STOP_INTERRUPT.clone(),
+        )
+        .await
+    }
+
+    /// Creates a server with explicit instance paths and a per-instance stop token.
+    pub async fn new_with_result_and_paths(
+        basic_config: BasicConfiguration,
+        advanced_config: AdvancedConfiguration,
+        vanilla_data: VanillaData,
+        paths: ServerPaths,
+        stop_token: CancellationToken,
+    ) -> Result<Self, NetworkBindError> {
+        let server =
+            Server::new_with_paths(basic_config, advanced_config, vanilla_data, paths).await;
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
-        if rcon.enabled {
-            warn!(
-                "RCON is enabled, but it's highly insecure as it transmits passwords and commands in plain text. This makes it vulnerable to interception and exploitation by anyone on the network"
-            );
-            let rcon_server = server.clone();
-            server.spawn_task(async move {
-                RCONServer::run(&rcon, rcon_server).await;
-            });
-        }
+        let rcon_listener = if rcon.enabled {
+            Some(bind_tcp_async(rcon.address).await?)
+        } else {
+            None
+        };
 
         let tcp_listener = if server.advanced_config.networking.java.enabled {
             let address = server.advanced_config.networking.java.address;
-            // Setup the TCP server socket.
-            let listener = match TcpListener::bind(address).await {
-                Ok(l) => l,
-                Err(e) => match e.kind() {
-                    ErrorKind::AddrInUse => {
-                        error!("Error: Address {address} is already in use.");
-                        error!("Make sure another instance of the server isn't already running");
-                        std::process::exit(1);
-                    }
-                    ErrorKind::PermissionDenied => {
-                        error!("Error: Permission denied when binding to {address}.");
-                        error!("You might need sudo/admin privileges to use ports below 1024");
-                        std::process::exit(1);
-                    }
-                    ErrorKind::AddrNotAvailable => {
-                        error!("Error: The address {address} is not available on this machine");
-                        std::process::exit(1);
-                    }
-                    _ => {
-                        error!("Failed to start TcpListener on {address}: {e}");
-                        std::process::exit(1);
-                    }
-                },
-            };
-            // In the event the user puts 0 for their port, this will allow us to know what port it is running on
+            let listener = bind_tcp_async(address).await?;
             let addr = listener
                 .local_addr()
                 .expect("Unable to get the address of the server!");
 
             if server.advanced_config.networking.query.enabled {
                 info!("Query protocol is enabled. Starting...");
-                server.spawn_task(query::start_query_handler(
+                let query_addr = server.advanced_config.networking.query.address;
+                let query_socket = Arc::new(bind_udp_async(query_addr).await?);
+                server.spawn_task(query::start_query_handler_with_socket(
                     server.clone(),
-                    server.advanced_config.networking.query.address,
+                    query_socket,
+                    query_addr,
+                    stop_token.clone(),
                 ));
             }
 
@@ -277,7 +337,19 @@ impl PumpkinServer {
                     &server.advanced_config.networking.lan_broadcast,
                     &server.advanced_config.networking.java.motd,
                 );
-                server.spawn_task(lan_broadcast.start(addr));
+                let lan_socket =
+                    lan_broadcast
+                        .bind()
+                        .await
+                        .map_err(|source| NetworkBindError::Other {
+                            address: SocketAddr::from(([0, 0, 0, 0], 0)),
+                            source,
+                        })?;
+                server.spawn_task(lan_broadcast.start_with_socket(
+                    addr,
+                    lan_socket,
+                    stop_token.clone(),
+                ));
             }
 
             Some(listener)
@@ -288,26 +360,37 @@ impl PumpkinServer {
         // Ticker
         {
             let ticker_server = server.clone();
+            let ticker_token = stop_token.clone();
             server.spawn_task(async move {
-                Ticker::run(&ticker_server).await;
+                Ticker::run_with_token(&ticker_server, ticker_token).await;
             });
         };
 
         let udp_socket = if server.advanced_config.networking.bedrock.enabled {
-            Some(Arc::new(
-                UdpSocket::bind(server.advanced_config.networking.bedrock.address)
-                    .await
-                    .expect("Failed to bind UDP Socket"),
-            ))
+            let address = server.advanced_config.networking.bedrock.address;
+            Some(Arc::new(bind_udp_async(address).await?))
         } else {
             None
         };
 
-        Self {
+        if let Some(listener) = rcon_listener {
+            warn!(
+                "RCON is enabled, but it's highly insecure as it transmits passwords and commands in plain text. This makes it vulnerable to interception and exploitation by anyone on the network"
+            );
+            let rcon_server = server.clone();
+            let rcon_config = rcon.clone();
+            let rcon_token = stop_token.clone();
+            server.spawn_task(async move {
+                RCONServer::run_with_listener(listener, &rcon_config, rcon_server, rcon_token)
+                    .await;
+            });
+        }
+
+        Ok(Self {
             server,
             tcp_listener,
             udp_socket,
-        }
+        })
     }
 
     pub async fn init_plugins(&self) -> std::time::Duration {
@@ -336,8 +419,27 @@ impl PumpkinServer {
         }
     }
 
+    /// Starts the server with the global cancellation token.
     pub async fn start(&self) {
-        if self.server.advanced_config.commands.use_console
+        let token = STOP_INTERRUPT.clone();
+        self.start_with_token_and_global(token, true).await;
+    }
+
+    /// Starts the server with a specific cancellation token for per-instance control.
+    ///
+    /// This allows multiple server instances to run concurrently, each with their
+    /// own cancellation signal.
+    pub async fn start_with_token(&self, stop_token: CancellationToken) {
+        self.start_with_token_and_global(stop_token, false).await;
+    }
+
+    async fn start_with_token_and_global(
+        &self,
+        stop_token: CancellationToken,
+        global_shutdown: bool,
+    ) {
+        if global_shutdown
+            && self.server.advanced_config.commands.use_console
             && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
         {
             if let Some(rl) = wrapper.take_readline() {
@@ -362,18 +464,24 @@ impl PumpkinServer {
             .fire(ServerLoadEvent::new(LoadType::Startup))
             .await;
 
-        while !SHOULD_STOP.load(Ordering::Relaxed) {
+        while if global_shutdown {
+            !SHOULD_STOP.load(Ordering::Relaxed)
+        } else {
+            !stop_token.is_cancelled()
+        } {
             if !self
-                .unified_listener_task(&mut master_client_id, &tasks, &bedrock_clients)
+                .unified_listener_task(&mut master_client_id, &tasks, &bedrock_clients, &stop_token)
                 .await
             {
                 break;
             }
         }
 
-        SERVER_IS_STOPPING.store(true, Ordering::Release);
+        if global_shutdown {
+            SERVER_IS_STOPPING.store(true, Ordering::Release);
+        }
 
-        if let Some(crash_report) = CRASH_REPORT.get() {
+        if global_shutdown && let Some(crash_report) = CRASH_REPORT.get() {
             crash_report.print_to_console();
             crash_report.save_and_log();
 
@@ -427,7 +535,8 @@ impl PumpkinServer {
 
         info!("Completed save!");
 
-        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
+        if global_shutdown
+            && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
             && let Some(rl) = wrapper.take_readline()
         {
             let _ = rl;
@@ -440,6 +549,7 @@ impl PumpkinServer {
         master_client_id_counter: &mut u64,
         tasks: &Arc<TaskTracker>,
         bedrock_clients: &Arc<Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
+        stop_token: &CancellationToken,
     ) -> bool {
         let mut udp_buf = [0; 1496]; // Buffer for UDP receive
 
@@ -609,12 +719,20 @@ impl PumpkinServer {
                             }
                         }
                     }
-                    Err(e) => error!("UDP socket error: {e}"),
+                    Err(e) => {
+                        error!("UDP socket error: {e}");
+                        // Back off like the TCP arm above. `recv_from` can fail
+                        // repeatedly and immediately — on Linux a surfaced ICMP
+                        // "port unreachable" from an earlier send does exactly
+                        // that — and without this the select loop spins at full
+                        // speed on one worker.
+                        sleep(Duration::from_millis(50)).await;
+                    }
                 }
             },
 
-            // Branch for the global stop signal
-            () = STOP_INTERRUPT.cancelled() => {
+            // Branch for the stop signal
+            () = stop_token.cancelled() => {
                 return false;
             }
         }

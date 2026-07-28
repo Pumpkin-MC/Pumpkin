@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Controls how commands are accepted, logged, and which permission
 /// level non-operator players receive by default.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct CommandsConfig {
     /// Whether commands from the console are accepted.

@@ -1,6 +1,6 @@
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Arc, OnceLock},
 };
 
@@ -39,6 +39,7 @@ pub struct Context {
     pub plugin_manager: Arc<PluginManager>,
     pub permission_manager: Arc<RwLock<PermissionManager>>,
     pub logger: Arc<OnceLock<LoggerOption>>,
+    data_folder: PathBuf,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -57,6 +58,7 @@ impl Context {
         handlers: Arc<RwLock<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
         logger: Arc<OnceLock<LoggerOption>>,
+        data_folder: PathBuf,
     ) -> Self {
         let permission_manager = server.permission_manager.clone();
         Self {
@@ -66,6 +68,7 @@ impl Context {
             plugin_manager,
             permission_manager,
             logger,
+            data_folder,
         }
     }
 
@@ -80,7 +83,7 @@ impl Context {
     /// A string representing the path to the data folder.
     #[must_use]
     pub fn get_data_folder(&self) -> PathBuf {
-        let path = Path::new("plugins").join(&self.metadata.name);
+        let path = self.data_folder.clone();
         if !path.exists() {
             fs::create_dir_all(&path).unwrap();
         }

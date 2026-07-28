@@ -1,12 +1,12 @@
 use pumpkin_config::LANBroadcastConfig;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::{select, time};
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::{SHOULD_STOP, STOP_INTERRUPT};
+use crate::STOP_INTERRUPT;
 
 /// The standard Minecraft multicast address used for LAN discovery
 ///
@@ -52,12 +52,23 @@ impl LANBroadcast {
     /// # Panics
     /// Panics if the UDP socket cannot be bound or if broadcast permissions are denied
     pub async fn start(self, bound_addr: SocketAddr) {
-        let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.port))
-            .await
-            .expect("Unable to bind to address");
+        let socket = self.bind().await.expect("Unable to bind to address");
+        self.start_with_socket(bound_addr, socket, STOP_INTERRUPT.clone())
+            .await;
+    }
 
-        socket.set_broadcast(true).unwrap();
+    pub async fn bind(&self) -> std::io::Result<UdpSocket> {
+        let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.port)).await?;
+        socket.set_broadcast(true)?;
+        Ok(socket)
+    }
 
+    pub async fn start_with_socket(
+        self,
+        bound_addr: SocketAddr,
+        socket: UdpSocket,
+        stop_token: CancellationToken,
+    ) {
         let mut interval = time::interval(Duration::from_millis(1500));
 
         let advertisement = format!("[MOTD]{}[/MOTD][AD]{}[/AD]", self.motd, bound_addr.port());
@@ -69,9 +80,9 @@ impl LANBroadcast {
                 .expect("Unable to find running address!")
         );
 
-        while !SHOULD_STOP.load(Ordering::Relaxed) {
+        while !stop_token.is_cancelled() {
             let t1 = interval.tick();
-            let t2 = STOP_INTERRUPT.cancelled();
+            let t2 = stop_token.cancelled();
 
             let should_continue = select! {
                 _ = t1 => true,

@@ -34,7 +34,8 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 /// that makes old binary plugins incompatible.
 pub const PLUGIN_API_VERSION: u32 = 2;
 
-const PLUGIN_DIR: &str = "./plugins";
+/// Default plugin directory path.
+pub const DEFAULT_PLUGIN_DIR: &str = "./plugins";
 
 /// A trait for handling events dynamically.
 ///
@@ -185,6 +186,8 @@ pub struct PluginManager {
     // Background task for hot reloading
     hot_reload_task: RwLock<Option<JoinHandle<()>>>,
     hot_reload_enabled: AtomicBool,
+    // Plugin directory path
+    plugin_dir: RwLock<PathBuf>,
 }
 
 /// Represents a successfully loaded plugin
@@ -240,6 +243,7 @@ impl Default for PluginManager {
             state_notify: Arc::new(Notify::new()),
             hot_reload_task: RwLock::new(None),
             hot_reload_enabled: AtomicBool::new(false),
+            plugin_dir: RwLock::new(PathBuf::from(DEFAULT_PLUGIN_DIR)),
         }
     }
 }
@@ -249,6 +253,25 @@ impl PluginManager {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a new plugin manager with a custom plugin directory.
+    #[must_use]
+    pub fn with_plugin_dir(plugin_dir: PathBuf) -> Self {
+        Self {
+            plugin_dir: RwLock::new(plugin_dir),
+            ..Default::default()
+        }
+    }
+
+    /// Returns the current plugin directory path.
+    pub async fn plugin_dir(&self) -> PathBuf {
+        self.plugin_dir.read().await.clone()
+    }
+
+    /// Sets the plugin directory path.
+    pub async fn set_plugin_dir(&self, plugin_dir: PathBuf) {
+        *self.plugin_dir.write().await = plugin_dir;
     }
 
     /// Unload all loaded plugins
@@ -293,13 +316,13 @@ impl PluginManager {
         })
         .map_err(|e| ManagerError::IoError(std::io::Error::other(e)))?;
 
-        let plugin_dir = Path::new(PLUGIN_DIR);
+        let plugin_dir = self.plugin_dir.read().await.clone();
         if !plugin_dir.exists() {
-            std::fs::create_dir_all(plugin_dir)?;
+            std::fs::create_dir_all(&plugin_dir)?;
         }
 
         watcher
-            .watch(plugin_dir, RecursiveMode::NonRecursive)
+            .watch(&plugin_dir, RecursiveMode::NonRecursive)
             .map_err(|e| ManagerError::IoError(std::io::Error::other(e)))?;
 
         let self_ref = self
@@ -554,6 +577,8 @@ impl PluginManager {
             .clone()
             .ok_or(ManagerError::ServerNotInitialized)?;
 
+        let data_folder = self.plugin_dir.read().await.join(&metadata.name);
+
         let context = Arc::new(Context::new(
             metadata.clone(),
             Arc::clone(
@@ -567,6 +592,7 @@ impl PluginManager {
             Arc::clone(&self.handlers),
             Arc::clone(&self_ref),
             Arc::clone(&LOGGER_IMPL),
+            data_folder,
         ));
 
         // Create the plugin structure first
@@ -663,9 +689,12 @@ impl PluginManager {
         Ok(task)
     }
 
-    /// Load all plugins from the plugin directory
+    /// Load all plugins from the plugin directory.
+    ///
+    /// If a custom plugin directory has been set via `with_plugin_dir` or
+    /// `set_plugin_dir`, that directory is used instead of the default `./plugins`.
     pub async fn load_plugins(&self) -> Result<std::time::Duration, ManagerError> {
-        let path = Path::new(PLUGIN_DIR);
+        let path = &*self.plugin_dir.read().await;
 
         if !path.exists() {
             std::fs::create_dir(path)?;
@@ -821,7 +850,7 @@ impl PluginManager {
             if loader.can_load(path) {
                 let (instance, metadata, loader_data) = loader.load(path).await?;
 
-                let cache_path = Path::new(PLUGIN_DIR).join("permission_cache.json");
+                let cache_path = self.plugin_dir.read().await.join("permission_cache.json");
                 let mut cache = cache::PermissionCache::load(&cache_path).await;
 
                 let (allowed, _) = self

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for player data persistence.
 ///
 /// Controls whether player data is saved and the save interval.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct PlayerDataConfig {
     /// Whether saving player data is enabled.

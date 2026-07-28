@@ -1,6 +1,9 @@
-use std::{env, fs, path::Path};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
@@ -22,18 +25,69 @@ pub struct VanillaData {
     pub operator_config: RwLock<op::OperatorConfig>,
     pub user_cache: RwLock<usercache::UserCache>,
     pub whitelist_config: RwLock<whitelist::WhitelistConfig>,
+    data_dir: PathBuf,
 }
 
 impl VanillaData {
     #[must_use]
     pub fn load() -> Self {
+        let data_dir = env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(DATA_FOLDER);
+        Self::load_from(data_dir)
+    }
+
+    /// Loads all server data from an instance-specific directory.
+    #[must_use]
+    pub fn load_from(data_dir: impl Into<PathBuf>) -> Self {
+        let data_dir = data_dir.into();
         Self {
-            banned_ip_list: RwLock::new(banned_ip::BannedIpList::load()),
-            banned_player_list: RwLock::new(banned_player::BannedPlayerList::load()),
-            operator_config: RwLock::new(op::OperatorConfig::load()),
-            user_cache: RwLock::new(usercache::UserCache::load()),
-            whitelist_config: RwLock::new(whitelist::WhitelistConfig::load()),
+            banned_ip_list: RwLock::new(banned_ip::BannedIpList::load_from(&data_dir)),
+            banned_player_list: RwLock::new(banned_player::BannedPlayerList::load_from(&data_dir)),
+            operator_config: RwLock::new(op::OperatorConfig::load_from(&data_dir)),
+            user_cache: RwLock::new(usercache::UserCache::load_from(&data_dir)),
+            whitelist_config: RwLock::new(whitelist::WhitelistConfig::load_from(&data_dir)),
+            data_dir,
         }
+    }
+
+    #[must_use]
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+
+    pub async fn save_all(&self) {
+        let data_dir = &self.data_dir;
+        self.banned_ip_list.read().await.save_to(data_dir);
+        self.banned_player_list.read().await.save_to(data_dir);
+        self.operator_config.read().await.save_to(data_dir);
+        self.user_cache.read().await.save_to(data_dir);
+        self.whitelist_config.read().await.save_to(data_dir);
+    }
+
+    pub fn save_banned_ips(&self, value: &banned_ip::BannedIpList) {
+        value.save_to(&self.data_dir);
+    }
+
+    pub fn save_banned_players(&self, value: &banned_player::BannedPlayerList) {
+        value.save_to(&self.data_dir);
+    }
+
+    pub fn save_operator_config(&self, value: &op::OperatorConfig) {
+        value.save_to(&self.data_dir);
+    }
+
+    pub fn save_user_cache(&self, value: &usercache::UserCache) {
+        value.save_to(&self.data_dir);
+    }
+
+    pub fn save_whitelist(&self, value: &whitelist::WhitelistConfig) {
+        value.save_to(&self.data_dir);
+    }
+
+    #[must_use]
+    pub fn load_whitelist(&self) -> whitelist::WhitelistConfig {
+        whitelist::WhitelistConfig::load_from(&self.data_dir)
     }
 }
 
@@ -44,10 +98,17 @@ pub trait LoadJSONConfiguration {
         Self: Sized + Default + Serialize + for<'de> Deserialize<'de>,
     {
         let exe_dir = env::current_dir().expect("Failed to get current directory");
-        let data_dir = exe_dir.join(DATA_FOLDER);
+        Self::load_from(&exe_dir.join(DATA_FOLDER))
+    }
+
+    #[must_use]
+    fn load_from(data_dir: &Path) -> Self
+    where
+        Self: Sized + Default + Serialize + DeserializeOwned,
+    {
         if !data_dir.exists() {
             debug!("creating new data root folder");
-            fs::create_dir(&data_dir).expect("Failed to create data root folder");
+            fs::create_dir_all(data_dir).expect("Failed to create data root folder");
         }
         let path = data_dir.join(Self::get_path());
 
@@ -93,10 +154,16 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
         Self: Sized + Default + Serialize + for<'de> Deserialize<'de>,
     {
         let exe_dir = env::current_dir().expect("Failed to get current directory");
-        let data_dir = exe_dir.join(DATA_FOLDER);
+        self.save_to(&exe_dir.join(DATA_FOLDER));
+    }
+
+    fn save_to(&self, data_dir: &Path)
+    where
+        Self: Sized + Default + Serialize + for<'de> Deserialize<'de>,
+    {
         if !data_dir.exists() {
             debug!("creating new data root folder");
-            fs::create_dir(&data_dir).expect("Failed to create data root folder");
+            fs::create_dir_all(data_dir).expect("Failed to create data root folder");
         }
         let path = data_dir.join(Self::get_path());
 

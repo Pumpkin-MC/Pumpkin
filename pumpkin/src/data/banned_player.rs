@@ -23,17 +23,11 @@ impl BannedPlayerList {
     }
 
     fn remove_invalid_entries(&mut self) {
-        let original_len = self.banned_players.len();
-
         self.banned_players.retain(|entry| {
             entry
                 .expires
                 .is_none_or(|expires| expires >= OffsetDateTime::now_utc())
         });
-
-        if original_len != self.banned_players.len() {
-            self.save();
-        }
     }
 }
 

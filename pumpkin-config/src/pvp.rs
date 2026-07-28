@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for player-versus-player mechanics.
 ///
 /// Controls whether PVP is enabled, combat effects, and player protections.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct PVPConfig {
     /// Whether PVP is enabled on the server.

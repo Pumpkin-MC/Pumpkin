@@ -18,7 +18,6 @@ use crate::{
             builder::{argument, literal},
         },
     },
-    data::{LoadJSONConfiguration, SaveJSONConfiguration, whitelist::WhitelistConfig},
     net::DisconnectReason,
     server::Server,
 };
@@ -167,7 +166,7 @@ impl CommandExecutor for ReloadExecutor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            *server.data.whitelist_config.write().await = WhitelistConfig::load();
+            *server.data.whitelist_config.write().await = server.data.load_whitelist();
             kick_non_whitelisted_players(server).await;
             sender
                 .send_message(TextComponent::translate_cross(
@@ -221,7 +220,7 @@ impl CommandExecutor for AddExecutor {
                 successes += 1;
             }
 
-            whitelist.save();
+            server.data.save_whitelist(&whitelist);
 
             if successes == 0 {
                 Err(CommandError::CommandFailed(TextComponent::translate_cross(
@@ -271,7 +270,7 @@ impl CommandExecutor for RemoveExecutor {
                 }
             }
 
-            whitelist.save();
+            server.data.save_whitelist(&whitelist);
             drop(whitelist);
 
             kick_non_whitelisted_players(server).await;

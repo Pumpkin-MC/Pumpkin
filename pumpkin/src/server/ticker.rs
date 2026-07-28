@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::time::{Instant, sleep_until};
+use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
 pub struct Ticker;
@@ -16,6 +17,10 @@ pub struct Ticker;
 impl Ticker {
     /// IMPORTANT: Run this in a new thread/tokio task.
     pub async fn run(server: &Arc<Server>) {
+        Self::run_with_token(server, STOP_INTERRUPT.clone()).await;
+    }
+
+    pub async fn run_with_token(server: &Arc<Server>, stop_token: CancellationToken) {
         let mut next_tick = Instant::now();
 
         'ticker: loop {
@@ -61,7 +66,7 @@ impl Ticker {
 
             tokio::select! {
                 () = sleep_until(next_tick) => {},
-                () = STOP_INTERRUPT.cancelled() => {
+                () = stop_token.cancelled() => {
                     break 'ticker;
                 }
             }

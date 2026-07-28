@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for LAN broadcast of the server.
 ///
 /// Controls whether the server is discoverable on the local network, and optional MOTD and port settings.
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
 pub struct LANBroadcastConfig {
     /// Whether LAN broadcast is enabled.

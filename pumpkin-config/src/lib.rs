@@ -48,7 +48,7 @@ use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
 use world::LevelConfig;
 
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
 pub struct PumpkinConfig {
     #[serde(flatten)]
@@ -116,7 +116,7 @@ impl LoadConfiguration for PumpkinConfig {
 /// tweaking performance or experimental options.
 ///
 /// `Important`: The configuration should match vanilla by default.
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
 pub struct AdvancedConfiguration {
     /// Logging-related configuration such as log levels and output behaviour.
@@ -150,7 +150,7 @@ pub struct AdvancedConfiguration {
 /// Basic configuration for core server settings.
 ///
 /// Covers edition support, world, networking, gameplay rules, and security options.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct BasicConfiguration {
     /// The seed for the world generation.

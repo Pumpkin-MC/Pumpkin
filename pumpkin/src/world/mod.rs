@@ -2550,6 +2550,13 @@ impl World {
         let Some(client) = player.client.java() else {
             return;
         };
+        if client.is_closed() {
+            debug!(
+                "Skipping spawn for {}: client already closed",
+                player.gameprofile.name
+            );
+            return;
+        }
         // Send the login packet for our new player
         client
             .send_packet_now(&CLogin::new(

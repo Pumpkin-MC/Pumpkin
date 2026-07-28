@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for in-game chat behaviour.
 ///
 /// Controls chat formatting and display.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct ChatConfig {
     /// The custom chat format.

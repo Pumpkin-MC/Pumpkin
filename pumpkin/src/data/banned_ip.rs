@@ -19,17 +19,11 @@ impl BannedIpList {
     }
 
     fn remove_invalid_entries(&mut self) {
-        let original_len = self.banned_ips.len();
-
         self.banned_ips.retain(|entry| {
             entry
                 .expires
                 .is_none_or(|expires| expires >= OffsetDateTime::now_utc())
         });
-
-        if original_len != self.banned_ips.len() {
-            self.save();
-        }
     }
 }
 

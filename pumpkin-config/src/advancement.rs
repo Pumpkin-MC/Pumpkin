@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for advancements
 ///
 /// Controls whether the advancements should be saved and loaded
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct AdvancementConfig {
     /// Whether saving advancements is enabled.

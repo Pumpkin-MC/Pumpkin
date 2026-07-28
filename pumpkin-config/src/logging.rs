@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for server logging behavior.
 ///
 /// Controls log output, formatting, and file settings.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct LoggingConfig {
     /// Whether logging is enabled.

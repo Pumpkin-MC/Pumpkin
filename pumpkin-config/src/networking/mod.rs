@@ -20,7 +20,7 @@ pub mod rcon;
 ///
 /// Covers authentication, query, RCON, proxying, packet compression,
 /// and LAN broadcast behaviour.
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
 pub struct NetworkingConfig {
     /// Query protocol settings for server status requests.
