@@ -1650,7 +1650,7 @@ impl Player {
         self.sleeping_since.load().is_some()
     }
 
-        async fn is_swimming(&self, flying: bool) -> bool {
+    async fn is_swimming(&self, flying: bool) -> bool {
         let entity = self.get_entity();
 
         entity.swimming.load(Ordering::Relaxed)
