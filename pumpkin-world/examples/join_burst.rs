@@ -69,7 +69,9 @@ fn thread_cpu_ticks(name: &str) -> u64 {
             continue;
         };
         // comm is parenthesised and may contain spaces; split on the last ')'.
-        let Some(close) = stat.rfind(')') else { continue };
+        let Some(close) = stat.rfind(')') else {
+            continue;
+        };
         let Some(open) = stat.find('(') else { continue };
         if &stat[open + 1..close] != name {
             continue;
@@ -101,9 +103,9 @@ async fn main() {
         42,
         None,
     );
-    level
-        .world_portal
-        .store(Arc::new(Some(Arc::new(StubPortal) as Arc<dyn WorldPortalExt>)));
+    level.world_portal.store(Arc::new(Some(
+        Arc::new(StubPortal) as Arc<dyn WorldPortalExt>
+    )));
 
     // Let the chunk-system threads reach their idle park before measuring.
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
