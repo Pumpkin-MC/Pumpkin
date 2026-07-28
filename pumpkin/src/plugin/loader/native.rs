@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::{any::Any, sync::Arc};
 
 use libloading::Library;
 
@@ -49,7 +49,7 @@ impl PluginLoader for NativePluginLoader {
             };
 
             Ok((
-                plugin_factory(),
+                Arc::from(plugin_factory()),
                 metadata.clone(),
                 Box::new(library) as Box<dyn Any + Send + Sync>,
             ))
