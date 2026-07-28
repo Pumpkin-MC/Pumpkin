@@ -252,40 +252,28 @@ impl HugeFungusFeature {
 
                         if bottom {
                             if !inner {
-                                self.generate_hat_drop_block(chunk, random, block_pos, hat_state, place_vines);
+                                self.generate_hat_drop_block(
+                                    chunk,
+                                    random,
+                                    block_pos,
+                                    hat_state,
+                                    place_vines,
+                                );
                             }
                         } else if inner {
                             let vine_prob = if place_vines { 0.1 } else { 0.0 };
                             self.generate_hat_block(
-                                chunk,
-                                random,
-                                block_pos,
-                                hat_state,
-                                0.1,
-                                0.2,
-                                vine_prob,
+                                chunk, random, block_pos, hat_state, 0.1, 0.2, vine_prob,
                             );
                         } else if corner {
                             let vine_prob = if place_vines { 0.083 } else { 0.0 };
                             self.generate_hat_block(
-                                chunk,
-                                random,
-                                block_pos,
-                                hat_state,
-                                0.01,
-                                0.7,
-                                vine_prob,
+                                chunk, random, block_pos, hat_state, 0.01, 0.7, vine_prob,
                             );
                         } else {
                             let vine_prob = if place_vines { 0.07 } else { 0.0 };
                             self.generate_hat_block(
-                                chunk,
-                                random,
-                                block_pos,
-                                hat_state,
-                                5.0e-4,
-                                0.98,
-                                vine_prob,
+                                chunk, random, block_pos, hat_state, 5.0e-4, 0.98, vine_prob,
                             );
                         }
                     }
