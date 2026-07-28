@@ -450,21 +450,28 @@ impl DynamicLightEngine {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         level
             .read_chunk_sync(&chunk_coordinate, |chunk| {
-                let section_index =
-                    (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+                // Signed offset first. The unsigned cast used to run before the
+                // sign check, so a `y` below `min_y` wrapped to a huge index,
+                // hit the out-of-bounds branch, and read as full bright.
+                // Vanilla is 15 above the build height and 0 below the world.
+                let offset = relative.y - chunk.section.min_y;
+                if offset < 0 {
+                    return 0;
+                }
+                let section_index = offset as usize / BlockPalette::SIZE;
 
                 let light_engine = chunk
                     .light_engine
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                // Bounds check for section index (lock the light engine)
+                // Above the top of the stored sections: open sky.
                 if section_index >= light_engine.sky_light.len() {
                     return 15;
                 }
 
                 light_engine.sky_light[section_index].get(
                     relative.x as usize,
-                    (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE,
+                    offset as usize % BlockPalette::SIZE,
                     relative.z as usize,
                 )
             })
@@ -527,21 +534,26 @@ impl DynamicLightEngine {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         level
             .read_chunk_sync(&chunk_coordinate, |chunk| {
-                let section_index =
-                    (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+                // Same sign-before-cast rule as `get_sky_light_level_sync`:
+                // below the world is 0, above the build height is 15.
+                let offset = relative.y - chunk.section.min_y;
+                if offset < 0 {
+                    return 0;
+                }
+                let section_index = offset as usize / BlockPalette::SIZE;
 
                 let light_engine = chunk
                     .light_engine
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                // Bounds check for section index (lock the light engine)
+                // Above the top of the stored sections: open sky.
                 if section_index >= light_engine.sky_light.len() {
                     return 15;
                 }
 
                 light_engine.sky_light[section_index].get(
                     relative.x as usize,
-                    (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE,
+                    offset as usize % BlockPalette::SIZE,
                     relative.z as usize,
                 )
             })

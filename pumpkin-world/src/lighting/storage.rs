@@ -109,14 +109,18 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     match &cache.chunks[idx] {
         Chunk::Level(c) => {
             let light_engine = c.light_engine.lock().unwrap();
+            // Above the stored sections is open sky, 15, matching vanilla and
+            // the runtime getters in `runtime.rs`. This used to return 0, so
+            // the two paths disagreed about the same position. Below the world
+            // stays 0 via `get_section_y` returning `None` above.
             if section_y >= light_engine.sky_light.len() {
-                return 0;
+                return 15;
             }
             light_engine.sky_light[section_y].get(x, y, z)
         }
         Chunk::Proto(c) => {
             if section_y >= c.light.sky_light.len() {
-                return 0;
+                return 15;
             }
             c.light.sky_light[section_y].get(x, y, z)
         }
