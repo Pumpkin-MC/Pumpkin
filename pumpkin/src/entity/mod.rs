@@ -2551,10 +2551,10 @@ impl Entity {
         self.sneaking.load(Ordering::Relaxed)
     }
 
-    pub async fn set_swimming(&self, invisible: bool) {
-        if self.swimming.load(Ordering::Relaxed) != invisible {
-            self.swimming.store(invisible, Relaxed);
-            self.set_flag(Flag::Swimming, invisible).await;
+    pub async fn set_swimming(&self, swimming: bool) {
+        if self.swimming.load(Ordering::Relaxed) != swimming {
+            self.swimming.store(swimming, Relaxed);
+            self.set_flag(Flag::Swimming, swimming).await;
         }
     }
 
