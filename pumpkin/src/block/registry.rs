@@ -7,6 +7,7 @@ use crate::block::blocks::beacon::BeaconBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::beehive::BeehiveBlock;
 use crate::block::blocks::brewing_stand::BrewingStandBlock;
+use crate::block::blocks::bubble_column::BubbleColumnBlock;
 use crate::block::blocks::cake::CakeBlock;
 use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::blocks::candle_cakes::CandleCakeBlock;
@@ -314,6 +315,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CoralBlock);
     manager.register(AmethystBlock);
     manager.register(GrassBlock);
+    manager.register(BubbleColumnBlock);
 
     manager.register(FallingBlock);
 
