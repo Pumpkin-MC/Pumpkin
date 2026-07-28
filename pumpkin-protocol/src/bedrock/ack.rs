@@ -1,6 +1,9 @@
 use std::io::{Error, ErrorKind, Read, Write};
 
 const MAX_ACK_RECORDS: u16 = 4096;
+/// Hard cap on expanded sequence numbers from range records.
+/// Prevents a small datagram from expanding into multi-GB allocations.
+const MAX_ACK_SEQUENCES: usize = 4096;
 
 use crate::{
     codec::u24,
@@ -38,14 +41,34 @@ impl Acknowledge {
             ));
         }
 
-        let mut sequences = Vec::with_capacity(size as usize);
+        let mut sequences = Vec::with_capacity((size as usize).min(MAX_ACK_SEQUENCES));
         for _ in 0..size {
             let single = bool::read(reader)?;
             if single {
+                if sequences.len() >= MAX_ACK_SEQUENCES {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Acknowledge packet expands past sequence limit.",
+                    ));
+                }
                 sequences.push(u24::read(reader)?.0);
             } else {
                 let start = u24::read(reader)?.0;
                 let end = u24::read(reader)?.0;
+                if end < start {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Acknowledge range end before start.",
+                    ));
+                }
+                // Inclusive range length: end - start + 1, checked against remaining budget.
+                let range_len = (end - start) as usize + 1;
+                if sequences.len().saturating_add(range_len) > MAX_ACK_SEQUENCES {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Acknowledge packet range expansion exceeds sequence limit.",
+                    ));
+                }
                 for i in start..=end {
                     sequences.push(i);
                 }

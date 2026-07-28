@@ -68,6 +68,12 @@ pub const EMPTY_KEY: CommandErrorType<0> = CommandErrorType::new(
     translation::java::SNBT_PARSER_EMPTY_KEY,
 );
 
+/// Nesting budget exhausted (matches binary NBT depth cap).
+pub const NESTING_TOO_DEEP: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMAND_FAILED,
+    translation::java::COMMAND_FAILED,
+);
+
 pub const LEADING_ZERO_NOT_ALLOWED: CommandErrorType<0> = CommandErrorType::new(
     translation::java::SNBT_PARSER_LEADING_ZERO_NOT_ALLOWED,
     translation::java::SNBT_PARSER_LEADING_ZERO_NOT_ALLOWED,
@@ -696,6 +702,11 @@ impl SnbtParser<'_, '_> {
     }
 
     fn map_literal(&mut self) -> Option<NbtTag> {
+        if self.depth >= crate::command::snbt::MAX_SNBT_DEPTH {
+            self.store_simple_error(&NESTING_TOO_DEEP);
+            return None;
+        }
+        self.depth += 1;
         let entries = self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
             if parser.reader.peek() != Some('{') {
@@ -711,7 +722,9 @@ impl SnbtParser<'_, '_> {
             }
             parser.reader.skip();
             Some(entries)
-        })?;
+        });
+        self.depth = self.depth.saturating_sub(1);
+        let entries = entries?;
 
         Some(NbtTag::Compound(NbtCompound {
             child_tags: entries.into_iter().map(|(k, v)| (k.into(), v)).collect(),
@@ -755,7 +768,12 @@ impl SnbtParser<'_, '_> {
     }
 
     fn list_literal(&mut self) -> Option<NbtTag> {
-        self.parse_or_revert(|parser| {
+        if self.depth >= crate::command::snbt::MAX_SNBT_DEPTH {
+            self.store_simple_error(&NESTING_TOO_DEEP);
+            return None;
+        }
+        self.depth += 1;
+        let result = self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
             if parser.reader.peek() != Some('[') {
                 parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "[", &["["]);
@@ -795,7 +813,9 @@ impl SnbtParser<'_, '_> {
 
                 Some(NbtOps.create_list(entries))
             }
-        })
+        });
+        self.depth = self.depth.saturating_sub(1);
+        result
     }
 
     fn literal(&mut self) -> Option<NbtTag> {

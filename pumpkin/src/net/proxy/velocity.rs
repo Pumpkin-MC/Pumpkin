@@ -82,6 +82,13 @@ fn read_game_profile(read: impl Read) -> Result<GameProfile, VelocityError> {
     let name = read
         .get_str()
         .map_err(|_| VelocityError::FailedReadProfileName)?;
+    // Bound + sanitize forwarded names (proxy path previously accepted ≤1 MiB garbage).
+    if name.is_empty()
+        || name.len() > 16
+        || name.chars().any(|c| c.is_control() || c == ' ' || c == '§')
+    {
+        return Err(VelocityError::FailedReadProfileName);
+    }
 
     let properties = read
         .get_list(|data| {

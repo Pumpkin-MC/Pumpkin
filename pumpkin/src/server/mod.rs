@@ -6,7 +6,9 @@ use crate::data::player_server::ServerPlayerData;
 use crate::entity::{EntityBase, NBTStorage};
 use crate::item::registry::ItemRegistry;
 use crate::net::authentication::fetch_mojang_public_keys;
-use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
+use crate::net::{
+    ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig, can_not_join,
+};
 use crate::plugin::PluginManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
@@ -23,6 +25,7 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::translation;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
@@ -478,12 +481,36 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
+    #[allow(clippy::too_many_lines)]
     pub async fn add_player(
         &self,
         client: Arc<ClientPlatform>,
         profile: GameProfile,
         config: Option<PlayerConfig>,
     ) -> Option<(Arc<Player>, Arc<World>)> {
+        // Centralized identity + moderation gates for every transport (Java,
+        // Bedrock, offline, proxy). Previously several paths skipped these.
+        let address = client.address().await;
+        if let Some(reason) = can_not_join(&profile, &address, self).await {
+            client.kick(DisconnectReason::Kicked, reason).await;
+            return None;
+        }
+        if self.get_player_by_uuid(profile.id).is_some()
+            || self.get_player_by_name(&profile.name).is_some()
+        {
+            client
+                .kick(
+                    DisconnectReason::Kicked,
+                    TextComponent::translate_cross(
+                        translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+                        translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+                        [],
+                    ),
+                )
+                .await;
+            return None;
+        }
+
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
         let (world, nbt) =

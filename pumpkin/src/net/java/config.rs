@@ -263,16 +263,22 @@ impl JavaClient {
 
     pub async fn handle_config_acknowledged(&self, server: &Server) -> PacketHandlerResult {
         debug!("Handling config acknowledgement");
-        self.connection_state.store(ConnectionState::Play);
 
         let profile = self.gameprofile.lock().await.clone();
-        let profile = profile.unwrap();
+        let Some(profile) = profile else {
+            // Missing profile (skipped login / proxy response) must not panic.
+            self.kick(TextComponent::text("Missing game profile")).await;
+            return PacketHandlerResult::Stop;
+        };
         let address = self.address.lock().await;
 
         if let Some(reason) = can_not_join(&profile, &address, server).await {
             self.kick(reason).await;
             return PacketHandlerResult::Stop;
         }
+
+        // Only enter Play after profile + join gates succeed.
+        self.connection_state.store(ConnectionState::Play);
 
         let config = self.config.lock().await;
         PacketHandlerResult::ReadyToPlay(profile, config.clone().unwrap_or_default())
