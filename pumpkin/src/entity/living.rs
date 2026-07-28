@@ -852,9 +852,8 @@ impl LivingEntity {
             let should_swim = has_forward_input
                 && !self.entity.on_ground.load(SeqCst)
                 && self.entity.water_height.load() > self.get_swim_height();
-            self.entity
-                .set_swimming(should_swim)
-                .await;
+            self.entity.set_swimming(should_swim).await;
+            
         } else if self.entity.swimming.load(SeqCst) {
             self.entity.set_swimming(false).await;
         }
