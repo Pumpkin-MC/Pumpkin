@@ -44,6 +44,7 @@ mod data_component;
 mod dimension;
 mod dye_color;
 mod effect;
+mod embedded_vanilla_datapack;
 mod enchantments;
 mod entity_pose;
 mod entity_status;
@@ -163,9 +164,10 @@ pub fn main() {
         ),
         (carver::build, "carver.rs"),
         (chest_loot::build, "chest_loot.rs"),
-        (map_color::build, "map_color.rs"),
-        (map_decoration::build, "map_decoration.rs"),
-        (dye_color::build, "dye_color.rs"),
+        (
+            embedded_vanilla_datapack::build,
+            "embedded_vanilla_datapack.rs",
+        ),
     ];
     build_functions.extend(remap::build());
 

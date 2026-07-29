@@ -13,9 +13,14 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::path::PathBuf;
 use std::{fs, num::NonZeroU8, path::Path};
+<<<<<<< HEAD:crates/pumpkin-config/src/lib.rs
 use tracing::{debug, error, warn};
 
 /// Fun and experimental configuration options.
+=======
+use tracing::{debug, warn};
+pub mod datapack;
+>>>>>>> 19f95f77 (feat: initial datapack support):pumpkin-config/src/lib.rs
 pub mod fun;
 /// Server logging configuration options.
 pub mod logging;
@@ -61,6 +66,7 @@ pub mod whitelist;
 pub mod world;
 
 use advancement::AdvancementConfig;
+use datapack::DatapackConfig;
 use networking::NetworkingConfig;
 use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
@@ -161,6 +167,8 @@ pub struct AdvancedConfiguration {
     pub plugins: PluginsConfig,
     /// Advancement configuration
     pub advancement: AdvancementConfig,
+    /// Datapack configuration
+    pub datapack: DatapackConfig,
 }
 
 /// Basic configuration for core server settings.

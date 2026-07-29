@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+<<<<<<< HEAD
     "crates/pumpkin",
     "crates/pumpkin-api-macros",
     "crates/pumpkin-codecs",
@@ -14,6 +15,20 @@ members = [
     "crates/pumpkin-util",
     "crates/pumpkin-world",
     "tools/pumpkin-codegen",
+=======
+    "pumpkin-api-macros",
+    "pumpkin-config",
+    "pumpkin-util",
+    "pumpkin-inventory",
+    "pumpkin-macros/",
+    "pumpkin-protocol/",
+    "pumpkin-world",
+    "pumpkin/",
+    "pumpkin-data",
+    "pumpkin-plugin-api",
+    "pumpkin-codecs",
+    "pumpkin-datapack"
+>>>>>>> 19f95f77 (feat: initial datapack support)
 ]
 
 # [workspace.lints.rust]
@@ -170,6 +185,7 @@ num-traits = { version = "0.2", default-features = false, features = ["std"] }
 p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8"] }
 phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
+<<<<<<< HEAD
 pumpkin-codecs = { path = "crates/pumpkin-codecs", default-features = false }
 pumpkin-config = { path = "crates/pumpkin-config", default-features = false }
 pumpkin-data = { path = "crates/pumpkin-data", default-features = false }
@@ -179,6 +195,18 @@ pumpkin-nbt = { path = "crates/pumpkin-nbt", default-features = false }
 pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
 pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
 pumpkin-world = { path = "crates/pumpkin-world", default-features = false }
+=======
+pumpkin-codecs = { path = "pumpkin-codecs", default-features = false }
+pumpkin-config = { path = "pumpkin-config", default-features = false }
+pumpkin-data = { path = "pumpkin-data", default-features = false }
+pumpkin-inventory = { path = "pumpkin-inventory", default-features = false }
+pumpkin-macros = { path = "pumpkin-macros", default-features = false }
+pumpkin-nbt = { path = "pumpkin-nbt", default-features = false }
+pumpkin-protocol = { path = "pumpkin-protocol", default-features = false }
+pumpkin-util = { path = "pumpkin-util", default-features = false }
+pumpkin-world = { path = "pumpkin-world", default-features = false }
+pumpkin-datapack = { path = "pumpkin-datapack", default-features = false }
+>>>>>>> 19f95f77 (feat: initial datapack support)
 quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
 rand = { version = "0.10.2", default-features = false, features = ["std", "std_rng", "thread_rng"] }
 rsa = { version = "=0.10.0-rc.18", default-features = false, features = ["std", "encoding"] }
