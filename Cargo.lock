@@ -3429,24 +3429,15 @@ dependencies = [
 name = "pumpkin-datapack"
 version = "0.1.0-dev+26.2"
 dependencies = [
- "arc-swap",
- "dashmap",
  "futures",
- "itertools 0.15.0",
- "pumpkin-codecs",
  "pumpkin-data",
- "pumpkin-inventory",
  "pumpkin-protocol",
- "pumpkin-util",
- "pumpkin-world",
  "rand",
- "rayon",
  "serde",
  "serde_json",
  "thiserror 2.0.19",
  "tokio",
  "tracing",
- "uuid",
  "zip",
 ]
 
