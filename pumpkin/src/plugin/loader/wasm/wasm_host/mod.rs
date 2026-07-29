@@ -2,7 +2,7 @@ use std::{fs, path::Path, sync::Arc};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use wasmtime::{Cache, CacheConfig, Engine, Store, component::Component, component::Linker};
-use wasmtime_wasi::{WasiCtxBuilder, sockets::SocketAddrUse};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder, sockets::SocketAddrUse};
 
 use crate::plugin::{
     Context, PluginMetadata, loader::wasm::wasm_host::state::PluginHostState, permissions,
@@ -143,7 +143,6 @@ fn load_component(
 }
 
 impl WasmPlugin {
-    #[expect(clippy::too_many_lines)]
     pub async fn on_load(
         &self,
         context: Arc<Context>,
@@ -221,48 +220,29 @@ impl WasmPlugin {
             }
         }
 
-        let data_folder = context.get_data_folder();
-        let preopen_path =
-            if has_permission(permissions::FS_READ) || has_permission(permissions::FS_WRITE) {
-                Path::new(".")
-            } else {
-                data_folder.as_path()
-            };
-
-        // Determine permissions for the preopened directory
-        let (dir_perms, file_perms) = if has_permission(permissions::FS_WRITE) {
-            (
-                wasmtime_wasi::DirPerms::all(),
-                wasmtime_wasi::FilePerms::all(),
-            )
-        } else if has_permission(permissions::FS_READ) {
-            (
-                wasmtime_wasi::DirPerms::READ,
-                wasmtime_wasi::FilePerms::READ,
-            )
-        } else {
-            // Scoped to data folder
-            let can_write = has_permission(permissions::FS_WRITE_DATA);
-            if can_write {
-                (
-                    wasmtime_wasi::DirPerms::all(),
-                    wasmtime_wasi::FilePerms::all(),
-                )
-            } else {
-                // Default to READ if no write permission is given for data folder
-                // (Plugins should at least be able to read their own config)
-                (
-                    wasmtime_wasi::DirPerms::READ,
-                    wasmtime_wasi::FilePerms::READ,
-                )
-            }
-        };
-
         builder.preopened_dir(
-            preopen_path,
-            preopen_path.to_string_lossy(),
-            dir_perms,
-            file_perms,
+            context.get_data_folder(),
+            "data",
+            if has_permission(permissions::FS_READ_DATA)
+                || has_permission(permissions::FS_WRITE_DATA)
+            {
+                DirPerms::READ
+            } else {
+                DirPerms::empty()
+            } | if has_permission(permissions::FS_WRITE_DATA) {
+                DirPerms::MUTATE
+            } else {
+                DirPerms::empty()
+            },
+            if has_permission(permissions::FS_READ_DATA) {
+                FilePerms::READ
+            } else {
+                FilePerms::empty()
+            } | if has_permission(permissions::FS_WRITE_DATA) {
+                FilePerms::WRITE
+            } else {
+                FilePerms::empty()
+            },
         )?;
 
         if has_permission(permissions::HTTP_OUTBOUND) {
