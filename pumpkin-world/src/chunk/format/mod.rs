@@ -21,6 +21,7 @@ use crate::{
         format::anvil::{SingleChunkDataSerializer, WORLD_DATA_VERSION},
         io::{Dirtiable, file_manager::PathFromLevelFolder},
     },
+    chunk_system::chunk_state::StagedChunkEnum,
     generation::section_coords,
     level::LevelFolder,
     tick::{ScheduledTick, TickPriority, scheduler::ChunkTickScheduler},
@@ -188,8 +189,13 @@ const WRITTEN_ROOT_KEYS: &[&str] = &[
 /// - `entities`: entities live in the separate `entities/` region folder, so a retained
 ///   copy would be a second, never-updated set of the same mobs.
 /// - `PostProcessing`, `below_zero_retrogen`, `UpgradeData`: work records.
-/// - `carving_mask`: generation-stage scratch state. Unreachable in practice, since we
-///   only retain from chunks loaded at `Status: full`, but listed so the rule stays legible.
+/// - `carving_mask`: generation-stage scratch state.
+/// - `Lights`: vanilla's per-section list of light sources still to be processed,
+///   written for chunks below `light` status. Retaining it would put a work record on a
+///   chunk we go on to stamp `Status: minecraft:full`.
+///
+/// `carving_mask` and `Lights` only became reachable when the retention cutoff moved from
+/// `full` down to `features`; both belong to chunks caught mid-generation.
 ///
 /// How these are classified is reasoning about vanilla rather than something validated
 /// against a real region file. What is verified is that we have no code for any of them.
@@ -199,6 +205,7 @@ const NEVER_RETAINED_ROOT_KEYS: &[&str] = &[
     "below_zero_retrogen",
     "UpgradeData",
     "carving_mask",
+    "Lights",
 ];
 
 fn is_owned_root_key(key: &str) -> bool {
@@ -445,14 +452,26 @@ impl ChunkData {
             _ => ChunkStatus::Empty,
         };
 
-        // Only a chunk loaded at `full` is guaranteed to be written back over the same
-        // terrain. Anything below `full` goes straight back into the generation pipeline
-        // through `ProtoChunk::from_chunk_data`, which restores blocks and heightmaps but
-        // leaves `structure_starts` empty and `carving_mask` fresh, so the chunk is
-        // finished *without* the structures the retained metadata describes. An
-        // unrecognised `Status` lands here too, via the fall-through above — precisely
-        // the case where we must not vouch for anything.
-        let retained_nbt = if status == ChunkStatus::Full {
+        // Retain only from a chunk that will be written back over the same terrain the
+        // metadata describes.
+        //
+        // A chunk below `features` goes back into the generation pipeline through
+        // `ProtoChunk::from_chunk_data`, which restores blocks and heightmaps but leaves
+        // `structure_starts` empty and `carving_mask` fresh, so it is finished *without*
+        // the structures the retained metadata claims are there. An unrecognised `Status`
+        // falls through to `Empty` above and lands here too — precisely the case where we
+        // must not vouch for anything.
+        //
+        // At or above `features` that cannot happen: the features/structures step never
+        // re-runs for such a chunk. `drop_satisfied_tasks` deletes every task at or below
+        // the loaded stage, `Cache::advance` early-returns for a stage already reached,
+        // and the dispatch loop drops queued nodes for reached stages. `structure_starts`
+        // is only ever filled by `set_structure_starts`/`set_structure_references`, whose
+        // tasks are dropped for anything loaded at or above `StructureReferences`.
+        //
+        // So `features` is the boundary, not `full` — gating on `full` made this a no-op
+        // for exactly the chunks #2626 reported, which sit at `initialize_light`.
+        let retained_nbt = if StagedChunkEnum::from(status) >= StagedChunkEnum::Features {
             retain_foreign_root_tags(&root_tag)
         } else {
             NbtCompound::new()
@@ -957,6 +976,10 @@ mod tests {
         fixture.put_compound("below_zero_retrogen", NbtCompound::new());
         fixture.put_compound("UpgradeData", NbtCompound::new());
         fixture.put("carving_mask", NbtTag::LongArray(vec![1, 2, 3]));
+        fixture.put_list(
+            "Lights",
+            (0..24).map(|_| NbtTag::List(Vec::new())).collect(),
+        );
 
         let out = round_trip(&fixture);
 
@@ -969,7 +992,28 @@ mod tests {
             "below_zero_retrogen",
             "UpgradeData",
             "carving_mask",
+            "Lights",
         ] {
+            assert!(!out.has(key), "`{key}` should never be written back");
+        }
+    }
+
+    #[test]
+    fn work_directive_root_tags_are_never_retained_below_full_either() {
+        // The exclusions have to hold at the bottom of the retention range too, which is
+        // where a half-generated vanilla chunk actually carries them. `carving_mask` and
+        // `Lights` are unreachable at `full` and reachable here.
+        let mut fixture = minimal_root("minecraft:initialize_light");
+        fixture.put("carving_mask", NbtTag::LongArray(vec![1, 2, 3]));
+        fixture.put_list(
+            "Lights",
+            (0..24).map(|_| NbtTag::List(Vec::new())).collect(),
+        );
+        fixture.put_list("PostProcessing", Vec::new());
+
+        let out = round_trip(&fixture);
+
+        for key in ["carving_mask", "Lights", "PostProcessing"] {
             assert!(!out.has(key), "`{key}` should never be written back");
         }
     }
@@ -1069,18 +1113,45 @@ mod tests {
     }
 
     #[test]
-    fn chunks_below_full_status_retain_nothing() {
-        let mut fixture = minimal_root("minecraft:features");
+    fn chunks_below_the_features_stage_retain_nothing() {
+        let mut fixture = minimal_root("minecraft:carvers");
         fixture.put_compound("structures", NbtCompound::new());
         fixture.put("LastUpdate", NbtTag::Long(1));
 
-        // A chunk below `full` goes back through the generation pipeline, which finishes it
-        // without the structures this metadata describes. Losing the tags is what we already
-        // did; writing them back beside contradicting terrain would be new damage.
+        // A chunk below `features` still has its features/structures step ahead of it, so
+        // it is finished without the structures this metadata describes. Losing the tags is
+        // what we already did; writing them back beside contradicting terrain would be new
+        // damage.
         assert!(parse(&fixture).retained_nbt.is_empty());
         let out = round_trip(&fixture);
         assert!(!out.has("structures"));
         assert!(!out.has("LastUpdate"));
+    }
+
+    #[test]
+    fn chunks_from_the_features_stage_up_retain_their_metadata() {
+        // The statuses a half-generated vanilla world actually contains, including the
+        // `initialize_light` of #2626's reported chunk. Gating on `full` meant every one of
+        // these was still stripped on save.
+        for status in [
+            "minecraft:features",
+            "minecraft:initialize_light",
+            "minecraft:light",
+            "minecraft:spawn",
+            "minecraft:full",
+        ] {
+            let mut fixture = minimal_root(status);
+            fixture.put_compound("structures", NbtCompound::new());
+            fixture.put("LastUpdate", NbtTag::Long(1));
+
+            assert!(
+                !parse(&fixture).retained_nbt.is_empty(),
+                "`{status}` should retain foreign tags"
+            );
+            let out = round_trip(&fixture);
+            assert!(out.has("structures"), "`{status}` dropped `structures`");
+            assert!(out.has("LastUpdate"), "`{status}` dropped `LastUpdate`");
+        }
     }
 
     #[test]
