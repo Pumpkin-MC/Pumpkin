@@ -620,11 +620,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             let entity_tick_count = mob_entity.living_entity.entity.tick_count.load(Relaxed);
             let entity_id = mob_entity.living_entity.entity.entity_id;
-            let full_goal_pass = crate::entity::ai::goal::runs_full_goal_pass(
-                server.tick_count.load(Relaxed),
-                entity_id,
-                entity_tick_count,
-            );
+            let full_goal_pass =
+                crate::entity::ai::goal::runs_full_goal_pass(entity_id, entity_tick_count);
 
             // 1. "Take" selectors out of the mutexes
             let mut target_selector = {
