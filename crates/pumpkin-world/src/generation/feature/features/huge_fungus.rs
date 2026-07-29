@@ -147,9 +147,10 @@ impl HugeFungusFeature {
     }
 
     /// Check is given position's block in replace list
+    #[allow(clippy::unused_self)]
     fn is_replaceable<T: GenerationCache>(
         &self,
-        chunk: &mut T,
+        chunk: &T,
         pos: &BlockPos,
         check_non_replaceable_plants: bool,
     ) -> bool {
@@ -163,13 +164,15 @@ impl HugeFungusFeature {
         }
 
         if check_non_replaceable_plants {
-            return Self::REPLACEABLE_BLOCKS.contains(&block);
+            return Self::REPLACEABLE_BLOCKS.contains(block);
         }
 
         false
     }
 
     /// Generate the stem of this current fungus.
+    #[allow(clippy::unused_self)]
+    #[allow(clippy::too_many_arguments)]
     fn generate_stem<T: GenerationCache>(
         &self,
         chunk: &mut T,
@@ -180,14 +183,14 @@ impl HugeFungusFeature {
         is_huge: bool,
         planted: bool,
     ) {
-        let stem_radius: i32 = if is_huge { 1 } else { 0 };
+        let stem_radius = i32::from(is_huge);
 
         for dx in -stem_radius..=stem_radius {
             for dz in -stem_radius..=stem_radius {
                 let corner_of_huge_stem =
                     is_huge && dx.abs() == stem_radius && dz.abs() == stem_radius;
                 for dy in 0..total_height {
-                    let block_pos = pos.offset(Vector3::new(dx, dy as i32, dz));
+                    let block_pos = pos.offset(Vector3::new(dx, dy, dz));
                     if self.is_replaceable(chunk, &block_pos, true) {
                         if planted {
                             if !chunk.is_air(&block_pos.down().0) {
@@ -209,6 +212,8 @@ impl HugeFungusFeature {
     }
 
     /// Generate the hat of this current fungus.
+    #[allow(clippy::unused_self)]
+    #[allow(clippy::too_many_arguments)]
     fn generate_hat<T: GenerationCache>(
         &self,
         chunk: &mut T,
@@ -224,14 +229,13 @@ impl HugeFungusFeature {
         let hat_start_y = total_height - hat_height;
 
         for y in hat_start_y..=total_height {
-            let mut r = if y < total_height - random.next_bounded_i32(3) {
+            let mut r = if hat_height > 8 && y < hat_start_y + 4 {
+                3
+            } else if y < total_height - random.next_bounded_i32(3) {
                 2
             } else {
                 1
             };
-            if hat_height > 8 && y < hat_start_y + 4 {
-                r = 3;
-            }
 
             if is_huge {
                 r += 1;
@@ -244,7 +248,7 @@ impl HugeFungusFeature {
                     let inner = !edge_x && !edge_z && y != total_height;
                     let corner = edge_x && edge_z;
                     let bottom = y < hat_start_y + 3;
-                    let block_pos = pos.offset(Vector3::new(x, y as i32, z));
+                    let block_pos = pos.offset(Vector3::new(x, y, z));
                     if self.is_replaceable(chunk, &block_pos, true) {
                         if planted && !chunk.is_air(&block_pos.down().0) {
                             chunk.set_block_state(&block_pos.0, Block::AIR.default_state);
@@ -282,6 +286,8 @@ impl HugeFungusFeature {
         }
     }
 
+    #[allow(clippy::unused_self)]
+    #[allow(clippy::too_many_arguments)]
     fn generate_hat_block<T: GenerationCache>(
         &self,
         chunk: &mut T,
@@ -303,6 +309,7 @@ impl HugeFungusFeature {
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn generate_hat_drop_block<T: GenerationCache>(
         &self,
         chunk: &mut T,
@@ -322,6 +329,7 @@ impl HugeFungusFeature {
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn try_place_weeping_vines<T: GenerationCache>(
         hat_block_pos: BlockPos,
         chunk: &mut T,
