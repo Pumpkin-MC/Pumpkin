@@ -37,8 +37,31 @@ pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 /// The number of bytes in a sector (4 KiB)
 const SECTOR_BYTES: usize = 4096;
 
-// 26.1.2
-pub const WORLD_DATA_VERSION: i32 = 4790;
+/// The `DataVersion` stamped on every chunk we write.
+///
+/// This has to name the format `internal_to_bytes` actually produces, because it is
+/// what tells vanilla which datafixers to run when it opens a world we saved. Too low
+/// and vanilla migrates data that has already been migrated; too high and it skips
+/// fixes the data still needs.
+///
+/// Which makes it the same version `level.dat` claims through
+/// `MAXIMUM_SUPPORTED_WORLD_DATA_VERSION` — a world whose `level.dat` says 26.2 while
+/// its chunks say 1.21.11 is not a coherent world. This sat at 4790 while `level.dat`
+/// said 4903, which went unnoticed only because the numeric block palette meant nothing
+/// outside Pumpkin could read our chunks anyway.
+pub const WORLD_DATA_VERSION: i32 = 4903; // 26.2
+
+/// A guard, deliberately not an alias: what we emit and what we accept on load are
+/// different questions, and tying them together would mean the next widening of load
+/// support silently stamped a newer version onto chunks still written in the old shape.
+/// Failing the build instead forces the choice to be made on purpose.
+///
+/// If you are raising the load ceiling to a format `internal_to_bytes` does not yet
+/// produce, separate these two rather than bumping this one to match.
+const _: () = assert!(
+    WORLD_DATA_VERSION == crate::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
+    "a chunk's DataVersion must name the format we write, which is also what level.dat claims"
+);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
