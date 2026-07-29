@@ -376,9 +376,21 @@ impl PlayerAdvancement {
                 && let Some(ref dp) = self.manager.datapack_manager
                 && let Ok(advs) = dp.advancements.try_read()
             {
-                for (_id, file) in advs.iter() {
+                for file in advs.values() {
                     if let Some(entry) = advancement_file_to_entry(file) {
-                        added.push(entry);
+                        // Deduplicate against already-added built-in advancements
+                        let id_str = format!("{}:{}", file.id.namespace, file.id.path);
+                        if !added.iter().any(|a| match a {
+                            pumpkin_protocol::java::client::play::AdvancementEntry::Static(s) => {
+                                s.id.to_string() == id_str
+                            }
+                            pumpkin_protocol::java::client::play::AdvancementEntry::Dynamic {
+                                id,
+                                ..
+                            } => id.to_string() == id_str,
+                        }) {
+                            added.push(entry);
+                        }
                     }
                 }
             }

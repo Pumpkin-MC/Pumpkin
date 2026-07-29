@@ -58,7 +58,8 @@ pub fn load_damage_types(
     let mut types = HashMap::new();
 
     for ns in manager.get_namespaces() {
-        let paths = manager.list_resources(&ns, "damage_type");
+        let paths =
+            crate::resource::list_resources_multi(manager, &ns, &["damage_type", "damage_types"]);
         for path in &paths {
             if !std::path::Path::new(path)
                 .extension()
@@ -75,8 +76,8 @@ pub fn load_damage_types(
 
             let type_path = path
                 .strip_prefix("damage_type/")
+                .or_else(|| path.strip_prefix("damage_types/"))
                 .and_then(|p| p.strip_suffix(".json"))
-                .or_else(|| path.strip_suffix(".json"))
                 .unwrap_or(path.as_str());
             let id = Identifier::new(&ns, type_path);
 

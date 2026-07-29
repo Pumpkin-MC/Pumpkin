@@ -294,11 +294,21 @@ impl Server {
 
         // Wire the world's datapacks folder into the global structure template cache
         // so datapack-provided structure .nbt files can be loaded at runtime.
-        let dp_path = world_path.join("datapacks");
+        let dp_root = world_path.join("datapacks");
         // Ensure the datapacks directory exists
-        let _ = std::fs::create_dir_all(&dp_path);
+        let _ = std::fs::create_dir_all(&dp_root);
+        // Scan for individual pack directories; passing the root won't match
+        // actual pack layouts (e.g. world/datapacks/<pack>/data/...).
+        let pack_paths = std::fs::read_dir(&dp_root)
+            .ok()
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect::<Vec<_>>();
         pumpkin_world::generation::structure::template::global_cache()
-            .set_datapack_paths(vec![dp_path]);
+            .set_datapack_paths(pack_paths);
 
         // Configure the pack repository from level.dat and do initial reload
         {

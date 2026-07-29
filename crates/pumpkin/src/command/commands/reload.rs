@@ -41,5 +41,7 @@ impl CommandExecutor for ReloadExecutor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(literal("datapacks").execute(ReloadExecutor))
+    CommandTree::new(NAMES, DESCRIPTION)
+        .execute(ReloadExecutor)
+        .then(literal("datapacks").execute(ReloadExecutor))
 }

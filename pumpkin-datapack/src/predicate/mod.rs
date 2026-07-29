@@ -25,7 +25,8 @@ pub fn load_predicates(
     let mut predicates = HashMap::new();
 
     for ns in manager.get_namespaces() {
-        let paths = manager.list_resources(&ns, "predicate");
+        let paths =
+            crate::resource::list_resources_multi(manager, &ns, &["predicate", "predicates"]);
         for path in &paths {
             if !std::path::Path::new(path)
                 .extension()
@@ -40,8 +41,8 @@ pub fn load_predicates(
 
             let pred_name = path
                 .strip_prefix("predicate/")
+                .or_else(|| path.strip_prefix("predicates/"))
                 .and_then(|p| p.strip_suffix(".json"))
-                .or_else(|| path.strip_suffix(".json"))
                 .unwrap_or(path.as_str());
             let id = Identifier::new(&ns, pred_name);
 
@@ -59,7 +60,11 @@ pub fn load_item_modifiers(
     let mut modifiers = HashMap::new();
 
     for ns in manager.get_namespaces() {
-        let paths = manager.list_resources(&ns, "item_modifier");
+        let paths = crate::resource::list_resources_multi(
+            manager,
+            &ns,
+            &["item_modifier", "item_modifiers"],
+        );
         for path in &paths {
             if !std::path::Path::new(path)
                 .extension()
@@ -82,8 +87,8 @@ pub fn load_item_modifiers(
 
             let mod_name = path
                 .strip_prefix("item_modifier/")
+                .or_else(|| path.strip_prefix("item_modifiers/"))
                 .and_then(|p| p.strip_suffix(".json"))
-                .or_else(|| path.strip_suffix(".json"))
                 .unwrap_or(path.as_str());
             let id = Identifier::new(&ns, mod_name);
 

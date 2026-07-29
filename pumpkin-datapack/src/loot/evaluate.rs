@@ -664,7 +664,9 @@ fn evaluate_predicate_single(data: &serde_json::Value, ctx: &LootEvalContext) ->
                 .unwrap_or(1.0);
             rand::rng().random::<f64>() < chance
         }
-        "minecraft:survives_explosion" | "survives_explosion" => ctx.explosion_radius.is_some(),
+        "minecraft:survives_explosion" | "survives_explosion" => ctx
+            .explosion_radius
+            .is_none_or(|radius| rand::rng().random::<f32>() <= 1.0 / radius),
         "minecraft:match_tool" | "match_tool" => ctx.tool_item_id.is_some(),
         "minecraft:damage_source_properties" | "damage_source_properties" => true,
         _ => {

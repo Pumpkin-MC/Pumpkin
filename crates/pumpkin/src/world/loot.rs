@@ -190,7 +190,9 @@ fn evaluate_single_condition(data: &serde_json::Value, params: &LootContextParam
                 .unwrap_or(1.0);
             rand::random::<f64>() < chance
         }
-        "minecraft:survives_explosion" => params.explosion_radius.is_some(),
+        "minecraft:survives_explosion" => params
+            .explosion_radius
+            .is_none_or(|radius| rand::random::<f32>() <= 1.0 / radius),
         "minecraft:match_tool" => {
             // TODO(datapack parity): Implement proper match_tool with item predicate
             // (items, count, durability, enchantments, potions, nbt, etc.)
