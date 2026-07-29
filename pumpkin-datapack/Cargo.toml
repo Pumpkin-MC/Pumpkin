@@ -8,23 +8,14 @@ description = "Minecraft datapack loading and management for Pumpkin"
 
 [dependencies]
 pumpkin-data.workspace = true
-pumpkin-util.workspace = true
-pumpkin-codecs.workspace = true
-pumpkin-inventory.workspace = true
 pumpkin-protocol.workspace = true
-pumpkin-world.workspace = true
 
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-uuid.workspace = true
-dashmap.workspace = true
-arc-swap.workspace = true
 futures.workspace = true
-rayon.workspace = true
-itertools.workspace = true
 rand.workspace = true
 zip = { version = "2.4", default-features = false, features = ["deflate"] }
 
