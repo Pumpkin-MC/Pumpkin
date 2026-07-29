@@ -15,7 +15,8 @@ pub fn load_loot_tables(
     let mut tables = HashMap::new();
 
     for ns in manager.get_namespaces() {
-        let paths = manager.list_resources(&ns, "loot_table");
+        let paths =
+            crate::resource::list_resources_multi(manager, &ns, &["loot_table", "loot_tables"]);
         for path in &paths {
             if !std::path::Path::new(path)
                 .extension()
@@ -30,8 +31,8 @@ pub fn load_loot_tables(
 
             let table_name = path
                 .strip_prefix("loot_table/")
+                .or_else(|| path.strip_prefix("loot_tables/"))
                 .and_then(|p| p.strip_suffix(".json"))
-                .or_else(|| path.strip_suffix(".json"))
                 .unwrap_or(path.as_str());
             let id = Identifier::new(&ns, table_name);
 

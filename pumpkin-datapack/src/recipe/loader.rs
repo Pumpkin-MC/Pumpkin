@@ -16,7 +16,7 @@ pub fn load_recipes(
     // Discover recipe JSONs from resource manager
     let namespaces = manager.get_namespaces();
     for ns in &namespaces {
-        let paths = manager.list_resources(ns, "recipe");
+        let paths = crate::resource::list_resources_multi(manager, ns, &["recipe", "recipes"]);
         for path in &paths {
             if !std::path::Path::new(path)
                 .extension()

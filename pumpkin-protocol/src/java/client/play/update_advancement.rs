@@ -159,9 +159,13 @@ impl ClientPacket for CUpdateAdvancements {
                             .write_with_version(&mut write, version)?;
 
                         write.write_var_int(&VarInt(display.frame_type))?;
-                        let flags =
-                            ((display.show_toast as i32) << 1) | ((display.hidden as i32) << 2);
+                        let flags = (display.background_texture.is_some() as i32)
+                            | ((display.show_toast as i32) << 1)
+                            | ((display.hidden as i32) << 2);
                         write.write_i32_be(flags)?;
+                        if let Some(bg) = &display.background_texture {
+                            write.write_string(bg)?;
+                        }
                         write.write_f32_be(display.x)?;
                         write.write_f32_be(display.y)?;
                     }

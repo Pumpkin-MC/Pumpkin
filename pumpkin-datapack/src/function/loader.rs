@@ -18,7 +18,7 @@ pub fn load_functions(manager: &dyn ResourceManager) -> Result<FunctionManager, 
     let namespaces = manager.get_namespaces();
 
     for ns in &namespaces {
-        let paths = manager.list_resources(ns, "function");
+        let paths = crate::resource::list_resources_multi(manager, ns, &["function", "functions"]);
         for path in &paths {
             if !path.ends_with(".mcfunction") {
                 continue;
@@ -31,8 +31,8 @@ pub fn load_functions(manager: &dyn ResourceManager) -> Result<FunctionManager, 
 
             let func_name = path
                 .strip_prefix("function/")
+                .or_else(|| path.strip_prefix("functions/"))
                 .and_then(|p| p.strip_suffix(".mcfunction"))
-                .or_else(|| path.strip_suffix(".mcfunction"))
                 .unwrap_or(path.as_str());
             let id = Identifier::new(ns, func_name);
 

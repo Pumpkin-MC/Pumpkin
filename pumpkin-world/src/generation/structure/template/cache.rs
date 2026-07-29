@@ -49,15 +49,13 @@ impl TemplateCache {
         let paths = self.datapack_search_paths.read().unwrap();
         for base in paths.iter() {
             // Try: <base>/data/<namespace>/structure/<name>.nbt
-            // Since the name might already be in "namespace:path" form or just "path"
-            let namespaces = if name.contains('/') {
-                vec!["minecraft".to_string(), name.to_string()]
-            } else {
-                vec![
-                    format!("minecraft/structure/{name}"),
-                    format!("minecraft/structures/{name}"),
-                ]
-            };
+            // Handle both "namespace:path" and bare "path" forms
+            let (namespace, rel_path) = name.split_once(':').unwrap_or(("minecraft", name));
+            let rel_path = rel_path.trim_start_matches('/');
+            let namespaces = vec![
+                format!("{namespace}/structures/{rel_path}"),
+                format!("{namespace}/structure/{rel_path}"),
+            ];
             for ns_path in &namespaces {
                 let file_path = base.join("data").join(ns_path);
                 let with_ext = if file_path.extension().is_none() {
