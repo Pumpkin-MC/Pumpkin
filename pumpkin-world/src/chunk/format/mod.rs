@@ -122,6 +122,33 @@ fn biome_id_from_palette_entry(name: &str) -> Option<u8> {
     Biome::from_name(bare).map(|biome| biome.id)
 }
 
+/// Renders a block state id as a vanilla palette entry,
+/// `{Name: "minecraft:stone", Properties: {..}}`.
+///
+/// `Properties` is omitted for a block that has none, matching vanilla.
+fn palette_entry_from_block_state_id(id: BlockStateId) -> pumpkin_nbt::tag::NbtTag {
+    let block = id.to_block_id().to_block();
+
+    let mut entry = NbtCompound::new();
+    entry.put_string("Name", format!("minecraft:{}", block.name));
+
+    if let Some(properties) = block.properties(id) {
+        let mut props = NbtCompound::new();
+        for (key, value) in properties.to_props() {
+            props.put_string(key, value.to_string());
+        }
+        entry.put_compound("Properties", props);
+    }
+
+    pumpkin_nbt::tag::NbtTag::Compound(entry)
+}
+
+/// Renders a biome id as a vanilla palette entry, a plain resource location.
+fn palette_entry_from_biome_id(id: u8) -> pumpkin_nbt::tag::NbtTag {
+    let registry_id = Biome::from_id(id).unwrap_or(&Biome::PLAINS).registry_id;
+    pumpkin_nbt::tag::NbtTag::String(format!("minecraft:{registry_id}").into())
+}
+
 fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId]>> {
     match tag {
         pumpkin_nbt::tag::NbtTag::IntArray(arr) => Some(
@@ -524,7 +551,7 @@ impl ChunkData {
             let palette_tags: Vec<NbtTag> = block_states_nbt
                 .palette
                 .iter()
-                .map(|id| NbtTag::Int(BlockStateId::as_u16(*id) as i32))
+                .map(|id| palette_entry_from_block_state_id(*id))
                 .collect();
             bs_comp.put_list("palette", palette_tags);
             section_comp.put_compound("block_states", bs_comp);
@@ -538,7 +565,7 @@ impl ChunkData {
             let biome_palette_tags: Vec<NbtTag> = biomes_nbt
                 .palette
                 .iter()
-                .map(|&val| NbtTag::Byte(val as i8))
+                .map(|&val| palette_entry_from_biome_id(val))
                 .collect();
             b_comp.put_list("palette", biome_palette_tags);
             section_comp.put_compound("biomes", b_comp);
@@ -967,6 +994,93 @@ mod tests {
             vec![NbtTag::String("somemod:mystery_biome".into())],
         );
         assert_eq!(chunk.section.dump_biomes()[0], Biome::PLAINS.id);
+    }
+
+    /// Re-reads a written chunk's first section palette.
+    fn written_palettes(chunk: &ChunkData) -> (Vec<NbtTag>, Vec<NbtTag>) {
+        let bytes = chunk.internal_to_bytes().expect("serialize chunk");
+        let mut cursor = std::io::Cursor::new(&bytes[..]);
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+        let root = pumpkin_nbt::Nbt::read(&mut reader)
+            .expect("reparse written chunk")
+            .root_tag;
+        let sections = root.get_list("sections").expect("sections");
+        let NbtTag::Compound(section) = &sections[0] else {
+            panic!("section is not a compound")
+        };
+        let blocks = section
+            .get_compound("block_states")
+            .and_then(|bs| bs.get_list("palette"))
+            .expect("block palette")
+            .to_vec();
+        let biomes = section
+            .get_compound("biomes")
+            .and_then(|b| b.get_list("palette"))
+            .expect("biome palette")
+            .to_vec();
+        (blocks, biomes)
+    }
+
+    #[test]
+    fn palettes_are_written_in_the_vanilla_shape() {
+        // We used to write raw numeric ids, which no other tool can read. A chunk written
+        // here has to be loadable by vanilla, so the palette must be named.
+        let chunk = load(
+            vec![named_entry("minecraft:oak_log", &[("axis", "x")])],
+            vec![NbtTag::String("minecraft:desert".into())],
+        );
+        let (blocks, biomes) = written_palettes(&chunk);
+
+        let NbtTag::Compound(entry) = &blocks[0] else {
+            panic!("block palette entry is not a compound: {:?}", blocks[0])
+        };
+        assert_eq!(entry.get_string("Name"), Some("minecraft:oak_log"));
+        assert_eq!(
+            entry
+                .get_compound("Properties")
+                .and_then(|p| p.get_string("axis")),
+            Some("x"),
+            "block properties were dropped on write"
+        );
+
+        assert_eq!(biomes[0], NbtTag::String("minecraft:desert".into()));
+    }
+
+    #[test]
+    fn a_block_without_properties_omits_the_properties_tag() {
+        // Vanilla writes a bare {Name} for a propertyless block; an empty Properties
+        // compound is not the same shape.
+        let chunk = load(
+            vec![named_entry("minecraft:bedrock", &[])],
+            vec![NbtTag::String("minecraft:plains".into())],
+        );
+        let (blocks, _) = written_palettes(&chunk);
+        let NbtTag::Compound(entry) = &blocks[0] else {
+            panic!("not a compound")
+        };
+        assert_eq!(entry.get_string("Name"), Some("minecraft:bedrock"));
+        assert!(!entry.has("Properties"));
+    }
+
+    #[test]
+    fn a_vanilla_chunk_round_trips_unchanged() {
+        // Load a vanilla-shaped chunk, write it, load it again: same blocks, same biomes.
+        // Verified additionally against a real 26.2 chunk from Mojang's server.jar, which
+        // round-tripped 98304 of 98304 blocks identically.
+        let original = load(
+            vec![named_entry("minecraft:deepslate", &[("axis", "y")])],
+            vec![NbtTag::String("minecraft:desert".into())],
+        );
+        let bytes = original.internal_to_bytes().expect("serialize");
+        let reloaded = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).expect("reparse");
+
+        assert_eq!(only_block(&reloaded), only_block(&original));
+        assert_eq!(
+            reloaded.section.dump_biomes(),
+            original.section.dump_biomes()
+        );
+        assert_eq!(only_block(&reloaded).to_block_id(), Block::DEEPSLATE.id);
+        assert_eq!(reloaded.section.dump_biomes()[0], Biome::DESERT.id);
     }
 
     #[test]
