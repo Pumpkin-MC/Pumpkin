@@ -670,6 +670,7 @@ impl BedrockClient {
                                 cursor_pos: &data.click_position,
                             },
                             &held_item,
+                            &EquipmentSlot::MAIN_HAND,
                             &server,
                             &world,
                         )

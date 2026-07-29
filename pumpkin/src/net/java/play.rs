@@ -2249,6 +2249,11 @@ impl JavaClient {
         } else {
             off_hand_item
         };
+        let equipment_slot = if matches!(hand, Hand::Left) {
+            EquipmentSlot::MAIN_HAND
+        } else {
+            EquipmentSlot::OFF_HAND
+        };
 
         let item_id = item.lock().await.item.id;
         player
@@ -2290,6 +2295,7 @@ impl JavaClient {
                     &cursor_pos,
                     &face,
                     &item,
+                    &equipment_slot,
                     &world,
                     block,
                     server,
@@ -2375,6 +2381,7 @@ impl JavaClient {
         cursor_pos: &Vector3<f32>,
         face: &BlockDirection,
         held_item: &Arc<Mutex<ItemStack>>,
+        equipment_slot: &EquipmentSlot,
         world: &Arc<World>,
         block: &Block,
         server: &Arc<Server>,
@@ -2387,6 +2394,7 @@ impl JavaClient {
                 position,
                 &BlockHitResult { face, cursor_pos },
                 held_item,
+                equipment_slot,
                 server,
                 world,
             )

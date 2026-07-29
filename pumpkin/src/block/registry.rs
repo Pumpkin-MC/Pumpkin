@@ -145,6 +145,7 @@ use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -782,6 +783,7 @@ impl BlockRegistry {
         position: &BlockPos,
         hit: &BlockHitResult<'_>,
         item_stack: &Arc<Mutex<ItemStack>>,
+        equipment_slot: &EquipmentSlot,
         server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
@@ -796,6 +798,7 @@ impl BlockRegistry {
                     player,
                     hit,
                     item_stack,
+                    equipment_slot,
                 })
                 .await;
         }
