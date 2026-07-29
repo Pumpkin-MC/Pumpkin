@@ -77,4 +77,6 @@ pub enum OwnedCookingRecipeType {
 pub enum DynamicRecipe {
     Crafting(OwnedCraftingRecipe),
     Cooking(OwnedCookingRecipeType),
+    // TODO(datapack parity): Add SmithingTransform, SmithingTrim, Stonecutting variants
+    // and their protocol serialization. These require new Owned* structs.
 }

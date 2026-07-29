@@ -52,7 +52,7 @@ pub const ENDERMAN_BODY_Y_OFFSET: f64 = 1.45;
 pub const PLAYER_EYE_HEIGHT: f64 = 1.62;
 
 fn is_projectile_damage(dt: DamageType) -> bool {
-    let (names, _) = pumpkin_data::tag::DamageType::MINECRAFT_IS_PROJECTILE;
+    let (names, _, _) = pumpkin_data::tag::DamageType::MINECRAFT_IS_PROJECTILE;
     names.contains(&dt.message_id)
 }
 

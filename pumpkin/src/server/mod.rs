@@ -68,6 +68,17 @@ use crate::command::args::entities::{
 use crate::data::advancement_data::AdvancementManager;
 use crate::server::scheduler::TaskScheduler;
 
+/// Global handle to the running server instance.
+/// Set once during `Server::new()` and available for cases where
+/// a `&Arc<Server>` reference is needed (e.g., command dispatch from `/function`).
+static SERVER_INSTANCE: std::sync::OnceLock<Arc<Server>> = std::sync::OnceLock::new();
+
+/// Get the global server instance. Returns `None` if the server hasn't started yet.
+#[must_use]
+pub fn global_server() -> Option<&'static Arc<Server>> {
+    SERVER_INSTANCE.get()
+}
+
 /// Represents a Minecraft server instance.
 pub struct Server {
     pub basic_config: BasicConfiguration,
@@ -142,6 +153,11 @@ pub struct Server {
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
     world_info_writer: Arc<dyn WorldInfoWriter>,
+
+    /// Datapack management system
+    pub datapack_manager: Arc<pumpkin_datapack::DataPackManager>,
+    /// Whether `#minecraft:load` functions need to be executed after a reload.
+    load_functions_pending: AtomicBool,
 }
 
 impl Server {
@@ -197,6 +213,7 @@ impl Server {
         });
 
         let seed = level_info.world_gen_settings.seed;
+        let data_packs = level_info.data_packs.clone();
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
 
         let listing = Mutex::new(CachedStatus::new(
@@ -213,7 +230,7 @@ impl Server {
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
             advanced_config.player_data.save_player_data,
         );
-        let advancement_manager = Arc::new(AdvancementManager::new(
+        let mut advancement_manager = Arc::new(AdvancementManager::new(
             players_dir.clone(),
             advanced_config.advancement.save_advancements,
         ));
@@ -254,6 +271,92 @@ impl Server {
                 .collect::<Vec<_>>()
         );
 
+        // Initialize datapack manager with the world's datapacks folder
+        let datapack_manager = Arc::new(pumpkin_datapack::DataPackManager::new(world_path.clone()));
+
+        // Wire the world's datapacks folder into the global structure template cache
+        // so datapack-provided structure .nbt files can be loaded at runtime.
+        let dp_path = world_path.join("datapacks");
+        // Ensure the datapacks directory exists
+        let _ = std::fs::create_dir_all(&dp_path);
+        pumpkin_world::generation::structure::template::global_cache()
+            .set_datapack_paths(vec![dp_path]);
+
+        // Configure the pack repository from level.dat and do initial reload
+        {
+            let mut repo = datapack_manager.repository.write().await;
+            repo.reload();
+            repo.configure(&data_packs.enabled, &data_packs.disabled, false);
+        };
+
+        // Skip datapack loading entirely if disabled via config
+        if advanced_config.datapack.enabled
+        // Perform initial datapack reload (load tags, functions, recipes, loot tables, etc.)
+        {
+            if let Err(e) = datapack_manager.reload().await {
+                error!("Failed to load datapacks: {e:?}");
+            }
+
+            // Log datapack load summary if configured
+            if advanced_config.datapack.log_load_info {
+                let repo = datapack_manager.repository.read().await;
+                let selected = repo.selected_ids().to_vec();
+                let packs_info: Vec<String> = selected
+                    .iter()
+                    .filter_map(|id| {
+                        let name = repo
+                            .get_pack(id)
+                            .map_or_else(|| id.clone(), |p| p.name.clone());
+                        if id == "vanilla" {
+                            None // skip built-in pack from summary
+                        } else {
+                            Some(name)
+                        }
+                    })
+                    .collect();
+                drop(repo);
+
+                let loot_count = datapack_manager.loot_tables.read().await.len();
+                let recipe_count = datapack_manager.recipes.read().await.len();
+                let adv_count = datapack_manager.advancements.read().await.len();
+                let pred_count = datapack_manager.predicates.read().await.len();
+                let func_count = datapack_manager.functions.read().await.function_count();
+                let tag_count = datapack_manager.tags.read().unwrap().tag_count();
+
+                if !packs_info.is_empty() {
+                    for name in &packs_info {
+                        info!("Loaded datapack: \"{name}\"");
+                    }
+                    info!(
+                        "Datapack totals: {loot_count} loot tables, {recipe_count} recipes, \
+                         {func_count} functions, {tag_count} tags, \
+                         {adv_count} advancements, {pred_count} predicates"
+                    );
+                }
+            }
+        } else {
+            info!("Datapack loading is disabled by config");
+        }
+
+        // Set up the global dynamic tag bridge so Taggable::is_tagged_with
+        // and Taggable::has_tag also consult the datapack TagRegistry.
+        let dp = datapack_manager.clone();
+        pumpkin_data::dynamic_tag_bridge::set_dynamic_tag_checker(Box::new(
+            move |registry, element_key, tag_name| {
+                Some(dp.tags.read().unwrap().is_tagged_bridge(
+                    registry,
+                    element_key,
+                    tag_name,
+                    |_| None,
+                ))
+            },
+        ));
+
+        // Wire the datapack manager into the advancement manager for DP advancement lookups.
+        if let Some(am) = Arc::get_mut(&mut advancement_manager) {
+            am.set_datapack_manager(&datapack_manager);
+        }
+
         let server = Self {
             basic_config,
             advanced_config,
@@ -293,8 +396,13 @@ impl Server {
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
+            datapack_manager,
+            load_functions_pending: AtomicBool::new(false),
         };
         let server = Arc::new(server);
+
+        // Store global handle so code with only &Server can access the Arc
+        let _ = SERVER_INSTANCE.set(server.clone());
 
         let gen_pool = Arc::new(
             rayon::ThreadPoolBuilder::new()
@@ -590,6 +698,75 @@ impl Server {
         self.listing.lock().await.remove_player(player);
     }
 
+    /// Reload all datapacks: re-discover, re-load tags/functions/recipes.
+    /// `#minecraft:load` functions are executed on the next tick.
+    pub async fn reload_datapacks(&self) -> Result<(), Vec<String>> {
+        // Re-discover packs and auto-enable new compatible world packs
+        let level = self.level_info.load();
+        let mut repo = self.datapack_manager.repository.write().await;
+        repo.reload();
+        repo.configure(&level.data_packs.enabled, &level.data_packs.disabled, false);
+
+        if let Err(e) = self.datapack_manager.reload().await {
+            let errs = vec![format!("{e}")];
+            error!("Datapack reload failed: {e}");
+            return Err(errs);
+        }
+
+        // Merge datapack recipes into the recipe manager (for client recipe book)
+        let dp_recipes = self.datapack_manager.recipes.read().await.clone();
+        self.recipe_manager.set_recipes(dp_recipes).await;
+
+        // Schedule #minecraft:load functions for execution on the next tick
+        self.load_functions_pending
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+
+        Ok(())
+    }
+
+    /// Execute `#minecraft:load` functions. Called after reload when the
+    /// server can provide an `&Arc<Self>` reference for `CommandSource` creation.
+    pub async fn execute_load_functions(self: &Arc<Self>) {
+        let function_ids = {
+            let functions = self.datapack_manager.functions.read().await;
+            functions.get_load_functions().to_vec()
+        };
+        if function_ids.is_empty() {
+            return;
+        }
+
+        let source = crate::command::CommandSender::Console
+            .into_source(self)
+            .await;
+        let functions = self.datapack_manager.functions.read().await;
+        for func_id in &function_ids {
+            if let Some(func) = functions.get(func_id)
+                && let pumpkin_datapack::function::parser::MCFunction::PlainText { commands } = func
+            {
+                for cmd in commands {
+                    self.command_dispatcher
+                        .read()
+                        .await
+                        .handle_command(&source, cmd)
+                        .await;
+                }
+            }
+        }
+    }
+
+    /// Save the current datapack configuration into level.dat so it persists.
+    pub async fn save_datapack_config(&self) {
+        let (enabled, disabled) = {
+            let repo = self.datapack_manager.repository.read().await;
+            repo.to_config_lists()
+        };
+
+        let current = self.level_info.load();
+        let mut new_info = (**current).clone();
+        new_info.data_packs = pumpkin_world::world_info::DataPacks { enabled, disabled };
+        self.level_info.store(Arc::new(new_info));
+    }
+
     pub async fn shutdown(&self) {
         self.tasks.close();
         debug!("Awaiting tasks for server");
@@ -600,6 +777,10 @@ impl Server {
         for world in self.worlds.load().iter() {
             world.shutdown().await;
         }
+
+        // Save datapack config before writing level.dat
+        self.save_datapack_config().await;
+
         let level_data = self.level_info.load();
         // then lets save the world info
 
@@ -927,6 +1108,46 @@ impl Server {
         // Global tasks
         if let Err(e) = self.player_data_storage.tick(self).await {
             error!("Error ticking player data: {e}");
+        }
+
+        // Execute #minecraft:load functions once after a datapack reload
+        if self
+            .load_functions_pending
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
+        {
+            self.execute_load_functions().await;
+        }
+
+        // Tick datapack functions: execute #minecraft:tick tag commands.
+        self.execute_tick_functions().await;
+    }
+
+    /// Execute all commands in functions tagged with `#minecraft:tick`.
+    async fn execute_tick_functions(self: &Arc<Self>) {
+        let function_ids = {
+            let functions = self.datapack_manager.functions.read().await;
+            functions.get_tick_functions().to_vec()
+        };
+        if function_ids.is_empty() {
+            return;
+        }
+
+        let source = crate::command::CommandSender::Console
+            .into_source(self)
+            .await;
+        let functions = self.datapack_manager.functions.read().await;
+        for func_id in &function_ids {
+            if let Some(func) = functions.get(func_id)
+                && let pumpkin_datapack::function::parser::MCFunction::PlainText { commands } = func
+            {
+                for cmd in commands {
+                    self.command_dispatcher
+                        .read()
+                        .await
+                        .handle_command(&source, cmd)
+                        .await;
+                }
+            }
         }
     }
 
