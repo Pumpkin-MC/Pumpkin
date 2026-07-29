@@ -477,9 +477,13 @@ impl LivingEntity {
     /// same server-side state as one that was just applied. Keeping it in one
     /// place is the point — the two paths silently diverged before.
     ///
-    /// Deliberately does *not* grant absorption. The absorption amount is
-    /// persisted in its own `AbsorptionAmount` tag, so re-granting it here would
-    /// stack another +4 per level onto the saved value on every single load.
+    /// Deliberately does *not* grant absorption. The amount lives in its own
+    /// `AbsorptionAmount` tag, so re-granting it here would stack another +4 per
+    /// level onto the saved value on every single load. What this *does* restore
+    /// is the `MAX_ABSORPTION` modifier the effect carries, which is what makes
+    /// that saved amount survivable — the restore path in `read_nbt_non_mut`
+    /// clamps against `MAX_ABSORPTION`, so it has to read the tag only after this
+    /// has run.
     async fn apply_effect_state(
         &self,
         effect: &Effect,
@@ -2061,12 +2065,6 @@ impl NBTStorage for LivingEntity {
             self.entity.read_nbt_non_mut(nbt).await;
             self.health.store(nbt.get_float("Health").unwrap_or(0.0));
 
-            // Clamp any persisted absorption to the entity's configured max
-            let raw_abs = nbt.get_float("AbsorptionAmount").unwrap_or(0.0);
-            let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
-            let clamped_abs = raw_abs.max(0.0).min(max_abs);
-            self.absorption.store(clamped_abs);
-
             // Load fall distance, but if this entity is currently marked dead ensure we don't restore
             // a lethal fall distance that would immediately re-kill on spawn.
             let fd = nbt.get_float("fall_distance").unwrap_or(0.0);
@@ -2101,6 +2099,18 @@ impl NBTStorage for LivingEntity {
             // separately by whoever owns the join sequence, since there is no
             // connected client to talk to at this point.
             self.reapply_active_effect_state().await;
+
+            // Only now is `MAX_ABSORPTION` worth reading. Every entity type has it at
+            // base 0, and the thing that raises it is the Absorption effect's own
+            // `minecraft:effect.absorption` modifier (+4 per level), which the call
+            // above is what installs. Clamping before that point — where this used to
+            // sit — computes a max of 0 and stores 0, so a player who logged out with
+            // Absorption came back with none, and the tag `apply_effect_state`
+            // deliberately defers to had already been zeroed by the time the effect
+            // returned.
+            let raw_abs = nbt.get_float("AbsorptionAmount").unwrap_or(0.0);
+            let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
+            self.absorption.store(raw_abs.max(0.0).min(max_abs));
         })
         // todo more...
     }

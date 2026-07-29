@@ -260,7 +260,7 @@ impl AttributeRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::{AttributeInstance, Modifier, ModifierOperation};
+    use super::{AttributeInstance, Attributes, Modifier, ModifierOperation};
 
     fn modifier(id: &str, amount: f64, operation: ModifierOperation) -> Modifier {
         Modifier {
@@ -346,5 +346,45 @@ mod tests {
 
         inst.remove_modifier("x");
         assert!((inst.value() - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn max_absorption_is_zero_until_the_absorption_effect_is_applied() {
+        use pumpkin_data::effect::StatusEffect;
+
+        // The order the NBT restore path has to preserve. `AbsorptionAmount` is
+        // clamped against MAX_ABSORPTION, every entity type has that attribute at
+        // base 0, and the only thing that lifts it is the Absorption effect's own
+        // modifier. So clamping before the effect's state is re-applied computes a
+        // ceiling of 0 and throws the saved amount away — log out with Absorption,
+        // come back with none.
+        let saved_amount = 8.0f64;
+        let mut max_absorption = AttributeInstance::new(0.0);
+
+        assert!(max_absorption.value().abs() < f64::EPSILON);
+        assert!(
+            saved_amount.max(0.0).min(max_absorption.value()).abs() < f64::EPSILON,
+            "clamping before the effect returns must be what zeroes it"
+        );
+
+        // Absorption II, as `apply_effect_state` builds it.
+        let amplifier = 1.0;
+        let m = &StatusEffect::ABSORPTION.attribute_modifiers[0];
+        assert_eq!(
+            m.attribute.id,
+            Attributes::MAX_ABSORPTION.id,
+            "absorption is expected to modify MAX_ABSORPTION"
+        );
+        max_absorption.add_or_replace_modifier(modifier(
+            m.id,
+            m.base_value * (amplifier + 1.0),
+            ModifierOperation::Add,
+        ));
+
+        assert!((max_absorption.value() - 8.0).abs() < 1e-9);
+        assert!(
+            (saved_amount.max(0.0).min(max_absorption.value()) - 8.0).abs() < 1e-9,
+            "clamping after the effect returns must preserve the saved amount"
+        );
     }
 }
