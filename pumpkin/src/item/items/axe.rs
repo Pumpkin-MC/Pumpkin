@@ -42,7 +42,10 @@ impl ItemBehaviour for AxeItem {
             // If there is a strip equivalent.
             let changed = if let Some(replacement) = replacement_block {
                 let new_block = replacement.to_block();
-                let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_LOGS) {
+                // Bamboo blocks are pillars too, but they are not part of the logs tag.
+                let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_LOGS)
+                    || block == &Block::BAMBOO_BLOCK
+                {
                     let log_information = world.get_block_state_id(&location);
                     let log_props =
                         PaleOakWoodLikeProperties::from_state_id(log_information, block);
@@ -127,6 +130,11 @@ const fn get_stripped_equivalent(id: BlockId) -> Option<BlockId> {
         BlockId::MANGROVE_WOOD => Some(BlockId::STRIPPED_MANGROVE_WOOD),
         BlockId::CHERRY_WOOD => Some(BlockId::STRIPPED_CHERRY_WOOD),
         BlockId::PALE_OAK_WOOD => Some(BlockId::STRIPPED_PALE_OAK_WOOD),
+        BlockId::CRIMSON_STEM => Some(BlockId::STRIPPED_CRIMSON_STEM),
+        BlockId::WARPED_STEM => Some(BlockId::STRIPPED_WARPED_STEM),
+        BlockId::CRIMSON_HYPHAE => Some(BlockId::STRIPPED_CRIMSON_HYPHAE),
+        BlockId::WARPED_HYPHAE => Some(BlockId::STRIPPED_WARPED_HYPHAE),
+        BlockId::BAMBOO_BLOCK => Some(BlockId::STRIPPED_BAMBOO_BLOCK),
         _ => None,
     }
 }

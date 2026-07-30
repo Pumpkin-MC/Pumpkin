@@ -1,10 +1,11 @@
-use std::io::Read;
-
 use pumpkin_data::packet::serverbound::CONFIG_COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-use crate::{ReadingError, ServerPacket, ser::NetworkReadExt};
+use crate::{
+    ReadingError, ServerPacket,
+    ser::{NetworkReadExt, NetworkReadSliceExt},
+};
 
 /// The maximum allowed size for a cookie payload (5 KiB).
 const MAX_COOKIE_LENGTH: usize = 5120;
@@ -14,19 +15,18 @@ const MAX_COOKIE_LENGTH: usize = 5120;
 /// Cookies allow servers to store small amounts of data on the client side,
 /// which can be retrieved later (e.g., for session tracking or preferences)
 #[java_packet(CONFIG_COOKIE_RESPONSE)]
-pub struct SConfigCookieResponse {
+pub struct SConfigCookieResponse<'a> {
     /// The unique identifier for the cookie being returned
-    pub key: Box<str>,
+    pub key: &'a str,
     /// Indicates whether a payload is attached to this response
     pub has_payload: bool,
     /// The actual data stored in the cookie. Limited to 5120 bytes
-    pub payload: Option<Box<[u8]>>,
+    pub payload: Option<&'a [u8]>,
 }
 
-impl ServerPacket for SConfigCookieResponse {
-    fn read(read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let mut read = read;
-        let key = read.get_str()?;
+impl<'a> ServerPacket<'a> for SConfigCookieResponse<'a> {
+    fn read(read: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let key = read.get_str_borrowed()?;
         let has_payload = read.get_bool()?;
 
         if !has_payload {
@@ -42,7 +42,7 @@ impl ServerPacket for SConfigCookieResponse {
             return Err(ReadingError::TooLarge("SConfigCookieResponse".to_string()));
         }
 
-        let payload = read.read_boxed_slice(payload_length)?;
+        let payload = read.read_slice_borrowed(payload_length)?;
         Ok(Self {
             key,
             has_payload,

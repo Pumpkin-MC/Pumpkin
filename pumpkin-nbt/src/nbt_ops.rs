@@ -1,3 +1,5 @@
+//! NBT support for Pumpkin's dynamic serialization operations.
+
 use crate::compound::NbtCompound;
 use crate::tag::NbtTag;
 use pumpkin_codecs::DataResult;
@@ -11,7 +13,7 @@ use std::iter::Map;
 use std::vec::IntoIter;
 use tracing::warn;
 
-/// A [`DynamicOps`] to serialize to/deserialize from NBT data.
+/// A [`DynamicOps`] implementation that represents values as [`NbtTag`]s.
 pub struct NbtOps;
 
 impl DynamicOps for NbtOps {
@@ -387,7 +389,7 @@ impl MapLike for NbtMapLike<'_> {
     }
 }
 
-/// An implementation of [`StructBuilder`] for NBT objects.
+/// Builds NBT compounds for the [`NbtOps`] dynamic codec implementation.
 pub struct NbtStructBuilder {
     builder: DataResult<NbtTag>,
 }

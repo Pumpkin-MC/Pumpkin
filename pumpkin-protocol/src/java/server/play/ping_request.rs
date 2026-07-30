@@ -6,15 +6,14 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_PING_REQUEST)]
 pub struct SPlayPingRequest {
     pub payload: i64,
 }
 
-impl ServerPacket for SPlayPingRequest {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SPlayPingRequest {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             payload: bytebuf.get_i64_be()?,
         })

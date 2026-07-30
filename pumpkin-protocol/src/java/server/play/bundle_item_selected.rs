@@ -8,7 +8,6 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_BUNDLE_ITEM_SELECTED)]
 pub struct SBundleItemSelected {
@@ -16,8 +15,8 @@ pub struct SBundleItemSelected {
     pub selected_item_index: VarInt,
 }
 
-impl ServerPacket for SBundleItemSelected {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SBundleItemSelected {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             slot_id: bytebuf.get_var_int()?,
             selected_item_index: bytebuf.get_var_int()?,

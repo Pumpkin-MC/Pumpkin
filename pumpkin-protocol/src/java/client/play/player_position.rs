@@ -69,7 +69,6 @@ impl ClientPacket for CPlayerPosition {
             write.write_f64_be(self.delta.z)?;
             write.write_f32_be(self.yaw)?;
             write.write_f32_be(self.pitch)?;
-            // not sure about that
             write.write_i32_be(PositionFlag::get_bitfield(self.relatives.as_slice()))?;
         } else {
             write.write_f64_be(self.position.x)?;
@@ -77,16 +76,22 @@ impl ClientPacket for CPlayerPosition {
             write.write_f64_be(self.position.z)?;
             write.write_f32_be(self.yaw)?;
             write.write_f32_be(self.pitch)?;
-            write.write_u8(PositionFlag::get_bitfield(self.relatives.as_slice()) as u8)?;
-            write.write_var_int(&self.teleport_id)?;
+            if version >= &JavaMinecraftVersion::V_1_19_4 {
+                write.write_i32_be(PositionFlag::get_bitfield(self.relatives.as_slice()))?;
+            } else {
+                write.write_u8(PositionFlag::get_bitfield(self.relatives.as_slice()) as u8)?;
+            }
+            if version >= &JavaMinecraftVersion::V_1_9 {
+                write.write_var_int(&self.teleport_id)?;
+            }
         }
         Ok(())
     }
 }
 
-impl ServerPacket for CPlayerPosition {
+impl<'a> ServerPacket<'a> for CPlayerPosition {
     fn read(
-        mut read: impl std::io::Read,
+        read: &mut &'a [u8],
         _version: &JavaMinecraftVersion,
     ) -> Result<Self, crate::ser::ReadingError> {
         Ok(Self {

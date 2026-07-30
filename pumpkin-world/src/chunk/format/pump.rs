@@ -156,7 +156,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use std::future::Future;
     use std::pin::Pin;
-    use temp_dir::TempDir;
+    use tempfile::TempDir;
 
     #[derive(Debug, Serialize, Deserialize, Clone)]
     struct MockChunk {
@@ -201,7 +201,7 @@ mod tests {
     #[tokio::test]
     async fn pump_file_roundtrip() {
         let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir.child("r.0.0.pump");
+        let file_path = temp_dir.path().join("r.0.0.pump");
 
         let mut pump_file: PumpFile<MockChunk> = PumpFile::default();
         let chunk = MockChunk {

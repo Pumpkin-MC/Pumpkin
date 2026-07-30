@@ -23,6 +23,7 @@ use crate::{
     },
 };
 
+pub(crate) mod height_sampler;
 pub mod piece;
 pub mod placement;
 pub mod shiftable_piece;
@@ -82,6 +83,9 @@ pub fn generate_structure_position(
                     .expect("Jigsaw structure must have a start pool"),
                 structure.size.expect("Jigsaw structure must have a size"),
             );
+            if *key == StructureKeys::PillagerOutpost {
+                generator = generator.with_expansion_hack(true);
+            }
             if let Some(start_jigsaw_name) = structure.start_jigsaw_name {
                 generator = generator.with_start_jigsaw(start_jigsaw_name);
             }

@@ -22,6 +22,7 @@ use crate::entity::EntityBase;
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -247,6 +248,7 @@ pub struct UseWithItemArgs<'a> {
     pub player: &'a Arc<Player>,
     pub hit: &'a BlockHitResult<'a>,
     pub item_stack: &'a Arc<Mutex<ItemStack>>,
+    pub equipment_slot: &'a EquipmentSlot,
 }
 
 pub struct BlockHitResult<'a> {

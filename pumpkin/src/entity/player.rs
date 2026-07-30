@@ -122,6 +122,14 @@ const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
 pub const DATA_VERSION: i32 = 4903; // 26.2
 
+/// Food exhaustion applied for every block a player mines.
+///
+/// Vanilla: `Block#playerDestroy` calls `player.causeFoodExhaustion(0.005F)`.
+/// `ServerPlayerGameMode#destroyBlock` only reaches `playerDestroy` for
+/// non-creative players holding a tool that can harvest the block, so callers
+/// must apply the same gating.
+pub const MINE_BLOCK_EXHAUSTION: f32 = 0.005; // Vanilla: 0.005F
+
 struct HeapNode(i32, Vector2<i32>, Weak<ChunkData>);
 
 impl Eq for HeapNode {}
@@ -473,6 +481,7 @@ pub struct Player {
     pub last_food_saturation: AtomicBool,
     /// The player's permission level.
     pub permission_lvl: AtomicCell<PermissionLvl>,
+    pub subscribed_debug_sample: AtomicBool,
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
     pub bedrock_spawned: AtomicBool,
@@ -706,6 +715,7 @@ impl Player {
             last_sent_health: AtomicI32::new(-1),
             last_sent_food: AtomicU8::new(0),
             last_food_saturation: AtomicBool::new(true),
+            subscribed_debug_sample: AtomicBool::new(false),
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
@@ -1142,7 +1152,7 @@ impl Player {
                 _ => {}
             }
             if config.knockback {
-                combat::handle_knockback(attacker_entity, victim_entity, knockback_strength);
+                combat::handle_knockback(attacker_entity, victim.as_ref(), knockback_strength);
             }
         }
 
@@ -1161,6 +1171,11 @@ impl Player {
             Self::combat_weapon_durability_cost(&stack)
         })
         .await;
+
+        // Vanilla `Player#attack` ends the successful-hit branch with
+        // `causeFoodExhaustion(0.1F)`. Only landed hits exhaust; the miss/no-damage
+        // case returned early above.
+        self.add_exhaustion(0.1).await;
 
         if config.swing {}
     }
@@ -2126,15 +2141,14 @@ impl Player {
         progress.clamp(0.0, 1.0)
     }
 
-    pub async fn fire_packet_sent<P: 'static + Send + Sync + std::any::Any + Clone>(
+    pub async fn fire_packet_sent<P: Send + Sync + std::any::Any>(
         self: &Arc<Self>,
-        packet: &P,
+        packet: P,
         packet_id: i32,
         payload: Bytes,
     ) -> bool {
         if let Some(server) = self.world().server.upgrade() {
-            let event =
-                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet.clone()));
+            let event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
             let event = server.plugin_manager.fire(event).await;
             return event.cancelled;
         }
@@ -3609,7 +3623,7 @@ impl Player {
             .await;
     }
 
-    pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem) {
+    pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem<'_>) {
         self.update_last_action_time();
         let screen_handler_arc = self.current_screen_handler.lock().await.clone();
         let mut screen_handler = screen_handler_arc.lock().await;
@@ -3618,7 +3632,9 @@ impl Player {
             .as_any_mut()
             .downcast_mut::<pumpkin_inventory::anvil::AnvilScreenHandler>()
         {
-            anvil_handler.update_item_name(packet.item_name).await;
+            anvil_handler
+                .update_item_name(packet.item_name.to_string())
+                .await;
         }
     }
 

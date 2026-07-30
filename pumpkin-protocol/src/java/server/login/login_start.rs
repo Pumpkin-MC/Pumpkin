@@ -1,5 +1,3 @@
-use std::io::Read;
-
 use pumpkin_data::packet::serverbound::LOGIN_HELLO;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -15,11 +13,32 @@ pub struct SLoginStart {
     pub uuid: uuid::Uuid,
 }
 
-impl ServerPacket for SLoginStart {
-    fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        Ok(Self {
-            name: read.get_str_bounded(16)?,
-            uuid: read.get_uuid()?,
-        })
+impl<'a> ServerPacket<'a> for SLoginStart {
+    fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let name = read.get_str_bounded(16)?;
+        let uuid = if version >= &JavaMinecraftVersion::V_1_20_2 {
+            read.get_uuid()?
+        } else {
+            uuid::Uuid::new_v3(
+                &uuid::Uuid::nil(),
+                format!("OfflinePlayer:{name}").as_bytes(),
+            )
+        };
+        Ok(Self { name, uuid })
+    }
+}
+
+impl crate::ClientPacket for SLoginStart {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_string_bounded(&self.name, 16)?;
+        if version >= &JavaMinecraftVersion::V_1_20_2 {
+            write.write_uuid(&self.uuid)?;
+        }
+        Ok(())
     }
 }

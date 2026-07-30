@@ -49,7 +49,10 @@ use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{BlockHitResult, registry::BlockActionResult},
-    entity::{EntityBase, player::Player},
+    entity::{
+        EntityBase,
+        player::{MINE_BLOCK_EXHAUSTION, Player},
+    },
     net::{DisconnectReason, bedrock::BedrockClient},
     plugin::player::{
         item_held::PlayerItemHeldEvent,
@@ -447,7 +450,7 @@ impl BedrockClient {
         }
     }
 
-    pub async fn handle_emote(&self, player: &Arc<Player>, _server: &Server, packet: SEmote) {
+    pub async fn handle_emote(&self, player: &Arc<Player>, _server: &Server, packet: SEmote<'_>) {
         if !player.has_client_loaded() {
             return;
         }
@@ -670,6 +673,7 @@ impl BedrockClient {
                                 cursor_pos: &data.click_position,
                             },
                             &held_item,
+                            &EquipmentSlot::MAIN_HAND,
                             &server,
                             &world,
                         )
@@ -1006,12 +1010,17 @@ impl BedrockClient {
         .await;
     }
 
-    pub async fn handle_chat_message(&self, server: &Server, player: &Arc<Player>, packet: SText) {
+    pub async fn handle_chat_message(
+        &self,
+        server: &Server,
+        player: &Arc<Player>,
+        packet: SText<'_>,
+    ) {
         let gameprofile = &player.gameprofile;
 
         send_cancellable! {{
             server;
-            PlayerChatEvent::new(player.clone(), packet.message, vec![]);
+            PlayerChatEvent::new(player.clone(), packet.message.into_owned(), vec![]);
 
             'after: {
                 info!("<chat> {}: {}", gameprofile.name, event.message);
@@ -1093,6 +1102,7 @@ impl BedrockClient {
                     let speed = crate::block::calc_block_breaking(player, state, block).await;
                     if speed >= 1.0 {
                         let broken_state = world.get_block_state(&location);
+                        let can_harvest = player.can_harvest(broken_state, block).await;
                         let new_state = world
                             .break_block(
                                 &location,
@@ -1106,6 +1116,9 @@ impl BedrockClient {
                                 .broken(&world, block, player, &location, server, broken_state)
                                 .await;
                             player.apply_tool_damage_for_block_break(broken_state).await;
+                            if can_harvest {
+                                player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                            }
                         }
                     } else {
                         player.mining.store(true, Ordering::Relaxed);
@@ -1151,6 +1164,9 @@ impl BedrockClient {
                             .broken(&world, block, player, &location, server, state)
                             .await;
                         player.apply_tool_damage_for_block_break(state).await;
+                        if block_drop {
+                            player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                        }
                     }
                 }
             }
@@ -1178,11 +1194,11 @@ impl BedrockClient {
         &self,
         player: &Arc<Player>,
         server: &Arc<Server>,
-        packet: SCommandRequest,
+        packet: SCommandRequest<'_>,
     ) {
         let player_clone = player.clone();
         let server_clone = server.clone();
-        let command = packet.command.strip_prefix("/").unwrap_or(&packet.command);
+        let command = packet.command.strip_prefix('/').unwrap_or(&packet.command);
 
         send_cancellable! {{
             server;
@@ -1221,12 +1237,12 @@ impl BedrockClient {
         &self,
         player: &Arc<Player>,
         server: &Server,
-        packet: pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse,
+        packet: pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse<'_>,
     ) {
         let event = crate::plugin::api::events::player::bedrock_form_response::BedrockFormResponseEvent::new(
             player.clone(),
             packet.form_id.0 as u32,
-            packet.form_data,
+            packet.form_data.map(std::borrow::Cow::into_owned),
         );
         let _ = server.plugin_manager.fire(event).await;
     }

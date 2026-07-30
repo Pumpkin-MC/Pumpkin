@@ -765,7 +765,9 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (EnchantmentGlintOverride, &EnchantmentGlintOverrideImpl), });
         }
         if self.enchantments.is_some() {
-            tokens.extend(quote! { (Enchantments, &EnchantmentsImpl { enchantment: Cow::Borrowed(&[]) }), });
+            tokens.extend(
+                quote! { (Enchantments, &EnchantmentsImpl { enchantment: Cow::Borrowed(&[]) }), },
+            );
         }
         if self.entity_data.is_some() {
             tokens.extend(quote! { (EntityData, &EntityDataImpl), });
@@ -793,7 +795,8 @@ impl ToTokens for ItemComponents {
         }
         if let Some(model) = &self.item_model {
             let model_lit = LitStr::new(model, Span::call_site());
-            tokens.extend(quote! { (ItemModel, &ItemModelImpl { id: Cow::Borrowed(#model_lit) }), });
+            tokens
+                .extend(quote! { (ItemModel, &ItemModelImpl { id: Cow::Borrowed(#model_lit) }), });
         }
         if self.kinetic_weapon.is_some() {
             tokens.extend(quote! { (KineticWeapon, &KineticWeaponImpl), });
@@ -870,7 +873,9 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (UseRemainder, &UseRemainderImpl), });
         }
         if self.writable_book_content.is_some() {
-            tokens.extend(quote! { (WritableBookContent, &WritableBookContentImpl { pages: Vec::new() }), });
+            tokens.extend(
+                quote! { (WritableBookContent, &WritableBookContentImpl { pages: Vec::new() }), },
+            );
         }
     }
 }

@@ -49,6 +49,9 @@ pub mod update_abilities;
 pub mod update_attributes;
 pub mod update_block;
 
+pub mod level_sound_event;
+pub mod set_actor_link;
+
 pub use add_actor::*;
 pub use add_item_actor::*;
 pub use add_player::*;
@@ -70,6 +73,7 @@ pub use item_registry::*;
 pub use item_stack_response::*;
 pub use level_chunk::*;
 pub use level_event::*;
+pub use level_sound_event::*;
 pub use modal_form_request::*;
 pub use move_actor_absolute::*;
 pub use move_actor_delta::*;
@@ -85,6 +89,7 @@ pub use resource_pack_stack::*;
 pub use resource_packs_info::*;
 pub use scoreboard::*;
 pub use set_actor_data::*;
+pub use set_actor_link::*;
 pub use set_actor_motion::*;
 pub use set_difficulty::*;
 pub use set_health::*;

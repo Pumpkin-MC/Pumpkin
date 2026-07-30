@@ -6,7 +6,6 @@ use pumpkin_data::packet::serverbound::PLAY_USE_ITEM_ON;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 use crate::VarInt;
 
@@ -21,20 +20,32 @@ pub struct SUseItemOn {
     pub sequence: VarInt,
 }
 
-impl ServerPacket for SUseItemOn {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SUseItemOn {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let hand = bytebuf.get_var_int()?;
+        let position = BlockPos::from_i64(bytebuf.get_i64_be()?);
+        let face = bytebuf.get_var_int()?;
+        let cursor_pos = Vector3::new(
+            bytebuf.get_f32_be()?,
+            bytebuf.get_f32_be()?,
+            bytebuf.get_f32_be()?,
+        );
+        let inside_block = bytebuf.get_bool()?;
+        let is_against_world_border = if version >= &JavaMinecraftVersion::V_1_21_5 {
+            bytebuf.get_bool()?
+        } else {
+            false
+        };
+        let sequence = bytebuf.get_var_int()?;
+
         Ok(Self {
-            hand: bytebuf.get_var_int()?,
-            position: BlockPos::from_i64(bytebuf.get_i64_be()?),
-            face: bytebuf.get_var_int()?,
-            cursor_pos: Vector3::new(
-                bytebuf.get_f32_be()?,
-                bytebuf.get_f32_be()?,
-                bytebuf.get_f32_be()?,
-            ),
-            inside_block: bytebuf.get_bool()?,
-            is_against_world_border: bytebuf.get_bool()?,
-            sequence: bytebuf.get_var_int()?,
+            hand,
+            position,
+            face,
+            cursor_pos,
+            inside_block,
+            is_against_world_border,
+            sequence,
         })
     }
 }

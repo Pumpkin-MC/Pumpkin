@@ -7,7 +7,6 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 pub const FLAG_ON_GROUND: u8 = 0x01;
 pub const FLAG_IN_WALL: u8 = 0x02;
@@ -21,8 +20,8 @@ pub struct SPlayerPositionRotation {
     pub collision: u8,
 }
 
-impl ServerPacket for SPlayerPositionRotation {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SPlayerPositionRotation {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             position: Vector3::new(
                 bytebuf.get_f64_be()?,

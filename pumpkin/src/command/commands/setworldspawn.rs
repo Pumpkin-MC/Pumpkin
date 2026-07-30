@@ -102,7 +102,7 @@ async fn setworldspawn(
     yaw: f32,
     pitch: f32,
 ) -> Result<i32, CommandError> {
-    let Some(world) = sender.world() else {
+    let Some(world) = sender.world_or_first(server) else {
         return Err(CommandError::CommandFailed(TextComponent::text(
             "Failed to get world.",
         )));

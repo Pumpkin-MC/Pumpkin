@@ -16,7 +16,7 @@ use crate::block::{self};
 use crate::entity::EntityBase;
 use crate::entity::equipment_break_status;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
-use crate::entity::player::{ChatMode, ChatSession, Player};
+use crate::entity::player::{ChatMode, ChatSession, MINE_BLOCK_EXHAUSTION, Player};
 use crate::error::PumpkinError;
 use crate::log_at_level;
 use crate::net::PlayerConfig;
@@ -677,7 +677,7 @@ impl JavaClient {
         &self,
         player: &Arc<Player>,
         server: &Arc<Server>,
-        command: &SChatCommand,
+        command: &SChatCommand<'_>,
     ) {
         player.update_last_action_time();
         let player_clone = player.clone();
@@ -686,7 +686,7 @@ impl JavaClient {
             server;
             PlayerCommandSendEvent {
                 player: player.clone(),
-                command: command.command.clone(),
+                command: command.command.to_string(),
                 cancelled: false
             };
 
@@ -739,7 +739,10 @@ impl JavaClient {
             return;
         }
 
-        let stack = ItemStack::new(1, Item::from_id(block.item_id).unwrap());
+        let Some(item) = Item::from_id(block.item_id) else {
+            return;
+        };
+        let stack = ItemStack::new(1, item);
 
         let slot_with_stack = player.inventory().get_slot_with_stack(&stack).await;
 
@@ -802,8 +805,8 @@ impl JavaClient {
             }
         }
 
-        if let Some(egg_item_id) = found_egg {
-            let stack = ItemStack::new(1, Item::from_id(egg_item_id).unwrap());
+        if let Some(item) = found_egg.and_then(Item::from_id) {
+            let stack = ItemStack::new(1, item);
 
             let slot_with_stack = player.inventory().get_slot_with_stack(&stack).await;
 
@@ -838,7 +841,7 @@ impl JavaClient {
     pub async fn handle_set_command_block(
         &self,
         player: &Arc<Player>,
-        mut command: SSetCommandBlock,
+        command: SSetCommandBlock<'_>,
     ) {
         if !player.is_creative() {
             return;
@@ -869,8 +872,11 @@ impl JavaClient {
                 CommandBlockMode::Impulse => Block::COMMAND_BLOCK,
             };
 
-            let old_command_block: &CommandBlockEntity =
-                block_entity.as_any().downcast_ref().unwrap();
+            let Some(old_command_block) =
+                block_entity.as_any().downcast_ref::<CommandBlockEntity>()
+            else {
+                return;
+            };
 
             props.conditional = command.flags & 0x2 != 0;
 
@@ -884,8 +890,9 @@ impl JavaClient {
                 )
                 .await;
 
-            if command.command.starts_with('/') {
-                command.command.remove(0);
+            let mut cmd = command.command;
+            if cmd.starts_with('/') {
+                cmd = &cmd[1..];
             }
 
             let command_block = CommandBlockEntity {
@@ -897,7 +904,7 @@ impl JavaClient {
                     .into(),
                 auto: (command.flags & 0x4 != 0).into(),
                 dirty: old_command_block.dirty.load(Ordering::SeqCst).into(),
-                command: Mutex::new(command.command.clone()),
+                command: Mutex::new(cmd.to_string()),
                 last_output: old_command_block.last_output.lock().await.clone().into(),
                 track_output: (command.flags & 0x1 != 0).into(),
                 success_count: AtomicU32::new(0),
@@ -923,7 +930,7 @@ impl JavaClient {
         }
     }
 
-    pub async fn handle_set_jigsaw_block(&self, player: &Arc<Player>, jigsaw: SSetJigsawBlock) {
+    pub async fn handle_set_jigsaw_block(&self, player: &Arc<Player>, jigsaw: SSetJigsawBlock<'_>) {
         if !player.is_creative() {
             return;
         }
@@ -937,13 +944,16 @@ impl JavaClient {
                 return;
             }
 
-            let jigsaw_block: &JigsawBlockEntity = block_entity.as_any().downcast_ref().unwrap();
+            let Some(jigsaw_block) = block_entity.as_any().downcast_ref::<JigsawBlockEntity>()
+            else {
+                return;
+            };
 
-            *jigsaw_block.name.lock().await = jigsaw.name;
-            *jigsaw_block.target.lock().await = jigsaw.target;
-            *jigsaw_block.pool.lock().await = jigsaw.pool;
-            *jigsaw_block.final_state.lock().await = jigsaw.final_state;
-            *jigsaw_block.joint.lock().await = JigsawJointType::from_str(&jigsaw.joint);
+            *jigsaw_block.name.lock().await = jigsaw.name.to_string();
+            *jigsaw_block.target.lock().await = jigsaw.target.to_string();
+            *jigsaw_block.pool.lock().await = jigsaw.pool.to_string();
+            *jigsaw_block.final_state.lock().await = jigsaw.final_state.to_string();
+            *jigsaw_block.joint.lock().await = JigsawJointType::from_str(jigsaw.joint);
             jigsaw_block
                 .selection_priority
                 .store(jigsaw.selection_priority.0, Ordering::SeqCst);
@@ -1368,7 +1378,9 @@ impl JavaClient {
             PlayerInteractEvent::new(player, InteractAction::LeftClickAir, &Block::AIR, None)
         };
 
-        let server = player.world().server.upgrade().unwrap();
+        let Some(server) = player.world().server.upgrade() else {
+            return;
+        };
 
         send_cancellable! {{
             server;
@@ -1383,7 +1395,7 @@ impl JavaClient {
         &self,
         server: &Server,
         player: &Arc<Player>,
-        chat_message: SChatMessage,
+        chat_message: SChatMessage<'_>,
     ) {
         player.update_last_action_time();
         let gameprofile = &player.gameprofile;
@@ -1451,7 +1463,7 @@ impl JavaClient {
         &self,
         server: &Server,
         player: &Arc<Player>,
-        chat_message: &SChatMessage,
+        chat_message: &SChatMessage<'_>,
     ) -> Result<(), ChatError> {
         // Check for oversized messages
         // If we're able to find the 257th UTF-16 character, the message is too big.
@@ -1598,7 +1610,7 @@ impl JavaClient {
     pub async fn handle_client_information(
         &self,
         player: &Arc<Player>,
-        client_information: SClientInformationPlay,
+        client_information: SClientInformationPlay<'_>,
     ) {
         if let (Ok(main_hand), Ok(chat_mode)) = (
             Hand::try_from(client_information.main_hand.0),
@@ -1641,7 +1653,7 @@ impl JavaClient {
                 };
 
                 let new_config = PlayerConfig {
-                    locale: client_information.locale,
+                    locale: client_information.locale.to_string(),
                     view_distance: new_view_distance,
                     chat_mode,
                     chat_colors: client_information.chat_colors,
@@ -1981,6 +1993,7 @@ impl JavaClient {
                         // Instant break
                         if speed >= 1.0 {
                             let broken_state = world.get_block_state(&position);
+                            let can_harvest = player.can_harvest(broken_state, block).await;
                             let new_state = world
                                 .break_block(
                                     &position,
@@ -1994,6 +2007,9 @@ impl JavaClient {
                                     .broken(&world, block, player, &position, server, broken_state)
                                     .await;
                                 player.apply_tool_damage_for_block_break(broken_state).await;
+                                if can_harvest {
+                                    player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                                }
                                 let item_id = player.inventory().held_item().lock().await.item.id;
                                 player
                                     .increment_stat(StatisticCategory::Used, item_id as i32, 1)
@@ -2078,6 +2094,9 @@ impl JavaClient {
                             .await;
 
                         player.apply_tool_damage_for_block_break(state).await;
+                        if block_drop {
+                            player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                        }
                         let item_id = player.inventory().held_item().lock().await.item.id;
                         player
                             .increment_stat(StatisticCategory::Used, item_id as i32, 1)
@@ -2237,6 +2256,11 @@ impl JavaClient {
         } else {
             off_hand_item
         };
+        let equipment_slot = if matches!(hand, Hand::Left) {
+            EquipmentSlot::MAIN_HAND
+        } else {
+            EquipmentSlot::OFF_HAND
+        };
 
         let item_id = item.lock().await.item.id;
         player
@@ -2278,6 +2302,7 @@ impl JavaClient {
                     &cursor_pos,
                     &face,
                     &item,
+                    &equipment_slot,
                     &world,
                     block,
                     server,
@@ -2363,6 +2388,7 @@ impl JavaClient {
         cursor_pos: &Vector3<f32>,
         face: &BlockDirection,
         held_item: &Arc<Mutex<ItemStack>>,
+        equipment_slot: &EquipmentSlot,
         world: &Arc<World>,
         block: &Block,
         server: &Arc<Server>,
@@ -2375,6 +2401,7 @@ impl JavaClient {
                 position,
                 &BlockHitResult { face, cursor_pos },
                 held_item,
+                equipment_slot,
                 server,
                 world,
             )
@@ -2407,7 +2434,7 @@ impl JavaClient {
         BlockActionResult::Pass
     }
 
-    pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
+    pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign<'_>) {
         let world = player.get_entity().world.load_full();
         let Some(block_entity) = world.get_block_entity(&sign_data.location) else {
             return;
@@ -2426,10 +2453,10 @@ impl JavaClient {
         };
 
         *text.messages.lock().unwrap() = [
-            sign_data.line_1,
-            sign_data.line_2,
-            sign_data.line_3,
-            sign_data.line_4,
+            sign_data.line_1.into(),
+            sign_data.line_2.into(),
+            sign_data.line_3.into(),
+            sign_data.line_4.into(),
         ];
         *sign_entity.currently_editing_player.lock().await = None;
         world.update_block_entity(&block_entity);
@@ -2735,7 +2762,7 @@ impl JavaClient {
     pub async fn handle_command_suggestion(
         &self,
         player: &Arc<Player>,
-        packet: SCommandSuggestion,
+        packet: SCommandSuggestion<'_>,
         server: &Arc<Server>,
     ) {
         let Some(cmd) = &packet.command.get(1..) else {
@@ -2756,15 +2783,15 @@ impl JavaClient {
 
         let response = CCommandSuggestions::new(
             packet.id,
-            (last_word_start + 2).try_into().unwrap(),
-            (cmd.len() - last_word_start - 1).try_into().unwrap(),
+            ((last_word_start + 2) as i32).into(),
+            ((cmd.len() - last_word_start - 1) as i32).into(),
             suggestions.into(),
         );
 
         self.enqueue_packet(&response).await;
     }
 
-    pub fn handle_cookie_response(&self, packet: &SPCookieResponse) {
+    pub fn handle_cookie_response(&self, packet: &SPCookieResponse<'_>) {
         // TODO: allow plugins to access this
         debug!(
             "Received cookie_response[play]: key: \"{}\", payload_length: \"{:?}\"",
@@ -2897,7 +2924,7 @@ impl JavaClient {
     pub fn handle_test_instance_block_action(
         &self,
         player: &Arc<Player>,
-        packet: &STestInstanceBlockAction,
+        packet: &STestInstanceBlockAction<'_>,
     ) {
         if !player.has_client_loaded() {
             return;
@@ -2909,7 +2936,7 @@ impl JavaClient {
         );
     }
 
-    pub fn handle_set_test_block(&self, player: &Arc<Player>, packet: &SSetTestBlock) {
+    pub fn handle_set_test_block(&self, player: &Arc<Player>, packet: &SSetTestBlock<'_>) {
         if !player.has_client_loaded() {
             return;
         }
@@ -2918,5 +2945,29 @@ impl JavaClient {
             "Set test block at {:?}: mode={:?}, message={}",
             packet.position, packet.mode, packet.message
         );
+    }
+
+    pub fn handle_debug_subscription_request(
+        &self,
+        player: &Arc<Player>,
+        packet: &pumpkin_protocol::java::server::play::SDebugSubscriptionRequest,
+    ) {
+        if player.permission_lvl.load() >= PermissionLvl::Two && packet.sample_type.0 == 0 {
+            player
+                .subscribed_debug_sample
+                .store(true, Ordering::Relaxed);
+        }
+    }
+
+    pub fn handle_debug_sample_subscription(
+        &self,
+        player: &Arc<Player>,
+        packet: &pumpkin_protocol::java::server::play::SDebugSampleSubscription,
+    ) {
+        if player.permission_lvl.load() >= PermissionLvl::Two && packet.sample_type.0 == 0 {
+            player
+                .subscribed_debug_sample
+                .store(true, Ordering::Relaxed);
+        }
     }
 }

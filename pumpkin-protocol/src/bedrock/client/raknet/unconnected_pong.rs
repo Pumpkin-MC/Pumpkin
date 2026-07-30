@@ -5,6 +5,9 @@ use pumpkin_macros::packet;
 
 use crate::serial::PacketWrite;
 
+/// Sent by the server in response to an `UnconnectedPing` (`0x01` / `0x02`), containing server metadata (MOTD, protocol version, player counts, edition).
+///
+/// Ref: <https://minecraft.wiki/w/RakNet#Unconnected_Pong>
 #[packet(0x1c)]
 pub struct CUnconnectedPong {
     time: u64,

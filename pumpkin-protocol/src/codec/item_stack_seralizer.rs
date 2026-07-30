@@ -106,16 +106,30 @@ fn read_length_prefixed_component(
 ) -> Result<(DataComponent, Box<dyn DataComponentImpl>), ReadingError> {
     let id = read_component_id(read)?;
     let byte_len = read.get_var_int()?.0;
-    let byte_len = byte_len
+    let byte_len: usize = byte_len
         .try_into()
         .map_err(|_| ReadingError::Message("Negative component data length".into()))?;
-    let component_data = read.read_boxed_slice(byte_len)?;
 
-    let component_impl = if id == DataComponent::CustomName {
-        decode_custom_name(component_data.as_ref())?
+    let component_impl = if byte_len <= 256 {
+        let mut stack_buf = [0u8; 256];
+        let slice = &mut stack_buf[..byte_len];
+        read.read_bytes_to_buf(slice)?;
+
+        if id == DataComponent::CustomName {
+            decode_custom_name(slice)?
+        } else {
+            let mut cursor = Cursor::new(slice);
+            deserialize(id, &mut cursor)?
+        }
     } else {
-        let mut cursor = Cursor::new(component_data);
-        deserialize(id, &mut cursor)?
+        let mut component_data = vec![0u8; byte_len];
+        read.read_bytes_to_buf(&mut component_data)?;
+        if id == DataComponent::CustomName {
+            decode_custom_name(component_data.as_ref())?
+        } else {
+            let mut cursor = Cursor::new(component_data);
+            deserialize(id, &mut cursor)?
+        }
     };
 
     Ok((id, component_impl))
@@ -297,13 +311,11 @@ impl ItemComponentHash {
     pub fn read(read: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         const MAX_COMPONENTS: i32 = 256;
 
-        let mut added = Vec::new();
-        let mut removed = Vec::new();
-
         let added_length = read.get_var_int()?;
         if added_length.0 < 0 || added_length.0 > MAX_COMPONENTS {
             return Err(ReadingError::Message("added_length out of bounds".into()));
         }
+        let mut added = Vec::with_capacity(added_length.0 as usize);
         for _ in 0..added_length.0 {
             let component_id = read.get_var_int()?;
             let component_value = read.get_i32()?;
@@ -314,6 +326,7 @@ impl ItemComponentHash {
         if removed_length.0 < 0 || removed_length.0 > MAX_COMPONENTS {
             return Err(ReadingError::Message("removed_length out of bounds".into()));
         }
+        let mut removed = Vec::with_capacity(removed_length.0 as usize);
         for _ in 0..removed_length.0 {
             let component_id = read.get_var_int()?;
             removed.push(component_id);

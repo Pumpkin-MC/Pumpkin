@@ -582,6 +582,21 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::CatCollar => Some(CatCollarImpl::read_data(data)?.to_dyn()),
         DataComponent::SheepColor => Some(SheepColorImpl::read_data(data)?.to_dyn()),
         DataComponent::ShulkerColor => Some(ShulkerColorImpl::read_data(data)?.to_dyn()),
+        DataComponent::DyedColor => Some(DyedColorImpl::read_data(data)?.to_dyn()),
+        DataComponent::BaseColor => Some(BaseColorImpl::read_data(data)?.to_dyn()),
+        DataComponent::NoteBlockSound => Some(NoteBlockSoundImpl::read_data(data)?.to_dyn()),
+        DataComponent::TooltipStyle => Some(TooltipStyleImpl::read_data(data)?.to_dyn()),
+        DataComponent::Lock => Some(LockImpl::read_data(data)?.to_dyn()),
+        DataComponent::ContainerLoot => Some(ContainerLootImpl::read_data(data)?.to_dyn()),
+        DataComponent::CustomModelData => Some(CustomModelDataImpl::read_data(data)?.to_dyn()),
+        DataComponent::LodestoneTracker => Some(LodestoneTrackerImpl::read_data(data)?.to_dyn()),
+        DataComponent::Glider => Some(GliderImpl::read_data(data)?.to_dyn()),
+        DataComponent::IntangibleProjectile => {
+            Some(IntangibleProjectileImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::Trim => Some(TrimImpl::read_data(data)?.to_dyn()),
+        DataComponent::CanPlaceOn => Some(CanPlaceOnImpl::read_data(data)?.to_dyn()),
+        DataComponent::CanBreak => Some(CanBreakImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -603,5 +618,125 @@ mod tests {
         );
         assert_eq!(MaxStackSizeImpl { size: 99 }.get_hash(), -1632321551i32);
         assert_eq!(MapIdImpl { id: 10 }.get_hash(), -919192125i32);
+    }
+
+    fn assert_round_trip<T: DataComponentImpl + Clone + 'static>(
+        value: T,
+        read: impl Fn(&NbtTag) -> Option<T>,
+    ) {
+        let restored = read(&value.write_data()).expect("read_data returned None");
+        assert!(value.equal(&restored));
+    }
+
+    #[test]
+    fn dyed_color_round_trip() {
+        assert_round_trip(DyedColorImpl { rgb: 0x00A0F0 }, DyedColorImpl::read_data);
+    }
+
+    #[test]
+    fn base_color_round_trip() {
+        assert_round_trip(
+            BaseColorImpl {
+                color: "light_blue".to_string(),
+            },
+            BaseColorImpl::read_data,
+        );
+    }
+
+    #[test]
+    fn note_block_sound_round_trip() {
+        assert_round_trip(
+            NoteBlockSoundImpl {
+                sound: "minecraft:block.note_block.pling".to_string(),
+            },
+            NoteBlockSoundImpl::read_data,
+        );
+    }
+
+    #[test]
+    fn tooltip_style_round_trip() {
+        assert_round_trip(
+            TooltipStyleImpl {
+                id: "minecraft:my_style".to_string(),
+            },
+            TooltipStyleImpl::read_data,
+        );
+    }
+
+    #[test]
+    fn container_loot_round_trip() {
+        assert_round_trip(
+            ContainerLootImpl {
+                loot_table: "minecraft:chests/simple_dungeon".to_string(),
+                seed: 123_456_789,
+            },
+            ContainerLootImpl::read_data,
+        );
+    }
+
+    #[test]
+    fn custom_model_data_round_trip() {
+        assert_round_trip(
+            CustomModelDataImpl {
+                floats: vec![1.5, -2.0],
+                flags: vec![true, false, true],
+                strings: vec!["a".to_string(), "b".to_string()],
+                colors: vec![0xFF0000, 0x00FF00],
+            },
+            CustomModelDataImpl::read_data,
+        );
+    }
+
+    #[test]
+    fn lodestone_tracker_round_trip() {
+        assert_round_trip(
+            LodestoneTrackerImpl {
+                target: Some(LodestoneTarget {
+                    dimension: "minecraft:overworld".to_string(),
+                    x: 10,
+                    y: 64,
+                    z: -30,
+                }),
+                tracked: true,
+            },
+            LodestoneTrackerImpl::read_data,
+        );
+        assert_round_trip(
+            LodestoneTrackerImpl {
+                target: None,
+                tracked: false,
+            },
+            LodestoneTrackerImpl::read_data,
+        );
+    }
+
+    #[test]
+    fn marker_components_round_trip() {
+        assert_round_trip(GliderImpl, GliderImpl::read_data);
+        assert_round_trip(
+            IntangibleProjectileImpl,
+            IntangibleProjectileImpl::read_data,
+        );
+    }
+
+    #[test]
+    fn raw_nbt_components_round_trip() {
+        let mut material = NbtCompound::new();
+        material.put_string("material", "minecraft:diamond".to_string());
+        material.put_string("pattern", "minecraft:coast".to_string());
+        assert_round_trip(
+            TrimImpl::read_data(&NbtTag::Compound(material)).unwrap(),
+            TrimImpl::read_data,
+        );
+
+        let mut predicate = NbtCompound::new();
+        predicate.put_string("blocks", "minecraft:stone".to_string());
+        assert_round_trip(
+            CanPlaceOnImpl {
+                predicate: NbtTag::Compound(predicate.clone()),
+            },
+            CanPlaceOnImpl::read_data,
+        );
+        assert_round_trip(LockImpl { predicate }, LockImpl::read_data);
     }
 }

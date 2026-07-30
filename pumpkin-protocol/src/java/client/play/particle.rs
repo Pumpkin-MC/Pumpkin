@@ -1,6 +1,8 @@
 use std::io::Write;
 
-use pumpkin_data::packet::clientbound::PLAY_LEVEL_PARTICLES;
+use pumpkin_data::{
+    packet::clientbound::PLAY_LEVEL_PARTICLES, particle_id_remap::remap_particle_id_for_version,
+};
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
@@ -64,11 +66,23 @@ impl<'a> CParticle<'a> {
     }
 }
 
+pub(super) fn particle_id_for_version(
+    particle_id: VarInt,
+    version: JavaMinecraftVersion,
+) -> VarInt {
+    u16::try_from(particle_id.0).map_or(particle_id, |particle_id| {
+        VarInt(i32::from(remap_particle_id_for_version(
+            particle_id,
+            version,
+        )))
+    })
+}
+
 impl ClientPacket for CParticle<'_> {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 
@@ -85,8 +99,55 @@ impl ClientPacket for CParticle<'_> {
 
         write.write_f32_be(self.max_speed)?;
         write.write_i32_be(self.particle_count)?;
-        write.write_var_int(&self.particle_id)?;
+        write.write_var_int(&particle_id_for_version(self.particle_id, *version))?;
 
         write.write_all(self.data).map_err(WritingError::IoError)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{Cursor, Seek, SeekFrom};
+
+    use pumpkin_data::particle::Particle;
+    use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+
+    use crate::{ClientPacket, VarInt};
+
+    use super::CParticle;
+
+    fn encoded_particle_id(version: JavaMinecraftVersion) -> VarInt {
+        let packet = CParticle::new(
+            false,
+            false,
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(0.0, 0.0, 0.0),
+            0.0,
+            1,
+            VarInt(Particle::ExplosionEmitter as i32),
+            &[],
+        );
+        let mut bytes = Vec::new();
+        packet.write_packet_data(&mut bytes, &version).unwrap();
+
+        let mut cursor = Cursor::new(bytes);
+        cursor.seek(SeekFrom::Start(46)).unwrap();
+        VarInt::decode(&mut cursor).unwrap()
+    }
+
+    #[test]
+    fn particle_id_remaps_for_1_21_11() {
+        assert_eq!(
+            encoded_particle_id(JavaMinecraftVersion::V_1_21_11),
+            VarInt(22)
+        );
+    }
+
+    #[test]
+    fn particle_id_stays_latest_for_26_2() {
+        assert_eq!(
+            encoded_particle_id(JavaMinecraftVersion::V_26_2),
+            VarInt(29)
+        );
     }
 }

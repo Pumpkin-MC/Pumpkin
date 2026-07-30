@@ -61,9 +61,9 @@ impl ShulkerBulletEntity {
         // Position at the center of the shulker's bounding box
         let bb = owner.bounding_box.load();
         let origin = Vector3::new(
-            (bb.min.x + bb.max.x) * 0.5,
-            (bb.min.y + bb.max.y) * 0.5,
-            (bb.min.z + bb.max.z) * 0.5,
+            f64::midpoint(bb.min.x, bb.max.x),
+            f64::midpoint(bb.min.y, bb.max.y),
+            f64::midpoint(bb.min.z, bb.max.z),
         );
 
         let entity = Entity::from_uuid(

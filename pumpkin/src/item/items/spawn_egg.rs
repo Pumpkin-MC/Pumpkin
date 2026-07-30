@@ -27,7 +27,7 @@ impl ItemMetadata for SpawnEggItem {
     }
 }
 
-fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase) {
+pub(crate) fn apply_entity_variant(item: &ItemStack, mob: &dyn EntityBase) {
     if let Some(comp) = item.get_data_component::<ChickenVariantImpl>() {
         mob.set_variant_name(&comp.value);
     } else if let Some(comp) = item.get_data_component::<FrogVariantImpl>() {

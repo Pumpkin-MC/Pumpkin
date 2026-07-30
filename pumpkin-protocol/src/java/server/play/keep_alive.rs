@@ -6,15 +6,14 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_KEEP_ALIVE)]
 pub struct SKeepAlive {
     pub keep_alive_id: i64,
 }
 
-impl ServerPacket for SKeepAlive {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SKeepAlive {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             keep_alive_id: bytebuf.get_i64_be()?,
         })

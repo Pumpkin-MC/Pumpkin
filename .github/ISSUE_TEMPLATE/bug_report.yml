@@ -1,50 +1,61 @@
-name: "Bug report"
-description: "Create a bug report to help us improve"
+name: "Bug Report"
+description: "File a bug report to help us improve"
 labels: ["bug"]
-assignees: Snowiiii
+assignees: ["Snowiiii"]
 body:
   - type: checkboxes
     id: duplicate
     attributes:
-      label: "I've searched existing issues and couldn't find a duplicate."
-      description: "I confirm this is not a duplicate."
+      label: "Before Submitting"
       options:
-        - label: "I confirm this is not a duplicate."
+        - label: "I have searched existing issues and confirmed this is not a duplicate."
           required: true
-  - type: input
-    id: os
+
+  - type: dropdown
+    id: edition
     attributes:
-      label: Operating System
-      description: "What operating system are you using?"
-      placeholder: "Example: macOS Big Sur"
+      label: "Minecraft Edition"
+      description: "Which edition of Minecraft does this bug affect?"
+      options:
+        - "Java Edition"
+        - "Bedrock Edition"
+        - "Both / Crossplay"
     validations:
       required: true
+
   - type: input
     id: version
     attributes:
-      label: "Server Software Version/Commit"
-      description: "What Server Software Version/Commit are you using?. (Tip: Use the /pumpkin command)" 
-      placeholder: "Example: 1.0.0/39b4cb3"
+      label: "Server Version / Commit"
+      description: "Provide your server version (Tip: Run `/pumpkin`)."
+      placeholder: "e.g., 1.0.0/39b4cb3"
     validations:
       required: true
-  - type: textarea
-    id: what-happened
+
+  - type: input
+    id: os
     attributes:
-      label: "What happened?"
-      description: "A clear and concise description of what the bug is."
+      label: "Operating System"
+      placeholder: "e.g., Windows 11, Ubuntu 22.04, macOS"
     validations:
       required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Bug Description & Expected Behavior"
+      description: "What is currently happening, and what did you expect to happen instead?"
+    validations:
+      required: true
+
   - type: textarea
     id: to-reproduce
     attributes:
-      label: "To Reproduce"
-      description: "Steps to reproduce the behavior"
-    validations:
-      required: true
-  - type: textarea
-    id: expected-behavior
-    attributes:
-      label: "Expected behavior"
-      description: "A clear and concise description of what you expected to happen."
+      label: "Steps to Reproduce"
+      description: "Please provide a clear, step-by-step list to replicate the issue."
+      placeholder: |
+        1. Go to...
+        2. Click on...
+        3. See error...
     validations:
       required: true

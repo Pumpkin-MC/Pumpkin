@@ -34,3 +34,15 @@ impl ClientPacket for CStatusResponse {
         Ok(())
     }
 }
+
+impl<'a> crate::ServerPacket<'a> for CStatusResponse {
+    fn read(
+        bytebuf: &mut &'a [u8],
+        _version: &JavaMinecraftVersion,
+    ) -> Result<Self, crate::ser::ReadingError> {
+        use crate::ser::NetworkReadExt;
+        Ok(Self {
+            json_response: bytebuf.get_str()?.into_string(),
+        })
+    }
+}

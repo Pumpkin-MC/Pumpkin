@@ -80,6 +80,7 @@ use std::sync::{
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+pub mod ageable;
 pub mod ai;
 pub mod area_effect_cloud;
 pub mod attributes;
@@ -787,6 +788,8 @@ pub struct Entity {
     pub passengers: Mutex<Vec<Arc<dyn EntityBase>>>,
     /// The vehicle that entity is in
     pub vehicle: Mutex<Option<Arc<dyn EntityBase>>>,
+    /// The entity this entity is attached/leashed to (if any)
+    pub leashed_to: Mutex<Option<Arc<dyn EntityBase>>>,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
     /// The age of the entity in ticks. Negative values indicate a baby.
@@ -930,6 +933,8 @@ impl Entity {
             removal_reason: AtomicCell::new(None),
             passengers: Mutex::new(Vec::new()),
             vehicle: Mutex::new(None),
+            leashed_to: Mutex::new(None),
+
             riding_cooldown: AtomicI32::new(0),
             age: AtomicI32::new(0),
             current_biome: ArcSwap::new(Arc::new(&Biome::PLAINS)),
@@ -1353,9 +1358,13 @@ impl Entity {
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
     /// `LivingEntity.takeKnockback()`
     /// This function calculates the entity's new velocity based on the specified knockback strength and direction.
+    ///
+    /// Knockback resistance is not applied here, because it is a `LivingEntity`
+    /// attribute and this is an `Entity` method. Callers modelling vanilla's
+    /// `LivingEntity.knockback` scale `strength` with
+    /// `combat::knockback_after_resistance` first; callers modelling vanilla's raw
+    /// `Entity.push` (such as the ender dragon) pass `strength` unscaled.
     pub fn apply_knockback(&self, strength: f64, mut x: f64, mut z: f64) {
-        // TODO: strength *= 1 - Entity attribute knockback resistance
-
         if strength <= 0.0 {
             return;
         }
@@ -3011,6 +3020,103 @@ impl Entity {
 
     pub fn is_alive(&self) -> bool {
         !self.is_removed()
+    }
+
+    pub const LEASH_SNAP_DISTANCE: f64 = 12.0;
+    pub const LEASH_ELASTIC_DISTANCE: f64 = 6.0;
+
+    pub async fn leash_to(&self, holder: Arc<dyn EntityBase>) {
+        let holder_entity = holder.get_entity();
+        *self.leashed_to.lock().await = Some(holder.clone());
+
+        let je_packet = pumpkin_protocol::java::client::play::CSetEntityLink::new(
+            self.entity_id,
+            holder_entity.entity_id,
+        );
+        let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
+            link: pumpkin_protocol::bedrock::client::common::EntityLink {
+                ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
+                rider_unique_id: pumpkin_protocol::codec::var_long::VarLong(
+                    holder_entity.entity_id as i64,
+                ),
+                link_type: 1, // Leash link
+                immediate: true,
+                rider_initiated: false,
+                vehicle_angular_velocity: 0.0,
+            },
+        };
+
+        self.world.load().broadcast_to_chunk_editioned_sync(
+            self.chunk_pos.load(),
+            &je_packet,
+            &be_packet,
+        );
+    }
+
+    pub async fn unleash(&self) {
+        let old_holder = self.leashed_to.lock().await.take();
+        if old_holder.is_none() {
+            return;
+        }
+
+        let je_packet =
+            pumpkin_protocol::java::client::play::CSetEntityLink::new(self.entity_id, -1);
+        let be_packet = pumpkin_protocol::bedrock::client::CSetActorLink {
+            link: pumpkin_protocol::bedrock::client::common::EntityLink {
+                ridden_unique_id: pumpkin_protocol::codec::var_long::VarLong(self.entity_id as i64),
+                rider_unique_id: pumpkin_protocol::codec::var_long::VarLong(-1),
+                link_type: 0, // Unlink
+                immediate: true,
+                rider_initiated: false,
+                vehicle_angular_velocity: 0.0,
+            },
+        };
+
+        self.world.load().broadcast_to_chunk_editioned_sync(
+            self.chunk_pos.load(),
+            &je_packet,
+            &be_packet,
+        );
+    }
+
+    pub async fn tick_leash(&self) {
+        let holder = {
+            let guard = self.leashed_to.lock().await;
+            guard.clone()
+        };
+
+        if let Some(holder) = holder {
+            let holder_entity = holder.get_entity();
+
+            // Drop leash if entity or holder is removed or dead
+            if !self.is_alive() || !holder_entity.is_alive() {
+                self.unleash().await;
+                return;
+            }
+
+            let self_pos = self.pos.load();
+            let holder_pos = holder_entity.pos.load();
+            let diff = self_pos - holder_pos;
+            let distance = diff.length();
+
+            if distance > Self::LEASH_SNAP_DISTANCE {
+                // Too far: snap/break leash and drop lead item
+                self.unleash().await;
+                let lead_item =
+                    pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::LEAD);
+                self.world
+                    .load()
+                    .drop_stack(&self.block_pos.load(), lead_item)
+                    .await;
+            } else if distance > Self::LEASH_ELASTIC_DISTANCE {
+                // Elastic pull force towards leash holder
+                let dir = (holder_pos - self_pos).normalize();
+                let pull_strength = (distance - Self::LEASH_ELASTIC_DISTANCE) * 0.11;
+                let current_vel = self.velocity.load();
+                self.velocity.store(current_vel + dir * pull_strength);
+                self.velocity_dirty.store(true, Relaxed);
+            }
+        }
     }
 
     pub async fn has_passengers(&self) -> bool {

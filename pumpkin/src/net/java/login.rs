@@ -6,6 +6,7 @@ use pumpkin_protocol::{
         config::{CConfigAddResourcePack, CConfigServerLinks, CKnownPacks},
         login::{CLoginSuccess, CSetCompression},
     },
+    java::server::config::SKnownPacks,
     java::server::login::{
         SEncryptionResponse, SLoginCookieResponse, SLoginPluginResponse, SLoginStart,
     },
@@ -201,6 +202,9 @@ impl JavaClient {
     }
 
     async fn enable_compression(&self, server: &Server) {
+        if self.version.load() < JavaMinecraftVersion::V_1_8 {
+            return;
+        }
         let compression = server
             .advanced_config
             .networking
@@ -226,6 +230,9 @@ impl JavaClient {
             uuid::Uuid::new_v4(),
         );
         self.send_packet_now(&packet).await;
+        if self.version.load() < JavaMinecraftVersion::V_1_20_2 {
+            self.connection_state.store(ConnectionState::Play);
+        }
     }
 
     async fn authenticate(
@@ -288,7 +295,7 @@ impl JavaClient {
         Ok(profile)
     }
 
-    pub fn handle_login_cookie_response(&self, packet: &SLoginCookieResponse) {
+    pub fn handle_login_cookie_response(&self, packet: &SLoginCookieResponse<'_>) {
         // TODO: allow plugins to access this
         debug!(
             "Received cookie_response[login]: key: \"{}\", payload_length: \"{:?}\"",
@@ -405,19 +412,27 @@ impl JavaClient {
             );
 
             self.send_packet_now(&resource_pack).await;
-        } else {
-            // This will be invoked by our resource pack handler in the case of the above branch.
+        } else if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
             self.send_known_packs().await;
+        } else {
+            self.handle_known_packs(
+                SKnownPacks {
+                    known_packs: Vec::new(),
+                },
+                server,
+            )
+            .await;
         }
         debug!("login acknowledged");
     }
 
     /// Send the known data packs to the client.
     pub async fn send_known_packs(&self) {
+        let version_str = self.version.load().to_string();
         self.send_packet_now(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
             id: "core",
-            version: "26.2",
+            version: &version_str,
         }]))
         .await;
     }

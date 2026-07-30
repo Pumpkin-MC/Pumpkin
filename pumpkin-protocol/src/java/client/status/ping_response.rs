@@ -35,3 +35,15 @@ impl ClientPacket for CPingResponse {
         Ok(())
     }
 }
+
+impl<'a> crate::ServerPacket<'a> for CPingResponse {
+    fn read(
+        bytebuf: &mut &'a [u8],
+        _version: &JavaMinecraftVersion,
+    ) -> Result<Self, crate::ser::ReadingError> {
+        use crate::ser::NetworkReadExt;
+        Ok(Self {
+            payload: bytebuf.get_i64_be()?,
+        })
+    }
+}

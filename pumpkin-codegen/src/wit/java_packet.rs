@@ -165,7 +165,7 @@ fn collect_fields(
         .collect()
 }
 
-fn wit_name(name: String,state: &str) -> String{
+fn wit_name(name: String, state: &str) -> String {
     if state == "play" {
         name.to_kebab_case()
     } else {
@@ -180,7 +180,7 @@ fn process_struct(
     variant: &mut Variant,
     defined_cases: &mut HashSet<String>,
 ) {
-    let wit_name = wit_name(s.ident.to_string(),state);
+    let wit_name = wit_name(s.ident.to_string(), state);
     if !defined_cases.insert(wit_name.clone()) {
         return;
     }
@@ -199,7 +199,7 @@ fn process_enum(
     variant: &mut Variant,
     defined_cases: &mut HashSet<String>,
 ) {
-    let enum_wit_name = wit_name(e.ident.to_string(),state);
+    let enum_wit_name = wit_name(e.ident.to_string(), state);
     if !defined_cases.insert(enum_wit_name.clone()) {
         return;
     }
