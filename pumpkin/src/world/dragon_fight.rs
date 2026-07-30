@@ -21,7 +21,8 @@ use super::{
     World,
     bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags},
 };
-use crate::entity::{Entity, decoration::end_crystal::EndCrystalEntity};
+use crate::entity::boss::ender_dragon::phase::EnderDragonPhase;
+use crate::entity::{Entity, EntityBase, decoration::end_crystal::EndCrystalEntity};
 
 // ── Constants (match vanilla exactly) ────────────────────────────────────────
 
@@ -166,6 +167,18 @@ impl DragonFight {
 
         // 2. One-time state scan on the first populated tick.
         if needs_state_scanning {
+            // Pre-load center chunks BEFORE acquiring the fight mutex, so that
+            // `end_podium::place` inside `scan_state` can actually set blocks.
+            // The podium spans (−4..+4, −4..+4) which fits in chunks (−1,0).
+            for cx in -1i32..=0 {
+                for cz in -1i32..=0 {
+                    let () = world
+                        .level
+                        .get_or_fetch_chunk(Vector2::new(cx, cz), |_| ())
+                        .await;
+                }
+            }
+
             let mut fight = fight_mutex.lock().await;
             fight.scan_state(world).await;
             fight.needs_state_scanning = false;
@@ -298,10 +311,37 @@ impl DragonFight {
     async fn create_new_dragon(&mut self, world: &Arc<World>) {
         let uuid = Uuid::new_v4();
         let position = Vector3::new(0.5, DRAGON_SPAWN_Y, 0.5);
-        let dragon =
+        let dragon_arc =
             crate::entity::r#type::from_type(&EntityType::ENDER_DRAGON, position, world, uuid);
 
-        world.spawn_entity(dragon).await;
+        if let Some(dragon) = dragon_arc
+            .cast_any()
+            .downcast_ref::<crate::entity::boss::ender_dragon::EnderDragonEntity>(
+        ) {
+            if let Some(loc) = self.portal_location {
+                dragon.set_fight_origin(loc).await;
+            }
+            dragon.set_phase(EnderDragonPhase::HoldingPattern).await;
+            let yaw = rand::random::<f32>() * 360.0;
+            dragon.mob_entity.living_entity.entity.yaw.store(yaw);
+        }
+
+        // Register the dragon's hitbox parts (head/neck/body/tail/wings) so they're
+        // visible to hit detection/target selection, without spawning them as network
+        // entities: vanilla clients derive their positions locally from the dragon's own
+        // spawn packet and never see them as separate entities.
+        if let Some(dragon) = dragon_arc
+            .cast_any()
+            .downcast_ref::<crate::entity::boss::ender_dragon::EnderDragonEntity>(
+        ) {
+            for part in &dragon.parts {
+                world
+                    .add_entity_silent(part.clone() as Arc<dyn EntityBase>)
+                    .await;
+            }
+        }
+
+        world.spawn_entity(dragon_arc).await;
         self.dragon_uuid = Some(uuid);
         info!("Spawned ender dragon {:?}.", uuid);
     }
@@ -384,14 +424,25 @@ impl DragonFight {
     /// Called when an end crystal is destroyed.  If a respawn is in progress
     /// and this was one of the ritual crystals, the respawn is aborted.
     /// Matches vanilla `EnderDragonFight.onCrystalDestroyed`.
-    pub async fn on_crystal_destroyed(&mut self, world: &Arc<World>, crystal_uuid: Uuid) {
+    ///
+    /// Returns the dragon UUID if the dragon needs to be notified (caller
+    /// must do that *after* releasing the fight mutex to avoid a deadlock:
+    /// dragon phase ticks hold `path`/`target_location` locks and may try to
+    /// acquire `fight_mutex`, while `crystal_destroyed` → `set_phase` →
+    /// `begin()` acquires those same `path`/`target_location` locks).
+    pub async fn on_crystal_destroyed(
+        &mut self,
+        world: &Arc<World>,
+        crystal_uuid: Uuid,
+        _crystal_pos: Vector3<f64>,
+        _attacker: Option<&crate::entity::player::Player>,
+    ) -> Option<Uuid> {
         if self.respawn_stage.is_some() && self.respawn_crystal_uuids.contains(&crystal_uuid) {
             self.abort_respawn(world).await;
         } else {
             self.update_crystal_count(world);
-            // The dragon entity itself handles the visual beam-break logic;
-            // we just keep the count accurate here.
         }
+        self.dragon_uuid
     }
 
     // ── Respawn sequence ──────────────────────────────────────────────────────
@@ -564,30 +615,24 @@ impl DragonFight {
             return;
         }
 
-        for i in 0..10usize {
-            let angle = 2.0 * (-std::f64::consts::PI + std::f64::consts::PI * 0.1 * i as f64);
-            let cx = (42.0f64 * angle.cos()).floor() as i32;
-            let cz = (42.0f64 * angle.sin()).floor() as i32;
+        let spikes = pumpkin_world::generation::get_spikes_for_seed(world.level.seed.0);
 
-            // Find the top of the spike by scanning down from y=115 for bedrock.
-            let mut crystal_y = 78i32;
-            for y in (70..=115i32).rev() {
-                if world.get_block(&BlockPos::new(cx, y, cz)) == &Block::BEDROCK {
-                    crystal_y = y + 1;
-                    break;
-                }
-            }
-
+        for spike in &spikes {
+            let crystal_y = spike.height + 1;
             let entity = Entity::new(
                 world.clone(),
-                Vector3::new(cx as f64 + 0.5, crystal_y as f64, cz as f64 + 0.5),
+                Vector3::new(
+                    spike.center_x as f64 + 0.5,
+                    crystal_y as f64,
+                    spike.center_z as f64 + 0.5,
+                ),
                 &EntityType::END_CRYSTAL,
             );
             let crystal = Arc::new(EndCrystalEntity::new(entity));
             crystal.set_show_bottom(true);
             world.spawn_entity(crystal).await;
         }
-        info!("Spawned end crystals on spike tops.");
+        info!("Spawned {} end crystals on spike tops.", spikes.len());
     }
 
     // ── Exit portal ───────────────────────────────────────────────────────────

@@ -51,6 +51,10 @@ pub struct AreaEffectCloudEntity {
     pub duration_on_use: Mutex<i32>,
     /// ticks to wait before the cloud becomes active and applies effects (grace period)
     pub wait_time: Mutex<i32>,
+    /// Optional custom particle: `(particle_id, extra_data_bytes)`.
+    /// When set, overrides the default `ENTITY_EFFECT` color-based particle
+    /// (e.g. `DragonBreathParticleEffect` for dragon fireball clouds).
+    pub custom_particle: Mutex<Option<(i32, Vec<u8>)>>,
 }
 
 impl AreaEffectCloudEntity {
@@ -69,6 +73,7 @@ impl AreaEffectCloudEntity {
             radius_on_use: Mutex::new(0.0),
             duration_on_use: Mutex::new(0),
             wait_time: Mutex::new(20),
+            custom_particle: Mutex::new(None),
         };
 
         Arc::new(cloud)
@@ -99,6 +104,7 @@ impl AreaEffectCloudEntity {
             radius_on_use: Mutex::new(radius_on_use_in),
             duration_on_use: Mutex::new(duration_on_use_in),
             wait_time: Mutex::new(wait_time_in),
+            custom_particle: Mutex::new(None),
         };
 
         Arc::new(cloud)
@@ -117,18 +123,40 @@ impl EntityBase for AreaEffectCloudEntity {
             // Send initial radius and particle (color) so clients render correctly
             let radius = *self.radius.lock().await;
 
-            // Compute particle color
-            let stack = self.item_stack.lock().await.clone();
-            let effects = self.effects.lock().await.clone();
+            // Check for a custom particle override (e.g. DragonBreathParticleEffect)
+            let custom_particle = self.custom_particle.lock().await.clone();
 
-            // Use ARGB format
-            let mut color: i32 = (0xFFi32 << 24) | 0x385dc6; // default water-like color
+            let (particle_id, data_bytes_vec) = if let Some((pid, data)) = custom_particle {
+                (pid, data)
+            } else {
+                // Compute particle color from effects
+                let stack = self.item_stack.lock().await.clone();
+                let effects = self.effects.lock().await.clone();
 
-            if let Some(pc) =
-                stack.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
-            {
-                if let Some(c) = pc.custom_color {
-                    color = c | (0xFFi32 << 24);
+                // Use ARGB format
+                let mut color: i32 = (0xFFi32 << 24) | 0x385dc6; // default water-like color
+
+                if let Some(pc) = stack
+                    .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+                {
+                    if let Some(c) = pc.custom_color {
+                        color = c | (0xFFi32 << 24);
+                    } else if !effects.is_empty() {
+                        let mut r_sum = 0.0f32;
+                        let mut g_sum = 0.0f32;
+                        let mut b_sum = 0.0f32;
+                        let count = effects.len() as f32;
+                        for (eff, _, _, _, _, _) in &effects {
+                            let c = eff.color;
+                            r_sum += ((c >> 16) & 0xFF) as f32;
+                            g_sum += ((c >> 8) & 0xFF) as f32;
+                            b_sum += (c & 0xFF) as f32;
+                        }
+                        let r = (r_sum / count) as i32;
+                        let g = (g_sum / count) as i32;
+                        let b = (b_sum / count) as i32;
+                        color = (0xFFi32 << 24) | (r << 16) | (g << 8) | b;
+                    }
                 } else if !effects.is_empty() {
                     let mut r_sum = 0.0f32;
                     let mut g_sum = 0.0f32;
@@ -145,31 +173,17 @@ impl EntityBase for AreaEffectCloudEntity {
                     let b = (b_sum / count) as i32;
                     color = (0xFFi32 << 24) | (r << 16) | (g << 8) | b;
                 }
-            } else if !effects.is_empty() {
-                let mut r_sum = 0.0f32;
-                let mut g_sum = 0.0f32;
-                let mut b_sum = 0.0f32;
-                let count = effects.len() as f32;
-                for (eff, _, _, _, _, _) in &effects {
-                    let c = eff.color;
-                    r_sum += ((c >> 16) & 0xFF) as f32;
-                    g_sum += ((c >> 8) & 0xFF) as f32;
-                    b_sum += (c & 0xFF) as f32;
-                }
-                let r = (r_sum / count) as i32;
-                let g = (g_sum / count) as i32;
-                let b = (b_sum / count) as i32;
-                color = (0xFFi32 << 24) | (r << 16) | (g << 8) | b;
-            }
 
-            // Build raw particle option bytes for ENTITY_EFFECT
-            let data_bytes = color.to_be_bytes();
-
-            let meta = ParticleMeta {
-                particle_id: pumpkin_protocol::codec::var_int::VarInt(
+                (
                     pumpkin_data::particle::Particle::EntityEffect as i32,
-                ),
-                data: &data_bytes,
+                    color.to_be_bytes().to_vec(),
+                )
+            };
+
+            let data_bytes_ref = &data_bytes_vec;
+            let meta = ParticleMeta {
+                particle_id: pumpkin_protocol::codec::var_int::VarInt(particle_id),
+                data: data_bytes_ref,
             };
 
             // Send initial particle and radius
@@ -218,8 +232,8 @@ impl EntityBase for AreaEffectCloudEntity {
                 let mut age = self.age.lock().await;
                 *age += 1;
                 let duration = *self.duration.lock().await;
-                if *age > duration {
-                    // Remove old entities
+                let wait_time = *self.wait_time.lock().await;
+                if duration != -1 && (*age - wait_time) >= duration {
                     self.entity.remove().await;
                     return;
                 }
@@ -285,131 +299,133 @@ impl EntityBase for AreaEffectCloudEntity {
                 }
             }
 
-            // Apply effects to nearby entities if eligible
-            let pos = self.entity.pos.load();
-            let r = *self.radius.lock().await as f64;
-            let min = Vector3::new(pos.x - r, pos.y - r, pos.z - r);
-            let max = Vector3::new(pos.x + r, pos.y + r, pos.z + r);
-            let aabb = BoundingBox::new(min, max);
-            let world = self.entity.world.load();
+            if age % 5 == 0 {
+                // Apply effects to nearby entities if eligible
+                let pos = self.entity.pos.load();
+                let r = *self.radius.lock().await as f64;
+                let min = Vector3::new(pos.x - r, pos.y - r, pos.z - r);
+                let max = Vector3::new(pos.x + r, pos.y + r, pos.z + r);
+                let aabb = BoundingBox::new(min, max);
+                let world = self.entity.world.load();
 
-            let mut candidates = world.get_entities_at_box(&aabb);
-            let players = world.get_players_at_box(&aabb);
-            for p in players {
-                candidates.push(p.clone() as Arc<dyn EntityBase>);
-            }
-
-            for cand in candidates {
-                let cand_clone = cand.clone();
-
-                // Skip self and other `AreaEffectCloud` entities
-                if cand_clone.get_entity().entity_id == self.get_entity().entity_id {
-                    continue;
-                }
-                if *cand_clone.get_entity().entity_type
-                    == pumpkin_data::entity::EntityType::AREA_EFFECT_CLOUD
-                {
-                    continue;
+                let mut candidates = world.get_entities_at_box(&aabb);
+                let players = world.get_players_at_box(&aabb);
+                for p in players {
+                    candidates.push(p.clone() as Arc<dyn EntityBase>);
                 }
 
-                // Determine candidate id early
-                let ent_id = cand_clone.get_entity().entity_id;
+                for cand in candidates {
+                    let cand_clone = cand.clone();
 
-                let radius_f = *self.radius.lock().await as f64;
-                let pos_e = cand_clone.get_entity().pos.load();
-                let dx = pos_e.x - pos.x;
-                let dy = pos_e.y - pos.y;
-                let dz = pos_e.z - pos.z;
-                let dist = (dx * dx + dy * dy + dz * dz).sqrt();
-                if dist > radius_f {
-                    continue;
-                }
+                    // Skip self and other `AreaEffectCloud` entities
+                    if cand_clone.get_entity().entity_id == self.get_entity().entity_id {
+                        continue;
+                    }
+                    if *cand_clone.get_entity().entity_type
+                        == pumpkin_data::entity::EntityType::AREA_EFFECT_CLOUD
+                    {
+                        continue;
+                    }
 
-                let scale = 1.0f32 - (dist as f32 / radius_f as f32);
+                    // Determine candidate id early
+                    let ent_id = cand_clone.get_entity().entity_id;
 
-                // Decide whether this contact will actually apply an effect
-                let effs_clone = self.effects.lock().await.clone();
-                let mut will_apply = false;
+                    let radius_f = *self.radius.lock().await as f64;
+                    let pos_e = cand_clone.get_entity().pos.load();
+                    let dx = pos_e.x - pos.x;
+                    let dy = pos_e.y - pos.y;
+                    let dz = pos_e.z - pos.z;
+                    let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+                    if dist > radius_f {
+                        continue;
+                    }
 
-                // Only living entities can receive effects
-                if let Some(living_ref) = cand_clone.get_living_entity() {
-                    for (eff, _, _, _, _, _) in &effs_clone {
-                        // Instant effects always apply
-                        let is_instant = eff.id
-                            == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id
-                            || eff.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id;
-                        if is_instant {
-                            will_apply = true;
-                            break;
+                    let scale = 1.0f32 - (dist as f32 / radius_f as f32);
+
+                    // Decide whether this contact will actually apply an effect
+                    let effs_clone = self.effects.lock().await.clone();
+                    let mut will_apply = false;
+
+                    // Only living entities can receive effects
+                    if let Some(living_ref) = cand_clone.get_living_entity() {
+                        for (eff, _, _, _, _, _) in &effs_clone {
+                            // Instant effects always apply
+                            let is_instant = eff.id
+                                == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id
+                                || eff.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id;
+                            if is_instant {
+                                will_apply = true;
+                                break;
+                            }
+
+                            // Only apply if entity does not already have that effect
+                            if !living_ref.has_effect(eff).await {
+                                will_apply = true;
+                                break;
+                            }
                         }
+                    }
 
-                        // Only apply if entity does not already have that effect
-                        if !living_ref.has_effect(eff).await {
-                            will_apply = true;
-                            break;
+                    // If nothing would be applied, skip
+                    if !will_apply {
+                        continue;
+                    }
+
+                    // Apply scaled effects inside a spawned task
+                    let cand_for_spawn = cand_clone.clone();
+                    let effs_for_spawn = effs_clone.clone();
+                    tokio::spawn(async move {
+                        if let Some(living) = cand_for_spawn.get_living_entity() {
+                            crate::item::potion::PotionContents::apply_effects_to(
+                                living,
+                                effs_for_spawn,
+                                scale,
+                                crate::item::potion::PotionApplicationSource::AreaEffectCloud,
+                            )
+                            .await;
                         }
-                    }
-                }
+                    });
 
-                // If nothing would be applied, skip
-                if !will_apply {
-                    continue;
-                }
+                    // Set reapplication delay for this entity
+                    let mut map = self.reapplication_map.lock().await;
+                    let delay = *self.reapplication_delay.lock().await;
+                    map.insert(ent_id, delay);
 
-                // Apply scaled effects inside a spawned task
-                let cand_for_spawn = cand_clone.clone();
-                let effs_for_spawn = effs_clone.clone();
-                tokio::spawn(async move {
-                    if let Some(living) = cand_for_spawn.get_living_entity() {
-                        crate::item::potion::PotionContents::apply_effects_to(
-                            living,
-                            effs_for_spawn,
-                            scale,
-                            crate::item::potion::PotionApplicationSource::AreaEffectCloud,
-                        )
-                        .await;
-                    }
-                });
-
-                // Set reapplication delay for this entity
-                let mut map = self.reapplication_map.lock().await;
-                let delay = *self.reapplication_delay.lock().await;
-                map.insert(ent_id, delay);
-
-                // Apply radius-on-use (shrink)
-                let radius_on_use = *self.radius_on_use.lock().await;
-                if radius_on_use != 0.0 {
-                    let mut radius_lock = self.radius.lock().await;
-                    *radius_lock += radius_on_use;
-                    let current_radius = *radius_lock;
-                    if current_radius < 0.5 {
-                        drop(radius_lock);
-                        self.entity.remove().await;
-                        return;
-                    }
-                    drop(radius_lock);
-
-                    // Send updated radius to clients
-                    self.entity.send_meta_data(
-                        &[pumpkin_protocol::java::client::play::Metadata::new(
-                            pumpkin_data::tracked_data::TrackedData::RADIUS,
-                            pumpkin_data::meta_data_type::MetaDataType::FLOAT,
-                            current_radius,
-                        )],
-                        None,
-                    );
-                }
-
-                // Apply duration-on-use (shorten lifespan)
-                let duration_on_use = *self.duration_on_use.lock().await;
-                if duration_on_use != 0 {
-                    let mut duration_lock = self.duration.lock().await;
-                    if *duration_lock != -1 {
-                        *duration_lock += duration_on_use;
-                        if *duration_lock <= 0 {
-                            drop(duration_lock);
+                    // Apply radius-on-use (shrink)
+                    let radius_on_use = *self.radius_on_use.lock().await;
+                    if radius_on_use != 0.0 {
+                        let mut radius_lock = self.radius.lock().await;
+                        *radius_lock += radius_on_use;
+                        let current_radius = *radius_lock;
+                        if current_radius < 0.5 {
+                            drop(radius_lock);
                             self.entity.remove().await;
                             return;
+                        }
+                        drop(radius_lock);
+
+                        // Send updated radius to clients
+                        self.entity.send_meta_data(
+                            &[pumpkin_protocol::java::client::play::Metadata::new(
+                                pumpkin_data::tracked_data::TrackedData::RADIUS,
+                                pumpkin_data::meta_data_type::MetaDataType::FLOAT,
+                                current_radius,
+                            )],
+                            None,
+                        );
+                    }
+
+                    // Apply duration-on-use (shorten lifespan)
+                    let duration_on_use = *self.duration_on_use.lock().await;
+                    if duration_on_use != 0 {
+                        let mut duration_lock = self.duration.lock().await;
+                        if *duration_lock != -1 {
+                            *duration_lock += duration_on_use;
+                            if *duration_lock <= 0 {
+                                drop(duration_lock);
+                                self.entity.remove().await;
+                                return;
+                            }
                         }
                     }
                 }

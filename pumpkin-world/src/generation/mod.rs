@@ -6,6 +6,8 @@ mod block_predicate;
 mod block_state_provider;
 pub mod carver;
 pub mod feature;
+
+pub use feature::get_spikes_for_seed;
 pub mod generator;
 pub mod height_limit;
 pub mod height_provider;

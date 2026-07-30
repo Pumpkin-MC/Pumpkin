@@ -9,7 +9,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     block::{ExplodeArgs, drop_loot},
-    entity::{Entity, EntityBase},
+    entity::Entity,
     world::loot::LootContextParameters,
 };
 
@@ -180,11 +180,14 @@ impl Explosion {
             let damage_multiplier = (1.0 - distance) * exposure;
             let damage = (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier)
                 * 7.0
-                * self.power as f64
+                * radius
                 + 1.0) as f32;
 
             // TODO: damage type
-            entity
+            // Call damage through the trait object (entity_base) rather than on
+            // the raw &Entity so that EntityBase overrides (e.g. EnderDragonPart)
+            // are properly dispatched.
+            entity_base
                 .damage(entity_base.as_ref(), damage, DamageType::EXPLOSION)
                 .await;
 

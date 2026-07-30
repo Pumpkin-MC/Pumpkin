@@ -335,6 +335,10 @@ impl GenerationCache for Cache {
     fn is_air(&self, local_pos: &Vector3<i32>) -> bool {
         is_air(GenerationCache::get_block_state(self, local_pos))
     }
+
+    fn world_seed(&self) -> u64 {
+        self.get_center_chunk().world_seed
+    }
 }
 
 impl Cache {

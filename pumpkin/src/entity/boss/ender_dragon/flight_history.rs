@@ -13,19 +13,31 @@ pub struct DragonFlightHistory {
 impl Default for DragonFlightHistory {
     fn default() -> Self {
         Self {
-            samples: [Sample::default(); 64],
+            samples: [Sample { y: 0.0, y_rot: 0.0 }; 64],
             head: -1,
         }
     }
 }
 
 impl DragonFlightHistory {
+    /// Java: `DragonFlightHistory.copyFrom()` — copies all samples and head
+    /// position from another history, used for syncing client-side interpolation.
+    pub const fn copy_from(&mut self, other: &Self) {
+        self.samples = other.samples;
+        self.head = other.head;
+    }
+
     pub const fn record(&mut self, y: f64, y_rot: f32) {
+        let frame = Sample { y, y_rot };
+        if self.head < 0 {
+            self.samples = [frame; 64];
+        }
+
         self.head += 1;
         if self.head >= 64 {
             self.head = 0;
         }
-        self.samples[self.head as usize] = Sample { y, y_rot };
+        self.samples[self.head as usize] = frame;
     }
 
     #[must_use]
@@ -33,10 +45,7 @@ impl DragonFlightHistory {
         if self.head < 0 {
             return Sample::default();
         }
-        let mut index = (self.head - offset) & 63;
-        if index < 0 {
-            index += 64;
-        }
-        self.samples[index as usize]
+        let index = ((self.head - offset) & 63) as usize;
+        self.samples[index]
     }
 }
