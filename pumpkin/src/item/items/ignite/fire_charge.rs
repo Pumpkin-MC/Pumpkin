@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -35,9 +36,9 @@ impl ItemBehaviour for FireChargeItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
-            Ignition::ignite_block(
+            let ignited = Ignition::ignite_block(
                 |world: Arc<World>, pos: BlockPos, new_state_id: BlockStateId| async move {
                     world
                         .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
@@ -51,6 +52,12 @@ impl ItemBehaviour for FireChargeItem {
                 block,
             )
             .await;
+
+            if ignited {
+                BlockActionResult::Success
+            } else {
+                BlockActionResult::Fail
+            }
         })
     }
 

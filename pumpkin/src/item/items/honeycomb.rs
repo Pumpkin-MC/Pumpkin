@@ -39,7 +39,7 @@ impl ItemBehaviour for HoneyCombItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
 
@@ -76,6 +76,9 @@ impl ItemBehaviour for HoneyCombItem {
                 world
                     .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
+                BlockActionResult::Success
+            } else {
+                BlockActionResult::Pass
             }
         })
     }

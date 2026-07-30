@@ -18,6 +18,7 @@ use crate::entity::equipment_break_status;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::entity::player::{ChatMode, ChatSession, MINE_BLOCK_EXHAUSTION, Player};
 use crate::error::PumpkinError;
+use crate::item::registry::should_try_block_placement;
 use crate::log_at_level;
 use crate::net::PlayerConfig;
 use crate::net::java::JavaClient;
@@ -2334,19 +2335,21 @@ impl JavaClient {
 
         let before = stack.clone();
 
-        server
+        let item_result = server
             .item_registry
             .use_on_block(
                 &mut stack, player, position, face, cursor_pos, block, server,
             )
             .await;
 
-        // Check if the item is a block, because not every item can be placed :D
-        let item_id = stack.item.id;
-        if let Some(block) = Block::from_item_id(item_id) {
-            should_try_decrement = self
-                .run_is_block_place(player, block, server, use_item_on, position, face)
-                .await?;
+        if should_try_block_placement(&item_result) {
+            // Check if the item is a block, because not every item can be placed :D
+            let item_id = stack.item.id;
+            if let Some(block) = Block::from_item_id(item_id) {
+                should_try_decrement = self
+                    .run_is_block_place(player, block, server, use_item_on, position, face)
+                    .await?;
+            }
         }
 
         if should_try_decrement {
@@ -2359,6 +2362,10 @@ impl JavaClient {
 
         let after = stack.clone();
         drop(stack);
+
+        if matches!(item_result, BlockActionResult::SuccessServer) {
+            player.swing_hand(hand, true).await;
+        }
 
         // Broadcast the break entity status before the slot sync; the client
         // needs the old item texture in the slot for break particles.

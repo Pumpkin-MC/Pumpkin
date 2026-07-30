@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::entity::projectile::firework_rocket::FireworkRocketEntity;
 use crate::entity::{Entity, EntityBase};
@@ -32,7 +33,7 @@ impl ItemBehaviour for FireworkRocketItem {
         cursor_pos: Vector3<f32>,
         _block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
             let entity = Entity::new(
@@ -46,6 +47,7 @@ impl ItemBehaviour for FireworkRocketItem {
             );
             let entity = FireworkRocketEntity::new(entity);
             world.spawn_entity(Arc::new(entity)).await;
+            BlockActionResult::Success
         })
     }
 

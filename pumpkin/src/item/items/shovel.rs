@@ -1,5 +1,6 @@
 use std::pin::Pin;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -33,7 +34,7 @@ impl ItemBehaviour for ShovelItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
             // Yes, Minecraft does hardcode these
@@ -91,6 +92,12 @@ impl ItemBehaviour for ShovelItem {
             if changed && player.gamemode.load() != GameMode::Creative {
                 // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
                 let _ = item.damage_item(1);
+            }
+
+            if changed {
+                BlockActionResult::Success
+            } else {
+                BlockActionResult::Pass
             }
         })
     }

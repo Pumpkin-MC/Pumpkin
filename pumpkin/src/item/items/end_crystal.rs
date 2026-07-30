@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::decoration::end_crystal::EndCrystalEntity;
 use crate::entity::player::Player;
@@ -32,12 +33,12 @@ impl ItemBehaviour for EndCrystalItem {
         _cursor_pos: Vector3<f32>,
         _block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
             let block = world.get_block(&location);
             if block != &Block::OBSIDIAN && block != &Block::BEDROCK {
-                return;
+                return BlockActionResult::Fail;
             }
 
             let location = location.up();
@@ -51,7 +52,7 @@ impl ItemBehaviour for EndCrystalItem {
                     ))
                     .is_empty()
             {
-                return;
+                return BlockActionResult::Fail;
             }
 
             let entity = Entity::new(world.clone(), location.to_f64(), &EntityType::END_CRYSTAL);
@@ -59,6 +60,7 @@ impl ItemBehaviour for EndCrystalItem {
             world.spawn_entity(end_crystal.clone()).await;
             end_crystal.set_show_bottom(false);
             item.decrement_unless_creative(player.gamemode.load(), 1);
+            BlockActionResult::Success
         })
     }
 
