@@ -92,9 +92,9 @@ impl EntityBase for EndCrystalEntity {
                         .load()
                         .iter()
                         .find(|e| e.get_entity().entity_uuid == dragon_uuid)
-                        && let Some(dragon) = dragon_base
-                            .cast_any()
-                            .downcast_ref::<crate::entity::boss::ender_dragon::EnderDragonEntity>(
+                    && let Some(dragon) = dragon_base
+                        .cast_any()
+                        .downcast_ref::<crate::entity::boss::ender_dragon::EnderDragonEntity>(
                     )
                 {
                     dragon
