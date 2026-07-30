@@ -10,6 +10,7 @@ pub mod block_entity;
 pub mod boss_bar;
 pub mod commands;
 pub mod common;
+pub mod config;
 pub mod context;
 pub mod entity;
 pub mod events;
@@ -34,7 +35,7 @@ bindgen!({
     path: "../pumpkin-plugin-wit/v0.1",
     world: "plugin",
     imports: { default: async | trappable },
-    exports: { default: async | trappable},
+    exports: { default: async | trappable },
 });
 
 impl pumpkin::plugin::java_packets::Host for PluginHostState {}
@@ -77,10 +78,8 @@ pub async fn init_plugin(
         permissions: metadata.permissions,
     };
 
-    store
-        .data_mut()
-        .permissions
-        .clone_from(&metadata.permissions);
+    let store_data = store.data_mut();
+    store_data.permissions.clone_from(&metadata.permissions);
 
     Ok((
         WasmPlugin {

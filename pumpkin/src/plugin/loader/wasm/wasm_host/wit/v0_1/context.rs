@@ -10,6 +10,7 @@ use crate::plugin::loader::wasm::wasm_host::{
             self,
             plugin::{
                 command::Command,
+                config::Config,
                 context::Context,
                 event::{EventPriority, EventType},
                 permission::{Permission, PermissionDefault, PermissionLevel},
@@ -430,6 +431,15 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         let server_provider = self.get_context(&context)?.provider.server.clone();
         self.add_server(server_provider)
             .map_err(|_| wasmtime::Error::msg("failed to add server resource"))
+    }
+
+    async fn get_config(
+        &mut self,
+        context: Resource<Context>,
+    ) -> wasmtime::Result<Resource<Config>> {
+        let config_provider = self.get_context(&context)?.provider.config.clone();
+        self.add_config(config_provider)
+            .map_err(|_| wasmtime::Error::msg("failed to add config resource"))
     }
 
     async fn drop(&mut self, rep: Resource<Context>) -> wasmtime::Result<()> {
