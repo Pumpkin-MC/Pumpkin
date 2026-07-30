@@ -198,7 +198,8 @@ pub struct World {
     /// This does not include players.
     pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
-    pub scoreboard: Mutex<Scoreboard>,
+    /// Shared scoreboard across all dimensions.
+    pub scoreboard: Arc<tokio::sync::Mutex<Scoreboard>>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
     pub worldborder: Mutex<Worldborder>,
     /// The world's time, including counting ticks for weather, time cycles, and statistics.
@@ -279,6 +280,7 @@ impl World {
     pub fn load(
         level: Arc<Level>,
         level_info: Arc<ArcSwap<LevelData>>,
+        scoreboard: Arc<tokio::sync::Mutex<Scoreboard>>,
         dimension: Dimension,
         block_registry: Arc<BlockRegistry>,
         server: Weak<Server>,
@@ -290,13 +292,14 @@ impl World {
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
         let dragon_fight = (dimension.minecraft_name == Dimension::THE_END.minecraft_name)
             .then(|| Mutex::new(dragon_fight::DragonFight::new()));
+
         Self {
             uuid: Uuid::new_v4(),
             level,
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
             entities: ArcSwap::new(Arc::new(Vec::new())),
-            scoreboard: Mutex::new(Scoreboard::default()),
+            scoreboard,
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 5.999_996_8E7, 0, 5, 300)),
             level_time: Mutex::new(LevelTime::new()),
             dimension,
@@ -375,6 +378,8 @@ impl World {
         if let Err(e) = save_result {
             error!("Failed to save portal POI: {e}");
         }
+
+        // Scoreboard is global and saved by Server::shutdown() (vanilla: single global scoreboard)
 
         self.level.shutdown().await;
     }
@@ -3166,6 +3171,12 @@ impl World {
         )
         .color_named(NamedColor::Yellow);
         let event = PlayerJoinEvent::new(player.clone(), msg_comp);
+
+        // Send scoreboard state (tracked objectives + display slots + scores) to joining player
+        self.scoreboard
+            .lock()
+            .await
+            .send_state_to_player(player.as_ref());
 
         let event = server.plugin_manager.fire(event).await;
 
