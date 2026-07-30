@@ -41,7 +41,10 @@ impl CommandExecutor for Executor {
             let speed = speed.unwrap_or(Ok(0.0))?;
             let count = count.unwrap_or(Ok(0))?;
             let (world, pos) = match sender {
-                CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
+                CommandSender::Console
+                | CommandSender::Rcon(_)
+                | CommandSender::Dummy
+                | CommandSender::Entity(..) => {
                     let guard = server.worlds.load();
                     let world = guard
                         .first()

@@ -44,7 +44,10 @@ impl CommandExecutor for Executor {
             let block_state_id = block.default_state.id;
             let mode = self.0;
             let world = match sender {
-                CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
+                CommandSender::Console
+                | CommandSender::Rcon(_)
+                | CommandSender::Dummy
+                | CommandSender::Entity(..) => {
                     let guard = server.worlds.load();
 
                     guard

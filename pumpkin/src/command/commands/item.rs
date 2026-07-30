@@ -44,7 +44,10 @@ impl CommandExecutor for BlockReplaceExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let world = match sender {
-                CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
+                CommandSender::Console
+                | CommandSender::Rcon(_)
+                | CommandSender::Dummy
+                | CommandSender::Entity(..) => {
                     let guard = server.worlds.load();
                     guard
                         .first()
