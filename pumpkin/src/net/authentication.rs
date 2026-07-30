@@ -48,6 +48,59 @@ pub struct MojangPublicKeys {
     pub authentication_keys: Option<Vec<JsonPublicKey>>,
 }
 
+// Authlib-Injector Yggdrasil metadata
+
+/// Response from the Yggdrasil `GET /` metadata endpoint.
+#[derive(Deserialize, Clone, Debug)]
+struct YggdrasilMeta {
+    #[serde(rename = "skinDomains")]
+    skin_domains: Option<Vec<String>>,
+    #[serde(rename = "signaturePublickey")]
+    signature_publickey: Option<String>,
+}
+
+/// Derive the Yggdrasil API root URL from a `/hasJoined` URL.
+fn derive_api_root(has_joined_url: &str) -> Option<String> {
+    let path = has_joined_url.split('?').next()?;
+
+    if let Some(base) = path.strip_suffix("/sessionserver/session/minecraft/hasJoined") {
+        return Some(base.to_string());
+    }
+    if let Some(base) = path.strip_suffix("/session/minecraft/hasJoined") {
+        return Some(base.to_string());
+    }
+    // Non-standard path: strip the last segment as a best-effort fallback.
+    path.rsplit_once('/').map(|(base, _)| base.to_string())
+}
+
+/// Fetch the `GET /` metadata endpoint of a Yggdrasil service.
+///
+/// Returns `skinDomains` and `signaturePublickey` on success, `None` if
+/// the endpoint is unavailable (404, timeout, …).
+fn fetch_yggdrasil_meta(service: &YggdrasilServiceConfig) -> Option<YggdrasilMeta> {
+    let root = derive_api_root(&service.url)?;
+    let url = format!("{root}/");
+
+    let response = ureq::get(&url).call().ok()?;
+    if response.status() != StatusCode::OK {
+        return None;
+    }
+    response.into_body().read_json::<YggdrasilMeta>().ok()
+}
+
+/// Domain matching per Authlib-Injector spec
+///
+/// - Rules starting with `.` match any domain whose suffix equals the rule
+///   (e.g. `.example.com` matches `cdn.example.com`, **not** `example.com`).
+/// - Rules without a leading `.` require an exact match.
+fn is_domain_allowed(domain: &str, rule: &str) -> bool {
+    if rule.starts_with('.') {
+        domain.ends_with(rule)
+    } else {
+        domain == rule
+    }
+}
+
 const MOJANG_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
 const MOJANG_PREVENT_PROXY_AUTHENTICATION_URL: &str = "https://sessionserver.mojang.com/session/minecraft/hasJoined?username={username}&serverId={server_hash}";
 const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
@@ -182,7 +235,34 @@ fn authenticate_service(
 
     // Validate textures against the per-service config if present,
     // otherwise fall back to the global texture config.
-    let texture_config = service.textures.as_ref().unwrap_or(&global_config.textures);
+    let base_config = service.textures.as_ref().unwrap_or(&global_config.textures);
+
+    // Query the Yggdrasil GET / metadata endpoint to auto-discover
+    // skinDomains (§5.1).  This removes the need to manually list every
+    // third-party texture domain in the config.
+    let merged_config;
+    let texture_config = if let Some(meta) = fetch_yggdrasil_meta(service) {
+        if let Some(ref key) = meta.signature_publickey {
+            tracing::debug!("[{name}] signaturePublickey: {} bytes", key.len());
+        }
+        if let Some(domains) = meta.skin_domains.as_ref()
+            && !domains.is_empty()
+        {
+            let mut merged = base_config.clone();
+            merged.allowed_url_domains.extend(domains.iter().cloned());
+            tracing::debug!(
+                "[{name}] merged {} discovered skinDomains",
+                domains.len()
+            );
+            merged_config = merged;
+            &merged_config
+        } else {
+            base_config
+        }
+    } else {
+        base_config
+    };
+
     for property in profile.properties.load().iter() {
         validate_textures(property, texture_config).map_err(AuthError::TextureError)?;
     }
@@ -306,7 +386,7 @@ pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), Tex
     if !config
         .allowed_url_domains
         .iter()
-        .any(|allowed_domain| domain.as_str().ends_with(allowed_domain))
+        .any(|rule| is_domain_allowed(domain.as_str(), rule))
     {
         return Err(TextureError::DisallowedUrlDomain(domain.to_string()));
     }
