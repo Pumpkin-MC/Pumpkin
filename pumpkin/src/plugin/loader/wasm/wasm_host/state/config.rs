@@ -513,7 +513,7 @@ mod tests {
             };
             let value_from_tree = <Option<Value>>::try_from(tree).unwrap();
             assert!(value_from_tree.is_none());
-        }
+        };
         {
             let tree = ConfigTree {
                 nodes: vec![
