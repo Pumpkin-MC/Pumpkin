@@ -7,7 +7,7 @@ use crate::plugin::loader::wasm::wasm_host::{
 
 /// The return value will not be an error for many invalid formats, this should
 /// probably be fixed.
-fn string_to_path(s: String) -> wasmtime::Result<pumpkin::plugin::config::ConfigPath> {
+fn string_to_path(s: &str) -> wasmtime::Result<pumpkin::plugin::config::ConfigPath> {
     if s.is_empty() {
         return Ok(Vec::new());
     }
@@ -72,7 +72,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         res: wasmtime::component::Resource<pumpkin::plugin::config::Config>,
         key: String,
     ) -> wasmtime::Result<Option<pumpkin::plugin::config::ConfigTree>> {
-        self.path_get(res, string_to_path(key)?).await
+        self.path_get(res, string_to_path(&key)?).await
     }
 
     async fn get_or_default(
@@ -81,7 +81,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         key: String,
         default: pumpkin::plugin::config::ConfigTree,
     ) -> wasmtime::Result<pumpkin::plugin::config::ConfigTree> {
-        self.path_get_or_default(res, string_to_path(key)?, default)
+        self.path_get_or_default(res, string_to_path(&key)?, default)
             .await
     }
 
@@ -91,7 +91,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         key: String,
         value: pumpkin::plugin::config::ConfigTree,
     ) -> wasmtime::Result<()> {
-        self.path_set(res, string_to_path(key)?, value).await
+        self.path_set(res, string_to_path(&key)?, value).await
     }
 
     async fn remove(
@@ -99,7 +99,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         res: wasmtime::component::Resource<pumpkin::plugin::config::Config>,
         key: String,
     ) -> wasmtime::Result<bool> {
-        self.path_remove(res, string_to_path(key)?).await
+        self.path_remove(res, string_to_path(&key)?).await
     }
 
     async fn overwrite(
@@ -116,7 +116,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         res: wasmtime::component::Resource<pumpkin::plugin::config::Config>,
         key: String,
     ) -> wasmtime::Result<bool> {
-        self.path_has_key(res, string_to_path(key)?).await
+        self.path_has_key(res, string_to_path(&key)?).await
     }
 
     async fn path_get(
@@ -184,7 +184,7 @@ mod tests {
     #[test]
     fn path_parsing() {
         {
-            let mut path = string_to_path("a.bb.ccc".to_owned()).unwrap().into_iter();
+            let mut path = string_to_path("a.bb.ccc").unwrap().into_iter();
             let Some(ConfigPathElement::Key(s)) = path.next() else {
                 panic!();
             };
@@ -201,9 +201,7 @@ mod tests {
         }
 
         {
-            let mut path = string_to_path("xyz.bb[10].ccc".to_owned())
-                .unwrap()
-                .into_iter();
+            let mut path = string_to_path("xyz.bb[10].ccc").unwrap().into_iter();
             let Some(ConfigPathElement::Key(s)) = path.next() else {
                 panic!();
             };
@@ -223,10 +221,10 @@ mod tests {
             assert!(path.next().is_none());
         }
 
-        assert!(string_to_path(String::new()).unwrap().is_empty());
+        assert!(string_to_path("").unwrap().is_empty());
 
         {
-            let mut path = string_to_path("xyz[0]".to_owned()).unwrap().into_iter();
+            let mut path = string_to_path("xyz[0]").unwrap().into_iter();
             let Some(ConfigPathElement::Key(s)) = path.next() else {
                 panic!();
             };
@@ -239,7 +237,7 @@ mod tests {
         }
 
         {
-            let mut path = string_to_path("a[0].b".to_owned()).unwrap().into_iter();
+            let mut path = string_to_path("a[0].b").unwrap().into_iter();
             let Some(ConfigPathElement::Key(s)) = path.next() else {
                 panic!();
             };

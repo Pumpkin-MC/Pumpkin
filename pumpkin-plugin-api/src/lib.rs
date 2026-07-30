@@ -34,6 +34,7 @@ use crate::{
 };
 
 pub mod commands;
+pub mod config;
 pub mod events;
 pub mod forms;
 /// Constants for plugin permissions.
@@ -41,7 +42,6 @@ pub mod forms;
 /// Use these in your `PluginMetadata` to request access to specific host features.
 pub mod permissions;
 pub mod scheduler;
-pub mod config;
 
 pub mod command {
     pub use crate::wit::pumpkin::plugin::command::{

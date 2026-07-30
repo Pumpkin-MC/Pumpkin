@@ -74,9 +74,9 @@ impl PluginConfigManager {
         if let ConfigLoadState::Loaded { table, changed: _ } = &**config_guard {
             return Ok(Some(Arc::clone(table)));
         }
-        if let ConfigLoadState::DoesNotExist = &**config_guard {
+        if matches!(&**config_guard, ConfigLoadState::DoesNotExist) {
             return Ok(None);
-        };
+        }
         drop(config_guard);
 
         if let Some(parent) = self.path.parent() {
@@ -126,6 +126,7 @@ impl PluginConfigManager {
         }
         let mut file = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(&self.path)
@@ -181,9 +182,8 @@ impl PluginConfigManager {
             match elem {
                 ConfigPathElement::Key(name) => {
                     let table = match current_value {
-                        either::Left(toml::Value::Table(table)) => table,
-                        either::Right(table) => table,
-                        _ => return Err(ConfigSetError::InvalidPath),
+                        either::Left(toml::Value::Table(table)) | either::Right(table) => table,
+                        either::Left(_) => return Err(ConfigSetError::InvalidPath),
                     };
 
                     let insert_fn = match k_iter.peek() {
@@ -241,7 +241,11 @@ impl PluginConfigManager {
         let mut last_value: either::Either<&mut Vec<toml::Value>, &mut Map<String, toml::Value>> =
             either::Right(&mut table);
         let mut k_iter = k.into_iter().peekable();
-        while let Some(elem) = k_iter.next() {
+        loop {
+            let Some(elem) = k_iter.next() else {
+                *table = toml::Table::new();
+                return Ok(true);
+            };
             if k_iter.peek().is_none() {
                 return match (elem, last_value) {
                     (ConfigPathElement::Key(name), either::Right(table)) => {
@@ -278,7 +282,6 @@ impl PluginConfigManager {
                 _ => return Err(ConfigSetError::InvalidPath),
             };
         }
-        unreachable!();
     }
 
     pub async fn has_key(&self, k: ConfigPath) -> Result<bool, ConfigLoadError> {
@@ -291,8 +294,10 @@ impl PluginConfigManager {
             either::Right(&table);
         for elem in k {
             match (elem, last_value) {
-                (ConfigPathElement::Key(name), either::Left(toml::Value::Table(table)))
-                | (ConfigPathElement::Key(name), either::Right(table)) => {
+                (
+                    ConfigPathElement::Key(name),
+                    either::Left(toml::Value::Table(table)) | either::Right(table),
+                ) => {
                     let Some(value) = table.get(&name) else {
                         return Ok(false);
                     };
@@ -336,23 +341,23 @@ impl PluginConfigManager {
 impl From<toml::Value> for ConfigTree {
     fn from(value: toml::Value) -> Self {
         match value {
-            toml::Value::String(v) => ConfigTree {
+            toml::Value::String(v) => Self {
                 nodes: vec![ConfigValue::String(v)],
                 root_id: 0,
             },
-            toml::Value::Integer(v) => ConfigTree {
+            toml::Value::Integer(v) => Self {
                 nodes: vec![ConfigValue::S64(v)],
                 root_id: 0,
             },
-            toml::Value::Float(v) => ConfigTree {
+            toml::Value::Float(v) => Self {
                 nodes: vec![ConfigValue::F64(v)],
                 root_id: 0,
             },
-            toml::Value::Boolean(v) => ConfigTree {
+            toml::Value::Boolean(v) => Self {
                 nodes: vec![ConfigValue::Bool(v)],
                 root_id: 0,
             },
-            toml::Value::Datetime(v) => ConfigTree {
+            toml::Value::Datetime(v) => Self {
                 nodes: vec![ConfigValue::String(v.to_string())],
                 root_id: 0,
             },
@@ -360,21 +365,21 @@ impl From<toml::Value> for ConfigTree {
                 let mut node_indicies = Vec::new();
                 let mut nodes =
                     v.into_iter()
-                        .map(ConfigTree::from)
+                        .map(Self::from)
                         .fold(Vec::new(), |mut vec, mut tree| {
                             node_indicies.push(tree.root_id + vec.len() as u32);
                             vec.append(&mut tree.nodes);
                             vec
                         });
                 nodes.push(ConfigValue::List(node_indicies));
-                ConfigTree {
+                Self {
                     root_id: nodes.len() as u32 - 1,
                     nodes,
                 }
             }
             toml::Value::Table(v) => {
                 let mut map = Vec::new();
-                let mut nodes = v.into_iter().map(|(k, v)| (k, ConfigTree::from(v))).fold(
+                let mut nodes = v.into_iter().map(|(k, v)| (k, Self::from(v))).fold(
                     Vec::new(),
                     |mut vec, (k, mut tree)| {
                         map.push((k, tree.root_id + vec.len() as u32));
@@ -383,7 +388,7 @@ impl From<toml::Value> for ConfigTree {
                     },
                 );
                 nodes.push(ConfigValue::Object(map));
-                ConfigTree {
+                Self {
                     root_id: nodes.len() as u32 - 1,
                     nodes,
                 }
@@ -473,11 +478,7 @@ fn index_table(table: &Table, k: ConfigPath) -> Option<either::Either<&toml::Val
             }
         }
     }
-    Some(if let Some(value) = current_value {
-        either::Left(value)
-    } else {
-        either::Right(table)
-    })
+    Some(current_value.map_or(either::Right(table), either::Left))
 }
 
 #[cfg(test)]
