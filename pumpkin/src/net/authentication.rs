@@ -152,7 +152,11 @@ pub fn authenticate(
         .map_err(|_| AuthError::FailedResponse)?;
     match response.status() {
         StatusCode::OK => {}
-        StatusCode::NO_CONTENT => Err(AuthError::UnverifiedUsername)?,
+        StatusCode::NO_CONTENT | StatusCode::UNAUTHORIZED => {
+            // Some authlib-injector services (e.g. Ely.by) return 401
+            // instead of 204 when no matching session exists.
+            Err(AuthError::UnverifiedUsername)?;
+        }
         other => Err(AuthError::UnknownStatusCode(other))?,
     }
     let profile: GameProfile = response
@@ -265,10 +269,7 @@ fn authenticate_service(
         {
             let mut merged = base_config.clone();
             merged.allowed_url_domains.extend(domains.iter().cloned());
-            tracing::debug!(
-                "[{name}] merged {} discovered skinDomains",
-                domains.len()
-            );
+            tracing::debug!("[{name}] merged {} discovered skinDomains", domains.len());
             merged_config = merged;
             &merged_config
         } else {
@@ -389,15 +390,15 @@ pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<
 }
 
 pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), TextureError> {
-    let scheme = url.scheme().unwrap();
+    let scheme = url.scheme().ok_or(TextureError::InvalidURL)?;
     if !config
         .allowed_url_schemes
         .iter()
-        .any(|allowed_scheme| scheme.as_str().ends_with(allowed_scheme))
+        .any(|allowed_scheme| scheme.as_str() == allowed_scheme.as_str())
     {
         return Err(TextureError::DisallowedUrlScheme(scheme.to_string()));
     }
-    let domain = url.authority().unwrap();
+    let domain = url.authority().ok_or(TextureError::InvalidURL)?;
     if !config
         .allowed_url_domains
         .iter()
