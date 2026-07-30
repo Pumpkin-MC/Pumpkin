@@ -204,4 +204,99 @@ mod tests {
         );
         assert_eq!(jigsaw_blocks, 0, "jigsaw blocks were not replaced");
     }
+
+    #[test]
+    fn seed_zero_generates_the_vanilla_pillager_outpost_chunk() {
+        let dimension = Dimension::OVERWORLD;
+        let seed = Seed(0);
+        let block_registry = Arc::new(BlockRegistry);
+        let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
+        let biome_mixer_seed = hash_seed(world_gen.seed());
+
+        // Vanilla 26.2 locates seed 0's nearest outpost at block 576, 1648.
+        let chunk = generate_single_chunk(
+            &dimension,
+            biome_mixer_seed,
+            &world_gen,
+            block_registry.as_ref(),
+            35,
+            103,
+            StagedChunkEnum::Features,
+        );
+        let super::Chunk::Proto(chunk) = chunk else {
+            panic!("features stage should return a proto chunk");
+        };
+        let mut outpost_blocks = 0;
+        let mut jigsaw_blocks = 0;
+        for x in 560..576 {
+            for z in 1648..1664 {
+                for y in -64..320 {
+                    let block = chunk
+                        .get_block_state(&pumpkin_util::math::vector3::Vector3::new(x, y, z))
+                        .to_block_id();
+                    if [
+                        pumpkin_data::Block::DARK_OAK_LOG.id,
+                        pumpkin_data::Block::DARK_OAK_PLANKS.id,
+                        pumpkin_data::Block::DARK_OAK_FENCE.id,
+                    ]
+                    .contains(&block)
+                    {
+                        outpost_blocks += 1;
+                    }
+                    if block == pumpkin_data::Block::JIGSAW.id {
+                        jigsaw_blocks += 1;
+                    }
+                }
+            }
+        }
+
+        assert!(
+            outpost_blocks > 0,
+            "reference chunk contains no outpost blocks"
+        );
+        assert_eq!(jigsaw_blocks, 0, "jigsaw blocks were not replaced");
+    }
+
+    #[test]
+    fn pillager_outpost_features_shape_ground_at_vanilla_height() {
+        let dimension = Dimension::OVERWORLD;
+        let seed = Seed(1_782_124_772_053_846_960);
+        let block_registry = Arc::new(BlockRegistry);
+        let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
+        let biome_mixer_seed = hash_seed(world_gen.seed());
+
+        let chunk = generate_single_chunk(
+            &dimension,
+            biome_mixer_seed,
+            &world_gen,
+            block_registry.as_ref(),
+            73,
+            -82,
+            StagedChunkEnum::Features,
+        );
+        let super::Chunk::Proto(chunk) = chunk else {
+            panic!("features stage should return a proto chunk");
+        };
+
+        for (x, y, z) in [(1173, 70, -1311), (1173, 70, -1305)] {
+            let state = chunk.get_block_state(&pumpkin_util::math::vector3::Vector3::new(x, y, z));
+            assert_eq!(state.to_block_id(), pumpkin_data::Block::GRASS_BLOCK.id);
+        }
+
+        let cage_chunk = generate_single_chunk(
+            &dimension,
+            biome_mixer_seed,
+            &world_gen,
+            block_registry.as_ref(),
+            73,
+            -84,
+            StagedChunkEnum::Features,
+        );
+        let super::Chunk::Proto(cage_chunk) = cage_chunk else {
+            panic!("features stage should return a proto chunk");
+        };
+        let state =
+            cage_chunk.get_block_state(&pumpkin_util::math::vector3::Vector3::new(1183, 68, -1330));
+        assert_eq!(state.to_block_id(), pumpkin_data::Block::GRASS_BLOCK.id);
+    }
 }

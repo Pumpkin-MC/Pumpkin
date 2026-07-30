@@ -47,7 +47,7 @@ const fn get_dead_coral_block_type(id: BlockId) -> Option<&'static Block> {
     match id {
         BlockId::BRAIN_CORAL_BLOCK => Some(&Block::DEAD_BRAIN_CORAL_BLOCK),
         BlockId::BUBBLE_CORAL_BLOCK => Some(&Block::DEAD_BUBBLE_CORAL_BLOCK),
-        BlockId::FIRE_CORAL_BLOCK => Some(&Block::FIRE_CORAL_BLOCK),
+        BlockId::FIRE_CORAL_BLOCK => Some(&Block::DEAD_FIRE_CORAL_BLOCK),
         BlockId::HORN_CORAL_BLOCK => Some(&Block::DEAD_HORN_CORAL_BLOCK),
         BlockId::TUBE_CORAL_BLOCK => Some(&Block::DEAD_TUBE_CORAL_BLOCK),
         _ => None,

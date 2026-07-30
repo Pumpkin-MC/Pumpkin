@@ -105,3 +105,9 @@ pub use test_instance_block_action::*;
 
 mod set_test_block;
 pub use set_test_block::*;
+
+mod debug_subscription_request;
+pub use debug_subscription_request::*;
+
+mod debug_sample_subscription;
+pub use debug_sample_subscription::*;
