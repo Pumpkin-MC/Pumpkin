@@ -197,8 +197,8 @@ mod tests {
                 panic!();
             };
             assert_eq!(s, "ccc");
-            assert!(path.next().is_none());
-        }
+            assert!(path.next().is_none())
+        };
 
         {
             let mut path = string_to_path("xyz.bb[10].ccc").unwrap().into_iter();
@@ -218,8 +218,8 @@ mod tests {
                 panic!();
             };
             assert_eq!(s, "ccc");
-            assert!(path.next().is_none());
-        }
+            assert!(path.next().is_none())
+        };
 
         assert!(string_to_path("").unwrap().is_empty());
 
@@ -233,8 +233,8 @@ mod tests {
                 panic!();
             };
             assert_eq!(i, 0);
-            assert!(path.next().is_none());
-        }
+            assert!(path.next().is_none())
+        };
 
         {
             let mut path = string_to_path("a[0].b").unwrap().into_iter();
@@ -250,7 +250,7 @@ mod tests {
                 panic!();
             };
             assert_eq!(s, "b");
-            assert!(path.next().is_none());
-        }
+            assert!(path.next().is_none())
+        };
     }
 }
