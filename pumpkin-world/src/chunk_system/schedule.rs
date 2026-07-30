@@ -78,6 +78,11 @@ pub struct GenerationSchedule {
     listener: Arc<ChunkListener>,
     lighting_config: LightingEngineConfig,
     last_unload: std::time::Instant,
+    /// Chunks whose generation failure has already been reported. A failing chunk is
+    /// re-queued and will usually fail again the same way every time, so the details are
+    /// logged once per chunk and every repeat is demoted to debug instead of flooding
+    /// the console.
+    reported_generation_failures: HashSetType<ChunkPos>,
 }
 
 impl GenerationSchedule {
@@ -171,6 +176,7 @@ impl GenerationSchedule {
                     chunk_map: HashMap::default(),
                     lighting_config,
                     last_unload: std::time::Instant::now(),
+                    reported_generation_failures: HashSetType::default(),
                 };
                 scheduler.work(&level_sched);
             })
@@ -860,7 +866,7 @@ impl GenerationSchedule {
                                 let public_chunk = chunk.clone();
                                 if was_public {
                                     self.public_chunk_map.insert(new_pos, public_chunk);
-                                    info!(
+                                    debug!(
                                         "Notifying players: regenerated chunk at {:?} (was already public)",
                                         new_pos
                                     );
@@ -964,10 +970,19 @@ impl GenerationSchedule {
                 stage,
                 error,
             } => {
-                error!(
-                    "Received generation failure notification for chunk {:?} at stage {:?}: {}",
-                    fail_pos, stage, error
-                );
+                // Report each broken chunk once; the retry loop below would otherwise
+                // print the same failure every time it comes back around.
+                if self.reported_generation_failures.insert(fail_pos) {
+                    error!(
+                        "Received generation failure notification for chunk {:?} at stage {:?}: {} (further failures for this chunk are logged at debug level)",
+                        fail_pos, stage, error
+                    );
+                } else {
+                    debug!(
+                        "Received generation failure notification for chunk {:?} at stage {:?}: {}",
+                        fail_pos, stage, error
+                    );
+                }
 
                 if let Some(mut holder) = self.chunk_map.remove(&pos) {
                     let target_stage = holder.target_stage;
@@ -1019,7 +1034,8 @@ impl GenerationSchedule {
 
                     self.chunk_map.insert(pos, holder);
 
-                    warn!(
+                    // Part of the failure report above, which is already rate limited.
+                    debug!(
                         "Chunk {:?} reset to None and re-queued for regeneration (target: {:?})",
                         pos, target_stage
                     );

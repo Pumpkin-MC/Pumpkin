@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
-use tracing::{info, warn};
+use tracing::{debug, warn};
 
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
@@ -491,7 +491,7 @@ impl PoiStorage {
         }
 
         if saved > 0 {
-            info!("Saved {saved} POI region(s)");
+            debug!("Saved {saved} POI region(s)");
         }
         Ok(())
     }

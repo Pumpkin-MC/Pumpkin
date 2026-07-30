@@ -249,6 +249,19 @@ impl JavaClient {
         PacketHandlerResult::Stop
     }
 
+    /// Acknowledges every block change the client has predicted locally since the last
+    /// call. Until this is sent, the client keeps showing its *predicted* block (for
+    /// example the fire it drew when you used flint and steel), even though the server
+    /// already placed something else there. Vanilla sends this at the end of every tick
+    /// the client's action was handled in, so this must be called once per tick.
+    pub async fn ack_block_changes(&self) {
+        let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
+        if seq != -1 {
+            self.send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
+                .await;
+        }
+    }
+
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
         let mut keep_alive_interval = tokio::time::interval(std::time::Duration::from_secs(15));
 
@@ -276,13 +289,6 @@ impl JavaClient {
                     self.last_keep_alive_time.store(Instant::now());
                     let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
                     self.enqueue_packet(&packet).await;
-
-                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
-                    if seq != -1 {
-                        self
-                            .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
-                            .await;
-                    }
                 }
 
                 // INCOMING PACKETS

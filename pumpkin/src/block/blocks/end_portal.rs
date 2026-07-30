@@ -23,7 +23,8 @@ impl BlockBehaviour for EndPortalBlock {
             if Arc::ptr_eq(&target_world, args.world) {
                 return;
             }
-            tracing::info!(
+            // Fires for every portal block the entity touches, every tick.
+            tracing::trace!(
                 "End portal collision at {:?}, targeting world {:?}",
                 args.position,
                 target_world.dimension.minecraft_name

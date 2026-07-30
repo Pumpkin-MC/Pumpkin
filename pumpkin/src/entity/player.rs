@@ -1369,14 +1369,24 @@ impl Player {
 
         let respawn_guard = self.respawn_point.lock().await;
         let respawn_point = respawn_guard.as_ref()?;
-        let world = self.world();
-        let pos = &respawn_point.position;
-        let (block, state_id) = world.get_block_and_state_id(pos);
+        let dimension = respawn_point.dimension.clone();
+        let pos = respawn_point.position;
+        let yaw = respawn_point.yaw;
+        let force = respawn_point.force;
+        drop(respawn_guard);
+
+        // Validate the bed/anchor in the stored spawn dimension, not the death world.
+        let server = self.world().server.upgrade()?;
+        let world = server.get_world_from_dimension(&dimension);
+        let chunk_pos = pumpkin_util::math::vector2::Vector2::new(pos.0.x >> 4, pos.0.z >> 4);
+        world.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
+
+        let (block, state_id) = world.get_block_and_state_id(&pos);
 
         // If force is set (from /spawnpoint command), validate position is safe
-        if respawn_point.force {
+        if force {
             // For forced spawn, check if both the block and block above allow mob spawn
-            let block_state = world.get_block_state(pos);
+            let block_state = world.get_block_state(&pos);
             let above_state = world.get_block_state(&pos.up());
 
             // Check if blocks are passable (non-solid or air)
@@ -1391,13 +1401,13 @@ impl Player {
                 );
                 debug!(
                     "Returning forced spawn point at {:?}, dimension: {:?}",
-                    position, respawn_point.dimension
+                    position, dimension
                 );
                 return Some(CalculatedRespawnPoint {
                     position,
-                    yaw: respawn_point.yaw,
+                    yaw,
                     pitch: 0.0,
-                    dimension: respawn_point.dimension.clone(),
+                    dimension,
                 });
             }
             return None;
@@ -1410,14 +1420,12 @@ impl Player {
 
             // Try positions around the bed based on facing direction
             // Vanilla tries multiple offset patterns; we use a simplified version
-            if let Some(spawn_pos) =
-                Self::find_bed_spawn_position(&world, pos, facing, respawn_point.yaw)
-            {
+            if let Some(spawn_pos) = Self::find_bed_spawn_position(&world, &pos, facing, yaw) {
                 return Some(CalculatedRespawnPoint {
                     position: spawn_pos,
-                    yaw: respawn_point.yaw,
+                    yaw,
                     pitch: 0.0,
-                    dimension: respawn_point.dimension.clone(),
+                    dimension,
                 });
             }
             return None;
@@ -1434,14 +1442,14 @@ impl Player {
             }
 
             // Try positions around the anchor
-            if let Some(spawn_pos) = Self::find_anchor_spawn_position(&world, pos) {
+            if let Some(spawn_pos) = Self::find_anchor_spawn_position(&world, &pos) {
                 // Decrement charges after successful respawn position found
                 let new_charges = charges - 1;
                 let mut new_props = anchor_props;
                 new_props.charges = new_charges;
                 world
                     .set_block_state(
-                        pos,
+                        &pos,
                         new_props.to_state_id(block),
                         pumpkin_world::world::BlockFlags::NOTIFY_ALL,
                     )
@@ -1449,9 +1457,9 @@ impl Player {
 
                 return Some(CalculatedRespawnPoint {
                     position: spawn_pos,
-                    yaw: respawn_point.yaw,
+                    yaw,
                     pitch: 0.0,
-                    dimension: respawn_point.dimension.clone(),
+                    dimension,
                 });
             }
             return None;
@@ -1920,6 +1928,11 @@ impl Player {
 
     #[expect(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
+        // Confirm the block changes this client predicted since the last tick. Without
+        // this the client keeps drawing its prediction (e.g. the fire from flint and
+        // steel) until something else updates that position.
+        self.client.ack_block_changes().await;
+
         if let Some(camera_id) = self.camera_target_id.load() {
             if camera_id == self.entity_id() {
                 self.camera_target_id.store(None);
@@ -5051,14 +5064,14 @@ impl InventoryPlayer for Player {
                     use pumpkin_protocol::codec::var_uint::VarUInt;
 
                     let window_id = packet.window_id;
-                    tracing::info!(
+                    tracing::trace!(
                         "enqueue_slot_packet: window_id={}, slot={}",
                         window_id,
                         packet.slot
                     );
 
                     if window_id == 0 {
-                        tracing::info!(
+                        tracing::trace!(
                             "enqueue_slot_packet: window_id is 0, sending CInventorySlot to Bedrock client"
                         );
                         let slot_idx = packet.slot as usize;
@@ -5188,7 +5201,7 @@ impl InventoryPlayer for Player {
                     };
                     use pumpkin_protocol::codec::var_uint::VarUInt;
 
-                    tracing::info!(
+                    tracing::trace!(
                         "enqueue_slot_set_packet: slot={}, sending CInventorySlot to Bedrock client",
                         packet.slot.0
                     );

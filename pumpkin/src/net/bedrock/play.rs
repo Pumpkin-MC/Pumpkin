@@ -491,7 +491,7 @@ impl BedrockClient {
         player: &Arc<Player>,
         packet: SInventoryTransaction,
     ) {
-        tracing::info!("handle_inventory_action: packet={:?}", packet);
+        tracing::trace!("handle_inventory_action: packet={:?}", packet);
         let mut inventory_updated = false;
         let mut updates = Vec::new();
         let result = 0u8;
@@ -1270,7 +1270,7 @@ impl BedrockClient {
             let mut result = 0u8; // 0 = Success, 1 = Error
 
             for action in request.actions {
-                tracing::info!("Processing ItemStackRequestAction: {:?}", action);
+                tracing::trace!("Processing ItemStackRequestAction: {:?}", action);
                 match action {
                     ItemStackRequestAction::CraftCreative {
                         creative_item_id,
@@ -1538,7 +1538,7 @@ impl BedrockClient {
                                 let grid_slot =
                                     screen_handler.get_behaviour().slots[grid_slot_index].clone();
                                 let grid_stack = grid_slot.get_cloned_stack().await;
-                                tracing::info!(
+                                tracing::trace!(
                                     "Crafting Grid slot {i} (slot index {grid_slot_index}): Item ID: {}, Count: {}",
                                     grid_stack.item.id,
                                     grid_stack.item_count

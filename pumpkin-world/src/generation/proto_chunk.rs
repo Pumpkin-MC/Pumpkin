@@ -179,7 +179,12 @@ impl ProtoChunk {
     #[must_use]
     pub fn new(x: i32, z: i32, generator: &super::generator::WorldGenerator) -> Self {
         let dimension = generator.dimension();
-        let height = dimension.logical_height as u16;
+        // This must be the dimension's *storage* height, not `logical_height`.
+        // `logical_height` is only the cap for portals/mob AI (the Nether reports 128
+        // while its chunks are still 256 blocks tall). Sizing the block/biome/light
+        // buffers by it made every read above y=128 in the Nether run off the end of
+        // `flat_block_map` when the chunk was converted to a level chunk.
+        let height = dimension.height as u16;
         let section_count = (height as usize) / 16;
 
         let default_block = match generator {
@@ -433,6 +438,9 @@ impl ProtoChunk {
 
     #[inline]
     const fn local_pos_to_block_index(&self, x: i32, y: i32, z: i32) -> usize {
+        debug_assert!(x >= 0 && x < CHUNK_DIM as i32, "local x out of range");
+        debug_assert!(z >= 0 && z < CHUNK_DIM as i32, "local z out of range");
+        debug_assert!(y >= 0 && y < self.height as i32, "local y out of range");
         self.height() as usize * CHUNK_DIM as usize * x as usize
             + CHUNK_DIM as usize * y as usize
             + z as usize

@@ -249,7 +249,9 @@ pub fn run_generation(
                 })
                 .unwrap_or("Unknown panic payload");
 
-            error!("Chunk generation FAILED at {pos:?} ({stage:?}): {msg}");
+            // The scheduler reports this once per chunk (and rate limits repeats), so
+            // logging it here as well only doubles the noise on a retry loop.
+            debug!("Chunk generation FAILED at {pos:?} ({stage:?}): {msg}");
 
             RecvChunk::GenerationFailure {
                 pos,

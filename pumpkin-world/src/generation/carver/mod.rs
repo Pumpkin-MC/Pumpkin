@@ -160,7 +160,9 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
 
     let mut context = CarvingContext {
         min_y: generator.dimension.min_y as i8,
-        height: generator.dimension.logical_height as u16,
+        // Must match `ProtoChunk`'s storage height, not `logical_height`
+        // (the Nether's logical height is 128 while its chunks are 256 tall).
+        height: generator.dimension.height as u16,
         random_config: &generator.random_config,
         surface_noise: &generator.terrain_cache.surface_noise,
         secondary_noise: &generator.terrain_cache.secondary_noise,
@@ -404,7 +406,9 @@ fn with_carve_run_options<F>(
     });
     let mut context = CarvingContext {
         min_y: generator.dimension.min_y as i8,
-        height: generator.dimension.logical_height as u16,
+        // Must match `ProtoChunk`'s storage height, not `logical_height`
+        // (the Nether's logical height is 128 while its chunks are 256 tall).
+        height: generator.dimension.height as u16,
         random_config: &generator.random_config,
         surface_noise: &generator.terrain_cache.surface_noise,
         secondary_noise: &generator.terrain_cache.secondary_noise,

@@ -28,7 +28,7 @@ impl ItemMetadata for FireChargeItem {
 impl ItemBehaviour for FireChargeItem {
     fn use_on_block<'a>(
         &'a self,
-        _item: &'a mut ItemStack,
+        item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         face: BlockDirection,
@@ -37,13 +37,11 @@ impl ItemBehaviour for FireChargeItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            Ignition::ignite_block(
+            let ignited = Ignition::ignite_block(
                 |world: Arc<World>, pos: BlockPos, new_state_id: BlockStateId| async move {
                     world
                         .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
                         .await;
-
-                    world.play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos);
                 },
                 player,
                 location,
@@ -51,6 +49,16 @@ impl ItemBehaviour for FireChargeItem {
                 block,
             )
             .await;
+
+            if ignited {
+                let sound_pos = location.offset(face.to_offset());
+                player.world().play_block_sound(
+                    Sound::ItemFirechargeUse,
+                    SoundCategory::Blocks,
+                    sound_pos,
+                );
+                item.decrement_unless_creative(player.gamemode.load(), 1);
+            }
         })
     }
 

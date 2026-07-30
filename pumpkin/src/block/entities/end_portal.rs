@@ -50,6 +50,12 @@ impl BlockEntity for EndPortalBlockEntity {
         Box::pin(async {})
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        // Empty compound is enough for the client to instantiate the end portal
+        // renderer; without this, live activation never sends CBlockEntityData.
+        Some(NbtCompound::new())
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

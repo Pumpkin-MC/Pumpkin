@@ -14,6 +14,9 @@ use crate::world::World;
 
 const SEARCH_RADIUS_NETHER: i32 = 128;
 const SEARCH_RADIUS_OVERWORLD: i32 = 128;
+/// Horizontal radius, in blocks, searched for a spot to build a new portal when no
+/// existing portal is nearby. Vanilla (`PortalForcer::createPortal`) uses 16.
+const PORTAL_PLACEMENT_RADIUS: i32 = 16;
 
 #[derive(Debug, Clone)]
 pub struct PortalSearchResult {
@@ -265,22 +268,18 @@ impl NetherPortal {
         let mut props = NetherPortalLikeProperties::default(&Block::NETHER_PORTAL);
         props.axis = self.axis;
         let state = props.to_state_id(&Block::NETHER_PORTAL);
-        let blocks = BlockPos::iterate(
+        let blocks: Vec<BlockPos> = BlockPos::iterate(
             self.lower_conor,
             self.lower_conor
                 .offset_dir(BlockDirection::Up.to_offset(), self.height as i32 - 1)
                 .offset_dir(self.negative_direction.to_offset(), self.width as i32 - 1),
-        );
+        )
+        .collect();
+
+        world.set_block_states_force_batch(&blocks, state).await;
 
         let mut poi_storage = world.portal_poi.lock().await;
         for pos in blocks {
-            world
-                .set_block_state(
-                    &pos,
-                    state,
-                    BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
-                )
-                .await;
             poi_storage.add_portal(pos);
         }
     }
@@ -504,8 +503,28 @@ impl NetherPortal {
                 continue;
             }
 
+            // The portal we are travelling *to* is almost never in a loaded chunk - we
+            // are standing in the other dimension. The reads below are synchronous, so
+            // without pulling the chunk in first every known portal looks like air, the
+            // search fails, and we build a duplicate portal next to the one we should
+            // have reused.
+            let _ = world.get_block_state_async(&pos).await;
+
             if world.get_block(&pos) != &Block::NETHER_PORTAL {
                 continue;
+            }
+
+            // A frame can cross a chunk border, so make sure the neighbours are in
+            // memory before the shape check. Already-loaded chunks are a cheap lookup.
+            for offset_x in -1..=1i32 {
+                for offset_z in -1..=1i32 {
+                    let probe = BlockPos(Vector3::new(
+                        pos.0.x + offset_x * 16,
+                        pos.0.y,
+                        pos.0.z + offset_z * 16,
+                    ));
+                    let _ = world.get_block_state_async(&probe).await;
+                }
             }
 
             for axis in [HorizontalAxis::X, HorizontalAxis::Z] {
@@ -557,7 +576,6 @@ impl NetherPortal {
         );
         let min_y = world.min_y;
         let max_y = min_y + world.dimension.height - 1;
-        let worldborder = world.worldborder.lock().await;
 
         let top_y_limit = if world.dimension.has_ceiling {
             (min_y + world.dimension.logical_height - 1).min(max_y)
@@ -571,13 +589,44 @@ impl NetherPortal {
             BlockDirection::South // Fixed: positive Z direction
         };
 
+        // Pull every chunk the scan can touch into memory up front. The scan below reads
+        // hundreds of thousands of blocks; doing that through the async
+        // `get_block_state_async` path (which re-resolves the chunk, and may await a
+        // chunk load, per block) stalled the whole server tick for seconds while a
+        // player stood in a portal.
+        // +3 so the frame-fit checks, which reach a couple of blocks past the scan area,
+        // stay inside pre-loaded chunks too.
+        let probe_radius = PORTAL_PLACEMENT_RADIUS + 3;
+        let min_chunk_x = (target_pos.0.x - probe_radius) >> 4;
+        let max_chunk_x = (target_pos.0.x + probe_radius) >> 4;
+        let min_chunk_z = (target_pos.0.z - probe_radius) >> 4;
+        let max_chunk_z = (target_pos.0.z + probe_radius) >> 4;
+        for chunk_x in min_chunk_x..=max_chunk_x {
+            for chunk_z in min_chunk_z..=max_chunk_z {
+                let probe = BlockPos(Vector3::new(chunk_x << 4, min_y, chunk_z << 4));
+                let _ = world.get_block_state_async(&probe).await;
+            }
+        }
+
+        let worldborder = world.worldborder.lock().await;
+
         let mut ideal_pos: Option<(BlockPos, HorizontalAxis, f64)> = None;
         let mut acceptable_pos: Option<(BlockPos, HorizontalAxis, f64)> = None;
 
-        for offset_x in -32..=32 {
-            for offset_z in -32..=32 {
+        for offset_x in -PORTAL_PLACEMENT_RADIUS..=PORTAL_PLACEMENT_RADIUS {
+            for offset_z in -PORTAL_PLACEMENT_RADIUS..=PORTAL_PLACEMENT_RADIUS {
                 let check_x = target_pos.0.x + offset_x;
                 let check_z = target_pos.0.z + offset_z;
+
+                // The horizontal distance alone is a lower bound on the final squared
+                // distance, so a column that cannot beat the best ideal spot found so far
+                // can be skipped outright. This does not change which spot wins.
+                if let Some((_, _, best_dist)) = &ideal_pos {
+                    let horizontal_dist = f64::from(offset_x * offset_x + offset_z * offset_z);
+                    if horizontal_dist >= *best_dist {
+                        continue;
+                    }
+                }
 
                 if !worldborder.contains_block(check_x, check_z) {
                     continue;
@@ -601,14 +650,21 @@ impl NetherPortal {
                 let mut y = start_y;
                 while y >= min_y {
                     let pos = BlockPos(Vector3::new(check_x, y, check_z));
-                    let state = world.get_block_state_async(&pos).await;
+                    // Never treat an unloaded chunk as open air; that would let us drop a
+                    // portal into terrain we cannot see.
+                    let Some(state) = world.get_block_state_if_loaded(&pos) else {
+                        y -= 1;
+                        continue;
+                    };
 
                     if Self::is_valid_portal_air(state) {
                         let mut bottom_y = y;
                         while bottom_y > min_y {
                             let below = BlockPos(Vector3::new(check_x, bottom_y - 1, check_z));
-                            let below_state = world.get_block_state_async(&below).await;
-                            if !Self::is_valid_portal_air(below_state) {
+                            if !world
+                                .get_block_state_if_loaded(&below)
+                                .is_some_and(Self::is_valid_portal_air)
+                            {
                                 break;
                             }
                             bottom_y -= 1;
@@ -619,23 +675,18 @@ impl NetherPortal {
                             let floor_pos = BlockPos(Vector3::new(check_x, bottom_y, check_z));
 
                             for check_axis in [HorizontalAxis::X, HorizontalAxis::Z] {
-                                if Self::is_valid_portal_pos_async(world, floor_pos, check_axis, 0)
-                                    .await
-                                {
+                                if Self::is_valid_portal_pos(world, floor_pos, check_axis, 0) {
                                     let dist = f64::from(target_pos.0.squared_distance_to(
                                         floor_pos.0.x,
                                         floor_pos.0.y,
                                         floor_pos.0.z,
                                     ));
 
-                                    let is_ideal = Self::is_valid_portal_pos_async(
-                                        world, floor_pos, check_axis, -1,
-                                    )
-                                    .await
-                                        && Self::is_valid_portal_pos_async(
-                                            world, floor_pos, check_axis, 1,
-                                        )
-                                        .await;
+                                    let is_ideal =
+                                        Self::is_valid_portal_pos(world, floor_pos, check_axis, -1)
+                                            && Self::is_valid_portal_pos(
+                                                world, floor_pos, check_axis, 1,
+                                            );
 
                                     if is_ideal {
                                         if ideal_pos.is_none()
@@ -686,7 +737,9 @@ impl NetherPortal {
         state.replaceable() && !state.is_liquid()
     }
 
-    async fn is_valid_portal_pos_async(
+    /// Synchronous: every chunk this touches is pre-loaded by [`Self::find_safe_location`]
+    /// before the scan starts, so this must not do async block fetches in its hot loop.
+    fn is_valid_portal_pos(
         world: &Arc<World>,
         floor_pos: BlockPos,
         axis: HorizontalAxis,
@@ -710,7 +763,9 @@ impl NetherPortal {
                     .offset_dir(perpendicular.to_offset(), perpendicular_offset)
                     .offset_dir(BlockDirection::Up.to_offset(), height);
 
-                let state = world.get_block_state_async(&pos).await;
+                let Some(state) = world.get_block_state_if_loaded(&pos) else {
+                    return false;
+                };
 
                 if height < 0 {
                     if !state.is_solid_block() {
