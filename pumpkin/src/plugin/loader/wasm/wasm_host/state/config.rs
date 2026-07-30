@@ -8,11 +8,7 @@ use std::{
 };
 
 use arc_swap::ArcSwap;
-use tokio::{
-    fs::OpenOptions,
-    io::{AsyncReadExt, AsyncWriteExt},
-    sync::Mutex,
-};
+use tokio::{fs::OpenOptions, io::AsyncReadExt, sync::Mutex};
 use toml::{Table, map::Map};
 
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::config::{
@@ -22,7 +18,6 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::config::
 enum ConfigLoadState {
     Loaded {
         table: Arc<Mutex<toml::Table>>,
-        file: Mutex<tokio::fs::File>,
         changed: Arc<AtomicBool>,
     },
     /// The config file does not exist.
@@ -76,12 +71,7 @@ impl PluginConfigManager {
         &self,
     ) -> Result<Option<Arc<Mutex<toml::Table>>>, ConfigLoadError> {
         let config_guard = self.config.load();
-        if let ConfigLoadState::Loaded {
-            table,
-            file: _,
-            changed: _,
-        } = &**config_guard
-        {
+        if let ConfigLoadState::Loaded { table, changed: _ } = &**config_guard {
             return Ok(Some(Arc::clone(table)));
         }
         if let ConfigLoadState::DoesNotExist = &**config_guard {
@@ -97,7 +87,7 @@ impl PluginConfigManager {
         let mut file = match OpenOptions::new()
             .create(false)
             .read(true)
-            .write(true)
+            .write(false)
             .open(&self.path)
             .await
         {
@@ -117,7 +107,6 @@ impl PluginConfigManager {
         ));
         self.config.store(Arc::new(ConfigLoadState::Loaded {
             table: Arc::clone(&table),
-            file: Mutex::new(file),
             changed: Arc::new(AtomicBool::new(false)),
         }));
         Ok(Some(table))
@@ -126,12 +115,7 @@ impl PluginConfigManager {
     async fn get_or_load_config(
         &self,
     ) -> Result<(Arc<Mutex<toml::Table>>, Arc<AtomicBool>), ConfigLoadError> {
-        if let ConfigLoadState::Loaded {
-            table,
-            file: _,
-            changed,
-        } = &**self.config.load()
-        {
+        if let ConfigLoadState::Loaded { table, changed } = &**self.config.load() {
             return Ok((Arc::clone(table), Arc::clone(changed)));
         }
 
@@ -143,7 +127,7 @@ impl PluginConfigManager {
         let mut file = OpenOptions::new()
             .create(true)
             .read(true)
-            .write(true)
+            .write(false)
             .open(&self.path)
             .await
             .map_err(ConfigLoadError::Io)?;
@@ -157,7 +141,6 @@ impl PluginConfigManager {
         let changed = Arc::new(AtomicBool::new(false));
         self.config.store(Arc::new(ConfigLoadState::Loaded {
             table: Arc::clone(&table),
-            file: Mutex::new(file),
             changed: Arc::clone(&changed),
         }));
 
@@ -328,24 +311,14 @@ impl PluginConfigManager {
     }
 
     pub fn changed(&self) -> bool {
-        let ConfigLoadState::Loaded {
-            table: _,
-            file: _,
-            changed,
-        } = &**self.config.load()
-        else {
+        let ConfigLoadState::Loaded { table: _, changed } = &**self.config.load() else {
             return false;
         };
         changed.load(Ordering::Acquire)
     }
 
     pub async fn save(&self) -> Result<(), ConfigSaveError> {
-        let ConfigLoadState::Loaded {
-            table,
-            file,
-            changed,
-        } = &**self.config.load()
-        else {
+        let ConfigLoadState::Loaded { table, changed } = &**self.config.load() else {
             return Ok(());
         };
         changed.store(false, Ordering::Release);
@@ -353,9 +326,7 @@ impl PluginConfigManager {
         let config_string = toml::to_string_pretty(&*table).map_err(ConfigSaveError::Serialize)?;
         // Avoid holding the lock while saving to the file
         drop(table);
-        file.lock()
-            .await
-            .write_all(config_string.as_bytes())
+        tokio::fs::write(&self.path, config_string.as_bytes())
             .await
             .map_err(ConfigSaveError::Io)?;
         Ok(())
