@@ -197,7 +197,7 @@ mod tests {
                 panic!();
             };
             assert_eq!(s, "ccc");
-            assert!(path.next().is_none())
+            assert!(path.next().is_none());
         };
 
         {
@@ -218,7 +218,7 @@ mod tests {
                 panic!();
             };
             assert_eq!(s, "ccc");
-            assert!(path.next().is_none())
+            assert!(path.next().is_none());
         };
 
         assert!(string_to_path("").unwrap().is_empty());
@@ -233,7 +233,7 @@ mod tests {
                 panic!();
             };
             assert_eq!(i, 0);
-            assert!(path.next().is_none())
+            assert!(path.next().is_none());
         };
 
         {
@@ -250,7 +250,7 @@ mod tests {
                 panic!();
             };
             assert_eq!(s, "b");
-            assert!(path.next().is_none())
+            assert!(path.next().is_none());
         };
     }
 }
