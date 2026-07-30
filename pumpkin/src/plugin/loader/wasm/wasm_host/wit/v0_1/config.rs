@@ -135,7 +135,12 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         default: pumpkin::plugin::config::ConfigTree,
     ) -> wasmtime::Result<pumpkin::plugin::config::ConfigTree> {
         let res = self.get_config_res(&res)?;
-        Ok(res.provider.get(key).await?.unwrap_or(default))
+        Ok(if let Some(tree) = res.provider.get(key.clone()).await? {
+            tree
+        } else {
+            res.provider.set(key, default.clone()).await?;
+            default
+        })
     }
 
     async fn path_set(
