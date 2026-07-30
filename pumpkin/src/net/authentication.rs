@@ -209,15 +209,30 @@ fn authenticate_service(
         .call()
         .map_err(|_| AuthError::FailedResponse)?;
 
+    // Handle non-OK status codes with early returns so the rest of the
+    // function body only deals with the happy path.
     match response.status() {
         StatusCode::OK => {
             tracing::info!("[{name}] /hasJoined → 200 OK");
         }
         StatusCode::NO_CONTENT => {
             tracing::info!("[{name}] /hasJoined → 204 (user not found)");
-            Err(AuthError::UnverifiedUsername)?;
+            return Err(AuthError::UnverifiedUsername);
         }
-        other => Err(AuthError::UnknownStatusCode(other))?,
+        // Ely.by (and potentially other authlib-injector services) returns 401
+        // instead of 204 when no matching session exists.  Treat it as
+        // "user not found" rather than a hard error so the auth chain can
+        // fall through to the next service gracefully.
+        StatusCode::UNAUTHORIZED => {
+            tracing::info!("[{name}] /hasJoined → 401 (user not found, non-standard)");
+            // Read and log the response body for debugging.
+            if let Ok(body) = response.into_body().read_to_string() {
+                let truncated: String = body.chars().take(200).collect();
+                tracing::debug!("[{name}] 401 body: {truncated}");
+            }
+            return Err(AuthError::UnverifiedUsername);
+        }
+        other => return Err(AuthError::UnknownStatusCode(other)),
     }
 
     // Log the canonical API location reported by Authlib-Injector services.
