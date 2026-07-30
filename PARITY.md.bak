@@ -1,0 +1,63 @@
+# Vanilla Parity Gap Tracker
+
+Tracks divergences between Pumpkin and vanilla Minecraft 26.2 behaviour. Populated by
+discovery workers; fixes land as separate branches/PRs per `CLAUDE.md` rules.
+
+**Severity vocabulary (priority order):** Crash > Data corruption > Blocks testing > Gameplay > Cosmetic.
+**Status vocabulary:** Open, PR #N, Filed #N, Fixed, Wontfix.
+
+All PR/issue numbers below were confirmed live against `Pumpkin-MC/Pumpkin` on 2026-07-27
+via `gh pr view` / `gh issue view`; all were `OPEN` at that time.
+
+## Seeded gaps (prior campaign work)
+
+| Subsystem | Gap | Severity | Evidence | Status |
+|---|---|---|---|---|
+| Game rules | `randomTickSpeed` game rule was a no-op, blocking all gameplay-behaviour testing that depends on random ticks | Blocks testing | https://github.com/Pumpkin-MC/Pumpkin/pull/2587 | PR #2587 |
+| Commands | `execute` subcommands (e.g. `if`, `as`, `at`) never actually ran their modifiers | Gameplay | https://github.com/Pumpkin-MC/Pumpkin/pull/2609 | PR #2609 |
+| AI / Pathfinding | Pathfinder node cache was never cleared between searches, so a closed door stayed permanently unwalkable once cached | Gameplay | https://github.com/Pumpkin-MC/Pumpkin/pull/2603 | PR #2603 |
+| AI / Targeting | Target search picked the nearest entity then filtered afterward, so a single Creative player in range blanked all nearby mob aggro | Gameplay | https://github.com/Pumpkin-MC/Pumpkin/pull/2606 | PR #2606 |
+| AI / Mobs | Creeper fuse cancelled at 3 blocks instead of vanilla's 7; iron golems attacked players on sight | Gameplay | https://github.com/Pumpkin-MC/Pumpkin/pull/2602 | PR #2602 |
+| Redstone | Weighted pressure plate used integer division; blackstone button used 30 ticks instead of 20; hopper used a 9-tick transfer instead of 8 | Gameplay | https://github.com/Pumpkin-MC/Pumpkin/pull/2589 | PR #2589 |
+| Blocks | Copper waxing/scraping discarded block state, destroying double slabs; honeycomb and fire charge were never consumed | Data corruption | https://github.com/Pumpkin-MC/Pumpkin/pull/2590 | PR #2590 |
+| Redstone | Target block emitted no redstone power at all | Gameplay | https://github.com/Pumpkin-MC/Pumpkin/pull/2591 | PR #2591 |
+| Blocks | Note block was missing the Pling and Trumpet instruments; hopper chain compared the wrong field for its cooldown | Gameplay | https://github.com/Pumpkin-MC/Pumpkin/pull/2611 | PR #2611 |
+| World I/O | level.dat backup and file logger aborted server startup on recoverable IO errors; sky light `Empty(15)` sections were lost across save/load | Crash | https://github.com/Pumpkin-MC/Pumpkin/pull/2612 | PR #2612 |
+| Items | Flint and steel lit furnaces and redstone lamps; hoe wiped the snowy block state; bamboo bone meal was dead code; axe stripping left gaps | Gameplay | https://github.com/Pumpkin-MC/Pumpkin/pull/2610 | PR #2610 |
+| Plants | Twisting vines checked the wrong support face | Gameplay | https://github.com/Pumpkin-MC/Pumpkin/pull/2604 | PR #2604 |
+| Weather | Weather cycle never ran at all | Gameplay | https://github.com/Pumpkin-MC/Pumpkin/pull/2585 | PR #2585 |
+| Commands | Console and RCON could not run `/fill` (or `/setworldspawn`) | Blocks testing | https://github.com/Pumpkin-MC/Pumpkin/pull/2583 | PR #2583 |
+| Commands / Lighting | `execute if block` ignored its predicate; blockstate arguments were rejected; `forceload` did not load chunks; `CLightUpdate` was never sent | Blocks testing | https://github.com/Pumpkin-MC/Pumpkin/issues/2592 | Filed #2592 |
+| Plants | Sweet berry bush and nether wart grow far slower than vanilla (extra random gate) | Gameplay | https://github.com/Pumpkin-MC/Pumpkin/issues/2582 | Filed #2582 |
+
+## Known, currently unfixed
+
+| Subsystem | Gap | Severity | Evidence | Status |
+|---|---|---|---|---|
+| Lighting | `CLightUpdate` mask offset and nibble order both disagree with `CChunkData`, corrupting client-side light data | Data corruption | pumpkin/src/net (CLightUpdate construction) vs CChunkData packing | Open |
+| Lighting | `get_sky_light_level` returns 15 below the world (should be 0) due to an unsigned cast wrapping | Gameplay | pumpkin-world sky light query path | Open |
+| Lighting | Vanilla-imported worlds go dark above terrain: `isLightOn=true` suppresses relight while `SkyLight` tags are absent from the imported region | Gameplay | world load / relight gating logic | Open |
+| Config | `simulation_distance` config is never read; active chunks are a hardcoded 17x17 box | Gameplay | chunk ticking / simulation area sizing | Open |
+| Blocks | Stone pressure plates trigger on items and arrows (should only trigger on players/mobs) | Gameplay | pumpkin/src/block/blocks (stone pressure plate) | Open |
+| Weather | `isRainingAt` is unimplemented for lightning: literal `if true`, so lightning strikes indoors, underground, and in deserts | Gameplay | lightning strike site selection | Open |
+
+## Potions and status effects audit (2026-07-27)
+
+Subsystem coverage: brewing stand mechanics/recipes, drinking/splash/lingering application,
+effect stacking/amplifier/duration rules, milk removal, area effect clouds, tipped arrows,
+and implemented-vs-registered-but-inert effects. Upstream was checked with
+`gh issue list` / `gh pr list --search` before recording each row; duplicates are filed
+under their existing number rather than re-reported.
+
+Prioritized registered-but-wrong (runs and produces a wrong result) over entirely-absent,
+per instructions; wholly unimplemented features are one coarse row each rather than enumerated.
+
+| Subsystem | Gap | Severity | Evidence | Status |
+|---|---|---|---|---|
+| Status effects | `LivingEntity::add_effect` unconditionally overwrites the stored effect (`self.active_effects.lock().await.insert(effect.effect_type, effect.clone())`) with no amplifier/duration comparison. Vanilla only replaces when the new amplifier is higher, or the amplifier is equal and the new duration is longer; a weaker/shorter reapplication should be a no-op (or, for non-player entities, hidden until the stronger one expires). Every application path (drink, splash, lingering, `/effect give`) shares this one function, so e.g. drinking a Splash Potion of Regeneration I while Regeneration II (30s left) is active **downgrades** the player to Regeneration I. | Gameplay | pumpkin/src/entity/living.rs:463 (`add_effect`), insert at line 486. Vanilla: https://minecraft.wiki/w/Effect#Behavior ("higher levels overwrite lower levels, and higher durations overwrite lower durations of the same level... a stronger version... that already has a weaker version... the weaker effect remains but is hidden") | Open |
+| Area effect cloud | Lingering-potion cloud potency incorrectly scales with distance from the cloud's center. Vanilla applies a **flat** 1/4 duration (non-instant effects) and flat 1/2 potency (instant effects) to every entity inside the radius, regardless of position. Pumpkin instead computes `scale = 1.0 - dist/radius` per victim and multiplies the flat factor by it, so an entity near the edge of the cloud gets far less than 1/4 duration (approaching zero at the boundary) instead of the vanilla flat amount. | Gameplay | pumpkin/src/entity/area_effect_cloud.rs:328 (`let scale = 1.0f32 - (dist/radius)`) feeding into pumpkin/src/item/potion.rs:131-135 (`instant_scale = scale * 0.5`) and the analogous `duration_scale = scale * 0.25` branch below it. Vanilla: https://minecraft.wiki/w/Lingering_Potion ("the duration applied by the cloud is 1/4 that of the corresponding potion... the potency... is 1/2") | Open |
+| Area effect cloud | Reapplication is gated on `LivingEntity::has_effect(eff)` rather than the reapplication-delay map. The cloud maintains and ticks down a `reapplication_map`/`reapplication_delay` (correctly initialised to 20 ticks, matching vanilla) but never consults it when deciding whether to reapply — it only checks whether the candidate still has any trace of the effect. An entity whose effect is one tick from expiring is skipped instead of refreshed, unlike vanilla's tick-count-keyed "victims" cooldown, which does refresh it. Vanilla explicitly expects continuous reapplication: "the effect may be applied consecutively if the player or mob remains in the cloud." | Gameplay | pumpkin/src/entity/area_effect_cloud.rs:347 (`if !living_ref.has_effect(eff).await`, the actual gate) vs. lines 375-377 (`reapplication_map.insert(ent_id, delay)`, populated but never read before the gate above). Vanilla: https://minecraft.wiki/w/Lingering_Potion | Open |
+| Status effects | Instant Health and Instant Damage never special-case undead targets. Vanilla: Instant Health heals living mobs/players but **damages** the undead; Instant Damage does the reverse. Both application paths in Pumpkin (`LivingEntity::add_effect` and `PotionContents::apply_effects_to`) unconditionally heal for Instant Health and damage for Instant Damage with no undead check anywhere (only the Smite enchantment references "undead" in the whole crate). Splash Potion of Harming thrown at a zombie damages it instead of healing it, and vice versa for Healing. | Gameplay | pumpkin/src/entity/living.rs:466-472; pumpkin/src/item/potion.rs:126-141 (grep for "undead" in pumpkin/src only matches player.rs's Smite enchantment check). Vanilla: https://minecraft.wiki/w/Instant_Health (meta-description: "instantly increases health for players and living mobs and damages the undead") | Open |
+| Status effects | Resistance is a registered status effect (present in generated effect data, has a color/particle) but no code path anywhere in the damage pipeline checks for `StatusEffect::RESISTANCE`; it silently does nothing. Verified still true against current tree (no standalone reference to `StatusEffect::RESISTANCE` outside `FIRE_RESISTANCE`). Already tracked in a broader, partly-stale catalog issue: several other items in that issue (absorption, glowing, invisibility, regeneration/poison/wither ticking, hunger/saturation, water breathing, slow falling, levitation) are now implemented per this audit's code reading and should be re-triaged, but Resistance itself is still exactly as reported. | Gameplay | pumpkin/src/entity/living.rs (no `StatusEffect::RESISTANCE` match); https://github.com/Pumpkin-MC/Pumpkin/issues/764 ("resistance: :x: No effect") | Filed #764 |
+| Consumables | Milk bucket does not remove status effects at all — completely unimplemented. `MILK_BUCKET` is never referenced anywhere in `pumpkin/src` outside the mooshroom entity's doc comment; there is no consumable "clear all effects" component handling. A prior fix existed but was closed unmerged. | Gameplay | No `Item::MILK_BUCKET` handling anywhere in pumpkin/src/item; https://github.com/Pumpkin-MC/Pumpkin/pull/2548 (closed, unmerged — "Milk & consumable effects... clear_all_effects (milk)"). Vanilla: https://minecraft.wiki/w/Effect#Behavior ("remove all of their effects either by dying, drinking a milk bucket... or being saved... by a totem of undying") | Open |
+| Tipped arrows | Tipped arrows apply zero potion effect on hit — entirely unimplemented. `ArrowEntity` carries no potion-effect field at all, and `Item::TIPPED_ARROW` / `EntityType::SPECTRAL_ARROW`'s effect payload is never referenced anywhere in `pumpkin/src`; bow/crossbow firing never inspects the fired stack's `PotionContents` component. Tipped arrows currently deal identical damage to plain arrows with no side effect. | Gameplay | pumpkin/src/entity/projectile/arrow.rs (no effect field, `on_hit` Entity branch only calls `target.damage(...)`); pumpkin/src/item/items/arrow.rs (18 lines, no potion handling); no `TIPPED_ARROW` string anywhere in pumpkin/src. Vanilla: https://minecraft.wiki/w/Tipped_Arrow | Open |
