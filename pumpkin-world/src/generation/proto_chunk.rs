@@ -144,6 +144,7 @@ pub struct ProtoChunk {
     pub carving_mask: crate::generation::carver::mask::CarvingMask,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub pending_block_entities: Vec<NbtCompound>,
+    pending_structure_entities: Vec<NbtCompound>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
 }
 
@@ -229,6 +230,7 @@ impl ProtoChunk {
             ),
             blending_data: None,
             pending_block_entities: Vec::new(),
+            pending_structure_entities: Vec::new(),
             fluid_ticks: Vec::new(),
         }
     }
@@ -341,6 +343,14 @@ impl ProtoChunk {
 
     pub fn take_pending_block_entities(&mut self) -> Vec<NbtCompound> {
         std::mem::take(&mut self.pending_block_entities)
+    }
+
+    pub fn add_structure_entity(&mut self, nbt: NbtCompound) {
+        self.pending_structure_entities.push(nbt);
+    }
+
+    fn take_pending_structure_entities(&mut self) -> Vec<NbtCompound> {
+        std::mem::take(&mut self.pending_structure_entities)
     }
 
     pub fn schedule_fluid_tick(&mut self, x: i32, y: i32, z: i32, fluid: &'static Fluid) {
@@ -871,6 +881,11 @@ impl ProtoChunk {
 
         block_registry.spawn_mobs_for_chunk_generation(cache, biome, x, z);
 
+        let entities = cache
+            .get_center_chunk_mut()
+            .take_pending_structure_entities();
+        block_registry.spawn_structure_entities(entities);
+
         cache.get_center_chunk_mut().stage = StagedChunkEnum::Spawn;
     }
 
@@ -1211,17 +1226,12 @@ impl ProtoChunk {
 
         let seed = random_config.seed;
 
-        let mut height_sampler = crate::generation::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler::generate(
-            &generator.base_router.surface_estimator,
-            &crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
-                crate::generation::biome_coords::from_block(crate::generation::positions::chunk_pos::start_block_x(self.x)),
-                crate::generation::biome_coords::from_block(crate::generation::positions::chunk_pos::start_block_z(self.z)),
-                4,
-                settings.shape.min_y as i32,
-                settings.shape.height as i32,
-                (settings.shape.height / settings.shape.vertical_cell_block_count() as u16) as usize,
-            ),
-        );
+        let mut height_sampler =
+            crate::generation::structure::height_sampler::NoiseHeightSampler::new(
+                generator,
+                self.start_block_x(),
+                self.start_block_z(),
+            );
 
         for (i, set) in StructureSet::ALL.iter().enumerate() {
             let allowed_biomes = &generator.structure_allowed_biomes[&i];
@@ -1292,7 +1302,7 @@ impl ProtoChunk {
         sea_level: i32,
         entry: &WeightedEntry,
         random_config: &GlobalRandomConfig,
-        height_sampler: &mut crate::generation::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler<'_>,
+        height_sampler: &mut dyn crate::generation::structure::structures::HeightSampler,
     ) -> bool {
         let structure = Structure::get(&entry.structure);
         let position = try_generate_structure(
@@ -1320,6 +1330,7 @@ impl ProtoChunk {
         let dimension = &generator.dimension;
         let noise_router = &generator.base_router;
         let global_cache = &generator.global_structure_cache;
+        let calculator = &generator.structure_calculator;
 
         let start_x = chunk_pos::start_block_x(self.x);
         let start_z = chunk_pos::start_block_z(self.z);
@@ -1346,24 +1357,17 @@ impl ProtoChunk {
         let mut multi_noise_sampler =
             MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
 
-        let mut height_sampler = crate::generation::noise::router::surface_height_sampler::SurfaceHeightEstimateSampler::generate(
-            &noise_router.surface_estimator,
-            &crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions::new(
-                crate::generation::biome_coords::from_block(start_x),
-                crate::generation::biome_coords::from_block(start_z),
-                4,
-                settings.shape.min_y as i32,
-                settings.shape.height as i32,
-                (settings.shape.height / settings.shape.vertical_cell_block_count() as u16) as usize,
-            ),
-        );
+        let mut height_sampler =
+            crate::generation::structure::height_sampler::NoiseHeightSampler::new(
+                generator, start_x, start_z,
+            );
 
         let mut references = Vec::new();
         // Constant across every chunk in the dimension, so hoist it out of the loop
         // and out of the (cached) structure-start computation below.
         let chunk_min_y = self.bottom_y() as i32;
 
-        for set in StructureSet::ALL {
+        for (set_index, set) in StructureSet::ALL.iter().enumerate() {
             let mut candidate_chunks = Vec::new();
 
             match &set.placement.placement_type {
@@ -1402,6 +1406,18 @@ impl ProtoChunk {
             }
 
             for (candidate_chunk_x, candidate_chunk_z) in candidate_chunks {
+                if !should_generate_structure(
+                    &set.placement,
+                    calculator,
+                    candidate_chunk_x,
+                    candidate_chunk_z,
+                    global_cache,
+                    self,
+                    &generator.structure_allowed_biomes[&set_index],
+                ) {
+                    continue;
+                }
+
                 if (candidate_chunk_x - self.x).abs() <= 8
                     && (candidate_chunk_z - self.z).abs() <= 8
                 {

@@ -37,7 +37,7 @@ use crate::{
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
-    entity::{Entity, EntityBase, player::Player, r#type::from_type},
+    entity::{Entity, EntityBase, NBTStorage, player::Player, r#type::from_type},
     error::PumpkinError,
     net::{ClientPlatform, java::JavaClient},
     plugin::{
@@ -5464,5 +5464,34 @@ impl WorldPortalExt for WorldPortal {
         chunk_z: i32,
     ) {
         natural_spawner::spawn_mobs_for_chunk_generation(&self.0, cache, biome, chunk_x, chunk_z);
+    }
+
+    fn spawn_structure_entities(&self, entities: Vec<NbtCompound>) {
+        let world = self.0.clone();
+        let Some(server) = world.server.upgrade() else {
+            return;
+        };
+        server.spawn_task(async move {
+            for nbt in entities {
+                let Some(id) = nbt.get_string("id") else {
+                    continue;
+                };
+                let Some(entity_type) =
+                    EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
+                else {
+                    warn!("Unknown structure entity type: {id}");
+                    continue;
+                };
+                let entity = from_type(
+                    entity_type,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    &world,
+                    Uuid::new_v4(),
+                );
+                entity.get_entity().read_nbt_non_mut(&nbt).await;
+                entity.read_nbt_non_mut(&nbt).await;
+                world.spawn_entity(entity).await;
+            }
+        });
     }
 }

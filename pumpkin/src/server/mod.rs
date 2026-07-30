@@ -138,6 +138,7 @@ pub struct Server {
     /// Manages scheduled tasks (e.g. from plugins)
     pub task_scheduler: Arc<TaskScheduler>,
     tasks: TaskTracker,
+    runtime: tokio::runtime::Handle,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
@@ -287,6 +288,7 @@ impl Server {
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
+            runtime: tokio::runtime::Handle::current(),
             task_scheduler: Arc::new(TaskScheduler::new()),
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
@@ -391,7 +393,7 @@ impl Server {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.tasks.spawn(task)
+        self.tasks.spawn_on(task, &self.runtime)
     }
 
     pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
@@ -942,6 +944,29 @@ impl Server {
 
         self.aggregated_tick_times_nanos
             .fetch_add(tick_duration_nanos - old_time, Ordering::Relaxed);
+
+        let target_tick_nanos = self.tick_rate_manager.nanoseconds_per_tick();
+        let idle_nanos = target_tick_nanos.saturating_sub(tick_duration_nanos);
+
+        let sample_slice = [
+            tick_duration_nanos.max(target_tick_nanos),
+            tick_duration_nanos,
+            0,
+            idle_nanos,
+        ];
+        let packet = pumpkin_protocol::java::client::play::CDebugSample::new(
+            &sample_slice,
+            pumpkin_protocol::codec::var_int::VarInt(0),
+        );
+        for world in self.worlds.load().iter() {
+            for player in world.players.load().iter() {
+                if player.subscribed_debug_sample.load(Ordering::Relaxed)
+                    && player.permission_lvl.load() >= pumpkin_util::PermissionLvl::Two
+                {
+                    player.client.try_enqueue_packet(&packet);
+                }
+            }
+        }
     }
 
     /// Gets the rolling average tick time over the last 100 ticks, in nanoseconds.
