@@ -5,7 +5,7 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
-use pumpkin_data::{Block, BlockStateId, translation};
+use pumpkin_data::{BlockStateId, translation};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::position::BlockPos;
@@ -173,10 +173,7 @@ impl CommandExecutor for CloneExecutor {
                         let should_clone = match self.mask_mode {
                             MaskMode::Replace => true,
                             MaskMode::Masked => !pumpkin_data::block_properties::is_air(state_id),
-                            MaskMode::Filtered => {
-                                let block = Block::from_state_id(state_id);
-                                block.id == filter_block.unwrap().id
-                            }
+                            MaskMode::Filtered => state_id == filter_block.unwrap().id,
                         };
 
                         if should_clone {

@@ -41,7 +41,7 @@ impl CommandExecutor for Executor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
-            let block_state_id = block.default_state.id;
+            let block_state_id = block.id;
             let mode = self.0;
             let world = sender
                 .world_or_first(server)

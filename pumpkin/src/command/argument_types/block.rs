@@ -8,7 +8,7 @@ use crate::command::{
     string_reader::StringReader,
     suggestion::suggestions::{Suggestions, SuggestionsBuilder},
 };
-use pumpkin_data::{Block, translation};
+use pumpkin_data::{Block, BlockState, translation};
 use pumpkin_util::text::TextComponent;
 
 pub const INVALID_BLOCK_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
@@ -20,7 +20,7 @@ pub const INVALID_BLOCK_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
 pub struct BlockArgumentType;
 
 impl ArgumentType for BlockArgumentType {
-    type Item = &'static Block;
+    type Item = &'static BlockState;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
         let start = reader.cursor();
@@ -31,6 +31,15 @@ impl ArgumentType for BlockArgumentType {
                 break;
             }
         }
+        if reader.peek() == Some('[') {
+            reader.skip();
+            while let Some(c) = reader.peek() {
+                reader.skip();
+                if c == ']' {
+                    break;
+                }
+            }
+        }
         let block_name = &reader.string()[start..reader.cursor()];
         let normalized = if block_name.contains(':') {
             block_name.to_string()
@@ -38,7 +47,7 @@ impl ArgumentType for BlockArgumentType {
             format!("minecraft:{block_name}")
         };
 
-        Block::from_name(&normalized)
+        Block::from_state_str(&normalized)
             .ok_or_else(|| INVALID_BLOCK_ERROR_TYPE.create(reader, TextComponent::text(normalized)))
     }
 
@@ -56,7 +65,10 @@ impl ArgumentType for BlockArgumentType {
 }
 
 impl BlockArgumentType {
-    pub fn get(context: &CommandContext, name: &str) -> Result<&'static Block, CommandSyntaxError> {
-        context.get_argument::<&'static Block>(name).copied()
+    pub fn get(
+        context: &CommandContext,
+        name: &str,
+    ) -> Result<&'static BlockState, CommandSyntaxError> {
+        context.get_argument::<&'static BlockState>(name).copied()
     }
 }

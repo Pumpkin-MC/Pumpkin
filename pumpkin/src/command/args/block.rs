@@ -1,5 +1,5 @@
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use pumpkin_data::{Block, BlockId, translation};
+use pumpkin_data::{Block, BlockId, BlockState, translation};
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
 
@@ -48,11 +48,11 @@ impl DefaultNameArgConsumer for BlockArgumentConsumer {
 }
 
 impl<'a> FindArg<'a> for BlockArgumentConsumer {
-    type Data = &'static Block;
+    type Data = &'static BlockState;
 
     fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
         match args.get(name) {
-            Some(Arg::Block(name)) => Block::from_name(name).map_or_else(
+            Some(Arg::Block(name)) => Block::from_state_str(name).map_or_else(
                 || {
                     if name.starts_with("minecraft:") {
                         Err(CommandError::CommandFailed(TextComponent::translate_cross(

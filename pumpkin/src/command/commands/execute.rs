@@ -278,11 +278,11 @@ fn execute_if_block_modifier<'a>(
 ) -> crate::command::node::RedirectModifierResult<'a> {
     Box::pin(async move {
         let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-        let expected_block = BlockArgumentType::get(context, "block")?;
+        let expected_state = BlockArgumentType::get(context, "block")?;
 
         if let Some(ref world) = context.source.world {
-            let block = world.get_block(&pos);
-            if block == expected_block {
+            let state = world.get_block_state(&pos);
+            if state == expected_state {
                 return Ok(vec![context.source.clone()]);
             }
         }
@@ -295,11 +295,11 @@ fn execute_unless_block_modifier<'a>(
 ) -> crate::command::node::RedirectModifierResult<'a> {
     Box::pin(async move {
         let pos = BlockPosArgumentType::get_block_pos(context, "pos")?;
-        let expected_block = BlockArgumentType::get(context, "block")?;
+        let expected_state = BlockArgumentType::get(context, "block")?;
 
         if let Some(ref world) = context.source.world {
-            let block = world.get_block(&pos);
-            if block != expected_block {
+            let state = world.get_block_state(&pos);
+            if state != expected_state {
                 return Ok(vec![context.source.clone()]);
             }
         } else {

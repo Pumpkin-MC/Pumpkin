@@ -194,6 +194,53 @@ impl Block {
     ) -> &'static BlockState {
         BlockState::from_id(id)
     }
+
+    /// Parses a block state argument such as `minecraft:wheat[age=0]`, resolving any
+    /// supplied properties against the block's definition. Returns `None` if the block
+    /// name is unknown, a property name/value is not valid for the block, or the block
+    /// does not have properties at all but some were supplied.
+    #[must_use]
+    pub fn from_state_str(input: &str) -> Option<&'static BlockState> {
+        let (name, props) = match input.find('[') {
+            Some(idx) if input.ends_with(']') => (&input[..idx], &input[idx + 1..input.len() - 1]),
+            _ => (input, ""),
+        };
+
+        let block = Self::from_name(name)?;
+
+        let props = props.trim();
+        if props.is_empty() {
+            return Some(block.default_state);
+        }
+
+        let valid_keys: Vec<&str> = block
+            .properties(block.default_state.id)
+            .map(|properties| properties.to_props().into_iter().map(|(key, _)| key).collect())
+            .unwrap_or_default();
+
+        let mut pairs = Vec::new();
+        for part in props.split(',') {
+            let mut kv = part.splitn(2, '=');
+            let key = kv.next().unwrap_or("").trim();
+            let value = kv.next().unwrap_or("").trim();
+
+            if !valid_keys.contains(&key) {
+                return None;
+            }
+
+            // Some property values only fail once resolved against the block's generated
+            // enum types; validate each key in isolation before committing to the batch
+            // below so a bad value is reported here instead of panicking downstream.
+            if std::panic::catch_unwind(|| block.from_properties(&[(key, value)])).is_err() {
+                return None;
+            }
+
+            pairs.push((key, value));
+        }
+
+        let state_id = block.from_properties(&pairs).to_state_id(block);
+        Some(BlockState::from_id(state_id))
+    }
 }
 
 impl BlockId {
