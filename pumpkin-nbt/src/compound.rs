@@ -1,3 +1,5 @@
+//! Storage and convenience methods for NBT compound tags.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -11,6 +13,9 @@ use std::collections::hash_map::IntoIter;
 use std::io::ErrorKind;
 
 #[macro_export]
+/// Creates an [`NbtTag::Compound`](crate::tag::NbtTag::Compound) from key-value pairs.
+///
+/// The macro also accepts an empty invocation to create an empty compound tag.
 macro_rules! nbt_compound_tag {
     { $($key:literal : $tag:expr),+ $(,)* } => {
         {
@@ -32,10 +37,12 @@ macro_rules! nbt_compound_tag {
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NbtCompound {
+    /// Tags in the compound, indexed by their names.
     pub child_tags: HashMap<Box<str>, NbtTag>,
 }
 
 impl NbtCompound {
+    /// Creates an empty compound.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -43,6 +50,7 @@ impl NbtCompound {
         }
     }
 
+    /// Advances a reader past a compound's payload without allocating its tags.
     pub fn skip_content<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<(), Error> {
         loop {
             let tag_id = match reader.get_u8() {
@@ -64,6 +72,7 @@ impl NbtCompound {
         Ok(())
     }
 
+    /// Deserializes a compound payload, starting after the compound's name.
     pub fn deserialize_content<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<Self, Error> {
         let mut compound = Self::new();
 
@@ -87,6 +96,7 @@ impl NbtCompound {
         Ok(compound)
     }
 
+    /// Serializes the compound's entries followed by an end tag.
     pub fn serialize_content<W: NbtWriteHelper>(self, w: &mut W) -> Result<(), Error> {
         for (name, tag) in self.child_tags {
             w.write_u8(tag.get_type_id())?;
@@ -97,52 +107,66 @@ impl NbtCompound {
         Ok(())
     }
 
+    /// Returns `true` when the compound contains no child tags.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.child_tags.is_empty()
     }
 
+    /// Inserts a tag when `name` is not already present.
+    ///
+    /// Existing entries are left unchanged.
     pub fn put(&mut self, name: &str, value: impl Into<NbtTag>) {
         if !self.child_tags.contains_key(name) {
             self.child_tags.insert(name.into(), value.into());
         }
     }
 
+    /// Inserts a string tag when `name` is not already present.
     pub fn put_string(&mut self, name: &str, value: String) {
         self.put(name, NbtTag::String(value.into()));
     }
 
+    /// Inserts a list tag when `name` is not already present.
     pub fn put_list(&mut self, name: &str, value: Vec<NbtTag>) {
         self.put(name, NbtTag::List(value));
     }
 
+    /// Inserts a byte tag when `name` is not already present.
     pub fn put_byte(&mut self, name: &str, value: i8) {
         self.put(name, NbtTag::Byte(value));
     }
 
+    /// Inserts a boolean encoded as a byte tag when `name` is not already present.
     pub fn put_bool(&mut self, name: &str, value: bool) {
         self.put(name, NbtTag::Byte(i8::from(value)));
     }
 
+    /// Inserts a short tag when `name` is not already present.
     pub fn put_short(&mut self, name: &str, value: i16) {
         self.put(name, NbtTag::Short(value));
     }
 
+    /// Inserts an integer tag when `name` is not already present.
     pub fn put_int(&mut self, name: &str, value: i32) {
         self.put(name, NbtTag::Int(value));
     }
+    /// Inserts a long tag when `name` is not already present.
     pub fn put_long(&mut self, name: &str, value: i64) {
         self.put(name, NbtTag::Long(value));
     }
 
+    /// Inserts a float tag when `name` is not already present.
     pub fn put_float(&mut self, name: &str, value: f32) {
         self.put(name, NbtTag::Float(value));
     }
 
+    /// Inserts a double tag when `name` is not already present.
     pub fn put_double(&mut self, name: &str, value: f64) {
         self.put(name, NbtTag::Double(value));
     }
 
+    /// Inserts a compound tag when `name` is not already present.
     pub fn put_compound(&mut self, name: &str, value: Self) {
         self.put(name, NbtTag::Compound(value));
     }
@@ -162,73 +186,87 @@ impl NbtCompound {
         );
     }
 
+    /// Returns the named byte value, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_byte(&self, name: &str) -> Option<i8> {
         self.get(name).and_then(super::tag::NbtTag::extract_byte)
     }
 
+    /// Returns the named tag.
     #[inline]
     #[must_use]
     pub fn get(&self, name: &str) -> Option<&NbtTag> {
         self.child_tags.get(name)
     }
 
+    /// Returns whether the compound contains `name`.
     #[inline]
     #[must_use]
     pub fn has(&self, name: &str) -> bool {
         self.child_tags.contains_key(name)
     }
 
+    /// Returns the named short value, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_short(&self, name: &str) -> Option<i16> {
         self.get(name).and_then(super::tag::NbtTag::extract_short)
     }
 
+    /// Returns the named integer value, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_int(&self, name: &str) -> Option<i32> {
         self.get(name).and_then(super::tag::NbtTag::extract_int)
     }
 
+    /// Returns the named long value, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_long(&self, name: &str) -> Option<i64> {
         self.get(name).and_then(super::tag::NbtTag::extract_long)
     }
 
+    /// Returns the named float value, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_float(&self, name: &str) -> Option<f32> {
         self.get(name).and_then(super::tag::NbtTag::extract_float)
     }
 
+    /// Returns the named double value, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_double(&self, name: &str) -> Option<f64> {
         self.get(name).and_then(super::tag::NbtTag::extract_double)
     }
 
+    /// Returns the named byte as a boolean, where zero is `false`.
     #[must_use]
     pub fn get_bool(&self, name: &str) -> Option<bool> {
         self.get(name).and_then(super::tag::NbtTag::extract_bool)
     }
 
+    /// Returns the named string, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_string(&self, name: &str) -> Option<&str> {
         self.get(name).and_then(|tag| tag.extract_string())
     }
 
+    /// Returns the named list, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_list(&self, name: &str) -> Option<&[NbtTag]> {
         self.get(name).and_then(|tag| tag.extract_list())
     }
 
+    /// Returns the named compound, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_compound(&self, name: &str) -> Option<&Self> {
         self.get(name).and_then(|tag| tag.extract_compound())
     }
 
+    /// Returns the named integer array, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_int_array(&self, name: &str) -> Option<&[i32]> {
         self.get(name).and_then(|tag| tag.extract_int_array())
     }
 
+    /// Returns the named long array, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_long_array(&self, name: &str) -> Option<&[i64]> {
         self.get(name).and_then(|tag| tag.extract_long_array())

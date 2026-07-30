@@ -1358,9 +1358,13 @@ impl Entity {
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
     /// `LivingEntity.takeKnockback()`
     /// This function calculates the entity's new velocity based on the specified knockback strength and direction.
+    ///
+    /// Knockback resistance is not applied here, because it is a `LivingEntity`
+    /// attribute and this is an `Entity` method. Callers modelling vanilla's
+    /// `LivingEntity.knockback` scale `strength` with
+    /// `combat::knockback_after_resistance` first; callers modelling vanilla's raw
+    /// `Entity.push` (such as the ender dragon) pass `strength` unscaled.
     pub fn apply_knockback(&self, strength: f64, mut x: f64, mut z: f64) {
-        // TODO: strength *= 1 - Entity attribute knockback resistance
-
         if strength <= 0.0 {
             return;
         }

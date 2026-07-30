@@ -38,17 +38,14 @@ pub const NETWORK_OUTBOUND: &str = "network.outbound";
 /// This is separate from `network.outbound`. This allows the use of `wasi:http`; the other allows the more powerful `wasi:sockets`.
 pub const HTTP_OUTBOUND: &str = "http.outbound";
 
-/// Allows the plugin to read files from the server's file system outside of its data folder.
-pub const FS_READ: &str = "fs.read";
-
-/// Allows the plugin to write files to the server's file system outside of its data folder.
-pub const FS_WRITE: &str = "fs.write";
-
-/// Allows the plugin to read files within its own data folder (`plugins/<name>`).
-/// This is granted by default if any other FS permission is not specified, but can be explicitly requested.
+/// Allows the plugin to read files within its own data folder (`plugins/data/<name>`).
 pub const FS_READ_DATA: &str = "fs.read.data";
 
-/// Allows the plugin to write files within its own data folder (`plugins/<name>`).
+/// Allows the plugin to write files within its own data folder (`plugins/data/<name>`).
+///
+/// Note that even without `FS_READ_DATA`, this will allow the plugin to
+/// inspect (e.g. list) the contents of the directory. But it will block
+/// reading any file's contents.
 pub const FS_WRITE_DATA: &str = "fs.write.data";
 
 /// Allows the plugin to read all environment variables.
@@ -98,14 +95,13 @@ pub fn get_permission_description(permission: &str) -> Option<&'static str> {
         HTTP_OUTBOUND => {
             Some("Allows the plugin to make outbound HTTP requests (through `wasi:http`)")
         }
-        FS_READ => Some(
-            "Allows the plugin to read files from the server's file system outside of its data folder.",
-        ),
-        FS_WRITE => Some(
-            "Allows the plugin to write files to the server's file system outside of its data folder.",
-        ),
         FS_READ_DATA => Some("Allows the plugin to read files within its own data folder."),
-        FS_WRITE_DATA => Some("Allows the plugin to write files within its own data folder."),
+        FS_WRITE_DATA => Some(
+            "\
+Allows the plugin to write files within its own data folder. \
+Even without `fs.read.data`, this will allow the plugin to list directory contents \
+(but not read the contents of the discovered files).",
+        ),
         SYS_ENV => Some("Allows the plugin to read all environment variables."),
         SYS_INFO => Some("Allows the plugin to read system information (CPU, Memory, OS)."),
         SYS_INFO_CPU => Some("Allows the plugin to read CPU information."),

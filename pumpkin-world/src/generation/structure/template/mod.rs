@@ -32,7 +32,7 @@ mod template_piece;
 
 use pumpkin_data::Mirror;
 use pumpkin_data::Rotation;
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
 
@@ -81,11 +81,6 @@ pub fn place_template(
         if palette_entry.name == "minecraft:structure_void"
             || palette_entry.name == "minecraft:structure_block"
         {
-            continue;
-        }
-
-        // Skip air blocks when using IGNORE_AIR processor (e.g. nether fossils)
-        if skip_air && palette_entry.name == "minecraft:air" {
             continue;
         }
 
@@ -157,6 +152,10 @@ pub fn place_template(
         if !should_place {
             continue;
         }
+        // Legacy pool elements ignore air after jigsaw replacement and custom processors.
+        if skip_air && state.id.to_block_id() == pumpkin_data::Block::AIR.id {
+            continue;
+        }
 
         chunk.set_block_state(wx, wy, wz, state);
 
@@ -192,6 +191,71 @@ pub fn place_template(
 
             chunk.add_block_entity(placed_nbt);
         }
+    }
+}
+
+pub(crate) fn place_template_entities(
+    chunk: &mut ProtoChunk,
+    template: &StructureTemplate,
+    origin: Vector3<i32>,
+    rotation: Rotation,
+    chunk_box: &pumpkin_util::math::block_box::BlockBox,
+) {
+    for entity in &template.entities {
+        let block_pos = rotation.transform_pos(entity.block_pos, template.size);
+        let world_block_pos = Vector3::new(
+            origin.x + block_pos.x,
+            origin.y + block_pos.y,
+            origin.z + block_pos.z,
+        );
+        if !chunk_box.contains_pos(&world_block_pos) {
+            continue;
+        }
+
+        let pos = match rotation {
+            Rotation::None => entity.pos,
+            Rotation::Clockwise90 => Vector3::new(
+                f64::from(template.size.z) - entity.pos.z,
+                entity.pos.y,
+                entity.pos.x,
+            ),
+            Rotation::Rotate180 => Vector3::new(
+                f64::from(template.size.x) - entity.pos.x,
+                entity.pos.y,
+                f64::from(template.size.z) - entity.pos.z,
+            ),
+            Rotation::CounterClockwise90 => Vector3::new(
+                entity.pos.z,
+                entity.pos.y,
+                f64::from(template.size.x) - entity.pos.x,
+            ),
+        };
+        let mut nbt = entity.nbt.clone();
+        nbt.put(
+            "Pos",
+            NbtTag::List(vec![
+                (f64::from(origin.x) + pos.x).into(),
+                (f64::from(origin.y) + pos.y).into(),
+                (f64::from(origin.z) + pos.z).into(),
+            ]),
+        );
+        nbt.child_tags.remove("UUID");
+
+        if let Some(rotation_nbt) = nbt.get_list("Rotation")
+            && rotation_nbt.len() == 2
+        {
+            let yaw = rotation_nbt[0].extract_float().unwrap_or_default()
+                + match rotation {
+                    Rotation::None => 0.0,
+                    Rotation::Clockwise90 => 90.0,
+                    Rotation::Rotate180 => 180.0,
+                    Rotation::CounterClockwise90 => 270.0,
+                };
+            let pitch = rotation_nbt[1].extract_float().unwrap_or_default();
+            nbt.put("Rotation", NbtTag::List(vec![yaw.into(), pitch.into()]));
+        }
+
+        chunk.add_structure_entity(nbt);
     }
 }
 
