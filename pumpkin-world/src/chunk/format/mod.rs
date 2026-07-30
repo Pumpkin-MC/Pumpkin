@@ -207,6 +207,7 @@ impl ChunkData {
         let section_count = (max_y_section as i32 - min_y_section + 1).max(0) as usize;
         let mut block_lights = vec![LightContainer::Empty(0); section_count];
         let mut sky_lights = vec![LightContainer::Empty(0); section_count];
+        let mut sky_light_present = vec![false; section_count];
         let mut block_palettes = vec![BlockPalette::default(); section_count];
         let mut biome_palettes = vec![BiomePalette::default(); section_count];
 
@@ -231,8 +232,10 @@ impl ChunkData {
 
                     block_lights[index] =
                         block_light.map_or(LightContainer::Empty(0), LightContainer::Full);
-                    sky_lights[index] =
-                        sky_light.map_or(LightContainer::Empty(0), LightContainer::Full);
+                    if let Some(sky_light) = sky_light {
+                        sky_lights[index] = LightContainer::Full(sky_light);
+                        sky_light_present[index] = true;
+                    }
 
                     if let Some(bs_compound) = section_compound.get_compound("block_states") {
                         let data = bs_compound
@@ -264,6 +267,32 @@ impl ChunkData {
                         biome_palettes[index] = BiomePalette::default();
                     }
                 }
+            }
+        }
+
+        // Vanilla only writes a `SkyLight` array for a section it actually touched
+        // while lighting; an omitted array is not a stored "0", it is derived from
+        // position. Sections above the highest section that carries a `SkyLight` tag
+        // see open sky and are 15. Sections at or below it that lack a tag repeat the
+        // nearest tagged layer above them, since the light engine skips writing a
+        // section whose value is identical to the one above it. If no section in the
+        // chunk carries a `SkyLight` tag at all, this dimension has no sky light and
+        // every section is dark (0).
+        if let Some(top) = sky_light_present.iter().rposition(|&present| present) {
+            for light in sky_lights.iter_mut().skip(top + 1) {
+                *light = LightContainer::new_empty(15);
+            }
+            let mut nearest_above = sky_lights[top].clone();
+            for i in (0..top).rev() {
+                if sky_light_present[i] {
+                    nearest_above = sky_lights[i].clone();
+                } else {
+                    sky_lights[i] = nearest_above.clone();
+                }
+            }
+        } else {
+            for light in &mut sky_lights {
+                *light = LightContainer::new_empty(0);
             }
         }
 
@@ -746,4 +775,77 @@ struct EntityNbt {
     data_version: i32,
     position: [i32; 2],
     entities: Vec<NbtCompound>,
+}
+
+#[cfg(test)]
+mod chunk_codec_tests {
+    use super::*;
+    use pumpkin_nbt::tag::NbtTag;
+
+    fn full_sky_light(value: u8) -> Box<[i8]> {
+        let byte = ((value << 4) | value) as i8;
+        vec![byte; LightContainer::ARRAY_SIZE].into_boxed_slice()
+    }
+
+    fn section(y: i8, sky_light: Option<u8>) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_byte("Y", y);
+        if let Some(value) = sky_light {
+            compound.put("SkyLight", NbtTag::ByteArray(full_sky_light(value)));
+        }
+        NbtTag::Compound(compound)
+    }
+
+    fn encode_chunk(min_y_section: i32, sections: Vec<NbtTag>) -> Vec<u8> {
+        let mut root = NbtCompound::new();
+        root.put_int("xPos", 0);
+        root.put_int("zPos", 0);
+        root.put_int("yPos", min_y_section);
+        root.put_list("sections", sections);
+        root.put_bool("isLightOn", true);
+
+        let mut bytes = Vec::new();
+        pumpkin_nbt::serializer::to_bytes(&root, &mut bytes).unwrap();
+        bytes
+    }
+
+    #[test]
+    fn missing_sky_light_above_terrain_derives_open_sky() {
+        // Only the middle section carries a `SkyLight` tag, as a vanilla chunk
+        // would for terrain with air above it.
+        let sections = vec![
+            section(0, None),
+            section(1, Some(7)),
+            section(2, None),
+            section(3, None),
+        ];
+        let bytes = encode_chunk(0, sections);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let light = chunk.light_engine.lock().unwrap();
+
+        // Sections above the highest tagged section see open sky (15), not the
+        // buggy default of reading a missing tag as `Empty(0)`.
+        assert_eq!(light.sky_light[2].get(0, 0, 0), 15);
+        assert_eq!(light.sky_light[3].get(0, 0, 0), 15);
+
+        // A section below the highest tagged one with no tag of its own repeats
+        // the nearest tagged layer above it, not a fixed default.
+        assert_eq!(light.sky_light[0].get(0, 0, 0), 7);
+
+        // The tagged section itself round-trips unchanged.
+        assert_eq!(light.sky_light[1].get(0, 0, 0), 7);
+    }
+
+    #[test]
+    fn no_sky_light_tags_reads_as_dark_dimension() {
+        // No section carries a `SkyLight` tag at all, as in a dimension without
+        // sky light (e.g. the Nether). This must not be lit up as open sky.
+        let sections = vec![section(0, None), section(1, None)];
+        let bytes = encode_chunk(0, sections);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let light = chunk.light_engine.lock().unwrap();
+
+        assert_eq!(light.sky_light[0].get(0, 0, 0), 0);
+        assert_eq!(light.sky_light[1].get(0, 0, 0), 0);
+    }
 }
