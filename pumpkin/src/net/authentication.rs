@@ -1,4 +1,8 @@
-use std::{collections::HashMap, net::IpAddr};
+use std::{
+    collections::HashMap,
+    net::IpAddr,
+    sync::{LazyLock, Mutex},
+};
 
 use base64::{Engine, engine::general_purpose};
 use pumpkin_config::{
@@ -13,6 +17,30 @@ use ureq::http::{StatusCode, Uri};
 use uuid::Uuid;
 
 use super::GameProfile;
+
+/// Cache of `ureq::Agent`s keyed by `(connect_timeout_ms, read_timeout_ms)`.
+///
+/// Every call to `authenticate_service` shares the same agent for a given
+/// timeout pair, which preserves the connection pool, DNS cache, and TLS
+/// session cache across authentication attempts.
+type AgentKey = (u64, u64);
+static AGENT_CACHE: LazyLock<Mutex<HashMap<AgentKey, ureq::Agent>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn get_or_create_agent(connect_timeout: u32, read_timeout: u32) -> ureq::Agent {
+    let key = (connect_timeout as u64, read_timeout as u64);
+    let mut cache = AGENT_CACHE.lock().unwrap();
+    cache
+        .entry(key)
+        .or_insert_with(|| {
+            ureq::Agent::config_builder()
+                .timeout_connect(Some(std::time::Duration::from_millis(key.0)))
+                .timeout_global(Some(std::time::Duration::from_millis(key.1)))
+                .build()
+                .new_agent()
+        })
+        .clone()
+}
 
 #[derive(Deserialize, Clone, Debug)]
 #[expect(dead_code)]
@@ -77,11 +105,17 @@ fn derive_api_root(has_joined_url: &str) -> Option<String> {
 ///
 /// Returns `skinDomains` and `signaturePublickey` on success, `None` if
 /// the endpoint is unavailable (404, timeout, …).
-fn fetch_yggdrasil_meta(service: &YggdrasilServiceConfig) -> Option<YggdrasilMeta> {
+///
+/// Uses the same timeout-aware `agent` as the main `/hasJoined` request
+/// instead of the global (unbounded) `ureq` agent.
+fn fetch_yggdrasil_meta(
+    service: &YggdrasilServiceConfig,
+    agent: &ureq::Agent,
+) -> Option<YggdrasilMeta> {
     let root = derive_api_root(&service.url)?;
     let url = format!("{root}/");
 
-    let response = ureq::get(&url).call().ok()?;
+    let response = agent.get(&url).call().ok()?;
     if response.status() != StatusCode::OK {
         return None;
     }
@@ -198,13 +232,9 @@ fn authenticate_service(
         global_config.read_timeout
     };
 
-    let agent_config = ureq::Agent::config_builder()
-        .timeout_connect(Some(std::time::Duration::from_millis(
-            connect_timeout as u64,
-        )))
-        .timeout_global(Some(std::time::Duration::from_millis(read_timeout as u64)))
-        .build();
-    let agent = agent_config.new_agent();
+    // Reuse a cached agent keyed on the timeout pair.  This preserves the
+    // connection pool, DNS cache, and TLS session cache across requests.
+    let agent = get_or_create_agent(connect_timeout, read_timeout);
 
     tracing::info!("[{name}] /hasJoined username={username} server_hash={server_hash}");
 
@@ -260,7 +290,7 @@ fn authenticate_service(
     // skinDomains (§5.1).  This removes the need to manually list every
     // third-party texture domain in the config.
     let merged_config;
-    let texture_config = if let Some(meta) = fetch_yggdrasil_meta(service) {
+    let texture_config = if let Some(meta) = fetch_yggdrasil_meta(service, &agent) {
         if let Some(ref key) = meta.signature_publickey {
             tracing::debug!("[{name}] signaturePublickey: {} bytes", key.len());
         }
