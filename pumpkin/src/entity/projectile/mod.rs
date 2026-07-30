@@ -10,6 +10,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 pub mod arrow;
+pub mod dragon_fireball;
 pub mod egg;
 pub mod ender_pearl;
 pub mod eye_of_ender;
@@ -38,6 +39,7 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::SHULKER_BULLET
         || *entity_type == EntityType::FIREBALL
         || *entity_type == EntityType::SMALL_FIREBALL
+        || *entity_type == EntityType::DRAGON_FIREBALL
         || *entity_type == EntityType::FISHING_BOBBER
 }
 
@@ -112,6 +114,213 @@ impl ThrownItemEntity {
 }
 
 impl NBTStorage for ThrownItemEntity {}
+
+/// Movement model for projectiles that extend `AbstractHurtingProjectile` in vanilla
+/// (dragon fireball, ghast fireball, blaze small fireball, wither skull).
+///
+/// Instead of gravity + drag, these use an acceleration-power model:
+/// `velocity = (velocity + normalize(velocity) * accelerationPower) * inertia`
+pub struct HurtingProjectileEntity {
+    pub entity: Entity,
+    pub owner_id: Option<i32>,
+    pub acceleration_power: f64,
+    pub has_hit: AtomicBool,
+    /// Matches Java's `Projectile.leftOwner`: becomes true once the projectile's
+    /// AABB (expanded by delta movement + inflated by 1.0) no longer intersects
+    /// the owner's bounding box. Until then, the projectile cannot collide with
+    /// the owner.
+    left_owner: AtomicBool,
+}
+
+impl HurtingProjectileEntity {
+    pub const DEFAULT_ACCELERATION_POWER: f64 = 0.1;
+
+    pub fn new(entity: Entity, owner: &Entity, acceleration_power: f64) -> Self {
+        let mut owner_pos = owner.pos.load();
+        owner_pos.y += owner.get_eye_height() - 0.1;
+        entity.pos.store(owner_pos);
+        Self {
+            entity,
+            owner_id: Some(owner.entity_id),
+            acceleration_power,
+            has_hit: AtomicBool::new(false),
+            left_owner: AtomicBool::new(false),
+        }
+    }
+}
+
+impl NBTStorage for HurtingProjectileEntity {}
+
+impl HurtingProjectileEntity {
+    /// Process a tick using `AbstractHurtingProjectile` movement physics.
+    #[expect(clippy::too_many_lines)]
+    pub async fn process_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
+        let entity = &self.entity;
+        let world = entity.world.load();
+
+        // Match Java's Projectile.tick() → checkLeftOwner():
+        // Once the projectile's AABB (expanded by velocity, inflated by 1.0)
+        // no longer intersects the owner's bounding box, set left_owner = true.
+        if !self.left_owner.load(Ordering::Relaxed) {
+            if let Some(owner_id) = self.owner_id {
+                if let Some(owner) = world.get_entity_by_id(owner_id) {
+                    let velocity = entity.velocity.load();
+                    let projectile_bb = entity
+                        .bounding_box
+                        .load()
+                        .expand_towards(velocity.x, velocity.y, velocity.z)
+                        .expand(1.0, 1.0, 1.0);
+                    let owner_bb = owner.get_entity().bounding_box.load();
+                    if !projectile_bb.intersects(&owner_bb) {
+                        self.left_owner.store(true, Ordering::Relaxed);
+                    }
+                } else {
+                    self.left_owner.store(true, Ordering::Relaxed);
+                }
+            } else {
+                self.left_owner.store(true, Ordering::Relaxed);
+            }
+        }
+
+        entity.update_last_pos();
+
+        let mut velocity = entity.velocity.load();
+
+        // `AbstractHurtingProjectile.applyInertia()`
+        let inertia = if entity.touching_water.load(Ordering::Relaxed) {
+            0.8
+        } else {
+            0.95
+        };
+        let len = velocity.length();
+        if len > 1e-9 {
+            let nx = velocity.x / len;
+            let ny = velocity.y / len;
+            let nz = velocity.z / len;
+            let ap = self.acceleration_power;
+            velocity = Vector3::new(
+                (velocity.x + nx * ap) * inertia,
+                (velocity.y + ny * ap) * inertia,
+                (velocity.z + nz * ap) * inertia,
+            );
+        } else {
+            velocity = velocity.multiply(inertia, inertia, inertia);
+        }
+        entity.velocity.store(velocity);
+
+        let start_pos = entity.pos.load();
+        let delta = velocity;
+
+        let new_pos = start_pos.add(&delta);
+        entity.set_pos(new_pos);
+
+        let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
+        let chunk_pos = entity.chunk_pos.load();
+        world.broadcast_to_chunk(chunk_pos, &packet);
+
+        let search_box = BoundingBox::new(
+            Vector3::new(
+                start_pos.x.min(new_pos.x),
+                start_pos.y.min(new_pos.y),
+                start_pos.z.min(new_pos.z),
+            ),
+            Vector3::new(
+                start_pos.x.max(new_pos.x),
+                start_pos.y.max(new_pos.y),
+                start_pos.z.max(new_pos.z),
+            ),
+        )
+        .expand(0.3, 0.3, 0.3);
+
+        let mut closest_t = 1.0f64;
+        let mut hit = None;
+
+        let (block_cols, block_positions) = world
+            .get_block_collisions(search_box, caller.as_ref())
+            .await;
+        for (idx, bb) in block_cols.iter().enumerate() {
+            if let Some(t) = calculate_ray_intersection(&start_pos, &delta, bb)
+                && t < closest_t
+            {
+                closest_t = t;
+                let mut curr = 0;
+                for (len, pos) in &block_positions {
+                    curr += len;
+                    if idx < curr {
+                        let hit_pos = start_pos.add(&delta.multiply(t, t, t));
+                        hit = Some(ProjectileHit::Block {
+                            pos: *pos,
+                            face: get_hit_face(hit_pos, *pos),
+                            hit_pos,
+                            normal: delta.normalize().multiply(-1.0, -1.0, -1.0),
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+
+        let candidates = world.get_entities_at_box(&search_box);
+        for cand in candidates {
+            if self.should_skip_collision(entity, &cand) {
+                continue;
+            }
+
+            let ebb = cand.get_entity().bounding_box.load().expand(0.3, 0.3, 0.3);
+            if let Some(t) = calculate_ray_intersection(&start_pos, &delta, &ebb)
+                && t < closest_t
+            {
+                closest_t = t;
+                let hit_pos = start_pos.add(&delta.multiply(t, t, t));
+                hit = Some(ProjectileHit::Entity {
+                    entity: cand.clone(),
+                    hit_pos,
+                    normal: delta.normalize().multiply(-1.0, -1.0, -1.0),
+                });
+            }
+        }
+
+        if let Some(h) = hit {
+            if self.has_hit.swap(true, Ordering::SeqCst) {
+                return;
+            }
+            caller.on_hit(h).await;
+            entity.remove().await;
+        }
+    }
+
+    fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
+        let other_ent = other.get_entity();
+        if other_ent.entity_id == self_ent.entity_id {
+            return true;
+        }
+
+        if let Some(owner_id) = self.owner_id {
+            // Match Java's Projectile.canHitEntity: skip owner until
+            // the projectile has left the owner's collision range.
+            if other_ent.entity_id == owner_id && !self.left_owner.load(Ordering::Relaxed) {
+                return true;
+            }
+
+            if *other_ent.entity_type == EntityType::ENDER_DRAGON {
+                let oid = other_ent.entity_id;
+                if oid > owner_id && oid <= owner_id + 8 {
+                    return true;
+                }
+            }
+        }
+
+        if *other_ent.entity_type == EntityType::AREA_EFFECT_CLOUD {
+            return true;
+        }
+
+        if is_projectile(other_ent.entity_type) {
+            return true;
+        }
+
+        false
+    }
+}
 
 impl ThrownItemEntity {
     /// Process a tick for projectile movement and collisions
@@ -233,9 +442,21 @@ impl ThrownItemEntity {
             return true;
         }
 
-        // Skip owner for initial frames
-        if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
-            return true;
+        if let Some(owner_id) = self.owner_id {
+            // Skip owner for initial frames
+            if other_ent.entity_id == owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+                return true;
+            }
+
+            // Skip dragon parts belonging to the owner.  Dragon parts are
+            // assigned consecutive entity IDs `owner_id + 1 ..= owner_id + 8`
+            // by `Entity::reserve_ids(8)` + `from_uuid_with_id(base_id + i)`.
+            if *other_ent.entity_type == EntityType::ENDER_DRAGON {
+                let oid = other_ent.entity_id;
+                if oid > owner_id && oid <= owner_id + 8 {
+                    return true;
+                }
+            }
         }
 
         // Projectiles should pass through lingering clouds

@@ -115,11 +115,21 @@ pub struct LivingEntity {
     /// The tick at which this entity last attacked something (entity age).
     pub last_attack_time: AtomicI32,
 
+    /// The tick at which this entity was last hurt by a mob (entity age).
+    /// Mirrors vanilla's `LivingEntity.lastHurtByMobTimestamp`.
+    pub last_hurt_by_mob_tick: AtomicI32,
+
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
 
     /// The attributes of the entity
     pub attributes: RwLock<HashMap<u8, AttributeInstance>>,
+
+    /// When set, `tick()` skips `tick_movement` (travel/goal-selector/navigation physics)
+    /// entirely, leaving the rest of the living-entity bookkeeping (effects, hurt cooldown,
+    /// death timer, ...) intact. Mirrors vanilla's `EnderDragonEntity` overriding
+    /// `tickMovement()` without calling `super.tickMovement()`.
+    pub skip_travel: AtomicBool,
 }
 
 impl LivingEntity {
@@ -185,8 +195,10 @@ impl LivingEntity {
             last_attacked_time: AtomicI32::new(0),
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
+            last_hurt_by_mob_tick: AtomicI32::new(-9999),
             movement_input: AtomicCell::new(Vector3::default()),
             water_movement_speed_multiplier,
+            skip_travel: AtomicBool::new(false),
         }
     }
 
@@ -2415,7 +2427,9 @@ impl EntityBase for LivingEntity {
                     &self.entity.pos.load(),
                 );
 
-                if let Some(source) = source {
+                if let Some(source) = source
+                    && source.get_entity().entity_id != self.entity.entity_id
+                {
                     let source_pos = source.get_entity().pos.load();
                     let target_pos = self.entity.pos.load();
                     let dx = source_pos.x - target_pos.x;
@@ -2470,6 +2484,10 @@ impl EntityBase for LivingEntity {
                         .store(attacker.get_entity().entity_id, Relaxed);
                     self.last_attacked_time
                         .store(self.entity.age.load(Relaxed), Relaxed);
+                    if attacker.get_living_entity().is_some() {
+                        self.last_hurt_by_mob_tick
+                            .store(self.entity.age.load(Relaxed), Relaxed);
+                    }
                 }
             }
 
@@ -2507,6 +2525,10 @@ impl EntityBase for LivingEntity {
                         .store(attacker.get_entity().entity_id, Relaxed);
                     self.last_attacked_time
                         .store(self.entity.age.load(Relaxed), Relaxed);
+                    if attacker.get_living_entity().is_some() {
+                        self.last_hurt_by_mob_tick
+                            .store(self.entity.age.load(Relaxed), Relaxed);
+                    }
                 }
             }
 
@@ -2555,7 +2577,9 @@ impl EntityBase for LivingEntity {
             let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
             let in_death_animation =
                 self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
-            if is_alive || (in_death_animation && self.entity.entity_type != &EntityType::PLAYER) {
+            if (is_alive || (in_death_animation && self.entity.entity_type != &EntityType::PLAYER))
+                && !self.skip_travel.load(Relaxed)
+            {
                 self.tick_movement(server, caller).await;
                 // Vanilla-like order: freeze logic runs after movement/collisions.
                 self.entity.tick_frozen(caller.as_ref()).await;

@@ -85,6 +85,7 @@ impl Goal for BlazeShootFireballGoal {
         true
     }
 
+    #[expect(clippy::too_many_lines)]
     fn tick<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             self.attack_time -= 1;
@@ -196,7 +197,12 @@ impl Goal for BlazeShootFireballGoal {
                                 base_entity,
                                 &blaze.entity.living_entity.entity,
                             );
-                            fireball.thrown.entity.velocity.store(direction);
+                            let speed = fireball.hurting.acceleration_power;
+                            fireball
+                                .hurting
+                                .entity
+                                .velocity
+                                .store(direction.multiply(speed, speed, speed));
 
                             world.spawn_entity(Arc::new(fireball)).await;
                         }

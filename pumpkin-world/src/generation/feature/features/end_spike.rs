@@ -1,10 +1,13 @@
+use std::f64::consts::PI;
+use std::sync::Mutex;
+
 use pumpkin_data::{
     Block, BlockState,
     block_properties::{BlockProperties, OakFenceLikeProperties},
 };
 use pumpkin_util::{
     math::position::BlockPos,
-    random::{RandomGenerator, RandomImpl},
+    random::{RandomImpl, legacy_rand::LegacyRand},
 };
 
 use crate::generation::proto_chunk::GenerationCache;
@@ -32,6 +35,60 @@ impl Spike {
     }
 }
 
+/// Cached spike list keyed by world seed, matching Java's `SPIKE_CACHE`.
+static SPIKE_CACHE: Mutex<Option<(u64, Vec<Spike>)>> = Mutex::new(None);
+
+/// Compute the canonical spike list for a given world seed, using the same
+/// 48-bit LCG (`LegacyRand`) that Java's `SingleThreadedRandomSource` uses.
+///
+/// Results are cached so that both worldgen and dragon-fight code get the
+/// exact same list without recomputing.
+pub fn get_spikes_for_seed(world_seed: u64) -> Vec<Spike> {
+    {
+        let cache = SPIKE_CACHE.lock().unwrap();
+        if let Some((seed, ref spikes)) = *cache
+            && seed == world_seed
+        {
+            return spikes.clone();
+        }
+    }
+
+    // Stage 1: derive cache key from world seed
+    // Java: RandomSource.createThreadLocalInstance(worldSeed).nextLong() & 65535L
+    let mut key_rng = LegacyRand::from_seed(world_seed);
+    let cache_key = key_rng.next_i64() as u64 & 0xFFFF;
+
+    // Stage 2: shuffle sizes using the cache key
+    // Java: SPIKE_CACHE.load() → Util.toShuffledList(IntStream.range(0,10),
+    //       RandomSource.createThreadLocalInstance(seed))
+    let mut rng = LegacyRand::from_seed(cache_key);
+    let mut sizes: Vec<i32> = (0..10).collect();
+    for i in (1..10usize).rev() {
+        let j = rng.next_bounded_i32(i as i32 + 1) as usize;
+        sizes.swap(i, j);
+    }
+
+    let mut spikes = Vec::with_capacity(10);
+    for (i, &l) in sizes.iter().enumerate() {
+        let angle = 2.0 * (-PI + PI / 10.0 * i as f64);
+        let center_x = (42.0 * angle.cos()).floor() as i32;
+        let center_z = (42.0 * angle.sin()).floor() as i32;
+        let radius = 2 + l / 3;
+        let height = 76 + l * 3;
+        let guarded = l == 1 || l == 2;
+        spikes.push(Spike {
+            center_x,
+            center_z,
+            radius,
+            height,
+            guarded,
+        });
+    }
+
+    *SPIKE_CACHE.lock().unwrap() = Some((world_seed, spikes.clone()));
+    spikes
+}
+
 impl EndSpikeFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
@@ -40,35 +97,13 @@ impl EndSpikeFeature {
         _block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
-        _feature: pumpkin_data::placed_feature::PlacedFeature, // This placed feature
-        random: &mut RandomGenerator,
+        _feature: pumpkin_data::placed_feature::PlacedFeature,
+        _random: &mut pumpkin_util::random::RandomGenerator,
         pos: BlockPos,
     ) -> bool {
         let mut spikes = self.spikes.clone();
         if spikes.is_empty() {
-            let mut sizes: Vec<i32> = (0..10).collect();
-            for i in (1..10usize).rev() {
-                let j = random.next_bounded_i32(i as i32 + 1) as usize;
-                sizes.swap(i, j);
-            }
-
-            for (i, &l) in sizes.iter().enumerate() {
-                let angle = 2.0 * (-std::f64::consts::PI + 0.3141592653589793 * i as f64);
-                let center_x = (42.0 * angle.cos()).floor() as i32;
-                let center_z = (42.0 * angle.sin()).floor() as i32;
-
-                let radius = 2 + l / 3;
-                let height = 76 + l * 3;
-                let guarded = l == 1 || l == 2;
-
-                spikes.push(Spike {
-                    center_x,
-                    center_z,
-                    radius,
-                    height,
-                    guarded,
-                });
-            }
+            spikes = get_spikes_for_seed(chunk.world_seed());
         }
         for spike in spikes {
             if !spike.is_in_chunk(&pos) {
@@ -145,10 +180,10 @@ impl EndSpikeFeature {
                         let z_edge = z_wall_present || on_top;
 
                         let mut props = OakFenceLikeProperties::default(&Block::IRON_BARS);
-                        props.north = x_edge && dz != 2;
-                        props.south = x_edge && dz != -2;
-                        props.west = z_edge && dx != 2;
-                        props.east = z_edge && dx != -2;
+                        props.north = x_edge && dz != -2;
+                        props.south = x_edge && dz != 2;
+                        props.west = z_edge && dx != -2;
+                        props.east = z_edge && dx != 2;
 
                         let bar_state = BlockState::from_id(props.to_state_id(&Block::IRON_BARS));
                         chunk.set_block_state(
