@@ -1283,7 +1283,7 @@ impl ProtoChunk {
                         global_cache,
                         settings.sea_level,
                         entry,
-                        random_config,
+                        generator,
                         &mut height_sampler,
                     );
                 }
@@ -1315,7 +1315,7 @@ impl ProtoChunk {
                     global_cache,
                     settings.sea_level,
                     selected_entry,
-                    random_config,
+                    generator,
                     &mut height_sampler,
                 ) {
                     break;
@@ -1333,9 +1333,24 @@ impl ProtoChunk {
         global_cache: &GlobalStructureCache,
         sea_level: i32,
         entry: &WeightedEntry,
-        random_config: &GlobalRandomConfig,
+        generator: &super::generator::VanillaGenerator,
         height_sampler: &mut dyn crate::generation::structure::structures::HeightSampler,
     ) -> bool {
+        if entry.structure == StructureKeys::Monument {
+            let config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
+            let mut sampler =
+                MultiNoiseSampler::generate(&generator.base_router.multi_noise, &config);
+            if !crate::generation::structure::structures::ocean_monument::has_valid_surrounding(
+                &MultiNoiseBiomeSupplier::OVERWORLD,
+                &mut sampler,
+                self.x,
+                self.z,
+                sea_level,
+            ) {
+                return false;
+            }
+        }
+
         let chunk_x = self.x;
         let chunk_z = self.z;
         let position =
@@ -1344,7 +1359,7 @@ impl ProtoChunk {
                 try_generate_structure(
                     &entry.structure,
                     structure,
-                    random_config.seed as i64,
+                    generator.random_config.seed as i64,
                     self,
                     sea_level,
                     Some(height_sampler),

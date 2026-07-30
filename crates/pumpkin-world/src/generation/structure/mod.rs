@@ -16,7 +16,8 @@ use crate::{
             igloo::IglooGenerator, jigsaw::JigsawGenerator, jungle_temple::JungleTempleGenerator,
             mansion::MansionGenerator, mineshaft::MineshaftGenerator,
             nether_fortress::NetherFortressGenerator, nether_fossil::NetherFossilGenerator,
-            ocean_monument::OceanMonumentGenerator, ocean_ruin::OceanRuinGenerator,
+            ocean_monument::{OceanMonumentGenerator, has_valid_surrounding},
+            ocean_ruin::OceanRuinGenerator,
             ruined_portal::RuinedPortalGenerator, shipwreck::ShipwreckGenerator,
             stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
         },
@@ -189,6 +190,18 @@ pub fn lazily_generate_structure(
     biome_supplier: &dyn BiomeSupplier,
     multi_noise_sampler: &mut MultiNoiseSampler,
 ) -> Option<StructurePosition> {
+    if *key == StructureKeys::Monument
+        && !has_valid_surrounding(
+            biome_supplier,
+            multi_noise_sampler,
+            context.chunk_x,
+            context.chunk_z,
+            context.sea_level,
+        )
+    {
+        return None;
+    }
+
     let structure_pos = generate_structure_position(key, structure, context);
 
     if let Some(pos) = structure_pos {
