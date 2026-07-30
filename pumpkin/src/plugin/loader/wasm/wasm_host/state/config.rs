@@ -127,7 +127,7 @@ impl PluginConfigManager {
         let mut file = OpenOptions::new()
             .create(true)
             .read(true)
-            .write(false)
+            .write(true)
             .open(&self.path)
             .await
             .map_err(ConfigLoadError::Io)?;

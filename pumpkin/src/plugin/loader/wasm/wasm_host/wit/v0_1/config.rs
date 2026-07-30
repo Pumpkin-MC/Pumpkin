@@ -237,5 +237,22 @@ mod tests {
             assert_eq!(i, 0);
             assert!(path.next().is_none());
         }
+
+        {
+            let mut path = string_to_path("a[0].b".to_owned()).unwrap().into_iter();
+            let Some(ConfigPathElement::Key(s)) = path.next() else {
+                panic!();
+            };
+            assert_eq!(s, "a");
+            let Some(ConfigPathElement::Index(i)) = path.next() else {
+                panic!();
+            };
+            assert_eq!(i, 0);
+            let Some(ConfigPathElement::Key(s)) = path.next() else {
+                panic!();
+            };
+            assert_eq!(s, "b");
+            assert!(path.next().is_none());
+        }
     }
 }
