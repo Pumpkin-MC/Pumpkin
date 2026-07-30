@@ -15,7 +15,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
 use std::{
     collections::{BTreeMap, HashMap},
-    sync::atomic::Ordering,
+    sync::atomic::{AtomicU8, Ordering},
 };
 use tracing::{debug, error, info, trace, warn};
 
@@ -206,6 +206,9 @@ pub struct World {
     pub worldborder: Mutex<Worldborder>,
     /// The world's time, including counting ticks for weather, time cycles, and statistics.
     pub level_time: Mutex<LevelTime>,
+    /// How much the sky light is dimmed by the time of day, from `0` at
+    /// midday to `11` at night.
+    pub sky_darken: AtomicU8,
     /// The type of dimension the world is in.
     pub dimension: Dimension,
     pub sea_level: i32,
@@ -302,6 +305,7 @@ impl World {
             scoreboard: Mutex::new(Scoreboard::default()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 5.999_996_8E7, 0, 5, 300)),
             level_time: Mutex::new(LevelTime::new()),
+            sky_darken: AtomicU8::new(0),
             dimension,
             weather: Mutex::new(Weather::new()),
             block_registry,
@@ -1174,6 +1178,26 @@ impl World {
         } else if world_age % 20 == 0 {
             let level_time = self.level_time.lock().await;
             level_time.send_time(self).await;
+        }
+
+        let time_of_day = self.level_time.lock().await.time_of_day;
+        self.sky_darken
+            .store(Self::sky_darken_for_time(time_of_day), Relaxed);
+    }
+
+    /// The ambient darkness sky light is reduced by for the given time of
+    /// day: `0` at midday, ramping up to `11` at night.
+    fn sky_darken_for_time(time_of_day: i64) -> u8 {
+        use std::f32::consts::PI;
+
+        let day_progress = (time_of_day.rem_euclid(24_000) as f32) / 24_000.0;
+        let sun_angle_radians = (day_progress - 0.25) * (PI * 2.0);
+        let cos_angle = sun_angle_radians.cos();
+
+        if cos_angle < 0.0 {
+            (cos_angle.abs() * 11.0) as u8
+        } else {
+            0
         }
     }
 
@@ -4441,8 +4465,7 @@ impl World {
     }
 
     pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
-        // TODO: pass the sky darken value here once it is tracked.
-        self.get_raw_brightness(pos, 0)
+        self.get_raw_brightness(pos, self.sky_darken.load(Relaxed))
     }
 
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
