@@ -298,6 +298,35 @@ impl PluginConfigManager {
         unreachable!();
     }
 
+    pub async fn has_key(&self, k: ConfigPath) -> Result<bool, ConfigLoadError> {
+        let Some(table) = self.get_or_load_config_if_exists().await? else {
+            return Ok(false);
+        };
+
+        let table = table.lock().await;
+        let mut last_value: either::Either<&toml::Value, &Map<String, toml::Value>> =
+            either::Right(&table);
+        for elem in k {
+            match (elem, last_value) {
+                (ConfigPathElement::Key(name), either::Left(toml::Value::Table(table)))
+                | (ConfigPathElement::Key(name), either::Right(table)) => {
+                    let Some(value) = table.get(&name) else {
+                        return Ok(false);
+                    };
+                    last_value = either::Left(value);
+                }
+                (ConfigPathElement::Index(i), either::Left(toml::Value::Array(arr))) => {
+                    let Some(value) = arr.get(i as usize) else {
+                        return Ok(false);
+                    };
+                    last_value = either::Left(value);
+                }
+                _ => return Ok(false),
+            }
+        }
+        Ok(true)
+    }
+
     pub fn changed(&self) -> bool {
         let ConfigLoadState::Loaded {
             table: _,

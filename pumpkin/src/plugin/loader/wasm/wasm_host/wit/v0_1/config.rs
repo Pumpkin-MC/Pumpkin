@@ -5,8 +5,8 @@ use crate::plugin::loader::wasm::wasm_host::{
     wit::v0_1::pumpkin::{self, plugin::config::ConfigPathElement},
 };
 
-/// The return value is largely unspecified if the provided path has an invalid format.
-/// This should probably be fixed.
+/// The return value will not be an error for many invalid formats, this should
+/// probably be fixed.
 fn string_to_path(s: String) -> wasmtime::Result<pumpkin::plugin::config::ConfigPath> {
     if s.is_empty() {
         return Ok(Vec::new());
@@ -163,8 +163,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         key: pumpkin::plugin::config::ConfigPath,
     ) -> wasmtime::Result<bool> {
         let res = self.get_config_res(&res)?;
-        // TODO: Make a dedicated function for has_key
-        Ok(res.provider.get(key).await?.is_some())
+        Ok(res.provider.has_key(key).await?)
     }
 
     async fn drop(
