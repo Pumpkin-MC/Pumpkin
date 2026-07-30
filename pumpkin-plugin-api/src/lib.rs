@@ -41,6 +41,7 @@ pub mod forms;
 /// Use these in your `PluginMetadata` to request access to specific host features.
 pub mod permissions;
 pub mod scheduler;
+pub mod config;
 
 pub mod command {
     pub use crate::wit::pumpkin::plugin::command::{
@@ -51,7 +52,6 @@ pub mod command {
 
 pub use wit::pumpkin::plugin::{
     bedrock_packets, block_entity, boss_bar, command as command_wit, common,
-    config::*,
     context::{Context, Server},
     data_components, entity,
     entity_types::EntityType,
