@@ -5,7 +5,8 @@ use wasmtime::{Cache, CacheConfig, Engine, Store, component::Component, componen
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder, sockets::SocketAddrUse};
 
 use crate::plugin::{
-    Context, PluginMetadata, loader::wasm::wasm_host::state::PluginHostState, permissions,
+    Context, PluginMetadata, cache::calculate_hash_for_bytes,
+    loader::wasm::wasm_host::state::PluginHostState, permissions,
 };
 
 pub mod args;
@@ -15,16 +16,26 @@ pub mod wit;
 
 #[derive(Error, Debug)]
 pub enum PluginInitError {
-    #[error("Engine creation failed")]
+    #[error("Engine creation failed: {0}")]
     EngineCreationFailed(wasmtime::Error),
-    #[error("Failed to setup linker")]
+    #[error("Failed to setup linker: {0}")]
     LinkerSetupFailed(wasmtime::Error),
-    #[error("plugin API version mismatch")]
-    ApiVersionMismatch,
-    #[error("failed to read plugin bytes")]
-    FailedToReadPluginBytes(#[from] std::io::Error),
-    #[error("plugin failed to load with error: {0}")]
-    PluginFailedToLoad(#[from] wasmtime::Error),
+    #[error("Plugin is built against a different API version: {0}")]
+    ApiVersionMismatch(wasmtime::Error),
+    #[error("Failed to read plugin file: {0}")]
+    FileReadFailed(std::io::Error),
+    #[error("Failed to load plugin as component: {0}")]
+    ComponentNewFailed(wasmtime::Error),
+    #[error("Failed to create cache data for plugin: {0}")]
+    ComponentCacheSerializeFailed(wasmtime::Error),
+    #[error("Failed to write cache file for plugin: {0}")]
+    ComponentCacheWriteFailed(std::io::Error),
+    #[error("Failed to instantiate plugin: {0}")]
+    InstantiationFailed(wasmtime::Error),
+    #[error("Calling `init_plugin` failed: {0}")]
+    CallInitPluginFailed(wasmtime::Error),
+    #[error("Calling `get_metadata` failed: {0}")]
+    CallGetMetadataFailed(wasmtime::Error),
 }
 
 pub struct PluginRuntime {
@@ -75,18 +86,20 @@ impl PluginRuntime {
         &self,
         path: P,
     ) -> Result<(Arc<WasmPlugin>, PluginMetadata), PluginInitError> {
-        let wasm_bytes = std::fs::read(&path)?;
+        let wasm_bytes = std::fs::read(&path).map_err(PluginInitError::FileReadFailed)?;
 
-        let component = load_component(&self.engine, &wasm_bytes, path.as_ref(), &self.cache_dir)?;
+        let component = load_component(&self.engine, &wasm_bytes, &self.cache_dir)?;
 
-        let instance_pre = self.linker.instantiate_pre(&component)?;
+        let instance_pre = self
+            .linker
+            .instantiate_pre(&component)
+            .map_err(PluginInitError::ApiVersionMismatch)?;
 
         let (wasm_plugin, metadata) = {
-            if let Ok(plugin_pre) = wit::v0_1::prepare_plugin(&instance_pre) {
-                wit::v0_1::init_plugin(&self.engine, plugin_pre).await?
-            } else {
-                return Err(PluginInitError::ApiVersionMismatch);
-            }
+            let plugin_pre = wit::v0_1::prepare_plugin(&instance_pre)
+                .map_err(PluginInitError::ApiVersionMismatch)?;
+
+            wit::v0_1::init_plugin(&self.engine, plugin_pre).await?
         };
 
         let wasm_plugin = Arc::new(wasm_plugin);
@@ -103,29 +116,13 @@ fn setup_linker(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState>> {
     Ok(linker)
 }
 
-fn cache_key(wasm_path: &Path) -> Result<String, std::io::Error> {
-    let metadata = fs::metadata(wasm_path)?;
-    let file_name = wasm_path.file_stem().unwrap().to_string_lossy();
-    let len = metadata.len();
-    let modified = metadata
-        .modified()?
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    Ok(format!(
-        "{file_name}-{len}-{modified}-{}.cwasm",
-        env!("CARGO_PKG_VERSION"),
-    ))
-}
-
 fn load_component(
     engine: &Engine,
     wasm_bytes: &[u8],
-    wasm_path: &Path,
     cache_dir: &Path,
 ) -> Result<Component, PluginInitError> {
-    let cache_name = cache_key(wasm_path)?;
+    let hash = calculate_hash_for_bytes(wasm_bytes);
+    let cache_name = format!("{hash}-{}.cwasm", env!("CARGO_PKG_VERSION"));
     let cache_path = cache_dir.join(cache_name);
 
     if cache_path.exists() {
@@ -137,8 +134,15 @@ fn load_component(
         }
     }
 
-    let component = Component::new(engine, wasm_bytes)?;
-    fs::write(&cache_path, component.serialize()?)?;
+    let component =
+        Component::new(engine, wasm_bytes).map_err(PluginInitError::ComponentNewFailed)?;
+    fs::write(
+        &cache_path,
+        component
+            .serialize()
+            .map_err(PluginInitError::ComponentCacheSerializeFailed)?,
+    )
+    .map_err(PluginInitError::ComponentCacheWriteFailed)?;
     Ok(component)
 }
 
