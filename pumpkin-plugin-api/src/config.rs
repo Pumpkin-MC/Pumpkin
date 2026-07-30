@@ -33,16 +33,16 @@ impl From<ConfigVal> for ConfigTree {
                 root_id: 0,
             },
             ConfigVal::List(v) => {
-                let mut node_indicies = Vec::new();
+                let mut node_indices = Vec::new();
                 let mut nodes =
                     v.into_iter()
                         .map(ConfigTree::from)
                         .fold(Vec::new(), |mut vec, mut tree| {
-                            node_indicies.push(tree.root_id + vec.len() as u32);
+                            node_indices.push(tree.root_id + vec.len() as u32);
                             vec.append(&mut tree.nodes);
                             vec
                         });
-                nodes.push(ConfigValue::List(node_indicies));
+                nodes.push(ConfigValue::List(node_indices));
                 ConfigTree {
                     root_id: nodes.len() as u32 - 1,
                     nodes,
