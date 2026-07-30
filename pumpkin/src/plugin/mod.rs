@@ -557,25 +557,26 @@ impl PluginManager {
             .clone()
             .ok_or(ManagerError::ServerNotInitialized)?;
 
+        let server = self
+            .server
+            .read()
+            .await
+            .clone()
+            .ok_or(ManagerError::ServerNotInitialized)?;
+        let config = Arc::new(PluginConfigManager::new({
+            let mut path = PathBuf::from(PLUGIN_CONFIG_DIR);
+            // FIXME(uid): This should be the uid of the plugin once it is implemented
+            path.push(format!("{}.toml", metadata.name));
+            path
+        }));
+        server.register_plugin_config(Arc::clone(&config)).await;
         let context = Arc::new(Context::new(
             metadata.clone(),
-            Arc::clone(
-                &self
-                    .server
-                    .read()
-                    .await
-                    .clone()
-                    .ok_or(ManagerError::ServerNotInitialized)?,
-            ),
+            Arc::clone(&server),
             Arc::clone(&self.handlers),
             Arc::clone(&self_ref),
             Arc::clone(&LOGGER_IMPL),
-            PluginConfigManager::new({
-                let mut path = PathBuf::from(PLUGIN_CONFIG_DIR);
-                // FIXME(uid): This should be the uid of the plugin once it is implemented
-                path.push(format!("{}.toml", metadata.name));
-                path
-            }),
+            config,
         ));
 
         // Create the plugin structure first

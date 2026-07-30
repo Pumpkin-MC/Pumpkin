@@ -1,6 +1,18 @@
-use std::{io, path::PathBuf};
+use std::{
+    io,
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
-use tokio::{fs::OpenOptions, io::AsyncReadExt};
+use arc_swap::ArcSwap;
+use tokio::{
+    fs::OpenOptions,
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::Mutex,
+};
 use toml::{Table, map::Map};
 
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::config::{
@@ -8,8 +20,11 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::config::
 };
 
 enum ConfigLoadState {
-    // TODO: Auto-saving and saving on server stop
-    Loaded(toml::Table, tokio::fs::File),
+    Loaded {
+        table: Arc<Mutex<toml::Table>>,
+        file: Mutex<tokio::fs::File>,
+        changed: Arc<AtomicBool>,
+    },
     /// The config file does not exist.
     DoesNotExist,
     /// It is unknown whether the config file exists. On the next
@@ -21,7 +36,7 @@ enum ConfigLoadState {
 pub enum ConfigLoadError {
     #[error("IO Error: {0}")]
     Io(io::Error),
-    #[error("Error parsing config: {0}")]
+    #[error("Error parsing: {0}")]
     Deserialize(toml::de::Error),
 }
 
@@ -35,8 +50,16 @@ pub enum ConfigSetError {
     InvalidPath,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigSaveError {
+    #[error("IO Error: {0}")]
+    Io(io::Error),
+    #[error("Error serializing: {0}")]
+    Serialize(toml::ser::Error),
+}
+
 pub struct PluginConfigManager {
-    config: ConfigLoadState,
+    config: ArcSwap<ConfigLoadState>,
     path: PathBuf,
 }
 
@@ -44,20 +67,27 @@ impl PluginConfigManager {
     #[must_use]
     pub fn new(path: PathBuf) -> Self {
         Self {
-            config: ConfigLoadState::Unknown,
+            config: ArcSwap::new(Arc::new(ConfigLoadState::Unknown)),
             path,
         }
     }
 
     async fn get_or_load_config_if_exists(
-        &mut self,
-    ) -> Result<Option<&mut toml::Table>, ConfigLoadError> {
-        if let ConfigLoadState::Loaded(ref mut table, _) = self.config {
-            return Ok(Some(table));
+        &self,
+    ) -> Result<Option<Arc<Mutex<toml::Table>>>, ConfigLoadError> {
+        let config_guard = self.config.load();
+        if let ConfigLoadState::Loaded {
+            table,
+            file: _,
+            changed: _,
+        } = &**config_guard
+        {
+            return Ok(Some(Arc::clone(table)));
         }
-        if let ConfigLoadState::DoesNotExist = self.config {
+        if let ConfigLoadState::DoesNotExist = &**config_guard {
             return Ok(None);
         };
+        drop(config_guard);
 
         if let Some(parent) = self.path.parent() {
             tokio::fs::create_dir_all(parent)
@@ -73,7 +103,7 @@ impl PluginConfigManager {
         {
             Ok(file) => file,
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
-                self.config = ConfigLoadState::DoesNotExist;
+                self.config.store(Arc::new(ConfigLoadState::DoesNotExist));
                 return Ok(None);
             }
             Err(e) => return Err(ConfigLoadError::Io(e)),
@@ -82,19 +112,27 @@ impl PluginConfigManager {
         file.read_to_string(&mut string)
             .await
             .map_err(ConfigLoadError::Io)?;
-        let table: Table = string.parse().map_err(ConfigLoadError::Deserialize)?;
-        self.config = ConfigLoadState::Loaded(table, file);
-
-        let ConfigLoadState::Loaded(config, _) = &mut self.config else {
-            // The compiler might be able to optimize this panic away.
-            unreachable!("The state was just set to Loaded");
-        };
-        Ok(Some(config))
+        let table = Arc::new(Mutex::new(
+            string.parse().map_err(ConfigLoadError::Deserialize)?,
+        ));
+        self.config.store(Arc::new(ConfigLoadState::Loaded {
+            table: Arc::clone(&table),
+            file: Mutex::new(file),
+            changed: Arc::new(AtomicBool::new(false)),
+        }));
+        Ok(Some(table))
     }
 
-    async fn get_or_load_config(&mut self) -> Result<&mut toml::Table, ConfigLoadError> {
-        if let ConfigLoadState::Loaded(ref mut table, _) = self.config {
-            return Ok(table);
+    async fn get_or_load_config(
+        &self,
+    ) -> Result<(Arc<Mutex<toml::Table>>, Arc<AtomicBool>), ConfigLoadError> {
+        if let ConfigLoadState::Loaded {
+            table,
+            file: _,
+            changed,
+        } = &**self.config.load()
+        {
+            return Ok((Arc::clone(table), Arc::clone(changed)));
         }
 
         if let Some(parent) = self.path.parent() {
@@ -113,28 +151,32 @@ impl PluginConfigManager {
         file.read_to_string(&mut string)
             .await
             .map_err(ConfigLoadError::Io)?;
-        let table: Table = string.parse().map_err(ConfigLoadError::Deserialize)?;
-        self.config = ConfigLoadState::Loaded(table, file);
+        let table = Arc::new(Mutex::new(
+            string.parse().map_err(ConfigLoadError::Deserialize)?,
+        ));
+        let changed = Arc::new(AtomicBool::new(false));
+        self.config.store(Arc::new(ConfigLoadState::Loaded {
+            table: Arc::clone(&table),
+            file: Mutex::new(file),
+            changed: Arc::clone(&changed),
+        }));
 
-        let ConfigLoadState::Loaded(config, _) = &mut self.config else {
-            // The compiler might be able to optimize this panic away.
-            unreachable!("The state was just set to Loaded");
-        };
-        Ok(config)
+        Ok((table, changed))
     }
 
-    pub async fn get(&mut self, k: ConfigPath) -> Result<Option<ConfigTree>, ConfigLoadError> {
-        let Some(config) = self.get_or_load_config_if_exists().await? else {
+    pub async fn get(&self, k: ConfigPath) -> Result<Option<ConfigTree>, ConfigLoadError> {
+        let Some(table) = self.get_or_load_config_if_exists().await? else {
             return Ok(None);
         };
-        Ok(match index_table(config, k) {
+        let table = table.lock().await;
+        Ok(match index_table(&table, k) {
             Some(either::Left(value)) => Some(value.clone().into()),
             Some(either::Right(table)) => Some(toml::Value::Table(table.clone()).into()),
             None => None,
         })
     }
 
-    pub async fn set(&mut self, k: ConfigPath, v: ConfigTree) -> Result<(), ConfigSetError> {
+    pub async fn set(&self, k: ConfigPath, v: ConfigTree) -> Result<(), ConfigSetError> {
         let Ok(value) = Option::<toml::Value>::try_from(v) else {
             return Err(ConfigSetError::InvalidTree);
         };
@@ -142,12 +184,15 @@ impl PluginConfigManager {
             self.remove(k).await?;
             return Ok(());
         };
-        let table = self
+        let (table, changed) = self
             .get_or_load_config()
             .await
             .map_err(ConfigSetError::Load)?;
+        changed.store(true, Ordering::Release);
+        let mut table = table.lock().await;
 
-        let mut current_value: either::Either<&mut toml::Value, &mut Table> = either::Right(table);
+        let mut current_value: either::Either<&mut toml::Value, &mut Table> =
+            either::Right(&mut table);
         let mut k_iter = k.into_iter().peekable();
         while let Some(elem) = k_iter.next() {
             match elem {
@@ -203,13 +248,15 @@ impl PluginConfigManager {
         Ok(())
     }
 
-    pub async fn remove(&mut self, k: ConfigPath) -> Result<bool, ConfigSetError> {
-        let table = self
+    pub async fn remove(&self, k: ConfigPath) -> Result<bool, ConfigSetError> {
+        let (table, changed) = self
             .get_or_load_config()
             .await
             .map_err(ConfigSetError::Load)?;
+        changed.store(true, Ordering::Release);
+        let mut table = table.lock().await;
         let mut last_value: either::Either<&mut Vec<toml::Value>, &mut Map<String, toml::Value>> =
-            either::Right(table);
+            either::Right(&mut table);
         let mut k_iter = k.into_iter().peekable();
         while let Some(elem) = k_iter.next() {
             if k_iter.peek().is_none() {
@@ -249,6 +296,40 @@ impl PluginConfigManager {
             };
         }
         unreachable!();
+    }
+
+    pub fn changed(&self) -> bool {
+        let ConfigLoadState::Loaded {
+            table: _,
+            file: _,
+            changed,
+        } = &**self.config.load()
+        else {
+            return false;
+        };
+        changed.load(Ordering::Acquire)
+    }
+
+    pub async fn save(&self) -> Result<(), ConfigSaveError> {
+        let ConfigLoadState::Loaded {
+            table,
+            file,
+            changed,
+        } = &**self.config.load()
+        else {
+            return Ok(());
+        };
+        changed.store(false, Ordering::Release);
+        let table = table.lock().await;
+        let config_string = toml::to_string_pretty(&*table).map_err(ConfigSaveError::Serialize)?;
+        // Avoid holding the lock while saving to the file
+        drop(table);
+        file.lock()
+            .await
+            .write_all(config_string.as_bytes())
+            .await
+            .map_err(ConfigSaveError::Io)?;
+        Ok(())
     }
 }
 

@@ -108,7 +108,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         config: pumpkin::plugin::config::ConfigTree,
     ) -> wasmtime::Result<()> {
         let res = self.get_config_res(&res)?;
-        Ok(res.provider.lock().await.set(Vec::new(), config).await?)
+        Ok(res.provider.set(Vec::new(), config).await?)
     }
 
     async fn has_key(
@@ -125,7 +125,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         key: pumpkin::plugin::config::ConfigPath,
     ) -> wasmtime::Result<Option<pumpkin::plugin::config::ConfigTree>> {
         let res = self.get_config_res(&res)?;
-        Ok(res.provider.lock().await.get(key).await?)
+        Ok(res.provider.get(key).await?)
     }
 
     async fn path_get_or_default(
@@ -135,7 +135,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         default: pumpkin::plugin::config::ConfigTree,
     ) -> wasmtime::Result<pumpkin::plugin::config::ConfigTree> {
         let res = self.get_config_res(&res)?;
-        Ok(res.provider.lock().await.get(key).await?.unwrap_or(default))
+        Ok(res.provider.get(key).await?.unwrap_or(default))
     }
 
     async fn path_set(
@@ -145,7 +145,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         value: pumpkin::plugin::config::ConfigTree,
     ) -> wasmtime::Result<()> {
         let res = self.get_config_res(&res)?;
-        Ok(res.provider.lock().await.set(key, value).await?)
+        Ok(res.provider.set(key, value).await?)
     }
 
     async fn path_remove(
@@ -154,7 +154,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
         key: pumpkin::plugin::config::ConfigPath,
     ) -> wasmtime::Result<bool> {
         let res = self.get_config_res(&res)?;
-        Ok(res.provider.lock().await.remove(key).await?)
+        Ok(res.provider.remove(key).await?)
     }
 
     async fn path_has_key(
@@ -164,7 +164,7 @@ impl pumpkin::plugin::config::HostConfig for PluginHostState {
     ) -> wasmtime::Result<bool> {
         let res = self.get_config_res(&res)?;
         // TODO: Make a dedicated function for has_key
-        Ok(res.provider.lock().await.get(key).await?.is_some())
+        Ok(res.provider.get(key).await?.is_some())
     }
 
     async fn drop(

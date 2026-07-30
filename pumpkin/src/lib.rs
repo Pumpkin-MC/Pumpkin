@@ -420,6 +420,7 @@ impl PumpkinServer {
         tasks.wait().await;
 
         self.unload_plugins().await;
+        self.server.save_plugin_configs().await;
 
         info!("Starting save.");
 

@@ -15,7 +15,7 @@ use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
 };
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tracing::Level;
 
 use crate::{
@@ -42,7 +42,7 @@ pub struct Context {
     pub plugin_manager: Arc<PluginManager>,
     pub permission_manager: Arc<RwLock<PermissionManager>>,
     pub logger: Arc<OnceLock<LoggerOption>>,
-    pub config: Arc<Mutex<PluginConfigManager>>,
+    pub config: Arc<PluginConfigManager>,
 }
 
 impl Context {
@@ -62,7 +62,7 @@ impl Context {
         handlers: Arc<RwLock<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
         logger: Arc<OnceLock<LoggerOption>>,
-        config: PluginConfigManager,
+        config: Arc<PluginConfigManager>,
     ) -> Self {
         let permission_manager = server.permission_manager.clone();
         Self {
@@ -72,7 +72,7 @@ impl Context {
             plugin_manager,
             permission_manager,
             logger,
-            config: Arc::new(Mutex::new(config)),
+            config,
         }
     }
 

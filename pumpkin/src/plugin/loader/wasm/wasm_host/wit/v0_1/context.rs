@@ -437,7 +437,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         &mut self,
         context: Resource<Context>,
     ) -> wasmtime::Result<Resource<Config>> {
-        let config_provider = self.get_context(&context)?.provider.config.clone();
+        let config_provider = Arc::clone(&self.get_context(&context)?.provider.config);
         self.add_config(config_provider)
             .map_err(|_| wasmtime::Error::msg("failed to add config resource"))
     }

@@ -59,7 +59,7 @@ pub type CommandNodeResource = WasmResource<NonLeafNodeBuilder>;
 pub type ItemStackResource = WasmResource<Arc<Mutex<pumpkin_data::item_stack::ItemStack>>>;
 pub type RecipeManagerResource = WasmResource<Arc<RecipeManager>>;
 pub type BlockEntityResource = WasmResource<Arc<dyn crate::block::entities::BlockEntity>>;
-pub type ConfigResource = WasmResource<Arc<Mutex<PluginConfigManager>>>;
+pub type ConfigResource = WasmResource<Arc<PluginConfigManager>>;
 
 pub type OwnedConsumedArgs = HashMap<String, OwnedArg>;
 
@@ -230,7 +230,7 @@ impl PluginHostState {
 
     pub fn add_config<T>(
         &mut self,
-        config: Arc<Mutex<PluginConfigManager>>,
+        config: Arc<PluginConfigManager>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self
             .resource_table

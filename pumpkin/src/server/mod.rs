@@ -8,6 +8,7 @@ use crate::item::registry::ItemRegistry;
 use crate::net::authentication::fetch_mojang_public_keys;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
 use crate::plugin::PluginManager;
+use crate::plugin::loader::wasm::wasm_host::state::config::PluginConfigManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
@@ -142,6 +143,7 @@ pub struct Server {
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
     world_info_writer: Arc<dyn WorldInfoWriter>,
+    configs: Mutex<Vec<Arc<PluginConfigManager>>>,
 }
 
 impl Server {
@@ -293,6 +295,7 @@ impl Server {
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
+            configs: Mutex::new(Vec::new()),
         };
         let server = Arc::new(server);
 
@@ -1172,6 +1175,23 @@ impl Server {
                     }
                 });
                 entities.into_iter().take(limit).collect()
+            }
+        }
+    }
+
+    pub async fn register_plugin_config(&self, mgr: Arc<PluginConfigManager>) {
+        self.configs.lock().await.push(mgr);
+    }
+
+    pub async fn save_plugin_configs(&self) {
+        let configs = self.configs.lock().await;
+        // TODO: Possibly do all the save operations concurrently instead of one after the other.
+        for mgr in configs.iter() {
+            if !mgr.changed() {
+                continue;
+            }
+            if let Err(e) = mgr.save().await {
+                tracing::error!("Failed to save plugin config: {e}");
             }
         }
     }
