@@ -30,6 +30,7 @@ use crate::screen_handler::{
 use crate::slot::{BoxFuture, NormalSlot, Slot};
 
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::recipe_remainder::get_recipe_remainder_id;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING};
 use pumpkin_data::screen::WindowType;
 use pumpkin_data::statistic::StatisticCategory;
@@ -204,19 +205,38 @@ async fn recipe_matches(
             result,
             ..
         }) => {
-            if count != 2 {
+            // Vanilla transmute recipes require one input stack and their configured
+            // material count. Built-in recipes currently use the default of one
+            // material stack.
+            const MATERIAL_COUNT: usize = 1;
+            if count != MATERIAL_COUNT + 1 {
                 return None;
             }
+
+            let mut input_count = 0;
+            let mut material_count = 0;
             'item_stack: for i in 0..inventory.size() {
                 let slot = inventory.get_stack(i).await;
                 let slot = slot.lock().await;
                 if slot.is_empty() {
                     continue 'item_stack;
                 }
-                if !material.match_item(slot.item) && !input.match_item(slot.item) {
+
+                // This ordering matches TransmuteRecipe::matches: a stack that
+                // satisfies both ingredients is the input, never the material.
+                if input.match_item(slot.item) {
+                    input_count += 1;
+                } else if material.match_item(slot.item) {
+                    material_count += 1;
+                } else {
                     return None;
                 }
             }
+
+            if input_count != 1 || material_count != MATERIAL_COUNT {
+                return None;
+            }
+
             Some(RecipeResult {
                 item_id: result.id.to_string(),
                 count: result.count,
@@ -417,6 +437,27 @@ impl ResultSlot {
     }
 }
 
+/// Applies vanilla's crafting-remainder precedence to one input slot.
+///
+/// The ingredient has already been consumed when this is called. A remainder
+/// replaces an empty slot, merges with an equal surviving stack, or is returned
+/// for insertion into the player's inventory (and dropping if that is full).
+fn apply_recipe_remainder(input: &mut ItemStack, remainder: ItemStack) -> Option<ItemStack> {
+    if remainder.is_empty() {
+        return None;
+    }
+
+    if input.is_empty() {
+        *input = remainder;
+        None
+    } else if input.are_items_and_components_equal(&remainder) {
+        input.increment(remainder.item_count);
+        None
+    } else {
+        Some(remainder)
+    }
+}
+
 impl Slot for ResultSlot {
     fn get_inventory(&self) -> Arc<dyn Inventory> {
         self.inventory.clone()
@@ -453,7 +494,22 @@ impl Slot for ResultSlot {
                 let slot = self.inventory.get_stack(i).await;
                 let mut stack = slot.lock().await;
                 if !stack.is_empty() {
+                    let remainder = get_recipe_remainder_id(stack.item.id)
+                        .and_then(pumpkin_data::item::Item::from_id)
+                        .map(|item| ItemStack::new(1, item));
                     stack.item_count -= 1;
+                    if let Some(remainder) = remainder
+                        && let Some(mut remainder) = apply_recipe_remainder(&mut stack, remainder)
+                    {
+                        drop(stack);
+                        player
+                            .get_inventory()
+                            .insert_stack_anywhere(&mut remainder)
+                            .await;
+                        if !remainder.is_empty() {
+                            player.drop_item(remainder, false).await;
+                        }
+                    }
                 }
             }
             self.mark_dirty().await;
@@ -668,3 +724,86 @@ impl ScreenHandler for CraftingTableScreenHandler {
 }
 
 impl CraftingScreenHandler<CraftingInventory> for CraftingTableScreenHandler {}
+
+#[cfg(test)]
+mod recipe_remainder_tests {
+    use super::apply_recipe_remainder;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+
+    #[test]
+    fn cake_milk_bucket_remainder_replaces_consumed_ingredient() {
+        let mut consumed_milk_bucket = ItemStack::new(0, &Item::MILK_BUCKET);
+        let bucket = ItemStack::new(1, &Item::BUCKET);
+
+        assert!(apply_recipe_remainder(&mut consumed_milk_bucket, bucket).is_none());
+        assert!(consumed_milk_bucket.are_equal(&ItemStack::new(1, &Item::BUCKET)));
+    }
+
+    #[test]
+    fn remainder_merges_with_a_surviving_equal_input_stack() {
+        let mut buckets = ItemStack::new(2, &Item::BUCKET);
+        let bucket = ItemStack::new(1, &Item::BUCKET);
+
+        assert!(apply_recipe_remainder(&mut buckets, bucket).is_none());
+        assert_eq!(buckets.item_count, 3);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crafting::crafting_inventory::CraftingInventory;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::recipes::{RecipeCategoryTypes, RecipeIngredientTypes, RecipeResultStruct};
+
+    fn transmute_recipe() -> CraftingRecipeTypes {
+        CraftingRecipeTypes::CraftingTransmute {
+            category: RecipeCategoryTypes::Misc,
+            group: None,
+            input: RecipeIngredientTypes::Simple("minecraft:shulker_box"),
+            material: RecipeIngredientTypes::Simple("minecraft:black_dye"),
+            result: RecipeResultStruct {
+                id: "minecraft:black_shulker_box",
+                count: 1,
+            },
+        }
+    }
+
+    async fn matches_transmute(stacks: &[&'static Item]) -> bool {
+        let inventory = CraftingInventory::new(3, 3);
+        for (slot, item) in stacks.iter().enumerate() {
+            inventory.set_stack(slot, ItemStack::new(1, item)).await;
+        }
+
+        let recipe = transmute_recipe();
+        recipe_matches(
+            GenericRecipe::Vanilla(&recipe),
+            1,
+            stacks.len(),
+            0,
+            0,
+            stacks.len(),
+            &inventory,
+        )
+        .await
+        .is_some()
+    }
+
+    #[tokio::test]
+    async fn transmute_matches_one_input_and_one_material() {
+        assert!(matches_transmute(&[&Item::SHULKER_BOX, &Item::BLACK_DYE]).await);
+    }
+
+    #[tokio::test]
+    async fn transmute_rejects_two_material_stacks() {
+        assert!(
+            !matches_transmute(&[&Item::SHULKER_BOX, &Item::BLACK_DYE, &Item::BLACK_DYE,]).await
+        );
+    }
+
+    #[tokio::test]
+    async fn transmute_rejects_duplicate_input_stacks() {
+        assert!(!matches_transmute(&[&Item::SHULKER_BOX, &Item::SHULKER_BOX]).await);
+    }
+}
