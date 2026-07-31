@@ -139,6 +139,43 @@ const fn has_finite_position(position: Vector3<f64>) -> bool {
     position.x.is_finite() && position.y.is_finite() && position.z.is_finite()
 }
 
+// Vanilla: `ServerGamePacketListenerImpl::shouldCheckPlayerMovement` only enables
+// correction while ticks run normally, outside sleep, and when the corresponding
+// gamerules permit it. Pumpkin does not yet track vanilla's first-good position or
+// per-tick packet count, so this preserves the one-packet portion of the check.
+#[derive(Debug, Clone, Copy)]
+struct MovementCheckContext {
+    fall_flying: bool,
+    ticks_run_normally: bool,
+    player_movement_check: bool,
+    elytra_movement_check: bool,
+    sleeping: bool,
+}
+
+const fn movement_requires_correction(
+    current_position: Vector3<f64>,
+    target_position: Vector3<f64>,
+    expected_velocity: Vector3<f64>,
+    context: MovementCheckContext,
+) -> bool {
+    if !context.ticks_run_normally
+        || !context.player_movement_check
+        || (context.fall_flying && !context.elytra_movement_check)
+        || context.sleeping
+    {
+        return false;
+    }
+
+    let delta_x = target_position.x - current_position.x;
+    let delta_y = target_position.y - current_position.y;
+    let delta_z = target_position.z - current_position.z;
+    let moved_distance_squared = delta_x * delta_x + delta_y * delta_y + delta_z * delta_z;
+    let expected_distance_squared = expected_velocity.length_squared();
+    let maximum_excess_distance_squared = if context.fall_flying { 300.0 } else { 100.0 };
+
+    moved_distance_squared - expected_distance_squared > maximum_excess_distance_squared
+}
+
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
     BlockOutOfReach,
@@ -395,6 +432,30 @@ impl JavaClient {
             Self::clamp_vertical(position.y),
             Self::clamp_horizontal(position.z),
         );
+        let entity = player.get_entity();
+        let last_pos = entity.pos.load();
+        let (player_movement_check, elytra_movement_check) = {
+            let level_info = player.world().level_info.load();
+            (
+                level_info.game_rules.player_movement_check,
+                level_info.game_rules.elytra_movement_check,
+            )
+        };
+        if movement_requires_correction(
+            last_pos,
+            position,
+            entity.velocity.load(),
+            MovementCheckContext {
+                fall_flying: entity.is_fall_flying(),
+                ticks_run_normally: server.tick_rate_manager.runs_normally(),
+                player_movement_check,
+                elytra_movement_check,
+                sleeping: player.sleeping_since.load().is_some(),
+            },
+        ) {
+            self.force_tp(player, last_pos).await;
+            return;
+        }
 
         send_cancellable! {{
             server;
@@ -529,6 +590,30 @@ impl JavaClient {
             Self::clamp_vertical(position.y),
             Self::clamp_horizontal(position.z),
         );
+        let entity = player.get_entity();
+        let last_pos = entity.pos.load();
+        let (player_movement_check, elytra_movement_check) = {
+            let level_info = player.world().level_info.load();
+            (
+                level_info.game_rules.player_movement_check,
+                level_info.game_rules.elytra_movement_check,
+            )
+        };
+        if movement_requires_correction(
+            last_pos,
+            position,
+            entity.velocity.load(),
+            MovementCheckContext {
+                fall_flying: entity.is_fall_flying(),
+                ticks_run_normally: server.tick_rate_manager.runs_normally(),
+                player_movement_check,
+                elytra_movement_check,
+                sleeping: player.sleeping_since.load().is_some(),
+            },
+        ) {
+            self.force_tp(player, last_pos).await;
+            return;
+        }
 
         send_cancellable! {{
             server;
@@ -2996,7 +3081,8 @@ mod tests {
     };
 
     use super::{
-        TeleportConfirmAction, attack_target_is_in_range, has_finite_position, pvp_allows_attack,
+        MovementCheckContext, TeleportConfirmAction, attack_target_is_in_range,
+        has_finite_position, movement_requires_correction, pvp_allows_attack,
         teleport_confirm_action,
     };
 
@@ -3010,6 +3096,93 @@ mod tests {
             f64::NEG_INFINITY,
             0.0
         )));
+    }
+
+    #[test]
+    fn movement_speed_check_uses_vanilla_excess_distance_limits() {
+        let origin = Vector3::default();
+        let stationary = Vector3::default();
+
+        assert!(!movement_requires_correction(
+            origin,
+            Vector3::new(10.0, 0.0, 0.0),
+            stationary,
+            MovementCheckContext {
+                fall_flying: false,
+                ticks_run_normally: true,
+                player_movement_check: true,
+                elytra_movement_check: true,
+                sleeping: false,
+            },
+        ));
+        assert!(movement_requires_correction(
+            origin,
+            Vector3::new(10.001, 0.0, 0.0),
+            stationary,
+            MovementCheckContext {
+                fall_flying: false,
+                ticks_run_normally: true,
+                player_movement_check: true,
+                elytra_movement_check: true,
+                sleeping: false,
+            },
+        ));
+        assert!(!movement_requires_correction(
+            origin,
+            Vector3::new(11.0, 0.0, 0.0),
+            Vector3::new(5.0, 0.0, 0.0),
+            MovementCheckContext {
+                fall_flying: false,
+                ticks_run_normally: true,
+                player_movement_check: true,
+                elytra_movement_check: true,
+                sleeping: false,
+            },
+        ));
+        assert!(!movement_requires_correction(
+            origin,
+            Vector3::new(300.0_f64.sqrt(), 0.0, 0.0),
+            stationary,
+            MovementCheckContext {
+                fall_flying: true,
+                ticks_run_normally: true,
+                player_movement_check: true,
+                elytra_movement_check: true,
+                sleeping: false,
+            },
+        ));
+        assert!(movement_requires_correction(
+            origin,
+            Vector3::new(300.001_f64.sqrt(), 0.0, 0.0),
+            stationary,
+            MovementCheckContext {
+                fall_flying: true,
+                ticks_run_normally: true,
+                player_movement_check: true,
+                elytra_movement_check: true,
+                sleeping: false,
+            },
+        ));
+
+        for (ticks_run_normally, player_check, elytra_check, sleeping, fall_flying) in [
+            (false, true, true, false, false),
+            (true, false, true, false, false),
+            (true, true, true, true, false),
+            (true, true, false, false, true),
+        ] {
+            assert!(!movement_requires_correction(
+                origin,
+                Vector3::new(100.0, 0.0, 0.0),
+                stationary,
+                MovementCheckContext {
+                    fall_flying,
+                    ticks_run_normally,
+                    player_movement_check: player_check,
+                    elytra_movement_check: elytra_check,
+                    sleeping,
+                },
+            ));
+        }
     }
 
     #[test]
