@@ -84,6 +84,26 @@ use tokio::sync::Mutex;
 /// Vanilla: 2 minutes
 const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
 
+/// Vanilla only accepts the confirmation for the teleport that is currently pending.
+/// Late, duplicate, and unsolicited confirmations are ignored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TeleportConfirmAction {
+    ApplyPendingPosition,
+    Ignore,
+}
+
+const fn teleport_confirm_action(
+    awaiting_teleport_id: Option<i32>,
+    confirmation_id: i32,
+) -> TeleportConfirmAction {
+    match awaiting_teleport_id {
+        Some(awaiting_id) if awaiting_id == confirmation_id => {
+            TeleportConfirmAction::ApplyPendingPosition
+        }
+        _ => TeleportConfirmAction::Ignore,
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
     BlockOutOfReach,
@@ -224,25 +244,21 @@ impl JavaClient {
         confirm_teleport: SConfirmTeleport,
     ) {
         let mut awaiting_teleport = player.awaiting_teleport.lock().await;
-        if let Some((id, position)) = awaiting_teleport.as_ref() {
-            if id == &confirm_teleport.teleport_id {
-                // We should set the position now to what we requested in the teleport packet.
-                // This may fix issues when the client sends the position while being teleported.
-                player.get_entity().set_pos(*position);
-
-                *awaiting_teleport = None;
-                drop(awaiting_teleport);
-            } else {
-                drop(awaiting_teleport);
-                self.kick(TextComponent::text("Wrong teleport id")).await;
-            }
-        } else {
-            drop(awaiting_teleport);
-            self.kick(TextComponent::text(
-                "Send Teleport confirm, but we did not teleport",
-            ))
-            .await;
+        if teleport_confirm_action(
+            awaiting_teleport.as_ref().map(|(id, _)| id.0),
+            confirm_teleport.teleport_id.0,
+        ) == TeleportConfirmAction::Ignore
+        {
+            return;
         }
+
+        let Some((_, position)) = awaiting_teleport.take() else {
+            return;
+        };
+        drop(awaiting_teleport);
+
+        // Apply the server-authoritative position once the matching confirmation arrives.
+        player.get_entity().set_pos(position);
     }
 
     pub async fn handle_change_game_mode(
@@ -2969,6 +2985,29 @@ impl JavaClient {
             player
                 .subscribed_debug_sample
                 .store(true, Ordering::Relaxed);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TeleportConfirmAction, teleport_confirm_action};
+
+    #[test]
+    fn teleport_confirm_only_accepts_the_current_pending_id() {
+        use TeleportConfirmAction::{ApplyPendingPosition, Ignore};
+
+        for (awaiting_id, confirmation_id, expected) in [
+            (None, 7, Ignore),
+            (Some(7), 6, Ignore),
+            (Some(7), 7, ApplyPendingPosition),
+            // A duplicate confirm becomes unsolicited after the first matching confirm clears it.
+            (None, 7, Ignore),
+        ] {
+            assert_eq!(
+                teleport_confirm_action(awaiting_id, confirmation_id),
+                expected
+            );
         }
     }
 }
