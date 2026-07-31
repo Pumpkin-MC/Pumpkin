@@ -138,6 +138,7 @@ pub struct Server {
     /// Manages scheduled tasks (e.g. from plugins)
     pub task_scheduler: Arc<TaskScheduler>,
     tasks: TaskTracker,
+    runtime: tokio::runtime::Handle,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
@@ -287,6 +288,7 @@ impl Server {
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
+            runtime: tokio::runtime::Handle::current(),
             task_scheduler: Arc::new(TaskScheduler::new()),
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
@@ -391,7 +393,7 @@ impl Server {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.tasks.spawn(task)
+        self.tasks.spawn_on(task, &self.runtime)
     }
 
     pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {

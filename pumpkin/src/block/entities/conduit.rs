@@ -45,6 +45,17 @@ impl BlockEntity for ConduitBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        nbt.put_bool("Active", *self.active.try_lock().ok()?);
+        if let Ok(target) = self.target.try_lock()
+            && let Some(ref tgt) = *target
+        {
+            nbt.put("Target", tgt.clone());
+        }
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

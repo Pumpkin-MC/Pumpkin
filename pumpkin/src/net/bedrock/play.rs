@@ -49,7 +49,10 @@ use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{BlockHitResult, registry::BlockActionResult},
-    entity::{EntityBase, player::Player},
+    entity::{
+        EntityBase,
+        player::{MINE_BLOCK_EXHAUSTION, Player},
+    },
     net::{DisconnectReason, bedrock::BedrockClient},
     plugin::player::{
         item_held::PlayerItemHeldEvent,
@@ -670,6 +673,7 @@ impl BedrockClient {
                                 cursor_pos: &data.click_position,
                             },
                             &held_item,
+                            &EquipmentSlot::MAIN_HAND,
                             &server,
                             &world,
                         )
@@ -1098,6 +1102,7 @@ impl BedrockClient {
                     let speed = crate::block::calc_block_breaking(player, state, block).await;
                     if speed >= 1.0 {
                         let broken_state = world.get_block_state(&location);
+                        let can_harvest = player.can_harvest(broken_state, block).await;
                         let new_state = world
                             .break_block(
                                 &location,
@@ -1111,6 +1116,9 @@ impl BedrockClient {
                                 .broken(&world, block, player, &location, server, broken_state)
                                 .await;
                             player.apply_tool_damage_for_block_break(broken_state).await;
+                            if can_harvest {
+                                player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                            }
                         }
                     } else {
                         player.mining.store(true, Ordering::Relaxed);
@@ -1156,6 +1164,9 @@ impl BedrockClient {
                             .broken(&world, block, player, &location, server, state)
                             .await;
                         player.apply_tool_damage_for_block_break(state).await;
+                        if block_drop {
+                            player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                        }
                     }
                 }
             }

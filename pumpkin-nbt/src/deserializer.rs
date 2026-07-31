@@ -1,3 +1,5 @@
+//! Deserialization from Java Edition, unnamed network, and Bedrock NBT.
+
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::io::{Cursor, Seek, SeekFrom};
@@ -10,9 +12,14 @@ use io::Read;
 use serde::de::{self, DeserializeSeed, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, forward_to_deserialize_any};
 
+/// Result type returned by NBT deserialization operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
 thread_local! {
+    /// Tag ID of the sequence currently visited by Serde.
+    ///
+    /// This is used to preserve the distinction between NBT lists and the
+    /// three specialized NBT array types.
     pub static CURR_VISITOR_LIST_TYPE: RefCell<Option<u8>> = const { std::cell::RefCell::new(None) };
 }
 
@@ -26,15 +33,28 @@ pub(super) fn set_curr_visitor_seq_list_id(tag: Option<u8>) {
     });
 }
 
+/// Byte source used by NBT read helpers.
+///
+/// Implementations may return borrowed strings and byte arrays when the
+/// underlying storage permits it.
 pub trait NbtDataSource<'a> {
+    /// Reads one unsigned byte.
     fn read_u8(&mut self) -> Result<u8>;
+    /// Fills `buf` with bytes from the source.
     fn read_bytes(&mut self, buf: &mut [u8]) -> Result<()>;
+    /// Moves the current position by `offset` bytes.
     fn seek_relative(&mut self, offset: i64) -> Result<()>;
+    /// Reads and decodes a string payload of `len` bytes.
     fn read_string(&mut self, len: usize) -> Result<Cow<'a, str>>;
+    /// Reads a byte-array payload of `len` elements.
     fn read_byte_array(&mut self, len: usize) -> Result<Cow<'a, [i8]>>;
 }
 
-pub struct NbtStreamReader<R>(pub R);
+/// Adapts a [`Read`] and [`Seek`] stream into an [`NbtDataSource`].
+pub struct NbtStreamReader<R>(
+    /// Wrapped input stream.
+    pub R,
+);
 
 impl<'a, R: Read + Seek> NbtDataSource<'a> for NbtStreamReader<R> {
     fn read_u8(&mut self) -> Result<u8> {
@@ -191,63 +211,88 @@ impl<'a> NbtDataSource<'a> for Cursor<Vec<u8>> {
     }
 }
 
+/// Format-specific primitive reader used by the NBT parser.
 pub trait NbtReadHelper<'a> {
+    /// Underlying byte source.
     type Reader: NbtDataSource<'a>;
 
+    /// Returns the underlying byte source.
     fn reader(&mut self) -> &mut Self::Reader;
 
+    /// Advances by `count` bytes.
     fn skip_bytes(&mut self, count: i64) -> Result<()> {
         self.reader().seek_relative(count)
     }
+    /// Advances past an unsigned byte.
     fn skip_u8(&mut self) -> Result<()> {
         self.skip_bytes(1)
     }
+    /// Advances past a signed byte.
     fn skip_i8(&mut self) -> Result<()> {
         self.skip_bytes(1)
     }
+    /// Advances past a 16-bit signed integer.
     fn skip_i16(&mut self) -> Result<()> {
         self.skip_bytes(2)
     }
+    /// Advances past a 32-bit signed integer.
     fn skip_i32(&mut self) -> Result<()> {
         self.skip_bytes(4)
     }
+    /// Advances past a 64-bit signed integer.
     fn skip_i64(&mut self) -> Result<()> {
         self.skip_bytes(8)
     }
+    /// Advances past a 32-bit floating-point number.
     fn skip_f32(&mut self) -> Result<()> {
         self.skip_bytes(4)
     }
+    /// Advances past a 64-bit floating-point number.
     fn skip_f64(&mut self) -> Result<()> {
         self.skip_bytes(8)
     }
+    /// Advances past a length-prefixed string.
     fn skip_string(&mut self) -> Result<()>;
 
+    /// Reads an unsigned byte.
     fn get_u8(&mut self) -> Result<u8>;
+    /// Reads a signed byte.
     fn get_i8(&mut self) -> Result<i8>;
+    /// Reads a 16-bit signed integer.
     fn get_i16(&mut self) -> Result<i16>;
+    /// Reads a 32-bit signed integer.
     fn get_i32(&mut self) -> Result<i32>;
+    /// Reads a 64-bit signed integer.
     fn get_i64(&mut self) -> Result<i64>;
+    /// Reads a 32-bit floating-point number.
     fn get_f32(&mut self) -> Result<f32>;
+    /// Reads a 64-bit floating-point number.
     fn get_f64(&mut self) -> Result<f64>;
+    /// Reads a length-prefixed string.
     fn get_string(&mut self) -> Result<Cow<'a, str>>;
+    /// Reads a byte array with the supplied element count.
     fn get_byte_array(&mut self, len: usize) -> Result<Cow<'a, [i8]>>;
 }
 
+/// Reads Java Edition NBT primitives using big-endian numeric encoding.
 pub struct NbtReadHelperJava<D> {
     reader: D,
 }
 
 impl<D> NbtReadHelperJava<D> {
+    /// Creates a Java Edition reader over `r`.
     pub const fn new(r: D) -> Self {
         Self { reader: r }
     }
 }
 
+/// Reads Bedrock network NBT primitives using little-endian and variable-length encoding.
 pub struct NbtReadHelperBedrock<D> {
     reader: D,
 }
 
 impl<D> NbtReadHelperBedrock<D> {
+    /// Creates a Bedrock network reader over `r`.
     pub const fn new(r: D) -> Self {
         Self { reader: r }
     }
@@ -409,6 +454,7 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelper<'a> for NbtReadHelperBedrock<D> {
     }
 }
 
+/// A Serde deserializer backed by a format-specific NBT reader.
 pub struct Deserializer<R> {
     input: R,
     tag_to_deserialize_stack: Option<u8>,
@@ -417,6 +463,10 @@ pub struct Deserializer<R> {
 }
 
 impl<R> Deserializer<R> {
+    /// Creates a deserializer.
+    ///
+    /// When `is_named` is `true`, the root compound name is consumed from the
+    /// input. Unnamed network NBT must pass `false`.
     pub const fn new(input: R, is_named: bool) -> Self {
         Self {
             input,
@@ -427,37 +477,43 @@ impl<R> Deserializer<R> {
     }
 }
 
-/// Deserializes struct using Serde Deserializer from normal NBT
+/// Deserializes a value from named Java Edition NBT.
 pub fn from_bytes<'a, T: Deserialize<'a>>(r: impl Read + Seek) -> Result<T> {
     let mut deserializer = Deserializer::new(NbtReadHelperJava::new(NbtStreamReader(r)), true);
     T::deserialize(&mut deserializer)
 }
 
-/// Deserializes struct using Serde Deserializer from network NBT
+/// Deserializes a value from unnamed Java Edition network NBT.
 pub fn from_bytes_unnamed<'a, T: Deserialize<'a>>(r: impl Read + Seek) -> Result<T> {
     let mut deserializer = Deserializer::new(NbtReadHelperJava::new(NbtStreamReader(r)), false);
     T::deserialize(&mut deserializer)
 }
 
-/// Deserializes struct using Serde Deserializer from Bedrock network NBT
+/// Deserializes a value from named Bedrock network NBT.
 pub fn from_bytes_bedrock<'a, T: Deserialize<'a>>(r: impl Read + Seek) -> Result<T> {
     let mut deserializer = Deserializer::new(NbtReadHelperBedrock::new(NbtStreamReader(r)), true);
     T::deserialize(&mut deserializer)
 }
 
-/// Deserializes struct using Serde Deserializer from a normal NBT slice (zero-allocation)
+/// Deserializes a value from a named Java Edition NBT slice.
+///
+/// Strings and byte arrays may borrow directly from `slice`.
 pub fn from_slice<'a, T: Deserialize<'a>>(slice: &'a [u8]) -> Result<T> {
     let mut deserializer = Deserializer::new(NbtReadHelperJava::new(Cursor::new(slice)), true);
     T::deserialize(&mut deserializer)
 }
 
-/// Deserializes struct using Serde Deserializer from a network NBT slice (zero-allocation)
+/// Deserializes a value from an unnamed Java Edition network NBT slice.
+///
+/// Strings and byte arrays may borrow directly from `slice`.
 pub fn from_slice_unnamed<'a, T: Deserialize<'a>>(slice: &'a [u8]) -> Result<T> {
     let mut deserializer = Deserializer::new(NbtReadHelperJava::new(Cursor::new(slice)), false);
     T::deserialize(&mut deserializer)
 }
 
-/// Deserializes struct using Serde Deserializer from a Bedrock network NBT slice (zero-allocation)
+/// Deserializes a value from a named Bedrock network NBT slice.
+///
+/// Strings and byte arrays may borrow directly from `slice`.
 pub fn from_slice_bedrock<'a, T: Deserialize<'a>>(slice: &'a [u8]) -> Result<T> {
     let mut deserializer = Deserializer::new(NbtReadHelperBedrock::new(Cursor::new(slice)), true);
     T::deserialize(&mut deserializer)

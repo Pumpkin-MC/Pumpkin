@@ -29,6 +29,7 @@ use crate::block::OnLandedUponArgs;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
+use crate::entity::combat::knockback_after_resistance;
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
@@ -2419,7 +2420,12 @@ impl EntityBase for LivingEntity {
                     let target_pos = self.entity.pos.load();
                     let dx = source_pos.x - target_pos.x;
                     let dz = source_pos.z - target_pos.z;
-                    self.entity.apply_knockback(0.4, dx, dz);
+                    let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+                    self.entity.apply_knockback(
+                        knockback_after_resistance(0.4, resistance),
+                        dx,
+                        dz,
+                    );
                     self.entity.send_velocity();
                 }
             }

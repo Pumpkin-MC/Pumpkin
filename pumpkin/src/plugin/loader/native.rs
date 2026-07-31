@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::sync::LazyLock;
 
 use libloading::Library;
 
@@ -35,10 +36,13 @@ impl PluginLoader for NativePluginLoader {
             }
 
             // 2. Extract Metadata (METADATA)
+            // `#[plugin_impl]` exports this as a `LazyLock`, since `PluginMetadata`
+            // owns its strings and can't be built in a const.
             let metadata = unsafe {
-                &**library
-                    .get::<*const PluginMetadata>(b"METADATA")
-                    .map_err(|_| LoaderError::MetadataMissing)?
+                let metadata = library
+                    .get::<*const LazyLock<PluginMetadata>>(b"METADATA")
+                    .map_err(|_| LoaderError::MetadataMissing)?;
+                (**metadata).clone()
             };
 
             // 3. Extract Plugin Factory (plugin)
@@ -50,7 +54,7 @@ impl PluginLoader for NativePluginLoader {
 
             Ok((
                 plugin_factory(),
-                metadata.clone(),
+                metadata,
                 Box::new(library) as Box<dyn Any + Send + Sync>,
             ))
         })

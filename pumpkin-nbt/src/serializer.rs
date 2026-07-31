@@ -1,3 +1,5 @@
+//! Serialization to Java Edition, unnamed network, and Bedrock NBT.
+
 use serde::ser::Impossible;
 use serde::{Serialize, ser};
 use std::io::Write;
@@ -8,6 +10,7 @@ use crate::{
     NBT_LONG_ARRAY_TAG, SHORT_ID, STRING_ID,
 };
 
+/// Result type returned by NBT serialization operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
 macro_rules! define_write_number_be {
@@ -30,30 +33,44 @@ macro_rules! define_write_number_le {
     };
 }
 
+/// Format-specific primitive writer used by the NBT serializer.
 pub trait NbtWriteHelper {
+    /// Underlying output writer.
     type Writer: Write;
 
+    /// Returns the underlying output writer.
     fn writer(&mut self) -> &mut Self::Writer;
+    /// Writes an unsigned byte.
     fn write_u8(&mut self, value: u8) -> Result<()>;
+    /// Writes a signed byte.
     fn write_i8(&mut self, value: i8) -> Result<()>;
+    /// Writes a 16-bit signed integer.
     fn write_i16(&mut self, value: i16) -> Result<()>;
+    /// Writes a 32-bit signed integer.
     fn write_i32(&mut self, value: i32) -> Result<()>;
+    /// Writes a 64-bit signed integer.
     fn write_i64(&mut self, value: i64) -> Result<()>;
+    /// Writes a 32-bit floating-point number.
     fn write_f32(&mut self, value: f32) -> Result<()>;
+    /// Writes a 64-bit floating-point number.
     fn write_f64(&mut self, value: f64) -> Result<()>;
+    /// Writes a length-prefixed string.
     fn write_string(&mut self, value: &str) -> Result<()>;
 
+    /// Writes an unmodified byte slice.
     fn write_slice(&mut self, value: &[u8]) -> Result<()> {
         self.writer().write_all(value).map_err(Error::Incomplete)?;
         Ok(())
     }
 }
 
+/// Writes Java Edition NBT primitives using big-endian numeric encoding.
 pub struct NbtWriteHelperJava<W: Write> {
     writer: W,
 }
 
 impl<W: Write> NbtWriteHelperJava<W> {
+    /// Creates a Java Edition writer over `w`.
     pub const fn new(w: W) -> Self {
         Self { writer: w }
     }
@@ -93,11 +110,13 @@ impl<W: Write> NbtWriteHelper for NbtWriteHelperJava<W> {
     }
 }
 
+/// Writes Bedrock network NBT primitives using little-endian and variable-length encoding.
 pub struct NbtWriteHelperBedrock<W: Write> {
     writer: W,
 }
 
 impl<W: Write> NbtWriteHelperBedrock<W> {
+    /// Creates a Bedrock network writer over `w`.
     pub const fn new(w: W) -> Self {
         Self { writer: w }
     }
@@ -185,6 +204,7 @@ impl<W: Write> NbtWriteHelper for NbtWriteHelperBedrock<W> {
     }
 }
 
+/// A Serde serializer backed by a format-specific NBT writer.
 pub struct Serializer<W: NbtWriteHelper> {
     output: W,
     state: State,
@@ -193,6 +213,9 @@ pub struct Serializer<W: NbtWriteHelper> {
 }
 
 impl<W: NbtWriteHelper> Serializer<W> {
+    /// Creates a serializer with an optional root compound name.
+    ///
+    /// Passing `None` writes unnamed network NBT.
     pub const fn new(output: W, name: Option<String>) -> Self {
         Self {
             output,
@@ -276,31 +299,33 @@ impl<W: NbtWriteHelper> Serializer<W> {
     }
 }
 
-/// Serializes struct using Serde Serializer to unnamed (network) NBT
+/// Serializes a value as unnamed Java Edition network NBT.
 pub fn to_bytes_unnamed<T: Serialize>(value: &T, w: impl Write) -> Result<()> {
     let mut serializer = Serializer::new(NbtWriteHelperJava::new(w), None);
     value.serialize(&mut serializer)?;
     Ok(())
 }
 
-/// Serializes struct using Serde Serializer to normal NBT
+/// Serializes a value as named Java Edition NBT using `name` for the root compound.
 pub fn to_bytes_named<T: Serialize>(value: &T, name: String, w: impl Write) -> Result<()> {
     let mut serializer = Serializer::new(NbtWriteHelperJava::new(w), Some(name));
     value.serialize(&mut serializer)?;
     Ok(())
 }
 
-/// Serializes struct using Serde Serializer to Bedrock network NBT
+/// Serializes a value as named Bedrock network NBT using `name` for the root compound.
 pub fn to_bytes_named_bedrock<T: Serialize>(value: &T, name: String, w: impl Write) -> Result<()> {
     let mut serializer = Serializer::new(NbtWriteHelperBedrock::new(w), Some(name));
     value.serialize(&mut serializer)?;
     Ok(())
 }
 
+/// Serializes a value as Java Edition NBT with an empty root name.
 pub fn to_bytes<T: Serialize>(value: &T, w: impl Write) -> Result<()> {
     to_bytes_named(value, String::new(), w)
 }
 
+/// Serializes a value as Bedrock network NBT with an empty root name.
 pub fn to_bytes_bedrock<T: Serialize>(value: &T, w: impl Write) -> Result<()> {
     to_bytes_named_bedrock(value, String::new(), w)
 }

@@ -30,9 +30,10 @@ pub mod processor;
 mod structure_template;
 mod template_piece;
 
+use pumpkin_data::BlockStateId;
 use pumpkin_data::Mirror;
 use pumpkin_data::Rotation;
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomImpl, hash_block_pos, legacy_rand::LegacyRand};
 
@@ -40,13 +41,21 @@ use crate::ProtoChunk;
 
 pub use block_state_resolver::BlockStateResolver;
 pub use cache::{
-    TemplateCache, get_pool_elements, get_processor_list_json, get_template,
-    get_template_pool_json, global_cache,
+    TemplateCache, all_pool_names, all_structure_names, all_template_names, get_pool_elements,
+    get_processor_list_json, get_template, get_template_pool_json, global_cache,
 };
 pub use processor::StructureProcessor;
-pub use pumpkin_data::{Mirror as BlockMirror, Rotation as BlockRotation};
+pub use pumpkin_data::{BlockState, Mirror as BlockMirror, Rotation as BlockRotation};
 pub use structure_template::{PaletteEntry, StructureTemplate, TemplateBlock, TemplateEntity};
 pub use template_piece::TemplatePiece;
+
+/// Abstraction over block placement, implemented by both [`ProtoChunk`] (worldgen) and
+/// [`WorldBlockPlacer`] (live `/place template` command).
+pub trait BlockPlacer {
+    fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId;
+    fn set_block_state(&mut self, pos: &Vector3<i32>, state: &BlockState);
+    fn add_block_entity(&mut self, nbt: NbtCompound);
+}
 
 /// Places a template at a world origin with an un-rotated XZ offset.
 ///
@@ -60,7 +69,7 @@ pub use template_piece::TemplatePiece;
 /// `offset` is the un-rotated XZ offset from origin (`x_offset`, `z_offset`) - rotation is applied automatically.
 #[allow(clippy::too_many_arguments)]
 pub fn place_template(
-    chunk: &mut ProtoChunk,
+    placer: &mut impl BlockPlacer,
     template: &StructureTemplate,
     origin: Vector3<i32>,
     offset: (i32, i32),
@@ -81,11 +90,6 @@ pub fn place_template(
         if palette_entry.name == "minecraft:structure_void"
             || palette_entry.name == "minecraft:structure_block"
         {
-            continue;
-        }
-
-        // Skip air blocks when using IGNORE_AIR processor (e.g. nether fossils)
-        if skip_air && palette_entry.name == "minecraft:air" {
             continue;
         }
 
@@ -131,7 +135,7 @@ pub fn place_template(
         let world_pos = Vector3::new(wx, wy, wz);
 
         if apply_waterlogging
-            && chunk.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
+            && placer.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
             && let Some((_, waterlogged)) = placed_entry
                 .properties
                 .iter_mut()
@@ -148,7 +152,7 @@ pub fn place_template(
         // Apply processors
         let mut should_place = true;
         for processor in processors {
-            let Some(processed_state) = processor.process(chunk, world_pos, state) else {
+            let Some(processed_state) = processor.process(placer, world_pos, state) else {
                 should_place = false;
                 break;
             };
@@ -157,8 +161,12 @@ pub fn place_template(
         if !should_place {
             continue;
         }
+        // Legacy pool elements ignore air after jigsaw replacement and custom processors.
+        if skip_air && state.id.to_block_id() == pumpkin_data::Block::AIR.id {
+            continue;
+        }
 
-        chunk.set_block_state(wx, wy, wz, state);
+        placer.set_block_state(&Vector3::new(wx, wy, wz), state);
 
         // Create block entities for interactive blocks (furnaces, chests, etc.)
         let block_entity_id = get_block_entity_id(&placed_entry.name);
@@ -190,8 +198,73 @@ pub fn place_template(
                 placed_nbt.put_long("LootTableSeed", random.next_i64());
             }
 
-            chunk.add_block_entity(placed_nbt);
+            placer.add_block_entity(placed_nbt);
         }
+    }
+}
+
+pub(crate) fn place_template_entities(
+    chunk: &mut ProtoChunk,
+    template: &StructureTemplate,
+    origin: Vector3<i32>,
+    rotation: Rotation,
+    chunk_box: &pumpkin_util::math::block_box::BlockBox,
+) {
+    for entity in &template.entities {
+        let block_pos = rotation.transform_pos(entity.block_pos, template.size);
+        let world_block_pos = Vector3::new(
+            origin.x + block_pos.x,
+            origin.y + block_pos.y,
+            origin.z + block_pos.z,
+        );
+        if !chunk_box.contains_pos(&world_block_pos) {
+            continue;
+        }
+
+        let pos = match rotation {
+            Rotation::None => entity.pos,
+            Rotation::Clockwise90 => Vector3::new(
+                f64::from(template.size.z) - entity.pos.z,
+                entity.pos.y,
+                entity.pos.x,
+            ),
+            Rotation::Rotate180 => Vector3::new(
+                f64::from(template.size.x) - entity.pos.x,
+                entity.pos.y,
+                f64::from(template.size.z) - entity.pos.z,
+            ),
+            Rotation::CounterClockwise90 => Vector3::new(
+                entity.pos.z,
+                entity.pos.y,
+                f64::from(template.size.x) - entity.pos.x,
+            ),
+        };
+        let mut nbt = entity.nbt.clone();
+        nbt.put(
+            "Pos",
+            NbtTag::List(vec![
+                (f64::from(origin.x) + pos.x).into(),
+                (f64::from(origin.y) + pos.y).into(),
+                (f64::from(origin.z) + pos.z).into(),
+            ]),
+        );
+        nbt.child_tags.remove("UUID");
+
+        if let Some(rotation_nbt) = nbt.get_list("Rotation")
+            && rotation_nbt.len() == 2
+        {
+            let yaw = rotation_nbt[0].extract_float().unwrap_or_default()
+                + match rotation {
+                    Rotation::None => 0.0,
+                    Rotation::Clockwise90 => 90.0,
+                    Rotation::Rotate180 => 180.0,
+                    Rotation::CounterClockwise90 => 270.0,
+                };
+            let pitch = rotation_nbt[1].extract_float().unwrap_or_default();
+            nbt.put("Rotation", NbtTag::List(vec![yaw.into(), pitch.into()]));
+        }
+
+        chunk.add_structure_entity(nbt);
     }
 }
 
