@@ -18,6 +18,14 @@ struct ParticleMeta<'a> {
     data: &'a [u8],
 }
 
+fn application_scale(_distance: f64, _radius: f64) -> f32 {
+    1.0
+}
+
+fn can_reapply(reapplication_map: &HashMap<i32, i32>, entity_id: i32) -> bool {
+    !reapplication_map.contains_key(&entity_id)
+}
+
 impl pumpkin_protocol::java::client::play::MetadataSerializer for ParticleMeta<'_> {
     fn write_metadata(
         &self,
@@ -315,6 +323,13 @@ impl EntityBase for AreaEffectCloudEntity {
                 // Determine candidate id early
                 let ent_id = cand_clone.get_entity().entity_id;
 
+                {
+                    let reapplication_map = self.reapplication_map.lock().await;
+                    if !can_reapply(&*reapplication_map, ent_id) {
+                        continue;
+                    }
+                }
+
                 let radius_f = *self.radius.lock().await as f64;
                 let pos_e = cand_clone.get_entity().pos.load();
                 let dx = pos_e.x - pos.x;
@@ -324,39 +339,15 @@ impl EntityBase for AreaEffectCloudEntity {
                 if dist > radius_f {
                     continue;
                 }
-
-                let scale = 1.0f32 - (dist as f32 / radius_f as f32);
+                let scale = application_scale(dist, radius_f);
 
                 // Decide whether this contact will actually apply an effect
                 let effs_clone = self.effects.lock().await.clone();
-                let mut will_apply = false;
-
-                // Only living entities can receive effects
-                if let Some(living_ref) = cand_clone.get_living_entity() {
-                    for (eff, _, _, _, _, _) in &effs_clone {
-                        // Instant effects always apply
-                        let is_instant = eff.id
-                            == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id
-                            || eff.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id;
-                        if is_instant {
-                            will_apply = true;
-                            break;
-                        }
-
-                        // Only apply if entity does not already have that effect
-                        if !living_ref.has_effect(eff).await {
-                            will_apply = true;
-                            break;
-                        }
-                    }
-                }
-
-                // If nothing would be applied, skip
-                if !will_apply {
+                if effs_clone.is_empty() || cand_clone.get_living_entity().is_none() {
                     continue;
                 }
 
-                // Apply scaled effects inside a spawned task
+                // Apply effects inside a spawned task
                 let cand_for_spawn = cand_clone.clone();
                 let effs_for_spawn = effs_clone.clone();
                 tokio::spawn(async move {
@@ -427,5 +418,29 @@ impl EntityBase for AreaEffectCloudEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{application_scale, can_reapply};
+    use std::collections::HashMap;
+
+    #[test]
+    fn cloud_effect_scale_is_flat() {
+        assert_eq!(application_scale(0.0, 3.0), 1.0);
+        assert_eq!(application_scale(2.99, 3.0), 1.0);
+    }
+
+    #[test]
+    fn reapplication_is_controlled_by_cooldown_map() {
+        let mut cooldowns = HashMap::new();
+        assert!(can_reapply(&cooldowns, 42));
+
+        cooldowns.insert(42, 20);
+        assert!(!can_reapply(&cooldowns, 42));
+
+        cooldowns.remove(&42);
+        assert!(can_reapply(&cooldowns, 42));
     }
 }
