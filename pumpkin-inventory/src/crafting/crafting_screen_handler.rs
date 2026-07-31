@@ -29,6 +29,8 @@ use crate::screen_handler::{
 };
 use crate::slot::{BoxFuture, NormalSlot, Slot};
 
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::DataComponentImpl;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipe_remainder::get_recipe_remainder_id;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING};
@@ -55,6 +57,27 @@ pub struct ResultSlot {
 pub struct RecipeResult {
     pub item_id: String,
     pub count: u8,
+    /// Components copied from a transmuted input, matching vanilla's
+    /// `TransmuteRecipe::createWithOriginalComponents`.
+    pub component_patch: Vec<(DataComponent, Option<Box<dyn DataComponentImpl>>)>,
+}
+
+impl RecipeResult {
+    fn new(item_id: String, count: u8) -> Self {
+        Self {
+            item_id,
+            count,
+            component_patch: Vec::new(),
+        }
+    }
+
+    fn transmuted(item_id: String, count: u8, input: &ItemStack) -> Self {
+        Self {
+            item_id,
+            count,
+            component_patch: input.patch.clone(),
+        }
+    }
 }
 
 /// Checks if a recipe pattern is symmetrical horizontally.
@@ -166,10 +189,7 @@ async fn recipe_matches(
                 }
             }
 
-            matched.then_some(RecipeResult {
-                item_id: result.id.to_string(),
-                count: result.count,
-            })
+            matched.then(|| RecipeResult::new(result.id.to_string(), result.count))
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingShapeless {
             ingredients,
@@ -194,10 +214,7 @@ async fn recipe_matches(
                 }
                 return None;
             }
-            Some(RecipeResult {
-                item_id: result.id.to_string(),
-                count: result.count,
-            })
+            Some(RecipeResult::new(result.id.to_string(), result.count))
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingTransmute {
             input,
@@ -215,6 +232,7 @@ async fn recipe_matches(
 
             let mut input_count = 0;
             let mut material_count = 0;
+            let mut input_stack = None;
             'item_stack: for i in 0..inventory.size() {
                 let slot = inventory.get_stack(i).await;
                 let slot = slot.lock().await;
@@ -226,6 +244,7 @@ async fn recipe_matches(
                 // satisfies both ingredients is the input, never the material.
                 if input.match_item(slot.item) {
                     input_count += 1;
+                    input_stack = Some(slot.clone());
                 } else if material.match_item(slot.item) {
                     material_count += 1;
                 } else {
@@ -237,10 +256,13 @@ async fn recipe_matches(
                 return None;
             }
 
-            Some(RecipeResult {
-                item_id: result.id.to_string(),
-                count: result.count,
-            })
+            Some(RecipeResult::transmuted(
+                result.id.to_string(),
+                result.count,
+                input_stack
+                    .as_ref()
+                    .expect("matched transmute recipe has an input"),
+            ))
         }
         GenericRecipe::Vanilla(CraftingRecipeTypes::CraftingDecoratedPot { .. }) => {
             if count != 4 || inventory.get_width() != 3 || inventory.get_height() != 3 {
@@ -257,10 +279,7 @@ async fn recipe_matches(
                     return None;
                 }
             }
-            Some(RecipeResult {
-                item_id: "minecraft:decorated_pot".to_string(),
-                count: 1,
-            })
+            Some(RecipeResult::new("minecraft:decorated_pot".to_string(), 1))
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shaped {
             pattern,
@@ -306,10 +325,7 @@ async fn recipe_matches(
                     }
                 }
             }
-            matched.then_some(RecipeResult {
-                item_id: result.item_id.clone(),
-                count: result.count,
-            })
+            matched.then(|| RecipeResult::new(result.item_id.clone(), result.count))
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shapeless {
             ingredients,
@@ -334,10 +350,7 @@ async fn recipe_matches(
                 }
                 return None;
             }
-            Some(RecipeResult {
-                item_id: result.item_id.clone(),
-                count: result.count,
-            })
+            Some(RecipeResult::new(result.item_id.clone(), result.count))
         }
         _ => None,
     }
@@ -428,7 +441,7 @@ impl ResultSlot {
                 .unwrap_or(&matched.item_id);
             let item = pumpkin_data::item::Item::from_registry_key(key)
                 .unwrap_or(&pumpkin_data::item::Item::AIR);
-            ItemStack::new(matched.count, item)
+            ItemStack::new_with_component(matched.count, item, matched.component_patch)
         } else {
             ItemStack::EMPTY.clone()
         };
@@ -805,5 +818,28 @@ mod tests {
     #[tokio::test]
     async fn transmute_rejects_duplicate_input_stacks() {
         assert!(!matches_transmute(&[&Item::SHULKER_BOX, &Item::SHULKER_BOX]).await);
+    }
+
+    #[tokio::test]
+    async fn transmute_preserves_the_input_component_patch() {
+        let inventory = CraftingInventory::new(3, 3);
+        let mut input = ItemStack::new(1, &Item::SHULKER_BOX);
+        input.set_damage(26);
+        inventory.set_stack(0, input).await;
+        inventory
+            .set_stack(1, ItemStack::new(1, &Item::BLACK_DYE))
+            .await;
+
+        let recipe = transmute_recipe();
+        let result = recipe_matches(GenericRecipe::Vanilla(&recipe), 1, 2, 0, 0, 2, &inventory)
+            .await
+            .expect("transmute recipe should match");
+        let output = ItemStack::new_with_component(
+            result.count,
+            &Item::BLACK_SHULKER_BOX,
+            result.component_patch,
+        );
+
+        assert_eq!(output.get_damage(), 26);
     }
 }
