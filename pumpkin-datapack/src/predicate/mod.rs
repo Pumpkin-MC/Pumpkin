@@ -44,7 +44,7 @@ pub fn load_predicates(
                 .or_else(|| path.strip_prefix("predicates/"))
                 .and_then(|p| p.strip_suffix(".json"))
                 .unwrap_or(path.as_str());
-            let id = Identifier::new(&ns, pred_name);
+            let id = Identifier::new(ns.clone(), pred_name.to_string())?;
 
             predicates.insert(id.clone(), Predicate { id, data: raw });
         }
@@ -90,7 +90,7 @@ pub fn load_item_modifiers(
                 .or_else(|| path.strip_prefix("item_modifiers/"))
                 .and_then(|p| p.strip_suffix(".json"))
                 .unwrap_or(path.as_str());
-            let id = Identifier::new(&ns, mod_name);
+            let id = Identifier::new(ns.clone(), mod_name.to_string())?;
 
             modifiers.insert(id.clone(), ItemModifier { id, functions });
         }

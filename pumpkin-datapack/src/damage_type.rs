@@ -79,7 +79,7 @@ pub fn load_damage_types(
                 .or_else(|| path.strip_prefix("damage_types/"))
                 .and_then(|p| p.strip_suffix(".json"))
                 .unwrap_or(path.as_str());
-            let id = Identifier::new(&ns, type_path);
+            let id = Identifier::new(ns.clone(), type_path.to_string())?;
 
             types.insert(id.clone(), DamageTypeFile { id, data: raw });
         }

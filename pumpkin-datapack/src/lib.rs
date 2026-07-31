@@ -2,7 +2,6 @@ pub mod advancement;
 pub mod command;
 pub mod damage_type;
 pub mod function;
-pub mod identifier;
 pub mod loot;
 pub mod pack;
 pub mod predicate;
@@ -10,6 +9,8 @@ pub mod recipe;
 pub mod reload;
 pub mod resource;
 pub mod tag;
+
+pub use pumpkin_util::identifier::Identifier;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -21,7 +22,6 @@ use pack::repository::PackRepository;
 use reload::manager::ReloadManager;
 use tag::registry::TagRegistry;
 
-pub use identifier::Identifier;
 pub use loot::LootTable as DynamicLootTable;
 
 /// Error type for datapack operations.
@@ -43,6 +43,8 @@ pub enum DatapackError {
     TagResolution(String),
     #[error("Function error: {0}")]
     Function(String),
+    #[error("Invalid identifier: {0}")]
+    Identifier(#[from] pumpkin_util::identifier::IdentifierError),
 }
 
 /// Top-level orchestrator for all datapack lifecycle operations.
@@ -103,15 +105,15 @@ impl DataPackManager {
         // into their respective static registries here once loaders are added.
 
         // Populate tick/load functions from tag registry
-        let tick_tag = Identifier::parse("minecraft:tick");
-        let load_tag = Identifier::parse("minecraft:load");
+        let tick_tag = Identifier::parse("minecraft:tick")?;
+        let load_tag = Identifier::parse("minecraft:load")?;
         let tick_funcs = tags
             .get_tag_values("function", &tick_tag)
-            .map(<[identifier::Identifier]>::to_vec)
+            .map(<[_]>::to_vec)
             .unwrap_or_default();
         let load_funcs = tags
             .get_tag_values("function", &load_tag)
-            .map(<[identifier::Identifier]>::to_vec)
+            .map(<[_]>::to_vec)
             .unwrap_or_default();
 
         self.tags.write().unwrap().replace_with(tags);

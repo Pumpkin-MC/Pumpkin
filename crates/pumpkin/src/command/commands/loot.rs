@@ -113,7 +113,12 @@ impl CommandExecutor for LootExecutor {
                         // Fallback: check datapack loot tables
                         let server = context.server();
                         let dp_tables = server.datapack_manager.loot_tables.read().await;
-                        let dp_id = pumpkin_datapack::Identifier::parse(&formatted_key);
+                        let dp_id =
+                            pumpkin_datapack::Identifier::parse(&formatted_key).map_err(|_| {
+                                ERROR_INVALID_LOOT_TABLE.create_without_context(
+                                    TextComponent::text(loot_table_str.to_string()),
+                                )
+                            })?;
                         if let Some(dp_table) = dp_tables.get(&dp_id) {
                             let dp_predicates = server.datapack_manager.predicates.read().await;
                             let ctx = pumpkin_datapack::loot::evaluate::LootEvalContext {

@@ -44,7 +44,7 @@ pub fn load_advancements(
                 .or_else(|| path.strip_prefix("advancements/"))
                 .and_then(|p| p.strip_suffix(".json"))
                 .unwrap_or(path.as_str());
-            let id = Identifier::new(&ns, adv_path);
+            let id = Identifier::new(ns.clone(), adv_path.to_string())?;
 
             advancements.insert(id.clone(), AdvancementFile { id, data: raw });
         }

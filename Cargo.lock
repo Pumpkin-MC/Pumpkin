@@ -3432,6 +3432,7 @@ dependencies = [
  "futures",
  "pumpkin-data",
  "pumpkin-protocol",
+ "pumpkin-util",
  "rand",
  "serde",
  "serde_json",

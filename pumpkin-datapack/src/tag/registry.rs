@@ -94,8 +94,12 @@ impl TagRegistry {
             return true;
         }
         // Fall through to dynamic tags
-        let tag_id = crate::Identifier::parse(tag_name);
-        let element_id = crate::Identifier::parse(element_key);
+        let Ok(tag_id) = crate::Identifier::parse(tag_name) else {
+            return false;
+        };
+        let Ok(element_id) = crate::Identifier::parse(element_key) else {
+            return false;
+        };
         self.is_tagged(registry, &element_id, &tag_id)
     }
 

@@ -43,17 +43,17 @@ pub fn load_tags(manager: &dyn ResourceManager) -> Result<TagRegistry, DatapackE
                     .and_then(|p| p.strip_suffix(".json"))
                     .or_else(|| path.strip_suffix(".json"))
                     .unwrap_or(path.as_str());
-                let tag_id = Identifier::new(ns, tag_path);
+                let tag_id = Identifier::new(ns.clone(), tag_path.to_string())?;
 
                 // Parse values
                 let mut entries = Vec::new();
                 for val in &tag_file.values {
                     if let Some(s) = val.as_str() {
                         if let Some(stripped) = s.strip_prefix('#') {
-                            let ref_id = Identifier::parse(stripped);
-                            entries.push(TagEntry::TagReference(ref_id, true));
-                        } else {
-                            let elem_id = Identifier::parse(s);
+                            if let Ok(ref_id) = Identifier::parse(stripped) {
+                                entries.push(TagEntry::TagReference(ref_id, true));
+                            }
+                        } else if let Ok(elem_id) = Identifier::parse(s) {
                             entries.push(TagEntry::Element(elem_id, true));
                         }
                     } else if let Some(obj) = val.as_object() {
@@ -63,10 +63,10 @@ pub fn load_tags(manager: &dyn ResourceManager) -> Result<TagRegistry, DatapackE
                             .and_then(serde_json::Value::as_bool)
                             .unwrap_or(true);
                         if let Some(stripped) = id_str.strip_prefix('#') {
-                            let ref_id = Identifier::parse(stripped);
-                            entries.push(TagEntry::TagReference(ref_id, required));
-                        } else {
-                            let elem_id = Identifier::parse(id_str);
+                            if let Ok(ref_id) = Identifier::parse(stripped) {
+                                entries.push(TagEntry::TagReference(ref_id, required));
+                            }
+                        } else if let Ok(elem_id) = Identifier::parse(id_str) {
                             entries.push(TagEntry::Element(elem_id, required));
                         }
                     }

@@ -24,7 +24,14 @@ impl CommandExecutor for FunctionExecutor {
                 return Err(CommandError::InvalidConsumption(Some(ARG_NAME.into())));
             };
 
-            let func_id = pumpkin_datapack::Identifier::parse(name);
+            let Some(func_id) = pumpkin_datapack::Identifier::parse(name).ok() else {
+                sender
+                    .send_message(TextComponent::text(format!("§cUnknown function: {name}")))
+                    .await;
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "§cUnknown function: {name}"
+                ))));
+            };
 
             // Read function from the datapack manager
             let function = {

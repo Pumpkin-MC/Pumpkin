@@ -52,10 +52,7 @@ impl AdvancementManager {
             && let Ok(advancements) = dp.advancements.try_read()
         {
             for id in advancements.keys() {
-                let id_str = format!("{}:{}", id.namespace, id.path);
-                if let Ok(mc_id) = Identifier::parse(&id_str) {
-                    ids.push(mc_id);
-                }
+                ids.push(id.clone());
             }
         }
         ids

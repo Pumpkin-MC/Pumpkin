@@ -379,7 +379,7 @@ impl PlayerAdvancement {
                 for file in advs.values() {
                     if let Some(entry) = advancement_file_to_entry(file) {
                         // Deduplicate against already-added built-in advancements
-                        let id_str = format!("{}:{}", file.id.namespace, file.id.path);
+                        let id_str = file.id.to_string();
                         if !added.iter().any(|a| match a {
                             pumpkin_protocol::java::client::play::AdvancementEntry::Static(s) => {
                                 s.id.to_string() == id_str
@@ -544,13 +544,13 @@ impl PlayerAdvancement {
 }
 
 /// Convert a datapack `AdvancementFile` into a packet `AdvancementEntry` for client sync.
+#[allow(clippy::unnecessary_wraps)]
 fn advancement_file_to_entry(
     file: &pumpkin_datapack::advancement::AdvancementFile,
 ) -> Option<pumpkin_protocol::java::client::play::AdvancementEntry> {
     use pumpkin_protocol::java::client::play::AdvancementEntry;
 
-    let id_str = format!("{}:{}", file.id.namespace, file.id.path);
-    let id = pumpkin_util::identifier::Identifier::parse(&id_str).ok()?;
+    let id = file.id.clone();
 
     let parent = file
         .data
