@@ -133,6 +133,12 @@ const fn teleport_confirm_action(
     }
 }
 
+// Vanilla: `ServerGamePacketListenerImpl::handleMovePlayer` rejects every non-finite
+// position component before clamping it to the world border.
+const fn has_finite_position(position: Vector3<f64>) -> bool {
+    position.x.is_finite() && position.y.is_finite() && position.z.is_finite()
+}
+
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
     BlockOutOfReach,
@@ -375,7 +381,7 @@ impl JavaClient {
         }
         // y = feet Y
         let position = packet.position;
-        if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
+        if !has_finite_position(position) {
             self.kick(TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
@@ -508,12 +514,7 @@ impl JavaClient {
         }
         // y = feet Y
         let position = packet.position;
-        if !position.x.is_finite()
-            || !position.y.is_finite()
-            || !position.z.is_finite()
-            || !packet.yaw.is_finite()
-            || !packet.pitch.is_finite()
-        {
+        if !has_finite_position(position) || !packet.yaw.is_finite() || !packet.pitch.is_finite() {
             self.kick(TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
@@ -2995,9 +2996,21 @@ mod tests {
     };
 
     use super::{
-        TeleportConfirmAction, attack_target_is_in_range, pvp_allows_attack,
+        TeleportConfirmAction, attack_target_is_in_range, has_finite_position, pvp_allows_attack,
         teleport_confirm_action,
     };
+
+    #[test]
+    fn movement_position_rejects_non_finite_components() {
+        assert!(has_finite_position(Vector3::new(0.0, -64.0, 0.0)));
+        assert!(!has_finite_position(Vector3::new(f64::NAN, 0.0, 0.0)));
+        assert!(!has_finite_position(Vector3::new(f64::INFINITY, 0.0, 0.0)));
+        assert!(!has_finite_position(Vector3::new(
+            0.0,
+            f64::NEG_INFINITY,
+            0.0
+        )));
+    }
 
     #[test]
     fn attack_range_uses_the_nearest_point_of_the_target_bounds() {
