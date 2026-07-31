@@ -40,6 +40,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
+use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect, UseRemainderImpl};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
     EquipmentSlot, EquippableImpl, FoodImpl,
@@ -2621,7 +2622,6 @@ impl EntityBase for LivingEntity {
                     && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
                     // Consume item
-                    let mut is_potion = false;
                     if let Some(food) = item.get_data_component::<FoodImpl>()
                         && let Some(player) = caller.get_player()
                     {
@@ -2700,7 +2700,20 @@ impl EntityBase for LivingEntity {
                     if item.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>().is_some() {
                         let effects = crate::item::potion::PotionContents::read_potion_effects(item);
                         crate::item::potion::PotionContents::apply_effects_to(self, effects, 1.0, crate::item::potion::PotionApplicationSource::Normal).await;
-                        is_potion = true;
+                    }
+
+                    if consumable_clears_all_effects(item) {
+                        if let Some(player) = caller.get_player() {
+                            // This sends one removal packet per active effect before the
+                            // living entity broadcasts the removal to nearby players.
+                            player.remove_all_effects().await;
+                        } else {
+                            let effects: Vec<_> =
+                                self.active_effects.lock().await.keys().copied().collect();
+                            for effect in effects {
+                                self.remove_effect(effect).await;
+                            }
+                        }
                     }
 
                     if let Some(player) = caller.get_player() {
@@ -2721,11 +2734,11 @@ impl EntityBase for LivingEntity {
                         {
                             let mut held_lock = held_arc.lock().await;
                             if held_lock.are_items_and_components_equal(item) {
-                                if is_potion {
+                                if let Some(remainder) = consumable_remainder(item) {
                                     if player.gamemode.load() != GameMode::Creative {
                                         held_lock.decrement(1);
                                         if held_lock.is_empty() {
-                                            *held_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                            *held_lock = ItemStack::new(1, remainder);
                                         }
                                     }
                                 } else {
@@ -2740,11 +2753,11 @@ impl EntityBase for LivingEntity {
                             let off_arc = player.inventory.off_hand_item().await;
                             let mut off_lock = off_arc.lock().await;
                             if off_lock.are_items_and_components_equal(item) {
-                                if is_potion {
+                                if let Some(remainder) = consumable_remainder(item) {
                                     if player.gamemode.load() != GameMode::Creative {
                                         off_lock.decrement(1);
                                         if off_lock.is_empty() {
-                                            *off_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                            *off_lock = ItemStack::new(1, remainder);
                                         }
                                     }
                                 } else {
@@ -2764,11 +2777,11 @@ impl EntityBase for LivingEntity {
                                 .await;
                             let mut item_lock = item_stack.lock().await;
 
-                            if is_potion {
+                            if let Some(remainder) = consumable_remainder(item) {
                                 if player.gamemode.load() != GameMode::Creative {
                                     item_lock.decrement(1);
                                     if item_lock.is_empty() {
-                                        *item_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                        *item_lock = ItemStack::new(1, remainder);
                                     }
                                 }
                             } else {
@@ -2827,6 +2840,56 @@ impl EntityBase for LivingEntity {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+}
+
+/// Returns whether this consumable has vanilla's `clear_all_effects` consume effect.
+fn consumable_clears_all_effects(item: &ItemStack) -> bool {
+    item.get_data_component::<ConsumableImpl>()
+        .is_some_and(|consumable| {
+            consumable
+                .effects
+                .iter()
+                .any(|effect| matches!(effect, ConsumeEffect::ClearAllEffects))
+        })
+}
+
+/// Returns the item that replaces a consumed single-item container.
+///
+/// `use_remainder` is a unit data component in the vanilla item data, so the
+/// concrete remainder remains an item-specific rule. Keep this mapping here at
+/// the shared consumable completion point so main hand, off-hand, and packet
+/// inventory synchronization all take the same path.
+fn consumable_remainder(item: &ItemStack) -> Option<&'static Item> {
+    item.get_data_component::<UseRemainderImpl>()?;
+
+    match item.item.id {
+        id if id == Item::MILK_BUCKET.id => Some(&Item::BUCKET),
+        id if id == Item::POTION.id => Some(&Item::GLASS_BOTTLE),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod milk_bucket_tests {
+    use super::{consumable_clears_all_effects, consumable_remainder};
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+
+    #[test]
+    fn milk_bucket_clears_all_effects_when_consumed() {
+        let milk = ItemStack::new(1, &Item::MILK_BUCKET);
+
+        assert!(consumable_clears_all_effects(&milk));
+    }
+
+    #[test]
+    fn milk_bucket_returns_an_empty_bucket() {
+        let milk = ItemStack::new(1, &Item::MILK_BUCKET);
+
+        assert_eq!(
+            consumable_remainder(&milk).map(|item| item.id),
+            Some(Item::BUCKET.id)
+        );
     }
 }
 
