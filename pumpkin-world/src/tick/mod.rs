@@ -10,8 +10,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod scheduler;
 
-const MAX_TICK_DELAY: usize = 1 << 8;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 #[repr(i32)]
 pub enum TickPriority {
@@ -60,7 +58,9 @@ impl TryFrom<i32> for TickPriority {
 
 #[derive(Clone)]
 pub struct ScheduledTick<T> {
-    pub delay: u8,
+    /// Ticks remaining until this entry runs. Vanilla stores this as a signed `int` in chunk NBT
+    /// and expands it into a long absolute trigger time while the chunk is loaded.
+    pub delay: i64,
     pub priority: TickPriority,
     pub position: BlockPos,
     pub value: T,
@@ -120,7 +120,10 @@ where
         nbt.put_int("x", self.position.0.x);
         nbt.put_int("y", self.position.0.y);
         nbt.put_int("z", self.position.0.z);
-        nbt.put_int("t", self.delay as i32);
+        nbt.put_int(
+            "t",
+            i32::try_from(self.delay).expect("scheduled tick delay must fit vanilla's NBT int"),
+        );
         nbt.put_int("p", self.priority as i32);
         nbt.put_string("i", self.value.to_resource_location());
         nbt.serialize(serializer)
@@ -147,7 +150,7 @@ where
         let y = get_int("y")?;
         let z = get_int("z")?;
 
-        let delay = get_int("t")? as u8;
+        let delay = i64::from(get_int("t")?);
 
         let priority = TickPriority::try_from(get_int("p")?)
             .map_err(|_| D::Error::custom("Invalid tick priority"))?;

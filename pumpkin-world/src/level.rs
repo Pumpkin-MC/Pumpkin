@@ -918,7 +918,7 @@ impl Level {
     ) {
         let tick_order = self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);
         let scheduled_tick = ScheduledTick {
-            delay,
+            delay: i64::from(delay),
             position: block_pos,
             priority,
             value: unsafe { &*std::ptr::from_ref::<Block>(block) },
@@ -944,7 +944,7 @@ impl Level {
     ) {
         let tick_order = self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);
         let scheduled_tick = ScheduledTick {
-            delay,
+            delay: i64::from(delay),
             position: block_pos,
             priority,
             value: unsafe { &*std::ptr::from_ref::<Fluid>(fluid) },

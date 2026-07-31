@@ -139,7 +139,7 @@ where
     let x = nbt.get_int("x")?;
     let y = nbt.get_int("y")?;
     let z = nbt.get_int("z")?;
-    let delay = nbt.get_int("t")? as u8;
+    let delay = i64::from(nbt.get_int("t")?);
     let priority = TickPriority::try_from(nbt.get_int("p")?).ok()?;
     let res_loc_str = nbt.get_string("i")?;
     let res_loc = ResourceLocation::from_str(res_loc_str).ok()?;
@@ -520,7 +520,10 @@ impl ChunkData {
             tick_comp.put_int("x", tick.position.0.x);
             tick_comp.put_int("y", tick.position.0.y);
             tick_comp.put_int("z", tick.position.0.z);
-            tick_comp.put_int("t", tick.delay as i32);
+            tick_comp.put_int(
+                "t",
+                i32::try_from(tick.delay).expect("scheduled tick delay must fit vanilla's NBT int"),
+            );
             tick_comp.put_int("p", tick.priority as i32);
             tick_comp.put_string("i", tick.value.to_resource_location());
             block_ticks_list.push(NbtTag::Compound(tick_comp));
@@ -533,7 +536,10 @@ impl ChunkData {
             tick_comp.put_int("x", tick.position.0.x);
             tick_comp.put_int("y", tick.position.0.y);
             tick_comp.put_int("z", tick.position.0.z);
-            tick_comp.put_int("t", tick.delay as i32);
+            tick_comp.put_int(
+                "t",
+                i32::try_from(tick.delay).expect("scheduled tick delay must fit vanilla's NBT int"),
+            );
             tick_comp.put_int("p", tick.priority as i32);
             tick_comp.put_string("i", tick.value.to_resource_location());
             fluid_ticks_list.push(NbtTag::Compound(tick_comp));
