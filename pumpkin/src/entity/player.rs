@@ -940,7 +940,11 @@ impl Player {
 
         {
             let stack = item_stack.lock().await;
-            if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+            if stack.is_empty() {
+                // Vanilla fist: base_attack_damage = -1.0, base_attack_speed = -2.4
+                add_damage = -1.0;
+                add_speed = -2.4;
+            } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
                 for item_mod in modifiers.attribute_modifiers.iter() {
                     if item_mod.operation == Operation::AddValue {
                         if item_mod.id == "minecraft:base_attack_damage" {
@@ -1007,7 +1011,7 @@ impl Player {
         }
 
         // Modify the added damage based on the multiplier.
-        let mut damage = base_damage + add_damage * damage_multiplier;
+        let mut damage = (base_damage + add_damage) * damage_multiplier;
         damage += extra_ench_damage * attack_cooldown_progress;
 
         if let Some(strength) = self
