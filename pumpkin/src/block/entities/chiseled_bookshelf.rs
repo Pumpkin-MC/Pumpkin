@@ -20,7 +20,7 @@ use crate::{
     world::{BlockFlags, World},
 };
 use pumpkin_world::inventory::InventoryFuture;
-use pumpkin_world::inventory::{Clearable, Inventory, split_stack};
+use pumpkin_world::inventory::{Clearable, Inventory, split_stack, sync_write_items_to_nbt};
 
 pub struct ChiseledBookshelfBlockEntity {
     pub position: BlockPos,
@@ -84,6 +84,16 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
 
     fn clear_dirty(&self) {
         self.dirty.store(false, Ordering::Relaxed);
+    }
+
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        sync_write_items_to_nbt(&self.items, &mut nbt);
+        nbt.put_int(
+            "last_interacted_slot",
+            self.last_interacted_slot.load(Ordering::Relaxed) as i32,
+        );
+        Some(nbt)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

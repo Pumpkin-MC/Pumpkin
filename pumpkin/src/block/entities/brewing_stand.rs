@@ -18,7 +18,7 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::Inventory;
+use pumpkin_world::inventory::{Inventory, sync_write_items_to_nbt};
 use tokio::sync::Mutex;
 
 pub struct BrewingStandBlockEntity {
@@ -393,9 +393,9 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        // Provide brew state for client-side UI when chunk is sent
         nbt.put_int("BrewTime", self.brew_time.load(Ordering::Relaxed));
         nbt.put_int("Fuel", self.fuel.load(Ordering::Relaxed));
+        sync_write_items_to_nbt(&self.items, &mut nbt);
         Some(nbt)
     }
 

@@ -550,6 +550,12 @@ pub trait ConditionalPlacementModifier {
 }
 
 // generated code is now placed alongside other codegen outputs
-// in `src/generated` so it’s easier to find when upgrading MC versions.
+// in `src/generated` so it's easier to find when upgrading MC versions.
 // the path is relative to this file (up two levels to reach `src`).
+
+/// Returns all placed feature names for tab-completion in `/place feature`.
+#[must_use]
+pub const fn all_placed_feature_names() -> &'static [&'static str] {
+    pumpkin_data::placed_feature::PlacedFeature::all_names()
+}
 include!("../../../../pumpkin-data/src/generated/placed_features_generated.rs");

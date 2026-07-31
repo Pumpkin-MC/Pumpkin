@@ -28,8 +28,21 @@ pub(crate) fn build() -> TokenStream {
 
         let content = fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("Failed to read JSON file: {path} {e}"));
-        let parsed: BTreeMap<String, u8> = serde_json::from_str(&content)
+        let mut parsed: BTreeMap<String, u8> = serde_json::from_str(&content)
             .unwrap_or_else(|e| panic!("Failed to parse {path}: {e}"));
+
+        // The upstream flattened asset loses duplicate Mojang field names.
+        // Before 26.1 the wolf tracker was named VARIANT; newer mappings use
+        // DATA_VARIANT_ID, which collides with unrelated entity fields in the
+        // flattened table. Preserve the legacy value and set the entity-scoped
+        // ID for the new mappings explicitly.
+        let wolf_variant_id = match ver {
+            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(23),
+            _ => parsed.get("VARIANT").copied(),
+        };
+        if let Some(id) = wolf_variant_id {
+            parsed.insert("WOLF_VARIANT_ID".to_owned(), id);
+        }
 
         versions.insert(ver, parsed);
     }
@@ -150,5 +163,33 @@ fn normalize_name(name: &str) -> String {
         "CUSTOM_NAME_VISIBLE".to_string()
     } else {
         normalized
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build;
+    use quote::quote;
+
+    #[test]
+    fn wolf_variant_keeps_its_entity_specific_v26_2_tracker_id() {
+        let generated = build().to_string();
+
+        assert!(generated.contains("WOLF_VARIANT_ID"));
+        let wolf = generated
+            .split("WOLF_VARIANT_ID")
+            .nth(1)
+            .expect("wolf tracker constant");
+        assert!(wolf.contains("v1_21_11 : 20u8"));
+        assert!(wolf.contains("v26_2 : 23u8"));
+    }
+
+    #[test]
+    fn checked_in_tracker_table_matches_codegen() {
+        let checked_in = std::fs::read_to_string("../pumpkin-data/src/generated/tracked_data.rs")
+            .expect("checked-in tracked data");
+        let parsed = syn::parse_file(&checked_in).expect("valid generated Rust");
+
+        assert_eq!(quote!(#parsed).to_string(), build().to_string());
     }
 }

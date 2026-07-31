@@ -2282,9 +2282,10 @@ impl JavaClient {
             server;
             event;
             'cancelled: {
+                let state_id = world.get_block_state_id(&position);
                 self.enqueue_packet(&CBlockUpdate::new(
                     position,
-                    VarInt(block.id.as_u16() as i32),
+                    VarInt(i32::from(state_id.as_u16())),
                 ))
                 .await;
                 return Ok(());

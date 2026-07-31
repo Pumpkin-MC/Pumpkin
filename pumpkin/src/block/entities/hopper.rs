@@ -10,7 +10,9 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
+use pumpkin_world::inventory::{
+    Clearable, Inventory, InventoryFuture, split_stack, sync_write_items_to_nbt,
+};
 use std::any::Any;
 use std::array::from_fn;
 use std::pin::Pin;
@@ -110,6 +112,16 @@ impl BlockEntity for HopperBlockEntity {
 
     fn clear_dirty(&self) {
         self.dirty.store(false, Ordering::Relaxed);
+    }
+
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        nbt.put(
+            "TransferCooldown",
+            NbtTag::Int(self.cooldown_time.load(Ordering::Relaxed)),
+        );
+        sync_write_items_to_nbt(&self.items, &mut nbt);
+        Some(nbt)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

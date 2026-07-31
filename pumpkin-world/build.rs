@@ -38,11 +38,20 @@ fn main() {
 
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let assets_dir = Path::new(&manifest_dir).join("assets/structures");
+    let mut all_template_names: Vec<String> = Vec::new();
+    let mut all_pool_names: Vec<String> = Vec::new();
     if assets_dir.exists() {
         let mut pools = std::collections::BTreeMap::new();
-        process_dir(&assets_dir, "", &mut code, &mut pools);
+        process_dir(
+            &assets_dir,
+            "",
+            &mut code,
+            &mut pools,
+            &mut all_template_names,
+        );
 
         for (pool_id, elements) in pools {
+            all_pool_names.push(pool_id.clone());
             let _ = writeln!(
                 pool_code,
                 "        \"minecraft:{pool_id}\" | \"{pool_id}\" => Some(&["
@@ -57,6 +66,24 @@ fn main() {
     code.push_str("        _ => None,\n");
     code.push_str("    }\n}\n");
 
+    // Generate a function returning all available template names (for tab-completion)
+    code.push_str(
+        "#[must_use]\n#[allow(clippy::too_many_lines, clippy::large_stack_arrays)]\npub const fn _generated_all_template_names() -> &'static [&'static str] {\n    &[\n",
+    );
+    for name in &all_template_names {
+        let _ = writeln!(code, "        \"{name}\",");
+    }
+    code.push_str("    ]\n}\n");
+
+    // Generate a function returning all available pool names (for tab-completion)
+    code.push_str(
+        "#[must_use]\n#[allow(clippy::too_many_lines, clippy::large_stack_arrays)]\npub const fn _generated_all_pool_names() -> &'static [&'static str] {\n    &[\n",
+    );
+    for name in &all_pool_names {
+        let _ = writeln!(code, "        \"{name}\",");
+    }
+    code.push_str("    ]\n}\n");
+
     pool_code.push_str("        _ => None,\n");
     pool_code.push_str("    }\n}\n");
 
@@ -65,11 +92,13 @@ fn main() {
         &worldgen_dir.join("template_pool"),
         "",
         &mut template_pool_json_code,
+        &mut all_pool_names,
     );
     process_json_dir(
         &worldgen_dir.join("processor_list"),
         "",
         &mut processor_list_json_code,
+        &mut Vec::new(),
     );
     template_pool_json_code.push_str("        _ => None,\n");
     template_pool_json_code.push_str("    }\n}\n");
@@ -90,6 +119,7 @@ fn process_dir(
     prefix: &str,
     code: &mut String,
     pools: &mut std::collections::BTreeMap<String, Vec<String>>,
+    names: &mut Vec<String>,
 ) {
     for entry in fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
@@ -102,7 +132,7 @@ fn process_dir(
             } else {
                 format!("{prefix}/{name}")
             };
-            process_dir(&path, &new_prefix, code, pools);
+            process_dir(&path, &new_prefix, code, pools, names);
         } else if path
             .extension()
             .and_then(|s| s.to_str())
@@ -121,6 +151,7 @@ fn process_dir(
                 template_name = template_name,
                 abs = abs_path.display()
             );
+            names.push(template_name.clone());
 
             if !prefix.is_empty() {
                 pools
@@ -132,7 +163,7 @@ fn process_dir(
     }
 }
 
-fn process_json_dir(dir: &Path, prefix: &str, code: &mut String) {
+fn process_json_dir(dir: &Path, prefix: &str, code: &mut String, names: &mut Vec<String>) {
     if !dir.exists() {
         return;
     }
@@ -152,13 +183,14 @@ fn process_json_dir(dir: &Path, prefix: &str, code: &mut String) {
             } else {
                 format!("{prefix}/{name}")
             };
-            process_json_dir(&path, &new_prefix, code);
+            process_json_dir(&path, &new_prefix, code, names);
         } else if let Some(stem) = name.strip_suffix(".json") {
             let id = if prefix.is_empty() {
                 stem.to_string()
             } else {
                 format!("{prefix}/{stem}")
             };
+            names.push(id.clone());
             let abs_path = path.canonicalize().unwrap();
             let _ = writeln!(
                 code,

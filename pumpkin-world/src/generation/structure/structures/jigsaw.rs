@@ -5,9 +5,11 @@ use crate::generation::structure::structures::{
     StructureGenerator, StructureGeneratorContext, StructurePieceBase, StructurePosition,
 };
 use crate::generation::structure::template::{
-    BlockMirror, BlockRotation, PaletteEntry, StructureTemplate,
+    BlockMirror, BlockPlacer, BlockRotation, PaletteEntry, StructureTemplate,
 };
+use pumpkin_util::math::block_box::BlockBox;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::RandomImpl;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -540,6 +542,45 @@ impl StructurePieceBase for PoolElementStructurePiece {
             placed_feature.generate_in_proto_chunk(chunk, feature, random, self.pos);
         }
     }
+}
+
+pub fn place_pool_element_templates(
+    piece: &PoolElementStructurePiece,
+    placer: &mut impl BlockPlacer,
+    chunk_box: Option<&BlockBox>,
+) {
+    let origin = Vector3::new(piece.pos.0.x, piece.pos.0.y, piece.pos.0.z);
+
+    piece
+        .element
+        .for_each_template(|_name, processor_list, legacy, template| {
+            let corner = piece.rotation.rotate_offset(
+                template.size.x.saturating_sub(1),
+                template.size.z.saturating_sub(1),
+            );
+            let placement_origin = Vector3::new(
+                origin.x + corner.0.min(0),
+                origin.y,
+                origin.z + corner.1.min(0),
+            );
+            let processors = match processor_list {
+                ProcessorListRef::Named(name) => {
+                    crate::generation::structure::template::processor::load_processor_list(name)
+                }
+                ProcessorListRef::Empty => Arc::from([]),
+            };
+            crate::generation::structure::template::place_template(
+                placer,
+                &template,
+                placement_origin,
+                (0, 0),
+                piece.rotation,
+                legacy,
+                piece.liquid_settings == LiquidSettings::ApplyWaterlog,
+                processors.as_ref(),
+                chunk_box,
+            );
+        });
 }
 
 impl PoolElementStructurePiece {
