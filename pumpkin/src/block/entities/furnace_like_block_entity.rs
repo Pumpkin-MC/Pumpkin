@@ -7,6 +7,26 @@ use crate::block::entities::{BlockEntity, PropertyDelegate};
 pub use pumpkin_world::block::entities::ExperienceContainer;
 use pumpkin_world::inventory::{Clearable, Inventory};
 
+/// Calculates the experience for one furnace recipe entry.
+///
+/// Vanilla rounds each recipe entry independently: it floors `amount * experience`, then awards
+/// the remaining fractional point when a single random float is below that fraction. Keeping the
+/// random source injectable makes the boundary behaviour testable without probabilistic tests.
+pub(crate) fn experience_for_recipe<R>(amount: u32, experience: f32, random: &mut R) -> i32
+where
+    R: FnMut() -> f32,
+{
+    let exact_experience = amount as f32 * experience;
+    let mut reward = exact_experience.floor() as i32;
+    let fraction = exact_experience.fract();
+
+    if fraction != 0.0 && random() < fraction {
+        reward += 1;
+    }
+
+    reward
+}
+
 /// Trait for extracting smelting experience from cooking block entities.
 pub trait CookingBlockEntityBase:
     Sync + Send + Inventory + PropertyDelegate + BlockEntity + Clearable
@@ -105,17 +125,21 @@ macro_rules! impl_cooking_block_entity_base {
             }
 
             fn extract_experience_from_recipes(&self) -> i32 {
-                // Calculate total XP from tracked recipes and clear the map (vanilla behavior)
+                // Vanilla rounds each recipe's earned XP separately before adding it to the
+                // total, so recipes with fractional XP must not be aggregated before flooring.
                 let mut recipes = self.recipes_used.lock().unwrap();
-                let mut total_xp: f32 = 0.0;
+                let mut total_xp = 0;
                 for (recipe_id, count) in recipes.iter() {
-                    // Look up the recipe's XP value
                     if let Some(xp) = pumpkin_data::recipes::get_recipe_experience(recipe_id) {
-                        total_xp += xp * (*count as f32);
+                        total_xp += $crate::block::entities::furnace_like_block_entity::experience_for_recipe(
+                            *count,
+                            xp,
+                            &mut || rand::random(),
+                        );
                     }
                 }
                 recipes.clear();
-                total_xp.floor() as i32
+                total_xp
             }
 
             async fn can_accept_recipe_output(
@@ -265,6 +289,40 @@ macro_rules! impl_experience_container_for_cooking {
             }
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::experience_for_recipe;
+
+    #[test]
+    fn fractional_recipe_experience_uses_a_strict_probability_boundary() {
+        assert_eq!(experience_for_recipe(1, 0.5, &mut || 0.49), 1);
+        assert_eq!(experience_for_recipe(1, 0.5, &mut || 0.5), 0);
+    }
+
+    #[test]
+    fn whole_recipe_experience_does_not_consume_a_random_value() {
+        assert_eq!(
+            experience_for_recipe(2, 0.5, &mut || panic!("no roll expected")),
+            1
+        );
+    }
+
+    #[test]
+    fn fractional_recipe_entries_are_rounded_before_being_aggregated() {
+        let mut rolls = [0.49, 0.49].into_iter();
+        let mut random = || {
+            rolls
+                .next()
+                .expect("one random roll per fractional recipe entry")
+        };
+
+        let total =
+            experience_for_recipe(1, 0.5, &mut random) + experience_for_recipe(1, 0.5, &mut random);
+
+        assert_eq!(total, 2);
+    }
 }
 
 #[macro_export]
