@@ -479,11 +479,20 @@ impl LivingEntity {
                     .await;
             }
         } else {
-            // Apply non-instant effects
-            self.active_effects
-                .lock()
-                .await
-                .insert(effect.effect_type, effect.clone());
+            let did_apply = {
+                let mut active_effects = self.active_effects.lock().await;
+                let should_replace = active_effects
+                    .get(effect.effect_type)
+                    .is_none_or(|current| should_replace_effect(current, &effect));
+                if should_replace {
+                    active_effects.insert(effect.effect_type, effect.clone());
+                }
+                should_replace
+            };
+
+            if !did_apply {
+                return;
+            }
 
             // Effects that modify attributes (ex. speed) should also update the
             // entity's attribute instances (server-side) and then notify clients.
@@ -2801,6 +2810,11 @@ impl EntityBase for LivingEntity {
     }
 }
 
+fn should_replace_effect(current: &Effect, candidate: &Effect) -> bool {
+    candidate.amplifier > current.amplifier
+        || (candidate.amplifier == current.amplifier && candidate.duration > current.duration)
+}
+
 /// Returns `true` if `damage_type` is in `#minecraft:bypasses_armor` (1.21.11).
 /// These sources bypass armor entirely (fall, drown, freeze, etc.).
 pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool {
@@ -2855,6 +2869,35 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn effect(amplifier: u8, duration: i32) -> Effect {
+        Effect {
+            effect_type: &StatusEffect::SPEED,
+            duration,
+            amplifier,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        }
+    }
+
+    #[test]
+    fn stronger_effect_replaces_weaker_effect_even_when_shorter() {
+        assert!(should_replace_effect(&effect(0, 1_200), &effect(1, 100)));
+    }
+
+    #[test]
+    fn longer_effect_replaces_effect_with_same_amplifier() {
+        assert!(should_replace_effect(&effect(1, 100), &effect(1, 101)));
+    }
+
+    #[test]
+    fn weaker_or_shorter_effect_does_not_replace_active_effect() {
+        assert!(!should_replace_effect(&effect(1, 100), &effect(0, 1_200)));
+        assert!(!should_replace_effect(&effect(1, 100), &effect(1, 99)));
+        assert!(!should_replace_effect(&effect(1, 100), &effect(1, 100)));
+    }
 
     // ── bypasses_armor_durability ─────────────────────────────────────
 
