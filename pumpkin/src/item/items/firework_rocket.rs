@@ -48,7 +48,7 @@ impl ItemBehaviour for FireworkRocketItem {
                 ),
                 &EntityType::FIREWORK_ROCKET,
             );
-            let entity = FireworkRocketEntity::new(entity);
+            let entity = FireworkRocketEntity::new_with_item(entity, item);
             world.spawn_entity(Arc::new(entity)).await;
             if should_consume_rocket(player.is_creative()) {
                 item.decrement(1);
@@ -69,23 +69,46 @@ impl ItemBehaviour for FireworkRocketItem {
                     player.get_entity().pos.load(),
                     &EntityType::FIREWORK_ROCKET,
                 );
-                let entity = FireworkRocketEntity::new_shot(entity, player.get_entity());
+                // The entity keeps the pre-consumption stack. Its Fireworks component
+                // determines both the client payload and the vanilla lifetime.
+                let main_hand = player.inventory.held_item();
+                let mut used_main_hand = true;
+                let mut source_stack = {
+                    let stack = main_hand.lock().await.clone();
+                    (stack.item == &Item::FIREWORK_ROCKET).then_some(stack)
+                };
+                if source_stack.is_none() {
+                    let off_hand = player.inventory.off_hand_item().await;
+                    let stack = off_hand.lock().await.clone();
+                    if stack.item == &Item::FIREWORK_ROCKET {
+                        source_stack = Some(stack);
+                        used_main_hand = false;
+                    }
+                }
+
+                let Some(source_stack) = source_stack else {
+                    return;
+                };
+                let entity = FireworkRocketEntity::new_shot_with_item(
+                    entity,
+                    player.get_entity(),
+                    &source_stack,
+                );
                 world.spawn_entity(Arc::new(entity)).await;
 
                 // Vanilla `FireworkRocketItem::use` consumes the hand that launched
                 // the attached rocket, except in Creative mode.
                 if should_consume_rocket(player.is_creative()) {
-                    let held_item = player.inventory.held_item();
-                    let mut held_item = held_item.lock().await;
-                    if held_item.item == &Item::FIREWORK_ROCKET {
-                        held_item.decrement(1);
+                    if used_main_hand {
+                        main_hand.lock().await.decrement(1);
                     } else {
-                        drop(held_item);
-                        let off_hand_item = player.inventory.off_hand_item().await;
-                        let mut off_hand_item = off_hand_item.lock().await;
-                        if off_hand_item.item == &Item::FIREWORK_ROCKET {
-                            off_hand_item.decrement(1);
-                        }
+                        player
+                            .inventory
+                            .off_hand_item()
+                            .await
+                            .lock()
+                            .await
+                            .decrement(1);
                     }
                 }
             }
