@@ -1,5 +1,6 @@
 use crate::WritingError;
 use crate::codec::bit_set::BitSet;
+use crate::java::client::play::light_update::light_masks;
 use crate::{ClientPacket, VarInt, ser::NetworkWriteExt};
 use pumpkin_data::block_state_remap::remap_block_state_for_version;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
@@ -232,49 +233,21 @@ impl ClientPacket for CChunkData<'_> {
                 .map_err(|_| WritingError::Message("light_engine lock poisoned".into()))?;
             let num_sections = light_engine.sky_light.len();
 
-            let mut sky_light_empty_mask = 0u64;
-            let mut block_light_empty_mask = 0u64;
-            let mut sky_light_mask = 0u64;
-            let mut block_light_mask = 0u64;
-
-            // Bit 0 represents the section below the world (always empty)
-            sky_light_empty_mask |= 1 << 0;
-            block_light_empty_mask |= 1 << 0;
-
-            // Bits 1..=num_sections represent the actual world sections
-            for section_index in 0..num_sections {
-                let bit_index = section_index + 1; // Offset by 1 for the below-world section
-
-                if let LightContainer::Full(_) = &light_engine.sky_light[section_index] {
-                    sky_light_mask |= 1 << bit_index;
-                } else {
-                    sky_light_empty_mask |= 1 << bit_index;
-                }
-
-                if let LightContainer::Full(_) = &light_engine.block_light[section_index] {
-                    block_light_mask |= 1 << bit_index;
-                } else {
-                    block_light_empty_mask |= 1 << bit_index;
-                }
-            }
-
-            // Bit num_sections+1 represents the section above the world (always empty)
-            sky_light_empty_mask |= 1 << (num_sections + 1);
-            block_light_empty_mask |= 1 << (num_sections + 1);
+            let masks = light_masks(&light_engine);
 
             // Write Sky Light Mask
-            write.write_bitset(&BitSet(Box::new([sky_light_mask as i64])))?;
+            write.write_bitset(&BitSet(Box::new([masks.sky as i64])))?;
             // Write Block Light Mask
-            write.write_bitset(&BitSet(Box::new([block_light_mask as i64])))?;
+            write.write_bitset(&BitSet(Box::new([masks.block as i64])))?;
             // Write Empty Sky Light Mask
-            write.write_bitset(&BitSet(Box::new([sky_light_empty_mask as i64])))?;
+            write.write_bitset(&BitSet(Box::new([masks.empty_sky as i64])))?;
             // Write Empty Block Light Mask
-            write.write_bitset(&BitSet(Box::new([block_light_empty_mask as i64])))?;
+            write.write_bitset(&BitSet(Box::new([masks.empty_block as i64])))?;
 
             let light_data_size: VarInt = VarInt(LightContainer::ARRAY_SIZE as i32);
 
             // Write Sky Light arrays
-            write.write_var_int(&VarInt(sky_light_mask.count_ones() as i32))?;
+            write.write_var_int(&VarInt(masks.sky.count_ones() as i32))?;
             for section_index in 0..num_sections {
                 if let LightContainer::Full(data) = &light_engine.sky_light[section_index] {
                     write.write_var_int(&light_data_size)?;
@@ -283,7 +256,7 @@ impl ClientPacket for CChunkData<'_> {
             }
 
             // Write Block Light arrays
-            write.write_var_int(&VarInt(block_light_mask.count_ones() as i32))?;
+            write.write_var_int(&VarInt(masks.block.count_ones() as i32))?;
             for section_index in 0..num_sections {
                 if let LightContainer::Full(data) = &light_engine.block_light[section_index] {
                     write.write_var_int(&light_data_size)?;
