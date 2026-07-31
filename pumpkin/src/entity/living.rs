@@ -2609,72 +2609,9 @@ impl EntityBase for LivingEntity {
                             .hunger_manager
                             .eat(player, food.nutrition as u8, food.saturation)
                             .await;
-
-                        // Special food effects
-                        if item.item == &Item::GOLDEN_APPLE {
-                            self.add_effect(pumpkin_data::potion::Effect {
-                                effect_type: &pumpkin_data::effect::StatusEffect::REGENERATION,
-                                amplifier: 1,
-                                duration: 100,
-                                ambient: false,
-                                show_particles: true,
-                                show_icon: true,
-                                blend: false,
-                            })
-                            .await;
-                            self.add_effect(pumpkin_data::potion::Effect {
-                                effect_type: &pumpkin_data::effect::StatusEffect::ABSORPTION,
-                                amplifier: 0,
-                                duration: 2400,
-                                ambient: false,
-                                show_particles: true,
-                                show_icon: true,
-                                blend: false,
-                            })
-                            .await;
-                        } else if item.item == &Item::ENCHANTED_GOLDEN_APPLE {
-                            self.add_effect(pumpkin_data::potion::Effect {
-                                effect_type: &pumpkin_data::effect::StatusEffect::REGENERATION,
-                                amplifier: 1,
-                                duration: 400,
-                                ambient: false,
-                                show_particles: true,
-                                show_icon: true,
-                                blend: false,
-                            })
-                            .await;
-                            self.add_effect(pumpkin_data::potion::Effect {
-                                effect_type: &pumpkin_data::effect::StatusEffect::ABSORPTION,
-                                amplifier: 3,
-                                duration: 2400,
-                                ambient: false,
-                                show_particles: true,
-                                show_icon: true,
-                                blend: false,
-                            })
-                            .await;
-                            self.add_effect(pumpkin_data::potion::Effect {
-                                effect_type: &pumpkin_data::effect::StatusEffect::RESISTANCE,
-                                amplifier: 0,
-                                duration: 6000,
-                                ambient: false,
-                                show_particles: true,
-                                show_icon: true,
-                                blend: false,
-                            })
-                            .await;
-                            self.add_effect(pumpkin_data::potion::Effect {
-                                effect_type: &pumpkin_data::effect::StatusEffect::FIRE_RESISTANCE,
-                                amplifier: 0,
-                                duration: 6000,
-                                ambient: false,
-                                show_particles: true,
-                                show_icon: true,
-                                blend: false,
-                            })
-                            .await;
-                        }
                     }
+
+                    self.apply_consumable_effects(item).await;
 
                     // Handle potion consumption
                     if item.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>().is_some() {
@@ -2823,6 +2760,50 @@ impl EntityBase for LivingEntity {
     }
 }
 
+impl LivingEntity {
+    /// Applies data-driven `apply_effects` consume effects after an item completes use.
+    /// Vanilla: `Consumable.onConsume` invokes every configured effect server-side.
+    async fn apply_consumable_effects(&self, item: &ItemStack) {
+        let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
+            return;
+        };
+
+        for consume_effect in consumable.effects.iter() {
+            let ConsumeEffect::ApplyEffects((effects, probability)) = consume_effect else {
+                continue;
+            };
+            if !consume_effect_probability_applies(*probability, rand::random()) {
+                continue;
+            }
+
+            for effect in effects.iter() {
+                let Some(effect_type) = StatusEffect::from_minecraft_name(&effect.effect_id) else {
+                    continue;
+                };
+                let Ok(amplifier) = u8::try_from(effect.amplifier) else {
+                    continue;
+                };
+
+                self.add_effect(Effect {
+                    effect_type,
+                    duration: effect.duration,
+                    amplifier,
+                    ambient: effect.ambient,
+                    show_particles: effect.show_particles,
+                    show_icon: effect.show_icon,
+                    blend: false,
+                })
+                .await;
+            }
+        }
+    }
+}
+
+/// Mirrors vanilla's strict `random < probability` consume-effect gate.
+const fn consume_effect_probability_applies(probability: f32, random: f32) -> bool {
+    random < probability
+}
+
 /// Returns whether this consumable has vanilla's `clear_all_effects` consume effect.
 fn consumable_clears_all_effects(item: &ItemStack) -> bool {
     item.get_data_component::<ConsumableImpl>()
@@ -2857,7 +2838,9 @@ const fn should_replace_effect(current: &Effect, candidate: &Effect) -> bool {
 
 #[cfg(test)]
 mod milk_bucket_tests {
-    use super::{consumable_clears_all_effects, consumable_remainder};
+    use super::{
+        consumable_clears_all_effects, consumable_remainder, consume_effect_probability_applies,
+    };
     use pumpkin_data::{item::Item, item_stack::ItemStack};
 
     #[test]
@@ -2875,6 +2858,14 @@ mod milk_bucket_tests {
             consumable_remainder(&milk).map(|item| item.id),
             Some(Item::BUCKET.id)
         );
+    }
+
+    #[test]
+    fn consumable_effect_probability_matches_vanilla_strict_threshold() {
+        assert!(!consume_effect_probability_applies(0.0, 0.0));
+        assert!(consume_effect_probability_applies(1.0, 0.999));
+        assert!(consume_effect_probability_applies(0.5, 0.499));
+        assert!(!consume_effect_probability_applies(0.5, 0.5));
     }
 }
 
