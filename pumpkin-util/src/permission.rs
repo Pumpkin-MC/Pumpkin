@@ -368,6 +368,7 @@ impl<'de> Deserialize<'de> for PermissionLvl {
         let value = u8::deserialize(deserializer)?;
         match value {
             0 => Ok(Self::Zero),
+            1 => Ok(Self::One),
             2 => Ok(Self::Two),
             3 => Ok(Self::Three),
             4 => Ok(Self::Four),
@@ -375,5 +376,32 @@ impl<'de> Deserialize<'de> for PermissionLvl {
                 "Invalid value for OpLevel: {value}"
             ))),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::permission::PermissionLvl;
+
+    #[test]
+    fn serde_round_trip() {
+        for lvl in [
+            PermissionLvl::Zero,
+            PermissionLvl::One,
+            PermissionLvl::Two,
+            PermissionLvl::Three,
+            PermissionLvl::Four,
+        ] {
+            let serialized = serde_json::to_string(&lvl).expect("Should have serialized");
+            assert_eq!(
+                serde_json::from_str::<PermissionLvl>(&serialized).expect("Should have parsed"),
+                lvl
+            );
+        }
+    }
+
+    #[test]
+    fn deserialize_rejects_unknown_level() {
+        assert!(serde_json::from_str::<PermissionLvl>("5").is_err());
     }
 }
