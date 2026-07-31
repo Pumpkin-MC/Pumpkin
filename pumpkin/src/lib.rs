@@ -186,9 +186,8 @@ pub fn stop_or_exit_server() {
     if SERVER_IS_STOPPING.load(Ordering::Acquire) {
         // Server is already stopping, so we forcefully exit.
         exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
-    } else {
-        stop_server();
     }
+    stop_server();
 }
 
 fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(

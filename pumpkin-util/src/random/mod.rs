@@ -29,7 +29,7 @@ static SEED_UNIQUIFIER: AtomicU64 = AtomicU64::new(8682522807148012u64);
 /// A 64-bit seed value suitable for initializing random number generators.
 pub fn get_seed() -> u64 {
     let seed = SEED_UNIQUIFIER
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
             Some(val.wrapping_mul(1181783497276652981u64))
         })
         .unwrap();
