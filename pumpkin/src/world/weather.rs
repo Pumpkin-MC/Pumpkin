@@ -78,9 +78,7 @@ impl Weather {
     }
 
     pub fn tick_weather(&mut self, world: &World) {
-        if !self.weather_cycle_enabled {
-            self.advance_weather_cycle();
-        }
+        self.advance_weather_cycle();
 
         // Update visual transitions
         self.old_rain_level = self.rain_level;
@@ -115,6 +113,10 @@ impl Weather {
     }
 
     fn advance_weather_cycle(&mut self) {
+        if !self.weather_cycle_enabled {
+            return;
+        }
+
         // Removed async since there are no await calls
         if self.clear_weather_time > 0 {
             self.clear_weather_time -= 1;
@@ -152,6 +154,52 @@ impl Weather {
 
     pub fn reset_weather_cycle(&mut self, world: &World) {
         self.set_weather_parameters(world, 0, 0, false, false);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Weather;
+
+    #[test]
+    fn weather_cycle_respects_advance_weather_rule() {
+        struct Case {
+            weather_cycle_enabled: bool,
+            expected_clear_weather_time: i32,
+            expected_rain_time: i32,
+            expected_thunder_time: i32,
+        }
+
+        let cases = [
+            Case {
+                weather_cycle_enabled: true,
+                expected_clear_weather_time: 1,
+                expected_rain_time: 1,
+                expected_thunder_time: 1,
+            },
+            Case {
+                weather_cycle_enabled: false,
+                expected_clear_weather_time: 2,
+                expected_rain_time: 9,
+                expected_thunder_time: 7,
+            },
+        ];
+
+        for case in cases {
+            let mut weather = Weather {
+                clear_weather_time: 2,
+                rain_time: 9,
+                thunder_time: 7,
+                weather_cycle_enabled: case.weather_cycle_enabled,
+                ..Weather::new()
+            };
+
+            weather.advance_weather_cycle();
+
+            assert_eq!(weather.clear_weather_time, case.expected_clear_weather_time);
+            assert_eq!(weather.rain_time, case.expected_rain_time);
+            assert_eq!(weather.thunder_time, case.expected_thunder_time);
+        }
     }
 }
 
