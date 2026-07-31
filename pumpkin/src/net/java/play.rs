@@ -84,7 +84,7 @@ use tokio::sync::Mutex;
 /// Vanilla: 2 minutes
 const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
 
-/// PvP controls attacks against other players only; mobs remain attackable.
+/// `PvP` controls attacks against other players only; mobs remain attackable.
 const fn pvp_allows_attack(pvp_enabled: bool, target_is_player: bool) -> bool {
     pvp_enabled || !target_is_player
 }

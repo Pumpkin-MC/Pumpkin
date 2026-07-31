@@ -202,7 +202,7 @@ fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
 /// Pumpkin, so entity-specific NBT (such as a custom name or tropical-fish
 /// variant) cannot yet be restored here.  Spawning the correct base entity is
 /// still required after the water has been successfully placed.
-fn mob_bucket_entity_type(item: &Item) -> Option<&'static EntityType> {
+const fn mob_bucket_entity_type(item: &Item) -> Option<&'static EntityType> {
     match item.id {
         id if id == Item::AXOLOTL_BUCKET.id => Some(&EntityType::AXOLOTL),
         id if id == Item::COD_BUCKET.id => Some(&EntityType::COD),

@@ -291,40 +291,6 @@ macro_rules! impl_experience_container_for_cooking {
     };
 }
 
-#[cfg(test)]
-mod tests {
-    use super::experience_for_recipe;
-
-    #[test]
-    fn fractional_recipe_experience_uses_a_strict_probability_boundary() {
-        assert_eq!(experience_for_recipe(1, 0.5, &mut || 0.49), 1);
-        assert_eq!(experience_for_recipe(1, 0.5, &mut || 0.5), 0);
-    }
-
-    #[test]
-    fn whole_recipe_experience_does_not_consume_a_random_value() {
-        assert_eq!(
-            experience_for_recipe(2, 0.5, &mut || panic!("no roll expected")),
-            1
-        );
-    }
-
-    #[test]
-    fn fractional_recipe_entries_are_rounded_before_being_aggregated() {
-        let mut rolls = [0.49, 0.49].into_iter();
-        let mut random = || {
-            rolls
-                .next()
-                .expect("one random roll per fractional recipe entry")
-        };
-
-        let total =
-            experience_for_recipe(1, 0.5, &mut random) + experience_for_recipe(1, 0.5, &mut random);
-
-        assert_eq!(total, 2);
-    }
-}
-
 #[macro_export]
 macro_rules! impl_inventory_for_cooking {
     ($struct_name:ty) => {
@@ -676,4 +642,38 @@ macro_rules! impl_block_entity_for_cooking {
             }
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::experience_for_recipe;
+
+    #[test]
+    fn fractional_recipe_experience_uses_a_strict_probability_boundary() {
+        assert_eq!(experience_for_recipe(1, 0.5, &mut || 0.49), 1);
+        assert_eq!(experience_for_recipe(1, 0.5, &mut || 0.5), 0);
+    }
+
+    #[test]
+    fn whole_recipe_experience_does_not_consume_a_random_value() {
+        assert_eq!(
+            experience_for_recipe(2, 0.5, &mut || panic!("no roll expected")),
+            1
+        );
+    }
+
+    #[test]
+    fn fractional_recipe_entries_are_rounded_before_being_aggregated() {
+        let mut rolls = [0.49, 0.49].into_iter();
+        let mut random = || {
+            rolls
+                .next()
+                .expect("one random roll per fractional recipe entry")
+        };
+
+        let total =
+            experience_for_recipe(1, 0.5, &mut random) + experience_for_recipe(1, 0.5, &mut random);
+
+        assert_eq!(total, 2);
+    }
 }

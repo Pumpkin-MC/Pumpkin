@@ -157,6 +157,23 @@ impl Weather {
     }
 }
 
+impl Clone for Weather {
+    fn clone(&self) -> Self {
+        Self {
+            clear_weather_time: self.clear_weather_time,
+            raining: self.raining,
+            rain_time: self.rain_time,
+            thundering: self.thundering,
+            thunder_time: self.thunder_time,
+            rain_level: self.rain_level,
+            old_rain_level: self.old_rain_level,
+            thunder_level: self.thunder_level,
+            old_thunder_level: self.old_thunder_level,
+            weather_cycle_enabled: self.weather_cycle_enabled,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Weather;
@@ -199,23 +216,6 @@ mod tests {
             assert_eq!(weather.clear_weather_time, case.expected_clear_weather_time);
             assert_eq!(weather.rain_time, case.expected_rain_time);
             assert_eq!(weather.thunder_time, case.expected_thunder_time);
-        }
-    }
-}
-
-impl Clone for Weather {
-    fn clone(&self) -> Self {
-        Self {
-            clear_weather_time: self.clear_weather_time,
-            raining: self.raining,
-            rain_time: self.rain_time,
-            thundering: self.thundering,
-            thunder_time: self.thunder_time,
-            rain_level: self.rain_level,
-            old_rain_level: self.old_rain_level,
-            thunder_level: self.thunder_level,
-            old_thunder_level: self.old_thunder_level,
-            weather_cycle_enabled: self.weather_cycle_enabled,
         }
     }
 }
