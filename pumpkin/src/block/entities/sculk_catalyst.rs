@@ -38,6 +38,12 @@ impl BlockEntity for SculkCatalystBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        nbt.put_int("decay_delay", *self.decay_delay.try_lock().ok()?);
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
