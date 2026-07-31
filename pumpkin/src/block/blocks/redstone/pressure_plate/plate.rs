@@ -12,6 +12,7 @@ use crate::{
         GetRedstonePowerArgs, OnEntityCollisionArgs, OnNeighborUpdateArgs, OnScheduledTickArgs,
         OnStateReplacedArgs,
     },
+    entity::EntityBase,
     world::World,
 };
 
@@ -21,6 +22,14 @@ use super::PressurePlate;
 pub struct PressurePlateBlock;
 
 type PressurePlateProps = pumpkin_data::block_properties::StonePressurePlateLikeProperties;
+
+fn detects_entity(block: &Block, is_living: bool, is_spectator: bool) -> bool {
+    !is_spectator
+        && (!block
+            .id
+            .has_tag(tag::Block::MINECRAFT_STONE_PRESSURE_PLATES)
+            || is_living)
+}
 
 impl BlockMetadata for PressurePlateBlock {
     fn ids() -> Box<[BlockId]> {
@@ -98,12 +107,21 @@ impl PressurePlate for PressurePlateBlock {
         if props.powered { 15 } else { 0 }
     }
 
-    async fn calculate_redstone_output(&self, world: &World, _block: &Block, pos: &BlockPos) -> u8 {
+    async fn calculate_redstone_output(&self, world: &World, block: &Block, pos: &BlockPos) -> u8 {
         // TODO: this is bad use real box
         let aabb = BoundingBox::from_block(pos);
-        if !world.get_entities_at_box(&aabb).is_empty()
-            || !world.get_players_at_box(&aabb).is_empty()
-        {
+        let entity_triggers = world.get_entities_at_box(&aabb).into_iter().any(|entity| {
+            detects_entity(
+                block,
+                entity.get_living_entity().is_some(),
+                entity.is_spectator(),
+            )
+        });
+        let player_triggers = world
+            .get_players_at_box(&aabb)
+            .into_iter()
+            .any(|player| detects_entity(block, true, player.is_spectator()));
+        if entity_triggers || player_triggers {
             return 15;
         }
         0
@@ -113,5 +131,39 @@ impl PressurePlate for PressurePlateBlock {
         let mut props = PressurePlateProps::from_state_id(state.id, block);
         props.powered = output > 0;
         props.to_state_id(block)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::detects_entity;
+    use pumpkin_data::Block;
+
+    #[test]
+    fn stone_pressure_plates_only_detect_living_entities() {
+        assert!(detects_entity(&Block::STONE_PRESSURE_PLATE, true, false));
+        assert!(!detects_entity(&Block::STONE_PRESSURE_PLATE, false, false));
+        assert!(detects_entity(
+            &Block::POLISHED_BLACKSTONE_PRESSURE_PLATE,
+            true,
+            false
+        ));
+        assert!(!detects_entity(
+            &Block::POLISHED_BLACKSTONE_PRESSURE_PLATE,
+            false,
+            false
+        ));
+    }
+
+    #[test]
+    fn wooden_pressure_plates_detect_non_living_entities() {
+        assert!(detects_entity(&Block::OAK_PRESSURE_PLATE, true, false));
+        assert!(detects_entity(&Block::OAK_PRESSURE_PLATE, false, false));
+    }
+
+    #[test]
+    fn pressure_plates_ignore_spectators() {
+        assert!(!detects_entity(&Block::STONE_PRESSURE_PLATE, true, true));
+        assert!(!detects_entity(&Block::OAK_PRESSURE_PLATE, true, true));
     }
 }
