@@ -1,13 +1,16 @@
 use std::sync::{Arc, Weak};
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::{
+    data_component_impl::EquipmentSlot, entity::EntityType, item::Item, item_stack::ItemStack,
+};
 
 use crate::entity::{
     Entity, NBTStorage, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        ranged_bow_attack::RangedBowAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -26,6 +29,7 @@ pub struct SkeletonEntityBase {
 
 impl SkeletonEntityBase {
     pub fn new(entity: Entity) -> Arc<Self> {
+        let uses_bow = entity.entity_type != &EntityType::WITHER_SKELETON;
         let mob_entity = MobEntity::new(entity);
         let mob = Self { mob_entity };
         let mob_arc = Arc::new(mob);
@@ -34,11 +38,35 @@ impl SkeletonEntityBase {
             Arc::downgrade(&mob_arc)
         };
         {
+            // Vanilla `AbstractSkeleton#populateDefaultEquipmentSlots` equips a bow;
+            // WitherSkeleton overrides that hook with a stone sword.
+            let main_hand = if uses_bow {
+                &Item::BOW
+            } else {
+                &Item::STONE_SWORD
+            };
+            mob_arc
+                .mob_entity
+                .living_entity
+                .entity_equipment
+                .try_lock()
+                .expect("new skeleton equipment is uncontended")
+                .equipment
+                .insert(
+                    EquipmentSlot::MAIN_HAND,
+                    Arc::new(tokio::sync::Mutex::new(ItemStack::new(1, main_hand))),
+                );
+
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.2, false)));
+            if uses_bow {
+                // Vanilla `AbstractSkeleton#reassessWeaponGoal` selects this at priority 4.
+                goal_selector.add_goal(4, Box::new(RangedBowAttackGoal::new(40, 15.0)));
+            } else {
+                goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.2, false)));
+            }
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 8,
