@@ -84,6 +84,12 @@ use tokio::sync::Mutex;
 /// Vanilla: 2 minutes
 const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
 
+// Vanilla: `ServerGamePacketListenerImpl::handleMovePlayer` rejects every non-finite
+// position component before clamping it to the world border.
+const fn has_finite_position(position: Vector3<f64>) -> bool {
+    position.x.is_finite() && position.y.is_finite() && position.z.is_finite()
+}
+
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
     BlockOutOfReach,
@@ -330,7 +336,7 @@ impl JavaClient {
         }
         // y = feet Y
         let position = packet.position;
-        if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
+        if !has_finite_position(position) {
             self.kick(TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
@@ -463,12 +469,7 @@ impl JavaClient {
         }
         // y = feet Y
         let position = packet.position;
-        if !position.x.is_finite()
-            || !position.y.is_finite()
-            || !position.z.is_finite()
-            || !packet.yaw.is_finite()
-            || !packet.pitch.is_finite()
-        {
+        if !has_finite_position(position) || !packet.yaw.is_finite() || !packet.pitch.is_finite() {
             self.kick(TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
@@ -2970,5 +2971,24 @@ impl JavaClient {
                 .subscribed_debug_sample
                 .store(true, Ordering::Relaxed);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::math::vector3::Vector3;
+
+    use super::has_finite_position;
+
+    #[test]
+    fn movement_position_rejects_non_finite_components() {
+        assert!(has_finite_position(Vector3::new(0.0, -64.0, 0.0)));
+        assert!(!has_finite_position(Vector3::new(f64::NAN, 0.0, 0.0)));
+        assert!(!has_finite_position(Vector3::new(f64::INFINITY, 0.0, 0.0)));
+        assert!(!has_finite_position(Vector3::new(
+            0.0,
+            f64::NEG_INFINITY,
+            0.0
+        )));
     }
 }
