@@ -58,6 +58,22 @@ impl BlockEntity for EndGatewayBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        nbt.put_long("Age", *self.age.try_lock().ok()?);
+        nbt.put_bool("ExactTeleport", *self.exact_teleport.try_lock().ok()?);
+        if let Ok(exit) = self.exit_portal.try_lock()
+            && let Some(ref exit) = *exit
+        {
+            let mut exit_nbt = NbtCompound::new();
+            exit_nbt.put_int("X", exit.0.x);
+            exit_nbt.put_int("Y", exit.0.y);
+            exit_nbt.put_int("Z", exit.0.z);
+            nbt.put_compound("ExitPortal", exit_nbt);
+        }
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

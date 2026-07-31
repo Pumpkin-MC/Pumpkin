@@ -19,7 +19,7 @@ use crate::block::viewer::{
 use crate::world::World;
 use pumpkin_world::inventory::InventoryFuture;
 use pumpkin_world::inventory::{
-    split_stack, {Clearable, Inventory},
+    split_stack, sync_write_items_to_nbt, {Clearable, Inventory},
 };
 
 use super::BlockEntity;
@@ -96,6 +96,12 @@ impl BlockEntity for ShulkerBoxBlockEntity {
 
     fn clear_dirty(&self) {
         self.dirty.store(false, Ordering::Relaxed);
+    }
+
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        sync_write_items_to_nbt(&self.items, &mut nbt);
+        Some(nbt)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -92,7 +92,7 @@ impl CommandExecutor for Executor {
                             .add_child(TextComponent::text("]"))
                             .hover_event(HoverEvent::ShowItem {
                                 id: item_name.to_string().into(),
-                                count: Some(item_count),
+                                count: Some(item_count.min(99)),
                             }),
                         targets[0].get_display_name().await,
                     ],
@@ -108,7 +108,7 @@ impl CommandExecutor for Executor {
                             .add_child(TextComponent::text("]"))
                             .hover_event(HoverEvent::ShowItem {
                                 id: item_name.to_string().into(),
-                                count: Some(item_count),
+                                count: Some(item_count.min(99)),
                             }),
                         TextComponent::text(targets.len().to_string()),
                     ],
