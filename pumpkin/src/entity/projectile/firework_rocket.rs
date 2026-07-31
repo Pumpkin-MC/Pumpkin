@@ -3,8 +3,14 @@ use crate::{
     server::Server,
     world::World,
 };
-use pumpkin_data::{entity::EntityStatus, meta_data_type::MetaDataType, tracked_data::TrackedData};
-use pumpkin_protocol::{codec::optional_int::OptionalInt, java::client::play::Metadata};
+use pumpkin_data::{
+    data_component_impl::FireworksImpl, entity::EntityStatus, item::Item, item_stack::ItemStack,
+    meta_data_type::MetaDataType, tracked_data::TrackedData,
+};
+use pumpkin_protocol::{
+    codec::{item_stack_seralizer::ItemStackSerializer, optional_int::OptionalInt},
+    java::client::play::Metadata,
+};
 use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
@@ -12,19 +18,24 @@ use pumpkin_util::{
 use std::sync::atomic::AtomicBool;
 use std::sync::{
     Arc,
-    atomic::{AtomicU32, Ordering},
+    atomic::{AtomicI32, Ordering},
 };
 
 const GRAVITY: f64 = 0.0;
 
 pub struct FireworkRocketEntity {
     entity: ThrownItemEntity,
-    life: AtomicU32,
-    life_time: AtomicU32,
+    item_stack: ItemStack,
+    life: AtomicI32,
+    life_time: AtomicI32,
 }
 
 impl FireworkRocketEntity {
     pub fn new(entity: Entity) -> Self {
+        Self::new_with_item(entity, &ItemStack::new(1, &Item::FIREWORK_ROCKET))
+    }
+
+    pub fn new_with_item(entity: Entity, item_stack: &ItemStack) -> Self {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
 
         entity.set_velocity(Vector3::new(
@@ -40,14 +51,22 @@ impl FireworkRocketEntity {
                 has_hit: AtomicBool::new(false),
                 gravity: GRAVITY,
             },
+            item_stack: item_stack.clone(),
             life: 0.into(),
-            // TODO
-            life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
-                .into(),
+            life_time: firework_lifetime(
+                flight_duration(item_stack),
+                random.next_bounded_i32(6),
+                random.next_bounded_i32(7),
+            )
+            .into(),
         }
     }
 
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
+        Self::new_shot_with_item(entity, shooter, &ItemStack::new(1, &Item::FIREWORK_ROCKET))
+    }
+
+    pub fn new_shot_with_item(entity: Entity, shooter: &Entity, item_stack: &ItemStack) -> Self {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
 
         // Set random initial velocity
@@ -62,9 +81,14 @@ impl FireworkRocketEntity {
         // Set random life
         let rocket = Self {
             entity: thrown,
+            item_stack: item_stack.clone(),
             life: 0.into(),
-            life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
-                .into(),
+            life_time: firework_lifetime(
+                flight_duration(item_stack),
+                random.next_bounded_i32(6),
+                random.next_bounded_i32(7),
+            )
+            .into(),
         };
 
         // Set shooter metadata
@@ -90,9 +114,37 @@ impl FireworkRocketEntity {
     }
 }
 
+/// Matches `FireworkRocketEntity(Level, ..., ItemStack)`: vanilla adds one to the
+/// data-component duration, then adds its two independent random lifetime offsets.
+const fn firework_lifetime(flight_duration: i32, first_random: i32, second_random: i32) -> i32 {
+    10i32
+        .wrapping_mul(1i32.wrapping_add(flight_duration))
+        .wrapping_add(first_random)
+        .wrapping_add(second_random)
+}
+
+fn flight_duration(item_stack: &ItemStack) -> i32 {
+    item_stack
+        .get_data_component::<FireworksImpl>()
+        .map_or(0, |fireworks| fireworks.flight_duration)
+}
+
 impl NBTStorage for FireworkRocketEntity {}
 
 impl EntityBase for FireworkRocketEntity {
+    fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            self.get_entity().send_meta_data(
+                &[Metadata::new(
+                    TrackedData::ID_FIREWORKS_ITEM,
+                    MetaDataType::ITEM_STACK,
+                    &ItemStackSerializer::from(self.item_stack.clone()),
+                )],
+                None,
+            );
+        })
+    }
+
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,
@@ -133,7 +185,7 @@ impl EntityBase for FireworkRocketEntity {
             }
 
             // Increment life and check for explosion
-            let current_life = self.life.fetch_add(1, Ordering::Relaxed);
+            let current_life = self.life.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
             if current_life > self.life_time.load(Ordering::Relaxed) {
                 self.explode_and_remove(&world).await;
             }
@@ -154,5 +206,24 @@ impl EntityBase for FireworkRocketEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::firework_lifetime;
+
+    #[test]
+    fn lifetime_includes_default_flight_duration() {
+        // The default Fireworks component has flight_duration 1, so vanilla starts
+        // at 20 ticks before adding its two random offsets.
+        assert_eq!(firework_lifetime(1, 0, 0), 20);
+        assert_eq!(firework_lifetime(1, 5, 6), 31);
+    }
+
+    #[test]
+    fn lifetime_scales_with_component_flight_duration() {
+        assert_eq!(firework_lifetime(3, 0, 0), 40);
+        assert_eq!(firework_lifetime(3, 5, 6), 51);
     }
 }
