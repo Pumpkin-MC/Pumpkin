@@ -2,11 +2,13 @@ use std::{pin::Pin, sync::Arc};
 
 use crate::{
     entity::player::Player,
+    entity::r#type::from_type,
     item::{ItemBehaviour, ItemMetadata},
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId,
     dimension::Dimension,
+    entity::EntityType,
     fluid::Fluid,
     item::Item,
     item_stack::ItemStack,
@@ -17,6 +19,7 @@ use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
 };
 use pumpkin_world::{inventory::Inventory, tick::TickPriority, world::BlockFlags};
+use uuid::Uuid;
 
 use crate::world::World;
 
@@ -193,6 +196,24 @@ fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
         && world.dimension == Dimension::THE_NETHER
 }
 
+/// Returns the aquatic entity carried by a vanilla mob bucket.
+///
+/// The bucket's `bucket_entity_data` component is currently an opaque marker in
+/// Pumpkin, so entity-specific NBT (such as a custom name or tropical-fish
+/// variant) cannot yet be restored here.  Spawning the correct base entity is
+/// still required after the water has been successfully placed.
+fn mob_bucket_entity_type(item: &Item) -> Option<&'static EntityType> {
+    match item.id {
+        id if id == Item::AXOLOTL_BUCKET.id => Some(&EntityType::AXOLOTL),
+        id if id == Item::COD_BUCKET.id => Some(&EntityType::COD),
+        id if id == Item::SALMON_BUCKET.id => Some(&EntityType::SALMON),
+        id if id == Item::TROPICAL_FISH_BUCKET.id => Some(&EntityType::TROPICAL_FISH),
+        id if id == Item::PUFFERFISH_BUCKET.id => Some(&EntityType::PUFFERFISH),
+        id if id == Item::TADPOLE_BUCKET.id => Some(&EntityType::TADPOLE),
+        _ => None,
+    }
+}
+
 fn play_bucket_evaporation(world: &Arc<World>, player: &Player) {
     world.play_sound_raw(
         Sound::BlockFireExtinguish as u16,
@@ -233,10 +254,12 @@ async fn try_place_filled_bucket(
     item: &Item,
     pos: BlockPos,
     direction: BlockDirection,
-) -> bool {
+) -> Option<BlockPos> {
     let (block, state) = world.get_block_and_state(&pos);
     if item.id == Item::POWDER_SNOW_BUCKET.id {
-        return try_place_powder_snow(world, pos, direction).await;
+        return try_place_powder_snow(world, pos, direction)
+            .await
+            .then_some(pos.offset(direction.to_offset()));
     }
 
     if is_waterlogged(block, state.id) && item.id == Item::WATER_BUCKET.id {
@@ -245,7 +268,7 @@ async fn try_place_filled_bucket(
             .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
         world.schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal);
-        return true;
+        return Some(pos);
     }
 
     let target_pos = pos.offset(direction.to_offset());
@@ -253,14 +276,14 @@ async fn try_place_filled_bucket(
 
     if waterlogged_check(block, state.id).is_some() {
         if item.id == Item::LAVA_BUCKET.id {
-            return false;
+            return None;
         }
         let state_id = set_waterlogged(block, state.id, true);
         world
             .set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
         world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
-        return true;
+        return Some(target_pos);
     }
 
     if state.id == Block::AIR.default_state.id || state.is_liquid() {
@@ -275,10 +298,27 @@ async fn try_place_filled_bucket(
                 BlockFlags::NOTIFY_NEIGHBORS,
             )
             .await;
-        return true;
+        return Some(target_pos);
     }
 
-    false
+    None
+}
+
+async fn spawn_mob_bucket_entity(world: &Arc<World>, item: &Item, pos: BlockPos) {
+    let Some(entity_type) = mob_bucket_entity_type(item) else {
+        return;
+    };
+
+    // MobBucketItem.checkExtraContent adds its entity at the successfully
+    // filled fluid block, rather than at the clicked block.
+    let spawn_pos = Vector3::new(
+        f64::from(pos.0.x) + 0.5,
+        f64::from(pos.0.y) + 0.5,
+        f64::from(pos.0.z) + 0.5,
+    );
+    world
+        .spawn_entity(from_type(entity_type, spawn_pos, world, Uuid::new_v4()))
+        .await;
 }
 
 impl ItemBehaviour for EmptyBucketItem {
@@ -348,11 +388,12 @@ impl ItemBehaviour for FilledBucketItem {
                 play_bucket_evaporation(&world, player);
                 return;
             }
-            if !try_place_filled_bucket(&world, item, pos, direction).await {
+            let Some(placed_pos) = try_place_filled_bucket(&world, item, pos, direction).await
+            else {
                 return;
-            }
+            };
 
-            //TODO: Spawn entity if applicable
+            spawn_mob_bucket_entity(&world, item, placed_pos).await;
             if player.gamemode.load() != GameMode::Creative {
                 let item_stack = ItemStack::new(1, &Item::BUCKET);
                 player
@@ -369,3 +410,26 @@ impl ItemBehaviour for FilledBucketItem {
 }
 
 //TODO: Implement MilkBucketItem
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mob_buckets_map_to_their_vanilla_entity_types() {
+        let cases = [
+            (&Item::AXOLOTL_BUCKET, &EntityType::AXOLOTL),
+            (&Item::COD_BUCKET, &EntityType::COD),
+            (&Item::SALMON_BUCKET, &EntityType::SALMON),
+            (&Item::TROPICAL_FISH_BUCKET, &EntityType::TROPICAL_FISH),
+            (&Item::PUFFERFISH_BUCKET, &EntityType::PUFFERFISH),
+            (&Item::TADPOLE_BUCKET, &EntityType::TADPOLE),
+        ];
+
+        for (bucket, entity_type) in cases {
+            assert_eq!(mob_bucket_entity_type(bucket), Some(entity_type));
+        }
+        assert_eq!(mob_bucket_entity_type(&Item::WATER_BUCKET), None);
+        assert_eq!(mob_bucket_entity_type(&Item::LAVA_BUCKET), None);
+    }
+}
