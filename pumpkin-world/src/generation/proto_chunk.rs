@@ -1550,6 +1550,9 @@ impl GenerationCache for ProtoChunk {
     fn try_get_proto_chunk(&self, cx: i32, cz: i32) -> Option<&ProtoChunk> {
         self.get_chunk(cx, cz)
     }
+    fn world_seed(&self) -> u64 {
+        self.world_seed
+    }
     fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId {
         Self::get_block_state(self, pos)
     }
