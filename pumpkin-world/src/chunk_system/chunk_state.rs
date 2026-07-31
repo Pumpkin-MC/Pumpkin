@@ -221,6 +221,7 @@ impl Chunk {
                 light_populated: AtomicBool::new(false),
                 status: ChunkStatus::Empty,
                 blending_data: None,
+                unknown_nbt: pumpkin_nbt::compound::NbtCompound::new(),
                 dirty: AtomicBool::new(false),
             })),
         ) {
@@ -313,6 +314,7 @@ impl Chunk {
             pending_block_entities: Mutex::new(pending_block_entities),
             status: proto_chunk.stage.into(),
             blending_data: proto_chunk.blending_data,
+            unknown_nbt: pumpkin_nbt::compound::NbtCompound::new(),
         };
 
         chunk.heightmap = Mutex::new(chunk.calculate_heightmap());

@@ -80,6 +80,7 @@ pub struct ChunkData {
     pub light_populated: AtomicBool,
     pub status: ChunkStatus,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
+    pub unknown_nbt: NbtCompound,
     pub dirty: AtomicBool,
 }
 
