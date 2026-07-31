@@ -57,6 +57,25 @@ impl BlockEntity for BeehiveBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        if let Ok(bees) = self.bees.try_lock()
+            && let Some(ref b) = *bees
+        {
+            nbt.put_list("Bees", b.clone());
+        }
+        if let Ok(flower_pos) = self.flower_pos.try_lock()
+            && let Some(ref fp) = *flower_pos
+        {
+            let mut fp_nbt = NbtCompound::new();
+            fp_nbt.put_int("X", fp.0.x);
+            fp_nbt.put_int("Y", fp.0.y);
+            fp_nbt.put_int("Z", fp.0.z);
+            nbt.put_compound("FlowerPos", fp_nbt);
+        }
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

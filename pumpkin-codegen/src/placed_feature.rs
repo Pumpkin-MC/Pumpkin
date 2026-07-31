@@ -13,6 +13,7 @@ pub fn build_enum() -> TokenStream {
 
     let mut from_name_arms = Vec::new();
     let mut to_name_arms = Vec::new();
+    let mut all_names: Vec<String> = Vec::new();
 
     let variants: Vec<TokenStream> = json
         .as_object()
@@ -26,10 +27,16 @@ pub fn build_enum() -> TokenStream {
             to_name_arms.push(quote! {
                 Self::#variant_name => #name,
             });
+            all_names.push(format!("minecraft:{name}"));
             quote! {
                 #variant_name,
             }
         })
+        .collect();
+
+    let all_names_tokens: Vec<TokenStream> = all_names
+        .iter()
+        .map(|name| quote! { #name })
         .collect();
 
     quote! {
@@ -51,6 +58,11 @@ pub fn build_enum() -> TokenStream {
                 match self {
                     #(#to_name_arms)*
                 }
+            }
+
+            #[must_use]
+            pub const fn all_names() -> &'static [&'static str] {
+                &[#(#all_names_tokens),*]
             }
         }
     }
