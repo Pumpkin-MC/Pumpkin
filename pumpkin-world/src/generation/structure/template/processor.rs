@@ -10,10 +10,16 @@ use crate::ProtoChunk;
 
 #[derive(Clone)]
 pub enum StructureProcessor {
-    BlockRot { integrity: f32, blocks: BlockTag },
+    BlockRot {
+        integrity: f32,
+        blocks: Option<BlockTag>,
+    },
     Rules(Vec<ProcessorRule>),
     ProtectedBlocks(BlockTag),
-    Capped { limit: i32, delegate: Box<Self> },
+    Capped {
+        limit: i32,
+        delegate: Box<Self>,
+    },
 }
 
 #[derive(Clone)]
@@ -84,7 +90,7 @@ impl StructureProcessor {
         let input_block = state.id.to_block_id();
         match self {
             Self::BlockRot { integrity, blocks } => {
-                if !blocks.contains(input_block) {
+                if blocks.is_some_and(|blocks| !blocks.contains(input_block)) {
                     return Some(state);
                 }
                 let mut random = LegacyRand::from_seed(hash_block_pos(pos.x, pos.y, pos.z) as u64);
@@ -119,7 +125,7 @@ enum RawProcessor {
     #[serde(rename = "minecraft:block_rot")]
     BlockRot {
         integrity: f32,
-        rottable_blocks: String,
+        rottable_blocks: Option<String>,
     },
     #[serde(rename = "minecraft:rule")]
     Rule { rules: Vec<RawRule> },
@@ -153,8 +159,16 @@ fn convert_raw_processor(raw: RawProcessor) -> Option<StructureProcessor> {
         RawProcessor::BlockRot {
             integrity,
             rottable_blocks,
-        } => BlockTag::from_name(&rottable_blocks)
-            .map(|blocks| StructureProcessor::BlockRot { integrity, blocks }),
+        } => match rottable_blocks {
+            Some(blocks) => Some(StructureProcessor::BlockRot {
+                integrity,
+                blocks: Some(BlockTag::from_name(&blocks)?),
+            }),
+            None => Some(StructureProcessor::BlockRot {
+                integrity,
+                blocks: None,
+            }),
+        },
         RawProcessor::ProtectedBlocks { value } => {
             BlockTag::from_name(&value).map(StructureProcessor::ProtectedBlocks)
         }
@@ -259,5 +273,17 @@ mod tests {
             load_processor_list("minecraft:trail_ruins_houses_archaeology").len(),
             3
         );
+    }
+
+    #[test]
+    fn parses_outpost_rot_without_a_block_filter() {
+        let processors = load_processor_list("minecraft:outpost_rot");
+        assert!(matches!(
+            processors.as_ref(),
+            [StructureProcessor::BlockRot {
+                integrity,
+                blocks: None,
+            }] if (*integrity - 0.05).abs() < f32::EPSILON
+        ));
     }
 }

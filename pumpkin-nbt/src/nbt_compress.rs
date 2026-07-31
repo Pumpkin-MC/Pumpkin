@@ -1,17 +1,13 @@
+//! Helpers for reading and writing gzip-compressed NBT data.
+
 use crate::deserializer::NbtReadHelperJava;
 use crate::{Error, Nbt, NbtCompound, deserializer, serializer};
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use std::io::{Cursor, Read, Seek, Write};
 
-/// Reads a `GZipped` NBT compound tag from any reader.
+/// Reads a gzip-compressed, named NBT compound from a seekable reader.
 ///
-/// # Arguments
-///
-/// * `input` - Any type implementing the Read trait containing `GZipped` NBT data
-///
-/// # Returns
-///
-/// A Result containing either the parsed `NbtCompound` or an Error
+/// Decompressed data is limited to 64 MiB.
 pub fn read_gzip_compound_tag(input: impl Read + Seek) -> Result<NbtCompound, Error> {
     // Create a GZip decoder and directly chain it to the NBT reader
     let mut decoder = GzDecoder::new(input).take(64 * 1024 * 1024); // 64 MB limit
@@ -24,18 +20,9 @@ pub fn read_gzip_compound_tag(input: impl Read + Seek) -> Result<NbtCompound, Er
     Ok(nbt.root_tag)
 }
 
-/// Writes an NBT compound tag with `GZip` compression.
+/// Writes a named NBT compound with gzip compression.
 ///
-/// This function takes an `NbtCompound` and writes it as a `GZipped` byte vector.
-///
-/// # Arguments
-///
-/// * `compound` - The `NbtCompound` to serialize and compress
-/// * `output` - Any type implementing the Write trait where the compressed data will be written
-///
-/// # Returns
-///
-/// A Result containing either the compressed data as a byte vector or an Error
+/// The root name is written as an empty string.
 pub fn write_gzip_compound_tag(compound: NbtCompound, output: impl Write) -> Result<(), Error> {
     // Create a GZip encoder that writes to the output
     let mut encoder = GzEncoder::new(output, Compression::default());
@@ -51,22 +38,18 @@ pub fn write_gzip_compound_tag(compound: NbtCompound, output: impl Write) -> Res
     Ok(())
 }
 
-/// Convenience function that returns compressed bytes
+/// Serializes a named NBT compound into a gzip-compressed byte vector.
+///
+/// The root name is written as an empty string.
 pub fn write_gzip_compound_tag_to_bytes(compound: NbtCompound) -> Result<Vec<u8>, Error> {
     let mut buffer = Vec::new();
     write_gzip_compound_tag(compound, &mut buffer)?;
     Ok(buffer)
 }
 
-/// Reads a `GZipped` NBT structure into a Rust type.
+/// Deserializes a value from gzip-compressed, named Java Edition NBT.
 ///
-/// # Arguments
-///
-/// * `input` - Any type implementing the Read trait containing `GZipped` NBT data
-///
-/// # Returns
-///
-/// A Result containing either the deserialized type or an Error
+/// Decompressed data is limited to 64 MiB.
 pub fn from_gzip_bytes<'a, T: serde::Deserialize<'a>, R: Read>(input: R) -> Result<T, Error> {
     // Create a GZip decoder and directly use it for deserialization
     let mut decoder = GzDecoder::new(input).take(64 * 1024 * 1024); // 64 MB limit
@@ -75,16 +58,9 @@ pub fn from_gzip_bytes<'a, T: serde::Deserialize<'a>, R: Read>(input: R) -> Resu
     deserializer::from_bytes(Cursor::new(buf))
 }
 
-/// Writes a Rust type as `GZipped` NBT to any writer.
+/// Serializes a value as gzip-compressed Java Edition NBT.
 ///
-/// # Arguments
-///
-/// * `value` - The value to serialize and compress
-/// * `output` - Any type implementing the Write trait where the compressed data will be written
-///
-/// # Returns
-///
-/// A Result indicating success or an Error
+/// The root name is written as an empty string.
 pub fn to_gzip_bytes<T: serde::Serialize, W: Write>(value: &T, output: W) -> Result<(), Error> {
     // Create a GZip encoder that writes to the output
     let encoder = GzEncoder::new(output, Compression::default());
@@ -93,7 +69,9 @@ pub fn to_gzip_bytes<T: serde::Serialize, W: Write>(value: &T, output: W) -> Res
     serializer::to_bytes(value, encoder)
 }
 
-/// Convenience function that returns compressed bytes
+/// Serializes a value into a gzip-compressed Java Edition NBT byte vector.
+///
+/// The root name is written as an empty string.
 pub fn to_gzip_bytes_vec<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, Error> {
     let mut buffer = Vec::new();
     to_gzip_bytes(value, &mut buffer)?;
