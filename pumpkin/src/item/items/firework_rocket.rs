@@ -25,7 +25,7 @@ impl ItemMetadata for FireworkRocketItem {
 impl ItemBehaviour for FireworkRocketItem {
     fn use_on_block<'a>(
         &'a self,
-        _item: &'a mut ItemStack,
+        item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -44,7 +44,7 @@ impl ItemBehaviour for FireworkRocketItem {
                 ),
                 &EntityType::FIREWORK_ROCKET,
             );
-            let entity = FireworkRocketEntity::new(entity);
+            let entity = FireworkRocketEntity::new_with_item(entity, item);
             world.spawn_entity(Arc::new(entity)).await;
         })
     }
@@ -62,7 +62,29 @@ impl ItemBehaviour for FireworkRocketItem {
                     player.get_entity().pos.load(),
                     &EntityType::FIREWORK_ROCKET,
                 );
-                let entity = FireworkRocketEntity::new_shot(entity, player.get_entity());
+                // The entity keeps the pre-consumption stack. Its Fireworks component
+                // determines both the client payload and the vanilla lifetime.
+                let main_hand = player.inventory.held_item();
+                let mut source_stack = {
+                    let stack = main_hand.lock().await.clone();
+                    (stack.item == &Item::FIREWORK_ROCKET).then_some(stack)
+                };
+                if source_stack.is_none() {
+                    let off_hand = player.inventory.off_hand_item().await;
+                    let stack = off_hand.lock().await.clone();
+                    if stack.item == &Item::FIREWORK_ROCKET {
+                        source_stack = Some(stack);
+                    }
+                }
+
+                let Some(source_stack) = source_stack else {
+                    return;
+                };
+                let entity = FireworkRocketEntity::new_shot_with_item(
+                    entity,
+                    player.get_entity(),
+                    &source_stack,
+                );
                 world.spawn_entity(Arc::new(entity)).await;
             }
         })
