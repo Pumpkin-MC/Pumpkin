@@ -37,10 +37,7 @@ impl ItemBehaviour for CrossbowItem {
             let held = inventory.held_item();
             let stack = held.lock().await.clone();
 
-            if stack
-                .get_data_component::<ChargedProjectilesImpl>()
-                .is_some()
-            {
+            if Self::is_charged(&stack) {
                 Self::fire_projectiles(player, &held).await;
                 return;
             }
@@ -137,6 +134,14 @@ impl ItemBehaviour for CrossbowItem {
 }
 
 impl CrossbowItem {
+    /// A crossbow's default `charged_projectiles` component is empty; only a
+    /// component containing a projectile represents a loaded crossbow.
+    fn is_charged(stack: &ItemStack) -> bool {
+        stack
+            .get_data_component::<ChargedProjectilesImpl>()
+            .is_some_and(|charged| !charged.projectiles.is_empty())
+    }
+
     async fn fire_projectiles(player: &Player, held: &Arc<Mutex<ItemStack>>) {
         let mut stack = held.lock().await;
         let projectiles = stack
@@ -191,5 +196,36 @@ impl CrossbowItem {
                 .retain(|(id, _)| *id != DataComponent::ChargedProjectiles);
             player.damage_held_item(1).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_charged_projectiles_component_is_not_charged() {
+        let stack = ItemStack::new(1, &Item::CROSSBOW);
+
+        // Crossbows carry this empty component by default.
+        assert!(
+            stack
+                .get_data_component::<ChargedProjectilesImpl>()
+                .is_some()
+        );
+        assert!(!CrossbowItem::is_charged(&stack));
+    }
+
+    #[test]
+    fn charged_projectiles_component_with_projectile_is_charged() {
+        let mut stack = ItemStack::new(1, &Item::CROSSBOW);
+        stack.patch.push((
+            DataComponent::ChargedProjectiles,
+            Some(Box::new(ChargedProjectilesImpl {
+                projectiles: vec![pumpkin_nbt::compound::NbtCompound::new()],
+            })),
+        ));
+
+        assert!(CrossbowItem::is_charged(&stack));
     }
 }
