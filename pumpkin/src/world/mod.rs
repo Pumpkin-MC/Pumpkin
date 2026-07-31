@@ -143,6 +143,7 @@ use scoreboard::Scoreboard;
 use time::LevelTime;
 use tokio::sync::Mutex;
 
+pub mod block_placer;
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
@@ -1036,6 +1037,16 @@ impl World {
             .lock()
             .await
             .insert(position, block_state_id);
+    }
+
+    /// Queues block state changes for broadcast to nearby players.
+    ///
+    /// Call [`flush_block_updates`](Self::flush_block_updates) afterward to send the packets.
+    pub async fn queue_block_updates(&self, changes: &[(BlockPos, BlockStateId)]) {
+        let mut guard = self.unsent_block_changes.lock().await;
+        for (pos, state_id) in changes {
+            guard.insert(*pos, *state_id);
+        }
     }
 
     pub async fn flush_block_updates(&self) {
