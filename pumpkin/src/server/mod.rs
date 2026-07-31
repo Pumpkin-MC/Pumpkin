@@ -1210,14 +1210,18 @@ impl Server {
 
     pub async fn save_plugin_configs(&self) {
         let configs = self.configs.lock().await;
-        // TODO: Possibly do all the save operations concurrently instead of one after the other.
+        let mut join_set = JoinSet::new();
         for mgr in configs.iter() {
             if !mgr.changed() {
                 continue;
             }
-            if let Err(e) = mgr.save().await {
-                tracing::error!("Failed to save plugin config: {e}");
-            }
+            let mgr = Arc::clone(mgr);
+            join_set.spawn(async move {
+                if let Err(e) = mgr.save().await {
+                    tracing::error!("Failed to save plugin config: {e}");
+                }
+            });
         }
+        join_set.join_all().await;
     }
 }
