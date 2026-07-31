@@ -163,6 +163,7 @@ pub struct ChunkNoiseGenerator<'a> {
     generation_shape: &'a GenerationShapeConfig,
     start_cell_pos_x: i32,
     start_cell_pos_z: i32,
+    horizontal_cell_count: usize,
 
     vertical_cell_count: usize,
     minimum_cell_y: i32,
@@ -255,6 +256,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
             generation_shape,
             start_cell_pos_x,
             start_cell_pos_z,
+            horizontal_cell_count,
             vertical_cell_count,
             minimum_cell_y,
 
@@ -279,7 +281,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
     fn sample_density(&mut self, start: bool, current_x: i32) {
         let x = current_x * self.horizontal_cell_block_count() as i32;
 
-        for cell_z in 0..=(16 / self.horizontal_cell_block_count()) {
+        for cell_z in 0..=self.horizontal_cell_count {
             let current_cell_z_pos = self.start_cell_pos_z + cell_z as i32;
             let z = current_cell_z_pos * self.horizontal_cell_block_count() as i32;
             self.cache_fill_unique_id += 1;
@@ -305,7 +307,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
                 0,
             );
 
-            self.fill_interpolator_buffers(start, cell_z as usize, &mapper, &mut options);
+            self.fill_interpolator_buffers(start, cell_z, &mapper, &mut options);
             self.cache_result_unique_id = options.cache_result_unique_id;
         }
         self.cache_fill_unique_id += 1;

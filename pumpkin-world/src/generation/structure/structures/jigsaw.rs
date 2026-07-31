@@ -38,6 +38,7 @@ pub enum PoolElementKind {
     Single {
         template: String,
         processors: ProcessorListRef,
+        legacy: bool,
     },
     List(Vec<Self>),
     Feature(pumpkin_data::placed_feature::PlacedFeature),
@@ -67,11 +68,14 @@ struct RawWeightedPoolElement {
 enum RawPoolElement {
     #[serde(rename = "minecraft:empty_pool_element")]
     Empty,
-    #[serde(
-        rename = "minecraft:single_pool_element",
-        alias = "minecraft:legacy_single_pool_element"
-    )]
+    #[serde(rename = "minecraft:single_pool_element")]
     Single {
+        location: String,
+        processors: RawProcessorList,
+        projection: RawProjection,
+    },
+    #[serde(rename = "minecraft:legacy_single_pool_element")]
+    LegacySingle {
         location: String,
         processors: RawProcessorList,
         projection: RawProjection,
@@ -112,6 +116,29 @@ impl From<RawProjection> for JigsawProjection {
 }
 
 impl RawPoolElement {
+    fn single(
+        location: String,
+        processors: RawProcessorList,
+        projection: RawProjection,
+        legacy: bool,
+    ) -> (PoolElementKind, JigsawProjection) {
+        let processors = match processors {
+            RawProcessorList::Named(name) => ProcessorListRef::Named(name),
+            RawProcessorList::Inline { processors } => {
+                debug_assert!(processors.is_empty());
+                ProcessorListRef::Empty
+            }
+        };
+        (
+            PoolElementKind::Single {
+                template: location,
+                processors,
+                legacy,
+            },
+            projection.into(),
+        )
+    }
+
     fn into_element(self) -> Option<(PoolElementKind, JigsawProjection)> {
         match self {
             Self::Empty => Some((PoolElementKind::Empty, JigsawProjection::Rigid)),
@@ -119,22 +146,12 @@ impl RawPoolElement {
                 location,
                 processors,
                 projection,
-            } => {
-                let processors = match processors {
-                    RawProcessorList::Named(name) => ProcessorListRef::Named(name),
-                    RawProcessorList::Inline { processors } => {
-                        debug_assert!(processors.is_empty());
-                        ProcessorListRef::Empty
-                    }
-                };
-                Some((
-                    PoolElementKind::Single {
-                        template: location,
-                        processors,
-                    },
-                    projection.into(),
-                ))
-            }
+            } => Some(Self::single(location, processors, projection, false)),
+            Self::LegacySingle {
+                location,
+                processors,
+                projection,
+            } => Some(Self::single(location, processors, projection, true)),
             Self::List {
                 elements,
                 projection,
@@ -181,21 +198,22 @@ impl PoolElement {
 
     pub fn for_each_template(
         &self,
-        mut consumer: impl FnMut(&str, &ProcessorListRef, Arc<StructureTemplate>),
+        mut consumer: impl FnMut(&str, &ProcessorListRef, bool, Arc<StructureTemplate>),
     ) {
         fn visit(
             kind: &PoolElementKind,
-            consumer: &mut impl FnMut(&str, &ProcessorListRef, Arc<StructureTemplate>),
+            consumer: &mut impl FnMut(&str, &ProcessorListRef, bool, Arc<StructureTemplate>),
         ) {
             match kind {
                 PoolElementKind::Single {
                     template,
                     processors,
+                    legacy,
                 } => {
                     if let Some(structure_template) =
                         crate::generation::structure::template::get_template(template)
                     {
-                        consumer(template, processors, structure_template);
+                        consumer(template, processors, *legacy, structure_template);
                     }
                 }
                 PoolElementKind::List(elements) => {
@@ -302,6 +320,7 @@ impl TemplatePool {
                         kind: PoolElementKind::Single {
                             template: (*e).to_string(),
                             processors: ProcessorListRef::Empty,
+                            legacy: false,
                         },
                     })
                     .collect(),
@@ -476,7 +495,16 @@ impl StructurePieceBase for PoolElementStructurePiece {
             pumpkin_util::math::vector3::Vector3::new(self.pos.0.x, self.pos.0.y, self.pos.0.z);
 
         self.element
-            .for_each_template(|_name, processor_list, template| {
+            .for_each_template(|name, processor_list, legacy, template| {
+                let corner = self.rotation.rotate_offset(
+                    template.size.x.saturating_sub(1),
+                    template.size.z.saturating_sub(1),
+                );
+                let placement_origin = pumpkin_util::math::vector3::Vector3::new(
+                    origin.x + corner.0.min(0),
+                    origin.y,
+                    origin.z + corner.1.min(0),
+                );
                 let processors = match processor_list {
                     ProcessorListRef::Named(name) => {
                         crate::generation::structure::template::processor::load_processor_list(name)
@@ -486,14 +514,23 @@ impl StructurePieceBase for PoolElementStructurePiece {
                 crate::generation::structure::template::place_template(
                     chunk,
                     &template,
-                    origin,
+                    placement_origin,
                     (0, 0),
                     self.rotation,
-                    false,
+                    legacy,
                     self.liquid_settings == LiquidSettings::ApplyWaterlog,
                     processors.as_ref(),
                     Some(chunk_box),
                 );
+                if name.starts_with("minecraft:pillager_outpost/") {
+                    crate::generation::structure::template::place_template_entities(
+                        chunk,
+                        &template,
+                        placement_origin,
+                        self.rotation,
+                        chunk_box,
+                    );
+                }
             });
 
         if let Some(feature) = self.element.feature()
@@ -633,6 +670,12 @@ mod tests {
             );
             assert_eq!(pool.fallback, "minecraft:empty", "{id}");
         }
+
+        let base = TemplatePool::discover("minecraft:pillager_outpost/base_plates").unwrap();
+        assert!(matches!(
+            &base.elements[0].kind,
+            PoolElementKind::Single { legacy: true, .. }
+        ));
     }
 
     #[test]
@@ -714,5 +757,135 @@ mod tests {
             collector.pieces.len()
         );
         assert_eq!(position.start_pos.0.y, -27);
+    }
+
+    #[test]
+    fn pillager_outpost_pools_match_vanilla() {
+        let expected = [
+            ("minecraft:pillager_outpost/base_plates", 1, 1),
+            ("minecraft:pillager_outpost/towers", 1, 1),
+            ("minecraft:pillager_outpost/feature_plates", 1, 1),
+            ("minecraft:pillager_outpost/features", 8, 13),
+        ];
+
+        for (id, element_count, total_weight) in expected {
+            let pool = TemplatePool::discover(id).unwrap_or_else(|| panic!("missing pool {id}"));
+            assert_eq!(pool.elements.len(), element_count, "{id}");
+            assert_eq!(
+                pool.elements
+                    .iter()
+                    .map(|element| element.weight)
+                    .sum::<u32>(),
+                total_weight,
+                "{id}"
+            );
+            assert_eq!(pool.fallback, "minecraft:empty", "{id}");
+        }
+    }
+
+    #[test]
+    fn pillager_outpost_templates_and_caged_mobs_are_embedded() {
+        for template in [
+            "base_plate",
+            "watchtower",
+            "watchtower_overgrown",
+            "feature_plate",
+            "feature_cage1",
+            "feature_cage2",
+            "feature_cage_with_allays",
+            "feature_logs",
+            "feature_tent1",
+            "feature_tent2",
+            "feature_targets",
+        ] {
+            let id = format!("minecraft:pillager_outpost/{template}");
+            assert!(
+                crate::generation::structure::template::get_template(&id).is_some(),
+                "missing template {id}"
+            );
+        }
+
+        let cage = crate::generation::structure::template::get_template(
+            "minecraft:pillager_outpost/feature_cage1",
+        )
+        .unwrap();
+        assert_eq!(cage.entities.len(), 1);
+        assert_eq!(
+            cage.entities[0].nbt.get_string("id"),
+            Some("minecraft:iron_golem")
+        );
+
+        let allay_cage = crate::generation::structure::template::get_template(
+            "minecraft:pillager_outpost/feature_cage_with_allays",
+        )
+        .unwrap();
+        assert_eq!(allay_cage.entities.len(), 2);
+        assert!(
+            allay_cage
+                .entities
+                .iter()
+                .all(|entity| entity.nbt.get_string("id") == Some("minecraft:allay"))
+        );
+    }
+
+    #[test]
+    fn pillager_outpost_builds_the_vanilla_jigsaw_graph() {
+        const SEED: i64 = 1_782_124_772_053_846_960;
+        let world_gen = crate::generation::get_world_gen(
+            pumpkin_util::world_seed::Seed(SEED as u64),
+            pumpkin_data::dimension::Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let crate::generation::generator::WorldGenerator::Noise(world_gen) = world_gen.as_ref()
+        else {
+            unreachable!()
+        };
+        let mut height_sampler =
+            crate::generation::structure::height_sampler::NoiseHeightSampler::new(
+                world_gen, 1200, -1312,
+            );
+        let generator = JigsawGenerator::new("minecraft:pillager_outpost/base_plates", 7)
+            .with_expansion_hack(true);
+        let context = StructureGeneratorContext {
+            seed: SEED,
+            chunk_x: 75,
+            chunk_z: -82,
+            random: super::super::create_chunk_random(SEED, 75, -82),
+            sea_level: 63,
+            min_y: -64,
+            height_sampler: Some(&mut height_sampler),
+            structure_key: Some(pumpkin_data::structures::StructureKeys::PillagerOutpost),
+        };
+
+        let position = generator
+            .get_structure_position(context)
+            .expect("pillager outpost graph should generate");
+        let mut collector = position.collector.lock().unwrap();
+        let mut feature_plates = 0;
+        let mut allay_cages = 0;
+        for piece in &collector.pieces {
+            let piece = piece
+                .as_any()
+                .downcast_ref::<PoolElementStructurePiece>()
+                .unwrap();
+            piece.element.for_each_template(|name, _, _, _| {
+                feature_plates += usize::from(name.ends_with("/feature_plate"));
+                allay_cages += usize::from(name.ends_with("/feature_cage_with_allays"));
+            });
+        }
+        assert_eq!(feature_plates, 3);
+        assert_eq!(allay_cages, 2);
+        assert_eq!(position.start_pos.0.y, 69);
+        let bounding_box = collector.get_bounding_box();
+        assert_eq!(
+            (bounding_box.min.x, bounding_box.min.y, bounding_box.min.z),
+            (1169, 68, -1343)
+        );
+        assert_eq!(
+            (bounding_box.max.x, bounding_box.max.y, bounding_box.max.z),
+            (1216, 97, -1296)
+        );
     }
 }

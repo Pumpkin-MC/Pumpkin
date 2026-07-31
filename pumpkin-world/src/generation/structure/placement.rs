@@ -1,6 +1,7 @@
 use pumpkin_data::structures::{
     ConcentricRingsStructurePlacement, FrequencyReductionMethod, RandomSpreadStructurePlacement,
     SpreadType, StructurePlacement, StructurePlacementCalculator, StructurePlacementType,
+    StructureSet,
 };
 use pumpkin_util::{
     math::floor_div,
@@ -199,7 +200,28 @@ pub fn should_generate_structure(
         chunk_z,
         placement.salt,
         placement.frequency.unwrap_or(1.0),
-    )
+    ) && !placement.exclusion_zone.as_ref().is_some_and(|zone| {
+        let set_name = zone
+            .other_set
+            .strip_prefix("minecraft:")
+            .unwrap_or(zone.other_set);
+        StructureSet::get(set_name).is_some_and(|set| {
+            let allowed_biomes = ProtoChunk::get_allowed_biomes(set);
+            (chunk_x - zone.chunk_count..=chunk_x + zone.chunk_count).any(|x| {
+                (chunk_z - zone.chunk_count..=chunk_z + zone.chunk_count).any(|z| {
+                    should_generate_structure(
+                        &set.placement,
+                        calculator,
+                        x,
+                        z,
+                        global_cache,
+                        biome_supplier,
+                        &allowed_biomes,
+                    )
+                })
+            })
+        })
+    })
 }
 
 fn apply_frequency_reduction(
@@ -235,8 +257,7 @@ fn should_generate_frequency(
         FrequencyReductionMethod::LegacyType1 => {
             let x = chunk_x >> 4;
             let z = chunk_z >> 4;
-            let mut random =
-                RandomGenerator::Xoroshiro(Xoroshiro::from_seed((x ^ z << 4) as u64 ^ seed as u64));
+            let mut random = LegacyRand::from_seed((i64::from(x ^ (z << 4)) ^ seed) as u64);
             random.next_i32();
             random.next_bounded_i32((1.0 / frequency) as i32) == 0
         }
@@ -331,12 +352,25 @@ fn is_start_chunk_random_spread(
 }
 #[cfg(test)]
 mod tests {
-    use pumpkin_data::structures::RandomSpreadStructurePlacement;
+    use pumpkin_data::{
+        dimension::Dimension,
+        structures::{RandomSpreadStructurePlacement, StructurePlacementCalculator, StructureSet},
+    };
     use pumpkin_util::random::{
         RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand,
     };
+    use pumpkin_util::world_seed::Seed;
 
-    use crate::generation::structure::placement::get_start_chunk_random_spread;
+    use crate::{
+        ProtoChunk,
+        generation::{
+            get_world_gen,
+            structure::placement::{
+                GlobalStructureCache, apply_frequency_reduction, get_start_chunk_random_spread,
+                is_start_chunk, should_generate_structure,
+            },
+        },
+    };
 
     #[test]
     fn get_start_chunk_random() {
@@ -355,5 +389,65 @@ mod tests {
         let (x, z) = get_start_chunk_random_spread(&random, 123, 1, 1, 14357620);
         assert_eq!(x, 5);
         assert_eq!(z, 4);
+    }
+
+    #[test]
+    fn pillager_outposts_respect_the_village_exclusion_zone() {
+        let seed = 0;
+        let calculator = StructurePlacementCalculator::new(seed);
+        let cache = GlobalStructureCache::new();
+        let generator = get_world_gen(
+            Seed(seed as u64),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let chunk = ProtoChunk::new(0, 0, &generator);
+        let outposts = &StructureSet::PILLAGER_OUTPOSTS;
+        let villages = &StructureSet::VILLAGES;
+        let excluded = (-1002, -595);
+        assert!(is_start_chunk(
+            &outposts.placement.placement_type,
+            &calculator,
+            excluded.0,
+            excluded.1,
+            outposts.placement.salt,
+            &cache,
+            &chunk,
+            &[],
+        ));
+        assert!(apply_frequency_reduction(
+            outposts.placement.frequency_reduction_method,
+            seed,
+            excluded.0,
+            excluded.1,
+            outposts.placement.salt,
+            outposts.placement.frequency.unwrap(),
+        ));
+        assert!((-10..=10).any(|dx| {
+            (-10..=10).any(|dz| {
+                is_start_chunk(
+                    &villages.placement.placement_type,
+                    &calculator,
+                    excluded.0 + dx,
+                    excluded.1 + dz,
+                    villages.placement.salt,
+                    &cache,
+                    &chunk,
+                    &[],
+                )
+            })
+        }));
+
+        assert!(!should_generate_structure(
+            &outposts.placement,
+            &calculator,
+            excluded.0,
+            excluded.1,
+            &cache,
+            &chunk,
+            &[],
+        ));
     }
 }

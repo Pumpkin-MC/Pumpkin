@@ -451,7 +451,7 @@ macro_rules! impl_block_entity_for_cooking {
                         }
                     } else if !self.is_burning() && self.get_cooking_time_spent() > 0 {
                         self.cooking_time_spent
-                            .fetch_update(Ordering::Acquire, Ordering::Acquire, |v| {
+                            .try_update(Ordering::Acquire, Ordering::Acquire, |v| {
                                 Some(
                                     v.saturating_sub(2)
                                         .min(self.cooking_total_time.load(Ordering::Acquire)),
