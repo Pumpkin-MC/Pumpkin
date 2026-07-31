@@ -1,13 +1,19 @@
 use pumpkin_data::BlockState;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, fluid::Fluid, tag};
+use pumpkin_data::{Block, BlockStateId, fluid::Fluid, tag};
 
 /// Check if a specific block can be replaced by fluid (based on block properties)
 #[must_use]
 pub fn can_be_replaced(block_state: &BlockState, block: &Block, fluid: &Fluid) -> bool {
-    // Waterlogged blocks should not be replaced by water
+    // An already waterlogged block retains its host state and is not replaceable.
     if block.is_waterlogged(block_state.id) {
         return false;
+    }
+
+    // Vanilla `LiquidBlockContainer` accepts water into a dry waterloggable block. The caller
+    // must change it to the waterlogged state rather than replace the block with a fluid state.
+    if fluid.matches_type(&Fluid::WATER) && block.with_waterlogged(block_state.id).is_some() {
+        return true;
     }
 
     // Fluid Logic
@@ -57,4 +63,36 @@ pub fn can_be_replaced(block_state: &BlockState, block: &Block, fluid: &Fluid) -
         || block.has_tag(&tag::Block::MINECRAFT_WOOL_CARPETS)
         // Only use PistonBehavior::Destroy if it didn't pass the checks above
         || block_state.piston_behavior == pumpkin_data::block_state::PistonBehavior::Destroy
+}
+
+#[must_use]
+pub fn waterlogged_replacement_state(
+    block_state: &BlockState,
+    block: &Block,
+    fluid: &Fluid,
+) -> Option<BlockStateId> {
+    fluid
+        .matches_type(&Fluid::WATER)
+        .then(|| block.with_waterlogged(block_state.id))
+        .flatten()
+        .map(|state| state.id)
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::{Block, fluid::Fluid};
+
+    use super::{can_be_replaced, waterlogged_replacement_state};
+
+    #[test]
+    fn water_flows_into_dry_waterloggable_blocks_without_replacing_them() {
+        let block = &Block::OAK_SLAB;
+        let dry = block.default_state;
+        let waterlogged_id = waterlogged_replacement_state(dry, block, &Fluid::WATER)
+            .expect("oak slabs have a waterlogged state");
+
+        assert!(can_be_replaced(dry, block, &Fluid::WATER));
+        assert!(block.is_waterlogged(waterlogged_id));
+        assert!(waterlogged_replacement_state(dry, block, &Fluid::LAVA).is_none());
+    }
 }

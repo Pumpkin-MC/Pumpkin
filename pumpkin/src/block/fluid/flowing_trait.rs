@@ -366,6 +366,21 @@ pub trait FlowingFluid: Send + Sync {
             } else {
                 // Replace non-fluid blocks
                 let block = world.get_block(pos);
+                let state = world.get_block_state(pos);
+                if let Some(waterlogged_state) =
+                    physics::waterlogged_replacement_state(state, block, fluid)
+                {
+                    world
+                        .set_block_state(pos, waterlogged_state, BlockFlags::NOTIFY_ALL)
+                        .await;
+                    world.schedule_fluid_tick(
+                        fluid,
+                        *pos,
+                        self.get_flow_speed(world),
+                        TickPriority::Normal,
+                    );
+                    return;
+                }
                 if block.id != Block::AIR.id {
                     world.break_block(pos, None, BlockFlags::NOTIFY_ALL).await;
                 }
