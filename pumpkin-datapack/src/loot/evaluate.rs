@@ -109,7 +109,9 @@ fn evaluate_entry_type(entry_type: &LootEntryType, ctx: &LootEvalContext) -> Vec
             vec![DpItemStack::new(name.clone(), 1)]
         }
         LootEntryType::LootTable(value) => {
-            let id = Identifier::parse(value);
+            let Some(id) = Identifier::parse(value).ok() else {
+                return Vec::new();
+            };
             if let Some(table) = ctx.all_loot_tables.as_ref().and_then(|t| t.get(&id)) {
                 return evaluate_loot_table(table, ctx);
             }
@@ -383,7 +385,9 @@ fn evaluate_single_condition(condition: &LootCondition, ctx: &LootEvalContext) -
             min.is_none_or(|m| v >= m) && max.is_none_or(|m| v <= m)
         }
         LootCondition::Reference(name) => {
-            let id = Identifier::parse(name);
+            let Some(id) = Identifier::parse(name).ok() else {
+                return true;
+            };
             ctx.predicates
                 .as_ref()
                 .and_then(|p| p.get(&id))

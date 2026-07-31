@@ -34,7 +34,7 @@ pub fn load_functions(manager: &dyn ResourceManager) -> Result<FunctionManager, 
                 .or_else(|| path.strip_prefix("functions/"))
                 .and_then(|p| p.strip_suffix(".mcfunction"))
                 .unwrap_or(path.as_str());
-            let id = Identifier::new(ns, func_name);
+            let id = Identifier::new(ns.clone(), func_name.to_string())?;
 
             match parse_function(&raw) {
                 Ok(func) => {

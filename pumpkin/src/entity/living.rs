@@ -1568,7 +1568,9 @@ impl LivingEntity {
     async fn drop_loot(&self, params: LootContextParameters) {
         let entity_type = &self.get_entity().entity_type;
         let loot_key = format!("minecraft:entities/{}", entity_type.resource_name);
-        let dp_id = pumpkin_datapack::Identifier::parse(&loot_key);
+        let Some(dp_id) = pumpkin_datapack::Identifier::parse(&loot_key).ok() else {
+            return;
+        };
 
         // Datapack loot tables override the static ones entirely (vanilla behaviour).
         // Check first if a datapack provides a loot table for this entity type.

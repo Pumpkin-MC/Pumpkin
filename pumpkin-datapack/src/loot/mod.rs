@@ -34,7 +34,7 @@ pub fn load_loot_tables(
                 .or_else(|| path.strip_prefix("loot_tables/"))
                 .and_then(|p| p.strip_suffix(".json"))
                 .unwrap_or(path.as_str());
-            let id = Identifier::new(&ns, table_name);
+            let id = Identifier::new(ns.clone(), table_name.to_string())?;
 
             let loot_type = raw
                 .get("type")

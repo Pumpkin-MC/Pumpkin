@@ -20,7 +20,7 @@ impl FileToIdConverter {
     /// Convert a resource ID to its filesystem path (relative to the namespace's data dir).
     #[must_use]
     pub fn id_to_file(&self, id: &Identifier) -> String {
-        format!("{}/{}{}", self.prefix, id.path, self.extension)
+        format!("{}/{}{}", self.prefix, id.path(), self.extension)
     }
 
     /// Try to convert a file path back to a resource ID.
@@ -45,8 +45,9 @@ impl FileToIdConverter {
             for path in manager.list_resources(&namespace, prefix) {
                 if let Some(stripped) = path.strip_suffix(&self.extension) {
                     let id_path = stripped.to_string();
-                    let id = Identifier::new(&namespace, &id_path);
-                    if let Some(data) = manager.get_resource(&namespace, &path) {
+                    if let Ok(id) = Identifier::new(namespace.clone(), id_path)
+                        && let Some(data) = manager.get_resource(&namespace, &path)
+                    {
                         results.push((id, data));
                     }
                 }

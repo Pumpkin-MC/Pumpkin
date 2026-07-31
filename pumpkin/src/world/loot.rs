@@ -785,7 +785,9 @@ impl LootConditionExt for LootCondition {
                 // Look up the predicate from datapacks. If found, evaluate it by
                 // checking the condition type against the loot context.
                 if let Some(ref pred_map) = params.datapack_predicates {
-                    let pred_id = pumpkin_datapack::Identifier::parse(name);
+                    let Some(pred_id) = pumpkin_datapack::Identifier::parse(name).ok() else {
+                        return true;
+                    };
                     if let Some(pred) = pred_map.get(&pred_id) {
                         return evaluate_predicate_json(&pred.data, params);
                     }

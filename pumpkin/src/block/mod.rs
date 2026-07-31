@@ -445,7 +445,9 @@ pub async fn drop_loot(
     params: LootContextParameters,
 ) {
     let loot_key = format!("minecraft:blocks/{}", block.name);
-    let dp_id = pumpkin_datapack::Identifier::parse(&loot_key);
+    let Some(dp_id) = pumpkin_datapack::Identifier::parse(&loot_key).ok() else {
+        return;
+    };
 
     // Datapack loot tables override static ones entirely (vanilla behaviour).
     let datapack_handled = if let Some(server) = world.server.upgrade() {
