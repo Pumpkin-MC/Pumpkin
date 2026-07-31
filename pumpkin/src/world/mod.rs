@@ -164,6 +164,22 @@ type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperti
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+fn comparator_notification_target(
+    direct_position: BlockPos,
+    direction_offset: Vector3<i32>,
+    direct_block: &Block,
+    direct_state: &BlockState,
+    through_conductor_block: &Block,
+) -> Option<BlockPos> {
+    if direct_block == &Block::COMPARATOR {
+        Some(direct_position)
+    } else if direct_state.is_solid_block() && through_conductor_block == &Block::COMPARATOR {
+        Some(direct_position.offset(direction_offset))
+    } else {
+        None
+    }
+}
+
 impl PumpkinError for GetBlockError {
     fn is_kick(&self) -> bool {
         false
@@ -993,6 +1009,13 @@ impl World {
                 let w_clone = world_for_be.clone();
                 tasks.spawn(async move {
                     be_clone.tick(&w_clone).await;
+                    if be_clone.is_dirty() {
+                        w_clone.update_block_entity(&be_clone);
+                        let position = be_clone.get_position();
+                        let changed_block = w_clone.get_block(&position);
+                        w_clone.update_comparators(&position, changed_block).await;
+                        be_clone.clear_dirty();
+                    }
                 });
             }
             while let Some(res) = tasks.join_next().await {
@@ -4368,7 +4391,7 @@ impl World {
 
             if flags.contains(BlockFlags::NOTIFY_NEIGHBORS) {
                 self.update_neighbors(position, None).await;
-                // TODO: updateComparators
+                self.update_comparators(position, new_block).await;
             }
 
             if !flags.contains(BlockFlags::FORCE_STATE) {
@@ -4925,6 +4948,26 @@ impl World {
                     notify: false,
                 })
                 .await;
+        }
+    }
+
+    /// Notifies comparators adjacent to a changed block and those reached through one solid
+    /// conductor, matching `Level.updateNeighbourForOutputSignal`.
+    pub async fn update_comparators(self: &Arc<Self>, position: &BlockPos, changed_block: &Block) {
+        for direction in BlockDirection::horizontal() {
+            let direct_pos = position.offset(direction.to_offset());
+            let (direct_block, direct_state) = self.get_block_and_state(&direct_pos);
+            let through_conductor_pos = direct_pos.offset(direction.to_offset());
+            let through_conductor_block = self.get_block(&through_conductor_pos);
+            if let Some(target) = comparator_notification_target(
+                direct_pos,
+                direction.to_offset(),
+                direct_block,
+                direct_state,
+                through_conductor_block,
+            ) {
+                self.update_neighbor(&target, changed_block).await;
+            }
         }
     }
 
@@ -5547,5 +5590,46 @@ impl WorldPortalExt for WorldPortal {
                 world.spawn_entity(entity).await;
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn comparator_notifications_reach_direct_and_conductor_targets() {
+        let origin = BlockPos::new(4, 64, 4);
+        let direct = origin.offset(BlockDirection::East.to_offset());
+        assert_eq!(
+            comparator_notification_target(
+                direct,
+                BlockDirection::East.to_offset(),
+                &Block::COMPARATOR,
+                Block::COMPARATOR.default_state,
+                &Block::AIR,
+            ),
+            Some(direct)
+        );
+        assert_eq!(
+            comparator_notification_target(
+                direct,
+                BlockDirection::East.to_offset(),
+                &Block::STONE,
+                Block::STONE.default_state,
+                &Block::COMPARATOR,
+            ),
+            Some(origin.offset(Vector3::new(2, 0, 0)))
+        );
+        assert_eq!(
+            comparator_notification_target(
+                direct,
+                BlockDirection::East.to_offset(),
+                &Block::AIR,
+                Block::AIR.default_state,
+                &Block::COMPARATOR,
+            ),
+            None
+        );
     }
 }
