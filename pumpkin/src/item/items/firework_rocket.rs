@@ -71,6 +71,23 @@ impl ItemBehaviour for FireworkRocketItem {
                 );
                 let entity = FireworkRocketEntity::new_shot(entity, player.get_entity());
                 world.spawn_entity(Arc::new(entity)).await;
+
+                // Vanilla `FireworkRocketItem::use` consumes the hand that launched
+                // the attached rocket, except in Creative mode.
+                if should_consume_rocket(player.is_creative()) {
+                    let held_item = player.inventory.held_item();
+                    let mut held_item = held_item.lock().await;
+                    if held_item.item == &Item::FIREWORK_ROCKET {
+                        held_item.decrement(1);
+                    } else {
+                        drop(held_item);
+                        let off_hand_item = player.inventory.off_hand_item().await;
+                        let mut off_hand_item = off_hand_item.lock().await;
+                        if off_hand_item.item == &Item::FIREWORK_ROCKET {
+                            off_hand_item.decrement(1);
+                        }
+                    }
+                }
             }
         })
     }
