@@ -106,6 +106,9 @@ pub struct ChunkSections {
     pub random_tick_sections: RwLock<Option<Box<[RandomTickSectionCache]>>>,
     pub randomly_ticking_mask: std::sync::atomic::AtomicU32,
     pub biome_sections: RwLock<Box<[BiomePalette]>>,
+    /// Section-level data that Pumpkin does not currently model. This includes
+    /// future fields nested in the block-state and biome compounds.
+    pub unknown_nbt: RwLock<Box<[NbtCompound]>>,
     pub min_y: i32,
 }
 
@@ -349,6 +352,7 @@ impl ChunkSections {
         let (random_tick_sections, randomly_ticking_mask) =
             Self::build_random_tick_sections_cache(&block_sections);
         let biome_sections = vec![BiomePalette::default(); num_sections].into_boxed_slice();
+        let unknown_nbt = vec![NbtCompound::new(); num_sections].into_boxed_slice();
 
         Self {
             count: num_sections,
@@ -356,6 +360,7 @@ impl ChunkSections {
             random_tick_sections: RwLock::new(random_tick_sections),
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_sections),
+            unknown_nbt: RwLock::new(unknown_nbt),
             min_y,
         }
     }

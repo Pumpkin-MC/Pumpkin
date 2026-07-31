@@ -226,6 +226,7 @@ impl ChunkData {
         let mut sky_light_present = vec![false; section_count];
         let mut block_palettes = vec![BlockPalette::default(); section_count];
         let mut biome_palettes = vec![BiomePalette::default(); section_count];
+        let mut unknown_section_nbt = vec![NbtCompound::new(); section_count];
 
         if let Some(sections_list) = root_tag.get_list("sections") {
             for section_tag in sections_list {
@@ -235,6 +236,26 @@ impl ChunkData {
                     if index >= section_count {
                         continue;
                     }
+
+                    let mut unknown = section_compound.clone();
+                    for key in ["Y", "BlockLight", "SkyLight"] {
+                        unknown.child_tags.remove(key);
+                    }
+                    for key in ["block_states", "biomes"] {
+                        match unknown.child_tags.get_mut(key) {
+                            Some(pumpkin_nbt::tag::NbtTag::Compound(compound)) => {
+                                compound.child_tags.remove("data");
+                                compound.child_tags.remove("palette");
+                            }
+                            // Pumpkin serializes these known fields as compounds, so discard an
+                            // incompatible representation rather than preventing the rewrite.
+                            Some(_) => {
+                                unknown.child_tags.remove(key);
+                            }
+                            None => {}
+                        }
+                    }
+                    unknown_section_nbt[index] = unknown;
 
                     let block_light = section_compound
                         .get("BlockLight")
@@ -328,6 +349,7 @@ impl ChunkData {
             random_tick_sections: RwLock::new(random_tick_sections),
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_palettes.into_boxed_slice()),
+            unknown_nbt: RwLock::new(unknown_section_nbt.into_boxed_slice()),
             min_y,
         };
 
@@ -444,6 +466,7 @@ impl ChunkData {
         let heightmap_lock = self.heightmap.lock().unwrap();
         let block_lock = self.section.block_sections.read().unwrap();
         let biome_lock = self.section.biome_sections.read().unwrap();
+        let unknown_sections_lock = self.section.unknown_nbt.read().unwrap();
 
         let min_section_y = (self.section.min_y >> 4) as i8;
 
@@ -483,13 +506,16 @@ impl ChunkData {
 
         let mut sections_list = Vec::new();
         for i in 0..self.section.count {
-            let mut section_comp = NbtCompound::new();
+            let mut section_comp = unknown_sections_lock.get(i).cloned().unwrap_or_default();
             let y_val = i as i8 + min_section_y;
             section_comp.put_byte("Y", y_val);
 
             // block_states
             let block_states_nbt = block_lock[i].to_disk_nbt();
-            let mut bs_comp = NbtCompound::new();
+            let mut bs_comp = match section_comp.child_tags.remove("block_states") {
+                Some(NbtTag::Compound(compound)) => compound,
+                _ => NbtCompound::new(),
+            };
             if let Some(ref data_arr) = block_states_nbt.data {
                 bs_comp.put("data", NbtTag::LongArray(data_arr.to_vec()));
             }
@@ -503,7 +529,10 @@ impl ChunkData {
 
             // biomes
             let biomes_nbt = biome_lock[i].to_disk_nbt();
-            let mut b_comp = NbtCompound::new();
+            let mut b_comp = match section_comp.child_tags.remove("biomes") {
+                Some(NbtTag::Compound(compound)) => compound,
+                _ => NbtCompound::new(),
+            };
             if let Some(ref data_arr) = biomes_nbt.data {
                 b_comp.put("data", NbtTag::LongArray(data_arr.to_vec()));
             }
@@ -899,6 +928,48 @@ mod chunk_codec_tests {
         assert_eq!(
             decoded.root_tag.get_int("DataVersion"),
             Some(WORLD_DATA_VERSION)
+        );
+    }
+
+    #[test]
+    fn preserves_unknown_section_tags_when_reserializing() {
+        let mut section_compound = NbtCompound::new();
+        section_compound.put_byte("Y", 0);
+        section_compound.put_string("FutureSectionField", "retained".to_string());
+
+        let mut block_states = NbtCompound::new();
+        block_states.put_list("palette", vec![NbtTag::Int(0)]);
+        block_states.put_int("FutureBlockStatesField", 42);
+        section_compound.put_compound("block_states", block_states);
+
+        let mut biomes = NbtCompound::new();
+        biomes.put_list("palette", vec![NbtTag::Byte(0)]);
+        biomes.put_string("FutureBiomesField", "retained".to_string());
+        section_compound.put_compound("biomes", biomes);
+
+        let bytes = encode_chunk(0, vec![NbtTag::Compound(section_compound)]);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let encoded = chunk.internal_to_bytes().unwrap();
+        let mut cursor = std::io::Cursor::new(encoded);
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+        let decoded = pumpkin_nbt::Nbt::read(&mut reader).unwrap();
+        let sections = decoded.root_tag.get_list("sections").unwrap();
+        let NbtTag::Compound(section) = &sections[0] else {
+            panic!("serialized section must be a compound");
+        };
+
+        assert_eq!(section.get_string("FutureSectionField"), Some("retained"));
+        assert_eq!(
+            section
+                .get_compound("block_states")
+                .and_then(|block_states| block_states.get_int("FutureBlockStatesField")),
+            Some(42)
+        );
+        assert_eq!(
+            section
+                .get_compound("biomes")
+                .and_then(|biomes| biomes.get_string("FutureBiomesField")),
+            Some("retained")
         );
     }
 }
