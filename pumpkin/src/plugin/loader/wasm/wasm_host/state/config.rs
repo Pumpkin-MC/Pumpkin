@@ -410,13 +410,7 @@ impl TryFrom<ConfigTree> for Option<toml::Value> {
                 ConfigValue::S64(v) => Some(toml::Value::Integer(v)),
                 ConfigValue::F64(v) => Some(toml::Value::Float(v)),
                 ConfigValue::Bool(v) => Some(toml::Value::Boolean(v)),
-                ConfigValue::Option(None) => None,
-                ConfigValue::Option(Some(id)) => {
-                    let Some(node) = nodes.get_mut(id as usize).and_then(Option::take) else {
-                        return Err(());
-                    };
-                    try_from_inner(nodes, node)?
-                }
+                ConfigValue::Null => None,
                 ConfigValue::List(ids) => {
                     let mut arr = Vec::with_capacity(ids.len());
                     for id in ids {
@@ -508,7 +502,7 @@ mod tests {
     fn value_from_tree() {
         {
             let tree = ConfigTree {
-                nodes: vec![ConfigValue::Option(None)],
+                nodes: vec![ConfigValue::Null],
                 root_id: 0,
             };
             let value_from_tree = <Option<Value>>::try_from(tree).unwrap();

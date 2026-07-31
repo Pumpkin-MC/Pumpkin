@@ -10,7 +10,7 @@ pub enum ConfigVal {
     String(String),
     List(Vec<ConfigVal>),
     Object(HashMap<String, ConfigVal>),
-    Option(Option<Box<ConfigVal>>),
+    Null,
 }
 
 impl From<ConfigVal> for ConfigTree {
@@ -64,21 +64,10 @@ impl From<ConfigVal> for ConfigTree {
                     nodes,
                 }
             }
-            ConfigVal::Option(v) => {
-                if let Some(v) = v {
-                    let ConfigTree { mut nodes, root_id } = ConfigTree::from(*v);
-                    nodes.push(ConfigValue::Option(Some(root_id)));
-                    ConfigTree {
-                        root_id: nodes.len() as u32 - 1,
-                        nodes,
-                    }
-                } else {
-                    ConfigTree {
-                        nodes: vec![ConfigValue::Option(None)],
-                        root_id: 0,
-                    }
-                }
-            }
+            ConfigVal::Null => ConfigTree {
+                nodes: vec![ConfigValue::Null],
+                root_id: 0,
+            },
         }
     }
 }
@@ -98,13 +87,7 @@ impl From<ConfigTree> for ConfigVal {
                 ConfigValue::S64(v) => ConfigVal::I64(v),
                 ConfigValue::F64(v) => ConfigVal::F64(v),
                 ConfigValue::Bool(v) => ConfigVal::Bool(v),
-                ConfigValue::Option(None) => ConfigVal::Option(None),
-                ConfigValue::Option(Some(id)) => {
-                    let Some(node) = nodes.get_mut(id as usize).and_then(Option::take) else {
-                        return Err(());
-                    };
-                    ConfigVal::Option(Some(Box::new(try_from_inner(nodes, node)?)))
-                }
+                ConfigValue::Null => ConfigVal::Null,
                 ConfigValue::List(ids) => {
                     let mut arr = Vec::with_capacity(ids.len());
                     for id in ids {
@@ -133,5 +116,129 @@ impl From<ConfigTree> for ConfigVal {
             panic!("Invalid config tree");
         };
         try_from_inner(&mut nodes, root_node).expect("Invalid config tree")
+    }
+}
+
+impl PartialEq<bool> for ConfigVal {
+    fn eq(&self, other: &bool) -> bool {
+        let Self::Bool(value) = self else {
+            return false;
+        };
+        value == other
+    }
+}
+
+impl PartialEq<&str> for ConfigVal {
+    fn eq(&self, other: &&str) -> bool {
+        let Self::String(s) = self else {
+            return false;
+        };
+
+        s == other
+    }
+}
+
+impl PartialEq<String> for ConfigVal {
+    fn eq(&self, other: &String) -> bool {
+        let Self::String(s) = self else {
+            return false;
+        };
+
+        s == other
+    }
+}
+
+impl PartialEq<i64> for ConfigVal {
+    fn eq(&self, other: &i64) -> bool {
+        let Self::I64(i) = self else {
+            return false;
+        };
+        i == other
+    }
+}
+
+impl PartialEq<f64> for ConfigVal {
+    fn eq(&self, other: &f64) -> bool {
+        let Self::F64(f) = self else {
+            return false;
+        };
+        f == other
+    }
+}
+
+impl<T> PartialEq<Vec<T>> for ConfigVal
+where
+    Self: PartialEq<T>,
+{
+    fn eq(&self, other: &Vec<T>) -> bool {
+        let Self::List(vec) = self else {
+            return false;
+        };
+        if other.len() != vec.len() {
+            return false;
+        }
+        for (a, b) in vec.iter().zip(other) {
+            if a != b {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl<T> PartialEq<HashMap<String, T>> for ConfigVal
+where
+    Self: PartialEq<T>,
+{
+    fn eq(&self, other: &HashMap<String, T>) -> bool {
+        let Self::Object(o) = self else {
+            return false;
+        };
+        if o.len() != other.len() {
+            return false;
+        }
+        for (k, v) in o {
+            let Some(b) = other.get(k) else {
+                return false;
+            };
+            if v != b {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl<T> PartialEq<Option<T>> for ConfigVal
+where
+    Self: PartialEq<T>,
+{
+    fn eq(&self, other: &Option<T>) -> bool {
+        if let Some(other) = other {
+            self == other
+        } else {
+            matches!(self, ConfigVal::Null)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn equalities() {
+        assert_eq!(ConfigVal::Null, None::<bool>);
+        assert_eq!(ConfigVal::List(Vec::new()), Some(Vec::<String>::new()));
+        assert_ne!(
+            ConfigVal::List(vec![ConfigVal::Bool(true), ConfigVal::Bool(false)]),
+            vec![true, false, false]
+        );
+        assert_ne!(
+            ConfigVal::List(vec![ConfigVal::Bool(true), ConfigVal::Bool(false)]),
+            vec![true]
+        );
+        assert_eq!(ConfigVal::String("abcdefg".to_owned()), "abcdefg");
+        assert_ne!(ConfigVal::String("abcdefg".to_owned()), None::<String>);
     }
 }
