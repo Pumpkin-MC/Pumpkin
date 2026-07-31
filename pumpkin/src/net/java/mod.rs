@@ -1,12 +1,12 @@
 use pumpkin_protocol::java::client::play::{
     CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
 };
+use pumpkin_util::duration_since_epoch;
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::Instant;
 use std::{io::Write, sync::Arc};
-
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
@@ -266,9 +266,7 @@ impl JavaClient {
                     }
 
                     // Generate a unique ID (current timestamp in ms)
-                    let keep_alive_id = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
+                    let keep_alive_id = duration_since_epoch()
                         .as_millis() as i64;
 
                     self.keep_alive_id.store(keep_alive_id);

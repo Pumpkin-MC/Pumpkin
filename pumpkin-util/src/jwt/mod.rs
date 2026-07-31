@@ -4,6 +4,7 @@
 //! sent by a Minecraft: Bedrock Edition client. It handles cryptographic signature
 //! verification, public key extraction, and decoding of player data.
 
+use crate::duration_since_epoch;
 use base64::{Engine as _, engine::general_purpose};
 use ecdsa::Signature;
 use p384::PublicKey;
@@ -453,10 +454,7 @@ fn verify_oidc_claims(payload: &Value, expected_issuer: Option<&str>) -> Result<
         .get("exp")
         .and_then(Value::as_u64)
         .ok_or_else(|| AuthError::PublicKeyBuild("OIDC payload missing exp".into()))?;
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let now = duration_since_epoch().as_secs();
     if now > exp {
         return Err(AuthError::PublicKeyBuild("OIDC token expired".into()));
     }

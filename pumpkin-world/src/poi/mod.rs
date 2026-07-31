@@ -1,8 +1,8 @@
+use pumpkin_util::duration_since_epoch;
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
-
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
@@ -241,9 +241,7 @@ impl PoiRegion {
         let mut timestamp_table = [0u32; CHUNK_COUNT];
         let mut sector_data: Vec<Vec<u8>> = Vec::new();
 
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_secs() as u32);
+        let timestamp = duration_since_epoch().as_secs() as u32;
 
         // Start after header (2 sectors)
         let mut current_sector: u32 = 2;

@@ -8,7 +8,6 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering},
     },
-    time::UNIX_EPOCH,
 };
 
 use tracing::{debug, error, warn};
@@ -92,7 +91,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use pumpkin_protocol::bedrock::server::login::ClientData;
-use pumpkin_util::version::BedrockMinecraftVersion;
+use pumpkin_util::{duration_since_epoch, version::BedrockMinecraftVersion};
 use pumpkin_world::level::SyncChunk;
 
 pub struct OutgoingPacket {
@@ -1234,7 +1233,7 @@ impl BedrockClient {
                         0,
                         [SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 19132)); 10],
                         request.time,
-                        UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+                        duration_since_epoch().as_millis() as u64,
                     ),
                     RakReliability::Unreliable,
                 )

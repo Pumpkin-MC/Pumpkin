@@ -1,20 +1,18 @@
-use std::collections::HashMap;
-use std::io::{ErrorKind, Read};
-use std::marker::PhantomData;
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use crate::chunk::format::anvil::{AnvilChunkFile, SingleChunkDataSerializer};
 use crate::chunk::io::{ChunkSerializer, LoadedData};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::{Buf, BufMut, Bytes};
+use pumpkin_util::duration_since_epoch;
 use pumpkin_util::math::vector2::Vector2;
 use ruzstd::decoding::StreamingDecoder;
 use ruzstd::encoding::{CompressionLevel, compress_to_vec};
+use std::collections::HashMap;
+use std::io::{ErrorKind, Read};
+use std::marker::PhantomData;
+use std::path::PathBuf;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tracing::{error, warn};
 use xxhash_rust::xxh64::xxh64;
-
 use super::anvil::CHUNK_COUNT;
 
 /// The signature used as both header and footer.
@@ -568,9 +566,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
             .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
-        self.timestamps[index] = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |d| d.as_secs());
+        self.timestamps[index] = duration_since_epoch().as_secs();
         self.chunks_data[index] = Some(chunk_raw);
         Ok(())
     }

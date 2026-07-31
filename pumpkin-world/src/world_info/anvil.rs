@@ -1,14 +1,12 @@
+use pumpkin_util::duration_since_epoch;
 use std::{
     fs::File,
     io::{Cursor, Read},
     path::Path,
-    time::{SystemTime, UNIX_EPOCH},
 };
 use tracing::error;
-
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
-
 use crate::world_info::{
     MAXIMUM_SUPPORTED_LEVEL_VERSION, MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
     MINIMUM_SUPPORTED_LEVEL_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION,
@@ -19,7 +17,6 @@ use crate::world_info::{
         write_world_clocks, write_world_gen_settings,
     },
 };
-
 use super::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
 
 pub const LEVEL_DAT_FILE_NAME: &str = "level.dat";
@@ -143,10 +140,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
         info: &LevelData,
         level_folder: &Path,
     ) -> Result<(), WorldInfoError> {
-        let start = SystemTime::now();
-        let since_the_epoch = start
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
+        let since_the_epoch = duration_since_epoch();
         let mut level_data = info.clone();
         level_data.last_played = since_the_epoch.as_millis() as i64;
         let level = LevelDat { data: level_data };

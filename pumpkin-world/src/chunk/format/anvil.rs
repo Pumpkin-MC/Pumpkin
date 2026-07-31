@@ -3,20 +3,18 @@ use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use itertools::Itertools;
 use lz4_java_wrc::Context;
 use pumpkin_config::chunk::AnvilChunkConfig;
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::{duration_since_epoch, math::vector2::Vector2};
 use std::{
     io::{Read, SeekFrom, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
     pin::Pin,
-    time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{
     io::{AsyncSeekExt, AsyncWrite, AsyncWriteExt, BufWriter},
     sync::Mutex,
 };
 use tracing::{debug, trace};
-
 use crate::chunk::{
     ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
     CompressionError,
@@ -613,10 +611,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
         chunk: &Self::Data,
         chunk_config: &Self::ChunkConfig,
     ) -> Result<(), ChunkWritingError> {
-        let epoch = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as u32;
+        let epoch = duration_since_epoch().as_secs() as u32;
 
         let index = Self::get_chunk_index(chunk.position().0, chunk.position().1);
         // Default to the compression type read from the file

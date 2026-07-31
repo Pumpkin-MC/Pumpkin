@@ -1,12 +1,8 @@
-use std::{
-    sync::atomic::{AtomicU64, Ordering},
-    time,
-};
-
+use std::sync::atomic::{AtomicU64, Ordering};
 use enum_dispatch::enum_dispatch;
 use legacy_rand::{LegacyRand, LegacySplitter};
 use xoroshiro128::{Xoroshiro, XoroshiroSplitter};
-
+use crate::duration_since_epoch;
 mod gaussian;
 pub mod legacy_rand;
 pub mod xoroshiro128;
@@ -34,10 +30,7 @@ pub fn get_seed() -> u64 {
         })
         .unwrap();
 
-    let nanos = time::SystemTime::now()
-        .duration_since(time::SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
+    let nanos = duration_since_epoch().as_nanos();
 
     let nano_upper = (nanos >> 8) as u64;
     let nano_lower = nanos as u64;

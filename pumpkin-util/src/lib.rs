@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::ops::{Index, IndexMut};
+use std::{
+    ops::{Index, IndexMut},
+    time::{Duration, UNIX_EPOCH},
+};
 
 pub use p384;
 pub use serde_json;
@@ -285,4 +288,10 @@ impl TryFrom<i32> for Hand {
             _ => Err(InvalidHand),
         }
     }
+}
+
+#[inline]
+#[must_use]
+pub fn duration_since_epoch() -> Duration {
+    UNIX_EPOCH.elapsed().expect("Time went backwards")
 }

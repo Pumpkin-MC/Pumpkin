@@ -1,15 +1,13 @@
 use pumpkin_protocol::bedrock::server::text::SText;
-use pumpkin_util::{Hand, PermissionLvl};
+use pumpkin_util::{Hand, PermissionLvl, duration_since_epoch};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
 use sha1::Sha1;
 use std::num::NonZeroU8;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use tracing::{Level, debug, error, info, trace, warn};
-
 use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self};
@@ -32,7 +30,6 @@ use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractU
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
 use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
-
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::jigsaw_block::JigsawBlockEntity;
 use crate::block::entities::sign::SignBlockEntity;
@@ -1489,10 +1486,7 @@ impl JavaClient {
                 return Err(ChatError::UnsignedChat); // There is no signature
             }
 
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as i64;
+            let now = duration_since_epoch().as_millis() as i64;
 
             // Verify message timestamp
             if chat_message.timestamp > now || chat_message.timestamp < (now - CHAT_MESSAGE_MAX_AGE)
@@ -1575,10 +1569,7 @@ impl JavaClient {
         session: &SPlayerSession,
     ) -> Result<(), ChatError> {
         // Verify session expiry
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as i64;
+        let now = duration_since_epoch().as_millis() as i64;
         if session.expires_at < now {
             return Err(ChatError::InvalidPublicKey);
         }
