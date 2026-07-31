@@ -276,6 +276,7 @@ impl Chunk {
                 light_populated: AtomicBool::new(false),
                 status: ChunkStatus::Empty,
                 blending_data: None,
+                unknown_nbt: pumpkin_nbt::compound::NbtCompound::new(),
                 dirty: AtomicBool::new(false),
                 inhabited_time: AtomicU64::new(0),
             })),
@@ -324,6 +325,7 @@ impl Chunk {
             status: proto_chunk.stage.into(),
             blending_data: proto_chunk.blending_data,
             inhabited_time: AtomicU64::new(0),
+            unknown_nbt: pumpkin_nbt::compound::NbtCompound::new(),
         };
 
         *self = Self::Level(Arc::new(chunk));
