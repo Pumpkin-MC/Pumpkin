@@ -18,7 +18,7 @@ struct ParticleMeta<'a> {
     data: &'a [u8],
 }
 
-fn application_scale(_distance: f64, _radius: f64) -> f32 {
+const fn application_scale(_distance: f64, _radius: f64) -> f32 {
     1.0
 }
 
@@ -325,7 +325,7 @@ impl EntityBase for AreaEffectCloudEntity {
 
                 {
                     let reapplication_map = self.reapplication_map.lock().await;
-                    if !can_reapply(&*reapplication_map, ent_id) {
+                    if !can_reapply(&reapplication_map, ent_id) {
                         continue;
                     }
                 }

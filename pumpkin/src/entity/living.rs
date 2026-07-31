@@ -2810,7 +2810,7 @@ impl EntityBase for LivingEntity {
     }
 }
 
-fn should_replace_effect(current: &Effect, candidate: &Effect) -> bool {
+const fn should_replace_effect(current: &Effect, candidate: &Effect) -> bool {
     candidate.amplifier > current.amplifier
         || (candidate.amplifier == current.amplifier && candidate.duration > current.duration)
 }
