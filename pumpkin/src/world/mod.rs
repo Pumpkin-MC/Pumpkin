@@ -1229,7 +1229,11 @@ impl World {
     #[expect(clippy::too_many_lines)]
     pub async fn tick_chunks(self: &Arc<Self>) {
         let active_chunks = self.active_chunks.load();
-        let tick_data = self.level.get_tick_data(&active_chunks);
+        // Read the ArcSwap-backed level data once. Random tick sampling for this tick must use
+        // the current `randomTickSpeed` rule without holding a world-info guard while chunks are
+        // inspected.
+        let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
+        let tick_data = self.level.get_tick_data(&active_chunks, random_tick_speed);
 
         // ONE JoinSet for all chunk operations
         let mut chunk_tasks = tokio::task::JoinSet::new();

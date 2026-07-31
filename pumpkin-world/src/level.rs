@@ -118,6 +118,14 @@ pub struct RandomTickSample {
     pub tick_fluid: bool,
 }
 
+/// Converts the `randomTickSpeed` game rule into the number of positions sampled in each
+/// randomly-ticking section. This mirrors vanilla's signed loop bound: zero and negative values
+/// skip random block and fluid ticking.
+#[inline]
+fn random_tick_samples_per_section(random_tick_speed: i64) -> usize {
+    random_tick_speed.max(0) as usize
+}
+
 pub struct LevelFolder {
     pub root_folder: PathBuf,
     pub dim_folder: PathBuf,
@@ -500,10 +508,22 @@ impl Level {
         });
     }
 
-    pub fn get_tick_data(&self, active_chunks: &FxHashSet<Vector2<i32>>) -> TickData {
+    /// Collects the ticks due for active chunks using a snapshot of the world's random-tick rule.
+    ///
+    /// The caller owns the game-rule snapshot so this crate stays independent from the server's
+    /// atomic world-info store. Negative values intentionally produce no samples, as vanilla's
+    /// `for (int i = 0; i < tickSpeed; i++)` loop does.
+    pub fn get_tick_data(
+        &self,
+        active_chunks: &FxHashSet<Vector2<i32>>,
+        random_tick_speed: i64,
+    ) -> TickData {
+        let random_tick_samples_per_section = random_tick_samples_per_section(random_tick_speed);
         let mut ticks = TickData {
             block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
+            // This is only a small initial allocation: a sampled block may not actually tick,
+            // and an arbitrarily large game-rule value must not cause eager allocation.
             random_ticks: Vec::with_capacity(active_chunks.len() * 3),
         };
 
@@ -526,7 +546,7 @@ impl Level {
                             continue;
                         }
                         let y_base = min_y + (i as i32 * 16);
-                        for _ in 0..3 {
+                        for _ in 0..random_tick_samples_per_section {
                             let r = rand::random::<u32>();
                             let x_offset = (r & 0xF) as usize;
                             let z_offset = (r >> 8 & 0xF) as usize;
@@ -953,5 +973,26 @@ impl Level {
             chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
         })
         .unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::random_tick_samples_per_section;
+
+    #[test]
+    fn zero_random_tick_speed_disables_section_sampling() {
+        assert_eq!(random_tick_samples_per_section(0), 0);
+    }
+
+    #[test]
+    fn configured_random_tick_speed_controls_section_sampling_count() {
+        assert_eq!(random_tick_samples_per_section(1), 1);
+        assert_eq!(random_tick_samples_per_section(8), 8);
+    }
+
+    #[test]
+    fn negative_random_tick_speed_disables_section_sampling() {
+        assert_eq!(random_tick_samples_per_section(-1), 0);
     }
 }
