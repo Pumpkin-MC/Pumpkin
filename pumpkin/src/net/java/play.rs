@@ -170,7 +170,9 @@ const fn movement_requires_correction(
     let delta_y = target_position.y - current_position.y;
     let delta_z = target_position.z - current_position.z;
     let moved_distance_squared = delta_x * delta_x + delta_y * delta_y + delta_z * delta_z;
-    let expected_distance_squared = expected_velocity.length_squared();
+    let expected_distance_squared = expected_velocity.x * expected_velocity.x
+        + expected_velocity.y * expected_velocity.y
+        + expected_velocity.z * expected_velocity.z;
     let maximum_excess_distance_squared = if context.fall_flying { 300.0 } else { 100.0 };
 
     moved_distance_squared - expected_distance_squared > maximum_excess_distance_squared
