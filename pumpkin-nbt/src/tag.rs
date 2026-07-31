@@ -1,3 +1,5 @@
+//! The in-memory representation of individual NBT tags.
+
 use compound::NbtCompound;
 use deserializer::NbtReadHelper;
 use serde::{Deserialize, Serialize};
@@ -9,21 +11,35 @@ use crate::{
     nbt_byte_array, nbt_int_array, nbt_long_array, serializer,
 };
 
+/// A value represented by one of the tag types defined by the NBT format.
 #[derive(Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum NbtTag {
+    /// Marks the end of a compound.
     End = END_ID,
+    /// An 8-bit signed integer.
     Byte(i8) = BYTE_ID,
+    /// A 16-bit signed integer.
     Short(i16) = SHORT_ID,
+    /// A 32-bit signed integer.
     Int(i32) = INT_ID,
+    /// A 64-bit signed integer.
     Long(i64) = LONG_ID,
+    /// A 32-bit floating-point number.
     Float(f32) = FLOAT_ID,
+    /// A 64-bit floating-point number.
     Double(f64) = DOUBLE_ID,
+    /// An array of 8-bit signed integers.
     ByteArray(Box<[i8]>) = BYTE_ARRAY_ID,
+    /// A string.
     String(Box<str>) = STRING_ID,
+    /// A sequence of tags.
     List(Vec<Self>) = LIST_ID,
+    /// A map of named tags.
     Compound(NbtCompound) = COMPOUND_ID,
+    /// An array of 32-bit signed integers.
     IntArray(Vec<i32>) = INT_ARRAY_ID,
+    /// An array of 64-bit signed integers.
     LongArray(Vec<i64>) = LONG_ARRAY_ID,
 }
 
@@ -36,6 +52,7 @@ impl NbtTag {
         unsafe { *std::ptr::from_ref::<Self>(self).cast::<u8>() }
     }
 
+    /// Serializes the tag's type ID followed by its payload.
     pub fn serialize<W: NbtWriteHelper>(self, w: &mut W) -> serializer::Result<()> {
         w.write_u8(self.get_type_id())?;
         self.serialize_data(w)?;
@@ -106,6 +123,7 @@ impl NbtTag {
         Self::Compound(compound)
     }
 
+    /// Serializes the tag payload without writing its type ID.
     pub fn serialize_data<W: NbtWriteHelper>(self, w: &mut W) -> serializer::Result<()> {
         match self {
             Self::End => {}
@@ -175,11 +193,13 @@ impl NbtTag {
         Ok(())
     }
 
+    /// Deserializes a type ID and its following payload.
     pub fn deserialize<'a, R: NbtReadHelper<'a>>(reader: &mut R) -> Result<Self, Error> {
         let tag_id = reader.get_u8()?;
         Self::deserialize_data(reader, tag_id)
     }
 
+    /// Advances a reader past the payload belonging to `tag_id`.
     pub fn skip_data<'a, R: NbtReadHelper<'a>>(reader: &mut R, tag_id: u8) -> Result<(), Error> {
         match tag_id {
             END_ID => Ok(()),
@@ -239,6 +259,7 @@ impl NbtTag {
         }
     }
 
+    /// Deserializes a payload whose type is identified by `tag_id`.
     pub fn deserialize_data<'a, R: NbtReadHelper<'a>>(
         reader: &mut R,
         tag_id: u8,
@@ -347,6 +368,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained byte, if this is a byte tag.
     #[must_use]
     pub const fn extract_byte(&self) -> Option<i8> {
         match self {
@@ -355,6 +377,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained short, if this is a short tag.
     #[must_use]
     pub const fn extract_short(&self) -> Option<i16> {
         match self {
@@ -363,6 +386,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained integer, if this is an integer tag.
     #[must_use]
     pub const fn extract_int(&self) -> Option<i32> {
         match self {
@@ -371,6 +395,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained long, if this is a long tag.
     #[must_use]
     pub const fn extract_long(&self) -> Option<i64> {
         match self {
@@ -379,6 +404,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained float, if this is a float tag.
     #[must_use]
     pub const fn extract_float(&self) -> Option<f32> {
         match self {
@@ -387,6 +413,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained double, if this is a double tag.
     #[must_use]
     pub const fn extract_double(&self) -> Option<f64> {
         match self {
@@ -395,6 +422,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained byte as a boolean, where zero is `false`.
     #[must_use]
     pub fn extract_bool(&self) -> Option<bool> {
         match self {
@@ -403,6 +431,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained byte array, if this is a byte-array tag.
     #[must_use]
     pub fn extract_byte_array(&self) -> Option<&[i8]> {
         match self {
@@ -411,6 +440,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained string, if this is a string tag.
     #[must_use]
     pub fn extract_string(&self) -> Option<&str> {
         match self {
@@ -419,6 +449,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained list, if this is a list tag.
     #[must_use]
     pub fn extract_list(&self) -> Option<&[Self]> {
         match self {
@@ -427,6 +458,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained compound, if this is a compound tag.
     #[must_use]
     pub const fn extract_compound(&self) -> Option<&NbtCompound> {
         match self {
@@ -435,6 +467,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained integer array, if this is an integer-array tag.
     #[must_use]
     pub fn extract_int_array(&self) -> Option<&[i32]> {
         match self {
@@ -443,6 +476,7 @@ impl NbtTag {
         }
     }
 
+    /// Returns the contained long array, if this is a long-array tag.
     #[must_use]
     pub fn extract_long_array(&self) -> Option<&[i64]> {
         match self {

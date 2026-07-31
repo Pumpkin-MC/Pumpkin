@@ -53,9 +53,8 @@ impl BlockBehaviour for RedstoneWireBlock {
         Box::pin(async move {
             let mut wire = RedstoneWireProperties::from_state_id(args.state_id, args.block);
             let old_state = wire;
-            let new_side: WireConnection;
 
-            match args.direction {
+            let new_side: WireConnection = match args.direction {
                 BlockDirection::Up => {
                     return args.state_id;
                 }
@@ -67,24 +66,24 @@ impl BlockBehaviour for RedstoneWireBlock {
                 BlockDirection::North => {
                     let side = get_side(args.world, args.position, BlockDirection::North).await;
                     wire.north = side.to_north();
-                    new_side = side;
+                    side
                 }
                 BlockDirection::South => {
                     let side = get_side(args.world, args.position, BlockDirection::South).await;
                     wire.south = side.to_south();
-                    new_side = side;
+                    side
                 }
                 BlockDirection::East => {
                     let side = get_side(args.world, args.position, BlockDirection::East).await;
                     wire.east = side.to_east();
-                    new_side = side;
+                    side
                 }
                 BlockDirection::West => {
                     let side = get_side(args.world, args.position, BlockDirection::West).await;
                     wire.west = side.to_west();
-                    new_side = side;
+                    side
                 }
-            }
+            };
 
             wire = get_regulated_sides(wire, args.world, args.position).await;
             wire.power = calculate_power(args.world, args.position).await;

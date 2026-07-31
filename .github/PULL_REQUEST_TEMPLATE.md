@@ -1,4 +1,5 @@
-<!-- Empty or bad Descriptions are not welcome, Don't waste my time -->
+<!-- Follow the Conventional Commits spec: <https://www.conventionalcommits.org/en/v1.0.0/> -->
+<!-- Empty or bad descriptions are not welcome. Don't waste my time -->
 
 ## Description
 
