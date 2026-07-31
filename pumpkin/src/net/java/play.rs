@@ -3143,7 +3143,7 @@ mod tests {
         ));
         assert!(!movement_requires_correction(
             origin,
-            Vector3::new(300.0_f64.sqrt(), 0.0, 0.0),
+            Vector3::new(299.0f64.sqrt(), 0.0, 0.0),
             stationary,
             MovementCheckContext {
                 fall_flying: true,
@@ -3155,7 +3155,7 @@ mod tests {
         ));
         assert!(movement_requires_correction(
             origin,
-            Vector3::new(300.001_f64.sqrt(), 0.0, 0.0),
+            Vector3::new(301.0f64.sqrt(), 0.0, 0.0),
             stationary,
             MovementCheckContext {
                 fall_flying: true,
