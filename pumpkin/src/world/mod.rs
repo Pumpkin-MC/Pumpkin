@@ -140,6 +140,7 @@ pub use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{RngExt, rng};
 use scoreboard::Scoreboard;
+use std::future::Future;
 use time::LevelTime;
 use tokio::sync::Mutex;
 
@@ -163,6 +164,21 @@ use weather::Weather;
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
 use rustc_hash::{FxHashMap, FxHashSet};
+
+/// Runs one vanilla chunk-tick phase in collection order.
+///
+/// Vanilla runs all scheduled block ticks, then scheduled fluid ticks, and finally chunk random
+/// ticks. Serial execution makes writes from an earlier tick observable to the next tick in the
+/// same world tick.
+async fn run_chunk_tick_phase<T, F, Fut>(ticks: impl IntoIterator<Item = T>, mut run: F)
+where
+    F: FnMut(T) -> Fut,
+    Fut: Future<Output = ()>,
+{
+    for tick in ticks {
+        run(tick).await;
+    }
+}
 
 impl PumpkinError for GetBlockError {
     fn is_kick(&self) -> bool {
@@ -1193,14 +1209,15 @@ impl World {
         let active_chunks = self.active_chunks.load();
         let tick_data = self.level.get_tick_data(&active_chunks);
 
-        // ONE JoinSet for all chunk operations
+        // Vanilla executes these three phases serially. The JoinSet below is retained only for
+        // independent natural-spawn work after all tick-induced block and fluid changes settle.
         let mut chunk_tasks = tokio::task::JoinSet::new();
 
-        // 1. Spawn Block Ticks
-        for scheduled_tick in tick_data.block_ticks {
+        // 1. Scheduled block ticks (`ServerLevel::tickBlock`).
+        run_chunk_tick_phase(tick_data.block_ticks, |scheduled_tick| {
             let world = self.clone();
-            let pos = scheduled_tick.position; // Clone for the move closure
-            chunk_tasks.spawn(async move {
+            async move {
+                let pos = scheduled_tick.position;
                 let block = world.get_block(&pos);
                 if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(block.id) {
                     pumpkin_block
@@ -1211,29 +1228,30 @@ impl World {
                         })
                         .await;
                 }
-            });
-        }
+            }
+        })
+        .await;
 
-        // 2. Spawn Fluid Ticks
-        for scheduled_tick in tick_data.fluid_ticks {
+        // 2. Scheduled fluid ticks (`ServerLevel::tickFluid`).
+        run_chunk_tick_phase(tick_data.fluid_ticks, |scheduled_tick| {
             let world = self.clone();
-            let pos = scheduled_tick.position;
-            chunk_tasks.spawn(async move {
+            async move {
+                let pos = scheduled_tick.position;
                 let fluid = world.get_fluid(&pos);
                 if let Some(pumpkin_fluid) = world.block_registry.get_pumpkin_fluid(fluid.id) {
                     pumpkin_fluid.on_scheduled_tick(&world, fluid, &pos).await;
                 }
-            });
-        }
+            }
+        })
+        .await;
 
-        // 3. Spawn Random Ticks
-        for scheduled_tick in tick_data.random_ticks {
+        // 3. Random block/fluid ticks (`ServerLevel::tickChunk`).
+        run_chunk_tick_phase(tick_data.random_ticks, |scheduled_tick| {
             let world = self.clone();
-            let pos = scheduled_tick.position;
-            let tick_block = scheduled_tick.tick_block;
-            let tick_fluid = scheduled_tick.tick_fluid;
-
-            chunk_tasks.spawn(async move {
+            async move {
+                let pos = scheduled_tick.position;
+                let tick_block = scheduled_tick.tick_block;
+                let tick_fluid = scheduled_tick.tick_fluid;
                 let (block, fluid) = match (tick_block, tick_fluid) {
                     (true, true) => {
                         let (b, f) = world.get_block_and_fluid(&pos);
@@ -1261,8 +1279,9 @@ impl World {
                 {
                     pumpkin_fluid.random_tick(fluid, &world, &pos).await;
                 }
-            });
-        }
+            }
+        })
+        .await;
 
         // 4. Calculate Spawn List (Sequential setup)
         let spawn_state = self.spawn_state.load();
@@ -1285,7 +1304,7 @@ impl World {
             spawn_passives,
         ));
 
-        // 5. Spawn Chunk Spawners into the SAME JoinSet
+        // 5. Spawn independent chunk-spawner work after all tick phases.
         if !spawn_list.is_empty() {
             let mut spawning_chunks = Vec::new();
             for pos in active_chunks.iter() {
@@ -5547,5 +5566,28 @@ impl WorldPortalExt for WorldPortal {
                 world.spawn_entity(entity).await;
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn chunk_tick_phases_complete_in_collection_order() {
+        let observed = Arc::new(Mutex::new(Vec::new()));
+
+        for phase in [vec![1, 2], vec![3], vec![4, 5]] {
+            let observed = observed.clone();
+            run_chunk_tick_phase(phase, move |tick| {
+                let observed = observed.clone();
+                async move {
+                    observed.lock().await.push(tick);
+                }
+            })
+            .await;
+        }
+
+        assert_eq!(*observed.lock().await, vec![1, 2, 3, 4, 5]);
     }
 }
