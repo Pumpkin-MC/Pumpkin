@@ -84,6 +84,11 @@ use tokio::sync::Mutex;
 /// Vanilla: 2 minutes
 const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
 
+/// PvP controls attacks against other players only; mobs remain attackable.
+const fn pvp_allows_attack(pvp_enabled: bool, target_is_player: bool) -> bool {
+    pvp_enabled || !target_is_player
+}
+
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
     BlockOutOfReach,
@@ -1734,11 +1739,6 @@ impl JavaClient {
         let player_entity = &player.get_entity();
         let world = player_entity.world.load_full();
 
-        let config = &server.advanced_config.pvp;
-        if !config.enabled {
-            return;
-        }
-
         if entity_id.0 == player.entity_id() {
             self.kick(TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
@@ -1763,6 +1763,10 @@ impl JavaClient {
             .await;
             return;
         };
+        let config = &server.advanced_config.pvp;
+        if !pvp_allows_attack(config.enabled, player_target.is_some()) {
+            return;
+        }
         if let Some(player_victim) = &player_target {
             if player_victim.living_entity.health.load() <= 0.0 {
                 return;
@@ -1833,13 +1837,13 @@ impl JavaClient {
                     match event.action {
                         ActionType::Attack => {
                             let config = &server.advanced_config.pvp;
-                            if !config.enabled {
-                                return;
-                            }
-
                             if entity_id.0 == player.entity_id() {
                                 self.kick(TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, [],))
                                 .await;
+                                return;
+                            }
+
+                            if !pvp_allows_attack(config.enabled, player_target.is_some()) {
                                 return;
                             }
 
@@ -2970,5 +2974,26 @@ impl JavaClient {
                 .subscribed_debug_sample
                 .store(true, Ordering::Relaxed);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pvp_allows_attack;
+
+    #[test]
+    fn disabled_pvp_allows_attacks_against_non_players() {
+        assert!(pvp_allows_attack(false, false));
+    }
+
+    #[test]
+    fn disabled_pvp_blocks_attacks_against_players() {
+        assert!(!pvp_allows_attack(false, true));
+    }
+
+    #[test]
+    fn enabled_pvp_allows_attacks_against_all_targets() {
+        assert!(pvp_allows_attack(true, false));
+        assert!(pvp_allows_attack(true, true));
     }
 }
