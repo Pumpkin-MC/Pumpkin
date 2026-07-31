@@ -43,18 +43,9 @@ impl CommandExecutor for Executor {
             let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
             let block_state_id = block.default_state.id;
             let mode = self.0;
-            let world = match sender {
-                CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
-                    let guard = server.worlds.load();
-
-                    guard
-                        .first()
-                        .cloned()
-                        .ok_or(CommandError::InvalidRequirement)?
-                }
-                CommandSender::Player(player) => player.world().clone(),
-                CommandSender::CommandBlock(_, w) => w.clone(),
-            };
+            let world = sender
+                .world_or_first(server)
+                .ok_or(CommandError::InvalidRequirement)?;
             let pos = BlockPosArgumentConsumer::find_loaded_arg(args, ARG_BLOCK_POS, &world)?;
 
             let success = match mode {

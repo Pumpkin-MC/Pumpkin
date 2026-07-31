@@ -579,6 +579,11 @@ impl ItemStack {
         if self.item != other.item {
             return false;
         }
+
+        if self.patch.len() != other.patch.len() {
+            return false;
+        }
+
         for (id, data) in &self.patch {
             let mut not_found = true;
             'out: for (other_id, other_data) in &other.patch {
@@ -743,6 +748,20 @@ mod tests {
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {
         ItemStack::new(1, &Item::IRON_SWORD)
+    }
+
+    #[test]
+    fn items_with_different_components_are_not_equal_in_either_direction() {
+        let plain = ItemStack::new(1, &Item::COAL);
+
+        let mut customized = ItemStack::new(1, &Item::COAL);
+        customized
+            .patch
+            .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
+
+        assert!(!plain.are_items_and_components_equal(&customized));
+        assert!(!customized.are_items_and_components_equal(&plain));
+        assert!(customized.are_items_and_components_equal(&customized.clone()));
     }
 
     #[test]

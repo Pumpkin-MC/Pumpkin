@@ -420,7 +420,7 @@ impl EntityBase for ArrowEntity {
                         {
                             crate::entity::combat::handle_knockback(
                                 owner_entity.get_entity(),
-                                target.get_entity(),
+                                target.as_ref(),
                                 f64::from(punch) * 0.6,
                             );
                         }

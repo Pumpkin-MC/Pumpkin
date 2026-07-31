@@ -7,6 +7,7 @@ use crate::block::blocks::beacon::BeaconBlock;
 use crate::block::blocks::bed::BedBlock;
 use crate::block::blocks::beehive::BeehiveBlock;
 use crate::block::blocks::brewing_stand::BrewingStandBlock;
+use crate::block::blocks::bubble_column::BubbleColumnBlock;
 use crate::block::blocks::cake::CakeBlock;
 use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::blocks::candle_cakes::CandleCakeBlock;
@@ -145,6 +146,7 @@ use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -314,6 +316,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CoralBlock);
     manager.register(AmethystBlock);
     manager.register(GrassBlock);
+    manager.register(BubbleColumnBlock);
 
     manager.register(FallingBlock);
 
@@ -782,6 +785,7 @@ impl BlockRegistry {
         position: &BlockPos,
         hit: &BlockHitResult<'_>,
         item_stack: &Arc<Mutex<ItemStack>>,
+        equipment_slot: &EquipmentSlot,
         server: &Server,
         world: &Arc<World>,
     ) -> BlockActionResult {
@@ -796,6 +800,7 @@ impl BlockRegistry {
                     player,
                     hit,
                     item_stack,
+                    equipment_slot,
                 })
                 .await;
         }
