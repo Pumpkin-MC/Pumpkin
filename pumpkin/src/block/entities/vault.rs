@@ -44,6 +44,21 @@ impl BlockEntity for VaultBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        if let Ok(cfg) = self.config.try_lock()
+            && let Some(ref cfg) = *cfg
+        {
+            nbt.put_compound("config", cfg.clone());
+        }
+        if let Ok(data) = self.server_data.try_lock()
+            && let Some(ref data) = *data
+        {
+            nbt.put_compound("server_data", data.clone());
+        }
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

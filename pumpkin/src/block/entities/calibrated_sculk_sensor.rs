@@ -41,6 +41,15 @@ impl BlockEntity for CalibratedSculkSensorBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        nbt.put_int(
+            "last_vibration_frequency",
+            *self.last_vibration_frequency.try_lock().ok()?,
+        );
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

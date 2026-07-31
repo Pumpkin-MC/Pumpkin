@@ -335,6 +335,7 @@ impl World {
         for pos in &active_chunks {
             if self.level.is_chunk_loaded(pos) {
                 spawnable_chunks += 1;
+                self.migrate_pending_block_entities(*pos);
             }
         }
 
@@ -5019,6 +5020,7 @@ impl World {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
         let block_entity_nbt = block_entity.chunk_data_nbt();
+        let entity_id = block_entity.resource_location().to_string();
 
         if let Some(nbt) = &block_entity_nbt {
             let mut bytes = Vec::new();
@@ -5037,12 +5039,22 @@ impl World {
             .entry(chunk_pos)
             .or_default()
             .insert(block_pos, block_entity);
+
+        if let Some(nbt) = block_entity_nbt {
+            let mut full_nbt = nbt;
+            full_nbt.put_string("id", entity_id);
+            full_nbt.put_int("x", block_pos.0.x);
+            full_nbt.put_int("y", block_pos.0.y);
+            full_nbt.put_int("z", block_pos.0.z);
+            self.add_block_entity_nbt(block_pos, &full_nbt);
+        }
+
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
             chunk.mark_dirty(true);
         });
     }
 
-    pub fn add_block_entity_nbt(&self, block_pos: BlockPos, nbt: &NbtCompound) {
+    pub(crate) fn add_block_entity_nbt(&self, block_pos: BlockPos, nbt: &NbtCompound) {
         self.level
             .read_chunk_sync(&block_pos.chunk_position(), |chunk| {
                 chunk
@@ -5072,6 +5084,30 @@ impl World {
         }
     }
 
+    fn migrate_pending_block_entities(&self, chunk_pos: Vector2<i32>) {
+        let positions: Vec<BlockPos> = self
+            .level
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap()
+                    .keys()
+                    .copied()
+                    .collect()
+            })
+            .unwrap_or_default();
+        for pos in positions {
+            let already_loaded = self
+                .block_entities
+                .get(&chunk_pos)
+                .is_some_and(|m| m.contains_key(&pos));
+            if !already_loaded && let Some(entity) = self.get_block_entity(&pos) {
+                self.update_block_entity(&entity);
+            }
+        }
+    }
+
     pub fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
@@ -5088,6 +5124,13 @@ impl World {
                     bytes.into_boxed_slice(),
                 ),
             );
+            let mut full_nbt = nbt.clone();
+            full_nbt.put_string("id", block_entity.resource_location().to_string());
+            let pos = block_entity.get_position();
+            full_nbt.put_int("x", pos.0.x);
+            full_nbt.put_int("y", pos.0.y);
+            full_nbt.put_int("z", pos.0.z);
+            self.add_block_entity_nbt(block_pos, &full_nbt);
         }
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
             chunk.mark_dirty(true);
