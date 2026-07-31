@@ -241,6 +241,18 @@ impl PartialEq for World {
 
 impl Eq for World {}
 
+fn extend_active_chunks(
+    active_chunks: &mut FxHashSet<Vector2<i32>>,
+    center: Vector2<i32>,
+    simulation_distance: i32,
+) {
+    for dx in -simulation_distance..=simulation_distance {
+        for dz in -simulation_distance..=simulation_distance {
+            active_chunks.insert(center.add_raw(dx, dz));
+        }
+    }
+}
+
 impl World {
     pub async fn get_block_state_id_async(&self, position: &BlockPos) -> BlockStateId {
         if !self.is_in_build_limit(*position) {
@@ -325,14 +337,27 @@ impl World {
 
     pub fn update_active_chunks(self: &Arc<Self>) {
         let mut active_chunks = FxHashSet::default();
+        let server = self.server.upgrade();
         for player in self.players.load().iter() {
             let center = player.get_entity().chunk_pos.load();
-            // TODO: gamerule for view distance/ticking distance
-            for dx in -8..=8 {
-                for dy in -8..=8 {
-                    active_chunks.insert(center.add_raw(dx, dy));
-                }
-            }
+            let simulation_distance =
+                server
+                    .as_ref()
+                    .map_or(8, |server| match player.client.as_ref() {
+                        ClientPlatform::Java(_) => server
+                            .advanced_config
+                            .networking
+                            .java
+                            .simulation_distance
+                            .get(),
+                        ClientPlatform::Bedrock(_) => server
+                            .advanced_config
+                            .networking
+                            .bedrock
+                            .simulation_distance
+                            .get(),
+                    });
+            extend_active_chunks(&mut active_chunks, center, i32::from(simulation_distance));
         }
         if let Ok(forced) = self.forced_chunks.lock() {
             active_chunks.extend(forced.iter().copied());
@@ -5542,5 +5567,34 @@ impl WorldPortalExt for WorldPortal {
         chunk_z: i32,
     ) {
         natural_spawner::spawn_mobs_for_chunk_generation(&self.0, cache, biome, chunk_x, chunk_z);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_chunks_use_configured_simulation_distance() {
+        let mut chunks = FxHashSet::default();
+        let center = Vector2::new(12, -7);
+
+        extend_active_chunks(&mut chunks, center, 2);
+
+        assert_eq!(chunks.len(), 25);
+        assert!(chunks.contains(&Vector2::new(10, -9)));
+        assert!(chunks.contains(&Vector2::new(14, -5)));
+        assert!(!chunks.contains(&Vector2::new(9, -7)));
+        assert!(!chunks.contains(&Vector2::new(12, -4)));
+    }
+
+    #[test]
+    fn overlapping_simulation_areas_are_deduplicated() {
+        let mut chunks = FxHashSet::default();
+
+        extend_active_chunks(&mut chunks, Vector2::new(0, 0), 1);
+        extend_active_chunks(&mut chunks, Vector2::new(1, 0), 1);
+
+        assert_eq!(chunks.len(), 12);
     }
 }
