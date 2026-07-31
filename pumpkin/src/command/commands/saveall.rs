@@ -61,6 +61,8 @@ impl CommandExecutor for SaveAllExecutor {
                 world.level.level_channel.notify();
             }
 
+            server.save_plugin_configs().await;
+
             context
                 .source
                 .send_feedback(
