@@ -73,6 +73,7 @@ use pumpkin_protocol::java::server::play::{
     SSetHeldItem, SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
     STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
 use pumpkin_util::{GameMode, text::TextComponent};
@@ -83,6 +84,29 @@ use tokio::sync::Mutex;
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
 const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
+
+// `ServerGamePacketListenerImpl::handleAttack` calls
+// `Player::isWithinAttackRange(..., 3.0)`. The default attack-range component
+// reaches 3 blocks in Survival and 5 in Creative, with a 0.3 hitbox margin.
+const ATTACK_PACKET_RANGE_BUFFER: f64 = 3.0;
+const DEFAULT_SURVIVAL_ATTACK_RANGE: f64 = 3.0;
+const DEFAULT_CREATIVE_ATTACK_RANGE: f64 = 5.0;
+const DEFAULT_ATTACK_HITBOX_MARGIN: f64 = 0.3;
+
+fn attack_target_is_in_range(
+    gamemode: GameMode,
+    attacker_eye_position: Vector3<f64>,
+    target_bounds: BoundingBox,
+) -> bool {
+    let weapon_range = if gamemode == GameMode::Creative {
+        DEFAULT_CREATIVE_ATTACK_RANGE
+    } else {
+        DEFAULT_SURVIVAL_ATTACK_RANGE
+    };
+    let max_range = weapon_range + ATTACK_PACKET_RANGE_BUFFER + DEFAULT_ATTACK_HITBOX_MARGIN;
+
+    target_bounds.squared_magnitude(attacker_eye_position) <= max_range * max_range
+}
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
@@ -1726,7 +1750,7 @@ impl JavaClient {
     }
 
     pub async fn handle_attack(&self, player: &Arc<Player>, attack: SAttack, server: &Arc<Server>) {
-        if !player.has_client_loaded() {
+        if !player.has_client_loaded() || player.gamemode.load() == GameMode::Spectator {
             return;
         }
         player.update_last_action_time();
@@ -1763,6 +1787,13 @@ impl JavaClient {
             .await;
             return;
         };
+        if !attack_target_is_in_range(
+            player.gamemode.load(),
+            player.eye_position(),
+            target.get_entity().bounding_box.load(),
+        ) {
+            return;
+        }
         if let Some(player_victim) = &player_target {
             if player_victim.living_entity.health.load() <= 0.0 {
                 return;
@@ -1840,6 +1871,14 @@ impl JavaClient {
                             if entity_id.0 == player.entity_id() {
                                 self.kick(TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, [],))
                                 .await;
+                                return;
+                            }
+
+                            if !attack_target_is_in_range(
+                                player.gamemode.load(),
+                                player.eye_position(),
+                                event.target.get_entity().bounding_box.load(),
+                            ) {
                                 return;
                             }
 
@@ -2970,5 +3009,46 @@ impl JavaClient {
                 .subscribed_debug_sample
                 .store(true, Ordering::Relaxed);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::{
+        GameMode,
+        math::{boundingbox::BoundingBox, vector3::Vector3},
+    };
+
+    use super::attack_target_is_in_range;
+
+    #[test]
+    fn attack_range_uses_the_nearest_point_of_the_target_bounds() {
+        let eye = Vector3::new(0.0, 0.0, 0.0);
+        let just_in_range =
+            BoundingBox::new(Vector3::new(6.3, 0.0, 0.0), Vector3::new(6.8, 1.0, 1.0));
+        let out_of_range = BoundingBox::new(
+            Vector3::new(6.300_001, 0.0, 0.0),
+            Vector3::new(7.0, 1.0, 1.0),
+        );
+
+        assert!(attack_target_is_in_range(
+            GameMode::Survival,
+            eye,
+            just_in_range
+        ));
+        assert!(!attack_target_is_in_range(
+            GameMode::Survival,
+            eye,
+            out_of_range
+        ));
+    }
+
+    #[test]
+    fn creative_attack_range_extends_to_eight_point_three_blocks() {
+        let eye = Vector3::new(0.0, 0.0, 0.0);
+        let target = BoundingBox::new(Vector3::new(8.3, 0.0, 0.0), Vector3::new(9.0, 1.0, 1.0));
+
+        assert!(attack_target_is_in_range(GameMode::Creative, eye, target));
+        assert!(!attack_target_is_in_range(GameMode::Survival, eye, target));
     }
 }
