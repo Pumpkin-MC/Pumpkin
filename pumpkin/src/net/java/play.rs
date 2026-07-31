@@ -16,7 +16,7 @@ use crate::block::{self};
 use crate::entity::EntityBase;
 use crate::entity::equipment_break_status;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
-use crate::entity::player::{ChatMode, ChatSession, Player};
+use crate::entity::player::{ChatMode, ChatSession, MINE_BLOCK_EXHAUSTION, Player};
 use crate::error::PumpkinError;
 use crate::log_at_level;
 use crate::net::PlayerConfig;
@@ -1993,6 +1993,7 @@ impl JavaClient {
                         // Instant break
                         if speed >= 1.0 {
                             let broken_state = world.get_block_state(&position);
+                            let can_harvest = player.can_harvest(broken_state, block).await;
                             let new_state = world
                                 .break_block(
                                     &position,
@@ -2006,6 +2007,9 @@ impl JavaClient {
                                     .broken(&world, block, player, &position, server, broken_state)
                                     .await;
                                 player.apply_tool_damage_for_block_break(broken_state).await;
+                                if can_harvest {
+                                    player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                                }
                                 let item_id = player.inventory().held_item().lock().await.item.id;
                                 player
                                     .increment_stat(StatisticCategory::Used, item_id as i32, 1)
@@ -2090,6 +2094,9 @@ impl JavaClient {
                             .await;
 
                         player.apply_tool_damage_for_block_break(state).await;
+                        if block_drop {
+                            player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                        }
                         let item_id = player.inventory().held_item().lock().await.item.id;
                         player
                             .increment_stat(StatisticCategory::Used, item_id as i32, 1)
@@ -2249,6 +2256,11 @@ impl JavaClient {
         } else {
             off_hand_item
         };
+        let equipment_slot = if matches!(hand, Hand::Left) {
+            EquipmentSlot::MAIN_HAND
+        } else {
+            EquipmentSlot::OFF_HAND
+        };
 
         let item_id = item.lock().await.item.id;
         player
@@ -2270,9 +2282,10 @@ impl JavaClient {
             server;
             event;
             'cancelled: {
+                let state_id = world.get_block_state_id(&position);
                 self.enqueue_packet(&CBlockUpdate::new(
                     position,
-                    VarInt(block.id.as_u16() as i32),
+                    VarInt(i32::from(state_id.as_u16())),
                 ))
                 .await;
                 return Ok(());
@@ -2290,6 +2303,7 @@ impl JavaClient {
                     &cursor_pos,
                     &face,
                     &item,
+                    &equipment_slot,
                     &world,
                     block,
                     server,
@@ -2375,6 +2389,7 @@ impl JavaClient {
         cursor_pos: &Vector3<f32>,
         face: &BlockDirection,
         held_item: &Arc<Mutex<ItemStack>>,
+        equipment_slot: &EquipmentSlot,
         world: &Arc<World>,
         block: &Block,
         server: &Arc<Server>,
@@ -2387,6 +2402,7 @@ impl JavaClient {
                 position,
                 &BlockHitResult { face, cursor_pos },
                 held_item,
+                equipment_slot,
                 server,
                 world,
             )
@@ -2930,5 +2946,29 @@ impl JavaClient {
             "Set test block at {:?}: mode={:?}, message={}",
             packet.position, packet.mode, packet.message
         );
+    }
+
+    pub fn handle_debug_subscription_request(
+        &self,
+        player: &Arc<Player>,
+        packet: &pumpkin_protocol::java::server::play::SDebugSubscriptionRequest,
+    ) {
+        if player.permission_lvl.load() >= PermissionLvl::Two && packet.sample_type.0 == 0 {
+            player
+                .subscribed_debug_sample
+                .store(true, Ordering::Relaxed);
+        }
+    }
+
+    pub fn handle_debug_sample_subscription(
+        &self,
+        player: &Arc<Player>,
+        packet: &pumpkin_protocol::java::server::play::SDebugSampleSubscription,
+    ) {
+        if player.permission_lvl.load() >= PermissionLvl::Two && packet.sample_type.0 == 0 {
+            player
+                .subscribed_debug_sample
+                .store(true, Ordering::Relaxed);
+        }
     }
 }

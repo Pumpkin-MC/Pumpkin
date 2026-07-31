@@ -218,3 +218,6 @@ pub use update_mob_effect::*;
 pub use update_objectives::*;
 pub use update_score::*;
 pub use worldevent::*;
+
+mod debug_sample;
+pub use debug_sample::*;

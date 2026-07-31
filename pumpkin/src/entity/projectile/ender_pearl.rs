@@ -10,7 +10,7 @@ use crate::{
     server::Server,
 };
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::EntityStatus;
+use pumpkin_data::entity::{EntityPose, EntityStatus};
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::vector3::Vector3;
@@ -129,6 +129,11 @@ impl EntityBase for EnderPearlEntity {
 
             if let Some(owner_id) = self.thrown.owner_id
                 && let Some(owner) = world.get_entity_by_id(owner_id)
+                && owner.get_entity().is_alive()
+                && owner.get_living_entity().is_none_or(|living| {
+                    living.health.load() > 0.0
+                        && owner.get_entity().pose.load() != EntityPose::Sleeping
+                })
             {
                 let should_spawn_endermite = rand::random::<f32>() < ENDERMITE_SPAWN_CHANCE;
                 if world.should_spawn_monsters() && should_spawn_endermite {

@@ -486,15 +486,13 @@ impl PluginManager {
             metadata.version.green()
         );
         for permission in &metadata.permissions {
-            if let Some(description) = permissions::get_permission_description(permission) {
-                println!(
-                    "  - {}: {}",
-                    permission.yellow().bold(),
-                    description.italic()
-                );
-            } else {
-                println!("  - {}", permission.yellow().bold());
-            }
+            println!(
+                "  - {}: {}",
+                permission.yellow().bold(),
+                permissions::get_permission_description(permission)
+                    .unwrap_or("<unknown permission>")
+                    .italic()
+            );
         }
 
         let prompt = format!(

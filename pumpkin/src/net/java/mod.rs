@@ -16,13 +16,14 @@ use pumpkin_protocol::java::server::play::{
     SAttack, SBundleItemSelected, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch,
     SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd, SCloseContainer,
     SCommandSuggestion, SConfirmTeleport, SContainerButtonClick,
-    SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SJigsawGenerate, SMoveVehicle,
-    SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
-    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
-    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
-    SRecipeBookSeenRecipe, SRenameItem, SSeenAdvancement, SSelectTrade, SSetCommandBlock,
-    SSetCreativeSlot, SSetHeldItem, SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm,
-    STeleportToEntity, STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
+    SCookieResponse as SPCookieResponse, SCustomPayload, SDebugSampleSubscription,
+    SDebugSubscriptionRequest, SInteract, SJigsawGenerate, SMoveVehicle, SPaddleBoat,
+    SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
+    SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
+    SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SRenameItem,
+    SSeenAdvancement, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+    SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
+    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -1010,6 +1011,18 @@ impl JavaClient {
             }
             id if id == SSetTestBlock::to_id(version) => {
                 self.handle_set_test_block(player, &SSetTestBlock::read(&mut payload, &version)?);
+            }
+            id if id == SDebugSubscriptionRequest::to_id(version) => {
+                self.handle_debug_subscription_request(
+                    player,
+                    &SDebugSubscriptionRequest::read(&mut payload, &version)?,
+                );
+            }
+            id if id == SDebugSampleSubscription::to_id(version) => {
+                self.handle_debug_sample_subscription(
+                    player,
+                    &SDebugSampleSubscription::read(&mut payload, &version)?,
+                );
             }
             id if id == SPlayerPosition::to_id(version) => {
                 self.handle_position(
