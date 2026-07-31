@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
@@ -19,6 +20,10 @@ use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+
+const fn piercing_allows_next_hit(pierce_level: u8, pierced_count: usize) -> bool {
+    pierce_level > 0 && pierced_count < pierce_level as usize + 1
+}
 
 /// Represents the pickup rules for arrows
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +67,7 @@ pub struct ArrowEntity {
     pub life: AtomicU32,
     pub shake_time: AtomicU8,
     pub has_hit: AtomicBool,
+    pub pierced_entity_ids: Mutex<HashSet<i32>>,
     pub last_block_pos: Arc<std::sync::RwLock<Option<BlockPos>>>,
 }
 
@@ -87,6 +93,7 @@ impl ArrowEntity {
             life: AtomicU32::new(0),
             shake_time: AtomicU8::new(0),
             has_hit: AtomicBool::new(false),
+            pierced_entity_ids: Mutex::new(HashSet::new()),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
         }
     }
@@ -111,6 +118,7 @@ impl ArrowEntity {
             life: AtomicU32::new(0),
             shake_time: AtomicU8::new(0),
             has_hit: AtomicBool::new(false),
+            pierced_entity_ids: Mutex::new(HashSet::new()),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
         }
     }
@@ -394,6 +402,23 @@ impl EntityBase for ArrowEntity {
                     hit_pos,
                     ..
                 } => {
+                    let pierce = self.pierce_level.load(Ordering::Relaxed);
+                    let exceeded_piercing_limit = {
+                        let mut pierced = self
+                            .pierced_entity_ids
+                            .lock()
+                            .expect("pierced entity ids lock poisoned");
+                        if pierce > 0 && !piercing_allows_next_hit(pierce, pierced.len()) {
+                            true
+                        } else {
+                            pierced.insert(target.get_entity().entity_id);
+                            false
+                        }
+                    };
+                    if exceeded_piercing_limit {
+                        entity.remove().await;
+                        return;
+                    }
                     // Calculate damage
                     let velocity = entity.velocity.load();
                     let power = velocity.length();
@@ -438,12 +463,13 @@ impl EntityBase for ArrowEntity {
                     }
 
                     // Check pierce level
-                    let pierce = self.pierce_level.load(Ordering::Relaxed);
                     if pierce == 0 {
                         // No piercing - remove arrow
                         entity.remove().await;
+                    } else {
+                        self.has_hit.store(false, Ordering::SeqCst);
                     }
-                    // If piercing > 0, arrow continues (TODO: would need to track pierced entities)
+                    // Piercing arrows continue until a later target would exceed their limit.
                 }
             }
         })
@@ -503,6 +529,15 @@ impl ArrowEntity {
 
         // Don't collide with self
         if other_ent.entity_id == self_ent.entity_id {
+            return true;
+        }
+
+        if self
+            .pierced_entity_ids
+            .lock()
+            .expect("pierced entity ids lock poisoned")
+            .contains(&other_ent.entity_id)
+        {
             return true;
         }
 
@@ -572,5 +607,20 @@ fn get_hit_face(hit_pos: Vector3<f64>, block_pos: BlockPos) -> pumpkin_data::Blo
         BlockDirection::North
     } else {
         BlockDirection::South
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::piercing_allows_next_hit;
+
+    #[test]
+    fn piercing_level_allows_level_plus_one_unique_targets() {
+        assert!(!piercing_allows_next_hit(0, 0));
+        assert!(piercing_allows_next_hit(1, 0));
+        assert!(piercing_allows_next_hit(1, 1));
+        assert!(!piercing_allows_next_hit(1, 2));
+        assert!(piercing_allows_next_hit(4, 4));
+        assert!(!piercing_allows_next_hit(4, 5));
     }
 }
