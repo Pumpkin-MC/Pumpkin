@@ -17289,7 +17289,17 @@ impl Item {
                 },
             ),
             (Lore, &LoreImpl),
-            (PotDecorations, &PotDecorationsImpl),
+            (
+                PotDecorations,
+                &PotDecorationsImpl {
+                    decorations: [
+                        Cow::Borrowed("minecraft:brick"),
+                        Cow::Borrowed("minecraft:brick"),
+                        Cow::Borrowed("minecraft:brick"),
+                        Cow::Borrowed("minecraft:brick"),
+                    ],
+                },
+            ),
             (Rarity, &RarityImpl),
             (RepairCost, &RepairCostImpl),
             (SwingAnimation, &SwingAnimationImpl),

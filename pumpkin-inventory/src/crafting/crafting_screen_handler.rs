@@ -30,7 +30,7 @@ use crate::screen_handler::{
 use crate::slot::{BoxFuture, NormalSlot, Slot};
 
 use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component_impl::DataComponentImpl;
+use pumpkin_data::data_component_impl::{DataComponentImpl, PotDecorationsImpl};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipe_remainder::get_recipe_remainder_id;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING};
@@ -268,6 +268,7 @@ async fn recipe_matches(
             if count != 4 || inventory.get_width() != 3 || inventory.get_height() != 3 {
                 return None;
             }
+            let mut decorations = Vec::with_capacity(4);
             for position in (1..=7).step_by(2) {
                 let slot = inventory.get_stack(position).await;
                 let slot = slot.lock().await;
@@ -278,8 +279,19 @@ async fn recipe_matches(
                 {
                     return None;
                 }
+                decorations.push(std::borrow::Cow::Borrowed(slot.item.registry_key));
             }
-            Some(RecipeResult::new("minecraft:decorated_pot".to_string(), 1))
+            let decorations = decorations
+                .try_into()
+                .expect("decorated pot recipe has exactly four ingredients");
+            Some(RecipeResult {
+                item_id: "minecraft:decorated_pot".to_string(),
+                count: 1,
+                component_patch: vec![(
+                    DataComponent::PotDecorations,
+                    Some(PotDecorationsImpl { decorations }.to_dyn()),
+                )],
+            })
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shaped {
             pattern,
@@ -841,5 +853,43 @@ mod tests {
         );
 
         assert_eq!(output.get_damage(), 26);
+    }
+
+    #[tokio::test]
+    async fn decorated_pot_preserves_sherd_order_in_its_component() {
+        let inventory = CraftingInventory::new(3, 3);
+        for (slot, item) in [
+            (1, &Item::ANGLER_POTTERY_SHERD),
+            (3, &Item::ARCHER_POTTERY_SHERD),
+            (5, &Item::ARMS_UP_POTTERY_SHERD),
+            (7, &Item::BLADE_POTTERY_SHERD),
+        ] {
+            inventory.set_stack(slot, ItemStack::new(1, item)).await;
+        }
+
+        let recipe = CraftingRecipeTypes::CraftingDecoratedPot {
+            category: RecipeCategoryTypes::Misc,
+        };
+        let result = recipe_matches(GenericRecipe::Vanilla(&recipe), 3, 3, 0, 0, 4, &inventory)
+            .await
+            .expect("decorated pot recipe should match");
+        let output = ItemStack::new_with_component(
+            result.count,
+            &Item::DECORATED_POT,
+            result.component_patch,
+        );
+        let decorations = output
+            .get_data_component::<PotDecorationsImpl>()
+            .expect("decorated pot output has decorations");
+
+        assert_eq!(
+            decorations.decorations,
+            [
+                std::borrow::Cow::Borrowed("angler_pottery_sherd"),
+                std::borrow::Cow::Borrowed("archer_pottery_sherd"),
+                std::borrow::Cow::Borrowed("arms_up_pottery_sherd"),
+                std::borrow::Cow::Borrowed("blade_pottery_sherd"),
+            ]
+        );
     }
 }

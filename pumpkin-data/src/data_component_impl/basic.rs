@@ -225,8 +225,32 @@ impl DataComponentImpl for BannerPatternsImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct PotDecorationsImpl;
+pub struct PotDecorationsImpl {
+    pub decorations: [Cow<'static, str>; 4],
+}
+impl PotDecorationsImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let decorations = data.extract_list()?;
+        let decorations: Vec<_> = decorations
+            .iter()
+            .map(|tag| {
+                tag.extract_string()
+                    .map(|value| Cow::Owned(value.to_string()))
+            })
+            .collect::<Option<_>>()?;
+        let decorations = decorations.try_into().ok()?;
+        Some(Self { decorations })
+    }
+}
 impl DataComponentImpl for PotDecorationsImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::List(
+            self.decorations
+                .iter()
+                .map(|decoration| NbtTag::String(decoration.to_string().into_boxed_str()))
+                .collect(),
+        )
+    }
     default_impl!(PotDecorations);
 }
 

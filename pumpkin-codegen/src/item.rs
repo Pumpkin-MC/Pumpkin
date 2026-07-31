@@ -817,8 +817,24 @@ impl ToTokens for ItemComponents {
         if self.piercing_weapon.is_some() {
             tokens.extend(quote! { (PiercingWeapon, &PiercingWeaponImpl), });
         }
-        if self.pot_decorations.is_some() {
-            tokens.extend(quote! { (PotDecorations, &PotDecorationsImpl), });
+        if let Some(decorations) = &self.pot_decorations
+            && let Some(decorations) = decorations.as_array()
+            && decorations.len() == 4
+        {
+            let decorations = decorations
+                .iter()
+                .map(|decoration| decoration.as_str())
+                .collect::<Option<Vec<_>>>();
+            if let Some(decorations) = decorations {
+                let decorations = decorations
+                    .iter()
+                    .map(|decoration| LitStr::new(decoration, Span::call_site()));
+                tokens.extend(quote! {
+                    (PotDecorations, &PotDecorationsImpl {
+                        decorations: [#(Cow::Borrowed(#decorations)),*],
+                    }),
+                });
+            }
         }
         if self.potion_contents.is_some() {
             tokens.extend(quote! {

@@ -542,6 +542,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
             Some(OminousBottleAmplifierImpl::read_data(data)?.to_dyn())
         }
         DataComponent::BlockState => Some(BlockStateImpl::read_data(data)?.to_dyn()),
+        DataComponent::PotDecorations => Some(PotDecorationsImpl::read_data(data)?.to_dyn()),
         DataComponent::Profile => Some(ProfileImpl::read_data(data)?.to_dyn()),
         DataComponent::ChickenVariant => Some(ChickenVariantImpl::read_data(data)?.to_dyn()),
         DataComponent::VillagerVariant => Some(VillagerVariantImpl::read_data(data)?.to_dyn()),
