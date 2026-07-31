@@ -223,11 +223,24 @@ impl CommandSender {
     #[must_use]
     pub fn world(&self) -> Option<Arc<World>> {
         match self {
-            // TODO: maybe return first world when console
+            // These senders are not bound to a world. Use `world_or_first` to
+            // fall back to the first world instead.
             Self::Console | Self::Rcon(..) | Self::Dummy => None,
             Self::Player(p) => Some(p.living_entity.entity.world.load_full()),
             Self::CommandBlock(_, w) => Some(w.clone()),
         }
+    }
+
+    /// Returns the world this sender acts in, falling back to the server's
+    /// first world for senders that are not bound to one.
+    ///
+    /// Console, RCON and dummy senders have no world of their own, so like
+    /// vanilla they operate on the first (overworld) world. Returns [`None`]
+    /// only when the server has no worlds loaded at all.
+    #[must_use]
+    pub fn world_or_first(&self, server: &Server) -> Option<Arc<World>> {
+        self.world()
+            .or_else(|| server.worlds.load().first().cloned())
     }
 
     #[must_use]

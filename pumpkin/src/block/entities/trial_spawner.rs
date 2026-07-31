@@ -49,6 +49,26 @@ impl BlockEntity for TrialSpawnerBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        if let Ok(cfg) = self.normal_config.try_lock()
+            && let Some(ref cfg) = *cfg
+        {
+            nbt.put_compound("normal_config", cfg.clone());
+        }
+        if let Ok(cfg) = self.ominous_config.try_lock()
+            && let Some(ref cfg) = *cfg
+        {
+            nbt.put_compound("ominous_config", cfg.clone());
+        }
+        if let Ok(data) = self.spawner_data.try_lock()
+            && let Some(ref data) = *data
+        {
+            nbt.put_compound("spawner_data", data.clone());
+        }
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

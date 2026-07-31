@@ -235,15 +235,17 @@ fn count_bamboo_above(world: &World, pos: &BlockPos) -> usize {
 async fn bone_meal(world: Arc<World>, position: &BlockPos) {
     let bamboo_below = count_bamboo_below(&world, position);
 
-    let growth_amount = rand::rng().random_range(1..=3);
+    let growth_amount = rand::rng().random_range(1..=2);
 
     for (bamboo_above, _) in (count_bamboo_above(&world, position)..).zip(0..growth_amount) {
         let current_total_height = bamboo_above + bamboo_below + 1;
 
+        // `next_pos` is the topmost bamboo of the stalk, so the free space we grow into is the
+        // block above it. Vanilla reads `STAGE` from the top stalk and grows from there too.
         let next_pos = position.up_height(bamboo_above as i32);
         let next_state = world.get_block_state(&next_pos);
 
-        if !next_state.is_air() || current_total_height >= 16 {
+        if current_total_height >= 16 || !world.get_block_state(&next_pos.up()).is_air() {
             return;
         }
 
@@ -252,7 +254,7 @@ async fn bone_meal(world: Arc<World>, position: &BlockPos) {
             return;
         }
 
-        update_leaves_and_grow(Arc::clone(&world), position).await;
+        update_leaves_and_grow(Arc::clone(&world), &next_pos).await;
     }
 }
 

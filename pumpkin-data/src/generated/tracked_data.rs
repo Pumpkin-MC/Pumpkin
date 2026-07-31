@@ -3960,6 +3960,18 @@ impl TrackedData {
         v26_1: 20u8,
         v26_2: 20u8,
     };
+    pub const WOLF_VARIANT_ID: TrackedId = TrackedId {
+        v1_21: 22u8,
+        v1_21_2: 22u8,
+        v1_21_4: 22u8,
+        v1_21_5: 22u8,
+        v1_21_6: 22u8,
+        v1_21_7: 20u8,
+        v1_21_9: 22u8,
+        v1_21_11: 20u8,
+        v26_1: 23u8,
+        v26_2: 23u8,
+    };
     pub const WOOL_ID: TrackedId = TrackedId {
         v1_21: 255u8,
         v1_21_2: 255u8,

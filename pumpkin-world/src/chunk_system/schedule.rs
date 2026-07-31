@@ -764,7 +764,10 @@ impl GenerationSchedule {
     }
 
     fn drop_satisfied_tasks(&mut self, holder: &mut ChunkHolder, stage: StagedChunkEnum) {
-        for task_idx in (holder.current_stage as usize + 1)..=(stage as usize) {
+        // A neighboring generation cache may already have advanced this holder past the
+        // returning task's stage. Drop every scheduled task satisfied by the returned data,
+        // including that task's stale in-flight node.
+        for task_idx in (StagedChunkEnum::None as usize + 1)..=(stage as usize) {
             if !holder.tasks[task_idx].is_null() {
                 self.waiting_for_chunks.remove(&holder.tasks[task_idx]);
                 self.drop_node(holder.tasks[task_idx]);

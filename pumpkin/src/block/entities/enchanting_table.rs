@@ -40,6 +40,16 @@ impl BlockEntity for EnchantingTableBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        if let Ok(name) = self.custom_name.try_lock()
+            && let Some(ref name) = *name
+        {
+            nbt.put_string("CustomName", name.clone());
+        }
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

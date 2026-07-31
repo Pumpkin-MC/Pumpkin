@@ -25,7 +25,7 @@ fn ring_bell(position: BlockPos, world: &Arc<World>, hit_direction: Option<Horiz
     let (block, state_id) = world.get_block_and_state_id(&position);
 
     let props = BellLikeProperties::from_state_id(state_id, block);
-    let direction = hit_direction.map_or(props.facing, |direction3| direction3);
+    let direction = hit_direction.unwrap_or(props.facing);
 
     if let Some(block_entity) = world.get_block_entity(&position)
         && let Some(be) = block_entity.as_any().downcast_ref::<BellBlockEntity>()

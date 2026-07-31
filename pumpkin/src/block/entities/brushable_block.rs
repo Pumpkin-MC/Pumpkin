@@ -53,6 +53,20 @@ impl BlockEntity for BrushableBlockBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        if let Ok(item) = self.item.try_lock()
+            && let Some(ref it) = *item
+        {
+            let mut it_nbt = NbtCompound::new();
+            it.write_item_stack(&mut it_nbt);
+            nbt.put_compound("item", it_nbt);
+        }
+        nbt.put_int("hits", *self.hits.try_lock().ok()?);
+        nbt.put_byte("direction", *self.direction.try_lock().ok()? as i8);
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

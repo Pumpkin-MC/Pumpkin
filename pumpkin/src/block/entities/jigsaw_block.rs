@@ -118,7 +118,7 @@ impl JigsawBlockEntity {
                 let mut templates = Vec::new();
                 pool_piece
                     .element
-                    .for_each_template(|_, _, template| templates.push(template));
+                    .for_each_template(|_, _, _, template| templates.push(template));
 
                 for template in templates {
                     for block in &template.blocks {
