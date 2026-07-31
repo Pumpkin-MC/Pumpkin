@@ -37,8 +37,11 @@ pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 /// The number of bytes in a sector (4 KiB)
 const SECTOR_BYTES: usize = 4096;
 
-// 26.1.2
-pub const WORLD_DATA_VERSION: i32 = 4790;
+/// The data version emitted for chunk and entity region files.
+///
+/// Keep this tied to the level-data compatibility ceiling so every file written for
+/// the supported Minecraft version advertises the same schema.
+pub const WORLD_DATA_VERSION: i32 = crate::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -1325,7 +1328,14 @@ mod tests {
  */
 #[cfg(test)]
 mod tests {
-    use super::{Compression, CompressionError};
+    use crate::world_info::MAXIMUM_SUPPORTED_WORLD_DATA_VERSION;
+
+    use super::{Compression, CompressionError, WORLD_DATA_VERSION};
+
+    #[test]
+    fn emitted_chunk_data_version_matches_supported_world_version() {
+        assert_eq!(WORLD_DATA_VERSION, MAXIMUM_SUPPORTED_WORLD_DATA_VERSION);
+    }
 
     #[test]
     fn custom_compression_returns_unknown_compression_error() {
