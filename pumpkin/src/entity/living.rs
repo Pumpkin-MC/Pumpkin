@@ -2370,7 +2370,10 @@ impl EntityBase for LivingEntity {
                 };
 
             // Finalize state
-            self.last_damage_taken.store(amount);
+            // Keep the full post-reduction amount in the same domain used by the
+            // next cooldown comparison. Vanilla stores `damage`, not the incremental
+            // difference applied for this hit.
+            self.last_damage_taken.store(effective_amount);
             let damage_amount = damage_amount.max(0.0);
 
             let config = &world.server.upgrade().unwrap().advanced_config.pvp;
