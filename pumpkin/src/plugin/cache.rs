@@ -30,14 +30,19 @@ impl PermissionCache {
 }
 
 pub async fn calculate_hash(path: &Path) -> tokio::io::Result<String> {
+    let bytes = fs::read(path).await?;
+    Ok(calculate_hash_for_bytes(&bytes))
+}
+
+#[must_use]
+pub fn calculate_hash_for_bytes(bytes: &[u8]) -> String {
     use std::fmt::Write;
 
-    let bytes = fs::read(path).await?;
     let mut hasher = Sha256::new();
-    hasher.update(&bytes);
+    hasher.update(bytes);
     let result = hasher.finalize();
-    Ok(result.iter().fold(String::new(), |mut output, b| {
+    result.iter().fold(String::new(), |mut output, b| {
         let _ = write!(output, "{b:02x}");
         output
-    }))
+    })
 }

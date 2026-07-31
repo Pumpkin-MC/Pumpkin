@@ -3,7 +3,8 @@ use crate::block::blocks::fire::fire::FireBlock;
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::fluid::Fluid;
-use pumpkin_data::{Block, BlockDirection, BlockStateId};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockDirection, BlockStateId, tag};
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
@@ -47,18 +48,24 @@ impl Ignition {
 }
 
 fn can_be_lit(block: &Block, state_id: BlockStateId) -> Option<BlockStateId> {
+    // Vanilla only lights the clicked block itself for campfires, candles and candle cakes.
+    // See `CampfireBlock::canLight`, `CandleBlock::canLight` and `CandleCakeBlock::canLight`.
+    // Everything else that merely carries a `lit` property (furnaces, redstone lamps, copper
+    // bulbs, ...) must fall through to placing a fire block instead.
+    if !block.has_tag(&tag::Block::MINECRAFT_CAMPFIRES)
+        && !block.has_tag(&tag::Block::MINECRAFT_CANDLES)
+        && !block.has_tag(&tag::Block::MINECRAFT_CANDLE_CAKES)
+    {
+        return None;
+    }
+
     let mut props = {
         let props = &block.properties(state_id)?;
         props.to_props()
     };
 
-    if let Some((_, value)) = props.iter_mut().find(|(k, _)| *k == "extinguished") {
-        *value = "false";
-    } else if let Some((_, value)) = props.iter_mut().find(|(k, _)| *k == "lit") {
-        *value = "true";
-    } else {
-        return None;
-    }
+    let (_, value) = props.iter_mut().find(|(k, _)| *k == "lit")?;
+    *value = "true";
 
     let new_state_id = block.from_properties(&props).to_state_id(block);
 

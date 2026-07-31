@@ -85,6 +85,28 @@ impl BlockEntity for StructureBlockBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("name", self.name.try_lock().ok()?.clone());
+        nbt.put_string("author", self.author.try_lock().ok()?.clone());
+        nbt.put_string("metadata", self.metadata.try_lock().ok()?.clone());
+        nbt.put_int("posX", *self.pos_x.try_lock().ok()?);
+        nbt.put_int("posY", *self.pos_y.try_lock().ok()?);
+        nbt.put_int("posZ", *self.pos_z.try_lock().ok()?);
+        nbt.put_int("sizeX", *self.size_x.try_lock().ok()?);
+        nbt.put_int("sizeY", *self.size_y.try_lock().ok()?);
+        nbt.put_int("sizeZ", *self.size_z.try_lock().ok()?);
+        nbt.put_string("rotation", self.rotation.try_lock().ok()?.clone());
+        nbt.put_string("mirror", self.mirror.try_lock().ok()?.clone());
+        nbt.put_string("mode", self.mode.try_lock().ok()?.clone());
+        nbt.put_bool("ignoreEntities", *self.ignore_entities.try_lock().ok()?);
+        nbt.put_bool("showAir", *self.show_air.try_lock().ok()?);
+        nbt.put_bool("showBoundingBox", *self.show_bounding_box.try_lock().ok()?);
+        nbt.put_float("integrity", *self.integrity.try_lock().ok()?);
+        nbt.put_long("seed", *self.seed.try_lock().ok()?);
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

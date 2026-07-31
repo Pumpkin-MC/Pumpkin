@@ -5,7 +5,7 @@ pub mod blender;
 mod block_predicate;
 mod block_state_provider;
 pub mod carver;
-mod feature;
+pub mod feature;
 pub mod generator;
 pub mod height_limit;
 pub mod height_provider;

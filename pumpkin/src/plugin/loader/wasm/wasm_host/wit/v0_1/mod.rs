@@ -1,6 +1,8 @@
 use crate::plugin::{
     PluginMetadata,
-    loader::wasm::wasm_host::{PluginInstance, WasmPlugin, state::PluginHostState},
+    loader::wasm::wasm_host::{
+        PluginInitError, PluginInstance, WasmPlugin, state::PluginHostState,
+    },
 };
 use tokio::sync::Mutex;
 use wasmtime::component::{HasSelf, InstancePre, Linker, bindgen};
@@ -57,16 +59,23 @@ pub fn prepare_plugin(
 pub async fn init_plugin(
     engine: &Engine,
     plugin_pre: PluginPre<PluginHostState>,
-) -> wasmtime::Result<(WasmPlugin, PluginMetadata)> {
+) -> Result<(WasmPlugin, PluginMetadata), PluginInitError> {
     let mut store = Store::new(engine, PluginHostState::new());
-    let plugin = plugin_pre.instantiate_async(&mut store).await?;
+    let plugin = plugin_pre
+        .instantiate_async(&mut store)
+        .await
+        .map_err(PluginInitError::InstantiationFailed)?;
 
-    plugin.call_init_plugin(&mut store).await?;
+    plugin
+        .call_init_plugin(&mut store)
+        .await
+        .map_err(PluginInitError::CallInitPluginFailed)?;
 
     let metadata = plugin
         .pumpkin_plugin_metadata()
         .call_get_metadata(&mut store)
-        .await?;
+        .await
+        .map_err(PluginInitError::CallGetMetadataFailed)?;
 
     let metadata = PluginMetadata {
         name: metadata.name,
