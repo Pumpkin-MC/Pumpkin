@@ -91,7 +91,9 @@ impl TargetPredicate {
         ));
     }
 
-    pub fn test(
+    /// Mirrors vanilla `TargetingConditions.test`, including its default
+    /// mob-to-target line-of-sight check.
+    pub async fn test(
         &self,
         world: &World,
         tester: Option<&LivingEntity>,
@@ -126,7 +128,23 @@ impl TargetPredicate {
             if dist_sq > max_dist * max_dist {
                 return false;
             }
-            // TODO: visibility check (needs world raycast)
+        }
+
+        if self.respects_visibility
+            && let Some(tester_ent) = tester
+            && tester_ent
+                .entity
+                .world
+                .load_full()
+                .raycast(
+                    tester_ent.entity.get_eye_pos(),
+                    target.entity.get_eye_pos(),
+                    async |block_pos, world| world.get_block_state(block_pos).is_solid(),
+                )
+                .await
+                .is_some()
+        {
+            return false;
         }
 
         true
