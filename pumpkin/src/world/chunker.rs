@@ -25,6 +25,27 @@ pub fn get_view_distance(player: &Player) -> NonZeroU8 {
         .clamp(NonZeroU8::new(2).unwrap(), max_view_distance)
 }
 
+/// Returns the configured simulation distance for a player's client platform.
+///
+/// Unlike view distance, simulation distance is not something the client
+/// negotiates down: it is a server-authoritative setting (vanilla's
+/// `simulation-distance` server property), so we return the configured
+/// value directly rather than clamping it against a per-player preference.
+#[must_use]
+pub fn get_simulation_distance(player: &Player) -> NonZeroU8 {
+    let server = player.world().server.upgrade().unwrap();
+    match player.client.as_ref() {
+        ClientPlatform::Java(_) => server.advanced_config.networking.java.simulation_distance,
+        ClientPlatform::Bedrock(_) => {
+            server
+                .advanced_config
+                .networking
+                .bedrock
+                .simulation_distance
+        }
+    }
+}
+
 // Checks if the target chunk is within the view distance
 // of the center chunk. Uses Chebyshev distance.
 #[must_use]

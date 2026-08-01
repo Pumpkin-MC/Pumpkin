@@ -28,7 +28,10 @@ pub mod time;
 
 use crate::block::RandomTickArgs;
 use crate::world::chunker::is_within_view_distance;
-use crate::world::{chunker::get_view_distance, loot::LootContextParameters};
+use crate::world::{
+    chunker::{get_simulation_distance, get_view_distance},
+    loot::LootContextParameters,
+};
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
     block::{
@@ -321,9 +324,14 @@ impl World {
         let mut active_chunks = FxHashSet::default();
         for player in self.players.load().iter() {
             let center = player.get_entity().chunk_pos.load();
-            // TODO: gamerule for view distance/ticking distance
-            for dx in -8..=8 {
-                for dy in -8..=8 {
+            // Use the configured simulation distance (server-authoritative,
+            // per client platform) rather than a hardcoded radius, so entity
+            // AI ticking, block entity ticking, random ticks and mob spawning
+            // (which all read `active_chunks`) follow the same setting vanilla
+            // uses for ticking eligibility.
+            let radius = get_simulation_distance(player).get() as i32;
+            for dx in -radius..=radius {
+                for dy in -radius..=radius {
                     active_chunks.insert(center.add_raw(dx, dy));
                 }
             }
