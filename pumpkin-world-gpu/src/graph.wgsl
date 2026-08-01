@@ -33,6 +33,7 @@ const OP_NOISE: u32 = 17u;
 const OP_SHIFT_A: u32 = 18u;
 const OP_SHIFT_B: u32 = 19u;
 const OP_SHIFTED_NOISE: u32 = 20u;
+const OP_SPLINE: u32 = 21u;
 
 struct Instruction {
     opcode: u32,
@@ -40,8 +41,9 @@ struct Instruction {
     input1: u32,
     input2: u32,
     sampler_index: u32,
-    _pad0: u32,
-    _pad1: u32,
+    // Opcode-specific operands that are NOT scratch indices.
+    aux0: u32,
+    aux1: u32,
     _pad2: u32,
     param0: f32,
     param1: f32,
@@ -88,6 +90,14 @@ struct Dims {
 @group(0) @binding(6) var<storage, read> octaves: array<OctaveParams>;
 // 256 entries per octave, in the same order as `octaves`.
 @group(0) @binding(7) var<storage, read> permutations: array<u32>;
+@group(0) @binding(8) var<storage, read> spline_points: array<SplinePoint>;
+
+struct SplinePoint {
+    location: f32,
+    derivative: f32,
+    value_node: u32,
+    _pad: u32,
+}
 
 const GRADIENTS: array<vec3<f32>, 16> = array<vec3<f32>, 16>(
     vec3<f32>(1.0, 1.0, 0.0), vec3<f32>(-1.0, 1.0, 0.0),
@@ -197,6 +207,56 @@ fn double_perlin_sample(sampler_index: u32, x: f32, y: f32, z: f32) -> f32 {
     return (first + second) * s.amplitude;
 }
 
+fn spline_outside_range(knot: SplinePoint, location: f32, last_known: f32) -> f32 {
+    if (knot.derivative == 0.0) {
+        return last_known;
+    }
+    return knot.derivative * (location - knot.location) + last_known;
+}
+
+// Mirrors Spline::sample in density_function/spline.rs. Knot values are read from
+// already-computed instruction outputs, so this never recurses.
+fn sample_spline(start: u32, count: u32, location: f32, point_index: u32) -> f32 {
+    if (count == 0u) {
+        return 0.0;
+    }
+
+    // Equivalent to partition_point(|p| location >= p.location); locations ascend.
+    var above: u32 = 0u;
+    for (var k: u32 = 0u; k < count; k = k + 1u) {
+        if (location >= spline_points[start + k].location) {
+            above = k + 1u;
+        }
+    }
+
+    if (above == 0u) {
+        let knot = spline_points[start];
+        let value = scratch[knot.value_node * dims.num_points + point_index];
+        return spline_outside_range(knot, location, value);
+    }
+    if (above == count) {
+        let knot = spline_points[start + count - 1u];
+        let value = scratch[knot.value_node * dims.num_points + point_index];
+        return spline_outside_range(knot, location, value);
+    }
+
+    let lower = spline_points[start + above - 1u];
+    let upper = spline_points[start + above];
+    let lower_value = scratch[lower.value_node * dims.num_points + point_index];
+    let upper_value = scratch[upper.value_node * dims.num_points + point_index];
+
+    let dist = upper.location - lower.location;
+    let x_scale = (location - lower.location) / dist;
+
+    let delta = upper_value - lower_value;
+    let extrapolated_lower = lower.derivative * dist - delta;
+    let extrapolated_upper = -upper.derivative * dist + delta;
+
+    let cubic = (x_scale * (1.0 - x_scale))
+        * lerp1(x_scale, extrapolated_lower, extrapolated_upper);
+    return cubic + lerp1(x_scale, lower_value, upper_value);
+}
+
 // Mirrors shift_sample_3d in density_function/noise.rs.
 fn shift_sample_3d(sampler_index: u32, x: f32, y: f32, z: f32) -> f32 {
     return double_perlin_sample(sampler_index, x * 0.25, y * 0.25, z * 0.25) * 4.0;
@@ -298,6 +358,9 @@ fn evaluate_graph(@builtin(global_invocation_id) gid: vec3<u32>) {
                     py * instruction.param1 + b,
                     pz * instruction.param0 + c,
                 );
+            }
+            case 21u: {
+                result = sample_spline(instruction.aux0, instruction.aux1, a, point_index);
             }
             default: { result = 0.0; }
         }

@@ -206,6 +206,7 @@ impl GpuNoiseContext {
                     storage_entry(5, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(6, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(7, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(8, wgpu::BufferBindingType::Storage { read_only: true }),
                 ],
             });
 
@@ -310,6 +311,10 @@ impl GpuNoiseContext {
             "graph permutations",
             bytemuck::cast_slice(&compiled.samplers.permutations),
         );
+        let spline_points_buffer = self.storage_or_placeholder(
+            "graph spline points",
+            bytemuck::cast_slice(&compiled.spline_points),
+        );
 
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("density_graph bind group"),
@@ -323,6 +328,7 @@ impl GpuNoiseContext {
                 bind_entry(5, &samplers_buffer),
                 bind_entry(6, &octaves_buffer),
                 bind_entry(7, &permutations_buffer),
+                bind_entry(8, &spline_points_buffer),
             ],
         });
 
@@ -588,6 +594,7 @@ mod test {
         let compiled = crate::graph::CompiledGraph {
             instructions: crate::graph::test::sample_graph(),
             samplers: crate::graph::SamplerPool::default(),
+            spline_points: Vec::new(),
         };
 
         // Spread y across the gradient's clamped range and both saturated ends.
@@ -605,6 +612,7 @@ mod test {
             let cpu_value = crate::graph::evaluate_cpu(
                 &compiled.instructions,
                 &compiled.samplers,
+                &compiled.spline_points,
                 point[0],
                 point[1],
                 point[2],
@@ -651,6 +659,7 @@ mod test {
         let compiled = crate::graph::CompiledGraph {
             instructions: vec![noise],
             samplers,
+            spline_points: Vec::new(),
         };
 
         let points: Vec<[f32; 3]> = (0..1000)
@@ -724,6 +733,7 @@ mod test {
         let compiled = crate::graph::CompiledGraph {
             instructions: vec![shift_a, shift_b, shifted],
             samplers,
+            spline_points: Vec::new(),
         };
 
         let points: Vec<[f32; 3]> = (0..600)
@@ -758,6 +768,108 @@ mod test {
         assert!(
             max_diff < 1e-2,
             "GPU shift opcodes diverged from vanilla semantics by {max_diff}"
+        );
+    }
+    /// Splines nest: a knot's value can be another spline. Flattening them into
+    /// separate instructions is the whole trick that removes runtime recursion, so this
+    /// checks a two-level spline against an expectation transcribed from
+    /// `density_function/spline.rs` rather than from this crate's own interpreter.
+    #[test]
+    fn gpu_nested_spline_matches_vanilla_semantics() {
+        // Independent transcription of Spline::sample for a two-knot spline.
+        fn eval_spline(loc: f32, knots: [(f32, f32, f32); 2]) -> f32 {
+            let outside = |k: (f32, f32, f32), last: f32| -> f32 {
+                if k.1 == 0.0 {
+                    last
+                } else {
+                    k.1 * (loc - k.0) + last
+                }
+            };
+            if loc < knots[0].0 {
+                return outside(knots[0], knots[0].2);
+            }
+            if loc >= knots[1].0 {
+                return outside(knots[1], knots[1].2);
+            }
+            let (lower, upper) = (knots[0], knots[1]);
+            let dist = upper.0 - lower.0;
+            let x_scale = (loc - lower.0) / dist;
+            let delta = upper.2 - lower.2;
+            let extrap_lo = lower.1 * dist - delta;
+            let extrap_hi = -upper.1 * dist + delta;
+            let lerp = |t: f32, a: f32, b: f32| a + t * (b - a);
+            (x_scale * (1.0 - x_scale)) * lerp(x_scale, extrap_lo, extrap_hi)
+                + lerp(x_scale, lower.2, upper.2)
+        }
+
+        use crate::graph::{CompiledGraph, GpuSplinePoint, Instruction, OpCode};
+
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        // Node 0: location = ClampedYGradient over y, giving a spread of locations.
+        let mut location = Instruction::new_for_test(OpCode::ClampedYGradient, 0);
+        location.param0 = 0.0;
+        location.param1 = 100.0;
+        location.param2 = 0.0;
+        location.param3 = 1.0;
+
+        // Nodes 1-2: constants used by the inner spline's knots.
+        let mut inner_lo = Instruction::new_for_test(OpCode::Constant, 1);
+        inner_lo.param0 = -0.5;
+        let mut inner_hi = Instruction::new_for_test(OpCode::Constant, 2);
+        inner_hi.param0 = 2.0;
+
+        // Node 3: inner spline over the same location, knots at 0.2 / 0.8.
+        let mut inner = Instruction::new_for_test(OpCode::Spline, 3);
+        inner.input0 = 0;
+        inner.aux0 = 0;
+        inner.aux1 = 2;
+
+        // Node 4: constant used as the outer spline's other knot.
+        let mut outer_far = Instruction::new_for_test(OpCode::Constant, 4);
+        outer_far.param0 = 5.0;
+
+        // Node 5: outer spline whose first knot's value IS the inner spline.
+        let mut outer = Instruction::new_for_test(OpCode::Spline, 5);
+        outer.input0 = 0;
+        outer.aux0 = 2;
+        outer.aux1 = 2;
+
+        let spline_points = vec![
+            // inner spline knots
+            GpuSplinePoint::new(0.2, 0.0, 1),
+            GpuSplinePoint::new(0.8, 1.5, 2),
+            // outer spline knots; knot 0 pulls its value from the inner spline (node 3)
+            GpuSplinePoint::new(0.3, 0.5, 3),
+            GpuSplinePoint::new(0.9, 0.0, 4),
+        ];
+
+        let compiled = CompiledGraph {
+            instructions: vec![location, inner_lo, inner_hi, inner, outer_far, outer],
+            samplers: crate::graph::SamplerPool::default(),
+            spline_points,
+        };
+
+        let points: Vec<[f32; 3]> = (0..400)
+            .map(|i| [0.0, i as f32 * 0.3 - 10.0, 0.0])
+            .collect();
+
+        let gpu_results = ctx.evaluate_graph(&compiled, &points);
+
+        let mut max_diff = 0.0f32;
+        for (point, &gpu_value) in points.iter().zip(&gpu_results) {
+            // ClampedYGradient(y) over [0,100] -> [0,1]
+            let loc = (point[1] / 100.0).clamp(0.0, 1.0);
+            let inner_value = eval_spline(loc, [(0.2, 0.0, -0.5), (0.8, 1.5, 2.0)]);
+            let expected = eval_spline(loc, [(0.3, 0.5, inner_value), (0.9, 0.0, 5.0)]);
+            max_diff = max_diff.max((expected - gpu_value).abs());
+        }
+
+        assert!(
+            max_diff < 1e-4,
+            "GPU nested spline diverged from vanilla semantics by {max_diff}"
         );
     }
 }

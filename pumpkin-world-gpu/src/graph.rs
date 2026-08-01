@@ -13,7 +13,9 @@ use crate::OctaveParams;
 use bytemuck::{Pod, Zeroable};
 use pumpkin_data::{
     chunk::DoublePerlinNoiseParameters,
-    noise_router::{BaseNoiseFunctionComponent, BinaryOperation, LinearOperation, UnaryOperation},
+    noise_router::{
+        BaseNoiseFunctionComponent, BinaryOperation, LinearOperation, SplineRepr, UnaryOperation,
+    },
 };
 use pumpkin_util::{
     noise::perlin::OctavePerlinNoiseSampler, random::xoroshiro128::XoroshiroSplitter,
@@ -54,6 +56,22 @@ pub enum OpCode {
     /// Samples this node's sampler at the point offset by three input nodes;
     /// `input0`/`input1`/`input2` are the x/y/z offsets.
     ShiftedNoise = 20,
+    /// Cubic spline. `input0` is the node giving the location to look up; `aux0`/`aux1`
+    /// are the start and length of this spline's run in the graph's point table.
+    Spline = 21,
+}
+
+/// One knot of a spline, as uploaded to the GPU.
+///
+/// `value_node` is the instruction whose output supplies this knot's value. Nested
+/// splines are emitted as their own instructions, so evaluation never recurses.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable, Debug)]
+pub struct GpuSplinePoint {
+    pub location: f32,
+    pub derivative: f32,
+    pub value_node: u32,
+    padding: u32,
 }
 
 /// One node of the flattened graph.
@@ -73,9 +91,11 @@ pub struct Instruction {
     pub input1: u32,
     pub input2: u32,
     pub sampler_index: u32,
-    padding0: u32,
-    padding1: u32,
-    padding2: u32,
+    /// Opcode-specific extra operands that are NOT scratch indices (unlike
+    /// `input0`..`input2`, which the shader always dereferences).
+    pub aux0: u32,
+    pub aux1: u32,
+    aux2: u32,
     pub param0: f32,
     pub param1: f32,
     pub param2: f32,
@@ -109,9 +129,9 @@ impl Instruction {
             input1: own,
             input2: own,
             sampler_index: 0,
-            padding0: 0,
-            padding1: 0,
-            padding2: 0,
+            aux0: 0,
+            aux1: 0,
+            aux2: 0,
             param0: 0.0,
             param1: 0.0,
             param2: 0.0,
@@ -133,6 +153,20 @@ pub struct SamplerRef {
     padding0: f32,
     padding1: f32,
     padding2: f32,
+}
+
+impl GpuSplinePoint {
+    /// Builds a knot whose value comes from instruction `value_node`.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) const fn new(location: f32, derivative: f32, value_node: u32) -> Self {
+        Self {
+            location,
+            derivative,
+            value_node,
+            padding: 0,
+        }
+    }
 }
 
 /// Every noise sampler referenced by a compiled graph, flattened into GPU-uploadable
@@ -222,6 +256,8 @@ impl std::error::Error for UnsupportedNode {}
 pub struct CompiledGraph {
     pub instructions: Vec<Instruction>,
     pub samplers: SamplerPool,
+    /// All spline knots, concatenated; `Spline` instructions index runs of this.
+    pub spline_points: Vec<GpuSplinePoint>,
 }
 
 /// Lowers a component stack into GPU instructions, building each noise node's sampler
@@ -235,112 +271,219 @@ pub fn compile(
     stack: &[BaseNoiseFunctionComponent],
     base_random_deriver: &XoroshiroSplitter,
 ) -> Result<CompiledGraph, UnsupportedNode> {
-    let mut out = Vec::with_capacity(stack.len());
+    let mut out: Vec<Instruction> = Vec::with_capacity(stack.len());
     let mut samplers = SamplerPool::default();
+    let mut spline_points: Vec<GpuSplinePoint> = Vec::new();
+    // Splines emit extra instructions for their nested values, so an original stack
+    // index no longer equals its instruction index; every input goes through this map.
+    let mut map: Vec<u32> = vec![0; stack.len()];
 
-    for (index, component) in stack.iter().enumerate() {
-        if let Some(instruction) =
-            lower_noise_family(component, index, &mut samplers, base_random_deriver)
+    for (stack_index, component) in stack.iter().enumerate() {
+        // `own` is an index into `out`; `stack_index` is an index into `stack`. They
+        // diverge as soon as a spline emits instructions for its nested values.
+        let own = out.len();
+
+        if let Some(mut instruction) =
+            lower_noise_family(component, own, &mut samplers, base_random_deriver)
         {
+            remap_inputs(&mut instruction, component, &map, own);
             out.push(instruction);
+            map[stack_index] = own as u32;
             continue;
         }
 
-        let instruction = match component {
-            BaseNoiseFunctionComponent::Constant { value } => {
-                let mut i = Instruction::new(OpCode::Constant, index);
-                i.param0 = *value as f32;
-                i
-            }
-            // Mirrors proto_noise_router.rs: while pumpkin-world has no blender, these
-            // collapse to constants. If the blender lands, both paths must change together.
-            BaseNoiseFunctionComponent::BlendAlpha => {
-                let mut i = Instruction::new(OpCode::Constant, index);
-                i.param0 = 1.0;
-                i
-            }
-            BaseNoiseFunctionComponent::BlendOffset => {
-                let mut i = Instruction::new(OpCode::Constant, index);
-                i.param0 = 0.0;
-                i
-            }
-            // Wrappers are pure caching in the CPU implementation, so on the GPU —
-            // where every point is recomputed in parallel anyway — they are identity.
-            BaseNoiseFunctionComponent::Wrapper { input_index, .. }
-            | BaseNoiseFunctionComponent::BlendDensity { input_index } => {
-                let mut i = Instruction::new(OpCode::PassThrough, index);
-                i.input0 = *input_index as u32;
-                i
-            }
-            BaseNoiseFunctionComponent::Linear { input_index, data } => {
-                let op = match data.operation {
-                    LinearOperation::Add => OpCode::LinearAdd,
-                    LinearOperation::Mul => OpCode::LinearMul,
-                };
-                let mut i = Instruction::new(op, index);
-                i.input0 = *input_index as u32;
-                i.param0 = data.argument as f32;
-                i
-            }
-            BaseNoiseFunctionComponent::Unary { input_index, data } => {
-                let op = match data.operation {
-                    UnaryOperation::Abs => OpCode::UnaryAbs,
-                    UnaryOperation::Square => OpCode::UnarySquare,
-                    UnaryOperation::Cube => OpCode::UnaryCube,
-                    UnaryOperation::HalfNegative => OpCode::UnaryHalfNegative,
-                    UnaryOperation::QuarterNegative => OpCode::UnaryQuarterNegative,
-                    UnaryOperation::Squeeze => OpCode::UnarySqueeze,
-                    UnaryOperation::Invert => OpCode::UnaryInvert,
-                };
-                let mut i = Instruction::new(op, index);
-                i.input0 = *input_index as u32;
-                i
-            }
-            BaseNoiseFunctionComponent::Clamp { input_index, data } => {
-                let mut i = Instruction::new(OpCode::Clamp, index);
-                i.input0 = *input_index as u32;
-                i.param0 = data.min_value as f32;
-                i.param1 = data.max_value as f32;
-                i
-            }
-            BaseNoiseFunctionComponent::Binary {
-                argument1_index,
-                argument2_index,
-                data,
-            } => {
-                let op = match data.operation {
-                    BinaryOperation::Add => OpCode::BinaryAdd,
-                    BinaryOperation::Mul => OpCode::BinaryMul,
-                    BinaryOperation::Min => OpCode::BinaryMin,
-                    BinaryOperation::Max => OpCode::BinaryMax,
-                };
-                let mut i = Instruction::new(op, index);
-                i.input0 = *argument1_index as u32;
-                i.input1 = *argument2_index as u32;
-                i
-            }
-            BaseNoiseFunctionComponent::ClampedYGradient { data } => {
-                let mut i = Instruction::new(OpCode::ClampedYGradient, index);
-                i.param0 = data.from_y as f32;
-                i.param1 = data.to_y as f32;
-                i.param2 = data.from_value as f32;
-                i.param3 = data.to_value as f32;
-                i
-            }
-            other => {
-                return Err(UnsupportedNode {
-                    index,
-                    name: node_name(other),
-                });
-            }
-        };
+        if let BaseNoiseFunctionComponent::Spline { spline } = component {
+            map[stack_index] = emit_spline(spline, &mut out, &mut spline_points, &map);
+            continue;
+        }
+
+        let instruction = lower_simple(component, stack_index, own, &map)?;
         out.push(instruction);
+        map[stack_index] = own as u32;
     }
 
     Ok(CompiledGraph {
         instructions: out,
         samplers,
+        spline_points,
     })
+}
+
+/// Lowers the arithmetic, constant and wrapper nodes — everything that needs neither a
+/// sampler nor spline flattening.
+fn lower_simple(
+    component: &BaseNoiseFunctionComponent,
+    stack_index: usize,
+    own: usize,
+    map: &[u32],
+) -> Result<Instruction, UnsupportedNode> {
+    let index = own;
+    let instruction = match component {
+        BaseNoiseFunctionComponent::Constant { value } => {
+            let mut i = Instruction::new(OpCode::Constant, index);
+            i.param0 = *value as f32;
+            i
+        }
+        // Mirrors proto_noise_router.rs: while pumpkin-world has no blender, these
+        // collapse to constants. If the blender lands, both paths must change together.
+        BaseNoiseFunctionComponent::BlendAlpha => {
+            let mut i = Instruction::new(OpCode::Constant, index);
+            i.param0 = 1.0;
+            i
+        }
+        BaseNoiseFunctionComponent::BlendOffset => {
+            let mut i = Instruction::new(OpCode::Constant, index);
+            i.param0 = 0.0;
+            i
+        }
+        // Wrappers are pure caching in the CPU implementation, so on the GPU —
+        // where every point is recomputed in parallel anyway — they are identity.
+        BaseNoiseFunctionComponent::Wrapper { input_index, .. }
+        | BaseNoiseFunctionComponent::BlendDensity { input_index } => {
+            let mut i = Instruction::new(OpCode::PassThrough, index);
+            i.input0 = map[*input_index];
+            i
+        }
+        BaseNoiseFunctionComponent::Linear { input_index, data } => {
+            let op = match data.operation {
+                LinearOperation::Add => OpCode::LinearAdd,
+                LinearOperation::Mul => OpCode::LinearMul,
+            };
+            let mut i = Instruction::new(op, index);
+            i.input0 = map[*input_index];
+            i.param0 = data.argument as f32;
+            i
+        }
+        BaseNoiseFunctionComponent::Unary { input_index, data } => {
+            let op = match data.operation {
+                UnaryOperation::Abs => OpCode::UnaryAbs,
+                UnaryOperation::Square => OpCode::UnarySquare,
+                UnaryOperation::Cube => OpCode::UnaryCube,
+                UnaryOperation::HalfNegative => OpCode::UnaryHalfNegative,
+                UnaryOperation::QuarterNegative => OpCode::UnaryQuarterNegative,
+                UnaryOperation::Squeeze => OpCode::UnarySqueeze,
+                UnaryOperation::Invert => OpCode::UnaryInvert,
+            };
+            let mut i = Instruction::new(op, index);
+            i.input0 = map[*input_index];
+            i
+        }
+        BaseNoiseFunctionComponent::Clamp { input_index, data } => {
+            let mut i = Instruction::new(OpCode::Clamp, index);
+            i.input0 = map[*input_index];
+            i.param0 = data.min_value as f32;
+            i.param1 = data.max_value as f32;
+            i
+        }
+        BaseNoiseFunctionComponent::Binary {
+            argument1_index,
+            argument2_index,
+            data,
+        } => {
+            let op = match data.operation {
+                BinaryOperation::Add => OpCode::BinaryAdd,
+                BinaryOperation::Mul => OpCode::BinaryMul,
+                BinaryOperation::Min => OpCode::BinaryMin,
+                BinaryOperation::Max => OpCode::BinaryMax,
+            };
+            let mut i = Instruction::new(op, index);
+            i.input0 = map[*argument1_index];
+            i.input1 = map[*argument2_index];
+            i
+        }
+        BaseNoiseFunctionComponent::ClampedYGradient { data } => {
+            let mut i = Instruction::new(OpCode::ClampedYGradient, index);
+            i.param0 = data.from_y as f32;
+            i.param1 = data.to_y as f32;
+            i.param2 = data.from_value as f32;
+            i.param3 = data.to_value as f32;
+            i
+        }
+        other => {
+            return Err(UnsupportedNode {
+                index: stack_index,
+                name: node_name(other),
+            });
+        }
+    };
+    Ok(instruction)
+}
+
+/// Rewrites the shift-noise inputs, which `lower_noise_family` fills with original
+/// stack indices, into instruction indices.
+fn remap_inputs(
+    instruction: &mut Instruction,
+    component: &BaseNoiseFunctionComponent,
+    map: &[u32],
+    own: usize,
+) {
+    if let BaseNoiseFunctionComponent::ShiftedNoise {
+        shift_x_index,
+        shift_y_index,
+        shift_z_index,
+        ..
+    } = component
+    {
+        instruction.input0 = map[*shift_x_index];
+        instruction.input1 = map[*shift_y_index];
+        instruction.input2 = map[*shift_z_index];
+    } else {
+        let own = own as u32;
+        instruction.input0 = own;
+        instruction.input1 = own;
+        instruction.input2 = own;
+    }
+}
+
+/// Emits `repr` (and, depth-first, everything nested inside it) as instructions,
+/// returning the index of the instruction holding its value.
+///
+/// Nested splines become ordinary instructions rather than a runtime recursion, which
+/// WGSL cannot express. The GPU evaluates every branch instead of only the two a given
+/// point needs, but it already evaluates every instruction for every point, so nothing
+/// is actually wasted.
+fn emit_spline(
+    repr: &SplineRepr,
+    out: &mut Vec<Instruction>,
+    spline_points: &mut Vec<GpuSplinePoint>,
+    map: &[u32],
+) -> u32 {
+    match repr {
+        SplineRepr::Fixed { value } => {
+            let own = out.len();
+            let mut i = Instruction::new(OpCode::Constant, own);
+            i.param0 = *value;
+            out.push(i);
+            own as u32
+        }
+        SplineRepr::Standard {
+            location_function_index,
+            points,
+        } => {
+            // Emit nested values first so their instructions precede this one.
+            let knots: Vec<GpuSplinePoint> = points
+                .iter()
+                .map(|point| GpuSplinePoint {
+                    location: point.location,
+                    derivative: point.derivative,
+                    value_node: emit_spline(point.value, out, spline_points, map),
+                    padding: 0,
+                })
+                .collect();
+
+            let start = spline_points.len() as u32;
+            let count = knots.len() as u32;
+            spline_points.extend(knots);
+
+            let own = out.len();
+            let mut i = Instruction::new(OpCode::Spline, own);
+            i.input0 = map[*location_function_index];
+            i.aux0 = start;
+            i.aux1 = count;
+            out.push(i);
+            own as u32
+        }
+    }
 }
 
 /// Lowers the noise-family nodes, which all need a seeded sampler registered in
@@ -439,6 +582,7 @@ const fn node_name(component: &BaseNoiseFunctionComponent) -> &'static str {
 pub fn evaluate_cpu(
     instructions: &[Instruction],
     pool: &SamplerPool,
+    spline_points: &[GpuSplinePoint],
     x: f32,
     y: f32,
     z: f32,
@@ -519,11 +663,73 @@ pub fn evaluate_cpu(
                 y * p.param1 + b,
                 z * p.param0 + c,
             ),
+            op if op == OpCode::Spline as u32 => {
+                sample_spline(spline_points, p.aux0 as usize, p.aux1 as usize, a, &values)
+            }
             _ => 0.0,
         };
     }
 
     values.last().copied().unwrap_or(0.0)
+}
+
+/// f32 mirror of `Spline::sample` in
+/// `pumpkin-world/src/generation/noise/router/density_function/spline.rs`.
+///
+/// Knot values are read from already-computed instruction outputs rather than being
+/// evaluated here, which is what removes the recursion.
+fn sample_spline(
+    spline_points: &[GpuSplinePoint],
+    start: usize,
+    count: usize,
+    location: f32,
+    values: &[f32],
+) -> f32 {
+    if count == 0 {
+        return 0.0;
+    }
+    let knots = &spline_points[start..start + count];
+    let knot_value = |knot: &GpuSplinePoint| values[knot.value_node as usize];
+
+    // Same as points.partition_point(|p| location >= p.location); locations ascend.
+    let above = knots.iter().filter(|k| location >= k.location).count();
+
+    if above == 0 {
+        let knot = &knots[0];
+        return sample_outside_range(knot, location, knot_value(knot));
+    }
+    if above == count {
+        let knot = &knots[count - 1];
+        return sample_outside_range(knot, location, knot_value(knot));
+    }
+
+    let lower = &knots[above - 1];
+    let upper = &knots[above];
+    let lower_value = knot_value(lower);
+    let upper_value = knot_value(upper);
+
+    let dist = upper.location - lower.location;
+    let x_scale = (location - lower.location) / dist;
+
+    let delta = upper_value - lower_value;
+    let extrapolated_lower = lower.derivative * dist - delta;
+    let extrapolated_upper = -upper.derivative * dist + delta;
+
+    let cubic =
+        (x_scale * (1.0 - x_scale)) * lerp_f32(x_scale, extrapolated_lower, extrapolated_upper);
+    cubic + lerp_f32(x_scale, lower_value, upper_value)
+}
+
+fn sample_outside_range(knot: &GpuSplinePoint, location: f32, last_known: f32) -> f32 {
+    if knot.derivative == 0.0 {
+        last_known
+    } else {
+        knot.derivative * (location - knot.location) + last_known
+    }
+}
+
+fn lerp_f32(delta: f32, start: f32, end: f32) -> f32 {
+    start + delta * (end - start)
 }
 
 /// f32 mirror of `shift_sample_3d` in
@@ -785,7 +991,7 @@ pub(crate) mod test {
             let z = f64::from(i) * 2.3;
 
             let expected = cpu_sampler.sample(x, y, z);
-            let actual = evaluate_cpu(&graph, &pool, x as f32, y as f32, z as f32);
+            let actual = evaluate_cpu(&graph, &pool, &[], x as f32, y as f32, z as f32);
             max_diff = max_diff.max((expected - f64::from(actual)).abs());
         }
 
@@ -834,13 +1040,15 @@ pub(crate) mod test {
         // y below from_y clamps the gradient to from_value (0.0), so the result is
         // constant(3.0) + squeeze(0.0) = 3.0, then clamped to the node's 2.5 ceiling.
         assert!(
-            (evaluate_cpu(&graph, &SamplerPool::default(), 0.0, -1000.0, 0.0) - 2.5).abs() < 1e-6
+            (evaluate_cpu(&graph, &SamplerPool::default(), &[], 0.0, -1000.0, 0.0) - 2.5).abs()
+                < 1e-6
         );
 
         // Above to_y the gradient saturates at to_value (1.0) -> *4 -> squeeze(1.0)
         // clamps to 1.0 -> 1/2 - 1/24, so the sum is 3.0 + ~0.4583, clamped to 2.5.
         assert!(
-            (evaluate_cpu(&graph, &SamplerPool::default(), 0.0, 1000.0, 0.0) - 2.5).abs() < 1e-6
+            (evaluate_cpu(&graph, &SamplerPool::default(), &[], 0.0, 1000.0, 0.0) - 2.5).abs()
+                < 1e-6
         );
     }
 
@@ -852,7 +1060,15 @@ pub(crate) mod test {
         invert.input0 = 0;
 
         assert!(
-            evaluate_cpu(&[constant, invert], &SamplerPool::default(), 0.0, 0.0, 0.0).is_infinite()
+            evaluate_cpu(
+                &[constant, invert],
+                &SamplerPool::default(),
+                &[],
+                0.0,
+                0.0,
+                0.0
+            )
+            .is_infinite()
         );
         let _ = UnaryOperation::Invert;
     }
