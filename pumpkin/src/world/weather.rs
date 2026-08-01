@@ -52,6 +52,30 @@ impl Weather {
         }
     }
 
+    #[must_use]
+    pub const fn from_persisted(
+        clear_weather_time: i32,
+        rain_time: i32,
+        raining: bool,
+        thunder_time: i32,
+        thundering: bool,
+    ) -> Self {
+        let rain_level = if raining { 1.0 } else { 0.0 };
+        let thunder_level = if thundering { 1.0 } else { 0.0 };
+        Self {
+            clear_weather_time,
+            raining,
+            rain_time,
+            thundering,
+            thunder_time,
+            rain_level,
+            old_rain_level: rain_level,
+            thunder_level,
+            old_thunder_level: thunder_level,
+            weather_cycle_enabled: true,
+        }
+    }
+
     pub fn set_weather_parameters(
         &mut self,
         world: &World,
@@ -217,5 +241,18 @@ mod tests {
             assert_eq!(weather.rain_time, case.expected_rain_time);
             assert_eq!(weather.thunder_time, case.expected_thunder_time);
         }
+    }
+
+    #[test]
+    fn restores_persisted_weather_state() {
+        let weather = Weather::from_persisted(1_200, 9_001, true, 4_501, true);
+
+        assert_eq!(weather.clear_weather_time, 1_200);
+        assert_eq!(weather.rain_time, 9_001);
+        assert!(weather.raining);
+        assert_eq!(weather.thunder_time, 4_501);
+        assert!(weather.thundering);
+        assert_eq!(weather.rain_level, 1.0);
+        assert_eq!(weather.thunder_level, 1.0);
     }
 }

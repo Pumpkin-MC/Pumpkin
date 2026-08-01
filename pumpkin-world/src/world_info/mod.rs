@@ -96,6 +96,18 @@ pub struct LevelData {
     /// Persisted to `data/minecraft/weather.dat`.
     #[serde(rename = "clearWeatherTime", skip_serializing, default)]
     pub clear_weather_time: i32,
+
+    #[serde(skip_serializing, default)]
+    pub rain_time: i32,
+
+    #[serde(skip_serializing, default)]
+    pub raining: bool,
+
+    #[serde(skip_serializing, default)]
+    pub thundering: bool,
+
+    #[serde(skip_serializing, default)]
+    pub thunder_time: i32,
 }
 
 const DEFAULT_BORDER_DAMAGE_PER_BLOCK: f64 = 0.2;
@@ -353,6 +365,10 @@ impl LevelData {
             world_gen_settings: WorldGenSettings::new(seed),
             day_time: 0,
             clear_weather_time: -1,
+            rain_time: 0,
+            raining: false,
+            thundering: false,
+            thunder_time: 0,
         }
     }
 

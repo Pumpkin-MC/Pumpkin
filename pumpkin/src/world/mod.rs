@@ -333,8 +333,17 @@ impl World {
         block_registry: Arc<BlockRegistry>,
         server: Weak<Server>,
     ) -> Self {
-        // TODO
         let generation_settings = GenerationSettings::from_dimension(&dimension);
+        let persisted_level_info = level_info.load();
+        let level_time = LevelTime::with_time_of_day(persisted_level_info.day_time);
+        let weather = Weather::from_persisted(
+            persisted_level_info.clear_weather_time,
+            persisted_level_info.rain_time,
+            persisted_level_info.raining,
+            persisted_level_info.thunder_time,
+            persisted_level_info.thundering,
+        );
+        drop(persisted_level_info);
 
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
@@ -348,10 +357,10 @@ impl World {
             entities: ArcSwap::new(Arc::new(Vec::new())),
             scoreboard: Mutex::new(Scoreboard::default()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 5.999_996_8E7, 0, 5, 300)),
-            level_time: Mutex::new(LevelTime::new()),
+            level_time: Mutex::new(level_time),
             sky_darken: AtomicU8::new(0),
             dimension,
-            weather: Mutex::new(Weather::new()),
+            weather: Mutex::new(weather),
             block_registry,
             sea_level: generation_settings.sea_level,
             min_y: i32::from(generation_settings.shape.min_y),

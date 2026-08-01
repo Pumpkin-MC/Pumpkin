@@ -24,6 +24,15 @@ impl LevelTime {
         }
     }
 
+    #[must_use]
+    pub const fn with_time_of_day(time_of_day: i64) -> Self {
+        Self {
+            world_age: 0,
+            time_of_day,
+            rain_time: 0,
+        }
+    }
+
     pub const fn tick_time(&mut self, advance_time: bool, advance_weather: bool) {
         self.world_age += 1;
         if advance_weather {
@@ -74,5 +83,18 @@ impl LevelTime {
     #[must_use]
     pub const fn is_night(&self) -> bool {
         (self.time_of_day % 24000) >= 12000 && (self.time_of_day % 24000) <= 23999
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::LevelTime;
+
+    #[test]
+    fn restores_persisted_time_of_day() {
+        let time = LevelTime::with_time_of_day(36_001);
+
+        assert_eq!(time.time_of_day, 36_001);
+        assert_eq!(time.world_age, 0);
     }
 }
