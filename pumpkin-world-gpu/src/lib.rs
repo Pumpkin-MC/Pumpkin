@@ -150,9 +150,13 @@ impl GpuNoiseContext {
         let adapter_name = info.name.clone();
         let adapter_is_discrete = info.device_type == wgpu::DeviceType::DiscreteGpu;
 
+        // The graph pipeline binds more storage buffers than wgpu's conservative
+        // defaults allow, so ask for what this adapter actually supports. An adapter
+        // too limited for the pipeline fails here and the caller falls back to the CPU.
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("pumpkin-world-gpu noise device"),
+                required_limits: adapter.limits(),
                 ..Default::default()
             })
             .await
@@ -207,6 +211,7 @@ impl GpuNoiseContext {
                     storage_entry(6, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(7, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(8, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(9, wgpu::BufferBindingType::Storage { read_only: true }),
                 ],
             });
 
@@ -299,21 +304,17 @@ impl GpuNoiseContext {
 
         // WGSL storage bindings must be non-empty even when a graph uses no noise
         // nodes, so fall back to a single zeroed element rather than a 0-byte buffer.
-        let samplers_buffer = self.storage_or_placeholder(
-            "graph samplers",
-            bytemuck::cast_slice(&compiled.samplers.samplers),
-        );
-        let octaves_buffer = self.storage_or_placeholder(
-            "graph octaves",
-            bytemuck::cast_slice(&compiled.samplers.octaves),
-        );
-        let permutations_buffer = self.storage_or_placeholder(
-            "graph permutations",
-            bytemuck::cast_slice(&compiled.samplers.permutations),
-        );
-        let spline_points_buffer = self.storage_or_placeholder(
-            "graph spline points",
-            bytemuck::cast_slice(&compiled.spline_points),
+        let samplers_buffer =
+            self.storage_or_placeholder("graph samplers", &compiled.samplers.samplers);
+        let octaves_buffer =
+            self.storage_or_placeholder("graph octaves", &compiled.samplers.octaves);
+        let permutations_buffer =
+            self.storage_or_placeholder("graph permutations", &compiled.samplers.permutations);
+        let spline_points_buffer =
+            self.storage_or_placeholder("graph spline points", &compiled.spline_points);
+        let interpolated_buffer = self.storage_or_placeholder(
+            "graph interpolated samplers",
+            &compiled.samplers.interpolated,
         );
 
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -329,6 +330,7 @@ impl GpuNoiseContext {
                 bind_entry(6, &octaves_buffer),
                 bind_entry(7, &permutations_buffer),
                 bind_entry(8, &spline_points_buffer),
+                bind_entry(9, &interpolated_buffer),
             ],
         });
 
@@ -352,12 +354,16 @@ impl GpuNoiseContext {
         self.read_back(&staging_buffer)
     }
 
-    fn storage_or_placeholder(&self, label: &str, contents: &[u8]) -> wgpu::Buffer {
-        const PLACEHOLDER: [u8; 32] = [0; 32];
-        let contents = if contents.is_empty() {
-            &PLACEHOLDER[..]
+    /// Uploads `data` as a storage buffer, substituting one zeroed element when it is
+    /// empty: WGSL rejects zero-sized storage bindings, and the placeholder has to be a
+    /// full element wide or validation rejects the size mismatch instead.
+    fn storage_or_placeholder<T: Pod>(&self, label: &str, data: &[T]) -> wgpu::Buffer {
+        let placeholder;
+        let contents = if data.is_empty() {
+            placeholder = vec![0u8; std::mem::size_of::<T>().max(4)];
+            &placeholder[..]
         } else {
-            contents
+            bytemuck::cast_slice(data)
         };
         self.device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -870,6 +876,76 @@ mod test {
         assert!(
             max_diff < 1e-4,
             "GPU nested spline diverged from vanilla semantics by {max_diff}"
+        );
+    }
+    /// `InterpolatedNoiseSampler` is the one node that samples with a non-zero vertical
+    /// scale, which triggers the Y-quantization branch of `sample_no_fade`, and that
+    /// walks its octaves in reverse against halving fractions. Checked against the real
+    /// CPU sampler rather than this crate's interpreter.
+    #[test]
+    fn gpu_interpolated_noise_matches_cpu_sampler() {
+        use crate::graph::{CompiledGraph, Instruction, OpCode, SamplerPool};
+        use pumpkin_data::noise_router::InterpolatedNoiseSamplerData;
+        use pumpkin_util::random::xoroshiro128::Xoroshiro;
+        use pumpkin_world::generation::noise::router::density_function::{
+            StaticIndependentChunkNoiseFunctionComponentImpl, noise::InterpolatedNoiseSampler,
+        };
+
+        // Vanilla's overworld values.
+        static DATA: InterpolatedNoiseSamplerData = InterpolatedNoiseSamplerData {
+            scaled_xz_scale: 0.25,
+            scaled_y_scale: 0.125,
+            xz_factor: 80.0,
+            y_factor: 160.0,
+            smear_scale_multiplier: 8.0,
+        };
+
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        let mut random = Xoroshiro::from_seed(9876);
+        let cpu_sampler = InterpolatedNoiseSampler::new(&DATA, &mut random);
+
+        let mut samplers = SamplerPool::default();
+        let sampler_index = samplers.push_interpolated(&cpu_sampler);
+
+        let mut node = Instruction::new_for_test(OpCode::InterpolatedNoise, 0);
+        node.sampler_index = sampler_index;
+
+        let compiled = CompiledGraph {
+            instructions: vec![node],
+            samplers,
+            spline_points: Vec::new(),
+        };
+
+        // Block coordinates in a realistic range; f32 loses ground far from origin, so
+        // this stays where a server actually generates terrain.
+        let points: Vec<[f32; 3]> = (0..300)
+            .map(|i| {
+                let f = i as f32;
+                [f * 3.0 - 400.0, (f % 64.0) * 4.0 - 64.0, f * 2.0 - 300.0]
+            })
+            .collect();
+
+        let gpu_results = ctx.evaluate_graph(&compiled, &points);
+
+        let mut max_diff = 0.0f64;
+        for (point, &gpu_value) in points.iter().zip(&gpu_results) {
+            let pos = pumpkin_util::math::vector3::Vector3::new(
+                point[0] as i32,
+                point[1] as i32,
+                point[2] as i32,
+            );
+            let expected = cpu_sampler.sample(&pos);
+            max_diff = max_diff.max((expected - f64::from(gpu_value)).abs());
+        }
+
+        // Looser than the other opcodes: this one multiplies coordinates by ~684 before
+        // sampling, so f32 rounding is amplified well beyond a plain noise lookup.
+        assert!(
+            max_diff < 5e-2,
+            "GPU interpolated noise diverged from the CPU sampler by {max_diff}"
         );
     }
 }

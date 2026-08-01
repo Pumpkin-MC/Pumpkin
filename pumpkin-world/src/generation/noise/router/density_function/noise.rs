@@ -23,6 +23,7 @@ pub struct Noise {
 }
 
 impl Noise {
+    #[must_use]
     pub const fn new(sampler: DoublePerlinNoiseSampler, data: &'static NoiseData) -> Self {
         Self { sampler, data }
     }
@@ -60,6 +61,7 @@ pub struct ShiftA {
 }
 
 impl ShiftA {
+    #[must_use]
     pub const fn new(sampler: DoublePerlinNoiseSampler) -> Self {
         Self { sampler }
     }
@@ -88,6 +90,7 @@ pub struct ShiftB {
 }
 
 impl ShiftB {
+    #[must_use]
     pub const fn new(sampler: DoublePerlinNoiseSampler) -> Self {
         Self { sampler }
     }
@@ -163,6 +166,7 @@ impl StaticChunkNoiseFunctionComponentImpl for ShiftedNoise {
 }
 
 impl ShiftedNoise {
+    #[must_use]
     pub const fn new(
         input_x_index: usize,
         input_y_index: usize,
@@ -222,6 +226,31 @@ impl InterpolatedNoiseSampler {
             max_value,
             y_multiplier,
         }
+    }
+
+    /// The three octave samplers backing this one, in `(lower, upper, noise)` order.
+    ///
+    /// Exposed read-only so a GPU-side reimplementation can mirror this exact instance
+    /// instead of re-deriving it from the seed.
+    #[must_use]
+    pub const fn octave_samplers(
+        &self,
+    ) -> (
+        &OctavePerlinNoiseSampler,
+        &OctavePerlinNoiseSampler,
+        &OctavePerlinNoiseSampler,
+    ) {
+        (&self.lower_noise, &self.upper_noise, &self.noise)
+    }
+
+    #[must_use]
+    pub const fn data(&self) -> &'static InterpolatedNoiseSamplerData {
+        self.data
+    }
+
+    #[must_use]
+    pub const fn y_multiplier(&self) -> f64 {
+        self.y_multiplier
     }
 }
 

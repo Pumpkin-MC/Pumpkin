@@ -18,9 +18,16 @@ use pumpkin_data::{
     },
 };
 use pumpkin_util::{
-    noise::perlin::OctavePerlinNoiseSampler, random::xoroshiro128::XoroshiroSplitter,
+    noise::perlin::OctavePerlinNoiseSampler,
+    random::{legacy_rand::LegacyRand, xoroshiro128::XoroshiroSplitter},
 };
-use pumpkin_world::generation::noise::router::proto_noise_router::DoublePerlinNoiseBuilder;
+use pumpkin_world::generation::{
+    GlobalRandomConfig,
+    noise::router::{
+        density_function::noise::InterpolatedNoiseSampler,
+        proto_noise_router::DoublePerlinNoiseBuilder,
+    },
+};
 
 /// Opcodes understood by `graph.wgsl`. Values must stay in sync with the `OP_*`
 /// constants in that shader.
@@ -59,6 +66,34 @@ pub enum OpCode {
     /// Cubic spline. `input0` is the node giving the location to look up; `aux0`/`aux1`
     /// are the start and length of this spline's run in the graph's point table.
     Spline = 21,
+    /// Vanilla's interpolated noise sampler; `sampler_index` selects an entry in the
+    /// graph's interpolated-sampler table.
+    InterpolatedNoise = 22,
+}
+
+/// GPU-side descriptor of an `InterpolatedNoiseSampler`.
+///
+/// Unlike [`SamplerRef`], the three octave runs here are sampled with per-octave
+/// fractions (1, 1/2, 1/4, ...) applied in reverse order, and with a non-zero vertical
+/// scale, so they cannot reuse the double-Perlin path.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable, Debug)]
+pub struct InterpolatedRef {
+    pub lower_start: u32,
+    pub lower_count: u32,
+    pub upper_start: u32,
+    pub upper_count: u32,
+    pub noise_start: u32,
+    pub noise_count: u32,
+    /// `scaled_xz_scale * 684.412`.
+    pub xz_multiplier: f32,
+    /// `scaled_y_scale * xz_factor / y_factor * 684.412`.
+    pub y_multiplier: f32,
+    pub xz_factor: f32,
+    pub y_factor: f32,
+    /// `y_multiplier * smear_scale_multiplier`.
+    pub smear: f32,
+    padding: f32,
 }
 
 /// One knot of a spline, as uploaded to the GPU.
@@ -177,6 +212,7 @@ impl GpuSplinePoint {
 #[derive(Default, Debug)]
 pub struct SamplerPool {
     pub samplers: Vec<SamplerRef>,
+    pub interpolated: Vec<InterpolatedRef>,
     /// Octave parameters for every sampler, concatenated.
     pub octaves: Vec<OctaveParams>,
     /// 256-entry permutation table per octave, concatenated in the same order.
@@ -204,6 +240,32 @@ impl SamplerPool {
             padding0: 0.0,
             padding1: 0.0,
             padding2: 0.0,
+        });
+        index
+    }
+
+    /// Registers an interpolated sampler's three octave runs, returning its index.
+    pub fn push_interpolated(&mut self, sampler: &InterpolatedNoiseSampler) -> u32 {
+        let (lower, upper, noise) = sampler.octave_samplers();
+        let lower_start = self.push_octaves(lower);
+        let upper_start = self.push_octaves(upper);
+        let noise_start = self.push_octaves(noise);
+
+        let index = self.interpolated.len() as u32;
+        let data = sampler.data();
+        self.interpolated.push(InterpolatedRef {
+            lower_start,
+            lower_count: lower.samplers.len() as u32,
+            upper_start,
+            upper_count: upper.samplers.len() as u32,
+            noise_start,
+            noise_count: noise.samplers.len() as u32,
+            xz_multiplier: (data.scaled_xz_scale * 684.412) as f32,
+            y_multiplier: sampler.y_multiplier() as f32,
+            xz_factor: data.xz_factor as f32,
+            y_factor: data.y_factor as f32,
+            smear: (sampler.y_multiplier() * data.smear_scale_multiplier) as f32,
+            padding: 0.0,
         });
         index
     }
@@ -260,16 +322,19 @@ pub struct CompiledGraph {
     pub spline_points: Vec<GpuSplinePoint>,
 }
 
-/// Lowers a component stack into GPU instructions, building each noise node's sampler
-/// from `base_random_deriver` exactly as `ProtoNoiseRouter` does on the CPU, so both
-/// paths use the same seeded state.
+/// Lowers a component stack into GPU instructions.
+///
+/// Every sampler is seeded from `random_config` exactly as `ProtoNoiseRouter` does on
+/// the CPU, so both paths share state. The full config is needed rather than just the
+/// deriver: `InterpolatedNoiseSampler` is built from the raw seed on legacy dimensions
+/// and from the deriver everywhere else.
 ///
 /// # Errors
 /// Returns [`UnsupportedNode`] for the first node whose type has no opcode yet, so
 /// callers can fall back to the CPU path instead of generating wrong terrain.
 pub fn compile(
     stack: &[BaseNoiseFunctionComponent],
-    base_random_deriver: &XoroshiroSplitter,
+    random_config: &GlobalRandomConfig,
 ) -> Result<CompiledGraph, UnsupportedNode> {
     let mut out: Vec<Instruction> = Vec::with_capacity(stack.len());
     let mut samplers = SamplerPool::default();
@@ -284,7 +349,7 @@ pub fn compile(
         let own = out.len();
 
         if let Some(mut instruction) =
-            lower_noise_family(component, own, &mut samplers, base_random_deriver)
+            lower_noise_family(component, own, &mut samplers, random_config)
         {
             remap_inputs(&mut instruction, component, &map, own);
             out.push(instruction);
@@ -492,8 +557,9 @@ fn lower_noise_family(
     component: &BaseNoiseFunctionComponent,
     index: usize,
     samplers: &mut SamplerPool,
-    base_random_deriver: &XoroshiroSplitter,
+    random_config: &GlobalRandomConfig,
 ) -> Option<Instruction> {
+    let base_random_deriver = &random_config.base_random_deriver;
     let instruction = match component {
         BaseNoiseFunctionComponent::Noise { data } => {
             let sampler_index = push_sampler(samplers, base_random_deriver, &data.noise_id);
@@ -512,6 +578,20 @@ fn lower_noise_family(
         BaseNoiseFunctionComponent::ShiftB { noise_id } => {
             let mut i = Instruction::new(OpCode::ShiftB, index);
             i.sampler_index = push_sampler(samplers, base_random_deriver, noise_id);
+            i
+        }
+        BaseNoiseFunctionComponent::InterpolatedNoiseSampler { data } => {
+            // Mirrors proto_noise_router.rs: legacy dimensions (the Nether) seed this
+            // from the raw world seed, everything else from the terrain deriver.
+            let sampler = if random_config.legacy_random_source {
+                let mut legacy = LegacyRand::from_seed(random_config.seed);
+                InterpolatedNoiseSampler::new(data, &mut legacy)
+            } else {
+                let mut random = base_random_deriver.split_string("minecraft:terrain");
+                InterpolatedNoiseSampler::new(data, &mut random)
+            };
+            let mut i = Instruction::new(OpCode::InterpolatedNoise, index);
+            i.sampler_index = samplers.push_interpolated(&sampler);
             i
         }
         BaseNoiseFunctionComponent::ShiftedNoise {
@@ -666,6 +746,9 @@ pub fn evaluate_cpu(
             op if op == OpCode::Spline as u32 => {
                 sample_spline(spline_points, p.aux0 as usize, p.aux1 as usize, a, &values)
             }
+            op if op == OpCode::InterpolatedNoise as u32 => {
+                interpolated_sample(pool, p.sampler_index as usize, x, y, z)
+            }
             _ => 0.0,
         };
     }
@@ -765,12 +848,14 @@ fn octave_sample(pool: &SamplerPool, start: u32, count: u32, x: f32, y: f32, z: 
         let Some(params) = pool.octaves.get(octave_index) else {
             continue;
         };
-        let sample = perlin_sample(
+        let sample = perlin_sample_no_fade(
             pool,
             octave_index,
-            maintain_precision(x * params.lacunarity) + params.x_origin,
-            maintain_precision(y * params.lacunarity) + params.y_origin,
-            maintain_precision(z * params.lacunarity) + params.z_origin,
+            maintain_precision(x * params.lacunarity),
+            maintain_precision(y * params.lacunarity),
+            maintain_precision(z * params.lacunarity),
+            0.0,
+            0.0,
         );
         total += params.amplitude * sample * params.persistence;
     }
@@ -817,19 +902,62 @@ fn grad(hash: u32, x: f32, y: f32, z: f32) -> f32 {
     g[0] * x + g[1] * y + g[2] * z
 }
 
+/// f32 mirror of `PerlinNoiseSampler::sample_no_fade`, including the vertical
+/// quantization that only applies for a non-zero `y_scale`.
+fn perlin_sample_no_fade(
+    pool: &SamplerPool,
+    octave_index: usize,
+    x: f32,
+    y: f32,
+    z: f32,
+    y_scale: f32,
+    y_max: f32,
+) -> f32 {
+    let Some(params) = pool.octaves.get(octave_index) else {
+        return 0.0;
+    };
+    let true_x = x + params.x_origin;
+    let true_y = y + params.y_origin;
+    let true_z = z + params.z_origin;
+
+    let x_dec = true_x - true_x.floor();
+    let y_dec = true_y - true_y.floor();
+    let z_dec = true_z - true_z.floor();
+
+    let y_noise = if y_scale == 0.0 {
+        0.0
+    } else {
+        let raw = if y_max >= 0.0 && y_max < y_dec {
+            y_max
+        } else {
+            y_dec
+        };
+        (raw / y_scale + 1e-7).floor() * y_scale
+    };
+
+    perlin_core(
+        pool,
+        octave_index,
+        [
+            true_x.floor() as i32,
+            true_y.floor() as i32,
+            true_z.floor() as i32,
+        ],
+        [x_dec, y_dec - y_noise, z_dec],
+        y_dec,
+    )
+}
+
 #[expect(clippy::many_single_char_names)]
-fn perlin_sample(pool: &SamplerPool, octave_index: usize, x: f32, y: f32, z: f32) -> f32 {
-    let x_floor = x.floor();
-    let y_floor = y.floor();
-    let z_floor = z.floor();
-
-    let local_x = x - x_floor;
-    let local_y = y - y_floor;
-    let local_z = z - z_floor;
-
-    let xi = x_floor as i32;
-    let yi = y_floor as i32;
-    let zi = z_floor as i32;
+fn perlin_core(
+    pool: &SamplerPool,
+    octave_index: usize,
+    lattice: [i32; 3],
+    local: [f32; 3],
+    fade_local_y: f32,
+) -> f32 {
+    let [xi, yi, zi] = lattice;
+    let [local_x, local_y, local_z] = local;
 
     let i = perm_at(pool, octave_index, xi) as i32;
     let j = perm_at(pool, octave_index, xi + 1) as i32;
@@ -889,10 +1017,80 @@ fn perlin_sample(pool: &SamplerPool, octave_index: usize, x: f32, y: f32, z: f32
 
     lerp3(
         perlin_fade(local_x),
-        perlin_fade(local_y),
+        perlin_fade(fade_local_y),
         perlin_fade(local_z),
         [d, e, f, g, h, o, p, q],
     )
+}
+
+/// f32 mirror of one octave run in `InterpolatedNoiseSampler::sample`: fractions
+/// 1, 1/2, 1/4, ... paired with octaves in reverse order.
+fn interpolated_run(
+    pool: &SamplerPool,
+    start: u32,
+    count: u32,
+    point: [f32; 3],
+    y_scale: f32,
+    y_max_base: f32,
+) -> f32 {
+    let mut total = 0.0f32;
+    let mut fraction = 1.0f32;
+    for i in 0..count.min(16) {
+        let octave_index = (start + (count - 1 - i)) as usize;
+        total += perlin_sample_no_fade(
+            pool,
+            octave_index,
+            maintain_precision(point[0] * fraction),
+            maintain_precision(point[1] * fraction),
+            maintain_precision(point[2] * fraction),
+            y_scale * fraction,
+            y_max_base * fraction,
+        ) / fraction;
+        fraction *= 0.5;
+    }
+    total
+}
+
+/// f32 mirror of `InterpolatedNoiseSampler::sample`.
+fn interpolated_sample(pool: &SamplerPool, index: usize, x: f32, y: f32, z: f32) -> f32 {
+    let Some(s) = pool.interpolated.get(index) else {
+        return 0.0;
+    };
+
+    let d = x * s.xz_multiplier;
+    let e = y * s.y_multiplier;
+    let f = z * s.xz_multiplier;
+
+    let g = d / s.xz_factor;
+    let h = e / s.y_factor;
+    let i = f / s.xz_factor;
+    let k = s.smear / s.y_factor;
+
+    let n = interpolated_run(pool, s.noise_start, s.noise_count, [g, h, i], k, h);
+    let q = f32::midpoint(n / 10.0, 1.0);
+
+    let lower = if q >= 1.0 {
+        0.0
+    } else {
+        interpolated_run(pool, s.lower_start, s.lower_count, [d, e, f], s.smear, e)
+    };
+    let upper = if q <= 0.0 {
+        0.0
+    } else {
+        interpolated_run(pool, s.upper_start, s.upper_count, [d, e, f], s.smear, e)
+    };
+
+    clamped_lerp_f32(lower / 512.0, upper / 512.0, q) / 128.0
+}
+
+fn clamped_lerp_f32(start: f32, end: f32, delta: f32) -> f32 {
+    if delta < 0.0 {
+        start
+    } else if delta > 1.0 {
+        end
+    } else {
+        lerp_f32(delta, start, end)
+    }
 }
 
 fn lerp1(delta: f32, start: f32, end: f32) -> f32 {
@@ -924,6 +1122,7 @@ pub(crate) mod test {
         NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER, UnaryOperation,
     };
     use pumpkin_util::random::xoroshiro128::{Xoroshiro, XoroshiroSplitter};
+    use pumpkin_world::generation::GlobalRandomConfig;
 
     fn instruction(opcode: OpCode, index: usize) -> Instruction {
         Instruction::new(opcode, index)
@@ -933,18 +1132,21 @@ pub(crate) mod test {
         Xoroshiro::from_seed(42).next_splitter()
     }
 
+    pub fn test_random_config() -> GlobalRandomConfig {
+        GlobalRandomConfig::new(42, false)
+    }
+
     /// The real graphs still contain node types with no opcode yet (splines, shifted
     /// noise, ...). Compilation must say so explicitly rather than emitting a graph
     /// that silently evaluates to something wrong.
     #[test]
     fn real_routers_report_unsupported_nodes_instead_of_miscompiling() {
-        let deriver = test_deriver();
+        let config = test_random_config();
         for stack in [
             OVERWORLD_BASE_NOISE_ROUTER.noise.full_component_stack,
             NETHER_BASE_NOISE_ROUTER.noise.full_component_stack,
         ] {
-            let err =
-                compile(stack, &deriver).expect_err("spline/shift nodes are not supported yet");
+            let err = compile(stack, &config).expect_err("some node types are still unsupported");
             assert!(
                 stack.len() > err.index,
                 "reported index must point into the stack"

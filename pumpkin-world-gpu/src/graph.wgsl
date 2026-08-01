@@ -34,6 +34,7 @@ const OP_SHIFT_A: u32 = 18u;
 const OP_SHIFT_B: u32 = 19u;
 const OP_SHIFTED_NOISE: u32 = 20u;
 const OP_SPLINE: u32 = 21u;
+const OP_INTERPOLATED_NOISE: u32 = 22u;
 
 struct Instruction {
     opcode: u32,
@@ -91,6 +92,22 @@ struct Dims {
 // 256 entries per octave, in the same order as `octaves`.
 @group(0) @binding(7) var<storage, read> permutations: array<u32>;
 @group(0) @binding(8) var<storage, read> spline_points: array<SplinePoint>;
+@group(0) @binding(9) var<storage, read> interpolated: array<InterpolatedRef>;
+
+struct InterpolatedRef {
+    lower_start: u32,
+    lower_count: u32,
+    upper_start: u32,
+    upper_count: u32,
+    noise_start: u32,
+    noise_count: u32,
+    xz_multiplier: f32,
+    y_multiplier: f32,
+    xz_factor: f32,
+    y_factor: f32,
+    smear: f32,
+    _pad: f32,
+}
 
 struct SplinePoint {
     location: f32,
@@ -139,20 +156,14 @@ fn lerp3(
     return lerp1(dz, lerp2(dx, dy, v000, v100, v010, v110), lerp2(dx, dy, v001, v101, v011, v111));
 }
 
-// Mirrors PerlinNoiseSampler::sample for the y_scale == 0 case, the only one the
-// octave sampler uses.
-fn perlin_sample(octave_index: u32, x: f32, y: f32, z: f32) -> f32 {
-    let x_floor = floor(x);
-    let y_floor = floor(y);
-    let z_floor = floor(z);
-
-    let local_x = x - x_floor;
-    let local_y = y - y_floor;
-    let local_z = z - z_floor;
-
-    let xi = i32(x_floor);
-    let yi = i32(y_floor);
-    let zi = i32(z_floor);
+// Mirrors PerlinNoiseSampler::sample. `local_y` and `fade_local_y` differ only when a
+// non-zero vertical scale quantized the Y component (see perlin_sample_no_fade).
+fn perlin_core(
+    octave_index: u32,
+    xi: i32, yi: i32, zi: i32,
+    local_x: f32, local_y: f32, local_z: f32,
+    fade_local_y: f32,
+) -> f32 {
 
     let i = perm_at(octave_index, xi);
     let j = perm_at(octave_index, xi + 1);
@@ -171,9 +182,106 @@ fn perlin_sample(octave_index: u32, x: f32, y: f32, z: f32) -> f32 {
     let q = grad(perm_at(octave_index, i32(n) + zi + 1), local_x - 1.0, local_y - 1.0, local_z - 1.0);
 
     return lerp3(
-        perlin_fade(local_x), perlin_fade(local_y), perlin_fade(local_z),
+        perlin_fade(local_x), perlin_fade(fade_local_y), perlin_fade(local_z),
         d, e, f, g, h, o, p, q,
     );
+}
+
+// Mirrors PerlinNoiseSampler::sample_no_fade, including the vertical quantization that
+// only kicks in for a non-zero y_scale.
+fn perlin_sample_no_fade(
+    octave_index: u32,
+    x: f32, y: f32, z: f32,
+    y_scale: f32, y_max: f32,
+) -> f32 {
+    let params = octaves[octave_index];
+    let true_x = x + params.x_origin;
+    let true_y = y + params.y_origin;
+    let true_z = z + params.z_origin;
+
+    let x_floor = floor(true_x);
+    let y_floor = floor(true_y);
+    let z_floor = floor(true_z);
+
+    let x_dec = true_x - x_floor;
+    let y_dec = true_y - y_floor;
+    let z_dec = true_z - z_floor;
+
+    var y_noise: f32 = 0.0;
+    if (y_scale != 0.0) {
+        var raw_y_dec = y_dec;
+        if (y_max >= 0.0 && y_max < y_dec) {
+            raw_y_dec = y_max;
+        }
+        y_noise = floor(raw_y_dec / y_scale + 1e-7) * y_scale;
+    }
+
+    return perlin_core(
+        octave_index,
+        i32(x_floor), i32(y_floor), i32(z_floor),
+        x_dec, y_dec - y_noise, z_dec,
+        y_dec,
+    );
+}
+
+// Sums one octave run against the fractions 1, 1/2, 1/4, ... applied in reverse octave
+// order, as InterpolatedNoiseSampler::sample does.
+fn interpolated_run(
+    start: u32, count: u32,
+    x: f32, y: f32, z: f32,
+    y_scale: f32, y_max_base: f32,
+) -> f32 {
+    var total: f32 = 0.0;
+    var fraction: f32 = 1.0;
+    for (var i: u32 = 0u; i < count && i < 16u; i = i + 1u) {
+        // Reverse order: fraction 1 pairs with the last octave.
+        let octave_index = start + (count - 1u - i);
+        total = total + perlin_sample_no_fade(
+            octave_index,
+            maintain_precision(x * fraction),
+            maintain_precision(y * fraction),
+            maintain_precision(z * fraction),
+            y_scale * fraction,
+            y_max_base * fraction,
+        ) / fraction;
+        fraction = fraction * 0.5;
+    }
+    return total;
+}
+
+// Mirrors InterpolatedNoiseSampler::sample in density_function/noise.rs.
+fn interpolated_sample(index: u32, px: f32, py: f32, pz: f32) -> f32 {
+    let s = interpolated[index];
+
+    let d = px * s.xz_multiplier;
+    let e = py * s.y_multiplier;
+    let f = pz * s.xz_multiplier;
+
+    let g = d / s.xz_factor;
+    let h = e / s.y_factor;
+    let i = f / s.xz_factor;
+
+    let k = s.smear / s.y_factor;
+
+    let n = interpolated_run(s.noise_start, s.noise_count, g, h, i, k, h);
+    let q = (n / 10.0 + 1.0) * 0.5;
+
+    var l: f32 = 0.0;
+    if (q < 1.0) {
+        l = interpolated_run(s.lower_start, s.lower_count, d, e, f, s.smear, e);
+    }
+    var m: f32 = 0.0;
+    if (q > 0.0) {
+        m = interpolated_run(s.upper_start, s.upper_count, d, e, f, s.smear, e);
+    }
+
+    return clamp_lerp(l / 512.0, m / 512.0, q) / 128.0;
+}
+
+fn clamp_lerp(start: f32, end: f32, delta: f32) -> f32 {
+    if (delta < 0.0) { return start; }
+    if (delta > 1.0) { return end; }
+    return lerp1(delta, start, end);
 }
 
 fn maintain_precision(value: f32) -> f32 {
@@ -187,11 +295,13 @@ fn octave_sample(start: u32, count: u32, x: f32, y: f32, z: f32) -> f32 {
         let octave_index = start + i;
         let params = octaves[octave_index];
 
-        let sample = perlin_sample(
+        let sample = perlin_sample_no_fade(
             octave_index,
-            maintain_precision(x * params.lacunarity) + params.x_origin,
-            maintain_precision(y * params.lacunarity) + params.y_origin,
-            maintain_precision(z * params.lacunarity) + params.z_origin,
+            maintain_precision(x * params.lacunarity),
+            maintain_precision(y * params.lacunarity),
+            maintain_precision(z * params.lacunarity),
+            0.0,
+            0.0,
         );
         total = total + params.amplitude * sample * params.persistence;
     }
@@ -361,6 +471,9 @@ fn evaluate_graph(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
             case 21u: {
                 result = sample_spline(instruction.aux0, instruction.aux1, a, point_index);
+            }
+            case 22u: {
+                result = interpolated_sample(instruction.sampler_index, px, py, pz);
             }
             default: { result = 0.0; }
         }
