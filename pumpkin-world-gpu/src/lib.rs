@@ -284,8 +284,8 @@ impl GpuNoiseContext {
 
     /// Evaluates `compiled` against per-chunk structure data.
     ///
-    /// `beardifier` is separate from `compiled` because it depends on which structures
-    /// generation placed near this chunk, so one compiled graph serves every chunk.
+    /// This uploads the graph's tables on every call. For repeated dispatches use
+    /// [`Self::prepare`], which uploads them once.
     #[must_use]
     pub fn evaluate_graph_with(
         &self,
@@ -293,120 +293,93 @@ impl GpuNoiseContext {
         points: &[[f32; 3]],
         beardifier: &graph::BeardifierData,
     ) -> Vec<f32> {
-        let instructions = &compiled.instructions;
-        if points.is_empty() || instructions.is_empty() {
-            return vec![0.0; points.len()];
-        }
+        self.prepare(compiled).evaluate(points, beardifier)
+    }
 
-        let dims = GraphDims::new(points.len(), instructions.len(), beardifier);
+    /// Uploads a compiled graph's tables to the GPU once, so repeated dispatches only
+    /// pay for the point batch.
+    #[must_use]
+    pub fn prepare<'a>(&'a self, compiled: &graph::CompiledGraph) -> PreparedGraph<'a> {
+        PreparedGraph::new(self, compiled)
+    }
 
-        let dims_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("graph dims"),
-                contents: bytemuck::bytes_of(&dims),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-        let instructions_buffer =
-            self.device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("graph instructions"),
-                    contents: bytemuck::cast_slice(instructions),
-                    usage: wgpu::BufferUsages::STORAGE,
-                });
-        let flat_points: Vec<f32> = points.iter().flat_map(|p| p.iter().copied()).collect();
-        let points_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("graph points"),
-                contents: bytemuck::cast_slice(&flat_points),
-                usage: wgpu::BufferUsages::STORAGE,
-            });
-
-        let scratch_size = (instructions.len() * points.len() * std::mem::size_of::<f32>()) as u64;
-        let scratch_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+    /// Allocates the buffers whose size follows the point count.
+    fn allocate_point_buffers(
+        &self,
+        point_capacity: usize,
+        num_instructions: usize,
+    ) -> (wgpu::Buffer, wgpu::Buffer, wgpu::Buffer, wgpu::Buffer) {
+        let f32_size = std::mem::size_of::<f32>() as u64;
+        let points = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("graph points"),
+            size: point_capacity as u64 * 3 * f32_size,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let scratch = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("graph scratch"),
-            size: scratch_size,
+            size: (num_instructions * point_capacity) as u64 * f32_size,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
-
-        let output_size = (points.len() * std::mem::size_of::<f32>()) as u64;
-        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+        let output = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("graph out_density"),
-            size: output_size,
+            size: point_capacity as u64 * f32_size,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
-        let staging_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+        let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("graph out_density staging"),
-            size: output_size,
+            size: point_capacity as u64 * f32_size,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-
-        // WGSL storage bindings must be non-empty even when a graph uses no noise
-        // nodes, so fall back to a single zeroed element rather than a 0-byte buffer.
-        let samplers_buffer =
-            self.storage_or_placeholder("graph samplers", &compiled.samplers.samplers);
-        let octaves_buffer =
-            self.storage_or_placeholder("graph octaves", &compiled.samplers.octaves);
-        let permutations_buffer =
-            self.storage_or_placeholder("graph permutations", &compiled.samplers.permutations);
-        let spline_points_buffer =
-            self.storage_or_placeholder("graph spline points", &compiled.spline_points);
-        let interpolated_buffer = self.storage_or_placeholder(
-            "graph interpolated samplers",
-            &compiled.samplers.interpolated,
-        );
-        let structures_buffer =
-            self.storage_or_placeholder("beard structures", &beardifier.structures);
-        let junctions_buffer =
-            self.storage_or_placeholder("beard junctions", &beardifier.junctions);
-
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("density_graph bind group"),
-            layout: &self.graph_bind_group_layout,
-            entries: &[
-                bind_entry(0, &dims_buffer),
-                bind_entry(1, &instructions_buffer),
-                bind_entry(2, &points_buffer),
-                bind_entry(3, &scratch_buffer),
-                bind_entry(4, &output_buffer),
-                bind_entry(5, &samplers_buffer),
-                bind_entry(6, &octaves_buffer),
-                bind_entry(7, &permutations_buffer),
-                bind_entry(8, &spline_points_buffer),
-                bind_entry(9, &interpolated_buffer),
-                bind_entry(10, &structures_buffer),
-                bind_entry(11, &junctions_buffer),
-            ],
-        });
-
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("density_graph encoder"),
-            });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("density_graph pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.graph_pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups(dims.num_points.div_ceil(WORKGROUP_SIZE), 1, 1);
-        };
-        encoder.copy_buffer_to_buffer(&output_buffer, 0, &staging_buffer, 0, output_size);
-        self.queue.submit(Some(encoder.finish()));
-
-        self.read_back(&staging_buffer)
+        (points, scratch, output, staging)
     }
 
-    /// Uploads `data` as a storage buffer, substituting one zeroed element when it is
-    /// empty: WGSL rejects zero-sized storage bindings, and the placeholder has to be a
-    /// full element wide or validation rejects the size mismatch instead.
-    fn storage_or_placeholder<T: Pod>(&self, label: &str, data: &[T]) -> wgpu::Buffer {
+    /// A writable storage buffer sized for `capacity` elements, contents undefined.
+    fn empty_storage<T: Pod>(&self, label: &str, capacity: usize) -> wgpu::Buffer {
+        self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(label),
+            size: (std::mem::size_of::<T>() * capacity.max(1)) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        })
+    }
+
+    /// Bind group used only to initialize the field before the real one is built.
+    fn placeholder_bind_group(&self) -> wgpu::BindGroup {
+        let dummy = self.empty_storage::<f32>("placeholder", 16);
+        let uniform = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("placeholder uniform"),
+            size: std::mem::size_of::<GraphDims>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM,
+            mapped_at_creation: false,
+        });
+        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("placeholder bind group"),
+            layout: &self.graph_bind_group_layout,
+            entries: &[
+                bind_entry(0, &uniform),
+                bind_entry(1, &dummy),
+                bind_entry(2, &dummy),
+                bind_entry(3, &dummy),
+                bind_entry(4, &dummy),
+                bind_entry(5, &dummy),
+                bind_entry(6, &dummy),
+                bind_entry(7, &dummy),
+                bind_entry(8, &dummy),
+                bind_entry(9, &dummy),
+                bind_entry(10, &dummy),
+                bind_entry(11, &dummy),
+            ],
+        })
+    }
+
+    /// Uploads `data` as a read-only storage buffer, substituting one zeroed element
+    /// when it is empty: WGSL rejects zero-sized storage bindings, and the placeholder
+    /// has to be a full element wide or validation rejects the size mismatch instead.
+    fn storage_from<T: Pod>(&self, label: &str, data: &[T]) -> wgpu::Buffer {
         let placeholder;
         let contents = if data.is_empty() {
             placeholder = vec![0u8; std::mem::size_of::<T>().max(4)];
@@ -422,8 +395,8 @@ impl GpuNoiseContext {
             })
     }
 
-    fn read_back(&self, staging_buffer: &wgpu::Buffer) -> Vec<f32> {
-        let slice = staging_buffer.slice(..);
+    fn read_back_range(&self, staging: &wgpu::Buffer, size: u64) -> Vec<f32> {
+        let slice = staging.slice(..size);
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {
             let _ = tx.send(result);
@@ -438,9 +411,8 @@ impl GpuNoiseContext {
         let data = slice
             .get_mapped_range()
             .expect("buffer was mapped but get_mapped_range failed");
-        let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
+        let result = bytemuck::cast_slice(&data).to_vec();
         drop(data);
-        staging_buffer.unmap();
         result
     }
 
@@ -571,6 +543,212 @@ fn bind_entry(binding: u32, buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry<'_> {
     wgpu::BindGroupEntry {
         binding,
         resource: buffer.as_entire_binding(),
+    }
+}
+
+/// A compiled graph with its GPU buffers already uploaded.
+///
+/// The graph's tables — instructions, samplers, octaves, permutation tables, spline
+/// knots — never change between dispatches, so uploading them once and reusing them is
+/// what makes repeated evaluation cheap. Only the point batch and the per-chunk
+/// beardifier data are rewritten per call, and their buffers are grown on demand rather
+/// than reallocated each time.
+pub struct PreparedGraph<'a> {
+    context: &'a GpuNoiseContext,
+    num_instructions: u32,
+
+    // Uploaded once, in the order the bind group expects.
+    dims: wgpu::Buffer,
+    instructions: wgpu::Buffer,
+    samplers: wgpu::Buffer,
+    octaves: wgpu::Buffer,
+    permutations: wgpu::Buffer,
+    spline_points: wgpu::Buffer,
+    interpolated: wgpu::Buffer,
+
+    // Rewritten per dispatch; reallocated only when the batch outgrows them.
+    points: wgpu::Buffer,
+    scratch: wgpu::Buffer,
+    output: wgpu::Buffer,
+    staging: wgpu::Buffer,
+    structures: wgpu::Buffer,
+    junctions: wgpu::Buffer,
+
+    bind_group: wgpu::BindGroup,
+    point_capacity: usize,
+    structure_capacity: usize,
+    junction_capacity: usize,
+    /// Scratch reused across calls to flatten `[[f32; 3]]` without allocating.
+    flat_points: Vec<f32>,
+}
+
+impl<'a> PreparedGraph<'a> {
+    fn new(context: &'a GpuNoiseContext, compiled: &graph::CompiledGraph) -> Self {
+        let device = &context.device;
+        let num_instructions = compiled.instructions.len() as u32;
+
+        let dims = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("graph dims"),
+            size: std::mem::size_of::<GraphDims>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let instructions = context.storage_from("graph instructions", &compiled.instructions);
+        let samplers = context.storage_from("graph samplers", &compiled.samplers.samplers);
+        let octaves = context.storage_from("graph octaves", &compiled.samplers.octaves);
+        let permutations =
+            context.storage_from("graph permutations", &compiled.samplers.permutations);
+        let spline_points = context.storage_from("graph spline points", &compiled.spline_points);
+        let interpolated = context.storage_from(
+            "graph interpolated samplers",
+            &compiled.samplers.interpolated,
+        );
+
+        let point_capacity = 1;
+        let (points, scratch, output, staging) =
+            context.allocate_point_buffers(point_capacity, num_instructions as usize);
+        let structures = context.empty_storage::<graph::GpuBeardStructure>("beard structures", 1);
+        let junctions = context.empty_storage::<graph::GpuBeardJunction>("beard junctions", 1);
+
+        let mut prepared = Self {
+            context,
+            num_instructions,
+            dims,
+            instructions,
+            samplers,
+            octaves,
+            permutations,
+            spline_points,
+            interpolated,
+            points,
+            scratch,
+            output,
+            staging,
+            structures,
+            junctions,
+            bind_group: context.placeholder_bind_group(),
+            point_capacity,
+            structure_capacity: 1,
+            junction_capacity: 1,
+            flat_points: Vec::new(),
+        };
+        prepared.rebuild_bind_group();
+        prepared
+    }
+
+    fn rebuild_bind_group(&mut self) {
+        self.bind_group = self
+            .context
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("density_graph bind group"),
+                layout: &self.context.graph_bind_group_layout,
+                entries: &[
+                    bind_entry(0, &self.dims),
+                    bind_entry(1, &self.instructions),
+                    bind_entry(2, &self.points),
+                    bind_entry(3, &self.scratch),
+                    bind_entry(4, &self.output),
+                    bind_entry(5, &self.samplers),
+                    bind_entry(6, &self.octaves),
+                    bind_entry(7, &self.permutations),
+                    bind_entry(8, &self.spline_points),
+                    bind_entry(9, &self.interpolated),
+                    bind_entry(10, &self.structures),
+                    bind_entry(11, &self.junctions),
+                ],
+            });
+    }
+
+    /// Evaluates the graph for `points`, reusing every buffer that is still big enough.
+    #[must_use]
+    pub fn evaluate(
+        &mut self,
+        points: &[[f32; 3]],
+        beardifier: &graph::BeardifierData,
+    ) -> Vec<f32> {
+        if points.is_empty() || self.num_instructions == 0 {
+            return vec![0.0; points.len()];
+        }
+
+        let mut bind_group_stale = points.len() > self.point_capacity;
+
+        if bind_group_stale {
+            let (p, s, o, st) = self
+                .context
+                .allocate_point_buffers(points.len(), self.num_instructions as usize);
+            self.points = p;
+            self.scratch = s;
+            self.output = o;
+            self.staging = st;
+            self.point_capacity = points.len();
+        }
+        if beardifier.structures.len() > self.structure_capacity {
+            self.structures = self.context.empty_storage::<graph::GpuBeardStructure>(
+                "beard structures",
+                beardifier.structures.len(),
+            );
+            self.structure_capacity = beardifier.structures.len();
+            bind_group_stale = true;
+        }
+        if beardifier.junctions.len() > self.junction_capacity {
+            self.junctions = self.context.empty_storage::<graph::GpuBeardJunction>(
+                "beard junctions",
+                beardifier.junctions.len(),
+            );
+            self.junction_capacity = beardifier.junctions.len();
+            bind_group_stale = true;
+        }
+        if bind_group_stale {
+            self.rebuild_bind_group();
+        }
+
+        let queue = &self.context.queue;
+        let dims = GraphDims::new(points.len(), self.num_instructions as usize, beardifier);
+        queue.write_buffer(&self.dims, 0, bytemuck::bytes_of(&dims));
+
+        self.flat_points.clear();
+        self.flat_points
+            .extend(points.iter().flat_map(|p| p.iter().copied()));
+        queue.write_buffer(&self.points, 0, bytemuck::cast_slice(&self.flat_points));
+
+        if !beardifier.structures.is_empty() {
+            queue.write_buffer(
+                &self.structures,
+                0,
+                bytemuck::cast_slice(&beardifier.structures),
+            );
+        }
+        if !beardifier.junctions.is_empty() {
+            queue.write_buffer(
+                &self.junctions,
+                0,
+                bytemuck::cast_slice(&beardifier.junctions),
+            );
+        }
+
+        let output_size = (points.len() * std::mem::size_of::<f32>()) as u64;
+        let mut encoder =
+            self.context
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("density_graph encoder"),
+                });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("density_graph pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&self.context.graph_pipeline);
+            pass.set_bind_group(0, &self.bind_group, &[]);
+            pass.dispatch_workgroups(dims.num_points.div_ceil(WORKGROUP_SIZE), 1, 1);
+        };
+        encoder.copy_buffer_to_buffer(&self.output, 0, &self.staging, 0, output_size);
+        queue.submit(Some(encoder.finish()));
+
+        let result = self.context.read_back_range(&self.staging, output_size);
+        self.staging.unmap();
+        result
     }
 }
 
