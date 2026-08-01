@@ -13,6 +13,24 @@ pub enum PotionApplicationSource {
     Normal,
     /// `AreaEffectCloud` application (shorter durations and weaker instant potency)
     AreaEffectCloud,
+    Arrow,
+}
+
+impl PotionApplicationSource {
+    const fn instant_scale(self, scale: f32) -> f32 {
+        match self {
+            Self::AreaEffectCloud => scale * 0.5,
+            Self::Arrow => 1.0,
+            Self::Normal => scale,
+        }
+    }
+
+    const fn duration_scale(self, scale: f32) -> f32 {
+        match self {
+            Self::AreaEffectCloud => scale * 0.25,
+            Self::Arrow | Self::Normal => scale,
+        }
+    }
 }
 
 impl PotionContents {
@@ -128,11 +146,7 @@ impl PotionContents {
 
             if is_instant {
                 // Instant potency scaling
-                let instant_scale = if source == PotionApplicationSource::AreaEffectCloud {
-                    scale * 0.5
-                } else {
-                    scale
-                };
+                let instant_scale = source.instant_scale(scale);
 
                 // Apply instant effects logic directly as they don't tick
                 if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id {
@@ -163,11 +177,7 @@ impl PotionContents {
                 target.add_effect(eff).await;
             } else {
                 // Duration scaling
-                let duration_scale = if source == PotionApplicationSource::AreaEffectCloud {
-                    scale * 0.25
-                } else {
-                    scale
-                };
+                let duration_scale = source.duration_scale(scale);
 
                 let dur = ((duration as f32) * duration_scale).max(1.0) as i32;
                 let eff = pumpkin_data::potion::Effect {
@@ -182,5 +192,29 @@ impl PotionContents {
                 target.add_effect(eff).await;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PotionApplicationSource;
+    use pumpkin_data::data_component_impl::PotionDurationScaleImpl;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+
+    #[test]
+    fn tipped_arrow_scale_shortens_duration_without_reducing_instant_potency() {
+        let tipped_arrow = ItemStack::new(1, &Item::TIPPED_ARROW);
+        let scale = tipped_arrow
+            .get_data_component::<PotionDurationScaleImpl>()
+            .expect("tipped arrows should define a potion duration scale")
+            .scale;
+
+        assert_eq!(PotionApplicationSource::Arrow.duration_scale(scale), 0.125);
+        assert_eq!(
+            (160.0 * PotionApplicationSource::Arrow.duration_scale(scale)) as i32,
+            20
+        );
+        assert_eq!(PotionApplicationSource::Arrow.instant_scale(scale), 1.0);
     }
 }

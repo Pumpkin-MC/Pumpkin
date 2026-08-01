@@ -4069,7 +4069,13 @@ impl Player {
         // Check offhand first
         let stack = inventory.get_stack(PlayerInventory::OFF_HAND_SLOT).await;
         let item = stack.lock().await;
-        if item.item.id == Item::ARROW.id && item.item_count > 0 {
+        if matches!(
+            item.item.id,
+            id if id == Item::ARROW.id
+                || id == Item::TIPPED_ARROW.id
+                || id == Item::SPECTRAL_ARROW.id
+        ) && item.item_count > 0
+        {
             return Some(PlayerInventory::OFF_HAND_SLOT);
         }
         drop(item);
@@ -4078,7 +4084,13 @@ impl Player {
         for slot in 0..PlayerInventory::MAIN_SIZE {
             let stack = inventory.get_stack(slot).await;
             let item = stack.lock().await;
-            if item.item.id == Item::ARROW.id && item.item_count > 0 {
+            if matches!(
+                item.item.id,
+                id if id == Item::ARROW.id
+                    || id == Item::TIPPED_ARROW.id
+                    || id == Item::SPECTRAL_ARROW.id
+            ) && item.item_count > 0
+            {
                 return Some(slot);
             }
         }

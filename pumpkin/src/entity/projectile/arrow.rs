@@ -1,14 +1,18 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
+use tokio::sync::RwLock;
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity, player::Player,
+        Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
+        player::Player,
     },
     server::Server,
 };
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::PotionDurationScaleImpl;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
@@ -51,6 +55,7 @@ impl ArrowPickup {
 pub struct ArrowEntity {
     pub entity: Entity,
     pub owner_id: Option<i32>,
+    pub item_stack: RwLock<ItemStack>,
     pub base_damage: f64,
     pub pickup: ArrowPickup,
     pub is_critical: AtomicBool,
@@ -73,33 +78,20 @@ impl ArrowEntity {
     const DESPAWN_TIME: u32 = 1200;
 
     pub fn new(entity: Entity, owner_id: Option<i32>) -> Self {
+        let item_stack = ItemStack::new(1, Self::default_item(entity.entity_type));
+        Self::new_with_item(entity, owner_id, &item_stack, ArrowPickup::Disallowed)
+    }
+
+    pub fn new_with_item(
+        entity: Entity,
+        owner_id: Option<i32>,
+        item_stack: &ItemStack,
+        pickup: ArrowPickup,
+    ) -> Self {
         Self {
             entity,
             owner_id,
-            base_damage: Self::ARROW_BASE_DAMAGE,
-            pickup: ArrowPickup::Disallowed,
-            is_critical: AtomicBool::new(false),
-            pierce_level: AtomicU8::new(0),
-            punch_level: AtomicU8::new(0),
-            is_flame: AtomicBool::new(false),
-            in_ground: AtomicBool::new(false),
-            in_ground_time: AtomicU32::new(0),
-            life: AtomicU32::new(0),
-            shake_time: AtomicU8::new(0),
-            has_hit: AtomicBool::new(false),
-            last_block_pos: Arc::new(std::sync::RwLock::new(None)),
-        }
-    }
-
-    pub fn new_shot(entity: Entity, shooter: &Entity, pickup: ArrowPickup) -> Self {
-        let mut owner_pos = shooter.pos.load();
-        owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
-        entity.pos.store(owner_pos);
-        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
-
-        Self {
-            entity,
-            owner_id: Some(shooter.entity_id),
+            item_stack: RwLock::new(item_stack.copy_with_count(1)),
             base_damage: Self::ARROW_BASE_DAMAGE,
             pickup,
             is_critical: AtomicBool::new(false),
@@ -113,6 +105,86 @@ impl ArrowEntity {
             has_hit: AtomicBool::new(false),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
         }
+    }
+
+    pub fn new_shot(
+        entity: Entity,
+        shooter: &Entity,
+        item_stack: &ItemStack,
+        pickup: ArrowPickup,
+    ) -> Self {
+        let mut owner_pos = shooter.pos.load();
+        owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
+        entity.pos.store(owner_pos);
+        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
+
+        Self {
+            entity,
+            owner_id: Some(shooter.entity_id),
+            item_stack: RwLock::new(item_stack.copy_with_count(1)),
+            base_damage: Self::ARROW_BASE_DAMAGE,
+            pickup,
+            is_critical: AtomicBool::new(false),
+            pierce_level: AtomicU8::new(0),
+            punch_level: AtomicU8::new(0),
+            is_flame: AtomicBool::new(false),
+            in_ground: AtomicBool::new(false),
+            in_ground_time: AtomicU32::new(0),
+            life: AtomicU32::new(0),
+            shake_time: AtomicU8::new(0),
+            has_hit: AtomicBool::new(false),
+            last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+        }
+    }
+
+    #[must_use]
+    pub const fn entity_type_for_item(item: &'static Item) -> &'static EntityType {
+        if item.id == Item::SPECTRAL_ARROW.id {
+            &EntityType::SPECTRAL_ARROW
+        } else {
+            &EntityType::ARROW
+        }
+    }
+
+    #[must_use]
+    pub const fn default_item(entity_type: &'static EntityType) -> &'static Item {
+        if entity_type.id == EntityType::SPECTRAL_ARROW.id {
+            &Item::SPECTRAL_ARROW
+        } else {
+            &Item::ARROW
+        }
+    }
+
+    fn write_item_stack_nbt(item_stack: &ItemStack, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        let mut item = pumpkin_nbt::compound::NbtCompound::new();
+        item_stack.copy_with_count(1).write_item_stack(&mut item);
+        nbt.put_compound("item", item);
+    }
+
+    fn read_item_stack_nbt(nbt: &pumpkin_nbt::compound::NbtCompound) -> Option<ItemStack> {
+        nbt.get_compound("item")
+            .and_then(ItemStack::read_item_stack)
+            .map(|item_stack| item_stack.copy_with_count(1))
+    }
+
+    fn pickup_item_stack(item_stack: &ItemStack) -> ItemStack {
+        item_stack.copy_with_count(1)
+    }
+
+    const fn spectral_glowing_effect() -> pumpkin_data::potion::Effect {
+        pumpkin_data::potion::Effect {
+            effect_type: &pumpkin_data::effect::StatusEffect::GLOWING,
+            duration: 200,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        }
+    }
+
+    const fn should_apply_post_hurt_effects(damage_succeeded: bool) -> bool {
+        damage_succeeded
     }
 
     pub fn set_velocity_from_rotation(
@@ -190,7 +262,30 @@ impl ArrowEntity {
     }
 }
 
-impl NBTStorage for ArrowEntity {}
+impl NBTStorage for ArrowEntity {
+    fn write_nbt<'a>(
+        &'a self,
+        nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
+    ) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.entity.write_nbt(nbt).await;
+            let item_stack = self.item_stack.read().await;
+            Self::write_item_stack_nbt(&item_stack, nbt);
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(
+        &'a self,
+        nbt: &'a pumpkin_nbt::compound::NbtCompound,
+    ) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.entity.read_nbt_non_mut(nbt).await;
+            if let Some(item_stack) = Self::read_item_stack_nbt(nbt) {
+                *self.item_stack.write().await = item_stack;
+            }
+        })
+    }
+}
 
 impl EntityBase for ArrowEntity {
     #[allow(clippy::too_many_lines)]
@@ -408,11 +503,11 @@ impl EntityBase for ArrowEntity {
                         target.get_entity().set_on_fire_for_ticks(100);
                     }
 
-                    target
+                    let damage_succeeded = target
                         .damage(&*target, damage as f32, DamageType::ARROW)
                         .await;
 
-                    if target.get_living_entity().is_some() {
+                    if let Some(living) = target.get_living_entity() {
                         let punch = self.punch_level.load(Ordering::Relaxed);
                         if punch > 0
                             && let Some(owner_id) = self.owner_id
@@ -435,6 +530,26 @@ impl EntityBase for ArrowEntity {
                             0.0,
                         );
                         world.broadcast_packet_all(&sound_packet);
+
+                        if Self::should_apply_post_hurt_effects(damage_succeeded) {
+                            let item_stack = self.item_stack.read().await.clone();
+                            let scale = item_stack
+                                .get_data_component::<PotionDurationScaleImpl>()
+                                .map_or(1.0, |component| component.scale);
+                            crate::item::potion::PotionContents::apply_effects_to(
+                                living,
+                                crate::item::potion::PotionContents::read_potion_effects(
+                                    &item_stack,
+                                ),
+                                scale,
+                                crate::item::potion::PotionApplicationSource::Arrow,
+                            )
+                            .await;
+
+                            if entity.entity_type.id == EntityType::SPECTRAL_ARROW.id {
+                                living.add_effect(Self::spectral_glowing_effect()).await;
+                            }
+                        }
                     }
 
                     // Check pierce level
@@ -482,7 +597,8 @@ impl EntityBase for ArrowEntity {
             }
 
             // Try to insert an arrow into the player's inventory
-            let mut stack = ItemStack::new(1, &Item::ARROW);
+            let item_stack = self.item_stack.read().await;
+            let mut stack = Self::pickup_item_stack(&item_stack);
             if player.is_creative() || player.inventory.insert_stack_anywhere(&mut stack).await {
                 player.living_entity.pickup(&self.entity, 1);
 
@@ -512,7 +628,8 @@ impl ArrowEntity {
         }
 
         // Skip other arrows, item entities, and falling block entities
-        if other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
+        if (other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
+            || other_ent.entity_type == &pumpkin_data::entity::EntityType::SPECTRAL_ARROW)
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::FALLING_BLOCK
         {
@@ -572,5 +689,97 @@ fn get_hit_face(hit_pos: Vector3<f64>, block_pos: BlockPos) -> pumpkin_data::Blo
         BlockDirection::North
     } else {
         BlockDirection::South
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ArrowEntity;
+    use pumpkin_data::data_component::DataComponent;
+    use pumpkin_data::data_component_impl::{
+        DataComponentImpl, PotionContentsImpl, PotionDurationScaleImpl,
+    };
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+
+    fn tipped_payload(count: u8) -> ItemStack {
+        let mut tipped = ItemStack::new(32, &Item::TIPPED_ARROW);
+        tipped.patch.push((
+            DataComponent::PotionContents,
+            Some(
+                PotionContentsImpl {
+                    potion_id: Some(5),
+                    custom_color: Some(0x123456),
+                    custom_effects: Vec::new(),
+                    custom_name: Some("payload".to_string()),
+                }
+                .to_dyn(),
+            ),
+        ));
+        tipped.patch.push((
+            DataComponent::PotionDurationScale,
+            Some(PotionDurationScaleImpl { scale: 0.5 }.to_dyn()),
+        ));
+        tipped.copy_with_count(count)
+    }
+
+    #[test]
+    fn projectile_payload_keeps_components_at_one_count() {
+        let tipped = tipped_payload(32);
+
+        let payload = tipped.copy_with_count(1);
+
+        assert_eq!(payload.item_count, 1);
+        assert!(payload.are_items_and_components_equal(&tipped));
+        assert_eq!(
+            ArrowEntity::entity_type_for_item(payload.item),
+            &EntityType::ARROW
+        );
+        assert_eq!(
+            ArrowEntity::entity_type_for_item(&Item::SPECTRAL_ARROW),
+            &EntityType::SPECTRAL_ARROW
+        );
+    }
+
+    #[test]
+    fn arrow_nbt_payload_round_trips() {
+        let payload = tipped_payload(1);
+        let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
+
+        ArrowEntity::write_item_stack_nbt(&payload, &mut nbt);
+        let restored = ArrowEntity::read_item_stack_nbt(&nbt).expect("arrow payload should decode");
+
+        assert!(restored.are_equal(&payload));
+        assert_eq!(restored.item_count, 1);
+    }
+
+    #[test]
+    fn grounded_pickup_stack_keeps_exact_arrow_payload() {
+        let payload = tipped_payload(32);
+        let pickup = ArrowEntity::pickup_item_stack(&payload);
+
+        assert_eq!(pickup.item_count, 1);
+        assert!(pickup.are_items_and_components_equal(&payload));
+    }
+
+    #[test]
+    fn spectral_arrow_applies_vanilla_glowing_effect() {
+        let effect = ArrowEntity::spectral_glowing_effect();
+
+        assert_eq!(
+            effect.effect_type,
+            &pumpkin_data::effect::StatusEffect::GLOWING
+        );
+        assert_eq!(effect.duration, 200);
+        assert_eq!(effect.amplifier, 0);
+        assert!(effect.show_particles);
+        assert!(effect.show_icon);
+    }
+
+    #[test]
+    fn post_hurt_effects_require_successful_arrow_damage() {
+        assert!(!ArrowEntity::should_apply_post_hurt_effects(false));
+        assert!(ArrowEntity::should_apply_post_hurt_effects(true));
     }
 }
