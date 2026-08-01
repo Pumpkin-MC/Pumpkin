@@ -30,12 +30,19 @@ const OP_CLAMPED_Y_GRADIENT: u32 = 16u;
 // Samples this node's own DoublePerlin sampler at the point scaled by
 // (param0 = xz_scale, param1 = y_scale); input0 carries the sampler index.
 const OP_NOISE: u32 = 17u;
+const OP_SHIFT_A: u32 = 18u;
+const OP_SHIFT_B: u32 = 19u;
+const OP_SHIFTED_NOISE: u32 = 20u;
 
 struct Instruction {
     opcode: u32,
     input0: u32,
     input1: u32,
-    _pad: u32,
+    input2: u32,
+    sampler_index: u32,
+    _pad0: u32,
+    _pad1: u32,
+    _pad2: u32,
     param0: f32,
     param1: f32,
     param2: f32,
@@ -190,6 +197,11 @@ fn double_perlin_sample(sampler_index: u32, x: f32, y: f32, z: f32) -> f32 {
     return (first + second) * s.amplitude;
 }
 
+// Mirrors shift_sample_3d in density_function/noise.rs.
+fn shift_sample_3d(sampler_index: u32, x: f32, y: f32, z: f32) -> f32 {
+    return double_perlin_sample(sampler_index, x * 0.25, y * 0.25, z * 0.25) * 4.0;
+}
+
 // f32 mirror of pumpkin_util::math::clamped_map.
 fn clamped_map(value: f32, old_start: f32, old_end: f32, new_start: f32, new_end: f32) -> f32 {
     let delta = (value - old_start) / (old_end - old_start);
@@ -217,6 +229,7 @@ fn evaluate_graph(@builtin(global_invocation_id) gid: vec3<u32>) {
         let instruction = instructions[i];
         let a = scratch[instruction.input0 * dims.num_points + point_index];
         let b = scratch[instruction.input1 * dims.num_points + point_index];
+        let c = scratch[instruction.input2 * dims.num_points + point_index];
 
         var result: f32 = 0.0;
         switch instruction.opcode {
@@ -265,10 +278,25 @@ fn evaluate_graph(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
             case 17u: {
                 result = double_perlin_sample(
-                    instruction.input0,
+                    instruction.sampler_index,
                     px * instruction.param0,
                     py * instruction.param1,
                     pz * instruction.param0,
+                );
+            }
+            case 18u: {
+                result = shift_sample_3d(instruction.sampler_index, px, 0.0, pz);
+            }
+            case 19u: {
+                // Vanilla passes (z, x, 0) here, not (x, y, z); the rotation is deliberate.
+                result = shift_sample_3d(instruction.sampler_index, pz, px, 0.0);
+            }
+            case 20u: {
+                result = double_perlin_sample(
+                    instruction.sampler_index,
+                    px * instruction.param0 + a,
+                    py * instruction.param1 + b,
+                    pz * instruction.param0 + c,
                 );
             }
             default: { result = 0.0; }

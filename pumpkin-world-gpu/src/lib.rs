@@ -677,4 +677,87 @@ mod test {
             "GPU Noise opcode diverged from the CPU sampler by {max_diff}"
         );
     }
+    /// `ShiftA`/`ShiftB` feed the sampler rotated, partly-zeroed coordinates, so a
+    /// transcription slip there is invisible unless checked against vanilla's exact
+    /// argument order. `ShiftedNoise` then offsets the point by three input nodes.
+    #[test]
+    fn gpu_shift_opcodes_match_cpu_semantics() {
+        use crate::graph::{Instruction, OpCode};
+        use pumpkin_data::chunk::DoublePerlinNoiseParameters;
+        use pumpkin_world::generation::noise::perlin::DoublePerlinNoiseSampler;
+        use pumpkin_world::generation::noise::router::proto_noise_router::DoublePerlinNoiseBuilder;
+
+        const AMPLITUDES: &[f64] = &[1.0, 1.0];
+
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        let params = DoublePerlinNoiseParameters::new(
+            0,
+            -5,
+            AMPLITUDES,
+            0x2C1D_9B04,
+            0x77A0_5E31,
+            DoublePerlinNoiseSampler::get_amplitude(AMPLITUDES),
+        );
+        let deriver = crate::graph::test::test_deriver();
+        let cpu_sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(&deriver, &params);
+
+        let mut samplers = crate::graph::SamplerPool::default();
+        let (first, second) = cpu_sampler.samplers();
+        let sampler_index = samplers.push_double_perlin(first, second, cpu_sampler.amplitude());
+
+        // Node 0: ShiftA, node 1: ShiftB, node 2: ShiftedNoise offset by both.
+        let mut shift_a = Instruction::new_for_test(OpCode::ShiftA, 0);
+        shift_a.sampler_index = sampler_index;
+        let mut shift_b = Instruction::new_for_test(OpCode::ShiftB, 1);
+        shift_b.sampler_index = sampler_index;
+        let mut shifted = Instruction::new_for_test(OpCode::ShiftedNoise, 2);
+        shifted.sampler_index = sampler_index;
+        shifted.input0 = 0;
+        shifted.input1 = 1;
+        shifted.input2 = 0;
+        shifted.param0 = 0.25;
+        shifted.param1 = 0.125;
+
+        let compiled = crate::graph::CompiledGraph {
+            instructions: vec![shift_a, shift_b, shifted],
+            samplers,
+        };
+
+        let points: Vec<[f32; 3]> = (0..600)
+            .map(|i| {
+                let f = i as f32;
+                [f * 2.1, f * -1.3, f * 0.7]
+            })
+            .collect();
+
+        let gpu_results = ctx.evaluate_graph(&compiled, &points);
+
+        // Independent expectation, written straight from density_function/noise.rs
+        // rather than reusing the crate's own interpreter.
+        let shift_sample_3d = |x: f64, y: f64, z: f64| -> f64 {
+            cpu_sampler.sample(x * 0.25, y * 0.25, z * 0.25) * 4.0
+        };
+
+        let mut max_diff = 0.0f64;
+        for (point, &gpu_value) in points.iter().zip(&gpu_results) {
+            let (x, y, z) = (
+                f64::from(point[0]),
+                f64::from(point[1]),
+                f64::from(point[2]),
+            );
+            let a = shift_sample_3d(x, 0.0, z);
+            let b = shift_sample_3d(z, x, 0.0);
+            let expected =
+                cpu_sampler.sample(x.mul_add(0.25, a), y.mul_add(0.125, b), z.mul_add(0.25, a));
+            max_diff = max_diff.max((expected - f64::from(gpu_value)).abs());
+        }
+
+        assert!(
+            max_diff < 1e-2,
+            "GPU shift opcodes diverged from vanilla semantics by {max_diff}"
+        );
+    }
 }

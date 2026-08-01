@@ -11,8 +11,9 @@
 
 use crate::OctaveParams;
 use bytemuck::{Pod, Zeroable};
-use pumpkin_data::noise_router::{
-    BaseNoiseFunctionComponent, BinaryOperation, LinearOperation, UnaryOperation,
+use pumpkin_data::{
+    chunk::DoublePerlinNoiseParameters,
+    noise_router::{BaseNoiseFunctionComponent, BinaryOperation, LinearOperation, UnaryOperation},
 };
 use pumpkin_util::{
     noise::perlin::OctavePerlinNoiseSampler, random::xoroshiro128::XoroshiroSplitter,
@@ -43,24 +44,38 @@ pub enum OpCode {
     BinaryMin = 14,
     BinaryMax = 15,
     ClampedYGradient = 16,
-    /// Samples this node's own sampler; `input0` is an index into
-    /// [`SamplerPool::samplers`], `param0`/`param1` are the xz/y scales.
+    /// Samples this node's own sampler at the point scaled by `param0`/`param1`
+    /// (xz/y scale).
     Noise = 17,
+    /// Vanilla's `shift_sample_3d(sampler, x, 0, z)`.
+    ShiftA = 18,
+    /// Vanilla's `shift_sample_3d(sampler, z, x, 0)` — note the rotated arguments.
+    ShiftB = 19,
+    /// Samples this node's sampler at the point offset by three input nodes;
+    /// `input0`/`input1`/`input2` are the x/y/z offsets.
+    ShiftedNoise = 20,
 }
 
 /// One node of the flattened graph.
 ///
-/// `input0`/`input1` index earlier entries in the same instruction list; unused inputs
+/// `input0`..`input2` index earlier entries in the same instruction list; unused inputs
 /// are set to the node's own index so a buggy read stays in bounds instead of reading
-/// past the buffer.
+/// past the buffer. `sampler_index` points into the graph's [`SamplerPool`] for the
+/// noise-family opcodes and is ignored otherwise.
+///
+/// Laid out as 48 bytes so `array<Instruction>` stays 16-byte aligned in WGSL; a
+/// whole overworld graph is only ~15 KB, so the padding is not worth packing away.
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug)]
 pub struct Instruction {
     pub opcode: u32,
     pub input0: u32,
     pub input1: u32,
-    /// Padding so the struct matches the WGSL `Instruction` layout; never read.
-    pub padding: u32,
+    pub input2: u32,
+    pub sampler_index: u32,
+    padding0: u32,
+    padding1: u32,
+    padding2: u32,
     pub param0: f32,
     pub param1: f32,
     pub param2: f32,
@@ -68,15 +83,22 @@ pub struct Instruction {
 }
 
 impl Instruction {
-    /// Builds a [`OpCode::Noise`] instruction referencing `sampler_index` in the
-    /// graph's [`SamplerPool`].
+    /// Builds a [`OpCode::Noise`] instruction sampling `sampler_index`.
     #[must_use]
     pub const fn noise(index: usize, sampler_index: u32, xz_scale: f32, y_scale: f32) -> Self {
         let mut instruction = Self::new(OpCode::Noise, index);
-        instruction.input0 = sampler_index;
+        instruction.sampler_index = sampler_index;
         instruction.param0 = xz_scale;
         instruction.param1 = y_scale;
         instruction
+    }
+
+    /// Builds a bare instruction for a given opcode. Test-only: production callers go
+    /// through [`compile`], which also wires up inputs and sampler state.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) const fn new_for_test(opcode: OpCode, index: usize) -> Self {
+        Self::new(opcode, index)
     }
 
     const fn new(opcode: OpCode, index: usize) -> Self {
@@ -85,7 +107,11 @@ impl Instruction {
             opcode: opcode as u32,
             input0: own,
             input1: own,
-            padding: 0,
+            input2: own,
+            sampler_index: 0,
+            padding0: 0,
+            padding1: 0,
+            padding2: 0,
             param0: 0.0,
             param1: 0.0,
             param2: 0.0,
@@ -213,25 +239,29 @@ pub fn compile(
     let mut samplers = SamplerPool::default();
 
     for (index, component) in stack.iter().enumerate() {
-        let instruction = match component {
-            BaseNoiseFunctionComponent::Noise { data } => {
-                let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
-                    base_random_deriver,
-                    &data.noise_id,
-                );
-                let (first, second) = sampler.samplers();
-                let sampler_index = samplers.push_double_perlin(first, second, sampler.amplitude());
+        if let Some(instruction) =
+            lower_noise_family(component, index, &mut samplers, base_random_deriver)
+        {
+            out.push(instruction);
+            continue;
+        }
 
-                Instruction::noise(
-                    index,
-                    sampler_index,
-                    data.xz_scale as f32,
-                    data.y_scale as f32,
-                )
-            }
+        let instruction = match component {
             BaseNoiseFunctionComponent::Constant { value } => {
                 let mut i = Instruction::new(OpCode::Constant, index);
                 i.param0 = *value as f32;
+                i
+            }
+            // Mirrors proto_noise_router.rs: while pumpkin-world has no blender, these
+            // collapse to constants. If the blender lands, both paths must change together.
+            BaseNoiseFunctionComponent::BlendAlpha => {
+                let mut i = Instruction::new(OpCode::Constant, index);
+                i.param0 = 1.0;
+                i
+            }
+            BaseNoiseFunctionComponent::BlendOffset => {
+                let mut i = Instruction::new(OpCode::Constant, index);
+                i.param0 = 0.0;
                 i
             }
             // Wrappers are pure caching in the CPU implementation, so on the GPU —
@@ -313,6 +343,65 @@ pub fn compile(
     })
 }
 
+/// Lowers the noise-family nodes, which all need a seeded sampler registered in
+/// `samplers`. Returns `None` for any other node type.
+fn lower_noise_family(
+    component: &BaseNoiseFunctionComponent,
+    index: usize,
+    samplers: &mut SamplerPool,
+    base_random_deriver: &XoroshiroSplitter,
+) -> Option<Instruction> {
+    let instruction = match component {
+        BaseNoiseFunctionComponent::Noise { data } => {
+            let sampler_index = push_sampler(samplers, base_random_deriver, &data.noise_id);
+            Instruction::noise(
+                index,
+                sampler_index,
+                data.xz_scale as f32,
+                data.y_scale as f32,
+            )
+        }
+        BaseNoiseFunctionComponent::ShiftA { noise_id } => {
+            let mut i = Instruction::new(OpCode::ShiftA, index);
+            i.sampler_index = push_sampler(samplers, base_random_deriver, noise_id);
+            i
+        }
+        BaseNoiseFunctionComponent::ShiftB { noise_id } => {
+            let mut i = Instruction::new(OpCode::ShiftB, index);
+            i.sampler_index = push_sampler(samplers, base_random_deriver, noise_id);
+            i
+        }
+        BaseNoiseFunctionComponent::ShiftedNoise {
+            shift_x_index,
+            shift_y_index,
+            shift_z_index,
+            data,
+        } => {
+            let mut i = Instruction::new(OpCode::ShiftedNoise, index);
+            i.input0 = *shift_x_index as u32;
+            i.input1 = *shift_y_index as u32;
+            i.input2 = *shift_z_index as u32;
+            i.sampler_index = push_sampler(samplers, base_random_deriver, &data.noise_id);
+            i.param0 = data.xz_scale as f32;
+            i.param1 = data.y_scale as f32;
+            i
+        }
+        _ => return None,
+    };
+    Some(instruction)
+}
+
+/// Builds a seeded sampler the same way `ProtoNoiseRouter` does and adds it to `pool`.
+fn push_sampler(
+    pool: &mut SamplerPool,
+    base_random_deriver: &XoroshiroSplitter,
+    noise_id: &DoublePerlinNoiseParameters,
+) -> u32 {
+    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(base_random_deriver, noise_id);
+    let (first, second) = sampler.samplers();
+    pool.push_double_perlin(first, second, sampler.amplitude())
+}
+
 const fn node_name(component: &BaseNoiseFunctionComponent) -> &'static str {
     match component {
         BaseNoiseFunctionComponent::Beardifier => "Beardifier",
@@ -359,6 +448,7 @@ pub fn evaluate_cpu(
     for (index, instruction) in instructions.iter().enumerate() {
         let a = values[instruction.input0 as usize];
         let b = values[instruction.input1 as usize];
+        let c = values[instruction.input2 as usize];
         let p = instruction;
 
         values[index] = match p.opcode {
@@ -410,16 +500,36 @@ pub fn evaluate_cpu(
             }
             op if op == OpCode::Noise as u32 => double_perlin_sample(
                 pool,
-                p.input0 as usize,
+                p.sampler_index as usize,
                 x * p.param0,
                 y * p.param1,
                 z * p.param0,
+            ),
+            op if op == OpCode::ShiftA as u32 => {
+                shift_sample_3d(pool, p.sampler_index as usize, x, 0.0, z)
+            }
+            // Vanilla feeds (z, x, 0) here, not (x, y, z); the rotation is deliberate.
+            op if op == OpCode::ShiftB as u32 => {
+                shift_sample_3d(pool, p.sampler_index as usize, z, x, 0.0)
+            }
+            op if op == OpCode::ShiftedNoise as u32 => double_perlin_sample(
+                pool,
+                p.sampler_index as usize,
+                x * p.param0 + a,
+                y * p.param1 + b,
+                z * p.param0 + c,
             ),
             _ => 0.0,
         };
     }
 
     values.last().copied().unwrap_or(0.0)
+}
+
+/// f32 mirror of `shift_sample_3d` in
+/// `pumpkin-world/src/generation/noise/router/density_function/noise.rs`.
+fn shift_sample_3d(pool: &SamplerPool, sampler_index: usize, x: f32, y: f32, z: f32) -> f32 {
+    double_perlin_sample(pool, sampler_index, x * 0.25, y * 0.25, z * 0.25) * 4.0
 }
 
 /// f32 mirror of `DoublePerlinNoiseSampler::sample`, reading from the flattened pool.
