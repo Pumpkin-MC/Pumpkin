@@ -4,7 +4,7 @@ use rand::RngExt;
 use std::sync::Arc;
 
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     ai::goal::{Controls, Goal, GoalFuture},
     mob::Mob,
     mob::blaze::BlazeEntity,
@@ -32,6 +32,25 @@ impl BlazeShootFireballGoal {
     const fn get_follow_distance() -> f64 {
         // TODO: use FOLLOW_RANGE
         48.0
+    }
+
+    const fn can_shoot_at_target(distance_squared: f64, has_line_of_sight: bool) -> bool {
+        distance_squared < Self::get_follow_distance() * Self::get_follow_distance()
+            && has_line_of_sight
+    }
+
+    async fn has_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
+        let entity = mob.get_entity();
+        entity
+            .world
+            .load_full()
+            .raycast(
+                entity.get_eye_pos(),
+                target.get_entity().get_eye_pos(),
+                async |block_pos, world| world.get_block_state(block_pos).is_solid(),
+            )
+            .await
+            .is_none()
     }
 }
 
@@ -98,8 +117,7 @@ impl Goal for BlazeShootFireballGoal {
                 return;
             };
 
-            // TODO: hasLineOfSight check
-            let has_line_of_sight = true;
+            let has_line_of_sight = Self::has_line_of_sight(&*blaze, target.as_ref()).await;
 
             if has_line_of_sight {
                 self.last_seen = 0;
@@ -127,7 +145,7 @@ impl Goal for BlazeShootFireballGoal {
                 }
 
                 // TODO: set wanted position to target
-            } else if distance_sq < Self::get_follow_distance().powi(2) && has_line_of_sight {
+            } else if Self::can_shoot_at_target(distance_sq, has_line_of_sight) {
                 let target_y_offset = target_pos.y + 0.5; // roughly target.getY(0.5)
                 let blaze_y_offset = blaze_pos.y + 0.5; // roughly blaze.getY(0.5)
                 let yd = target_y_offset - blaze_y_offset;
@@ -218,5 +236,19 @@ impl Goal for BlazeShootFireballGoal {
 
     fn controls(&self) -> Controls {
         Controls::MOVE | Controls::LOOK
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BlazeShootFireballGoal;
+
+    #[test]
+    fn shooting_requires_visible_target_within_follow_range() {
+        assert!(BlazeShootFireballGoal::can_shoot_at_target(2_303.99, true));
+        assert!(!BlazeShootFireballGoal::can_shoot_at_target(
+            2_303.99, false
+        ));
+        assert!(!BlazeShootFireballGoal::can_shoot_at_target(2_304.0, true));
     }
 }
