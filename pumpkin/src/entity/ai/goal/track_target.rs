@@ -34,8 +34,6 @@ impl TrackTargetGoal {
             check_can_navigate_cooldown: AtomicI32::new(0),
             time_without_visibility: AtomicI32::new(0),
             max_time_without_visibility: 60,
-            // `TargetGoal.canContinueToUse` checks attack eligibility here, but
-            // handles visibility separately so unseen-memory ticks are honored.
             target_predicate: TargetPredicate::create_attackable().ignore_visibility(),
         }
     }

@@ -91,8 +91,6 @@ impl TargetPredicate {
         ));
     }
 
-    /// Mirrors vanilla `TargetingConditions.test`, including its default
-    /// mob-to-target line-of-sight check.
     pub async fn test(
         &self,
         world: &World,

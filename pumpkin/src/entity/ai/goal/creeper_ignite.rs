@@ -20,8 +20,6 @@ impl CreeperIgniteGoal {
         }
     }
 
-    /// Vanilla: `SwellGoal.tick` stops swelling beyond seven blocks or when
-    /// the creeper's sensing cannot see its target.
     const fn should_swell(distance_squared: f64, has_line_of_sight: bool) -> bool {
         distance_squared <= 49.0 && has_line_of_sight
     }
