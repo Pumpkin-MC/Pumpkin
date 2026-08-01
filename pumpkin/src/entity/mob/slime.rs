@@ -323,7 +323,7 @@ impl Mob for SlimeEntity {
         Box::pin(async move {
             if !self.is_tiny() {
                 // dealDamage
-                self.entity.try_attack(self, &**player).await;
+                self.entity.try_attack(&**player).await;
             }
         })
     }

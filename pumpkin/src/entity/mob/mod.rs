@@ -256,23 +256,30 @@ impl MobEntity {
         true
     }
 
-    pub async fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
+    pub async fn try_attack(&self, target: &dyn EntityBase) -> bool {
         if self.living_entity.dead.load(Relaxed) {
-            return;
+            return false;
         }
 
         let attack_damage: f32 =
             self.living_entity
                 .get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
 
+        let caller = self
+            .living_entity
+            .entity
+            .world
+            .load()
+            .get_entity_by_id(self.living_entity.entity.entity_id);
+
         let damaged = target
             .damage_with_context(
                 target,
                 attack_damage,
                 DamageType::MOB_ATTACK,
-                Some(caller.get_entity().pos.load()),
-                Some(caller),
-                Some(caller),
+                Some(self.living_entity.entity.pos.load()),
+                caller.as_deref(),
+                caller.as_deref(),
             )
             .await;
 
@@ -284,6 +291,8 @@ impl MobEntity {
                 .last_attack_time
                 .store(self.living_entity.entity.age.load(Relaxed), Relaxed);
         }
+
+        damaged
     }
 
     async fn get_attack_box(&self, attack_range: f64) -> BoundingBox {
@@ -399,6 +408,20 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn get_mob_entity(&self) -> &MobEntity;
+
+    fn try_attack<'a>(&'a self, target: &'a dyn EntityBase) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            let damaged = self.get_mob_entity().try_attack(target).await;
+            if damaged {
+                self.on_successful_attack(target).await;
+            }
+            damaged
+        })
+    }
+
+    fn on_successful_attack<'a>(&'a self, _target: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async {})
+    }
 
     fn get_job_site(&self) -> Option<BlockPos> {
         None
