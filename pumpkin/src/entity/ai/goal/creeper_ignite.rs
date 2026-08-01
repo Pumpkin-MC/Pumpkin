@@ -19,6 +19,24 @@ impl CreeperIgniteGoal {
             creeper,
         }
     }
+
+    const fn should_swell(distance_squared: f64, has_line_of_sight: bool) -> bool {
+        distance_squared <= 49.0 && has_line_of_sight
+    }
+
+    async fn has_line_of_sight(mob: &dyn Mob, target: &dyn crate::entity::EntityBase) -> bool {
+        let entity = mob.get_entity();
+        entity
+            .world
+            .load_full()
+            .raycast(
+                entity.get_eye_pos(),
+                target.get_entity().get_eye_pos(),
+                async |block_pos, world| world.get_block_state(block_pos).is_solid(),
+            )
+            .await
+            .is_none()
+    }
 }
 
 impl Goal for CreeperIgniteGoal {
@@ -72,12 +90,11 @@ impl Goal for CreeperIgniteGoal {
                 .load()
                 .squared_distance_to_vec(&target.get_entity().pos.load());
 
-            if dist_sq > 49.0 {
-                self.creeper.set_fuse_speed(-1);
-            }
-            // TODO: line of sight check (needs world raycast)
-            else {
+            let has_line_of_sight = Self::has_line_of_sight(mob, target.as_ref()).await;
+            if Self::should_swell(dist_sq, has_line_of_sight) {
                 self.creeper.set_fuse_speed(1);
+            } else {
+                self.creeper.set_fuse_speed(-1);
             }
         })
     }
@@ -88,5 +105,17 @@ impl Goal for CreeperIgniteGoal {
 
     fn controls(&self) -> Controls {
         self.goal_control
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CreeperIgniteGoal;
+
+    #[test]
+    fn swelling_requires_vanilla_distance_and_line_of_sight() {
+        assert!(CreeperIgniteGoal::should_swell(49.0, true));
+        assert!(!CreeperIgniteGoal::should_swell(49.0, false));
+        assert!(!CreeperIgniteGoal::should_swell(49.000_001, true));
     }
 }
