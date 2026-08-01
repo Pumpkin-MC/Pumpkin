@@ -28,8 +28,15 @@ pub(crate) fn build() -> TokenStream {
 
         let content = fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("Failed to read JSON file: {path} {e}"));
-        let parsed: BTreeMap<String, u8> = serde_json::from_str(&content)
+        let mut parsed: BTreeMap<String, u8> = serde_json::from_str(&content)
             .unwrap_or_else(|e| panic!("Failed to parse {path}: {e}"));
+
+        if matches!(
+            ver,
+            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2
+        ) {
+            parsed.insert("SPIDER_FLAGS".to_string(), 16);
+        }
 
         versions.insert(ver, parsed);
     }

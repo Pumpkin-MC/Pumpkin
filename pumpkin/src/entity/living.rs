@@ -1057,6 +1057,25 @@ impl LivingEntity {
     }
 
     fn check_climbing(&self) {
+        if let Some(climbing) = spider_climbing_state(
+            self.entity.entity_type,
+            self.entity.horizontal_collision.load(SeqCst),
+        ) {
+            let was_climbing = self.climbing.swap(climbing, Relaxed);
+
+            if climbing != was_climbing {
+                self.entity.send_meta_data(
+                    &[Metadata::new(
+                        TrackedData::SPIDER_FLAGS,
+                        MetaDataType::BYTE,
+                        u8::from(climbing),
+                    )],
+                    None,
+                );
+            }
+            return;
+        }
+
         // If spectator: return false
 
         // TODO
@@ -2802,6 +2821,17 @@ impl LivingEntity {
     }
 }
 
+const fn spider_climbing_state(
+    entity_type: &EntityType,
+    horizontal_collision: bool,
+) -> Option<bool> {
+    if entity_type.id == EntityType::SPIDER.id || entity_type.id == EntityType::CAVE_SPIDER.id {
+        Some(horizontal_collision)
+    } else {
+        None
+    }
+}
+
 /// Mirrors vanilla's strict `random < probability` consume-effect gate.
 const fn consume_effect_probability_applies(probability: f32, random: f32) -> bool {
     random < probability
@@ -2926,6 +2956,22 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spiders_climb_only_during_horizontal_collisions() {
+        assert_eq!(spider_climbing_state(&EntityType::SPIDER, true), Some(true));
+        assert_eq!(
+            spider_climbing_state(&EntityType::SPIDER, false),
+            Some(false)
+        );
+        assert_eq!(
+            spider_climbing_state(&EntityType::CAVE_SPIDER, true),
+            Some(true)
+        );
+        assert_eq!(spider_climbing_state(&EntityType::ZOMBIE, true), None);
+        assert_eq!(TrackedData::SPIDER_FLAGS.v26_1, 16);
+        assert_eq!(TrackedData::SPIDER_FLAGS.v26_2, 16);
+    }
 
     fn effect(amplifier: u8, duration: i32) -> Effect {
         Effect {
