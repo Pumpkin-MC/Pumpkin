@@ -84,7 +84,10 @@ impl RangedBowAttackGoal {
         let shooter = mob.get_entity();
         let world = shooter.world.load_full();
         let arrow_entity = Entity::new(world.clone(), shooter.pos.load(), &EntityType::ARROW);
-        let arrow = ArrowEntity::new_shot(arrow_entity, shooter, ArrowPickup::Disallowed);
+        let arrow_item =
+            pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::ARROW);
+        let arrow =
+            ArrowEntity::new_shot(arrow_entity, shooter, &arrow_item, ArrowPickup::Disallowed);
         let direction = Self::target_vector(shooter, target);
 
         // `AbstractSkeleton#performRangedAttack`: power 1.6, inaccuracy 14 - difficulty * 4.

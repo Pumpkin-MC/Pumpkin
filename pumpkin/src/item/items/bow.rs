@@ -8,7 +8,6 @@ use crate::entity::player::Player;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
 use crate::entity::{Entity, EntityBase};
 use crate::item::{ItemBehaviour, ItemMetadata};
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -97,6 +96,14 @@ impl BowItem {
             return;
         }
 
+        let projectile = if let Some(slot) = arrow_slot {
+            let stack = player.inventory().get_stack(slot).await;
+            stack.lock().await.copy_with_count(1)
+        } else {
+            ItemStack::new(1, &Item::ARROW)
+        };
+        let infinite_projectile = projectile.item.id == Item::ARROW.id;
+
         // Calculate power and fire
         let power = Self::get_power_for_time(use_ticks);
 
@@ -114,12 +121,12 @@ impl BowItem {
                 .any(|(e, _)| **e == pumpkin_data::Enchantment::INFINITY);
         }
 
-        Self.fire_arrow(player, power).await;
+        Self::fire_arrow(player, power, projectile).await;
 
         // Consume arrow (if not creative and no Infinity)
         if let Some(slot) = arrow_slot
             && gamemode != GameMode::Creative
-            && !has_infinity
+            && !(has_infinity && infinite_projectile)
         {
             player.consume_arrow(slot).await;
         }
@@ -145,7 +152,7 @@ impl BowItem {
     }
 
     /// Fire an arrow from the bow
-    pub async fn fire_arrow(&self, player: &Player, power: f32) {
+    pub async fn fire_arrow(player: &Player, power: f32, projectile: ItemStack) {
         if power < 0.1 {
             return; // Not enough charge
         }
@@ -154,7 +161,11 @@ impl BowItem {
         let position = player.position();
 
         // Create arrow entity
-        let arrow_entity = Entity::new(world.clone(), position, &EntityType::ARROW);
+        let arrow_entity = Entity::new(
+            world.clone(),
+            position,
+            ArrowEntity::entity_type_for_item(projectile.item),
+        );
 
         // Determine pickup mode based on gamemode
         let gamemode = player.gamemode.load();
@@ -164,18 +175,8 @@ impl BowItem {
             ArrowPickup::Allowed
         };
 
-        let arrow_stack = if let Some(slot) = player.find_arrow().await {
-            let stack = player.inventory().get_stack(slot).await;
-            Some(stack.lock().await.clone())
-        } else {
-            None
-        };
-        let arrow = match arrow_stack.as_ref() {
-            Some(stack) => {
-                ArrowEntity::new_shot_with_stack(arrow_entity, player.get_entity(), pickup, stack)
-            }
-            None => ArrowEntity::new_shot(arrow_entity, player.get_entity(), pickup),
-        };
+        let arrow =
+            ArrowEntity::new_shot(arrow_entity, player.get_entity(), &projectile, pickup);
 
         // Read enchantments of the held item (bow)
         let held = player.inventory().held_item();

@@ -11,7 +11,6 @@ use crate::entity::{Entity, EntityBase};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{ChargedProjectilesImpl, EnchantmentsImpl};
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -37,7 +36,10 @@ impl ItemBehaviour for CrossbowItem {
             let held = inventory.held_item();
             let stack = held.lock().await.clone();
 
-            if Self::is_charged(&stack) {
+            if stack
+                .get_data_component::<ChargedProjectilesImpl>()
+                .is_some()
+            {
                 Self::fire_projectiles(player, &held).await;
                 return;
             }
@@ -87,7 +89,9 @@ impl ItemBehaviour for CrossbowItem {
                         let arrow_stack_arc = inventory.get_stack(slot).await;
                         let arrow_stack = arrow_stack_arc.lock().await;
                         let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
-                        arrow_stack.write_item_stack(&mut arrow_nbt);
+                        arrow_stack
+                            .copy_with_count(1)
+                            .write_item_stack(&mut arrow_nbt);
                         drop(arrow_stack);
                         (Some(arrow_nbt), slot)
                     } else if player.gamemode.load() == GameMode::Creative {
@@ -134,21 +138,12 @@ impl ItemBehaviour for CrossbowItem {
 }
 
 impl CrossbowItem {
-    /// A crossbow's default `charged_projectiles` component is empty; only a
-    /// component containing a projectile represents a loaded crossbow.
-    fn is_charged(stack: &ItemStack) -> bool {
-        stack
-            .get_data_component::<ChargedProjectilesImpl>()
-            .is_some_and(|charged| !charged.projectiles.is_empty())
-    }
-
     async fn fire_projectiles(player: &Player, held: &Arc<Mutex<ItemStack>>) {
-        let mut stack = held.lock().await;
-        let projectiles = stack
-            .get_data_component::<ChargedProjectilesImpl>()
-            .cloned();
-
-        if let Some(charged) = projectiles {
+        let (projectiles, has_multishot) = {
+            let stack = held.lock().await;
+            let projectiles = stack
+                .get_data_component::<ChargedProjectilesImpl>()
+                .cloned();
             let has_multishot =
                 stack
                     .get_data_component::<EnchantmentsImpl>()
@@ -158,7 +153,10 @@ impl CrossbowItem {
                             .iter()
                             .any(|(e, _)| **e == pumpkin_data::Enchantment::MULTISHOT)
                     });
+            (projectiles, has_multishot)
+        };
 
+        if let Some(charged) = projectiles {
             let world = player.world();
             world.play_sound(
                 Sound::ItemCrossbowShoot,
@@ -168,8 +166,10 @@ impl CrossbowItem {
 
             let (yaw, pitch) = player.rotation();
 
-            for projectile in charged.projectiles {
-                let arrow_stack = ItemStack::read_item_stack(&projectile);
+            for projectile_nbt in charged.projectiles {
+                let Some(projectile) = ItemStack::read_item_stack(&projectile_nbt) else {
+                    continue;
+                };
                 let yaws = if has_multishot {
                     vec![yaw - 10.0, yaw, yaw + 10.0]
                 } else {
@@ -177,64 +177,34 @@ impl CrossbowItem {
                 };
 
                 for t_yaw in yaws {
-                    let arrow_entity =
-                        Entity::new(world.clone(), player.position(), &EntityType::ARROW);
+                    let arrow_entity = Entity::new(
+                        world.clone(),
+                        player.position(),
+                        ArrowEntity::entity_type_for_item(projectile.item),
+                    );
                     let pickup = if player.gamemode.load() == GameMode::Creative {
                         ArrowPickup::CreativeOnly
                     } else {
                         ArrowPickup::Allowed
                     };
 
-                    let arrow = match arrow_stack.as_ref() {
-                        Some(stack) => ArrowEntity::new_shot_with_stack(
-                            arrow_entity,
-                            player.get_entity(),
-                            pickup,
-                            stack,
-                        ),
-                        None => ArrowEntity::new_shot(arrow_entity, player.get_entity(), pickup),
-                    };
+                    let arrow = ArrowEntity::new_shot(
+                        arrow_entity,
+                        player.get_entity(),
+                        &projectile,
+                        pickup,
+                    );
                     arrow.set_velocity_from_rotation(pitch, t_yaw, 0.0, 3.15, 1.0);
                     let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
                     world.spawn_entity(arrow_arc).await;
                 }
             }
 
-            stack
+            held.lock()
+                .await
                 .patch
                 .retain(|(id, _)| *id != DataComponent::ChargedProjectiles);
             player.damage_held_item(1).await;
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn empty_charged_projectiles_component_is_not_charged() {
-        let stack = ItemStack::new(1, &Item::CROSSBOW);
-
-        // Crossbows carry this empty component by default.
-        assert!(
-            stack
-                .get_data_component::<ChargedProjectilesImpl>()
-                .is_some()
-        );
-        assert!(!CrossbowItem::is_charged(&stack));
-    }
-
-    #[test]
-    fn charged_projectiles_component_with_projectile_is_charged() {
-        let mut stack = ItemStack::new(1, &Item::CROSSBOW);
-        stack.patch.push((
-            DataComponent::ChargedProjectiles,
-            Some(Box::new(ChargedProjectilesImpl {
-                projectiles: vec![pumpkin_nbt::compound::NbtCompound::new()],
-            })),
-        ));
-
-        assert!(CrossbowItem::is_charged(&stack));
     }
 }

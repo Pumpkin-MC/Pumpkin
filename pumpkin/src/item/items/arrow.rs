@@ -7,7 +7,11 @@ pub struct ArrowItem;
 
 impl ItemMetadata for ArrowItem {
     fn ids() -> Box<[u16]> {
-        Box::new([Item::ARROW.id])
+        Box::new([
+            Item::ARROW.id,
+            Item::TIPPED_ARROW.id,
+            Item::SPECTRAL_ARROW.id,
+        ])
     }
 }
 
