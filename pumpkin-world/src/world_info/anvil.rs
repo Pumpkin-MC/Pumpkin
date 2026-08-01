@@ -129,6 +129,10 @@ impl WorldInfoReader for AnvilLevelInfo {
         {
             let weather = read_weather(level_folder);
             info.data.clear_weather_time = weather.clear_weather_time;
+            info.data.rain_time = weather.rain_time;
+            info.data.raining = weather.raining;
+            info.data.thundering = weather.thundering;
+            info.data.thunder_time = weather.thunder_time;
         }
 
         // (wandering_trader.dat is not part of LevelData; stored separately when needed)
@@ -192,9 +196,14 @@ impl WorldInfoWriter for AnvilLevelInfo {
         }
 
         // weather.dat
-        let mut weather = read_weather(level_folder);
-        weather.clear_weather_time = info.clear_weather_time;
-        weather.data_version = data_version;
+        let weather = crate::world_info::data_files::WeatherData {
+            rain_time: info.rain_time,
+            raining: info.raining,
+            thundering: info.thundering,
+            thunder_time: info.thunder_time,
+            clear_weather_time: info.clear_weather_time,
+            data_version,
+        };
         if let Err(e) = write_weather(level_folder, &weather) {
             error!("Failed to write weather.dat: {e}");
         }
@@ -278,6 +287,10 @@ mod test {
             border_warning_blocks: 5.0,
             border_warning_time: 15.0,
             clear_weather_time: 0,
+            rain_time: 0,
+            raining: false,
+            thundering: false,
+            thunder_time: 0,
             data_packs: DataPacks {
                 disabled: vec![
                     "minecart_improvements".to_string(),
@@ -367,8 +380,36 @@ mod test {
         expected.data.world_gen_settings = WorldGenSettings::default();
         expected.data.day_time = 0;
         expected.data.clear_weather_time = 0;
+        expected.data.rain_time = 0;
+        expected.data.raining = false;
+        expected.data.thundering = false;
+        expected.data.thunder_time = 0;
 
         assert_eq!(level_dat_again, expected);
+    }
+
+    #[test]
+    fn preserves_world_clock_and_weather_data() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut data = LevelData::default(Seed(42));
+        data.day_time = 36_001;
+        data.clear_weather_time = 1_200;
+        data.rain_time = 9_001;
+        data.raining = true;
+        data.thundering = true;
+        data.thunder_time = 4_501;
+
+        AnvilLevelInfo
+            .write_world_info(&data, temp_dir.path())
+            .unwrap();
+
+        let loaded = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
+        assert_eq!(loaded.day_time, data.day_time);
+        assert_eq!(loaded.clear_weather_time, data.clear_weather_time);
+        assert_eq!(loaded.rain_time, data.rain_time);
+        assert_eq!(loaded.raining, data.raining);
+        assert_eq!(loaded.thundering, data.thundering);
+        assert_eq!(loaded.thunder_time, data.thunder_time);
     }
 
     #[test]

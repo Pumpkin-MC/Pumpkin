@@ -599,6 +599,25 @@ impl Server {
         debug!("Done awaiting tasks for server");
 
         info!("Starting worlds");
+        if let Some(overworld) = self
+            .worlds
+            .load()
+            .iter()
+            .find(|world| world.dimension == Dimension::OVERWORLD)
+        {
+            let day_time = overworld.get_time_of_day().await;
+            let weather = overworld.weather.lock().await.clone();
+            self.level_info.rcu(|level_info| {
+                let mut snapshot = (**level_info).clone();
+                snapshot.day_time = day_time;
+                snapshot.clear_weather_time = weather.clear_weather_time;
+                snapshot.rain_time = weather.rain_time;
+                snapshot.raining = weather.raining;
+                snapshot.thundering = weather.thundering;
+                snapshot.thunder_time = weather.thunder_time;
+                snapshot
+            });
+        }
         for world in self.worlds.load().iter() {
             world.shutdown().await;
         }
