@@ -135,10 +135,8 @@ impl PotionContents {
                 };
 
                 // Apply instant effects logic directly as they don't tick
-                if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id {
-                    let amount = (4 * ((amplifier as i32) + 1)) as f32 * instant_scale;
-                    target.heal(amount);
-                } else if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id {
+                let inverted = target.is_undead();
+                if LivingEntity::instant_effect_is_damage(effect_type, inverted) {
                     let amount = (6 * ((amplifier as i32) + 1)) as f32 * instant_scale;
 
                     target
@@ -148,6 +146,9 @@ impl PotionContents {
                             pumpkin_data::damage::DamageType::MAGIC,
                         )
                         .await;
+                } else {
+                    let amount = (4 * ((amplifier as i32) + 1)) as f32 * instant_scale;
+                    target.heal(amount);
                 }
 
                 // For instant effects, still add a short visual effect entry as before

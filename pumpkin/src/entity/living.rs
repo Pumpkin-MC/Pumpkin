@@ -137,6 +137,21 @@ impl LivingEntity {
         entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
     }
 
+    #[inline]
+    pub fn is_undead(&self) -> bool {
+        self.entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_INVERTED_HEALING_AND_HARM)
+    }
+
+    pub(crate) const fn instant_effect_is_damage(
+        effect_type: &'static StatusEffect,
+        inverted: bool,
+    ) -> bool {
+        (effect_type.id == StatusEffect::INSTANT_HEALTH.id && inverted)
+            || (effect_type.id == StatusEffect::INSTANT_DAMAGE.id && !inverted)
+    }
+
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
@@ -463,11 +478,13 @@ impl LivingEntity {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
-        // Apply instant effects immediately before storing
-        if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
+        let inverted = self.is_undead();
+        let is_instant = effect.effect_type.id == StatusEffect::INSTANT_HEALTH.id
+            || effect.effect_type.id == StatusEffect::INSTANT_DAMAGE.id;
+        if !Self::instant_effect_is_damage(effect.effect_type, inverted) && is_instant {
             let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
             self.heal(heal_amount);
-        } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
+        } else if is_instant {
             let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
             if let Some(dyn_self) = self
                 .entity
@@ -2988,6 +3005,29 @@ mod tests {
     #[test]
     fn stronger_effect_replaces_weaker_effect_even_when_shorter() {
         assert!(should_replace_effect(&effect(0, 1_200), &effect(1, 100)));
+    }
+
+    #[test]
+    fn instant_effects_invert_for_tagged_entities() {
+        assert!(EntityType::ZOMBIE.has_tag(&tag::EntityType::MINECRAFT_INVERTED_HEALING_AND_HARM));
+        assert!(EntityType::WITHER.has_tag(&tag::EntityType::MINECRAFT_INVERTED_HEALING_AND_HARM));
+        assert!(!EntityType::PLAYER.has_tag(&tag::EntityType::MINECRAFT_INVERTED_HEALING_AND_HARM));
+        assert!(!LivingEntity::instant_effect_is_damage(
+            &StatusEffect::INSTANT_HEALTH,
+            false
+        ));
+        assert!(LivingEntity::instant_effect_is_damage(
+            &StatusEffect::INSTANT_HEALTH,
+            true
+        ));
+        assert!(LivingEntity::instant_effect_is_damage(
+            &StatusEffect::INSTANT_DAMAGE,
+            false
+        ));
+        assert!(!LivingEntity::instant_effect_is_damage(
+            &StatusEffect::INSTANT_DAMAGE,
+            true
+        ));
     }
 
     #[test]
