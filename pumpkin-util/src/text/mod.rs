@@ -106,6 +106,7 @@ impl TextComponentBase {
         self.to_pretty_console_inner(&Style::default())
     }
 
+    #[expect(clippy::wrong_self_convention)]
     fn to_pretty_console_inner(self, current_styles: &Style) -> String {
         fn osc8_link(url: &str, text: &str) -> String {
             format!("\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\")
@@ -141,7 +142,7 @@ impl TextComponentBase {
             if let Some(click_event) = a.click_event {
                 style.click_event = Some(click_event);
             } else {
-                style.click_event = b.click_event.clone();
+                style.click_event.clone_from(&b.click_event);
             }
             style
         }
