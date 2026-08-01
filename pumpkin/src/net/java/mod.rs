@@ -252,8 +252,14 @@ impl JavaClient {
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
         let mut keep_alive_interval = tokio::time::interval(std::time::Duration::from_secs(15));
 
+        // Send block updates every tick
+        // TODO: Match the server tickrate
+        let mut block_update_interval = tokio::time::interval(std::time::Duration::from_millis(500));
+
         // Skip the immediate first tick so we don't send a keep-alive the exact millisecond they join
         keep_alive_interval.tick().await;
+
+        block_update_interval.tick().await;
 
         loop {
             tokio::select! {
@@ -276,14 +282,16 @@ impl JavaClient {
                     self.last_keep_alive_time.store(Instant::now());
                     let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
                     self.enqueue_packet(&packet).await;
+                }
 
+            _ = block_update_interval.tick() => {
                     let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
                     if seq != -1 {
                         self
                             .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
                             .await;
                     }
-                }
+            }
 
                 // INCOMING PACKETS
                 packet_opt = self.get_packet() => {
