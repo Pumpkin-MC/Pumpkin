@@ -51,6 +51,13 @@ impl ItemBehaviour for WindChargeItem {
             world
                 .spawn_entity(Arc::new(WindChargeEntity::new_normal(wind_charge)))
                 .await;
+
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                let inventory = player.inventory();
+                let held_item = inventory.held_item();
+                let mut held_item = held_item.lock().await;
+                held_item.decrement(1);
+            }
         })
     }
 
