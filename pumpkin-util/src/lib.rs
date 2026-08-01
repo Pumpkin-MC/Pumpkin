@@ -290,8 +290,59 @@ impl TryFrom<i32> for Hand {
     }
 }
 
+/// Returns elapsed time since `UNIX_EPOCH`.
+///
+/// # Panics
+///
+/// Panics if the system clock moved to before the Unix Epoch.
 #[inline]
 #[must_use]
 pub fn duration_since_epoch() -> Duration {
-    UNIX_EPOCH.elapsed().expect("Time went backwards")
+    UNIX_EPOCH
+        .elapsed()
+        .expect("System Clock set to before UNIX EPOCH")
+}
+
+/// Returns seconds since `UNIX_EPOCH`.
+///
+/// # Panics
+///
+/// Panics if the system clock moved to before the Unix Epoch.
+#[inline]
+#[must_use]
+pub fn unix_timestamp_secs() -> u64 {
+    duration_since_epoch().as_secs()
+}
+
+/// Returns milliseconds since `UNIX_EPOCH`.
+///
+/// # Panics
+///
+/// Panics if the system clock moved to before the Unix Epoch.
+#[inline]
+#[must_use]
+pub fn unix_timestamp_millis() -> u128 {
+    duration_since_epoch().as_millis()
+}
+
+/// Returns microseconds since `UNIX_EPOCH`.
+///
+/// # Panics
+///
+/// Panics if the system clock moved to before the Unix Epoch.
+#[inline]
+#[must_use]
+pub fn unix_timestamp_micros() -> u128 {
+    duration_since_epoch().as_micros()
+}
+
+/// Returns nanoseconds since `UNIX_EPOCH`.
+///
+/// # Panics
+///
+/// Panics if the system clock moved to before the Unix Epoch.
+#[inline]
+#[must_use]
+pub fn unix_timestamp_nanos() -> u128 {
+    duration_since_epoch().as_nanos()
 }

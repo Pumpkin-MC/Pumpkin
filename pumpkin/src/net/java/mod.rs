@@ -1,17 +1,11 @@
-use pumpkin_protocol::java::client::play::{
-    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
-};
-use pumpkin_util::duration_since_epoch;
-use pumpkin_world::level::SyncChunk;
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::time::Instant;
-use std::{io::Write, sync::Arc};
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::translation;
+use pumpkin_protocol::java::client::play::{
+    CAcknowledgeBlockChange, CChunkBatchEnd, CChunkBatchStart, CChunkData, CPlayDisconnect,
+};
 use pumpkin_protocol::java::server::play::{
     SAttack, SBundleItemSelected, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch,
     SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd, SCloseContainer,
@@ -49,7 +43,13 @@ use pumpkin_protocol::{
     ser::{NetworkWriteExt, ReadingError, WritingError},
 };
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::unix_timestamp_millis;
 use pumpkin_util::version::JavaMinecraftVersion;
+use pumpkin_world::level::SyncChunk;
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::time::Instant;
+use std::{io::Write, sync::Arc};
 use tokio::{
     io::{BufReader, BufWriter},
     net::{
@@ -266,8 +266,7 @@ impl JavaClient {
                     }
 
                     // Generate a unique ID (current timestamp in ms)
-                    let keep_alive_id = duration_since_epoch()
-                        .as_millis() as i64;
+                    let keep_alive_id = unix_timestamp_millis() as i64;
 
                     self.keep_alive_id.store(keep_alive_id);
                     self.wait_for_keep_alive.store(true, Ordering::Relaxed);

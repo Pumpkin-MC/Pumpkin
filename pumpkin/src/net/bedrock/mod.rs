@@ -91,7 +91,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use pumpkin_protocol::bedrock::server::login::ClientData;
-use pumpkin_util::{duration_since_epoch, version::BedrockMinecraftVersion};
+use pumpkin_util::{unix_timestamp_millis, version::BedrockMinecraftVersion};
 use pumpkin_world::level::SyncChunk;
 
 pub struct OutgoingPacket {
@@ -1233,7 +1233,7 @@ impl BedrockClient {
                         0,
                         [SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 19132)); 10],
                         request.time,
-                        duration_since_epoch().as_millis() as u64,
+                        unix_timestamp_millis() as u64,
                     ),
                     RakReliability::Unreliable,
                 )

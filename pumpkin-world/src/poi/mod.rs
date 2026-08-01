@@ -1,14 +1,14 @@
-use pumpkin_util::duration_since_epoch;
-use std::collections::HashMap;
-use std::io::{Cursor, Read, Write};
-use std::path::{Path, PathBuf};
-use tracing::{info, warn};
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::unix_timestamp_secs;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::io::{Cursor, Read, Write};
+use std::path::{Path, PathBuf};
+use tracing::{info, warn};
 
 /// POI type identifier for nether portals
 pub const POI_TYPE_NETHER_PORTAL: &str = "minecraft:nether_portal";
@@ -241,7 +241,7 @@ impl PoiRegion {
         let mut timestamp_table = [0u32; CHUNK_COUNT];
         let mut sector_data: Vec<Vec<u8>> = Vec::new();
 
-        let timestamp = duration_since_epoch().as_secs() as u32;
+        let timestamp = unix_timestamp_secs() as u32;
 
         // Start after header (2 sectors)
         let mut current_sector: u32 = 2;

@@ -1,9 +1,10 @@
+use super::anvil::CHUNK_COUNT;
 use crate::chunk::format::anvil::{AnvilChunkFile, SingleChunkDataSerializer};
 use crate::chunk::io::{ChunkSerializer, LoadedData};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::{Buf, BufMut, Bytes};
-use pumpkin_util::duration_since_epoch;
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::unix_timestamp_secs;
 use ruzstd::decoding::StreamingDecoder;
 use ruzstd::encoding::{CompressionLevel, compress_to_vec};
 use std::collections::HashMap;
@@ -13,7 +14,6 @@ use std::path::PathBuf;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tracing::{error, warn};
 use xxhash_rust::xxh64::xxh64;
-use super::anvil::CHUNK_COUNT;
 
 /// The signature used as both header and footer.
 /// <https://gist.github.com/Aaron2550/5701519671253d4c6190bde6706f9f98>
@@ -566,7 +566,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
             .await
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
-        self.timestamps[index] = duration_since_epoch().as_secs();
+        self.timestamps[index] = unix_timestamp_secs();
         self.chunks_data[index] = Some(chunk_raw);
         Ok(())
     }

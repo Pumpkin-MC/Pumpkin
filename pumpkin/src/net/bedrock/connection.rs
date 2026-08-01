@@ -3,7 +3,7 @@ use pumpkin_protocol::bedrock::{
     client::raknet::connection::CConnectedPong,
     server::raknet::connection::{SConnectedPing, SNewIncomingConnection},
 };
-use pumpkin_util::duration_since_epoch;
+use pumpkin_util::unix_timestamp_millis;
 
 use crate::net::bedrock::BedrockClient;
 
@@ -14,7 +14,7 @@ impl BedrockClient {
 
     pub async fn handle_connected_ping(&self, packet: SConnectedPing) {
         self.send_framed_packet(
-            &CConnectedPong::new(packet.time, duration_since_epoch().as_millis() as u64),
+            &CConnectedPong::new(packet.time, unix_timestamp_millis() as u64),
             RakReliability::Unreliable,
         )
         .await;
