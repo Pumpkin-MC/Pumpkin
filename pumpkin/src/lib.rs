@@ -20,7 +20,7 @@ use rustyline::history::FileHistory;
 use rustyline::{Config, error::ReadlineError};
 use std::collections::HashMap;
 use std::io::{Cursor, ErrorKind, IsTerminal, stdin};
-use std::process::{Command, Stdio, exit};
+use std::process::exit;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -200,6 +200,8 @@ pub fn stop_or_exit_server() {
 /// blocked thread) leaves the shell that launched us without local echo.
 #[cfg(unix)]
 pub fn restore_terminal() {
+    use std::process::{Command, Stdio};
+
     if stdin().is_terminal() {
         let _ = Command::new("stty")
             .arg("sane")
