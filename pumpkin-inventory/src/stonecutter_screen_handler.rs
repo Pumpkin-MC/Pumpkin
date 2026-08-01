@@ -83,6 +83,25 @@ impl StonecutterScreenHandler {
         }
     }
 
+    async fn select_recipe(&self, id: i32) -> bool {
+        if i32::from(self.selected_recipe.load(Ordering::Relaxed)) == id {
+            return false;
+        }
+
+        let input_stack = self.input_inventory.get_stack(0).await;
+        let input_stack = input_stack.lock().await;
+        let recipe_count = Self::get_available_recipes(&input_stack).len();
+        drop(input_stack);
+
+        if !(0..recipe_count).contains(&(id as usize)) {
+            return false;
+        }
+
+        self.selected_recipe.store(id as u8, Ordering::Relaxed);
+        self.update_output().await;
+        true
+    }
+
     fn get_available_recipes(input: &ItemStack) -> Vec<&'static StonecutterRecipe> {
         let item = input.item;
         RECIPES_STONECUTTING
@@ -119,15 +138,29 @@ impl ScreenHandler for StonecutterScreenHandler {
         Box::pin(async move {
             self.internal_on_slot_click(slot_index, button, action_type, player)
                 .await;
-            if slot_index == 0 {
+            if slot_index == 0 || slot_index == 1 {
                 self.update_output().await;
             }
         })
     }
 
-    fn quick_move<'a>(
+    fn on_button_click<'a>(
         &'a mut self,
         _player: &'a dyn InventoryPlayer,
+        id: i32,
+    ) -> ScreenHandlerFuture<'a, bool> {
+        Box::pin(async move {
+            let clicked = self.select_recipe(id).await;
+            if clicked {
+                self.send_content_updates().await;
+            }
+            clicked
+        })
+    }
+
+    fn quick_move<'a>(
+        &'a mut self,
+        player: &'a dyn InventoryPlayer,
         slot_index: i32,
     ) -> ScreenHandlerFuture<'a, ItemStack> {
         Box::pin(async move {
@@ -153,10 +186,18 @@ impl ScreenHandler for StonecutterScreenHandler {
                         }
                     }
 
+                    let moved_count = stack.item_count - slot_stack.item_count;
                     if slot_stack.is_empty() {
                         slot.set_stack(ItemStack::EMPTY.clone()).await;
                     } else {
                         slot.set_stack(slot_stack).await;
+                    }
+
+                    if slot_index == 1 {
+                        let mut taken_stack = stack.clone();
+                        taken_stack.set_count(moved_count);
+                        slot.on_take_item(player, &taken_stack).await;
+                        self.update_output().await;
                     }
                 }
             }
@@ -263,5 +304,80 @@ impl Slot for StonecutterOutputSlot {
         Box::pin(async move {
             self.inventory.mark_dirty();
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{build_equipment_slots, entity_equipment::EntityEquipment};
+
+    fn handler() -> StonecutterScreenHandler {
+        let player_inventory = Arc::new(PlayerInventory::new(
+            Arc::new(Mutex::new(EntityEquipment::new())),
+            Arc::new(build_equipment_slots()),
+        ));
+        StonecutterScreenHandler::new(0, &player_inventory)
+    }
+
+    #[tokio::test]
+    async fn selecting_a_valid_recipe_refreshes_the_output() {
+        let handler = handler();
+        let input = ItemStack::new(1, &Item::STONE);
+        let recipes = StonecutterScreenHandler::get_available_recipes(&input);
+        assert!(!recipes.is_empty());
+        handler.input_inventory.set_stack(0, input).await;
+
+        assert!(handler.select_recipe(0).await);
+        assert_eq!(handler.selected_recipe.load(Ordering::Relaxed), 0);
+
+        let output = handler.output_inventory.get_stack(0).await;
+        let output = output.lock().await;
+        let expected = Item::from_registry_key(recipes[0].result.id)
+            .expect("stonecutter recipe result must be a registered item");
+        assert_eq!(output.item.id, expected.id);
+        assert_eq!(output.item_count, recipes[0].result.count);
+    }
+
+    #[tokio::test]
+    async fn invalid_recipe_selection_preserves_the_current_output() {
+        let handler = handler();
+        handler
+            .input_inventory
+            .set_stack(0, ItemStack::new(1, &Item::STONE))
+            .await;
+        assert!(handler.select_recipe(0).await);
+
+        let output_before = handler.output_inventory.remove_stack(0).await;
+        handler
+            .output_inventory
+            .set_stack(0, output_before.clone())
+            .await;
+
+        assert!(!handler.select_recipe(i32::MAX).await);
+        assert_eq!(handler.selected_recipe.load(Ordering::Relaxed), 0);
+        let output_after = handler.output_inventory.remove_stack(0).await;
+        assert_eq!(output_after.item.id, output_before.item.id);
+        assert_eq!(output_after.item_count, output_before.item_count);
+    }
+
+    #[tokio::test]
+    async fn output_refresh_clears_selection_when_input_is_depleted() {
+        let handler = handler();
+        handler
+            .input_inventory
+            .set_stack(0, ItemStack::new(1, &Item::STONE))
+            .await;
+        assert!(handler.select_recipe(0).await);
+
+        handler
+            .input_inventory
+            .set_stack(0, ItemStack::EMPTY.clone())
+            .await;
+        handler.update_output().await;
+
+        assert_eq!(handler.selected_recipe.load(Ordering::Relaxed), u8::MAX);
+        let output = handler.output_inventory.get_stack(0).await;
+        assert!(output.lock().await.is_empty());
     }
 }
