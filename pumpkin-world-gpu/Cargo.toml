@@ -10,6 +10,7 @@ bytemuck = { workspace = true, features = ["derive"] }
 pollster.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }
 pumpkin-util.workspace = true
+pumpkin-world.workspace = true
 wgpu.workspace = true
 
 [dev-dependencies]

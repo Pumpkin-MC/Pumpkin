@@ -27,6 +27,9 @@ const OP_BINARY_MUL: u32 = 13u;
 const OP_BINARY_MIN: u32 = 14u;
 const OP_BINARY_MAX: u32 = 15u;
 const OP_CLAMPED_Y_GRADIENT: u32 = 16u;
+// Samples this node's own DoublePerlin sampler at the point scaled by
+// (param0 = xz_scale, param1 = y_scale); input0 carries the sampler index.
+const OP_NOISE: u32 = 17u;
 
 struct Instruction {
     opcode: u32,
@@ -37,6 +40,29 @@ struct Instruction {
     param1: f32,
     param2: f32,
     param3: f32,
+}
+
+struct OctaveParams {
+    x_origin: f32,
+    y_origin: f32,
+    z_origin: f32,
+    amplitude: f32,
+    persistence: f32,
+    lacunarity: f32,
+    _pad0: f32,
+    _pad1: f32,
+}
+
+// One DoublePerlin sampler: two runs of octaves in the shared pool.
+struct SamplerRef {
+    first_start: u32,
+    first_count: u32,
+    second_start: u32,
+    second_count: u32,
+    amplitude: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
 struct Dims {
@@ -51,6 +77,118 @@ struct Dims {
 // Scratch for intermediate node values, laid out [node * num_points + point].
 @group(0) @binding(3) var<storage, read_write> scratch: array<f32>;
 @group(0) @binding(4) var<storage, read_write> out_density: array<f32>;
+@group(0) @binding(5) var<storage, read> samplers: array<SamplerRef>;
+@group(0) @binding(6) var<storage, read> octaves: array<OctaveParams>;
+// 256 entries per octave, in the same order as `octaves`.
+@group(0) @binding(7) var<storage, read> permutations: array<u32>;
+
+const GRADIENTS: array<vec3<f32>, 16> = array<vec3<f32>, 16>(
+    vec3<f32>(1.0, 1.0, 0.0), vec3<f32>(-1.0, 1.0, 0.0),
+    vec3<f32>(1.0, -1.0, 0.0), vec3<f32>(-1.0, -1.0, 0.0),
+    vec3<f32>(1.0, 0.0, 1.0), vec3<f32>(-1.0, 0.0, 1.0),
+    vec3<f32>(1.0, 0.0, -1.0), vec3<f32>(-1.0, 0.0, -1.0),
+    vec3<f32>(0.0, 1.0, 1.0), vec3<f32>(0.0, -1.0, 1.0),
+    vec3<f32>(0.0, 1.0, -1.0), vec3<f32>(0.0, -1.0, -1.0),
+    vec3<f32>(1.0, 1.0, 0.0), vec3<f32>(0.0, -1.0, 1.0),
+    vec3<f32>(-1.0, 1.0, 0.0), vec3<f32>(0.0, -1.0, -1.0),
+);
+
+fn perlin_fade(t: f32) -> f32 {
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+fn grad(hash: u32, x: f32, y: f32, z: f32) -> f32 {
+    let g = GRADIENTS[hash & 15u];
+    return g.x * x + g.y * y + g.z * z;
+}
+
+fn perm_at(octave_index: u32, input: i32) -> u32 {
+    return permutations[octave_index * 256u + u32(input & 0xFF)];
+}
+
+fn lerp1(delta: f32, start: f32, end: f32) -> f32 {
+    return start + delta * (end - start);
+}
+
+fn lerp2(dx: f32, dy: f32, v00: f32, v10: f32, v01: f32, v11: f32) -> f32 {
+    return lerp1(dy, lerp1(dx, v00, v10), lerp1(dx, v01, v11));
+}
+
+fn lerp3(
+    dx: f32, dy: f32, dz: f32,
+    v000: f32, v100: f32, v010: f32, v110: f32,
+    v001: f32, v101: f32, v011: f32, v111: f32,
+) -> f32 {
+    return lerp1(dz, lerp2(dx, dy, v000, v100, v010, v110), lerp2(dx, dy, v001, v101, v011, v111));
+}
+
+// Mirrors PerlinNoiseSampler::sample for the y_scale == 0 case, the only one the
+// octave sampler uses.
+fn perlin_sample(octave_index: u32, x: f32, y: f32, z: f32) -> f32 {
+    let x_floor = floor(x);
+    let y_floor = floor(y);
+    let z_floor = floor(z);
+
+    let local_x = x - x_floor;
+    let local_y = y - y_floor;
+    let local_z = z - z_floor;
+
+    let xi = i32(x_floor);
+    let yi = i32(y_floor);
+    let zi = i32(z_floor);
+
+    let i = perm_at(octave_index, xi);
+    let j = perm_at(octave_index, xi + 1);
+    let k = perm_at(octave_index, i32(i) + yi);
+    let l = perm_at(octave_index, i32(i) + yi + 1);
+    let m = perm_at(octave_index, i32(j) + yi);
+    let n = perm_at(octave_index, i32(j) + yi + 1);
+
+    let d = grad(perm_at(octave_index, i32(k) + zi), local_x, local_y, local_z);
+    let e = grad(perm_at(octave_index, i32(m) + zi), local_x - 1.0, local_y, local_z);
+    let f = grad(perm_at(octave_index, i32(l) + zi), local_x, local_y - 1.0, local_z);
+    let g = grad(perm_at(octave_index, i32(n) + zi), local_x - 1.0, local_y - 1.0, local_z);
+    let h = grad(perm_at(octave_index, i32(k) + zi + 1), local_x, local_y, local_z - 1.0);
+    let o = grad(perm_at(octave_index, i32(m) + zi + 1), local_x - 1.0, local_y, local_z - 1.0);
+    let p = grad(perm_at(octave_index, i32(l) + zi + 1), local_x, local_y - 1.0, local_z - 1.0);
+    let q = grad(perm_at(octave_index, i32(n) + zi + 1), local_x - 1.0, local_y - 1.0, local_z - 1.0);
+
+    return lerp3(
+        perlin_fade(local_x), perlin_fade(local_y), perlin_fade(local_z),
+        d, e, f, g, h, o, p, q,
+    );
+}
+
+fn maintain_precision(value: f32) -> f32 {
+    let period = 3.3554432e7;
+    return value - floor(value / period + 0.5) * period;
+}
+
+fn octave_sample(start: u32, count: u32, x: f32, y: f32, z: f32) -> f32 {
+    var total: f32 = 0.0;
+    for (var i: u32 = 0u; i < count; i = i + 1u) {
+        let octave_index = start + i;
+        let params = octaves[octave_index];
+
+        let sample = perlin_sample(
+            octave_index,
+            maintain_precision(x * params.lacunarity) + params.x_origin,
+            maintain_precision(y * params.lacunarity) + params.y_origin,
+            maintain_precision(z * params.lacunarity) + params.z_origin,
+        );
+        total = total + params.amplitude * sample * params.persistence;
+    }
+    return total;
+}
+
+// Mirrors DoublePerlinNoiseSampler::sample.
+fn double_perlin_sample(sampler_index: u32, x: f32, y: f32, z: f32) -> f32 {
+    let s = samplers[sampler_index];
+    let scale = 1.0181268882175227;
+    let first = octave_sample(s.first_start, s.first_count, x, y, z);
+    let second = octave_sample(s.second_start, s.second_count, x * scale, y * scale, z * scale);
+    return (first + second) * s.amplitude;
+}
 
 // f32 mirror of pumpkin_util::math::clamped_map.
 fn clamped_map(value: f32, old_start: f32, old_end: f32, new_start: f32, new_end: f32) -> f32 {
@@ -71,7 +209,9 @@ fn evaluate_graph(@builtin(global_invocation_id) gid: vec3<u32>) {
         return;
     }
 
+    let px = points[point_index * 3u];
     let py = points[point_index * 3u + 1u];
+    let pz = points[point_index * 3u + 2u];
 
     for (var i: u32 = 0u; i < dims.num_instructions; i = i + 1u) {
         let instruction = instructions[i];
@@ -121,6 +261,14 @@ fn evaluate_graph(@builtin(global_invocation_id) gid: vec3<u32>) {
                     instruction.param1,
                     instruction.param2,
                     instruction.param3,
+                );
+            }
+            case 17u: {
+                result = double_perlin_sample(
+                    instruction.input0,
+                    px * instruction.param0,
+                    py * instruction.param1,
+                    pz * instruction.param0,
                 );
             }
             default: { result = 0.0; }

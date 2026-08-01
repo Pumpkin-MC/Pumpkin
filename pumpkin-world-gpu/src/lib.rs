@@ -22,7 +22,7 @@ const WORKGROUP_SIZE: u32 = 64;
 /// `pumpkin-util/src/noise/perlin.rs`). Padded to 32 bytes to keep
 /// `array<OctaveParams>` naturally aligned in the WGSL storage buffer.
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, Pod, Zeroable, Debug)]
 pub struct OctaveParams {
     pub x_origin: f32,
     pub y_origin: f32,
@@ -30,8 +30,31 @@ pub struct OctaveParams {
     pub amplitude: f32,
     pub persistence: f32,
     pub lacunarity: f32,
-    _pad0: f32,
-    _pad1: f32,
+    padding0: f32,
+    padding1: f32,
+}
+
+impl OctaveParams {
+    #[must_use]
+    pub const fn new(
+        x_origin: f32,
+        y_origin: f32,
+        z_origin: f32,
+        amplitude: f32,
+        persistence: f32,
+        lacunarity: f32,
+    ) -> Self {
+        Self {
+            x_origin,
+            y_origin,
+            z_origin,
+            amplitude,
+            persistence,
+            lacunarity,
+            padding0: 0.0,
+            padding1: 0.0,
+        }
+    }
 }
 
 #[repr(C)]
@@ -66,16 +89,14 @@ impl OctaveBatch {
 
         for data in &sampler.samplers {
             let (x_origin, y_origin, z_origin) = data.sampler.origin();
-            params.push(OctaveParams {
-                x_origin: x_origin as f32,
-                y_origin: y_origin as f32,
-                z_origin: z_origin as f32,
-                amplitude: data.amplitude as f32,
-                persistence: data.persistence as f32,
-                lacunarity: data.lacunarity as f32,
-                _pad0: 0.0,
-                _pad1: 0.0,
-            });
+            params.push(OctaveParams::new(
+                x_origin as f32,
+                y_origin as f32,
+                z_origin as f32,
+                data.amplitude as f32,
+                data.persistence as f32,
+                data.lacunarity as f32,
+            ));
             permutations.extend(data.sampler.permutation().iter().map(|&b| u32::from(b)));
         }
 
@@ -142,17 +163,16 @@ impl GpuNoiseContext {
             source: wgpu::ShaderSource::Wgsl(include_str!("octave_perlin.wgsl").into()),
         });
 
-        let bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("octave_perlin bind group layout"),
-                entries: &[
-                    storage_entry(0, wgpu::BufferBindingType::Uniform),
-                    storage_entry(1, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(2, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(3, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(4, wgpu::BufferBindingType::Storage { read_only: false }),
-                ],
-            });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("octave_perlin bind group layout"),
+            entries: &[
+                storage_entry(0, wgpu::BufferBindingType::Uniform),
+                storage_entry(1, wgpu::BufferBindingType::Storage { read_only: true }),
+                storage_entry(2, wgpu::BufferBindingType::Storage { read_only: true }),
+                storage_entry(3, wgpu::BufferBindingType::Storage { read_only: true }),
+                storage_entry(4, wgpu::BufferBindingType::Storage { read_only: false }),
+            ],
+        });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("octave_perlin pipeline layout"),
@@ -183,6 +203,9 @@ impl GpuNoiseContext {
                     storage_entry(2, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(3, wgpu::BufferBindingType::Storage { read_only: false }),
                     storage_entry(4, wgpu::BufferBindingType::Storage { read_only: false }),
+                    storage_entry(5, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(6, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(7, wgpu::BufferBindingType::Storage { read_only: true }),
                 ],
             });
 
@@ -217,11 +240,8 @@ impl GpuNoiseContext {
     /// Evaluates a compiled density-function graph (see [`graph::compile`]) at every
     /// point in `points`, returning the root node's value per point.
     #[must_use]
-    pub fn evaluate_graph(
-        &self,
-        instructions: &[graph::Instruction],
-        points: &[[f32; 3]],
-    ) -> Vec<f32> {
+    pub fn evaluate_graph(&self, compiled: &graph::CompiledGraph, points: &[[f32; 3]]) -> Vec<f32> {
+        let instructions = &compiled.instructions;
         if points.is_empty() || instructions.is_empty() {
             return vec![0.0; points.len()];
         }
@@ -276,6 +296,21 @@ impl GpuNoiseContext {
             mapped_at_creation: false,
         });
 
+        // WGSL storage bindings must be non-empty even when a graph uses no noise
+        // nodes, so fall back to a single zeroed element rather than a 0-byte buffer.
+        let samplers_buffer = self.storage_or_placeholder(
+            "graph samplers",
+            bytemuck::cast_slice(&compiled.samplers.samplers),
+        );
+        let octaves_buffer = self.storage_or_placeholder(
+            "graph octaves",
+            bytemuck::cast_slice(&compiled.samplers.octaves),
+        );
+        let permutations_buffer = self.storage_or_placeholder(
+            "graph permutations",
+            bytemuck::cast_slice(&compiled.samplers.permutations),
+        );
+
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("density_graph bind group"),
             layout: &self.graph_bind_group_layout,
@@ -285,6 +320,9 @@ impl GpuNoiseContext {
                 bind_entry(2, &points_buffer),
                 bind_entry(3, &scratch_buffer),
                 bind_entry(4, &output_buffer),
+                bind_entry(5, &samplers_buffer),
+                bind_entry(6, &octaves_buffer),
+                bind_entry(7, &permutations_buffer),
             ],
         });
 
@@ -306,6 +344,21 @@ impl GpuNoiseContext {
         self.queue.submit(Some(encoder.finish()));
 
         self.read_back(&staging_buffer)
+    }
+
+    fn storage_or_placeholder(&self, label: &str, contents: &[u8]) -> wgpu::Buffer {
+        const PLACEHOLDER: [u8; 32] = [0; 32];
+        let contents = if contents.is_empty() {
+            &PLACEHOLDER[..]
+        } else {
+            contents
+        };
+        self.device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(label),
+                contents,
+                usage: wgpu::BufferUsages::STORAGE,
+            })
     }
 
     fn read_back(&self, staging_buffer: &wgpu::Buffer) -> Vec<f32> {
@@ -506,8 +559,11 @@ mod test {
 
         let mut max_abs_diff = 0.0f64;
         for (point, &gpu_value) in points.iter().zip(&gpu_results) {
-            let cpu_value =
-                cpu_sampler.sample(f64::from(point[0]), f64::from(point[1]), f64::from(point[2]));
+            let cpu_value = cpu_sampler.sample(
+                f64::from(point[0]),
+                f64::from(point[1]),
+                f64::from(point[2]),
+            );
             let diff = (cpu_value - f64::from(gpu_value)).abs();
             max_abs_diff = max_abs_diff.max(diff);
         }
@@ -529,7 +585,10 @@ mod test {
             return;
         };
 
-        let instructions = crate::graph::test::sample_graph();
+        let compiled = crate::graph::CompiledGraph {
+            instructions: crate::graph::test::sample_graph(),
+            samplers: crate::graph::SamplerPool::default(),
+        };
 
         // Spread y across the gradient's clamped range and both saturated ends.
         let points: Vec<[f32; 3]> = (0..512)
@@ -539,15 +598,83 @@ mod test {
             })
             .collect();
 
-        let gpu_results = ctx.evaluate_graph(&instructions, &points);
+        let gpu_results = ctx.evaluate_graph(&compiled, &points);
         assert_eq!(gpu_results.len(), points.len());
 
         for (point, &gpu_value) in points.iter().zip(&gpu_results) {
-            let cpu_value = crate::graph::evaluate_cpu(&instructions, point[0], point[1], point[2]);
+            let cpu_value = crate::graph::evaluate_cpu(
+                &compiled.instructions,
+                &compiled.samplers,
+                point[0],
+                point[1],
+                point[2],
+            );
             assert!(
                 (cpu_value - gpu_value).abs() < 1e-5,
                 "graph mismatch at {point:?}: cpu={cpu_value} gpu={gpu_value}"
             );
         }
+    }
+
+    /// End-to-end check of the Noise opcode: a graph containing a real seeded sampler,
+    /// evaluated on the GPU, against the CPU `DoublePerlinNoiseSampler` it came from.
+    /// This is what proves the sampler pool is uploaded and indexed correctly.
+    #[test]
+    fn gpu_noise_opcode_matches_real_cpu_sampler() {
+        use pumpkin_data::chunk::DoublePerlinNoiseParameters;
+        use pumpkin_world::generation::noise::perlin::DoublePerlinNoiseSampler;
+        use pumpkin_world::generation::noise::router::proto_noise_router::DoublePerlinNoiseBuilder;
+
+        const AMPLITUDES: &[f64] = &[1.0, 1.0, 1.0];
+
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        let params = DoublePerlinNoiseParameters::new(
+            0,
+            -7,
+            AMPLITUDES,
+            0x5F3B_1A77,
+            0x91E4_C2D0,
+            DoublePerlinNoiseSampler::get_amplitude(AMPLITUDES),
+        );
+        let deriver = crate::graph::test::test_deriver();
+        let cpu_sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(&deriver, &params);
+
+        let mut samplers = crate::graph::SamplerPool::default();
+        let (first, second) = cpu_sampler.samplers();
+        let sampler_index = samplers.push_double_perlin(first, second, cpu_sampler.amplitude());
+
+        let mut noise = crate::graph::Instruction::noise(0, sampler_index, 1.0, 1.0);
+        noise.input1 = 0;
+        let compiled = crate::graph::CompiledGraph {
+            instructions: vec![noise],
+            samplers,
+        };
+
+        let points: Vec<[f32; 3]> = (0..1000)
+            .map(|i| {
+                let f = i as f32;
+                [f * 1.7, f * -0.9, f * 2.3]
+            })
+            .collect();
+
+        let gpu_results = ctx.evaluate_graph(&compiled, &points);
+
+        let mut max_diff = 0.0f64;
+        for (point, &gpu_value) in points.iter().zip(&gpu_results) {
+            let expected = cpu_sampler.sample(
+                f64::from(point[0]),
+                f64::from(point[1]),
+                f64::from(point[2]),
+            );
+            max_diff = max_diff.max((expected - f64::from(gpu_value)).abs());
+        }
+
+        assert!(
+            max_diff < 1e-3,
+            "GPU Noise opcode diverged from the CPU sampler by {max_diff}"
+        );
     }
 }

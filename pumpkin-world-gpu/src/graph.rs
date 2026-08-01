@@ -9,10 +9,15 @@
 //! Not every node type is supported yet — [`compile`] reports the first one it cannot
 //! lower rather than silently emitting something wrong.
 
+use crate::OctaveParams;
 use bytemuck::{Pod, Zeroable};
 use pumpkin_data::noise_router::{
     BaseNoiseFunctionComponent, BinaryOperation, LinearOperation, UnaryOperation,
 };
+use pumpkin_util::{
+    noise::perlin::OctavePerlinNoiseSampler, random::xoroshiro128::XoroshiroSplitter,
+};
+use pumpkin_world::generation::noise::router::proto_noise_router::DoublePerlinNoiseBuilder;
 
 /// Opcodes understood by `graph.wgsl`. Values must stay in sync with the `OP_*`
 /// constants in that shader.
@@ -38,6 +43,9 @@ pub enum OpCode {
     BinaryMin = 14,
     BinaryMax = 15,
     ClampedYGradient = 16,
+    /// Samples this node's own sampler; `input0` is an index into
+    /// [`SamplerPool::samplers`], `param0`/`param1` are the xz/y scales.
+    Noise = 17,
 }
 
 /// One node of the flattened graph.
@@ -60,6 +68,17 @@ pub struct Instruction {
 }
 
 impl Instruction {
+    /// Builds a [`OpCode::Noise`] instruction referencing `sampler_index` in the
+    /// graph's [`SamplerPool`].
+    #[must_use]
+    pub const fn noise(index: usize, sampler_index: u32, xz_scale: f32, y_scale: f32) -> Self {
+        let mut instruction = Self::new(OpCode::Noise, index);
+        instruction.input0 = sampler_index;
+        instruction.param0 = xz_scale;
+        instruction.param1 = y_scale;
+        instruction
+    }
+
     const fn new(opcode: OpCode, index: usize) -> Self {
         let own = index as u32;
         Self {
@@ -72,6 +91,84 @@ impl Instruction {
             param2: 0.0,
             param3: 0.0,
         }
+    }
+}
+
+/// GPU-side descriptor of one `DoublePerlinNoiseSampler`: two runs of octaves in the
+/// shared pool, plus the amplitude applied to their sum.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable, Debug)]
+pub struct SamplerRef {
+    pub first_start: u32,
+    pub first_count: u32,
+    pub second_start: u32,
+    pub second_count: u32,
+    pub amplitude: f32,
+    padding0: f32,
+    padding1: f32,
+    padding2: f32,
+}
+
+/// Every noise sampler referenced by a compiled graph, flattened into GPU-uploadable
+/// tables.
+///
+/// Each `Noise`-family node owns its own seeded sampler, so instructions index into
+/// [`Self::samplers`] rather than carrying sampler state inline.
+#[derive(Default, Debug)]
+pub struct SamplerPool {
+    pub samplers: Vec<SamplerRef>,
+    /// Octave parameters for every sampler, concatenated.
+    pub octaves: Vec<OctaveParams>,
+    /// 256-entry permutation table per octave, concatenated in the same order.
+    pub permutations: Vec<u32>,
+}
+
+impl SamplerPool {
+    /// Appends a double-Perlin sampler, returning the index instructions should use.
+    pub fn push_double_perlin(
+        &mut self,
+        first: &OctavePerlinNoiseSampler,
+        second: &OctavePerlinNoiseSampler,
+        amplitude: f64,
+    ) -> u32 {
+        let first_start = self.push_octaves(first);
+        let second_start = self.push_octaves(second);
+
+        let index = self.samplers.len() as u32;
+        self.samplers.push(SamplerRef {
+            first_start,
+            first_count: first.samplers.len() as u32,
+            second_start,
+            second_count: second.samplers.len() as u32,
+            amplitude: amplitude as f32,
+            padding0: 0.0,
+            padding1: 0.0,
+            padding2: 0.0,
+        });
+        index
+    }
+
+    fn push_octaves(&mut self, sampler: &OctavePerlinNoiseSampler) -> u32 {
+        let start = self.octaves.len() as u32;
+        for data in &sampler.samplers {
+            let (x_origin, y_origin, z_origin) = data.sampler.origin();
+            self.octaves.push(OctaveParams::new(
+                x_origin as f32,
+                y_origin as f32,
+                z_origin as f32,
+                data.amplitude as f32,
+                data.persistence as f32,
+                data.lacunarity as f32,
+            ));
+            self.permutations
+                .extend(data.sampler.permutation().iter().map(|&b| u32::from(b)));
+        }
+        start
+    }
+
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.samplers.is_empty()
     }
 }
 
@@ -94,16 +191,44 @@ impl std::fmt::Display for UnsupportedNode {
 
 impl std::error::Error for UnsupportedNode {}
 
-/// Lowers a component stack into GPU instructions.
+/// A compiled graph plus the sampler tables its instructions index into.
+#[derive(Debug)]
+pub struct CompiledGraph {
+    pub instructions: Vec<Instruction>,
+    pub samplers: SamplerPool,
+}
+
+/// Lowers a component stack into GPU instructions, building each noise node's sampler
+/// from `base_random_deriver` exactly as `ProtoNoiseRouter` does on the CPU, so both
+/// paths use the same seeded state.
 ///
 /// # Errors
 /// Returns [`UnsupportedNode`] for the first node whose type has no opcode yet, so
 /// callers can fall back to the CPU path instead of generating wrong terrain.
-pub fn compile(stack: &[BaseNoiseFunctionComponent]) -> Result<Vec<Instruction>, UnsupportedNode> {
+pub fn compile(
+    stack: &[BaseNoiseFunctionComponent],
+    base_random_deriver: &XoroshiroSplitter,
+) -> Result<CompiledGraph, UnsupportedNode> {
     let mut out = Vec::with_capacity(stack.len());
+    let mut samplers = SamplerPool::default();
 
     for (index, component) in stack.iter().enumerate() {
         let instruction = match component {
+            BaseNoiseFunctionComponent::Noise { data } => {
+                let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                    base_random_deriver,
+                    &data.noise_id,
+                );
+                let (first, second) = sampler.samplers();
+                let sampler_index = samplers.push_double_perlin(first, second, sampler.amplitude());
+
+                Instruction::noise(
+                    index,
+                    sampler_index,
+                    data.xz_scale as f32,
+                    data.y_scale as f32,
+                )
+            }
             BaseNoiseFunctionComponent::Constant { value } => {
                 let mut i = Instruction::new(OpCode::Constant, index);
                 i.param0 = *value as f32;
@@ -182,7 +307,10 @@ pub fn compile(stack: &[BaseNoiseFunctionComponent]) -> Result<Vec<Instruction>,
         out.push(instruction);
     }
 
-    Ok(out)
+    Ok(CompiledGraph {
+        instructions: out,
+        samplers,
+    })
 }
 
 const fn node_name(component: &BaseNoiseFunctionComponent) -> &'static str {
@@ -219,7 +347,13 @@ const fn node_name(component: &BaseNoiseFunctionComponent) -> &'static str {
 /// `pumpkin-world/src/generation/noise/router/density_function/`, and this exists to
 /// pin down what the shader should produce.
 #[must_use]
-pub fn evaluate_cpu(instructions: &[Instruction], x: f32, y: f32, z: f32) -> f32 {
+pub fn evaluate_cpu(
+    instructions: &[Instruction],
+    pool: &SamplerPool,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> f32 {
     let mut values = vec![0.0f32; instructions.len()];
 
     for (index, instruction) in instructions.iter().enumerate() {
@@ -274,12 +408,185 @@ pub fn evaluate_cpu(instructions: &[Instruction], x: f32, y: f32, z: f32) -> f32
             x if x == OpCode::ClampedYGradient as u32 => {
                 clamped_map(y, p.param0, p.param1, p.param2, p.param3)
             }
+            op if op == OpCode::Noise as u32 => double_perlin_sample(
+                pool,
+                p.input0 as usize,
+                x * p.param0,
+                y * p.param1,
+                z * p.param0,
+            ),
             _ => 0.0,
         };
-        let _ = (x, z);
     }
 
     values.last().copied().unwrap_or(0.0)
+}
+
+/// f32 mirror of `DoublePerlinNoiseSampler::sample`, reading from the flattened pool.
+fn double_perlin_sample(pool: &SamplerPool, sampler_index: usize, x: f32, y: f32, z: f32) -> f32 {
+    const SCALE: f32 = 1.018_126_9;
+
+    let Some(sampler) = pool.samplers.get(sampler_index) else {
+        return 0.0;
+    };
+
+    let first = octave_sample(pool, sampler.first_start, sampler.first_count, x, y, z);
+    let second = octave_sample(
+        pool,
+        sampler.second_start,
+        sampler.second_count,
+        x * SCALE,
+        y * SCALE,
+        z * SCALE,
+    );
+    (first + second) * sampler.amplitude
+}
+
+fn octave_sample(pool: &SamplerPool, start: u32, count: u32, x: f32, y: f32, z: f32) -> f32 {
+    let mut total = 0.0f32;
+    for i in 0..count {
+        let octave_index = (start + i) as usize;
+        let Some(params) = pool.octaves.get(octave_index) else {
+            continue;
+        };
+        let sample = perlin_sample(
+            pool,
+            octave_index,
+            maintain_precision(x * params.lacunarity) + params.x_origin,
+            maintain_precision(y * params.lacunarity) + params.y_origin,
+            maintain_precision(z * params.lacunarity) + params.z_origin,
+        );
+        total += params.amplitude * sample * params.persistence;
+    }
+    total
+}
+
+fn maintain_precision(value: f32) -> f32 {
+    const PERIOD: f32 = 3.355_443_2e7;
+    value - (value / PERIOD + 0.5).floor() * PERIOD
+}
+
+fn perlin_fade(t: f32) -> f32 {
+    t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
+}
+
+fn perm_at(pool: &SamplerPool, octave_index: usize, input: i32) -> u32 {
+    pool.permutations
+        .get(octave_index * 256 + (input & 0xFF) as usize)
+        .copied()
+        .unwrap_or(0)
+}
+
+fn grad(hash: u32, x: f32, y: f32, z: f32) -> f32 {
+    // Same 16-entry table as pumpkin_util::noise::GRADIENTS.
+    const GRADIENTS: [[f32; 3]; 16] = [
+        [1.0, 1.0, 0.0],
+        [-1.0, 1.0, 0.0],
+        [1.0, -1.0, 0.0],
+        [-1.0, -1.0, 0.0],
+        [1.0, 0.0, 1.0],
+        [-1.0, 0.0, 1.0],
+        [1.0, 0.0, -1.0],
+        [-1.0, 0.0, -1.0],
+        [0.0, 1.0, 1.0],
+        [0.0, -1.0, 1.0],
+        [0.0, 1.0, -1.0],
+        [0.0, -1.0, -1.0],
+        [1.0, 1.0, 0.0],
+        [0.0, -1.0, 1.0],
+        [-1.0, 1.0, 0.0],
+        [0.0, -1.0, -1.0],
+    ];
+    let g = GRADIENTS[(hash & 15) as usize];
+    g[0] * x + g[1] * y + g[2] * z
+}
+
+#[expect(clippy::many_single_char_names)]
+fn perlin_sample(pool: &SamplerPool, octave_index: usize, x: f32, y: f32, z: f32) -> f32 {
+    let x_floor = x.floor();
+    let y_floor = y.floor();
+    let z_floor = z.floor();
+
+    let local_x = x - x_floor;
+    let local_y = y - y_floor;
+    let local_z = z - z_floor;
+
+    let xi = x_floor as i32;
+    let yi = y_floor as i32;
+    let zi = z_floor as i32;
+
+    let i = perm_at(pool, octave_index, xi) as i32;
+    let j = perm_at(pool, octave_index, xi + 1) as i32;
+    let k = perm_at(pool, octave_index, i + yi) as i32;
+    let l = perm_at(pool, octave_index, i + yi + 1) as i32;
+    let m = perm_at(pool, octave_index, j + yi) as i32;
+    let n = perm_at(pool, octave_index, j + yi + 1) as i32;
+
+    let d = grad(
+        perm_at(pool, octave_index, k + zi),
+        local_x,
+        local_y,
+        local_z,
+    );
+    let e = grad(
+        perm_at(pool, octave_index, m + zi),
+        local_x - 1.0,
+        local_y,
+        local_z,
+    );
+    let f = grad(
+        perm_at(pool, octave_index, l + zi),
+        local_x,
+        local_y - 1.0,
+        local_z,
+    );
+    let g = grad(
+        perm_at(pool, octave_index, n + zi),
+        local_x - 1.0,
+        local_y - 1.0,
+        local_z,
+    );
+    let h = grad(
+        perm_at(pool, octave_index, k + zi + 1),
+        local_x,
+        local_y,
+        local_z - 1.0,
+    );
+    let o = grad(
+        perm_at(pool, octave_index, m + zi + 1),
+        local_x - 1.0,
+        local_y,
+        local_z - 1.0,
+    );
+    let p = grad(
+        perm_at(pool, octave_index, l + zi + 1),
+        local_x,
+        local_y - 1.0,
+        local_z - 1.0,
+    );
+    let q = grad(
+        perm_at(pool, octave_index, n + zi + 1),
+        local_x - 1.0,
+        local_y - 1.0,
+        local_z - 1.0,
+    );
+
+    lerp3(
+        perlin_fade(local_x),
+        perlin_fade(local_y),
+        perlin_fade(local_z),
+        [d, e, f, g, h, o, p, q],
+    )
+}
+
+fn lerp1(delta: f32, start: f32, end: f32) -> f32 {
+    start + delta * (end - start)
+}
+
+fn lerp3(dx: f32, dy: f32, dz: f32, v: [f32; 8]) -> f32 {
+    let lo = lerp1(dy, lerp1(dx, v[0], v[1]), lerp1(dx, v[2], v[3]));
+    let hi = lerp1(dy, lerp1(dx, v[4], v[5]), lerp1(dx, v[6], v[7]));
+    lerp1(dz, lo, hi)
 }
 
 /// f32 mirror of `pumpkin_util::math::clamped_map`.
@@ -296,30 +603,86 @@ fn clamped_map(value: f32, old_start: f32, old_end: f32, new_start: f32, new_end
 
 #[cfg(test)]
 pub(crate) mod test {
-    use super::{Instruction, OpCode, compile, evaluate_cpu};
+    use super::{Instruction, OpCode, SamplerPool, compile, evaluate_cpu};
     use pumpkin_data::noise_router::{
         NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER, UnaryOperation,
     };
+    use pumpkin_util::random::xoroshiro128::{Xoroshiro, XoroshiroSplitter};
 
     fn instruction(opcode: OpCode, index: usize) -> Instruction {
         Instruction::new(opcode, index)
     }
 
-    /// The real graphs still contain node types with no opcode yet (noise, splines,
-    /// ...). Compilation must say so explicitly rather than emitting a graph that
-    /// silently evaluates to something wrong.
+    pub fn test_deriver() -> XoroshiroSplitter {
+        Xoroshiro::from_seed(42).next_splitter()
+    }
+
+    /// The real graphs still contain node types with no opcode yet (splines, shifted
+    /// noise, ...). Compilation must say so explicitly rather than emitting a graph
+    /// that silently evaluates to something wrong.
     #[test]
     fn real_routers_report_unsupported_nodes_instead_of_miscompiling() {
+        let deriver = test_deriver();
         for stack in [
             OVERWORLD_BASE_NOISE_ROUTER.noise.full_component_stack,
             NETHER_BASE_NOISE_ROUTER.noise.full_component_stack,
         ] {
-            let err = compile(stack).expect_err("noise/spline nodes are not supported yet");
+            let err =
+                compile(stack, &deriver).expect_err("spline/shift nodes are not supported yet");
             assert!(
                 stack.len() > err.index,
                 "reported index must point into the stack"
             );
         }
+    }
+
+    /// The GPU-side Noise opcode must reproduce the real CPU `DoublePerlinNoiseSampler`
+    /// it was built from, within f32 precision.
+    #[test]
+    fn noise_opcode_matches_real_cpu_sampler() {
+        use pumpkin_data::chunk::DoublePerlinNoiseParameters;
+        use pumpkin_world::generation::noise::perlin::DoublePerlinNoiseSampler;
+        use pumpkin_world::generation::noise::router::proto_noise_router::DoublePerlinNoiseBuilder;
+
+        // A representative multi-octave noise; any seeded sampler exercises the same
+        // path. Fields are (id, first_octave, amplitudes, lo, hi, amplitude).
+        const AMPLITUDES: &[f64] = &[1.0, 1.0];
+        let params = DoublePerlinNoiseParameters::new(
+            0,
+            -7,
+            AMPLITUDES,
+            0x5F3B_1A77,
+            0x91E4_C2D0,
+            DoublePerlinNoiseSampler::get_amplitude(AMPLITUDES),
+        );
+        let deriver = test_deriver();
+        let cpu_sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(&deriver, &params);
+
+        let mut pool = SamplerPool::default();
+        let (first, second) = cpu_sampler.samplers();
+        let index = pool.push_double_perlin(first, second, cpu_sampler.amplitude());
+
+        let mut noise = instruction(OpCode::Noise, 0);
+        noise.input0 = index;
+        noise.param0 = 1.0;
+        noise.param1 = 1.0;
+        let graph = [noise];
+
+        let mut max_diff = 0.0f64;
+        for i in 0..500 {
+            let x = f64::from(i) * 1.7;
+            let y = f64::from(i) * -0.9;
+            let z = f64::from(i) * 2.3;
+
+            let expected = cpu_sampler.sample(x, y, z);
+            let actual = evaluate_cpu(&graph, &pool, x as f32, y as f32, z as f32);
+            max_diff = max_diff.max((expected - f64::from(actual)).abs());
+        }
+
+        assert!(
+            max_diff < 1e-3,
+            "Noise opcode diverged from the CPU sampler by {max_diff}"
+        );
     }
 
     /// A hand-built graph covering the supported opcodes, so the CPU reference can be
@@ -360,11 +723,15 @@ pub(crate) mod test {
 
         // y below from_y clamps the gradient to from_value (0.0), so the result is
         // constant(3.0) + squeeze(0.0) = 3.0, then clamped to the node's 2.5 ceiling.
-        assert!((evaluate_cpu(&graph, 0.0, -1000.0, 0.0) - 2.5).abs() < 1e-6);
+        assert!(
+            (evaluate_cpu(&graph, &SamplerPool::default(), 0.0, -1000.0, 0.0) - 2.5).abs() < 1e-6
+        );
 
         // Above to_y the gradient saturates at to_value (1.0) -> *4 -> squeeze(1.0)
         // clamps to 1.0 -> 1/2 - 1/24, so the sum is 3.0 + ~0.4583, clamped to 2.5.
-        assert!((evaluate_cpu(&graph, 0.0, 1000.0, 0.0) - 2.5).abs() < 1e-6);
+        assert!(
+            (evaluate_cpu(&graph, &SamplerPool::default(), 0.0, 1000.0, 0.0) - 2.5).abs() < 1e-6
+        );
     }
 
     #[test]
@@ -374,7 +741,9 @@ pub(crate) mod test {
         let mut invert = instruction(OpCode::UnaryInvert, 1);
         invert.input0 = 0;
 
-        assert!(evaluate_cpu(&[constant, invert], 0.0, 0.0, 0.0).is_infinite());
+        assert!(
+            evaluate_cpu(&[constant, invert], &SamplerPool::default(), 0.0, 0.0, 0.0).is_infinite()
+        );
         let _ = UnaryOperation::Invert;
     }
 }
