@@ -64,11 +64,39 @@ struct Dims {
     num_octaves: u32,
 }
 
+/// Uniform header for a graph dispatch. Matches `Dims` in `graph.wgsl`; the `vec3`
+/// fields there are 16-byte aligned, hence the interleaved scalars.
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct GraphDims {
     num_points: u32,
     num_instructions: u32,
+    num_structures: u32,
+    num_junctions: u32,
+    affected_min: [i32; 3],
+    has_affected_box: u32,
+    affected_max: [i32; 3],
+    padding: u32,
+}
+
+impl GraphDims {
+    fn new(num_points: usize, num_instructions: usize, beardifier: &graph::BeardifierData) -> Self {
+        let (affected_min, affected_max, has_affected_box) = beardifier
+            .affected_box
+            .map_or(([0, 0, 0], [0, 0, 0], 0), |(min, max)| {
+                ([min.x, min.y, min.z], [max.x, max.y, max.z], 1)
+            });
+        Self {
+            num_points: num_points as u32,
+            num_instructions: num_instructions as u32,
+            num_structures: beardifier.structures.len() as u32,
+            num_junctions: beardifier.junctions.len() as u32,
+            affected_min,
+            has_affected_box,
+            affected_max,
+            padding: 0,
+        }
+    }
 }
 
 /// A GPU-ready snapshot of an [`OctavePerlinNoiseSampler`]'s state: per-octave
@@ -212,6 +240,8 @@ impl GpuNoiseContext {
                     storage_entry(7, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(8, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(9, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(10, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(11, wgpu::BufferBindingType::Storage { read_only: true }),
                 ],
             });
 
@@ -245,17 +275,30 @@ impl GpuNoiseContext {
 
     /// Evaluates a compiled density-function graph (see [`graph::compile`]) at every
     /// point in `points`, returning the root node's value per point.
+    /// Evaluates `compiled` with no structures nearby — the common case for terrain
+    /// away from generated structures.
     #[must_use]
     pub fn evaluate_graph(&self, compiled: &graph::CompiledGraph, points: &[[f32; 3]]) -> Vec<f32> {
+        self.evaluate_graph_with(compiled, points, &graph::BeardifierData::default())
+    }
+
+    /// Evaluates `compiled` against per-chunk structure data.
+    ///
+    /// `beardifier` is separate from `compiled` because it depends on which structures
+    /// generation placed near this chunk, so one compiled graph serves every chunk.
+    #[must_use]
+    pub fn evaluate_graph_with(
+        &self,
+        compiled: &graph::CompiledGraph,
+        points: &[[f32; 3]],
+        beardifier: &graph::BeardifierData,
+    ) -> Vec<f32> {
         let instructions = &compiled.instructions;
         if points.is_empty() || instructions.is_empty() {
             return vec![0.0; points.len()];
         }
 
-        let dims = GraphDims {
-            num_points: points.len() as u32,
-            num_instructions: instructions.len() as u32,
-        };
+        let dims = GraphDims::new(points.len(), instructions.len(), beardifier);
 
         let dims_buffer = self
             .device
@@ -316,6 +359,10 @@ impl GpuNoiseContext {
             "graph interpolated samplers",
             &compiled.samplers.interpolated,
         );
+        let structures_buffer =
+            self.storage_or_placeholder("beard structures", &beardifier.structures);
+        let junctions_buffer =
+            self.storage_or_placeholder("beard junctions", &beardifier.junctions);
 
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("density_graph bind group"),
@@ -331,6 +378,8 @@ impl GpuNoiseContext {
                 bind_entry(7, &permutations_buffer),
                 bind_entry(8, &spline_points_buffer),
                 bind_entry(9, &interpolated_buffer),
+                bind_entry(10, &structures_buffer),
+                bind_entry(11, &junctions_buffer),
             ],
         });
 
@@ -619,6 +668,7 @@ mod test {
                 &compiled.instructions,
                 &compiled.samplers,
                 &compiled.spline_points,
+                &crate::graph::BeardifierData::default(),
                 point[0],
                 point[1],
                 point[2],
@@ -946,6 +996,104 @@ mod test {
         assert!(
             max_diff < 5e-2,
             "GPU interpolated noise diverged from the CPU sampler by {max_diff}"
+        );
+    }
+    /// Beardifier is the one node driven by per-chunk structure data rather than the
+    /// seed. Checked against the real CPU implementation with actual structures and
+    /// junctions in range — an empty-input test would pass on a no-op shader.
+    #[test]
+    fn gpu_beardifier_matches_cpu_with_real_structures() {
+        use crate::graph::{BeardifierData, CompiledGraph, Instruction, OpCode, SamplerPool};
+        use pumpkin_util::math::{block_box::BlockBox, vector3::Vector3};
+        use pumpkin_world::generation::noise::router::density_function::{
+            StaticIndependentChunkNoiseFunctionComponentImpl,
+            beardifier::{Beardifier, BeardifierJunction, BeardifierStructure, TerrainAdaptation},
+        };
+
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        // One structure per adaptation mode, so every branch of the shader is exercised.
+        let structures = vec![
+            BeardifierStructure {
+                bounding_box: BlockBox::new(0, 60, 0, 8, 70, 8),
+                terrain_adaptation: TerrainAdaptation::BeardThin,
+                ground_level_delta: 2,
+            },
+            BeardifierStructure {
+                bounding_box: BlockBox::new(12, 58, 4, 20, 66, 12),
+                terrain_adaptation: TerrainAdaptation::BeardBox,
+                ground_level_delta: 1,
+            },
+            BeardifierStructure {
+                bounding_box: BlockBox::new(-6, 62, -4, 2, 68, 4),
+                terrain_adaptation: TerrainAdaptation::Bury,
+                ground_level_delta: 3,
+            },
+            BeardifierStructure {
+                bounding_box: BlockBox::new(6, 55, 10, 14, 64, 18),
+                terrain_adaptation: TerrainAdaptation::Encapsulate,
+                ground_level_delta: 0,
+            },
+            BeardifierStructure {
+                bounding_box: BlockBox::new(-10, 50, -10, -4, 56, -4),
+                terrain_adaptation: TerrainAdaptation::None,
+                ground_level_delta: 0,
+            },
+        ];
+        let junctions = vec![
+            BeardifierJunction {
+                x: 4,
+                ground_y: 64,
+                z: 4,
+            },
+            BeardifierJunction {
+                x: 10,
+                ground_y: 62,
+                z: 8,
+            },
+        ];
+        let affected_box = BlockBox::new(-16, 40, -16, 32, 80, 32);
+
+        let cpu = Beardifier::new(structures.clone(), junctions.clone(), Some(affected_box));
+        let data = BeardifierData::from_cpu(&structures, &junctions, Some(&affected_box));
+
+        let compiled = CompiledGraph {
+            instructions: vec![Instruction::new_for_test(OpCode::Beardifier, 0)],
+            samplers: SamplerPool::default(),
+            spline_points: Vec::new(),
+        };
+
+        // Sweep through and around the structures, including points outside the box.
+        let mut points = Vec::new();
+        for x in -20..36 {
+            for y in [45, 55, 60, 63, 65, 70, 78] {
+                points.push([x as f32, y as f32, ((x * 3) % 40 - 18) as f32]);
+            }
+        }
+
+        let gpu_results = ctx.evaluate_graph_with(&compiled, &points, &data);
+
+        let mut max_diff = 0.0f64;
+        let mut nonzero = 0usize;
+        for (point, &gpu_value) in points.iter().zip(&gpu_results) {
+            let pos = Vector3::new(point[0] as i32, point[1] as i32, point[2] as i32);
+            let expected = cpu.sample(&pos);
+            if expected != 0.0 {
+                nonzero += 1;
+            }
+            max_diff = max_diff.max((expected - f64::from(gpu_value)).abs());
+        }
+
+        // Guards against the test passing because everything was zero anyway.
+        assert!(
+            nonzero > 50,
+            "expected many non-zero samples, got {nonzero}; the test data misses the structures"
+        );
+        assert!(
+            max_diff < 1e-4,
+            "GPU beardifier diverged from the CPU implementation by {max_diff}"
         );
     }
 }

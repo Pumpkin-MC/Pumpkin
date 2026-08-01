@@ -35,6 +35,7 @@ const OP_SHIFT_B: u32 = 19u;
 const OP_SHIFTED_NOISE: u32 = 20u;
 const OP_SPLINE: u32 = 21u;
 const OP_INTERPOLATED_NOISE: u32 = 22u;
+const OP_BEARDIFIER: u32 = 23u;
 
 struct Instruction {
     opcode: u32,
@@ -78,6 +79,27 @@ struct SamplerRef {
 struct Dims {
     num_points: u32,
     num_instructions: u32,
+    // Per-chunk beardifier inputs; see BeardifierData in graph.rs.
+    num_structures: u32,
+    num_junctions: u32,
+    affected_min: vec3<i32>,
+    has_affected_box: u32,
+    affected_max: vec3<i32>,
+    _pad: u32,
+}
+
+struct BeardStructure {
+    min: vec3<i32>,
+    adaptation: u32,
+    max: vec3<i32>,
+    ground_level_delta: i32,
+}
+
+struct BeardJunction {
+    x: i32,
+    ground_y: i32,
+    z: i32,
+    _pad: i32,
 }
 
 @group(0) @binding(0) var<uniform> dims: Dims;
@@ -93,6 +115,8 @@ struct Dims {
 @group(0) @binding(7) var<storage, read> permutations: array<u32>;
 @group(0) @binding(8) var<storage, read> spline_points: array<SplinePoint>;
 @group(0) @binding(9) var<storage, read> interpolated: array<InterpolatedRef>;
+@group(0) @binding(10) var<storage, read> beard_structures: array<BeardStructure>;
+@group(0) @binding(11) var<storage, read> beard_junctions: array<BeardJunction>;
 
 struct InterpolatedRef {
     lower_start: u32,
@@ -276,6 +300,85 @@ fn interpolated_sample(index: u32, px: f32, py: f32, pz: f32) -> f32 {
     }
 
     return clamp_lerp(l / 512.0, m / 512.0, q) / 128.0;
+}
+
+// The 24x24x24 table vanilla precomputes is exactly this closed form, so it is
+// evaluated directly instead of uploaded.
+fn beard_contribution(dx: i32, dy: i32, dz: i32, y_to_ground: i32) -> f32 {
+    let xi = dx + 12;
+    let yi = dy + 12;
+    let zi = dz + 12;
+    if (xi < 0 || xi >= 24 || yi < 0 || yi >= 24 || zi < 0 || zi >= 24) {
+        return 0.0;
+    }
+
+    let fx = f32(dx);
+    let fz = f32(dz);
+    let dy_with_offset = f32(y_to_ground) + 0.5;
+    let distance_sqr = fx * fx + dy_with_offset * dy_with_offset + fz * fz;
+    let value = -dy_with_offset / sqrt(distance_sqr / 2.0) / 2.0;
+
+    // Uses `dy`, while `value` uses `y_to_ground`; they differ for BeardBox.
+    let kernel_dy = f32(dy) + 0.5;
+    let kernel_sqr = fx * fx + kernel_dy * kernel_dy + fz * fz;
+    return value * exp(-kernel_sqr / 16.0);
+}
+
+// Equivalent to Mth.clampedMap(distance, 0, 6, 1, 0).
+fn bury_contribution(dx: f32, dy: f32, dz: f32) -> f32 {
+    let distance = sqrt(dx * dx + dy * dy + dz * dz);
+    if (distance < 0.0) { return 1.0; }
+    if (distance > 6.0) { return 0.0; }
+    return 1.0 - distance / 6.0;
+}
+
+// Mirrors Beardifier::sample in density_function/beardifier.rs.
+fn beardifier_sample(x: i32, y: i32, z: i32) -> f32 {
+    if (dims.has_affected_box == 0u) {
+        return 0.0;
+    }
+    let lo = dims.affected_min;
+    let hi = dims.affected_max;
+    if (x < lo.x || x > hi.x || y < lo.y || y > hi.y || z < lo.z || z > hi.z) {
+        return 0.0;
+    }
+
+    var weight: f32 = 0.0;
+
+    for (var i: u32 = 0u; i < dims.num_structures; i = i + 1u) {
+        let s = beard_structures[i];
+
+        let dx = max(0, max(s.min.x - x, x - s.max.x));
+        let dz = max(0, max(s.min.z - z, z - s.max.z));
+        let ground_y = s.min.y + s.ground_level_delta;
+        let dy_to_ground = y - ground_y;
+
+        var dy: i32 = 0;
+        if (s.adaptation == 1u || s.adaptation == 3u) {
+            dy = dy_to_ground;
+        } else if (s.adaptation == 2u) {
+            dy = max(0, max(ground_y - y, y - s.max.y));
+        } else if (s.adaptation == 4u) {
+            dy = max(0, max(s.min.y - y, y - s.max.y));
+        }
+
+        if (s.adaptation == 1u || s.adaptation == 2u) {
+            weight = weight + beard_contribution(dx, dy, dz, dy_to_ground) * 0.8;
+        } else if (s.adaptation == 3u) {
+            weight = weight + bury_contribution(f32(dx), f32(dy) / 2.0, f32(dz));
+        } else if (s.adaptation == 4u) {
+            weight = weight
+                + bury_contribution(f32(dx) / 2.0, f32(dy) / 2.0, f32(dz) / 2.0) * 0.8;
+        }
+    }
+
+    for (var i: u32 = 0u; i < dims.num_junctions; i = i + 1u) {
+        let j = beard_junctions[i];
+        let dy = y - j.ground_y;
+        weight = weight + beard_contribution(x - j.x, dy, z - j.z, dy) * 0.4;
+    }
+
+    return weight;
 }
 
 fn clamp_lerp(start: f32, end: f32, delta: f32) -> f32 {
@@ -474,6 +577,9 @@ fn evaluate_graph(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
             case 22u: {
                 result = interpolated_sample(instruction.sampler_index, px, py, pz);
+            }
+            case 23u: {
+                result = beardifier_sample(i32(px), i32(py), i32(pz));
             }
             default: { result = 0.0; }
         }

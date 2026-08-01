@@ -18,13 +18,17 @@ use pumpkin_data::{
     },
 };
 use pumpkin_util::{
+    math::{block_box::BlockBox, vector3::Vector3},
     noise::perlin::OctavePerlinNoiseSampler,
     random::{legacy_rand::LegacyRand, xoroshiro128::XoroshiroSplitter},
 };
 use pumpkin_world::generation::{
     GlobalRandomConfig,
     noise::router::{
-        density_function::noise::InterpolatedNoiseSampler,
+        density_function::{
+            beardifier::{BeardifierJunction, BeardifierStructure, TerrainAdaptation},
+            noise::InterpolatedNoiseSampler,
+        },
         proto_noise_router::DoublePerlinNoiseBuilder,
     },
 };
@@ -69,6 +73,106 @@ pub enum OpCode {
     /// Vanilla's interpolated noise sampler; `sampler_index` selects an entry in the
     /// graph's interpolated-sampler table.
     InterpolatedNoise = 22,
+    /// Structure "beard" weighting. Reads no graph inputs — its data is per-chunk and
+    /// supplied at dispatch time, not baked into the compiled graph.
+    Beardifier = 23,
+}
+
+/// How a structure adapts the terrain around it. Values must match
+/// `TerrainAdaptation` in `density_function/beardifier.rs` and the shader.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u32)]
+pub enum GpuTerrainAdaptation {
+    None = 0,
+    BeardThin = 1,
+    BeardBox = 2,
+    Bury = 3,
+    Encapsulate = 4,
+}
+
+impl From<TerrainAdaptation> for GpuTerrainAdaptation {
+    fn from(value: TerrainAdaptation) -> Self {
+        match value {
+            TerrainAdaptation::None => Self::None,
+            TerrainAdaptation::BeardThin => Self::BeardThin,
+            TerrainAdaptation::BeardBox => Self::BeardBox,
+            TerrainAdaptation::Bury => Self::Bury,
+            TerrainAdaptation::Encapsulate => Self::Encapsulate,
+        }
+    }
+}
+
+/// One structure's bounding box and adaptation mode, as uploaded to the GPU.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable, Debug)]
+pub struct GpuBeardStructure {
+    pub min: [i32; 3],
+    pub adaptation: u32,
+    pub max: [i32; 3],
+    pub ground_level_delta: i32,
+}
+
+/// One structure-piece junction, as uploaded to the GPU.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable, Debug)]
+pub struct GpuBeardJunction {
+    pub x: i32,
+    pub ground_y: i32,
+    pub z: i32,
+    padding: i32,
+}
+
+/// Per-chunk structure data for [`OpCode::Beardifier`].
+///
+/// Unlike everything else in a [`CompiledGraph`], this is not derived from the seed:
+/// it depends on which structures generation placed near the chunk being sampled, so
+/// it is supplied per dispatch and a compiled graph can be reused across chunks.
+#[derive(Default, Debug, Clone)]
+pub struct BeardifierData {
+    pub structures: Vec<GpuBeardStructure>,
+    pub junctions: Vec<GpuBeardJunction>,
+    /// Sampling outside this box contributes nothing; `None` disables the node.
+    pub affected_box: Option<(Vector3<i32>, Vector3<i32>)>,
+}
+
+impl BeardifierData {
+    /// Converts the CPU-side beardifier inputs into GPU-uploadable tables.
+    #[must_use]
+    pub fn from_cpu(
+        structures: &[BeardifierStructure],
+        junctions: &[BeardifierJunction],
+        affected_box: Option<&BlockBox>,
+    ) -> Self {
+        Self {
+            structures: structures
+                .iter()
+                .map(|s| GpuBeardStructure {
+                    min: [
+                        s.bounding_box.min.x,
+                        s.bounding_box.min.y,
+                        s.bounding_box.min.z,
+                    ],
+                    adaptation: GpuTerrainAdaptation::from(s.terrain_adaptation) as u32,
+                    max: [
+                        s.bounding_box.max.x,
+                        s.bounding_box.max.y,
+                        s.bounding_box.max.z,
+                    ],
+                    ground_level_delta: s.ground_level_delta,
+                })
+                .collect(),
+            junctions: junctions
+                .iter()
+                .map(|j| GpuBeardJunction {
+                    x: j.x,
+                    ground_y: j.ground_y,
+                    z: j.z,
+                    padding: 0,
+                })
+                .collect(),
+            affected_box: affected_box.map(|b| (b.min, b.max)),
+        }
+    }
 }
 
 /// GPU-side descriptor of an `InterpolatedNoiseSampler`.
@@ -384,6 +488,8 @@ fn lower_simple(
 ) -> Result<Instruction, UnsupportedNode> {
     let index = own;
     let instruction = match component {
+        // Reads no graph inputs: its data arrives per dispatch, not in the graph.
+        BaseNoiseFunctionComponent::Beardifier => Instruction::new(OpCode::Beardifier, index),
         BaseNoiseFunctionComponent::Constant { value } => {
             let mut i = Instruction::new(OpCode::Constant, index);
             i.param0 = *value as f32;
@@ -663,6 +769,7 @@ pub fn evaluate_cpu(
     instructions: &[Instruction],
     pool: &SamplerPool,
     spline_points: &[GpuSplinePoint],
+    beardifier: &BeardifierData,
     x: f32,
     y: f32,
     z: f32,
@@ -748,6 +855,9 @@ pub fn evaluate_cpu(
             }
             op if op == OpCode::InterpolatedNoise as u32 => {
                 interpolated_sample(pool, p.sampler_index as usize, x, y, z)
+            }
+            op if op == OpCode::Beardifier as u32 => {
+                beardifier_sample(beardifier, x as i32, y as i32, z as i32)
             }
             _ => 0.0,
         };
@@ -1083,6 +1193,80 @@ fn interpolated_sample(pool: &SamplerPool, index: usize, x: f32, y: f32, z: f32)
     clamped_lerp_f32(lower / 512.0, upper / 512.0, q) / 128.0
 }
 
+/// f32 mirror of `Beardifier::sample` in `density_function/beardifier.rs`.
+fn beardifier_sample(data: &BeardifierData, x: i32, y: i32, z: i32) -> f32 {
+    let Some((min, max)) = data.affected_box else {
+        return 0.0;
+    };
+    if x < min.x || x > max.x || y < min.y || y > max.y || z < min.z || z > max.z {
+        return 0.0;
+    }
+
+    let mut weight = 0.0f32;
+
+    for s in &data.structures {
+        let dx = 0.max((s.min[0] - x).max(x - s.max[0]));
+        let dz = 0.max((s.min[2] - z).max(z - s.max[2]));
+        let ground_y = s.min[1] + s.ground_level_delta;
+        let dy_to_ground = y - ground_y;
+
+        let dy = match s.adaptation {
+            1 | 3 => dy_to_ground,
+            2 => 0.max((ground_y - y).max(y - s.max[1])),
+            4 => 0.max((s.min[1] - y).max(y - s.max[1])),
+            _ => 0,
+        };
+
+        weight += match s.adaptation {
+            1 | 2 => beard_contribution(dx, dy, dz, dy_to_ground) * 0.8,
+            3 => bury_contribution(dx as f32, dy as f32 / 2.0, dz as f32),
+            4 => bury_contribution(dx as f32 / 2.0, dy as f32 / 2.0, dz as f32 / 2.0) * 0.8,
+            _ => 0.0,
+        };
+    }
+
+    for j in &data.junctions {
+        let dy = y - j.ground_y;
+        weight += beard_contribution(x - j.x, dy, z - j.z, dy) * 0.4;
+    }
+
+    weight
+}
+
+/// The kernel vanilla precomputes into a 24x24x24 table is just this closed form, so
+/// it is evaluated directly rather than uploaded.
+fn beard_contribution(dx: i32, dy: i32, dz: i32, y_to_ground: i32) -> f32 {
+    const RADIUS: i32 = 12;
+    const SIZE: i32 = 24;
+
+    let (xi, yi, zi) = (dx + RADIUS, dy + RADIUS, dz + RADIUS);
+    if !(0..SIZE).contains(&xi) || !(0..SIZE).contains(&yi) || !(0..SIZE).contains(&zi) {
+        return 0.0;
+    }
+
+    let dy_with_offset = y_to_ground as f32 + 0.5;
+    let distance_sqr = (dx as f32).powi(2) + dy_with_offset.powi(2) + (dz as f32).powi(2);
+    let value = -dy_with_offset * (distance_sqr / 2.0).sqrt().recip() / 2.0;
+
+    // The table entry works out to exp(-(dx^2 + (dy + 0.5)^2 + dz^2) / 16). Note this
+    // uses `dy`, while `value` above uses `y_to_ground`; they differ for BeardBox.
+    let kernel_dy = dy as f32 + 0.5;
+    let kernel_sqr = (dx as f32).powi(2) + kernel_dy.powi(2) + (dz as f32).powi(2);
+    value * (-kernel_sqr / 16.0).exp()
+}
+
+/// Equivalent to `Mth.clampedMap(distance, 0, 6, 1, 0)`.
+fn bury_contribution(dx: f32, dy: f32, dz: f32) -> f32 {
+    let distance = dx.mul_add(dx, dy.mul_add(dy, dz * dz)).sqrt();
+    if distance < 0.0 {
+        1.0
+    } else if distance > 6.0 {
+        0.0
+    } else {
+        1.0 - distance / 6.0
+    }
+}
+
 fn clamped_lerp_f32(start: f32, end: f32, delta: f32) -> f32 {
     if delta < 0.0 {
         start
@@ -1117,7 +1301,7 @@ fn clamped_map(value: f32, old_start: f32, old_end: f32, new_start: f32, new_end
 
 #[cfg(test)]
 pub(crate) mod test {
-    use super::{Instruction, OpCode, SamplerPool, compile, evaluate_cpu};
+    use super::{BeardifierData, Instruction, OpCode, SamplerPool, compile, evaluate_cpu};
     use pumpkin_data::noise_router::{
         NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER, UnaryOperation,
     };
@@ -1136,22 +1320,26 @@ pub(crate) mod test {
         GlobalRandomConfig::new(42, false)
     }
 
-    /// The real graphs still contain node types with no opcode yet (splines, shifted
-    /// noise, ...). Compilation must say so explicitly rather than emitting a graph
-    /// that silently evaluates to something wrong.
+    /// The nether router is fully lowered; the overworld one still contains node types
+    /// with no opcode. Compilation must report the unsupported node rather than
+    /// emitting a graph that silently evaluates to something wrong.
     #[test]
-    fn real_routers_report_unsupported_nodes_instead_of_miscompiling() {
+    fn compile_reports_unsupported_nodes_instead_of_miscompiling() {
         let config = test_random_config();
-        for stack in [
-            OVERWORLD_BASE_NOISE_ROUTER.noise.full_component_stack,
-            NETHER_BASE_NOISE_ROUTER.noise.full_component_stack,
-        ] {
-            let err = compile(stack, &config).expect_err("some node types are still unsupported");
-            assert!(
-                stack.len() > err.index,
-                "reported index must point into the stack"
-            );
-        }
+
+        let overworld = OVERWORLD_BASE_NOISE_ROUTER.noise.full_component_stack;
+        let err = compile(overworld, &config).expect_err("some node types remain unsupported");
+        assert!(
+            overworld.len() > err.index,
+            "reported index must point into the stack"
+        );
+
+        let nether = NETHER_BASE_NOISE_ROUTER.noise.full_component_stack;
+        let compiled = compile(nether, &config).expect("every nether node is lowered");
+        assert!(
+            compiled.instructions.len() >= nether.len(),
+            "each node lowers to at least one instruction"
+        );
     }
 
     /// The GPU-side Noise opcode must reproduce the real CPU `DoublePerlinNoiseSampler`
@@ -1193,7 +1381,15 @@ pub(crate) mod test {
             let z = f64::from(i) * 2.3;
 
             let expected = cpu_sampler.sample(x, y, z);
-            let actual = evaluate_cpu(&graph, &pool, &[], x as f32, y as f32, z as f32);
+            let actual = evaluate_cpu(
+                &graph,
+                &pool,
+                &[],
+                &BeardifierData::default(),
+                x as f32,
+                y as f32,
+                z as f32,
+            );
             max_diff = max_diff.max((expected - f64::from(actual)).abs());
         }
 
@@ -1242,14 +1438,32 @@ pub(crate) mod test {
         // y below from_y clamps the gradient to from_value (0.0), so the result is
         // constant(3.0) + squeeze(0.0) = 3.0, then clamped to the node's 2.5 ceiling.
         assert!(
-            (evaluate_cpu(&graph, &SamplerPool::default(), &[], 0.0, -1000.0, 0.0) - 2.5).abs()
+            (evaluate_cpu(
+                &graph,
+                &SamplerPool::default(),
+                &[],
+                &BeardifierData::default(),
+                0.0,
+                -1000.0,
+                0.0
+            ) - 2.5)
+                .abs()
                 < 1e-6
         );
 
         // Above to_y the gradient saturates at to_value (1.0) -> *4 -> squeeze(1.0)
         // clamps to 1.0 -> 1/2 - 1/24, so the sum is 3.0 + ~0.4583, clamped to 2.5.
         assert!(
-            (evaluate_cpu(&graph, &SamplerPool::default(), &[], 0.0, 1000.0, 0.0) - 2.5).abs()
+            (evaluate_cpu(
+                &graph,
+                &SamplerPool::default(),
+                &[],
+                &BeardifierData::default(),
+                0.0,
+                1000.0,
+                0.0
+            ) - 2.5)
+                .abs()
                 < 1e-6
         );
     }
@@ -1266,6 +1480,7 @@ pub(crate) mod test {
                 &[constant, invert],
                 &SamplerPool::default(),
                 &[],
+                &BeardifierData::default(),
                 0.0,
                 0.0,
                 0.0

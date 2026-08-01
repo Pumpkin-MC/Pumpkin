@@ -81,6 +81,10 @@ pub enum TerrainAdaptation {
 }
 
 impl TerrainAdaptation {
+    // Kept as an inherent method rather than `FromStr`: it is infallible, mapping any
+    // unknown string to `None`, so it has no meaningful `Err` type.
+    #[expect(clippy::should_implement_trait)]
+    #[must_use]
     pub fn from_str(s: &str) -> Self {
         match s {
             "beard_thin" => Self::BeardThin,
@@ -115,6 +119,7 @@ pub struct Beardifier {
 }
 
 impl Beardifier {
+    #[must_use]
     pub const fn new(
         structures: Vec<BeardifierStructure>,
         junctions: Vec<BeardifierJunction>,
