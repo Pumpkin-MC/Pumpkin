@@ -14,7 +14,7 @@
 // Reporting the measurements to the console is the entire point of this example.
 #![expect(clippy::print_stdout)]
 
-use pumpkin_data::noise_router::NETHER_BASE_NOISE_ROUTER;
+use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
 use pumpkin_world::generation::GlobalRandomConfig;
 use pumpkin_world_gpu::GpuNoiseContext;
 use pumpkin_world_gpu::graph::{BeardifierData, compile, evaluate_cpu};
@@ -22,8 +22,13 @@ use std::time::Instant;
 
 fn main() {
     let config = GlobalRandomConfig::new(42, false);
-    let stack = NETHER_BASE_NOISE_ROUTER.noise.full_component_stack;
-    let compiled = compile(stack, &config).expect("nether compiles");
+    let stack = OVERWORLD_BASE_NOISE_ROUTER.noise.full_component_stack;
+    let compiled = compile(stack, &config).expect("overworld compiles");
+    println!(
+        "overworld router: {} nodes -> {} instructions",
+        stack.len(),
+        compiled.instructions.len()
+    );
     let beard = BeardifierData::default();
     let ctx = GpuNoiseContext::try_new().expect("gpu");
 
@@ -53,15 +58,7 @@ fn main() {
             let t = Instant::now();
             let mut total = 0.0f32;
             for p in &points {
-                total += evaluate_cpu(
-                    &compiled.instructions,
-                    &compiled.samplers,
-                    &compiled.spline_points,
-                    &beard,
-                    p[0],
-                    p[1],
-                    p[2],
-                );
+                total += evaluate_cpu(&compiled, &beard, p[0], p[1], p[2]);
             }
             std::hint::black_box(total);
             cpu_ms = cpu_ms.min(t.elapsed().as_secs_f64() * 1000.0);

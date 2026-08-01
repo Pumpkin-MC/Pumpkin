@@ -84,15 +84,7 @@ fn bench_nether_router(c: &mut Criterion) {
         b.iter(|| {
             let mut total = 0.0f32;
             for p in &points {
-                total += evaluate_cpu(
-                    &compiled.instructions,
-                    &compiled.samplers,
-                    &compiled.spline_points,
-                    &beardifier,
-                    p[0],
-                    p[1],
-                    p[2],
-                );
+                total += evaluate_cpu(&compiled, &beardifier, p[0], p[1], p[2]);
             }
             std::hint::black_box(total)
         });

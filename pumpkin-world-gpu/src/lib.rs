@@ -242,6 +242,7 @@ impl GpuNoiseContext {
                     storage_entry(9, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(10, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(11, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(12, wgpu::BufferBindingType::Storage { read_only: true }),
                 ],
             });
 
@@ -372,6 +373,7 @@ impl GpuNoiseContext {
                 bind_entry(9, &dummy),
                 bind_entry(10, &dummy),
                 bind_entry(11, &dummy),
+                bind_entry(12, &dummy),
             ],
         })
     }
@@ -565,6 +567,7 @@ pub struct PreparedGraph<'a> {
     permutations: wgpu::Buffer,
     spline_points: wgpu::Buffer,
     interpolated: wgpu::Buffer,
+    interval_entries: wgpu::Buffer,
 
     // Rewritten per dispatch; reallocated only when the batch outgrows them.
     points: wgpu::Buffer,
@@ -603,6 +606,8 @@ impl<'a> PreparedGraph<'a> {
             "graph interpolated samplers",
             &compiled.samplers.interpolated,
         );
+        let interval_entries =
+            context.storage_from("graph interval entries", &compiled.interval_entries);
 
         let point_capacity = 1;
         let (points, scratch, output, staging) =
@@ -620,6 +625,7 @@ impl<'a> PreparedGraph<'a> {
             permutations,
             spline_points,
             interpolated,
+            interval_entries,
             points,
             scratch,
             output,
@@ -656,6 +662,7 @@ impl<'a> PreparedGraph<'a> {
                     bind_entry(9, &self.interpolated),
                     bind_entry(10, &self.structures),
                     bind_entry(11, &self.junctions),
+                    bind_entry(12, &self.interval_entries),
                 ],
             });
     }
@@ -828,6 +835,7 @@ mod test {
             instructions: crate::graph::test::sample_graph(),
             samplers: crate::graph::SamplerPool::default(),
             spline_points: Vec::new(),
+            interval_entries: Vec::new(),
         };
 
         // Spread y across the gradient's clamped range and both saturated ends.
@@ -843,9 +851,7 @@ mod test {
 
         for (point, &gpu_value) in points.iter().zip(&gpu_results) {
             let cpu_value = crate::graph::evaluate_cpu(
-                &compiled.instructions,
-                &compiled.samplers,
-                &compiled.spline_points,
+                &compiled,
                 &crate::graph::BeardifierData::default(),
                 point[0],
                 point[1],
@@ -894,6 +900,7 @@ mod test {
             instructions: vec![noise],
             samplers,
             spline_points: Vec::new(),
+            interval_entries: Vec::new(),
         };
 
         let points: Vec<[f32; 3]> = (0..1000)
@@ -968,6 +975,7 @@ mod test {
             instructions: vec![shift_a, shift_b, shifted],
             samplers,
             spline_points: Vec::new(),
+            interval_entries: Vec::new(),
         };
 
         let points: Vec<[f32; 3]> = (0..600)
@@ -1084,6 +1092,7 @@ mod test {
             instructions: vec![location, inner_lo, inner_hi, inner, outer_far, outer],
             samplers: crate::graph::SamplerPool::default(),
             spline_points,
+            interval_entries: Vec::new(),
         };
 
         let points: Vec<[f32; 3]> = (0..400)
@@ -1145,6 +1154,7 @@ mod test {
             instructions: vec![node],
             samplers,
             spline_points: Vec::new(),
+            interval_entries: Vec::new(),
         };
 
         // Block coordinates in a realistic range; f32 loses ground far from origin, so
@@ -1241,6 +1251,7 @@ mod test {
             instructions: vec![Instruction::new_for_test(OpCode::Beardifier, 0)],
             samplers: SamplerPool::default(),
             spline_points: Vec::new(),
+            interval_entries: Vec::new(),
         };
 
         // Sweep through and around the structures, including points outside the box.
@@ -1272,6 +1283,55 @@ mod test {
         assert!(
             max_diff < 1e-4,
             "GPU beardifier diverged from the CPU implementation by {max_diff}"
+        );
+    }
+    /// The strongest check available: the whole overworld router, 217 nodes deep,
+    /// evaluated on the GPU against the CPU reference interpreter. Any opcode whose
+    /// semantics are subtly wrong shows up here even if its own unit test passed.
+    #[test]
+    fn gpu_matches_cpu_on_the_full_overworld_router() {
+        use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
+        use pumpkin_world::generation::GlobalRandomConfig;
+
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        let config = GlobalRandomConfig::new(1234, false);
+        let stack = OVERWORLD_BASE_NOISE_ROUTER.noise.full_component_stack;
+        let compiled = crate::graph::compile(stack, &config).expect("overworld lowers");
+        let beardifier = crate::graph::BeardifierData::default();
+
+        // Realistic block coordinates spread over a few chunks and the full height range.
+        let points: Vec<[f32; 3]> = (0..500)
+            .map(|i| {
+                let f = i as f32;
+                [f * 2.0 - 200.0, (f % 96.0) * 4.0 - 64.0, f * 1.5 - 150.0]
+            })
+            .collect();
+
+        let gpu_results = ctx.evaluate_graph_with(&compiled, &points, &beardifier);
+
+        let mut max_diff = 0.0f32;
+        let mut nonzero = 0usize;
+        for (point, &gpu_value) in points.iter().zip(&gpu_results) {
+            let cpu_value =
+                crate::graph::evaluate_cpu(&compiled, &beardifier, point[0], point[1], point[2]);
+            if cpu_value != 0.0 {
+                nonzero += 1;
+            }
+            max_diff = max_diff.max((cpu_value - gpu_value).abs());
+        }
+
+        assert!(
+            nonzero > 400,
+            "expected the router to produce varied output, only {nonzero} non-zero"
+        );
+        // Both sides run the same f32 arithmetic, so they should agree closely; the
+        // slack covers reassociation the shader compiler is free to do.
+        assert!(
+            max_diff < 1e-2,
+            "GPU and CPU disagree on the overworld router by {max_diff}"
         );
     }
 }

@@ -76,6 +76,22 @@ pub enum OpCode {
     /// Structure "beard" weighting. Reads no graph inputs — its data is per-chunk and
     /// supplied at dispatch time, not baked into the compiled graph.
     Beardifier = 23,
+    /// `input1` when `input0` falls in `[param0, param1)`, otherwise `input2`.
+    RangeChoice = 24,
+    /// Picks a branch by which threshold `input0` falls under; `aux0`/`aux1` are the
+    /// start and length of this node's run in the graph's interval table.
+    IntervalSelect = 25,
+}
+
+/// One branch of an [`OpCode::IntervalSelect`].
+///
+/// The final entry carries an infinite threshold so "below none of them" needs no
+/// special case — it matches vanilla's fallback to `thresholds.len()`.
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable, Debug)]
+pub struct GpuIntervalEntry {
+    pub threshold: f32,
+    pub function_node: u32,
 }
 
 /// How a structure adapts the terrain around it. Values must match
@@ -424,6 +440,8 @@ pub struct CompiledGraph {
     pub samplers: SamplerPool,
     /// All spline knots, concatenated; `Spline` instructions index runs of this.
     pub spline_points: Vec<GpuSplinePoint>,
+    /// All interval branches, concatenated; `IntervalSelect` instructions index runs.
+    pub interval_entries: Vec<GpuIntervalEntry>,
 }
 
 /// Lowers a component stack into GPU instructions.
@@ -443,6 +461,7 @@ pub fn compile(
     let mut out: Vec<Instruction> = Vec::with_capacity(stack.len());
     let mut samplers = SamplerPool::default();
     let mut spline_points: Vec<GpuSplinePoint> = Vec::new();
+    let mut interval_entries: Vec<GpuIntervalEntry> = Vec::new();
     // Splines emit extra instructions for their nested values, so an original stack
     // index no longer equals its instruction index; every input goes through this map.
     let mut map: Vec<u32> = vec![0; stack.len()];
@@ -466,6 +485,30 @@ pub fn compile(
             continue;
         }
 
+        if let BaseNoiseFunctionComponent::IntervalSelect {
+            input_index,
+            thresholds,
+            functions_indices,
+        } = component
+        {
+            let start = interval_entries.len() as u32;
+            for (i, &function) in functions_indices.iter().enumerate() {
+                interval_entries.push(GpuIntervalEntry {
+                    // One more branch than thresholds: the last is the fallback.
+                    threshold: thresholds.get(i).map_or(f32::INFINITY, |&t| t as f32),
+                    function_node: map[function],
+                });
+            }
+
+            let mut i = Instruction::new(OpCode::IntervalSelect, own);
+            i.input0 = map[*input_index];
+            i.aux0 = start;
+            i.aux1 = functions_indices.len() as u32;
+            out.push(i);
+            map[stack_index] = own as u32;
+            continue;
+        }
+
         let instruction = lower_simple(component, stack_index, own, &map)?;
         out.push(instruction);
         map[stack_index] = own as u32;
@@ -475,7 +518,29 @@ pub fn compile(
         instructions: out,
         samplers,
         spline_points,
+        interval_entries,
     })
+}
+
+const fn unary_opcode(operation: UnaryOperation) -> OpCode {
+    match operation {
+        UnaryOperation::Abs => OpCode::UnaryAbs,
+        UnaryOperation::Square => OpCode::UnarySquare,
+        UnaryOperation::Cube => OpCode::UnaryCube,
+        UnaryOperation::HalfNegative => OpCode::UnaryHalfNegative,
+        UnaryOperation::QuarterNegative => OpCode::UnaryQuarterNegative,
+        UnaryOperation::Squeeze => OpCode::UnarySqueeze,
+        UnaryOperation::Invert => OpCode::UnaryInvert,
+    }
+}
+
+const fn binary_opcode(operation: BinaryOperation) -> OpCode {
+    match operation {
+        BinaryOperation::Add => OpCode::BinaryAdd,
+        BinaryOperation::Mul => OpCode::BinaryMul,
+        BinaryOperation::Min => OpCode::BinaryMin,
+        BinaryOperation::Max => OpCode::BinaryMax,
+    }
 }
 
 /// Lowers the arithmetic, constant and wrapper nodes — everything that needs neither a
@@ -490,6 +555,20 @@ fn lower_simple(
     let instruction = match component {
         // Reads no graph inputs: its data arrives per dispatch, not in the graph.
         BaseNoiseFunctionComponent::Beardifier => Instruction::new(OpCode::Beardifier, index),
+        BaseNoiseFunctionComponent::RangeChoice {
+            input_index,
+            when_in_range_index,
+            when_out_range_index,
+            data,
+        } => {
+            let mut i = Instruction::new(OpCode::RangeChoice, index);
+            i.input0 = map[*input_index];
+            i.input1 = map[*when_in_range_index];
+            i.input2 = map[*when_out_range_index];
+            i.param0 = data.min_inclusive as f32;
+            i.param1 = data.max_exclusive as f32;
+            i
+        }
         BaseNoiseFunctionComponent::Constant { value } => {
             let mut i = Instruction::new(OpCode::Constant, index);
             i.param0 = *value as f32;
@@ -526,15 +605,7 @@ fn lower_simple(
             i
         }
         BaseNoiseFunctionComponent::Unary { input_index, data } => {
-            let op = match data.operation {
-                UnaryOperation::Abs => OpCode::UnaryAbs,
-                UnaryOperation::Square => OpCode::UnarySquare,
-                UnaryOperation::Cube => OpCode::UnaryCube,
-                UnaryOperation::HalfNegative => OpCode::UnaryHalfNegative,
-                UnaryOperation::QuarterNegative => OpCode::UnaryQuarterNegative,
-                UnaryOperation::Squeeze => OpCode::UnarySqueeze,
-                UnaryOperation::Invert => OpCode::UnaryInvert,
-            };
+            let op = unary_opcode(data.operation);
             let mut i = Instruction::new(op, index);
             i.input0 = map[*input_index];
             i
@@ -551,12 +622,7 @@ fn lower_simple(
             argument2_index,
             data,
         } => {
-            let op = match data.operation {
-                BinaryOperation::Add => OpCode::BinaryAdd,
-                BinaryOperation::Mul => OpCode::BinaryMul,
-                BinaryOperation::Min => OpCode::BinaryMin,
-                BinaryOperation::Max => OpCode::BinaryMax,
-            };
+            let op = binary_opcode(data.operation);
             let mut i = Instruction::new(op, index);
             i.input0 = map[*argument1_index];
             i.input1 = map[*argument2_index];
@@ -766,14 +832,13 @@ const fn node_name(component: &BaseNoiseFunctionComponent) -> &'static str {
 /// pin down what the shader should produce.
 #[must_use]
 pub fn evaluate_cpu(
-    instructions: &[Instruction],
-    pool: &SamplerPool,
-    spline_points: &[GpuSplinePoint],
+    compiled: &CompiledGraph,
     beardifier: &BeardifierData,
     x: f32,
     y: f32,
     z: f32,
 ) -> f32 {
+    let instructions = &compiled.instructions;
     let mut values = vec![0.0f32; instructions.len()];
 
     for (index, instruction) in instructions.iter().enumerate() {
@@ -782,88 +847,136 @@ pub fn evaluate_cpu(
         let c = values[instruction.input2 as usize];
         let p = instruction;
 
-        values[index] = match p.opcode {
-            x if x == OpCode::Constant as u32 => p.param0,
-            x if x == OpCode::PassThrough as u32 => a,
-            x if x == OpCode::LinearAdd as u32 => a + p.param0,
-            x if x == OpCode::LinearMul as u32 => a * p.param0,
-            x if x == OpCode::UnaryAbs as u32 => a.abs(),
-            x if x == OpCode::UnarySquare as u32 => a * a,
-            x if x == OpCode::UnaryCube as u32 => a * a * a,
-            x if x == OpCode::UnaryHalfNegative as u32 => {
-                if a > 0.0 {
-                    a
-                } else {
-                    a * 0.5
-                }
-            }
-            x if x == OpCode::UnaryQuarterNegative as u32 => {
-                if a > 0.0 {
-                    a
-                } else {
-                    a * 0.25
-                }
-            }
-            x if x == OpCode::UnarySqueeze as u32 => {
-                let c = a.clamp(-1.0, 1.0);
-                c / 2.0 - c * c * c / 24.0
-            }
-            x if x == OpCode::UnaryInvert as u32 => {
-                if a == 0.0 {
-                    f32::INFINITY
-                } else {
-                    1.0 / a
-                }
-            }
-            x if x == OpCode::Clamp as u32 => a.clamp(p.param0, p.param1),
-            x if x == OpCode::BinaryAdd as u32 => a + b,
-            x if x == OpCode::BinaryMul as u32 => {
-                if a == 0.0 {
-                    0.0
-                } else {
-                    a * b
-                }
-            }
-            x if x == OpCode::BinaryMin as u32 => a.min(b),
-            x if x == OpCode::BinaryMax as u32 => a.max(b),
-            x if x == OpCode::ClampedYGradient as u32 => {
-                clamped_map(y, p.param0, p.param1, p.param2, p.param3)
-            }
-            op if op == OpCode::Noise as u32 => double_perlin_sample(
-                pool,
-                p.sampler_index as usize,
-                x * p.param0,
-                y * p.param1,
-                z * p.param0,
-            ),
-            op if op == OpCode::ShiftA as u32 => {
-                shift_sample_3d(pool, p.sampler_index as usize, x, 0.0, z)
-            }
-            // Vanilla feeds (z, x, 0) here, not (x, y, z); the rotation is deliberate.
-            op if op == OpCode::ShiftB as u32 => {
-                shift_sample_3d(pool, p.sampler_index as usize, z, x, 0.0)
-            }
-            op if op == OpCode::ShiftedNoise as u32 => double_perlin_sample(
-                pool,
-                p.sampler_index as usize,
-                x * p.param0 + a,
-                y * p.param1 + b,
-                z * p.param0 + c,
-            ),
-            op if op == OpCode::Spline as u32 => {
-                sample_spline(spline_points, p.aux0 as usize, p.aux1 as usize, a, &values)
-            }
-            op if op == OpCode::InterpolatedNoise as u32 => {
-                interpolated_sample(pool, p.sampler_index as usize, x, y, z)
-            }
-            op if op == OpCode::Beardifier as u32 => {
-                beardifier_sample(beardifier, x as i32, y as i32, z as i32)
-            }
-            _ => 0.0,
-        };
+        values[index] = eval_opcode(
+            p,
+            EvalInputs { a, b, c },
+            &values,
+            compiled,
+            beardifier,
+            [x, y, z],
+        );
     }
 
     values.last().copied().unwrap_or(0.0)
+}
+
+/// The three already-computed input values an instruction may read.
+#[derive(Clone, Copy)]
+struct EvalInputs {
+    a: f32,
+    b: f32,
+    c: f32,
+}
+
+/// Dispatches one instruction. Split from `evaluate_cpu` so each stays readable.
+fn eval_opcode(
+    p: &Instruction,
+    inputs: EvalInputs,
+    values: &[f32],
+    compiled: &CompiledGraph,
+    beardifier: &BeardifierData,
+    point: [f32; 3],
+) -> f32 {
+    let EvalInputs { a, b, c } = inputs;
+    let [x, y, z] = point;
+
+    match p.opcode {
+        op if op == OpCode::Constant as u32 => p.param0,
+        op if op == OpCode::PassThrough as u32 => a,
+        op if op == OpCode::LinearAdd as u32 => a + p.param0,
+        op if op == OpCode::LinearMul as u32 => a * p.param0,
+        op if op == OpCode::UnaryAbs as u32 => a.abs(),
+        op if op == OpCode::UnarySquare as u32 => a * a,
+        op if op == OpCode::UnaryCube as u32 => a * a * a,
+        op if op == OpCode::UnaryHalfNegative as u32 => {
+            if a > 0.0 {
+                a
+            } else {
+                a * 0.5
+            }
+        }
+        op if op == OpCode::UnaryQuarterNegative as u32 => {
+            if a > 0.0 {
+                a
+            } else {
+                a * 0.25
+            }
+        }
+        op if op == OpCode::UnarySqueeze as u32 => {
+            let clamped = a.clamp(-1.0, 1.0);
+            clamped / 2.0 - clamped * clamped * clamped / 24.0
+        }
+        op if op == OpCode::UnaryInvert as u32 => 1.0 / a,
+        op if op == OpCode::Clamp as u32 => a.clamp(p.param0, p.param1),
+        op if op == OpCode::BinaryAdd as u32 => a + b,
+        op if op == OpCode::BinaryMul as u32 => a * b,
+        op if op == OpCode::BinaryMin as u32 => a.min(b),
+        op if op == OpCode::BinaryMax as u32 => a.max(b),
+        op if op == OpCode::ClampedYGradient as u32 => {
+            clamped_map(y, p.param0, p.param1, p.param2, p.param3)
+        }
+        op if op == OpCode::Spline as u32 => sample_spline(
+            &compiled.spline_points,
+            p.aux0 as usize,
+            p.aux1 as usize,
+            a,
+            values,
+        ),
+        op if op == OpCode::Beardifier as u32 => {
+            beardifier_sample(beardifier, x as i32, y as i32, z as i32)
+        }
+        op if op == OpCode::RangeChoice as u32 => {
+            if p.param0 <= a && a < p.param1 {
+                b
+            } else {
+                c
+            }
+        }
+        op if op == OpCode::IntervalSelect as u32 => compiled
+            .interval_entries
+            .get(p.aux0 as usize..(p.aux0 + p.aux1) as usize)
+            .unwrap_or_default()
+            .iter()
+            .find(|entry| a < entry.threshold)
+            .map_or(0.0, |entry| values[entry.function_node as usize]),
+        _ => eval_noise_opcode(p, inputs, &compiled.samplers, point),
+    }
+}
+
+/// The noise-family opcodes, split out to keep the main dispatch readable.
+fn eval_noise_opcode(
+    p: &Instruction,
+    EvalInputs { a, b, c }: EvalInputs,
+    pool: &SamplerPool,
+    [x, y, z]: [f32; 3],
+) -> f32 {
+    match p.opcode {
+        op if op == OpCode::Noise as u32 => double_perlin_sample(
+            pool,
+            p.sampler_index as usize,
+            x * p.param0,
+            y * p.param1,
+            z * p.param0,
+        ),
+        op if op == OpCode::ShiftA as u32 => {
+            shift_sample_3d(pool, p.sampler_index as usize, x, 0.0, z)
+        }
+        // Vanilla feeds (z, x, 0) here, not (x, y, z); the rotation is deliberate.
+        op if op == OpCode::ShiftB as u32 => {
+            shift_sample_3d(pool, p.sampler_index as usize, z, x, 0.0)
+        }
+        op if op == OpCode::ShiftedNoise as u32 => double_perlin_sample(
+            pool,
+            p.sampler_index as usize,
+            x * p.param0 + a,
+            y * p.param1 + b,
+            z * p.param0 + c,
+        ),
+        op if op == OpCode::InterpolatedNoise as u32 => {
+            interpolated_sample(pool, p.sampler_index as usize, x, y, z)
+        }
+        _ => 0.0,
+    }
 }
 
 /// f32 mirror of `Spline::sample` in
@@ -1301,15 +1414,30 @@ fn clamped_map(value: f32, old_start: f32, old_end: f32, new_start: f32, new_end
 
 #[cfg(test)]
 pub(crate) mod test {
-    use super::{BeardifierData, Instruction, OpCode, SamplerPool, compile, evaluate_cpu};
+    use super::{
+        BeardifierData, CompiledGraph, Instruction, OpCode, SamplerPool, compile, evaluate_cpu,
+    };
     use pumpkin_data::noise_router::{
-        NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER, UnaryOperation,
+        BaseNoiseFunctionComponent, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
+        UnaryOperation,
     };
     use pumpkin_util::random::xoroshiro128::{Xoroshiro, XoroshiroSplitter};
     use pumpkin_world::generation::GlobalRandomConfig;
 
     fn instruction(opcode: OpCode, index: usize) -> Instruction {
         Instruction::new(opcode, index)
+    }
+
+    /// Wraps a bare instruction list so tests can call `evaluate_cpu` without
+    /// building the sampler and table plumbing a real compile produces.
+    fn bare_graph(instructions: &[Instruction]) -> CompiledGraph {
+        let instructions = instructions.to_vec();
+        CompiledGraph {
+            instructions,
+            samplers: SamplerPool::default(),
+            spline_points: Vec::new(),
+            interval_entries: Vec::new(),
+        }
     }
 
     pub fn test_deriver() -> XoroshiroSplitter {
@@ -1320,26 +1448,41 @@ pub(crate) mod test {
         GlobalRandomConfig::new(42, false)
     }
 
-    /// The nether router is fully lowered; the overworld one still contains node types
-    /// with no opcode. Compilation must report the unsupported node rather than
-    /// emitting a graph that silently evaluates to something wrong.
+    /// Both shipped routers lower end to end. If a future node type appears without an
+    /// opcode, compilation must report it rather than emit a graph that silently
+    /// evaluates to something wrong.
     #[test]
-    fn compile_reports_unsupported_nodes_instead_of_miscompiling() {
+    fn real_routers_lower_end_to_end() {
         let config = test_random_config();
 
-        let overworld = OVERWORLD_BASE_NOISE_ROUTER.noise.full_component_stack;
-        let err = compile(overworld, &config).expect_err("some node types remain unsupported");
-        assert!(
-            overworld.len() > err.index,
-            "reported index must point into the stack"
-        );
+        for (name, stack) in [
+            (
+                "overworld",
+                OVERWORLD_BASE_NOISE_ROUTER.noise.full_component_stack,
+            ),
+            (
+                "nether",
+                NETHER_BASE_NOISE_ROUTER.noise.full_component_stack,
+            ),
+        ] {
+            let compiled = compile(stack, &config)
+                .unwrap_or_else(|e| panic!("{name} router should lower fully, but hit {e}"));
+            assert!(
+                compiled.instructions.len() >= stack.len(),
+                "{name}: each node lowers to at least one instruction"
+            );
+        }
+    }
 
-        let nether = NETHER_BASE_NOISE_ROUTER.noise.full_component_stack;
-        let compiled = compile(nether, &config).expect("every nether node is lowered");
-        assert!(
-            compiled.instructions.len() >= nether.len(),
-            "each node lowers to at least one instruction"
-        );
+    /// A node type with no opcode has to be reported, not silently miscompiled.
+    #[test]
+    fn compile_reports_unsupported_nodes() {
+        let config = test_random_config();
+        // EndIslands has no opcode; it stands in for any future unlowered node.
+        let stack = [BaseNoiseFunctionComponent::EndIslands];
+        let err = compile(&stack, &config).expect_err("EndIslands has no opcode");
+        assert_eq!(err.index, 0);
+        assert_eq!(err.name, "EndIslands");
     }
 
     /// The GPU-side Noise opcode must reproduce the real CPU `DoublePerlinNoiseSampler`
@@ -1372,7 +1515,12 @@ pub(crate) mod test {
         noise.input0 = index;
         noise.param0 = 1.0;
         noise.param1 = 1.0;
-        let graph = [noise];
+        let graph = CompiledGraph {
+            instructions: vec![noise],
+            samplers: pool,
+            spline_points: Vec::new(),
+            interval_entries: Vec::new(),
+        };
 
         let mut max_diff = 0.0f64;
         for i in 0..500 {
@@ -1383,8 +1531,6 @@ pub(crate) mod test {
             let expected = cpu_sampler.sample(x, y, z);
             let actual = evaluate_cpu(
                 &graph,
-                &pool,
-                &[],
                 &BeardifierData::default(),
                 x as f32,
                 y as f32,
@@ -1439,9 +1585,7 @@ pub(crate) mod test {
         // constant(3.0) + squeeze(0.0) = 3.0, then clamped to the node's 2.5 ceiling.
         assert!(
             (evaluate_cpu(
-                &graph,
-                &SamplerPool::default(),
-                &[],
+                &bare_graph(&graph),
                 &BeardifierData::default(),
                 0.0,
                 -1000.0,
@@ -1455,9 +1599,7 @@ pub(crate) mod test {
         // clamps to 1.0 -> 1/2 - 1/24, so the sum is 3.0 + ~0.4583, clamped to 2.5.
         assert!(
             (evaluate_cpu(
-                &graph,
-                &SamplerPool::default(),
-                &[],
+                &bare_graph(&graph),
                 &BeardifierData::default(),
                 0.0,
                 1000.0,
@@ -1477,9 +1619,7 @@ pub(crate) mod test {
 
         assert!(
             evaluate_cpu(
-                &[constant, invert],
-                &SamplerPool::default(),
-                &[],
+                &bare_graph(&[constant, invert]),
                 &BeardifierData::default(),
                 0.0,
                 0.0,

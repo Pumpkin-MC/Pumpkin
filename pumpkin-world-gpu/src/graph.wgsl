@@ -36,6 +36,8 @@ const OP_SHIFTED_NOISE: u32 = 20u;
 const OP_SPLINE: u32 = 21u;
 const OP_INTERPOLATED_NOISE: u32 = 22u;
 const OP_BEARDIFIER: u32 = 23u;
+const OP_RANGE_CHOICE: u32 = 24u;
+const OP_INTERVAL_SELECT: u32 = 25u;
 
 struct Instruction {
     opcode: u32,
@@ -117,6 +119,12 @@ struct BeardJunction {
 @group(0) @binding(9) var<storage, read> interpolated: array<InterpolatedRef>;
 @group(0) @binding(10) var<storage, read> beard_structures: array<BeardStructure>;
 @group(0) @binding(11) var<storage, read> beard_junctions: array<BeardJunction>;
+@group(0) @binding(12) var<storage, read> interval_entries: array<IntervalEntry>;
+
+struct IntervalEntry {
+    threshold: f32,
+    function_node: u32,
+}
 
 struct InterpolatedRef {
     lower_start: u32,
@@ -580,6 +588,24 @@ fn evaluate_graph(@builtin(global_invocation_id) gid: vec3<u32>) {
             }
             case 23u: {
                 result = beardifier_sample(i32(px), i32(py), i32(pz));
+            }
+            case 24u: {
+                if (instruction.param0 <= a && a < instruction.param1) {
+                    result = b;
+                } else {
+                    result = c;
+                }
+            }
+            case 25u: {
+                // The last entry has an infinite threshold, so this always matches.
+                result = 0.0;
+                for (var k: u32 = 0u; k < instruction.aux1; k = k + 1u) {
+                    let entry = interval_entries[instruction.aux0 + k];
+                    if (a < entry.threshold) {
+                        result = scratch[entry.function_node * dims.num_points + point_index];
+                        break;
+                    }
+                }
             }
             default: { result = 0.0; }
         }
