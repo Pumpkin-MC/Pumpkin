@@ -1,3 +1,7 @@
+// Benchmarks report which GPU adapter was selected, and note when there is none, so
+// a run with no result is distinguishable from a run that silently skipped.
+#![expect(clippy::print_stderr)]
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_util::{
     noise::perlin::OctavePerlinNoiseSampler,
@@ -59,5 +63,48 @@ fn bench_noise(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_noise);
+/// The nether router is the first one that lowers end to end, so this is the first
+/// measurement of a real router rather than an isolated sampler.
+fn bench_nether_router(c: &mut Criterion) {
+    use pumpkin_data::noise_router::NETHER_BASE_NOISE_ROUTER;
+    use pumpkin_world::generation::GlobalRandomConfig;
+    use pumpkin_world_gpu::graph::{BeardifierData, compile, evaluate_cpu};
+
+    let config = GlobalRandomConfig::new(42, false);
+    let stack = NETHER_BASE_NOISE_ROUTER.noise.full_component_stack;
+    let Ok(compiled) = compile(stack, &config) else {
+        eprintln!("nether router no longer compiles; skipping router benchmark");
+        return;
+    };
+    let beardifier = BeardifierData::default();
+    let points = make_points(CHUNK_CORNER_BATCH);
+
+    let mut group = c.benchmark_group("nether_router");
+    group.bench_function("cpu_reference", |b| {
+        b.iter(|| {
+            let mut total = 0.0f32;
+            for p in &points {
+                total += evaluate_cpu(
+                    &compiled.instructions,
+                    &compiled.samplers,
+                    &compiled.spline_points,
+                    &beardifier,
+                    p[0],
+                    p[1],
+                    p[2],
+                );
+            }
+            std::hint::black_box(total)
+        });
+    });
+
+    if let Some(ctx) = GpuNoiseContext::try_new() {
+        group.bench_function("gpu_wgpu", |b| {
+            b.iter(|| std::hint::black_box(ctx.evaluate_graph(&compiled, &points)));
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_noise, bench_nether_router);
 criterion_main!(benches);
