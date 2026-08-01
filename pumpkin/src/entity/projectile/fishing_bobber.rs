@@ -4,7 +4,8 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use crate::entity::projectile::{ProjectileHit, is_projectile};
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity, player::Player,
+        Entity, EntityBase, EntityBaseFuture, NBTStorage, experience_orb::ExperienceOrbEntity,
+        living::LivingEntity, player::Player,
     },
     server::Server,
 };
@@ -76,9 +77,18 @@ impl FishingBobberEntity {
                 )
                 .await;
 
-            // TODO: Use actual loot tables. For now, just give a raw cod.
-            let _item_stack = ItemStack::new(1, &Item::COD);
-            // player.inventory().add_item(item_stack).await; // Need public add_item
+            let mut item_stack = ItemStack::new(1, &Item::COD);
+            if !player
+                .inventory()
+                .insert_stack_anywhere(&mut item_stack)
+                .await
+                && !item_stack.is_empty()
+            {
+                player.drop_item(item_stack).await;
+            }
+
+            ExperienceOrbEntity::spawn(&world, player.position(), rand::random::<u32>() % 6 + 1)
+                .await;
 
             world.play_sound(
                 Sound::EntityExperienceOrbPickup,

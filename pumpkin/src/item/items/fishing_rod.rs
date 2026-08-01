@@ -63,8 +63,10 @@ impl ItemBehaviour for FishingRodItem {
                     if let Some(bobber) =
                         bobber_base.cast_any().downcast_ref::<FishingBobberEntity>()
                     {
-                        let _result = bobber.reel_in(player).await;
-                        // TODO: give items
+                        let result = bobber.reel_in(player).await;
+                        if result > 0 {
+                            player.damage_held_item(result).await;
+                        }
                     }
                     bobber_base.get_entity().remove().await;
                 }
