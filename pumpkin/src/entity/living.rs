@@ -2318,9 +2318,14 @@ impl EntityBase for LivingEntity {
             }
 
             // Check for shield blocking
+            let shield_source_position = position.or_else(|| {
+                source
+                    .or(cause)
+                    .map(|entity| entity.get_entity().pos.load())
+            });
             if self.is_blocking().await
                 && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_SHIELD)
-                && let Some(pos) = position
+                && let Some(pos) = shield_source_position
             {
                 let player_pos = self.entity.pos.load();
                 let look_vec = Vector3::rotation_vector(0.0, self.entity.yaw.load() as f64);
