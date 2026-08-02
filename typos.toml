@@ -11,3 +11,6 @@ replaceables = "replaceables"
 # Vanilla's own misspelled identifier (Aquifer.java: FLOWING_UPDATE_SIMULARITY), quoted
 # verbatim in a source-citation comment so it's grep-able against the decompiled source.
 simularity = "simularity"
+# Vanilla's own misspelled method name (FrostedIceBlock.java: fewerNeigboursThan), quoted
+# verbatim in a source-citation comment so it's grep-able against the decompiled source.
+neigbours = "neigbours"
