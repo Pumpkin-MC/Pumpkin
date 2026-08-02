@@ -40,6 +40,10 @@ pub fn to_offset(facing: &FacingHopper) -> Vector3<i32> {
     .into()
 }
 
+fn output_position(position: BlockPos, state: HopperLikeProperties) -> BlockPos {
+    position.offset(to_offset(&state.facing))
+}
+
 impl BlockEntity for HopperBlockEntity {
     fn write_nbt<'a>(
         &'a self,
@@ -100,7 +104,6 @@ impl BlockEntity for HopperBlockEntity {
     }
 
     fn set_block_state(&mut self, block_state: BlockStateId) {
-        // TODO !!!IMPORTANT!!! set block state when loading the chunk
         self.facing = HopperLikeProperties::from_state_id(block_state, &Block::HOPPER).facing;
     }
 
@@ -137,7 +140,7 @@ impl HopperBlockEntity {
             let mut success = if self.is_empty().await {
                 false
             } else {
-                self.eject_items(world).await
+                self.eject_items(state, world).await
             };
             if !self.inventory_full().await {
                 success |= self.suck_in_items(world).await;
@@ -221,10 +224,10 @@ impl HopperBlockEntity {
         false
     }
 
-    async fn eject_items(&self, world: &Arc<World>) -> bool {
+    async fn eject_items(&self, state: &HopperLikeProperties, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
 
-        if let Some(entity) = world.get_block_entity(&self.position.offset(to_offset(&self.facing)))
+        if let Some(entity) = world.get_block_entity(&output_position(self.position, *state))
             && let Some(container) = entity.get_inventory()
         {
             // TODO check WorldlyContainer
@@ -359,5 +362,22 @@ impl Clearable for HopperBlockEntity {
             }
             self.mark_dirty();
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::output_position;
+    use pumpkin_data::Block;
+    use pumpkin_data::block_properties::{BlockProperties, FacingHopper, HopperLikeProperties};
+    use pumpkin_util::math::position::BlockPos;
+
+    #[test]
+    fn hopper_output_uses_current_facing() {
+        let position = BlockPos::new(4, 20, -3);
+        let mut state = HopperLikeProperties::default(&Block::HOPPER);
+        state.facing = FacingHopper::West;
+
+        assert_eq!(output_position(position, state), BlockPos::new(3, 20, -3));
     }
 }
