@@ -67,6 +67,10 @@ use std::sync::RwLock;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+fn knockback_strength_with_resistance(strength: f64, resistance: f64) -> f64 {
+    strength * (1.0 - resistance.clamp(0.0, 1.0))
+}
+
 /// Represents a living entity within the game world.
 ///
 /// This struct encapsulates the core properties and behaviors of living entities, including players, mobs, and other creatures.
@@ -2401,7 +2405,9 @@ impl EntityBase for LivingEntity {
                     let target_pos = self.entity.pos.load();
                     let dx = source_pos.x - target_pos.x;
                     let dz = source_pos.z - target_pos.z;
-                    self.entity.apply_knockback(0.4, dx, dz);
+                    let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+                    let knockback = knockback_strength_with_resistance(0.4, resistance);
+                    self.entity.apply_knockback(knockback, dx, dz);
                     self.entity.send_velocity();
                 }
             }
@@ -2957,6 +2963,13 @@ mod tests {
     fn active_hand_maps_to_the_matching_equipment_slot() {
         assert!(equipment_slot_for_hand(Hand::Left) == EquipmentSlot::OFF_HAND);
         assert!(equipment_slot_for_hand(Hand::Right) == EquipmentSlot::MAIN_HAND);
+    }
+
+    #[test]
+    fn knockback_resistance_scales_damage_knockback() {
+        assert_eq!(knockback_strength_with_resistance(0.4, 0.0), 0.4);
+        assert!((knockback_strength_with_resistance(0.4, 0.25) - 0.3).abs() < f64::EPSILON);
+        assert_eq!(knockback_strength_with_resistance(0.4, 1.0), 0.0);
     }
 
     #[test]
