@@ -1,9 +1,13 @@
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 use std::sync::{Arc, Weak};
 
+use crossbeam::atomic::AtomicCell;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
@@ -14,12 +18,25 @@ use crate::entity::{
 
 pub struct VexEntity {
     pub mob_entity: MobEntity,
+    /// Vanilla: `Vex.owner` (`OwnableEntity`). Set by `EvokerSummonSpellGoal`.
+    owner_id: AtomicCell<Option<i32>>,
+    /// Vanilla: `Vex.boundOrigin`, the point `VexRandomMoveGoal` wanders around.
+    bound_origin: AtomicCell<Option<BlockPos>>,
+    /// Vanilla: `Vex.hasLimitedLife` / `limitedLifeTicks`.
+    has_limited_life: AtomicBool,
+    limited_life_ticks: AtomicI32,
 }
 
 impl VexEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let vex = Self { mob_entity };
+        let vex = Self {
+            mob_entity,
+            owner_id: AtomicCell::new(None),
+            bound_origin: AtomicCell::new(None),
+            has_limited_life: AtomicBool::new(false),
+            limited_life_ticks: AtomicI32::new(0),
+        };
         let mob_arc = Arc::new(vex);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -47,6 +64,22 @@ impl VexEntity {
 
         mob_arc
     }
+
+    /// Vanilla: `Vex#setOwner`.
+    pub fn set_owner(&self, owner: &Entity) {
+        self.owner_id.store(Some(owner.entity_id));
+    }
+
+    /// Vanilla: `Vex#setBoundOrigin`.
+    pub fn set_bound_origin(&self, origin: BlockPos) {
+        self.bound_origin.store(Some(origin));
+    }
+
+    /// Vanilla: `Vex#setLimitedLife`.
+    pub fn set_limited_life(&self, life_ticks: i32) {
+        self.has_limited_life.store(true, Relaxed);
+        self.limited_life_ticks.store(life_ticks, Relaxed);
+    }
 }
 
 impl NBTStorage for VexEntity {}
@@ -54,5 +87,27 @@ impl NBTStorage for VexEntity {}
 impl Mob for VexEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    /// Vanilla: `Vex#tick` -- while `hasLimitedLife`, deals 1 starvation damage every 20 ticks
+    /// once the counter runs out, resetting it to keep ticking down.
+    ///
+    /// Scope reduction: the rest of vanilla's `Vex` AI (`VexMoveControl`'s no-physics flight,
+    /// `VexRandomMoveGoal` wandering around `bound_origin`, `VexChargeAttackGoal`'s charge dash,
+    /// and `VexCopyOwnerTargetGoal`) is not ported here -- Vex already falls back to the generic
+    /// `WanderAroundGoal`/`MeleeAttackGoal` pair registered above, which is a pre-existing gap
+    /// unrelated to evoker spellcasting.
+    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            if self.has_limited_life.load(Relaxed) {
+                let remaining = self.limited_life_ticks.fetch_sub(1, Relaxed) - 1;
+                if remaining <= 0 {
+                    self.limited_life_ticks.store(20, Relaxed);
+                    caller
+                        .damage(caller.as_ref(), 1.0, DamageType::STARVE)
+                        .await;
+                }
+            }
+        })
     }
 }

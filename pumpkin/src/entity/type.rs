@@ -99,6 +99,7 @@ use crate::entity::projectile::ThrownItemEntity;
 use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::projectile::egg::EggEntity;
 use crate::entity::projectile::ender_pearl::EnderPearlEntity;
+use crate::entity::projectile::evoker_fangs::EvokerFangsEntity;
 use crate::entity::projectile::experience_bottle::ExperienceBottleEntity;
 use crate::entity::projectile::eye_of_ender::EyeOfEnder;
 use crate::entity::projectile::fireball::FireballEntity;
@@ -240,6 +241,11 @@ pub fn from_type(
             // Shulker bullets are normally spawned by ShulkerEntity directly;
             // when loaded from the world we create a no-target bullet at the given position.
             Arc::new(ShulkerBulletEntity::orphan(entity))
+        }
+        id if id == EntityType::EVOKER_FANGS.id => {
+            // Normally spawned directly by EvokerAttackSpellGoal; loaded/summoned fangs have no
+            // casting owner.
+            Arc::new(EvokerFangsEntity::orphan(entity))
         }
         id if id == EntityType::FALLING_BLOCK.id => {
             Arc::new(FallingEntity::new(entity, Block::SAND.default_state.id))
