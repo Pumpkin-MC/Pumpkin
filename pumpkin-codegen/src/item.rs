@@ -736,7 +736,7 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (BucketEntityData, &BucketEntityDataImpl), });
         }
         if self.bundle_contents.is_some() {
-            tokens.extend(quote! { (BundleContents, &BundleContentsImpl { items: Vec::new() }), });
+            tokens.extend(quote! { (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }), });
         }
         if self.charged_projectiles.is_some() {
             tokens.extend(quote! { (ChargedProjectiles, &ChargedProjectilesImpl { projectiles: Vec::new() }), });

@@ -99,10 +99,16 @@ impl DataComponentImpl for ChargedProjectilesImpl {
 #[derive(Clone)]
 pub struct BundleContentsImpl {
     pub items: Vec<crate::item_stack::ItemStack>,
+    pub selected_item_index: i32,
 }
 impl PartialEq for BundleContentsImpl {
-    fn eq(&self, _other: &Self) -> bool {
-        false
+    fn eq(&self, other: &Self) -> bool {
+        self.items.len() == other.items.len()
+            && self
+                .items
+                .iter()
+                .zip(&other.items)
+                .all(|(item, other)| item.are_equal(other))
     }
 }
 impl Eq for BundleContentsImpl {}
@@ -123,7 +129,10 @@ impl BundleContentsImpl {
                 }
             }
         }
-        Some(Self { items })
+        Some(Self {
+            items,
+            selected_item_index: -1,
+        })
     }
     pub fn get_weight(&self) -> u32 {
         self.items
@@ -153,16 +162,91 @@ impl BundleContentsImpl {
         }
         inserted_anything
     }
+    pub fn toggle_selected_item(&mut self, selected_item_index: i32) {
+        self.selected_item_index = if self.selected_item_index != selected_item_index
+            && selected_item_index >= 0
+            && (selected_item_index as usize) < self.items.len()
+        {
+            selected_item_index
+        } else {
+            -1
+        };
+    }
     pub fn try_extract(&mut self) -> Option<crate::item_stack::ItemStack> {
         if self.items.is_empty() {
             None
         } else {
-            Some(self.items.remove(0))
+            let remove_index = if self.selected_item_index >= 0
+                && (self.selected_item_index as usize) < self.items.len()
+            {
+                self.selected_item_index as usize
+            } else {
+                0
+            };
+            let extracted = self.items.remove(remove_index);
+            self.toggle_selected_item(-1);
+            Some(extracted)
         }
     }
 }
 impl DataComponentImpl for BundleContentsImpl {
     default_impl!(BundleContents);
+}
+
+#[cfg(test)]
+mod bundle_tests {
+    use super::BundleContentsImpl;
+    use crate::{item::Item, item_stack::ItemStack};
+
+    #[test]
+    fn extracts_selected_item_and_clears_selection() {
+        let mut contents = BundleContentsImpl {
+            items: vec![
+                ItemStack::new(1, &Item::STONE),
+                ItemStack::new(1, &Item::APPLE),
+            ],
+            selected_item_index: -1,
+        };
+
+        contents.toggle_selected_item(1);
+        let extracted = contents.try_extract().expect("bundle should not be empty");
+
+        assert_eq!(extracted.item.id, Item::APPLE.id);
+        assert_eq!(contents.items[0].item.id, Item::STONE.id);
+        assert_eq!(contents.selected_item_index, -1);
+    }
+
+    #[test]
+    fn invalid_or_repeated_selection_clears_selection() {
+        let mut contents = BundleContentsImpl {
+            items: vec![ItemStack::new(1, &Item::STONE)],
+            selected_item_index: -1,
+        };
+
+        contents.toggle_selected_item(0);
+        assert_eq!(contents.selected_item_index, 0);
+
+        contents.toggle_selected_item(0);
+        assert_eq!(contents.selected_item_index, -1);
+
+        contents.toggle_selected_item(1);
+        assert_eq!(contents.selected_item_index, -1);
+    }
+
+    #[test]
+    fn equality_ignores_selected_item() {
+        let items = vec![ItemStack::new(1, &Item::STONE)];
+        let contents = BundleContentsImpl {
+            items: items.clone(),
+            selected_item_index: -1,
+        };
+        let selected_contents = BundleContentsImpl {
+            items,
+            selected_item_index: 0,
+        };
+
+        assert_eq!(contents, selected_contents);
+    }
 }
 
 /// The dimension and block position a lodestone compass points to.

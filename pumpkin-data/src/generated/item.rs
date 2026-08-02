@@ -3988,7 +3988,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -4941,7 +4941,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -6570,7 +6570,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -7452,7 +7452,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -15144,7 +15144,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -24958,7 +24958,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -25567,7 +25567,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -30648,7 +30648,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -31257,7 +31257,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -32056,7 +32056,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -32900,7 +32900,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -39425,7 +39425,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -42203,7 +42203,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -45691,7 +45691,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -47290,7 +47290,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -61759,7 +61759,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {
@@ -63424,7 +63424,7 @@ impl Item {
                 },
             ),
             (BreakSound, &BreakSoundImpl),
-            (BundleContents, &BundleContentsImpl { items: Vec::new() }),
+            (BundleContents, &BundleContentsImpl { items: Vec::new(), selected_item_index: -1 }),
             (
                 Enchantments,
                 &EnchantmentsImpl {

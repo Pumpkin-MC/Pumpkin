@@ -679,6 +679,30 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Sets the selected item index for a bundle in a screen handler slot.
+    fn set_selected_bundle_item_index(
+        &self,
+        slot_index: i32,
+        selected_item_index: i32,
+    ) -> ScreenHandlerFuture<'_, ()> {
+        Box::pin(async move {
+            let Ok(slot_index) = usize::try_from(slot_index) else {
+                return;
+            };
+            let Some(slot) = self.get_behaviour().slots.get(slot_index).cloned() else {
+                return;
+            };
+
+            let stack = slot.get_stack().await;
+            let mut stack = stack.lock().await;
+            if let Some(bundle) = stack
+                .get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+            {
+                bundle.toggle_selected_item(selected_item_index);
+            }
+        })
+    }
+
     /// Performs a quick move (shift-click) from a slot.
     ///
     /// Must be implemented by concrete screen handlers to define

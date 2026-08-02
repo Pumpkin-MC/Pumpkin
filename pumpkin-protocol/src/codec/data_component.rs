@@ -957,7 +957,10 @@ impl DataComponentCodec<Self> for BundleContentsImpl {
         for _ in 0..len {
             items.push(deserialize_item_stack_template(seq)?);
         }
-        Ok(Self { items })
+        Ok(Self {
+            items,
+            selected_item_index: -1,
+        })
     }
 }
 
