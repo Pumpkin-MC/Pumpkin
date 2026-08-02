@@ -534,6 +534,10 @@ pub trait Mob: EntityBase + Send + Sync {
     fn mob_set_variant_name(&self, _name: &str) {}
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
+    fn get_mob(&self) -> Option<&dyn Mob> {
+        Some(self)
+    }
+
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             self.mob_init_data_tracker().await;

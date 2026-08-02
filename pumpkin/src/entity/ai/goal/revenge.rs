@@ -7,6 +7,7 @@ use crate::entity::ai::goal::GoalFuture;
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
+use pumpkin_data::attributes::Attributes;
 
 pub struct RevengeGoal {
     track_target_goal: TrackTargetGoal,
@@ -79,9 +80,37 @@ impl Goal for RevengeGoal {
             let mob_entity = mob.get_mob_entity();
             self.last_attacked_time = mob_entity.living_entity.last_attacked_time.load(Relaxed);
             self.track_target_goal.max_time_without_visibility = 300;
-
             self.track_target_goal.start(mob).await;
-            // TODO: group revenge — call nearby mobs of same type to help
+
+            let Some(target) = self.target.as_ref() else {
+                return;
+            };
+            let mob_entity = mob.get_mob_entity();
+            let entity = &mob_entity.living_entity.entity;
+            let world = entity.world.load();
+            let position = entity.pos.load();
+            let follow_range = mob_entity
+                .living_entity
+                .get_attribute_value(&Attributes::FOLLOW_RANGE);
+            let entity_type = entity.entity_type;
+
+            for nearby in world
+                .get_nearby_entities(position, follow_range)
+                .into_values()
+            {
+                if nearby.get_entity().entity_id == entity.entity_id
+                    || nearby.get_entity().entity_type != entity_type
+                {
+                    continue;
+                }
+                let Some(nearby_mob) = nearby.get_mob() else {
+                    continue;
+                };
+                if nearby_mob.get_mob_entity().target.lock().await.is_some() {
+                    continue;
+                }
+                nearby_mob.set_mob_target(Some(target.clone())).await;
+            }
         })
     }
 

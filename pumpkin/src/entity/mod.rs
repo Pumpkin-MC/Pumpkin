@@ -599,6 +599,10 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
 
     fn get_living_entity(&self) -> Option<&LivingEntity>;
 
+    fn get_mob(&self) -> Option<&dyn crate::entity::mob::Mob> {
+        None
+    }
+
     fn cast_any(&self) -> &dyn std::any::Any;
 
     fn get_item_entity(self: Arc<Self>) -> Option<Arc<ItemEntity>> {
