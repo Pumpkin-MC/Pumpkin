@@ -193,7 +193,7 @@ pub struct PluginManager {
 /// - Windows: Plugin cannot be unloaded, it can be only active or not
 struct LoadedPlugin {
     metadata: PluginMetadata,
-    instance: Option<Box<dyn Plugin>>,
+    instance: Option<Arc<dyn Plugin>>,
     loader: Arc<dyn PluginLoader>,
     loader_data: Option<Box<dyn Any + Send + Sync>>,
     is_active: bool,
@@ -533,7 +533,7 @@ impl PluginManager {
     #[expect(clippy::too_many_lines)]
     async fn spawn_plugin_initialization(
         &self,
-        mut instance: Box<dyn Plugin>,
+        instance: Arc<dyn Plugin>,
         metadata: PluginMetadata,
         loader_data: Box<dyn Any + Send + Sync>,
         loader: Arc<dyn PluginLoader>,
@@ -731,7 +731,7 @@ impl PluginManager {
         let mut plugins_map: HashMap<
             String,
             (
-                Box<dyn Plugin>,
+                Arc<dyn Plugin>,
                 PluginMetadata,
                 Box<dyn Any + Send + Sync>,
                 Arc<dyn PluginLoader>,
@@ -942,7 +942,7 @@ impl PluginManager {
             plugins.remove(index)
         };
 
-        if let Some(mut instance) = plugin.instance.take() {
+        if let Some(instance) = plugin.instance.take() {
             instance.on_unload(plugin.context.clone()).await.ok();
         }
 

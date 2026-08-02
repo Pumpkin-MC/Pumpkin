@@ -254,12 +254,10 @@ impl ChunkManager {
             let new_level = ChunkLoading::get_level_from_view_distance(view_distance);
             lock.add_ticket(center, new_level);
 
-            if old_center != center || old_view_distance != view_distance {
+            if (old_center != center || old_view_distance != view_distance) && old_view_distance > 0
+            {
                 let old_level = ChunkLoading::get_level_from_view_distance(old_view_distance);
-                // Don't remove if it would be the same ticket
-                if old_center != center || old_level != new_level {
-                    lock.remove_ticket(old_center, old_level);
-                }
+                lock.remove_ticket(old_center, old_level);
             }
             lock.send_change();
         };
@@ -2494,8 +2492,11 @@ impl Player {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
-        // level.clean_chunks(&chunks_to_clean).await;
-        for chunk in chunks_to_clean {
+        if !chunks_to_clean.is_empty() {
+            world.remove_entities_in_chunks(&chunks_to_clean).await;
+            level.clean_entity_chunks(&chunks_to_clean);
+        }
+        for chunk in &chunks_to_clean {
             self.client
                 .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                 .await;
@@ -3012,24 +3013,28 @@ impl Player {
         let config = self.config.load();
         self.living_entity.entity.send_meta_data(
             &[
+                // v26.x
                 Metadata::new(
                     TrackedData::PLAYER_MODE_CUSTOMISATION,
                     MetaDataType::BYTE,
                     config.skin_parts,
                 ),
-                // PLAYER_MODE_CUSTOMIZATION_ID is the index for 1.21.7–1.21.11.
-                // Metadata::write skips entries where the resolved index is 255,
-                // so it is safe to emit both — exactly one will be sent per version.
+                Metadata::new(
+                    TrackedData::PLAYER_MAIN_HAND,
+                    MetaDataType::HUMANOID_ARM,
+                    config.main_hand as u8,
+                ),
+                // v1.21.x
                 Metadata::new(
                     TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
                     MetaDataType::BYTE,
                     config.skin_parts,
                 ),
-                // Metadata::new(
-                //     TrackedData::DATA_MAIN_ARM_ID,
-                //     MetaDataType::ARM,
-                //     VarInt(config.main_hand as u8 as i32),
-                // ),
+                Metadata::new(
+                    TrackedData::MAIN_ARM_ID,
+                    MetaDataType::BYTE,
+                    config.main_hand as u8,
+                ),
             ],
             None,
         );
