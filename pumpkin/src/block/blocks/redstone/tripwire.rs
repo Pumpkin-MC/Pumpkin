@@ -103,8 +103,7 @@ impl BlockBehaviour for TripwireBlock {
                         BlockFlags::empty(),
                     )
                     .await;
-                // TODO world.emitGameEvent(player, GameEvent.SHEAR, pos);
-                // TODO: Deduct 1 durability from held shears (skip in Creative mode).
+                args.player.damage_held_item(1).await;
             }
         })
     }
