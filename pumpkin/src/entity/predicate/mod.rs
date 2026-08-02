@@ -1,6 +1,14 @@
 use crate::entity::{Entity, EntityBase};
 use std::pin::Pin;
 
+const fn allowed_except_creative_or_spectator(
+    is_player: bool,
+    is_spectator: bool,
+    is_creative: bool,
+) -> bool {
+    !is_player || (!is_spectator && !is_creative)
+}
+
 pub enum EntityPredicate<'a> {
     ValidEntity,
     ValidLivingEntity,
@@ -33,9 +41,15 @@ impl EntityPredicate<'_> {
                     // TODO: implement
                     false
                 }
-                EntityPredicate::ExceptCreativeOrSpectator => entity
-                    .get_player()
-                    .is_some_and(|player| player.is_spectator() || player.is_creative()),
+                EntityPredicate::ExceptCreativeOrSpectator => {
+                    entity.get_player().is_none_or(|player| {
+                        allowed_except_creative_or_spectator(
+                            true,
+                            player.is_spectator(),
+                            player.is_creative(),
+                        )
+                    })
+                }
                 EntityPredicate::ExceptSpectator => !entity.is_spectator(),
                 EntityPredicate::CanCollide => {
                     EntityPredicate::ExceptSpectator.test(entity).await
@@ -70,5 +84,18 @@ impl EntityPredicate<'_> {
                 }
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allowed_except_creative_or_spectator;
+
+    #[test]
+    fn excludes_only_creative_and_spectator_players() {
+        assert!(allowed_except_creative_or_spectator(false, false, false));
+        assert!(allowed_except_creative_or_spectator(true, false, false));
+        assert!(!allowed_except_creative_or_spectator(true, true, false));
+        assert!(!allowed_except_creative_or_spectator(true, false, true));
     }
 }
