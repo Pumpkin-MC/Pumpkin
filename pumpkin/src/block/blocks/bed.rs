@@ -419,13 +419,14 @@ impl BedBlock {
 async fn can_sleep(world: &Arc<World>) -> bool {
     let time = world.level_time.lock().await;
     let weather = world.weather.lock().await;
+    let day_time = time.time_of_day.rem_euclid(24_000);
 
     if weather.thundering {
         true
     } else if weather.raining {
-        time.time_of_day > 12010 && time.time_of_day < 23991
+        day_time > 12010 && day_time < 23991
     } else {
-        time.time_of_day > 12542 && time.time_of_day < 23459
+        day_time > 12542 && day_time < 23459
     }
 }
 
