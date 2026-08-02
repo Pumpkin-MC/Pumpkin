@@ -294,6 +294,9 @@ async fn get_power_on_side(
 ) -> u8 {
     let side_pos = pos.offset(side.to_block_direction().to_offset());
     let (side_block, side_state) = world.get_block_and_state(&side_pos);
+    if !only_gate && side_block == &Block::REDSTONE_WIRE {
+        return RedstoneWireLikeProperties::from_state_id(side_state.id, side_block).power;
+    }
     if !only_gate || is_diode(side_block) {
         world
             .block_registry
