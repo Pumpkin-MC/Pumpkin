@@ -2,9 +2,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::chunk::ChunkHeightmapType;
@@ -38,7 +41,7 @@ impl BatEntity {
         };
         let mob_arc = Arc::new(bat);
 
-        Self::set_roosting_metadata(true);
+        mob_arc.set_roosting_metadata(true);
 
         mob_arc
     }
@@ -70,21 +73,19 @@ impl BatEntity {
 
     fn set_roosting(&self, roosting: bool) {
         self.roosting.store(roosting, Relaxed);
-        Self::set_roosting_metadata(roosting);
+        self.set_roosting_metadata(roosting);
     }
 
-    const fn set_roosting_metadata(_roosting: bool) {
-        // TODO
-        // let flags: u8 = if roosting { ROOSTING_FLAG } else { 0 };
-        // self.mob_entity
-        //     .living_entity
-        //     .entity
-        //     .send_meta_data(&[Metadata::new(
-        //         TrackedData::ID_FLAGS,
-        //         MetaDataType::BYTE,
-        //         flags,
-        //     )])
-        //     .await;
+    fn set_roosting_metadata(&self, roosting: bool) {
+        let flags = if roosting { ROOSTING_FLAG } else { 0 };
+        self.mob_entity.living_entity.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::BAT_FLAGS,
+                MetaDataType::BYTE,
+                flags,
+            )],
+            None,
+        );
     }
 }
 
@@ -110,6 +111,12 @@ impl NBTStorage for BatEntity {
 impl Mob for BatEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            self.set_roosting_metadata(self.is_roosting());
+        })
     }
 
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
