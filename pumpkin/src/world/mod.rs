@@ -1738,40 +1738,24 @@ impl World {
         };
 
         if is_raining && is_thundering && rng().random_range(0..100_000) == 0 {
-            let rand_value = rng().random::<i32>() >> 2;
-            let delta = Vector3::new(rand_value & 15, rand_value >> 16 & 15, rand_value >> 8 & 15);
-            let random_pos = Vector3::new(
-                chunk_pos.x << 4,
-                chunk.heightmap.lock().unwrap().get(
-                    MotionBlocking,
-                    chunk_pos.x << 4,
-                    chunk_pos.y << 4,
-                    self.min_y,
-                ),
-                chunk_pos.y << 4,
-            )
-            .add(&delta);
-            // TODO this.getBrightness(LightLayer.SKY, blockPos) >= 15;
-            // TODO heightmap
+            let local_x = rng().random_range(0..16);
+            let local_z = rng().random_range(0..16);
+            let x = (chunk_pos.x << 4) + local_x;
+            let z = (chunk_pos.y << 4) + local_z;
+            let y = self.get_heightmap_height(MotionBlocking, x, z) + 1;
+            let target = lightning_target_position(chunk_pos, local_x, local_z, y);
 
-            // TODO findLightningRod(blockPos)
-            // TODO encapsulatingFullBlocks
-            if true {
-                // TODO biome.getPrecipitationAt(pos, this.getSeaLevel()) == Biome.Precipitation.RAIN
-                // TODO this.getCurrentDifficultyAt(blockPos);
+            if self.is_raining_at_unchecked(&target) {
                 if rng().random::<f32>() < 0.0675
-                    && self.get_block(&random_pos.to_block_pos().down()) != &Block::LIGHTNING_ROD
+                    && self.get_block(&target.down()) != &Block::LIGHTNING_ROD
                 {
-                    let entity = Entity::new(
-                        self.clone(),
-                        random_pos.to_f64(),
-                        &EntityType::SKELETON_HORSE,
-                    );
+                    let entity =
+                        Entity::new(self.clone(), target.to_f64(), &EntityType::SKELETON_HORSE);
                     self.spawn_entity(Arc::new(entity)).await;
                 }
                 let entity = Entity::new(
                     self.clone(),
-                    random_pos.to_f64().add_raw(0.5, 0., 0.5),
+                    target.to_f64().add_raw(0.5, 0., 0.5),
                     &EntityType::LIGHTNING_BOLT,
                 );
                 self.spawn_entity(Arc::new(entity)).await;
@@ -5574,6 +5558,19 @@ impl World {
     }
 }
 
+const fn lightning_target_position(
+    chunk_pos: Vector2<i32>,
+    local_x: i32,
+    local_z: i32,
+    surface_y: i32,
+) -> BlockPos {
+    BlockPos(Vector3::new(
+        (chunk_pos.x << 4) + local_x,
+        surface_y,
+        (chunk_pos.y << 4) + local_z,
+    ))
+}
+
 impl BlockAccessor for World {
     fn get_block(&self, position: &BlockPos) -> &'static Block {
         self.get_block_state_id_if_loaded(position)
@@ -5648,6 +5645,14 @@ impl WorldPortalExt for WorldPortal {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lightning_target_uses_chunk_column_surface() {
+        assert_eq!(
+            lightning_target_position(Vector2::new(-2, 3), 7, 11, 96),
+            BlockPos::new(-25, 96, 59)
+        );
+    }
 
     #[test]
     fn active_chunks_use_configured_simulation_distance() {
