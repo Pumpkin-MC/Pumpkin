@@ -2300,18 +2300,21 @@ impl EntityBase for LivingEntity {
                 }
             }
 
-            // Apply Resistance effect reduction (20% per level), excluding bypasses_cooldown_protection and starvation damage
-            let resistance_reduction =
-                if !bypasses_cooldown_protection && damage_type != DamageType::STARVE {
-                    self.get_effect(&StatusEffect::RESISTANCE)
-                        .await
-                        .map_or(0.0, |e| 0.2 * (e.amplifier + 1) as f32)
-                } else {
-                    0.0
-                };
+            // Apply Resistance unless the damage source bypasses effects or resistance.
+            let resistance_reduction = if !damage_type
+                .has_tag(&tag::DamageType::MINECRAFT_BYPASSES_EFFECTS)
+                && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_RESISTANCE)
+            {
+                self.get_effect(&StatusEffect::RESISTANCE)
+                    .await
+                    .map_or(0.0, |e| (0.2 * (e.amplifier + 1) as f32).min(1.0))
+            } else {
+                0.0
+            };
 
             // Total damage after reductions
-            let effective_amount = damage_after_enchantments * (1.0 - resistance_reduction);
+            let effective_amount =
+                (damage_after_enchantments * (1.0 - resistance_reduction)).max(0.0);
 
             if resistance_reduction > 0.0 {
                 let resisted = damage_after_enchantments * resistance_reduction;
