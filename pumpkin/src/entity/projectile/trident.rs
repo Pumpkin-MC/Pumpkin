@@ -12,6 +12,8 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag;
+use pumpkin_data::tag::Taggable;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::{CEntityVelocity, CSoundEffect};
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -37,7 +39,9 @@ pub struct TridentEntity {
 impl TridentEntity {
     const BASE_DAMAGE: f64 = 8.0;
     const AIR_INERTIA: f64 = 0.99;
-    const WATER_INERTIA: f64 = 0.9;
+    // Vanilla ThrownTrident.java#getWaterInertia overrides AbstractArrow's default 0.6 with 0.99
+    // so tridents barely decelerate underwater.
+    const WATER_INERTIA: f64 = 0.99;
     const GRAVITY: f64 = 0.05;
     const DESPAWN_TIME: u32 = 1200;
 
@@ -350,12 +354,16 @@ impl EntityBase for TridentEntity {
                         .get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>(
                     ) {
                         for (enchantment, level) in enchantments.enchantment.iter() {
-                            if **enchantment == pumpkin_data::Enchantment::IMPALING {
-                                let in_water =
-                                    target.get_entity().touching_water.load(Ordering::Relaxed);
-                                if in_water {
-                                    damage += 1.25 * f64::from(*level);
-                                }
+                            // Vanilla Enchantments.java IMPALING: +2.5 damage/level, gated on the
+                            // target's entity type being tagged sensitive_to_impaling (aquatic
+                            // mobs), not on whether the target happens to be touching water.
+                            if **enchantment == pumpkin_data::Enchantment::IMPALING
+                                && target
+                                    .get_entity()
+                                    .entity_type
+                                    .has_tag(&tag::EntityType::MINECRAFT_SENSITIVE_TO_IMPALING)
+                            {
+                                damage += 2.5 * f64::from(*level);
                             }
                         }
                     }

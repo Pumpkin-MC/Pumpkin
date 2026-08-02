@@ -8,13 +8,16 @@ use pumpkin_data::block_properties::{
     OakDoorLikeProperties, OakTrapdoorLikeProperties, PaleOakWoodLikeProperties,
 };
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag};
 use pumpkin_data::{BlockDirection, BlockId};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
+use rand::{RngExt, rng};
 
 pub struct AxeItem;
 
@@ -42,7 +45,7 @@ impl ItemBehaviour for AxeItem {
             // First we try to strip the block. by getting his equivalent and applying it the axis.
 
             // If there is a strip equivalent.
-            let changed = if let Some(replacement) = replacement_block {
+            let changed = if let Some((replacement, action)) = replacement_block {
                 let new_block = replacement.to_block();
                 // Bamboo blocks are pillars too, but they are not part of the logs tag.
                 let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_LOGS)
@@ -85,6 +88,31 @@ impl ItemBehaviour for AxeItem {
                 world
                     .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
+
+                // Vanilla AxeItem#evaluateNewBlockState / spawnSoundAndParticle: strip only
+                // plays a sound; scrape and wax-off additionally emit a level event (particle).
+                let (sound, level_event) = match action {
+                    AxeAction::Strip => (Sound::ItemAxeStrip, None),
+                    AxeAction::Deoxidize => {
+                        (Sound::ItemAxeScrape, Some(WorldEvent::ParticlesScrape))
+                    }
+                    AxeAction::Unwax => (Sound::ItemAxeWaxOff, Some(WorldEvent::ParticlesWaxOff)),
+                };
+                let seed = rng().random::<f64>();
+                player
+                    .play_sound(
+                        sound as u16,
+                        SoundCategory::Blocks,
+                        &location.to_f64(),
+                        1.0,
+                        1.0,
+                        seed,
+                    )
+                    .await;
+                if let Some(event) = level_event {
+                    world.sync_world_event(event, location, 0);
+                }
+
                 true
             } else {
                 false
@@ -115,17 +143,27 @@ fn axe_trapdoor_state(
     target_properties.waterlogged = source_properties.waterlogged;
     target_properties.to_state_id(target)
 }
-const fn try_use_axe(id: BlockId) -> Option<BlockId> {
+#[derive(Clone, Copy)]
+enum AxeAction {
+    Strip,
+    Deoxidize,
+    Unwax,
+}
+
+const fn try_use_axe(id: BlockId) -> Option<(BlockId, AxeAction)> {
     // Trying to get the strip equivalent
     if let Some(block) = get_stripped_equivalent(id) {
-        return Some(block);
+        return Some((block, AxeAction::Strip));
     }
     // Else decrease the level of oxidation
     if let Some(block) = get_deoxidized_equivalent(id) {
-        return Some(block);
+        return Some((block, AxeAction::Deoxidize));
     }
     // Else unwax the block
-    get_unwaxed_equivalent(id)
+    match get_unwaxed_equivalent(id) {
+        Some(block) => Some((block, AxeAction::Unwax)),
+        None => None,
+    }
 }
 
 const fn get_stripped_equivalent(id: BlockId) -> Option<BlockId> {

@@ -62,8 +62,13 @@ impl ItemBehaviour for HoeItem {
                         future_block = &Block::FARMLAND;
                         changed = true;
                     }
-                    //Coarse dirt and rooted dirt become dirt
-                    else if block == &Block::COARSE_DIRT || block == &Block::ROOTED_DIRT {
+                    // Coarse dirt becomes dirt, but (like grass/dirt/dirt path above) only if
+                    // there's air above it; rooted dirt is the only tillable with no air
+                    // requirement (vanilla HoeItem.TILLABLES: onlyIfAirAbove vs unconditional).
+                    else if (block == &Block::COARSE_DIRT
+                        && world.get_block_state(&location.up()).is_air())
+                        || block == &Block::ROOTED_DIRT
+                    {
                         future_block = &Block::DIRT;
                         changed = true;
                     }

@@ -35,6 +35,13 @@ impl ItemBehaviour for ShovelItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
+            // Vanilla ShovelItem#useOn: `if (context.getClickedFace() == Direction.DOWN) return
+            // InteractionResult.PASS;` guards the entire method, both flattening and campfire
+            // dowsing -- shoveling the bottom face of a block never does anything.
+            if face == BlockDirection::Down {
+                return;
+            }
+
             let world = player.world();
             // Yes, Minecraft does hardcode these
             let mut changed = if (block == &Block::GRASS_BLOCK
@@ -43,7 +50,6 @@ impl ItemBehaviour for ShovelItem {
                 || block == &Block::ROOTED_DIRT
                 || block == &Block::PODZOL
                 || block == &Block::MYCELIUM)
-                && face != BlockDirection::Down
                 && world.get_block_state(&location.up()).is_air()
             {
                 world
@@ -51,6 +57,17 @@ impl ItemBehaviour for ShovelItem {
                         &location,
                         Block::DIRT_PATH.default_state.id,
                         BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+                let seed = rng().random::<f64>();
+                player
+                    .play_sound(
+                        Sound::ItemShovelFlatten as u16,
+                        SoundCategory::Blocks,
+                        &location.to_f64(),
+                        1.0,
+                        1.0,
+                        seed,
                     )
                     .await;
                 true
