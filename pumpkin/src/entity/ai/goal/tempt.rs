@@ -46,12 +46,19 @@ impl TemptGoal {
         let pos = mob_entity.living_entity.entity.pos.load();
         let world = mob_entity.living_entity.entity.world.load();
 
+        // Vanilla TemptGoal#canUse: `getNearestPlayer` selects the closest qualifying player,
+        // not an arbitrary one in range.
+        let mut nearest: Option<(Arc<Player>, f64)> = None;
         for player in world.get_nearby_players(pos, TEMPT_RANGE) {
-            if self.is_holding_tempt_item(&player).await {
-                return Some(player);
+            if !self.is_holding_tempt_item(&player).await {
+                continue;
+            }
+            let dist = pos.squared_distance_to_vec(&player.get_entity().pos.load());
+            if nearest.as_ref().is_none_or(|(_, best)| dist < *best) {
+                nearest = Some((player, dist));
             }
         }
-        None
+        nearest.map(|(player, _)| player)
     }
 
     async fn is_player_still_tempting(&self, player: &Player, mob: &dyn Mob) -> bool {

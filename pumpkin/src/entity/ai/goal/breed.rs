@@ -1,8 +1,12 @@
 use std::sync::Arc;
 
+use rand::{RngExt, rng};
 use uuid::Uuid;
 
-use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, r#type::from_type};
+use crate::entity::{
+    EntityBase, ai::pathfinder::NavigatorGoal, experience_orb::ExperienceOrbEntity, mob::Mob,
+    r#type::from_type,
+};
 
 use super::{Controls, Goal, GoalFuture};
 
@@ -104,6 +108,11 @@ impl BreedGoal {
         let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4());
         baby.get_entity().set_age(-24000);
         world.spawn_entity(baby).await;
+
+        // Vanilla Animal.java#finalizeSpawnChildFromBreeding: every successful breed spawns an
+        // experience orb worth 1-7 xp.
+        let xp = rng().random_range(1u32..=7);
+        ExperienceOrbEntity::spawn(&world, parent_pos, xp).await;
     }
 }
 
