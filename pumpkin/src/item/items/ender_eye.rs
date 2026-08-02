@@ -65,8 +65,7 @@ impl ItemBehaviour for EnderEyeItem {
             world
                 .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_LISTENERS)
                 .await;
-            // Consume one item.
-            item.decrement(1);
+            item.decrement_unless_creative(player.gamemode.load(), 1);
             world.sync_world_event(WorldEvent::EndPortalFrameFill, location, 0);
 
             // Try to complete the portal.
@@ -128,7 +127,12 @@ impl ItemBehaviour for EnderEyeItem {
             );
 
             player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::LaunchedEyeOfEnder).await;
-            player.inventory.held_item().lock().await.decrement(1);
+            player
+                .inventory
+                .held_item()
+                .lock()
+                .await
+                .decrement_unless_creative(player.gamemode.load(), 1);
         })
     }
 
