@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
@@ -6,10 +8,27 @@ use crate::command::args::{FindArg, time::TimeArgumentConsumer};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender, ConsumedArgs, tree::CommandTree};
+use crate::world::World;
 
 const NAMES: [&str; 1] = ["time"];
 const DESCRIPTION: &str = "Query the world time.";
 const ARG_TIME: &str = "time";
+
+fn world_for_sender(
+    sender: &CommandSender,
+    server: &crate::server::Server,
+) -> Result<Arc<World>, CommandError> {
+    match sender {
+        CommandSender::Player(player) => Ok(player.world()),
+        CommandSender::CommandBlock(_, world) => Ok(world.clone()),
+        CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => server
+            .worlds
+            .load()
+            .first()
+            .cloned()
+            .ok_or(CommandError::InvalidRequirement),
+    }
+}
 
 #[derive(Clone, Copy)]
 enum PresetTime {
@@ -54,11 +73,7 @@ impl CommandExecutor for QueryExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let mode = self.0;
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = world_for_sender(sender, server)?;
             let level_time = world.level_time.lock().await;
 
             let curr_time = match mode {
@@ -104,18 +119,14 @@ impl CommandExecutor for ChangeExecutor {
             };
 
             let mode = self.0;
-            // TODO: Maybe ask player for world, or get the current world
-            let worlds = server.worlds.load();
-            let world = worlds
-                .first()
-                .expect("There should always be at least one world");
+            let world = world_for_sender(sender, server)?;
             let mut level_time = world.level_time.lock().await;
 
             match mode {
                 Mode::Add => {
                     // add
                     level_time.add_time(time_count.into());
-                    level_time.send_time(world).await;
+                    level_time.send_time(&world).await;
                     let curr_time = level_time.query_daytime();
                     sender
                         .send_message(TextComponent::translate_cross(
@@ -129,7 +140,7 @@ impl CommandExecutor for ChangeExecutor {
                 Mode::Set(_) => {
                     // set
                     level_time.set_time(time_count.into());
-                    level_time.send_time(world).await;
+                    level_time.send_time(&world).await;
                     sender
                         .send_message(TextComponent::translate_cross(
                             translation::java::COMMANDS_TIME_SET,
