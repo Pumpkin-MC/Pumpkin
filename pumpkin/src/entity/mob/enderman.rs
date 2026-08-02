@@ -444,19 +444,21 @@ impl Mob for EndermanEntity {
             }
 
             let world = entity.world.load();
-            let in_rain =
-                world.weather.lock().await.raining && world.can_see_sky(&entity.block_pos.load());
+            let raining_at_feet = world.is_raining_at(&entity.block_pos.load()).await;
+            let raining_at_head = world
+                .is_raining_at(&entity.bounding_box.load().max_block_pos())
+                .await;
+            let in_rain = raining_at_feet || raining_at_head;
             if entity.touching_water.load(Ordering::SeqCst) || in_rain {
                 self.mob_entity
                     .living_entity
                     .damage_with_context(self, 1.0, DamageType::DROWN, None, None, None)
                     .await;
-                if in_rain {
-                    for _ in 0..64 {
-                        if self.teleport_randomly() {
-                            break;
-                        }
-                    }
+                // Mirrors vanilla EnderMan#hurtServer: non-projectile, non-living-sourced
+                // damage (which includes this rain "drown" tick) has a 1-in-10 chance to
+                // NOT trigger a random teleport.
+                if in_rain && self.get_random().random_range(0..10) != 0 {
+                    self.teleport_randomly();
                 }
             }
 

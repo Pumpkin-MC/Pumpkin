@@ -945,7 +945,11 @@ impl Player {
 
         {
             let stack = item_stack.lock().await;
-            if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+            if stack.is_empty() {
+                // Vanilla fist: base_attack_damage = -1.0, base_attack_speed = -2.4
+                add_damage = -1.0;
+                add_speed = -2.4;
+            } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
                 for item_mod in modifiers.attribute_modifiers.iter() {
                     if item_mod.operation == Operation::AddValue {
                         if item_mod.id == "minecraft:base_attack_damage" {
@@ -1012,7 +1016,7 @@ impl Player {
         }
 
         // Modify the added damage based on the multiplier.
-        let mut damage = base_damage + add_damage * damage_multiplier;
+        let mut damage = (base_damage + add_damage) * damage_multiplier;
         damage += extra_ench_damage * attack_cooldown_progress;
 
         if let Some(strength) = self
@@ -4369,6 +4373,21 @@ impl NBTStorage for Player {
             // Store food level, saturation, exhaustion, and tick timer
             self.hunger_manager.write_nbt(nbt).await;
 
+            nbt.put_int(
+                "AirSupply",
+                self.breath_manager
+                    .air_supply
+                    .load(Ordering::Relaxed)
+                    .clamp(0, super::breath::MAX_AIR),
+            );
+            nbt.put_int(
+                "DrowningTick",
+                self.breath_manager
+                    .drowning_tick
+                    .load(Ordering::Relaxed)
+                    .clamp(0, super::breath::DROWNING_INTERVAL - 1),
+            );
+
             nbt.put_string(
                 "Dimension",
                 self.world().dimension.minecraft_name.to_string(),
@@ -4420,6 +4439,18 @@ impl NBTStorage for Player {
             );
 
             self.hunger_manager.read_nbt(nbt).await;
+
+            if let Some(air) = nbt.get_int("AirSupply") {
+                self.breath_manager
+                    .air_supply
+                    .store(air.clamp(0, super::breath::MAX_AIR), Ordering::Relaxed);
+            }
+            if let Some(tick) = nbt.get_int("DrowningTick") {
+                self.breath_manager.drowning_tick.store(
+                    tick.clamp(0, super::breath::DROWNING_INTERVAL - 1),
+                    Ordering::Relaxed,
+                );
+            }
 
             // Load any saved spawnpoint data (SpawnX/SpawnY/SpawnZ, SpawnDimension, SpawnForced)
             if let (Some(x), Some(y), Some(z)) = (
