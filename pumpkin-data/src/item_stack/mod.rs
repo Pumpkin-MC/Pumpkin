@@ -575,29 +575,24 @@ impl ItemStack {
 
     #[must_use]
     pub fn are_items_and_components_equal(&self, other: &Self) -> bool {
-        // Items must match
         if self.item != other.item {
             return false;
         }
+
+        if self.patch.len() != other.patch.len() {
+            return false;
+        }
+
         for (id, data) in &self.patch {
-            let mut not_found = true;
-            'out: for (other_id, other_data) in &other.patch {
-                if id == other_id {
-                    if let (Some(data), Some(other_data)) = (data, other_data) {
-                        if !data.equal(other_data.as_ref()) {
-                            return false;
-                        }
-                        not_found = false;
-                        break 'out;
-                    } else if data.is_none() && other_data.is_none() {
-                        not_found = false;
-                        break 'out;
-                    }
-                    return false;
-                }
-            }
-            if not_found {
+            let Some((_, other_data)) = other.patch.iter().find(|(other_id, _)| id == other_id)
+            else {
                 return false;
+            };
+
+            match (data, other_data) {
+                (Some(data), Some(other_data)) if data.equal(other_data.as_ref()) => {}
+                (None, None) => {}
+                _ => return false,
             }
         }
 
@@ -1334,6 +1329,17 @@ mod tests {
         stack.enchant(&Enchantment::FLAME, 0);
         assert!(stack.has_enchantments());
         assert_eq!(stack.get_enchantment_level(&Enchantment::FLAME), 0);
+    }
+
+    #[test]
+    fn component_comparison_is_symmetric() {
+        let plain = ItemStack::new(1, &Item::BOW);
+        let mut named = plain.clone();
+        named.set_custom_name("named".into());
+
+        assert!(!plain.are_items_and_components_equal(&named));
+        assert!(!named.are_items_and_components_equal(&plain));
+        assert!(named.are_items_and_components_equal(&named));
     }
 
     #[test]
