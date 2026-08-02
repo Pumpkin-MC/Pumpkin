@@ -295,7 +295,7 @@ impl ProtoChunk {
 
         for z in 0..16 {
             for x in 0..16 {
-                let index = ((z << 4) + x) as usize;
+                let index = Self::local_position_to_height_map_index(x, z);
 
                 proto_chunk.flat_motion_blocking_height_map[index] = heightmap_data.get(
                     ChunkHeightmapType::MotionBlocking,

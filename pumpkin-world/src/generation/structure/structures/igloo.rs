@@ -182,6 +182,13 @@ impl StructurePieceBase for IglooPiece {
             &[],
             Some(chunk_box),
         );
+        crate::generation::structure::template::place_template_entities(
+            chunk,
+            &self.top_template,
+            origin,
+            self.rotation,
+            chunk_box,
+        );
 
         // Place basement components if present
         if self.has_basement {
@@ -232,6 +239,21 @@ impl StructurePieceBase for IglooPiece {
                     false,
                     &[],
                     Some(chunk_box),
+                );
+                let (rotated_ox, rotated_oz) = self
+                    .rotation
+                    .rotate_offset(BASEMENT_OFFSET_X, BASEMENT_OFFSET_Z);
+                let placement_origin = Vector3::new(
+                    basement_origin.x + rotated_ox,
+                    basement_origin.y,
+                    basement_origin.z + rotated_oz,
+                );
+                crate::generation::structure::template::place_template_entities(
+                    chunk,
+                    bottom,
+                    placement_origin,
+                    self.rotation,
+                    chunk_box,
                 );
             }
         }

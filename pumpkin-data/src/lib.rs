@@ -1,6 +1,10 @@
 #![allow(unused_imports)]
 
 #[rustfmt::skip]
+#[path = "generated/chunk_view_lut.rs"]
+pub mod chunk_view_lut;
+
+#[rustfmt::skip]
 #[path = "generated/chest_loot.rs"]
 pub mod chest_loot_table;
 

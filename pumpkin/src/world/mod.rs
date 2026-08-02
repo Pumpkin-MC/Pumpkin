@@ -319,11 +319,13 @@ impl World {
 
     pub fn update_active_chunks(self: &Arc<Self>) {
         let mut active_chunks = FxHashSet::default();
+        let sim_dist = self.server.upgrade().map_or(10, |s| {
+            s.advanced_config.networking.java.simulation_distance.get()
+        }) as i32;
         for player in self.players.load().iter() {
             let center = player.get_entity().chunk_pos.load();
-            // TODO: gamerule for view distance/ticking distance
-            for dx in -8..=8 {
-                for dy in -8..=8 {
+            for dx in -sim_dist..=sim_dist {
+                for dy in -sim_dist..=sim_dist {
                     active_chunks.insert(center.add_raw(dx, dy));
                 }
             }
@@ -4213,8 +4215,14 @@ impl World {
         );
     }
 
-    pub async fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
-        let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
+    pub async fn remove_entities_in_chunks(
+        &self,
+        chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
+    ) {
+        let chunks_set: FxHashSet<_> = chunks.into_iter().map(|c| *c.borrow()).collect();
+        if chunks_set.is_empty() {
+            return;
+        }
         let mut entities_to_remove = Vec::new();
 
         self.entities.rcu(|current_entities| {

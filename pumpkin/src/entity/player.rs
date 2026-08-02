@@ -254,10 +254,17 @@ impl ChunkManager {
             let new_level = ChunkLoading::get_level_from_view_distance(view_distance);
             lock.add_ticket(center, new_level);
 
+            let sim_dist = self.world.server.upgrade().map_or(10, |s| {
+                s.advanced_config.networking.java.simulation_distance.get()
+            });
+            let sim_level = ChunkLoading::get_level_from_simulation_distance(sim_dist);
+            lock.add_ticket(center, sim_level);
+
             if (old_center != center || old_view_distance != view_distance) && old_view_distance > 0
             {
                 let old_level = ChunkLoading::get_level_from_view_distance(old_view_distance);
                 lock.remove_ticket(old_center, old_level);
+                lock.remove_ticket(old_center, sim_level);
             }
             lock.send_change();
         };
@@ -891,7 +898,7 @@ impl Player {
         let level = &world.level;
 
         // Decrement the value of watched chunks
-        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
+        let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
         // Remove chunks with no watchers from the cache
         if !chunks_to_clean.is_empty() {
             world.remove_entities_in_chunks(&chunks_to_clean).await;
@@ -2474,7 +2481,7 @@ impl Player {
     pub async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
-        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
+        let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
         if !chunks_to_clean.is_empty() {
             world.remove_entities_in_chunks(&chunks_to_clean).await;
             level.clean_entity_chunks(&chunks_to_clean);

@@ -192,7 +192,7 @@ mod test {
     #[test]
     fn chunk_wide_blend() {
         let data: Vec<(i32, i32, i32, i32, i32, i32)> =
-            read_data_from_file!("../../assets/biome_mixer.json");
+            read_data_from_file!("../../../assets/tests/biome_mixer.json");
 
         let seed = hash_seed((-777i64) as u64);
         for (i, (x, y, z, result_x, result_y, result_z)) in data.into_iter().enumerate() {
