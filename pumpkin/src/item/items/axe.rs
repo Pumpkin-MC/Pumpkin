@@ -18,7 +18,7 @@ pub struct AxeItem;
 
 impl ItemMetadata for AxeItem {
     fn ids() -> Box<[u16]> {
-        tag::Item::MINECRAFT_AXES.1.into()
+        tag::Item::MINECRAFT_AXES.into()
     }
 }
 

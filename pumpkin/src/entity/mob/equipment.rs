@@ -737,12 +737,9 @@ fn enchant_pool_for(item: &Item, slot: &EquipmentSlot) -> &'static [&'static Enc
 #[must_use]
 fn conflicts_with(candidate: &Enchantment, applied: &[&Enchantment]) -> bool {
     if let Some(excl) = candidate.exclusive_set {
-        let excl_keys = excl.0;
-        for existing in applied {
-            if excl_keys.contains(&existing.registry_key) {
-                return true;
-            }
-        }
+        return applied
+            .iter()
+            .any(|existing| excl.contains(&(existing.id as u16)));
     }
     false
 }

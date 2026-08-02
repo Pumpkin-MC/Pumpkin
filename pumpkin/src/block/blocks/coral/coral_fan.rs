@@ -22,9 +22,9 @@ pub struct CoralFanBlock;
 impl BlockMetadata for CoralFanBlock {
     fn ids() -> Box<[BlockId]> {
         let alive_wall_fans: Vec<BlockId> = tag::Block::MINECRAFT_WALL_CORALS
-            .1
             .iter()
-            .map(|v| BlockId::new_or_air(*v))
+            .copied()
+            .map(BlockId::new_or_air)
             .collect();
         let alive_coral_fans: &[BlockId] = &[
             BlockId::BRAIN_CORAL_FAN,

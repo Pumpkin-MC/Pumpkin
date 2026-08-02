@@ -463,7 +463,7 @@ impl EquipmentSlot {
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum EntityTypeOrTag {
-    Tag(&'static crate::tag::Tag),
+    Tag(crate::tag::Tag),
     Single(&'static EntityType),
 }
 
@@ -471,7 +471,7 @@ impl std::hash::Hash for EntityTypeOrTag {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             Self::Tag(tag) => {
-                for x in tag.0 {
+                for x in *tag {
                     x.hash(state);
                 }
             }

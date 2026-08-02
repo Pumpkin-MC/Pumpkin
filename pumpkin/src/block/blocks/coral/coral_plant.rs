@@ -13,7 +13,7 @@ use crate::block::{
 pub struct CoralPlantBlock;
 impl BlockMetadata for CoralPlantBlock {
     fn ids() -> Box<[BlockId]> {
-        let alive_plants = tag::Block::MINECRAFT_CORAL_PLANTS.1;
+        let alive_plants = tag::Block::MINECRAFT_CORAL_PLANTS;
         let mut plants = Vec::new();
         for alive_plant_id in alive_plants {
             let block_id = BlockId::new_or_air(*alive_plant_id);

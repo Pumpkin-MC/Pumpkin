@@ -7,7 +7,7 @@ use pumpkin_world::world::BlockFlags;
 pub struct CoralBlock;
 impl BlockMetadata for CoralBlock {
     fn ids() -> Box<[BlockId]> {
-        let alive_plants = tag::Block::MINECRAFT_CORAL_BLOCKS.1;
+        let alive_plants = tag::Block::MINECRAFT_CORAL_BLOCKS;
         let mut plants = Vec::new();
         for alive_plant_id in alive_plants {
             let block_id = BlockId::new_or_air(*alive_plant_id);

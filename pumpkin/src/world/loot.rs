@@ -391,15 +391,11 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
             Self::Tag(tag) => {
                 let key = tag.name.strip_prefix("minecraft:").unwrap_or(tag.name);
 
-                let items = pumpkin_data::tag::get_tag_values(tag::RegistryKey::Item, key)
+                let items = pumpkin_data::tag::get_tag_ids(tag::RegistryKey::Item, key)
                     .unwrap_or_default()
                     .iter()
-                    .filter_map(|registry_key| {
-                        let item_key = registry_key
-                            .strip_prefix("minecraft:")
-                            .unwrap_or(registry_key);
-                        Item::from_registry_key(item_key)
-                    })
+                    .copied()
+                    .filter_map(|id| Item::from_id(id))
                     .collect::<Vec<_>>();
 
                 if items.is_empty() {

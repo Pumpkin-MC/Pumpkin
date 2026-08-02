@@ -131,7 +131,7 @@ pub fn build() -> TokenStream {
         };
         let translate = translate.to_string();
 
-        if let Some(exclusive_set) = &enchantment.exclusive_set {
+        let exclusive_set = if let Some(exclusive_set) = &enchantment.exclusive_set {
             let exclusive_set = format_ident!(
                 "{}",
                 exclusive_set
@@ -140,52 +140,33 @@ pub fn build() -> TokenStream {
                     .replace([':', '/'], "_")
                     .to_uppercase()
             );
-            variants.extend([quote! {
-                pub const #format_name: Self = Self {
-                    id: #id,
-                    name: #name,
-                    registry_key: #raw_name,
-                    description: #translate,
-                    anvil_cost: #anvil_cost,
-                    supported_items: &ItemTag::#supported_items,
-                    exclusive_set: Some(&EnchantmentTag::#exclusive_set),
-                    max_level: #max_level,
-                    slots: &[#(#slots),*],
-                    weight: #weight,
-                    min_cost: Cost {
-                        base: #min_cost_base,
-                        per_level_above_first: #min_cost_per_level,
-                    },
-                    max_cost: Cost {
-                        base: #max_cost_base,
-                        per_level_above_first: #max_cost_per_level,
-                    },
-                };
-            }]);
+            quote! {Some(EnchantmentTag::#exclusive_set)}
         } else {
-            variants.extend([quote! {
-                pub const #format_name: Self = Self {
-                    id: #id,
-                    name: #name,
-                    description: #translate,
-                    registry_key: #raw_name,
-                    anvil_cost: #anvil_cost,
-                    supported_items: &ItemTag::#supported_items,
-                    exclusive_set: None,
-                    max_level: #max_level,
-                    slots: &[#(#slots),*],
-                    weight: #weight,
-                    min_cost: Cost {
-                        base: #min_cost_base,
-                        per_level_above_first: #min_cost_per_level,
-                    },
-                    max_cost: Cost {
-                        base: #max_cost_base,
-                        per_level_above_first: #max_cost_per_level,
-                    },
-                };
-            }]);
-        }
+            quote! {None}
+        };
+
+        variants.extend([quote! {
+            pub const #format_name: Self = Self {
+                id: #id,
+                name: #name,
+                registry_key: #raw_name,
+                description: #translate,
+                anvil_cost: #anvil_cost,
+                supported_items: ItemTag::#supported_items,
+                exclusive_set: #exclusive_set,
+                max_level: #max_level,
+                slots: &[#(#slots),*],
+                weight: #weight,
+                min_cost: Cost {
+                    base: #min_cost_base,
+                    per_level_above_first: #min_cost_per_level,
+                },
+                max_cost: Cost {
+                    base: #max_cost_base,
+                    per_level_above_first: #max_cost_per_level,
+                },
+            };
+        }]);
 
         name_to_type.extend(quote! { #name => Some(&Self::#format_name), });
         id_to_type.extend(quote! { #id => Some(&Self::#format_name), });
@@ -208,8 +189,8 @@ pub fn build() -> TokenStream {
             pub registry_key: &'static str,
             pub description: &'static str, // TODO use TextComponent
             pub anvil_cost: u32,
-            pub supported_items: &'static Tag,
-            pub exclusive_set: Option<&'static Tag>,
+            pub supported_items: Tag,
+            pub exclusive_set: Option<Tag>,
             pub max_level: i32,
             pub slots: &'static [AttributeModifierSlot],
             pub weight: i32,
@@ -292,16 +273,16 @@ pub fn build() -> TokenStream {
             }
 
             pub fn can_enchant(&self, item: &'static Item) -> bool {
-                self.supported_items.1.contains(&item.id)
+                self.supported_items.contains(&item.id)
             }
             pub fn are_compatible(&self, other: &'static Enchantment) -> bool {
                 if self == other {
                     return false;
                 }
-                if let Some(tag) = self.exclusive_set && tag.1.contains(&(other.id as u16)) {
+                if let Some(tag) = self.exclusive_set && tag.contains(&(other.id as u16)) {
                     return false;
                 }
-                if let Some(tag) = other.exclusive_set && tag.1.contains(&(self.id as u16)) {
+                if let Some(tag) = other.exclusive_set && tag.contains(&(self.id as u16)) {
                     return false;
                 }
                 true
@@ -316,7 +297,7 @@ pub fn build() -> TokenStream {
             }
             pub fn get_fullname(&self, level: i32) -> TextComponent {
                 let mut ret = TextComponent::translate(self.description, []).color_named(
-                    if self.has_tag(&EnchantmentTag::MINECRAFT_CURSE) {
+                    if self.has_tag(EnchantmentTag::MINECRAFT_CURSE) {
                         NamedColor::Red
                     } else {
                         NamedColor::Gray

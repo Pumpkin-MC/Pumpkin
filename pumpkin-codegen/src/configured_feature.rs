@@ -1233,7 +1233,7 @@ fn value_to_block_list(v: &Value) -> TokenStream {
             tag.strip_prefix("minecraft:").unwrap_or(tag).to_uppercase()
         );
         let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
-        return quote! { &pumpkin_data::tag::Block::#ident.1 };
+        return quote! { &pumpkin_data::tag::Block::#ident };
     }
     let mut blocks = Vec::new();
     if let Some(arr) = v.as_array() {

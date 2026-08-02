@@ -11,7 +11,7 @@ pub struct BundleItem;
 
 impl ItemMetadata for BundleItem {
     fn ids() -> Box<[u16]> {
-        tag::Item::MINECRAFT_BUNDLES.1.into()
+        tag::Item::MINECRAFT_BUNDLES.into()
     }
 }
 

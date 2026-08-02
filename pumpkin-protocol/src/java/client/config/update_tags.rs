@@ -44,7 +44,7 @@ impl ClientPacket for CUpdateTags<'_> {
             for (key, values) in values.entries() {
                 // This is technically a `ResourceLocation` but same thing
                 p.write_string_bounded(key, u16::MAX as usize)?;
-                p.write_list(values.1, |p, id| p.write_var_int(&VarInt::from(*id)))?;
+                p.write_list(values, |p, id| p.write_var_int(&VarInt::from(*id)))?;
             }
 
             Ok(())
