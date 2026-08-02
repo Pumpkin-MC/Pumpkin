@@ -2218,7 +2218,7 @@ impl EntityBase for LivingEntity {
             }
 
             let mut damage_after_enchantments = damage_after_armor;
-            if damage_type != DamageType::OUT_OF_WORLD {
+            if !bypasses_enchantments(&damage_type) {
                 let mut epf = 0i32;
                 {
                     let equipment_lock = self.entity_equipment.lock().await;
@@ -3023,6 +3023,12 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
     (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
 }
 
+/// Returns whether the damage source bypasses protection enchantments.
+/// The 26.2 tag contains only sonic boom.
+pub(crate) const fn bypasses_enchantments(damage_type: &DamageType) -> bool {
+    damage_type.id == DamageType::SONIC_BOOM.id
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3217,5 +3223,11 @@ mod tests {
             LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
             Sound::EntityGenericHurt
         );
+    }
+
+    #[test]
+    fn sonic_boom_bypasses_armor_enchantments() {
+        assert!(bypasses_enchantments(&DamageType::SONIC_BOOM));
+        assert!(!bypasses_enchantments(&DamageType::MAGIC));
     }
 }
