@@ -76,6 +76,7 @@ pub struct MobEntity {
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
+    pub owner: AtomicCell<Option<Uuid>>,
     mob_flags: AtomicU8,
     last_sent_yaw: AtomicU8,
     last_sent_pitch: AtomicU8,
@@ -112,6 +113,7 @@ impl MobEntity {
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
+            owner: AtomicCell::new(None),
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -193,6 +195,14 @@ impl MobEntity {
         self.love_ticks
             .fetch_update(Relaxed, Relaxed, |ticks| (ticks > 0).then_some(0))
             .is_ok()
+    }
+
+    pub fn is_tamed(&self) -> bool {
+        self.owner.load().is_some()
+    }
+
+    pub fn set_owner(&self, owner: Uuid) {
+        self.owner.store(Some(owner));
     }
 
     pub fn is_breeding_ready(&self) -> bool {
@@ -574,7 +584,7 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn get_owner_uuid(&self) -> Option<Uuid> {
-        None
+        self.get_mob_entity().owner.load()
     }
 
     fn is_sitting(&self) -> bool {
