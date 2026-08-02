@@ -181,6 +181,7 @@ use crate::block::blocks::hopper::HopperBlock;
 use crate::block::blocks::jukebox::JukeboxBlock;
 use crate::block::blocks::ladder::LadderBlock;
 use crate::block::blocks::lanterns::LanternBlock;
+use crate::block::blocks::leaves::LeavesBlock;
 use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
@@ -318,6 +319,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(GrassBlock);
 
     manager.register(FallingBlock);
+    manager.register(LeavesBlock);
 
     // Fire
     manager.register(SoulFireBlock);
