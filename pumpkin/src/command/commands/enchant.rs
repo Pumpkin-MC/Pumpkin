@@ -72,6 +72,14 @@ impl CommandExecutor for Executor {
 
             for target in targets {
                 let Some(living) = target.get_living_entity() else {
+                    if only_one {
+                        let msg = TextComponent::translate_cross(
+                            translation::java::COMMANDS_ENCHANT_FAILED_ENTITY,
+                            translation::java::COMMANDS_ENCHANT_FAILED_ENTITY,
+                            [target.get_display_name().await],
+                        );
+                        return Err(CommandError::CommandFailed(msg));
+                    }
                     continue;
                 };
                 let player = target.get_player();
