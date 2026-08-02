@@ -263,7 +263,7 @@ pub(crate) fn build() -> TokenStream {
         let dict_name = format_ident!("{}_TAGS", key.to_shouty_snake_case());
 
         let mut tag_entries = Vec::new();
-        let mut tag_map_entries = Vec::new();
+        let mut phf_map = phf_codegen::Map::<&'static str>::new();
 
         for (tag_name, values) in tag_map {
             if values.is_empty() {
@@ -281,13 +281,14 @@ pub(crate) fn build() -> TokenStream {
             let tag = diff_tag.compute(&values, &id_mapper, quote! { crate::tag });
 
             tag_entries.push(tag);
-            tag_map_entries.push(quote! { #tag_name => #key_pascal::#tag_const_name });
+            phf_map.entry(Box::leak(tag_name.clone().into_boxed_str()), quote! {#key_pascal::#tag_const_name}.to_string());
 
             diff_tags
                 .entry(key.clone())
                 .or_default()
                 .insert(tag_name, diff_tag);
         }
+        let phf_map = phf_map.build();
 
         tag_dicts.push(quote! {
             #[allow(non_snake_case)]
@@ -295,8 +296,7 @@ pub(crate) fn build() -> TokenStream {
                 use crate::tag::Tag;
                 #(#tag_entries)*
             }
-            static #dict_name: phf::Map<&'static str, Tag> = phf::phf_map! {
-                #(#tag_map_entries),* };
+            static #dict_name: phf::Map<&'static str, Tag> = #phf_map;
         });
 
         match_local_map.push(quote! { RegistryKey::#key_pascal => Some(&#dict_name) });
@@ -332,7 +332,7 @@ pub(crate) fn build() -> TokenStream {
             let dict_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
 
             let mut tag_entries = Vec::new();
-            let mut tag_map_entries = Vec::new();
+            let mut phf_map = phf_codegen::Map::<&'static str>::new();
 
             for (tag_name, values) in tag_map {
                 if values.is_empty() {
@@ -354,8 +354,10 @@ pub(crate) fn build() -> TokenStream {
 
                 tag_entries.push(tag_entry);
 
-                tag_map_entries.push(quote! { #tag_name => #key_pascal::#tag_const_name });
+                phf_map.entry(Box::leak(tag_name.into_boxed_str()), quote! { #key_pascal::#tag_const_name }.to_string());
             }
+
+            let phf_map = phf_map.build();
 
             tag_dicts.push(quote! {
                 #[allow(non_snake_case)]
@@ -363,8 +365,7 @@ pub(crate) fn build() -> TokenStream {
                     use crate::tag::Tag;
                     #(#tag_entries)*
                 }
-                static #dict_name: phf::Map<&'static str, Tag> = phf::phf_map! {
-                    #(#tag_map_entries),* };
+                static #dict_name: phf::Map<&'static str, Tag> = #phf_map;
             });
 
             match_local_map.push(quote! { RegistryKey::#key_pascal => Some(&#dict_name) });
