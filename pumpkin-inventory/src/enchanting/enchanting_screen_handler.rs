@@ -126,7 +126,7 @@ impl EnchantingTableScreenHandler {
 
         match slot {
             0 => (level / 3).max(1),
-            1 => (level * 2 / 3 + 7).max(1),
+            1 => (level * 2 / 3 + 1).max(1),
             2 => level.max(b * 2).max(1),
             _ => 0,
         }
