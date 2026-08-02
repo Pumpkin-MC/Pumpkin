@@ -25,6 +25,39 @@ const fn piercing_allows_next_hit(pierce_level: u8, pierced_count: usize) -> boo
     pierce_level > 0 && pierced_count < pierce_level as usize + 1
 }
 
+type PotionEffect = (
+    &'static pumpkin_data::effect::StatusEffect,
+    i32,
+    u8,
+    bool,
+    bool,
+    bool,
+);
+
+fn arrow_potion_effects(effects: &[PotionEffect]) -> Vec<PotionEffect> {
+    effects
+        .iter()
+        .map(
+            |&(effect, duration, amplifier, ambient, show_particles, show_icon)| {
+                let instant = effect.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id
+                    || effect.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id;
+                (
+                    effect,
+                    if instant {
+                        duration
+                    } else {
+                        (duration / 8).max(1)
+                    },
+                    amplifier,
+                    ambient,
+                    show_particles,
+                    show_icon,
+                )
+            },
+        )
+        .collect()
+}
+
 /// Represents the pickup rules for arrows
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrowPickup {
@@ -69,6 +102,7 @@ pub struct ArrowEntity {
     pub has_hit: AtomicBool,
     pub pierced_entity_ids: Mutex<HashSet<i32>>,
     pub last_block_pos: Arc<std::sync::RwLock<Option<BlockPos>>>,
+    pub potion_effects: Vec<PotionEffect>,
 }
 
 impl ArrowEntity {
@@ -95,10 +129,30 @@ impl ArrowEntity {
             has_hit: AtomicBool::new(false),
             pierced_entity_ids: Mutex::new(HashSet::new()),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+            potion_effects: Vec::new(),
         }
     }
 
     pub fn new_shot(entity: Entity, shooter: &Entity, pickup: ArrowPickup) -> Self {
+        Self::new_shot_with_effects(entity, shooter, pickup, Vec::new())
+    }
+
+    pub fn new_shot_with_stack(
+        entity: Entity,
+        shooter: &Entity,
+        pickup: ArrowPickup,
+        stack: &ItemStack,
+    ) -> Self {
+        let effects = crate::item::potion::PotionContents::read_potion_effects(stack);
+        Self::new_shot_with_effects(entity, shooter, pickup, effects)
+    }
+
+    fn new_shot_with_effects(
+        entity: Entity,
+        shooter: &Entity,
+        pickup: ArrowPickup,
+        potion_effects: Vec<PotionEffect>,
+    ) -> Self {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
         entity.pos.store(owner_pos);
@@ -120,6 +174,7 @@ impl ArrowEntity {
             has_hit: AtomicBool::new(false),
             pierced_entity_ids: Mutex::new(HashSet::new()),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+            potion_effects,
         }
     }
 
@@ -353,6 +408,10 @@ impl EntityBase for ArrowEntity {
         })
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "projectile hit handling preserves vanilla order"
+    )]
     fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let entity = self.get_entity();
@@ -438,6 +497,17 @@ impl EntityBase for ArrowEntity {
                         .await;
 
                     if target.get_living_entity().is_some() {
+                        if !self.potion_effects.is_empty()
+                            && let Some(living) = target.get_living_entity()
+                        {
+                            crate::item::potion::PotionContents::apply_effects_to(
+                                living,
+                                arrow_potion_effects(&self.potion_effects),
+                                1.0,
+                                crate::item::potion::PotionApplicationSource::Normal,
+                            )
+                            .await;
+                        }
                         let punch = self.punch_level.load(Ordering::Relaxed);
                         if punch > 0
                             && let Some(owner_id) = self.owner_id
@@ -612,7 +682,13 @@ fn get_hit_face(hit_pos: Vector3<f64>, block_pos: BlockPos) -> pumpkin_data::Blo
 
 #[cfg(test)]
 mod tests {
-    use super::piercing_allows_next_hit;
+    use super::{arrow_potion_effects, piercing_allows_next_hit};
+    use crate::item::potion::PotionContents;
+    use pumpkin_data::data_component::DataComponent;
+    use pumpkin_data::data_component_impl::{PotionContentsImpl, StatusEffectInstance};
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+    use std::borrow::Cow;
 
     #[test]
     fn piercing_level_allows_level_plus_one_unique_targets() {
@@ -622,5 +698,45 @@ mod tests {
         assert!(!piercing_allows_next_hit(1, 2));
         assert!(piercing_allows_next_hit(4, 4));
         assert!(!piercing_allows_next_hit(4, 5));
+    }
+
+    #[test]
+    fn tipped_arrow_component_provides_hit_effects() {
+        let mut stack = ItemStack::new(1, &Item::TIPPED_ARROW);
+        stack.patch.push((
+            DataComponent::PotionContents,
+            Some(Box::new(PotionContentsImpl {
+                potion_id: None,
+                custom_color: None,
+                custom_effects: vec![StatusEffectInstance {
+                    effect_id: Cow::Borrowed("minecraft:poison"),
+                    amplifier: 1,
+                    duration: 100,
+                    ambient: false,
+                    show_particles: true,
+                    show_icon: true,
+                }],
+                custom_name: None,
+            })),
+        ));
+
+        let effects = PotionContents::read_potion_effects(&stack);
+        assert_eq!(effects.len(), 1);
+        assert_eq!(effects[0].1, 100);
+        assert_eq!(effects[0].2, 1);
+    }
+
+    #[test]
+    fn tipped_arrow_shortens_duration_but_not_instant_effects() {
+        let poison = pumpkin_data::effect::StatusEffect::from_minecraft_name("minecraft:poison")
+            .expect("poison effect should exist");
+        let instant = &pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE;
+        let effects = arrow_potion_effects(&[
+            (poison, 100, 0, false, true, true),
+            (instant, 1, 0, false, true, true),
+        ]);
+
+        assert_eq!(effects[0].1, 12);
+        assert_eq!(effects[1].1, 1);
     }
 }

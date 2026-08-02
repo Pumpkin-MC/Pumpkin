@@ -15,6 +15,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_util::GameMode;
+use pumpkin_world::inventory::Inventory;
 
 pub struct BowItem;
 
@@ -163,7 +164,18 @@ impl BowItem {
             ArrowPickup::Allowed
         };
 
-        let mut arrow = ArrowEntity::new_shot(arrow_entity, player.get_entity(), pickup);
+        let arrow_stack = if let Some(slot) = player.find_arrow().await {
+            let stack = player.inventory().get_stack(slot).await;
+            Some(stack.lock().await.clone())
+        } else {
+            None
+        };
+        let mut arrow = match arrow_stack.as_ref() {
+            Some(stack) => {
+                ArrowEntity::new_shot_with_stack(arrow_entity, player.get_entity(), pickup, stack)
+            }
+            None => ArrowEntity::new_shot(arrow_entity, player.get_entity(), pickup),
+        };
 
         // Read enchantments of the held item (bow)
         let held = player.inventory().held_item();
