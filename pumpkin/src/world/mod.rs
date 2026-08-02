@@ -143,6 +143,7 @@ use scoreboard::Scoreboard;
 use time::LevelTime;
 use tokio::sync::Mutex;
 
+pub mod block_placer;
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
@@ -160,6 +161,8 @@ use uuid::Uuid;
 use weather::Weather;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
+
+const MAX_LIGHT_LEVEL: u8 = 15;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -318,11 +321,13 @@ impl World {
 
     pub fn update_active_chunks(self: &Arc<Self>) {
         let mut active_chunks = FxHashSet::default();
+        let sim_dist = self.server.upgrade().map_or(10, |s| {
+            s.advanced_config.networking.java.simulation_distance.get()
+        }) as i32;
         for player in self.players.load().iter() {
             let center = player.get_entity().chunk_pos.load();
-            // TODO: gamerule for view distance/ticking distance
-            for dx in -8..=8 {
-                for dy in -8..=8 {
+            for dx in -sim_dist..=sim_dist {
+                for dy in -sim_dist..=sim_dist {
                     active_chunks.insert(center.add_raw(dx, dy));
                 }
             }
@@ -1038,6 +1043,16 @@ impl World {
             .insert(position, block_state_id);
     }
 
+    /// Queues block state changes for broadcast to nearby players.
+    ///
+    /// Call [`flush_block_updates`](Self::flush_block_updates) afterward to send the packets.
+    pub async fn queue_block_updates(&self, changes: &[(BlockPos, BlockStateId)]) {
+        let mut guard = self.unsent_block_changes.lock().await;
+        for (pos, state_id) in changes {
+            guard.insert(*pos, *state_id);
+        }
+    }
+
     pub async fn flush_block_updates(&self) {
         let mut block_state_updates_by_chunk_section: HashMap<
             Vector3<i32>,
@@ -1715,6 +1730,20 @@ impl World {
 
     pub async fn is_raining(&self) -> bool {
         self.weather.lock().await.raining
+    }
+
+    pub async fn is_raining_at(&self, pos: &BlockPos) -> bool {
+        if !self.is_raining().await {
+            return false;
+        }
+        if self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1 > pos.0.y {
+            return false;
+        }
+        self.can_see_sky(pos)
+            && self
+                .get_biome(pos)
+                .weather
+                .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
     }
 
     pub async fn set_raining(&self, raining: bool) {
@@ -3146,6 +3175,7 @@ impl World {
             .await;
 
         player.send_active_effects().await;
+        player.breath_manager.send_air_supply(player);
         self.send_player_equipment(player).await;
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
@@ -4202,8 +4232,14 @@ impl World {
         );
     }
 
-    pub async fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
-        let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
+    pub async fn remove_entities_in_chunks(
+        &self,
+        chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
+    ) {
+        let chunks_set: FxHashSet<_> = chunks.into_iter().map(|c| *c.borrow()).collect();
+        if chunks_set.is_empty() {
+            return;
+        }
         let mut entities_to_remove = Vec::new();
 
         self.entities.rcu(|current_entities| {
@@ -4418,6 +4454,13 @@ impl World {
         self.level
             .light_engine
             .get_sky_light_level(&self.level, position)
+    }
+
+    #[must_use]
+    pub fn can_see_sky(&self, position: &BlockPos) -> bool {
+        position.0.y >= self.dimension.min_y
+            && position.0.y < self.dimension.min_y + self.dimension.height
+            && self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
     }
 
     pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {

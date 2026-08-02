@@ -6,7 +6,7 @@ use pumpkin_util::{
 use serde::Deserialize;
 use std::sync::{Arc, LazyLock};
 
-use crate::ProtoChunk;
+use super::BlockPlacer;
 
 #[derive(Clone)]
 pub enum StructureProcessor {
@@ -83,7 +83,7 @@ impl StructureProcessor {
     #[must_use]
     pub fn process(
         &self,
-        chunk: &ProtoChunk,
+        placer: &impl BlockPlacer,
         pos: Vector3<i32>,
         state: &'static BlockState,
     ) -> Option<&'static BlockState> {
@@ -106,10 +106,10 @@ impl StructureProcessor {
                     .map_or(Some(state), |rule| Some(rule.output_state))
             }
             Self::ProtectedBlocks(blocks) => {
-                let existing = chunk.get_block_state(&pos).to_block_id();
+                let existing = placer.get_block_state(&pos).to_block_id();
                 (!blocks.contains(existing)).then_some(state)
             }
-            Self::Capped { limit: _, delegate } => delegate.process(chunk, pos, state),
+            Self::Capped { limit: _, delegate } => delegate.process(placer, pos, state),
         }
     }
 }

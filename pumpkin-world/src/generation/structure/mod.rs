@@ -30,28 +30,17 @@ pub mod shiftable_piece;
 pub mod structures;
 pub mod template;
 
+/// Creates a structure position by dispatching to the appropriate generator.
+/// Does NOT perform biome validation — callers that require it should add
+/// their own check after calling this function.
 #[must_use]
 #[allow(clippy::too_many_lines)]
-pub fn try_generate_structure(
+pub fn generate_structure_position(
     key: &StructureKeys,
     structure: &Structure,
-    seed: i64,
-    chunk: &ProtoChunk,
-    sea_level: i32,
-    height_sampler: Option<&mut dyn crate::generation::structure::structures::HeightSampler>,
+    context: StructureGeneratorContext<'_>,
 ) -> Option<StructurePosition> {
-    let random = create_chunk_random(seed, chunk.x, chunk.z);
-    let context = StructureGeneratorContext {
-        seed,
-        chunk_x: chunk.x,
-        chunk_z: chunk.z,
-        random,
-        sea_level,
-        min_y: chunk.bottom_y() as i32,
-        height_sampler,
-        structure_key: Some(*key),
-    };
-    let structure_pos = match key {
+    match key {
         StructureKeys::BuriedTreasure => {
             BuriedTreasureGenerator::get_structure_position(&BuriedTreasureGenerator, context)
         }
@@ -133,7 +122,30 @@ pub fn try_generate_structure(
             };
             generator.get_structure_position(context)
         }
+    }
+}
+
+#[must_use]
+pub fn try_generate_structure(
+    key: &StructureKeys,
+    structure: &Structure,
+    seed: i64,
+    chunk: &ProtoChunk,
+    sea_level: i32,
+    height_sampler: Option<&mut dyn crate::generation::structure::structures::HeightSampler>,
+) -> Option<StructurePosition> {
+    let random = create_chunk_random(seed, chunk.x, chunk.z);
+    let context = StructureGeneratorContext {
+        seed,
+        chunk_x: chunk.x,
+        chunk_z: chunk.z,
+        random,
+        sea_level,
+        min_y: chunk.bottom_y() as i32,
+        height_sampler,
+        structure_key: Some(*key),
     };
+    let structure_pos = generate_structure_position(key, structure, context);
 
     if let Some(pos) = structure_pos {
         // Get the biome at the structure's starting position.
@@ -177,81 +189,7 @@ pub fn lazily_generate_structure(
     biome_supplier: &dyn BiomeSupplier,
     multi_noise_sampler: &mut MultiNoiseSampler,
 ) -> Option<StructurePosition> {
-    let structure_pos = match key {
-        StructureKeys::BuriedTreasure => {
-            BuriedTreasureGenerator::get_structure_position(&BuriedTreasureGenerator, context)
-        }
-        StructureKeys::SwampHut => {
-            SwampHutGenerator::get_structure_position(&SwampHutGenerator, context)
-        }
-        StructureKeys::Stronghold => {
-            StrongholdGenerator::get_structure_position(&StrongholdGenerator, context)
-        }
-        StructureKeys::Fortress => {
-            NetherFortressGenerator::get_structure_position(&NetherFortressGenerator, context)
-        }
-        StructureKeys::NetherFossil => {
-            NetherFossilGenerator::get_structure_position(&NetherFossilGenerator, context)
-        }
-        StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
-        StructureKeys::DesertPyramid => DesertPyramidGenerator.get_structure_position(context),
-        StructureKeys::JunglePyramid => JungleTempleGenerator.get_structure_position(context),
-        StructureKeys::VillagePlains
-        | StructureKeys::VillageDesert
-        | StructureKeys::VillageSavanna
-        | StructureKeys::VillageSnowy
-        | StructureKeys::VillageTaiga
-        | StructureKeys::AncientCity
-        | StructureKeys::BastionRemnant
-        | StructureKeys::PillagerOutpost
-        | StructureKeys::TrailRuins
-        | StructureKeys::TrialChambers => {
-            let mut generator = JigsawGenerator::new(
-                structure
-                    .start_pool
-                    .expect("Jigsaw structure must have a start pool"),
-                structure.size.expect("Jigsaw structure must have a size"),
-            );
-            if *key == StructureKeys::PillagerOutpost {
-                generator = generator.with_expansion_hack(true);
-            }
-            if let Some(start_jigsaw_name) = structure.start_jigsaw_name {
-                generator = generator.with_start_jigsaw(start_jigsaw_name);
-            }
-            generator.get_structure_position(context)
-        }
-        StructureKeys::Shipwreck | StructureKeys::ShipwreckBeached => {
-            let generator = ShipwreckGenerator {
-                is_beached: *key == StructureKeys::ShipwreckBeached,
-            };
-            generator.get_structure_position(context)
-        }
-        StructureKeys::RuinedPortal
-        | StructureKeys::RuinedPortalDesert
-        | StructureKeys::RuinedPortalJungle
-        | StructureKeys::RuinedPortalSwamp
-        | StructureKeys::RuinedPortalMountain
-        | StructureKeys::RuinedPortalOcean
-        | StructureKeys::RuinedPortalNether => {
-            let generator = RuinedPortalGenerator { variant: *key };
-            generator.get_structure_position(context)
-        }
-        StructureKeys::OceanRuinCold | StructureKeys::OceanRuinWarm => {
-            let generator = OceanRuinGenerator {
-                is_warm: *key == StructureKeys::OceanRuinWarm,
-            };
-            generator.get_structure_position(context)
-        }
-        StructureKeys::EndCity => EndCityGenerator.get_structure_position(context),
-        StructureKeys::Mansion => MansionGenerator.get_structure_position(context),
-        StructureKeys::Monument => OceanMonumentGenerator.get_structure_position(context),
-        StructureKeys::Mineshaft | StructureKeys::MineshaftMesa => {
-            let generator = MineshaftGenerator {
-                is_mesa: *key == StructureKeys::MineshaftMesa,
-            };
-            generator.get_structure_position(context)
-        }
-    };
+    let structure_pos = generate_structure_position(key, structure, context);
 
     if let Some(pos) = structure_pos {
         // Get the biome mathematically, bypassing the chunk boundaries entirely!
