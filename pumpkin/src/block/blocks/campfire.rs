@@ -39,6 +39,13 @@ impl BlockBehaviour for CampfireBlock {
                         .inventory
                         .offer_or_drop_stack(item, args.player.as_ref())
                         .await;
+                    args.player
+                        .increment_stat(
+                            pumpkin_data::statistic::StatisticCategory::Custom,
+                            pumpkin_data::statistic::CustomStatistic::InteractWithCampfire as i32,
+                            1,
+                        )
+                        .await;
                     return BlockActionResult::Success;
                 }
             }
@@ -62,6 +69,13 @@ impl BlockBehaviour for CampfireBlock {
                 .add_item(&mut item, args.player.is_creative())
                 .await
             {
+                args.player
+                    .increment_stat(
+                        pumpkin_data::statistic::StatisticCategory::Custom,
+                        pumpkin_data::statistic::CustomStatistic::InteractWithCampfire as i32,
+                        1,
+                    )
+                    .await;
                 BlockActionResult::Success
             } else {
                 BlockActionResult::Pass
