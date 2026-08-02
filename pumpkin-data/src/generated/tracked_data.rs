@@ -3153,8 +3153,8 @@ impl TrackedData {
         v1_21_7: 255u8,
         v1_21_9: 16u8,
         v1_21_11: 16u8,
-        v26_1: 255u8,
-        v26_2: 255u8,
+        v26_1: 16u8,
+        v26_2: 16u8,
     };
     pub const SPIKES_RETRACTED: TrackedId = TrackedId {
         v1_21: 16u8,

@@ -43,6 +43,12 @@ pub(crate) fn build() -> TokenStream {
         if let Some(id) = wolf_variant_id {
             parsed.insert("WOLF_VARIANT_ID".to_owned(), id);
         }
+        if matches!(
+            ver,
+            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2
+        ) {
+            parsed.insert("SPIDER_FLAGS".to_owned(), 16);
+        }
 
         versions.insert(ver, parsed);
     }
