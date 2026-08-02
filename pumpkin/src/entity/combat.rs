@@ -27,7 +27,10 @@ pub enum AttackType {
     clippy::fn_params_excessive_bools,
     reason = "These flags directly mirror vanilla's critical-attack predicate"
 )]
-#[expect(clippy::too_many_arguments, reason = "Predicate mirrors vanilla state gates")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Predicate mirrors vanilla state gates"
+)]
 fn can_critical_attack(
     on_ground: bool,
     fall_distance: f32,
