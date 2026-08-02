@@ -2,6 +2,7 @@ pub mod armor_stand;
 pub mod arrow;
 pub mod axe;
 pub mod boat;
+pub mod bone_meal;
 pub mod bow;
 pub mod bucket;
 pub mod bundle;
@@ -11,6 +12,7 @@ pub mod egg;
 pub mod end_crystal;
 pub mod ender_eye;
 pub mod ender_pearl;
+pub mod experience_bottle;
 pub mod firework_rocket;
 pub mod fishing_rod;
 pub mod glowing_ink_sac;
@@ -34,6 +36,7 @@ pub mod lead;
 
 use crate::item::items::armor_stand::ArmorStandItem;
 use crate::item::items::boat::BoatItem;
+use crate::item::items::bone_meal::BoneMealItem;
 use crate::item::items::bundle::BundleItem;
 use crate::item::items::end_crystal::EndCrystalItem;
 use crate::item::items::lead::LeadItem;
@@ -58,6 +61,7 @@ use dye::DyeItem;
 use egg::EggItem;
 use ender_eye::EnderEyeItem;
 use ender_pearl::EnderPearlItem;
+use experience_bottle::ExperienceBottleItem;
 use hoe::HoeItem;
 use honeycomb::HoneyCombItem;
 use ignite::fire_charge::FireChargeItem;
@@ -76,6 +80,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
 
     manager.register(ArrowItem);
     manager.register(BowItem);
+    manager.register(BoneMealItem);
     manager.register(CrossbowItem);
     manager.register(SnowBallItem);
     manager.register(HoeItem);
@@ -100,6 +105,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(NameTagItem);
     manager.register(EnderEyeItem);
     manager.register(EnderPearlItem);
+    manager.register(ExperienceBottleItem);
     manager.register(FireChargeItem);
     manager.register(DyeItem);
     manager.register(MapItem);
