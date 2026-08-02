@@ -5,6 +5,7 @@ use arc_swap::ArcSwap;
 use pumpkin_data::biome::Spawner;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
+use pumpkin_data::tag::Block::MINECRAFT_FIRE;
 use pumpkin_data::tag::Block::MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE;
 use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
 use pumpkin_data::tag::Taggable;
@@ -845,7 +846,8 @@ pub fn is_spawn_position_ok(
                 down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
 
             if is_valid_spawn_below {
-                is_valid_empty_spawn_block(cur) && is_valid_empty_spawn_block(up)
+                is_valid_empty_spawn_block(cur, entity_type)
+                    && is_valid_empty_spawn_block(up, entity_type)
             } else {
                 false
             }
@@ -888,7 +890,8 @@ pub fn is_spawn_position_ok_cache(
                 down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
 
             if is_valid_spawn_below {
-                is_valid_empty_spawn_block(state) && is_valid_empty_spawn_block(up)
+                is_valid_empty_spawn_block(state, entity_type)
+                    && is_valid_empty_spawn_block(up, entity_type)
             } else {
                 false
             }
@@ -937,7 +940,10 @@ pub fn adjust_spawn_position(
 }
 
 #[must_use]
-pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
+pub fn is_valid_empty_spawn_block(
+    state: &'static BlockState,
+    entity_type: &'static EntityType,
+) -> bool {
     if state.is_full_cube() {
         return false;
     }
@@ -950,8 +956,37 @@ pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
     if Block::from_state_id(state.id).has_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE) {
         return false;
     }
+    let block = Block::from_state_id(state.id);
+    if block == &Block::WITHER_ROSE
+        || block == &Block::SWEET_BERRY_BUSH
+        || block == &Block::CACTUS
+        || block == &Block::POWDER_SNOW
+    {
+        return false;
+    }
 
-    // TODO: !entityType.isBlockDangerous(blockState)
-    // (e.g., preventing spawns inside Sweet Berry Bushes, Wither Roses, or Fire)
-    true
+    entity_type.fire_immune || !block.has_tag(&MINECRAFT_FIRE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_empty_spawn_block;
+    use pumpkin_data::Block;
+    use pumpkin_data::entity::EntityType;
+
+    #[test]
+    fn dangerous_blocks_reject_nonimmune_spawns() {
+        assert!(!is_valid_empty_spawn_block(
+            Block::SWEET_BERRY_BUSH.default_state,
+            &EntityType::ZOMBIE,
+        ));
+        assert!(!is_valid_empty_spawn_block(
+            Block::FIRE.default_state,
+            &EntityType::ZOMBIE,
+        ));
+        assert!(is_valid_empty_spawn_block(
+            Block::FIRE.default_state,
+            &EntityType::BLAZE,
+        ));
+    }
 }
