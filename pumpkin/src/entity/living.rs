@@ -2432,7 +2432,9 @@ impl EntityBase for LivingEntity {
                     }
 
                     let active_hand = self.active_hand.lock().await;
-                    if let Some(hand) = *active_hand {
+                    if let Some(hand) = *active_hand
+                        && amount >= 3.0
+                    {
                         let slot = equipment_slot_for_hand(hand);
 
                         let equipment_lock = self.entity_equipment.lock().await;
