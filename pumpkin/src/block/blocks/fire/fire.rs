@@ -115,10 +115,19 @@ impl FireBlock {
         total_burn_chance
     }
 
-    const fn is_near_rain(_world: &World, _pos: &BlockPos) -> bool {
-        // TODO: Implement proper rain checking when weather is implemented
-        // For now, return false to allow fire to work
-        false
+    /// Whether it is raining on this position or on any of its four horizontal
+    /// neighbours, matching vanilla `FireBlock#isNearRain`.
+    async fn is_near_rain(world: &World, pos: &BlockPos) -> bool {
+        // Check the weather once here rather than once per position, since
+        // this runs for every burning block and every spread candidate.
+        if !world.is_raining().await {
+            return false;
+        }
+        world.is_raining_at_unchecked(pos)
+            || world.is_raining_at_unchecked(&pos.west())
+            || world.is_raining_at_unchecked(&pos.east())
+            || world.is_raining_at_unchecked(&pos.north())
+            || world.is_raining_at_unchecked(&pos.south())
     }
 
     // Get burn odds for a block, used in try_spreading_fire
@@ -153,9 +162,12 @@ impl FireBlock {
         let odds = Self::get_burn_odds(block);
         if rand::rng().random_range(0..chance) < odds {
             let old_block = block;
-            if rand::rng().random_range(0..(age + 10) as i32) < 5
-                && !Self::is_near_rain(world.as_ref(), pos)
-            {
+            // Bound the `Rng` temporary to a statement so it is not held across the
+            // `is_near_rain` await point.
+            let can_persist = rand::rng().random_range(0..(age + 10) as i32) < 5;
+            // Vanilla `FireBlock#checkBurnOut` tests this position only; the
+            // five position `isNearRain` form is used for spreading.
+            if can_persist && !world.is_raining_at(pos).await {
                 let new_age = (age + (rand::rng().random_range(0..5) / 4)).min(15) as u8;
                 let state_id = self.get_state_for_position(world.as_ref(), &Block::FIRE, pos);
                 let mut fire_props = FireProperties::from_state_id(state_id, &Block::FIRE);
@@ -303,7 +315,7 @@ impl BlockBehaviour for FireBlock {
             let age = fire_props.age;
 
             // Check if rain should extinguish the fire
-            if !infiniburn && Self::is_near_rain(world.as_ref(), pos) {
+            if !infiniburn && Self::is_near_rain(world.as_ref(), pos).await {
                 let rain_chance = 0.2 + (age as f32) * 0.03;
                 if rand::random::<f32>() < rain_chance {
                     world
@@ -454,9 +466,12 @@ impl BlockBehaviour for FireBlock {
                                     odds /= 2; // Fire spreads 50% slower
                                 }
 
-                                if odds > 0
-                                    && rand::rng().random_range(0..rate) <= odds
-                                    && !Self::is_near_rain(world.as_ref(), &offset_pos)
+                                // Bound the `Rng` temporary to a statement so it is not
+                                // held across the `is_near_rain` await point.
+                                let can_ignite =
+                                    odds > 0 && rand::rng().random_range(0..rate) <= odds;
+                                if can_ignite
+                                    && !Self::is_near_rain(world.as_ref(), &offset_pos).await
                                 {
                                     let spread_age = (new_age + rand::rng().random_range(0..5) / 4)
                                         .min(15)

@@ -69,8 +69,9 @@ impl BlockBehaviour for FarmlandBlock {
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            // TODO: add rain check. Remember to check which one is most optimized.
-            if is_water_nearby(args.world, args.position) {
+            if is_water_nearby(args.world, args.position)
+                || args.world.is_raining_at(&args.position.up()).await
+            {
                 let mut props = FarmlandProperties::default(args.block);
                 props.moisture = 7;
                 args.world
@@ -118,6 +119,8 @@ fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     !state.is_solid() // TODO: add fence gate block
 }
 
+/// Mirrors vanilla `FarmBlock#isNearWater`, which tests the *fluid* state of every
+/// position in the box so that waterlogged blocks count as a water source too.
 fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
     for dx in -4..=4 {
         for dy in 0..=1 {
@@ -127,8 +130,10 @@ fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
                     y: dy,
                     z: dz,
                 });
-                //TODO this should use tag water. It does not seem to work rn.
-                if world.get_block(&check_pos) == &Block::WATER {
+                if world
+                    .get_fluid(&check_pos)
+                    .has_tag(&tag::Fluid::MINECRAFT_WATER)
+                {
                     return true;
                 }
             }
