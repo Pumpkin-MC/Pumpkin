@@ -162,6 +162,8 @@ use weather::Weather;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
+const MAX_LIGHT_LEVEL: u8 = 15;
+
 use rustc_hash::{FxHashMap, FxHashSet};
 
 impl PumpkinError for GetBlockError {
@@ -1730,6 +1732,20 @@ impl World {
         self.weather.lock().await.raining
     }
 
+    pub async fn is_raining_at(&self, pos: &BlockPos) -> bool {
+        if !self.is_raining().await {
+            return false;
+        }
+        if self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1 > pos.0.y {
+            return false;
+        }
+        self.can_see_sky(pos)
+            && self
+                .get_biome(pos)
+                .weather
+                .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
+    }
+
     pub async fn set_raining(&self, raining: bool) {
         let mut weather = self.weather.lock().await;
         if weather.raining != raining {
@@ -3159,6 +3175,7 @@ impl World {
             .await;
 
         player.send_active_effects().await;
+        player.breath_manager.send_air_supply(player);
         self.send_player_equipment(player).await;
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
@@ -4437,6 +4454,13 @@ impl World {
         self.level
             .light_engine
             .get_sky_light_level(&self.level, position)
+    }
+
+    #[must_use]
+    pub fn can_see_sky(&self, position: &BlockPos) -> bool {
+        position.0.y >= self.dimension.min_y
+            && position.0.y < self.dimension.min_y + self.dimension.height
+            && self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
     }
 
     pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {
