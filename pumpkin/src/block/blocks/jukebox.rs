@@ -194,10 +194,11 @@ impl BlockBehaviour for JukeboxBlock {
     }
 
     /// Vanilla: `JukeboxBlock.onStateReplaced()` -> `ItemScatterer.onStateReplaced()`
-    fn on_state_replaced<'a>(&'a self, _args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
+    fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            // Vanilla calls ItemScatterer.onStateReplaced which updates comparators
-            // TODO: world.updateComparators(pos, block) when implemented
+            args.world
+                .update_comparators(args.position, args.block)
+                .await;
         })
     }
 
