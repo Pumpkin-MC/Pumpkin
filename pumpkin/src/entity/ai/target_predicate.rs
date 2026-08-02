@@ -110,6 +110,7 @@ impl TargetPredicate {
 
         if self.attackable
             && (!target.can_take_damage()
+                || target.not_targetable_as_enemy.load(Relaxed)
                 || world.level_info.load().difficulty == Difficulty::Peaceful)
         {
             return false;

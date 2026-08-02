@@ -5,6 +5,7 @@ pub mod active_target;
 pub mod ambient_stand;
 pub mod armadillo_curl_up;
 pub mod avoid_entity;
+pub mod axolotl_play_dead;
 pub mod beg;
 pub mod blaze_attack;
 pub mod breed;

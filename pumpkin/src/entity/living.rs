@@ -153,6 +153,12 @@ pub struct LivingEntity {
     /// The tick at which this entity last attacked something (entity age).
     pub last_attack_time: AtomicI32,
 
+    /// Vanilla `LivingEntity.canBeSeenAsEnemy()` override hook (e.g. `Axolotl.canBeSeenAsEnemy`
+    /// while playing dead): when `true`, target-selection AI (`TargetPredicate`) treats this
+    /// entity as unattackable, independent of `can_take_damage` -- players and existing attackers
+    /// can still damage it normally, it just won't be picked as a *new* AI target.
+    pub not_targetable_as_enemy: AtomicBool,
+
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
 
@@ -247,6 +253,7 @@ impl LivingEntity {
             last_attacked_time: AtomicI32::new(0),
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
+            not_targetable_as_enemy: AtomicBool::new(false),
             movement_input: AtomicCell::new(Vector3::default()),
             water_movement_speed_multiplier,
         }
