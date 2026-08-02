@@ -648,6 +648,17 @@ impl LivingEntity {
         self.entity.world.load().broadcast_packet_all(&packet);
     }
 
+    pub async fn remove_all_effects(&self) -> bool {
+        let effect_list: Vec<&'static StatusEffect> =
+            self.active_effects.lock().await.keys().copied().collect();
+
+        let mut succeeded = false;
+        for effect_type in effect_list {
+            succeeded |= self.remove_effect(effect_type).await;
+        }
+        succeeded
+    }
+
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
         // Remove the effect
         let succeeded = self
@@ -1751,6 +1762,8 @@ impl LivingEntity {
                     .world
                     .load()
                     .send_entity_status(&self.entity, EntityStatus::ProtectedFromDeath);
+
+                self.remove_all_effects().await;
 
                 // Set Absorption, Regeneration, and Fire Resistance effects
                 self.add_effect(Effect {
