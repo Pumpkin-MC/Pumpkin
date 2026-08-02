@@ -9,6 +9,18 @@ use rand::RngExt;
 
 const MAX_ATTACK_TIME: i64 = 20;
 
+const fn should_continue_melee_goal(
+    pause_when_mob_idle: bool,
+    navigation_idle: bool,
+    target_in_range: bool,
+) -> bool {
+    if pause_when_mob_idle {
+        target_in_range
+    } else {
+        !navigation_idle || target_in_range
+    }
+}
+
 /// Vanilla: `MeleeAttackGoal::canPerformAttack` requires sensing line of sight.
 async fn has_melee_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
     let mob_entity = mob.get_entity();
@@ -99,15 +111,6 @@ impl Goal for MeleeAttackGoal {
                 return false;
             }
 
-            if !self.pause_when_mob_idle {
-                let is_idle = mob
-                    .get_mob_entity()
-                    .navigator
-                    .try_lock()
-                    .is_ok_and(|navigator| navigator.is_idle());
-                return !is_idle;
-            }
-
             let is_valid_target = !target
                 .get_player()
                 .is_some_and(|p| p.is_spectator() || p.is_creative());
@@ -116,7 +119,16 @@ impl Goal for MeleeAttackGoal {
                 .get_mob_entity()
                 .is_in_position_target_range_pos(&target.get_entity().block_pos.load());
 
-            in_range && is_valid_target
+            if !is_valid_target {
+                return false;
+            }
+
+            let navigation_idle = mob
+                .get_mob_entity()
+                .navigator
+                .try_lock()
+                .is_ok_and(|navigator| navigator.is_idle());
+            should_continue_melee_goal(self.pause_when_mob_idle, navigation_idle, in_range)
         })
     }
 
@@ -226,5 +238,18 @@ impl Goal for MeleeAttackGoal {
 
     fn controls(&self) -> Controls {
         self.goal_control
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_continue_melee_goal;
+
+    #[test]
+    fn in_range_targets_continue_when_navigation_is_idle() {
+        assert!(should_continue_melee_goal(false, true, true));
+        assert!(!should_continue_melee_goal(false, true, false));
+        assert!(!should_continue_melee_goal(true, true, false));
+        assert!(should_continue_melee_goal(true, false, true));
     }
 }
