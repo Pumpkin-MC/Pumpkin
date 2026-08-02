@@ -1033,6 +1033,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn close_inventory(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.close_handled_screen().await;
+        Ok(())
+    }
+
     async fn ban(
         &mut self,
         player: Resource<Player>,

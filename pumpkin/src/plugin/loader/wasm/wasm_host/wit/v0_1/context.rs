@@ -47,9 +47,10 @@ async fn register_player_event(
 ) {
     use crate::plugin::player::{
         changed_main_hand::PlayerChangedMainHandEvent, egg_throw::PlayerEggThrowEvent,
-        exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent, item_held::PlayerItemHeldEvent,
-        player_change_world::PlayerChangeWorldEvent, player_chat::PlayerChatEvent,
-        player_command_send::PlayerCommandSendEvent,
+        exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent,
+        inventory_close::InventoryCloseEvent, inventory_interact::InventoryClickEvent,
+        item_held::PlayerItemHeldEvent, player_change_world::PlayerChangeWorldEvent,
+        player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
         player_interact_event::PlayerInteractEvent,
@@ -150,6 +151,14 @@ async fn register_player_event(
         }
         EventType::PlayerToggleSprintEvent => {
             register_typed_event::<PlayerToggleSprintEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::InventoryClickEvent => {
+            register_typed_event::<InventoryClickEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::InventoryCloseEvent => {
+            register_typed_event::<InventoryCloseEvent>(resource, handler, priority, blocking)
                 .await;
         }
         _ => {
