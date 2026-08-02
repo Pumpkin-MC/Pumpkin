@@ -4,8 +4,8 @@ use crate::{
     world::World,
 };
 use pumpkin_data::{
-    data_component_impl::FireworksImpl, entity::EntityStatus, item::Item, item_stack::ItemStack,
-    meta_data_type::MetaDataType, tracked_data::TrackedData,
+    damage::DamageType, data_component_impl::FireworksImpl, entity::EntityStatus, item::Item,
+    item_stack::ItemStack, meta_data_type::MetaDataType, tracked_data::TrackedData,
 };
 use pumpkin_protocol::{
     codec::{item_stack_seralizer::ItemStackSerializer, optional_int::OptionalInt},
@@ -104,11 +104,55 @@ impl FireworkRocketEntity {
         rocket
     }
 
-    pub async fn explode_and_remove(&self, world: &World) {
+    pub async fn explode_and_remove(&self, world: &Arc<World>) {
         let entity = self.get_entity();
         world.send_entity_status(entity, EntityStatus::FireworksExplode);
 
-        // TODO: Explode/colors
+        let explosion_count = self
+            .item_stack
+            .get_data_component::<FireworksImpl>()
+            .map_or(0, |fireworks| fireworks.explosions.len());
+        if explosion_count > 0 {
+            let damage = 5.0 + (explosion_count as f32 * 2.0);
+            let rocket_pos = entity.pos.load();
+            if let Some(owner_id) = self.entity.owner_id
+                && let Some(owner) = world.get_entity_by_id(owner_id)
+            {
+                owner.damage(self, damage, DamageType::FIREWORKS).await;
+            }
+            let targets = world.get_all_at_box(&entity.bounding_box.load().expand(5.0, 5.0, 5.0));
+
+            for target in targets {
+                let target_entity = target.get_entity();
+                if !target_entity.is_alive()
+                    || self
+                        .entity
+                        .owner_id
+                        .is_some_and(|owner_id| owner_id == target_entity.entity_id)
+                {
+                    continue;
+                }
+
+                let distance = rocket_pos
+                    .squared_distance_to_vec(&target_entity.pos.load())
+                    .sqrt();
+                let Some(amount) = firework_damage(damage, distance) else {
+                    continue;
+                };
+                if world
+                    .raycast(
+                        rocket_pos,
+                        target_entity.get_eye_pos(),
+                        async |block_pos, world| world.get_block_state(block_pos).is_solid(),
+                    )
+                    .await
+                    .is_some()
+                {
+                    continue;
+                }
+                target.damage(self, amount, DamageType::FIREWORKS).await;
+            }
+        }
 
         entity.remove().await;
     }
@@ -127,6 +171,13 @@ fn flight_duration(item_stack: &ItemStack) -> i32 {
     item_stack
         .get_data_component::<FireworksImpl>()
         .map_or(0, |fireworks| fireworks.flight_duration)
+}
+
+fn firework_damage(base_damage: f32, distance: f64) -> Option<f32> {
+    if !(0.0..=5.0).contains(&distance) {
+        return None;
+    }
+    Some(base_damage * (((5.0 - distance) / 5.0).sqrt() as f32))
 }
 
 impl NBTStorage for FireworkRocketEntity {}
@@ -211,7 +262,14 @@ impl EntityBase for FireworkRocketEntity {
 
 #[cfg(test)]
 mod tests {
-    use super::firework_lifetime;
+    use super::{firework_damage, firework_lifetime};
+
+    #[test]
+    fn explosion_damage_falls_off_at_radius() {
+        assert_eq!(firework_damage(7.0, 0.0), Some(7.0));
+        assert_eq!(firework_damage(7.0, 5.0), Some(0.0));
+        assert_eq!(firework_damage(7.0, 5.1), None);
+    }
 
     #[test]
     fn lifetime_includes_default_flight_duration() {
