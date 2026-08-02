@@ -6,6 +6,36 @@ mod test {
     use pumpkin_data::dimension::Dimension;
     use pumpkin_util::world_seed::Seed;
 
+    #[test]
+    fn structure_references_are_rebuilt_when_resuming_generation() {
+        use crate::chunk_system::chunk_state::Chunk;
+        use pumpkin_config::lighting::LightingEngineConfig;
+        use pumpkin_data::structures::StructureKeys;
+
+        let seed = Seed(1_782_124_772_053_846_960);
+        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
+        let WorldGenerator::Noise(generator) = &*world_gen else {
+            unreachable!()
+        };
+
+        // This chunk contains the far edge of a monument starting at (-553, 173).
+        let mut proto = ProtoChunk::new(-553, 174, &world_gen);
+        proto.step_to_biomes(generator);
+        proto.set_structure_starts(generator);
+        proto.set_structure_references(generator);
+        assert!(proto.has_structure(StructureKeys::Monument));
+
+        let mut staged = Chunk::Proto(Box::new(proto));
+        staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(chunk_data) = staged else {
+            unreachable!()
+        };
+
+        let resumed = ProtoChunk::from_chunk_data(&chunk_data, &world_gen);
+        assert_eq!(resumed.stage, StagedChunkEnum::StructureReferences);
+        assert!(resumed.has_structure(StructureKeys::Monument));
+    }
+
     // Regression test for transposed heightmaps during Noise-stage chunk resume.
     // Flat terrain cannot expose this bug, so use a sloped chunk.
     #[test]

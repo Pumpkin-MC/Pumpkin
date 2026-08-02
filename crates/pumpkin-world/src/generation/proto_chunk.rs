@@ -180,6 +180,11 @@ impl TerrainCache {
 }
 
 impl ProtoChunk {
+    #[cfg(test)]
+    pub(crate) fn has_structure(&self, key: StructureKeys) -> bool {
+        self.structure_starts.contains_key(&key)
+    }
+
     #[must_use]
     pub fn new(x: i32, z: i32, generator: &super::generator::WorldGenerator) -> Self {
         let dimension = generator.dimension();
@@ -335,7 +340,21 @@ impl ProtoChunk {
             }
         }
 
-        proto_chunk.stage = StagedChunkEnum::from(chunk_data.status);
+        let saved_stage = StagedChunkEnum::from(chunk_data.status);
+        proto_chunk.stage = saved_stage;
+        if let super::generator::WorldGenerator::Noise(generator) = generator
+            && (StagedChunkEnum::StructureStart..StagedChunkEnum::Features).contains(&saved_stage)
+        {
+            // Structure starts and references are currently transient proto-chunk data.
+            // Rebuild them when resuming a partially generated chunk so structures that
+            // cross chunk boundaries are not truncated at the unload boundary.
+            proto_chunk.stage = StagedChunkEnum::Biomes;
+            proto_chunk.set_structure_starts(generator);
+            if saved_stage >= StagedChunkEnum::StructureReferences {
+                proto_chunk.set_structure_references(generator);
+            }
+            proto_chunk.stage = saved_stage;
+        }
         proto_chunk
     }
 
@@ -1340,12 +1359,16 @@ impl ProtoChunk {
             let config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
             let mut sampler =
                 MultiNoiseSampler::generate(&generator.base_router.multi_noise, &config);
-            if !crate::generation::structure::structures::ocean_monument::has_valid_surrounding(
+            let center_x = chunk_pos::get_center_x(self.x);
+            let center_z = chunk_pos::get_center_z(self.z);
+            let start_y = height_sampler.estimate_ocean_floor_height(center_x, center_z);
+            if !crate::generation::structure::structures::ocean_monument::has_valid_biomes(
                 &MultiNoiseBiomeSupplier::OVERWORLD,
                 &mut sampler,
                 self.x,
                 self.z,
                 sea_level,
+                start_y,
             ) {
                 return false;
             }

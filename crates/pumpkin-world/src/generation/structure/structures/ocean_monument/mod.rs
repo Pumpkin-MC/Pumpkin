@@ -42,13 +42,30 @@ const WATER: &BlockState = Block::WATER.default_state;
 
 pub struct OceanMonumentGenerator;
 
-pub(crate) fn has_valid_surrounding(
+pub(crate) fn has_valid_biomes(
     biome_supplier: &dyn BiomeSupplier,
     sampler: &mut MultiNoiseSampler,
     chunk_x: i32,
     chunk_z: i32,
     sea_level: i32,
+    start_y: i32,
 ) -> bool {
+    let start_x = get_center_x(chunk_x);
+    let start_z = get_center_z(chunk_z);
+    let start_biomes = pumpkin_data::tag::WorldgenBiome::MINECRAFT_HAS_STRUCTURE_OCEAN_MONUMENT.1;
+    if !start_biomes.contains(
+        &(biome_supplier
+            .biome(
+                biome_coords::from_block(start_x),
+                biome_coords::from_block(start_y),
+                biome_coords::from_block(start_z),
+                sampler,
+            )
+            .id as u16),
+    ) {
+        return false;
+    }
+
     let center_x = start_block_x(chunk_x) + 9;
     let center_z = start_block_z(chunk_z) + 9;
     let min_x = biome_coords::from_block(center_x - 29);
