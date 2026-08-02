@@ -515,6 +515,9 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
         DataComponent::DamageResistant => Some(DamageResistantImpl::read_data(data)?.to_dyn()),
         DataComponent::PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
+        DataComponent::PotionDurationScale => {
+            Some(PotionDurationScaleImpl::read_data(data)?.to_dyn())
+        }
         DataComponent::Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         DataComponent::FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
         DataComponent::CustomName => Some(CustomNameImpl::read_data(data)?.to_dyn()),
