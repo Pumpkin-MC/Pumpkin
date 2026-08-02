@@ -330,11 +330,14 @@ impl MobEntity {
             }
             if knockback_level != 0 {
                 let yaw = self.living_entity.entity.yaw.load().to_radians();
-                target.get_entity().knockback(
-                    knockback_enchantment_strength(knockback_level),
-                    f64::from(yaw.sin()),
-                    f64::from(-yaw.cos()),
-                );
+                let strength = knockback_enchantment_strength(knockback_level);
+                let x = f64::from(yaw.sin());
+                let z = f64::from(-yaw.cos());
+                if let Some(living) = target.get_living_entity() {
+                    living.knockback_with_resistance(strength, x, z);
+                } else {
+                    target.get_entity().knockback(strength, x, z);
+                }
             }
             self.living_entity
                 .last_attacking_id

@@ -125,6 +125,15 @@ pub struct LivingEntity {
 }
 
 impl LivingEntity {
+    pub fn knockback_with_resistance(&self, strength: f64, x: f64, z: f64) {
+        let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+        self.entity.knockback(
+            knockback_strength_with_resistance(strength, resistance),
+            x,
+            z,
+        );
+    }
+
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
     #[expect(dead_code)]
