@@ -27,11 +27,13 @@ pub enum AttackType {
     clippy::fn_params_excessive_bools,
     reason = "These flags directly mirror vanilla's critical-attack predicate"
 )]
+#[expect(clippy::too_many_arguments, reason = "Predicate mirrors vanilla state gates")]
 fn can_critical_attack(
     on_ground: bool,
     fall_distance: f32,
     climbing: bool,
     in_water: bool,
+    mobility_restricted: bool,
     mounted: bool,
     target_is_living: bool,
     sprinting: bool,
@@ -40,6 +42,7 @@ fn can_critical_attack(
         && fall_distance > 0.0
         && !climbing
         && !in_water
+        && !mobility_restricted
         && !mounted
         && target_is_living
         && !sprinting
@@ -82,6 +85,11 @@ impl AttackType {
         };
 
         let in_water = player.living_entity.is_in_water();
+        let mobility_restricted = player
+            .living_entity
+            .get_effect(&pumpkin_data::effect::StatusEffect::BLINDNESS)
+            .await
+            .is_some();
         let climbing = player.living_entity.climbing.load(Ordering::Relaxed);
         let mounted = entity.has_vehicle().await;
         let target_is_living = target.get_living_entity().is_some();
@@ -101,6 +109,7 @@ impl AttackType {
                 fall_distance,
                 climbing,
                 in_water,
+                mobility_restricted,
                 mounted,
                 target_is_living,
                 sprinting,
@@ -186,16 +195,16 @@ mod tests {
     #[test]
     fn critical_attacks_require_vanilla_movement_conditions() {
         assert!(can_critical_attack(
-            false, 1.0, false, false, false, true, false
+            false, 1.0, false, false, false, false, true, false
         ));
         assert!(!can_critical_attack(
-            false, 1.0, true, false, false, true, false
+            false, 1.0, true, false, false, false, true, false
         ));
         assert!(!can_critical_attack(
-            false, 1.0, false, true, false, true, false
+            false, 1.0, false, true, false, false, true, false
         ));
         assert!(!can_critical_attack(
-            false, 1.0, false, false, false, false, false
+            false, 1.0, false, false, true, false, true, false
         ));
     }
 
