@@ -261,9 +261,36 @@ impl MobEntity {
             return false;
         }
 
-        let attack_damage: f32 =
-            self.living_entity
-                .get_attribute_value(&Attributes::ATTACK_DAMAGE) as f32;
+        let mut attack_damage = self
+            .living_entity
+            .get_attribute_value(&Attributes::ATTACK_DAMAGE);
+        let held_item = self
+            .living_entity
+            .held_item(&self.living_entity.entity)
+            .await;
+        let held_item = held_item.lock().await;
+        if let Some(enchantments) =
+            held_item.get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
+        {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                if **enchantment == pumpkin_data::Enchantment::SHARPNESS {
+                    attack_damage += 0.5 * f64::from(*level) + 0.5;
+                } else if (**enchantment == pumpkin_data::Enchantment::SMITE
+                    && target
+                        .get_entity()
+                        .entity_type
+                        .has_tag(&tag::EntityType::MINECRAFT_SENSITIVE_TO_SMITE))
+                    || (**enchantment == pumpkin_data::Enchantment::BANE_OF_ARTHROPODS
+                        && target
+                            .get_entity()
+                            .entity_type
+                            .has_tag(&tag::EntityType::MINECRAFT_SENSITIVE_TO_BANE_OF_ARTHROPODS))
+                {
+                    attack_damage += 2.5 * f64::from(*level);
+                }
+            }
+        }
+        drop(held_item);
 
         let caller = self
             .living_entity
@@ -275,7 +302,7 @@ impl MobEntity {
         let damaged = target
             .damage_with_context(
                 target,
-                attack_damage,
+                attack_damage as f32,
                 DamageType::MOB_ATTACK,
                 Some(self.living_entity.entity.pos.load()),
                 caller.as_deref(),
