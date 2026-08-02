@@ -137,7 +137,6 @@ impl ItemEntity {
         let items = entities.iter().filter_map(|entity: &Arc<dyn EntityBase>| {
             entity.clone().get_item_entity().filter(|item| {
                 item.entity.entity_id != self.entity.entity_id
-                    && !item.never_despawn.load(Ordering::Relaxed)
                     && item.entity.bounding_box.load().intersects(&bounding_box)
             })
         });
