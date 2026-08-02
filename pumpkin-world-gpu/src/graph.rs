@@ -20,8 +20,8 @@ use pumpkin_data::{
 };
 use pumpkin_util::{
     math::{block_box::BlockBox, vector3::Vector3},
-    noise::perlin::OctavePerlinNoiseSampler,
-    random::{legacy_rand::LegacyRand, xoroshiro128::XoroshiroSplitter},
+    noise::{perlin::OctavePerlinNoiseSampler, simplex::SimplexNoiseSampler},
+    random::{RandomImpl, legacy_rand::LegacyRand, xoroshiro128::XoroshiroSplitter},
 };
 use pumpkin_world::generation::{
     GlobalRandomConfig,
@@ -87,6 +87,9 @@ pub enum OpCode {
     /// Y comes back a hair off, and differently per backend, which flips the threshold
     /// comparisons that read it. `param0`/`param1` are the bounds.
     ClampedYIdentity = 26,
+    /// End-island height field. `sampler_index` selects a simplex permutation table in
+    /// the graph's simplex pool.
+    EndIslands = 27,
 }
 
 /// One branch of an [`OpCode::IntervalSelect`].
@@ -339,6 +342,8 @@ impl GpuSplinePoint {
 pub struct SamplerPool {
     pub samplers: Vec<SamplerRef>,
     pub interpolated: Vec<InterpolatedRef>,
+    /// 256-entry simplex permutation tables, concatenated; `EndIslands` indexes them.
+    pub simplex_permutations: Vec<u32>,
     /// Octave parameters for every sampler, concatenated.
     pub octaves: Vec<OctaveParams>,
     /// 256-entry permutation table per octave, concatenated in the same order.
@@ -367,6 +372,14 @@ impl SamplerPool {
             padding1: 0.0,
             padding2: 0.0,
         });
+        index
+    }
+
+    /// Registers a simplex sampler's permutation table, returning its index.
+    pub fn push_simplex(&mut self, sampler: &SimplexNoiseSampler) -> u32 {
+        let index = (self.simplex_permutations.len() / 256) as u32;
+        self.simplex_permutations
+            .extend(sampler.permutation().iter().map(|&b| u32::from(b)));
         index
     }
 
@@ -836,6 +849,16 @@ fn lower_noise_family(
             i.sampler_index = push_sampler(samplers, base_random_deriver, noise_id);
             i
         }
+        BaseNoiseFunctionComponent::EndIslands => {
+            // Mirrors EndIsland::new in density_function/misc.rs.
+            let mut rand = LegacyRand::from_seed(random_config.seed);
+            rand.skip(17292);
+            let sampler = SimplexNoiseSampler::new(&mut rand);
+
+            let mut i = Instruction::new(OpCode::EndIslands, index);
+            i.sampler_index = samplers.push_simplex(&sampler);
+            i
+        }
         BaseNoiseFunctionComponent::InterpolatedNoiseSampler { data } => {
             // Mirrors proto_noise_router.rs: legacy dimensions (the Nether) seed this
             // from the raw world seed, everything else from the terrain deriver.
@@ -1107,8 +1130,130 @@ fn eval_noise_opcode(
         op if op == OpCode::InterpolatedNoise as u32 => {
             interpolated_sample(pool, p.sampler_index as usize, x, y, z)
         }
+        op if op == OpCode::EndIslands as u32 => {
+            end_islands_sample(pool, p.sampler_index as usize, x as i32, z as i32)
+        }
         _ => 0.0,
     }
+}
+
+/// f32 mirror of `EndIsland::sample` in `density_function/misc.rs`.
+fn end_islands_sample(pool: &SamplerPool, sampler_index: usize, x: i32, z: i32) -> f32 {
+    (end_islands_2d(pool, sampler_index, x / 8, z / 8) - 8.0) / 128.0
+}
+
+#[expect(clippy::many_single_char_names)]
+fn end_islands_2d(pool: &SamplerPool, sampler_index: usize, x: i32, z: i32) -> f32 {
+    let i = x / 2;
+    let j = z / 2;
+    let k = x % 2;
+    let l = z % 2;
+
+    let mut f = (((x * x + z * z) as f32).sqrt())
+        .mul_add(-8.0, 100.0)
+        .clamp(-100.0, 80.0);
+
+    for m in -12..=12 {
+        for n in -12..=12 {
+            let o = i64::from(i + m);
+            let p = i64::from(j + n);
+
+            if o * o + p * p > 4096
+                && simplex_sample_2d(pool, sampler_index, o as f32, p as f32) < -0.9
+            {
+                let g = (o as f32).abs().mul_add(3439.0, (p as f32).abs() * 147.0) % 13.0 + 9.0;
+                let h = (k - m * 2) as f32;
+                let q = (l - n * 2) as f32;
+                let s = h.hypot(q).mul_add(-g, 100.0).clamp(-100.0, 80.0);
+                f = f.max(s);
+            }
+        }
+    }
+    f
+}
+
+const SIMPLEX_SKEW_2D: f32 = 0.366_025_4;
+const SIMPLEX_UNSKEW_2D: f32 = 0.211_324_87;
+
+fn simplex_perm(pool: &SamplerPool, sampler_index: usize, input: i32) -> i32 {
+    pool.simplex_permutations
+        .get(sampler_index * 256 + (input & 0xFF) as usize)
+        .copied()
+        .map_or(0, |v| v as i32)
+}
+
+fn simplex_grad(gradient_index: usize, x: f32, y: f32, distance: f32) -> f32 {
+    // GRADIENTS from pumpkin_util::noise, with z fixed at 0 for the 2D case.
+    const GRADIENTS: [[f32; 3]; 16] = [
+        [1.0, 1.0, 0.0],
+        [-1.0, 1.0, 0.0],
+        [1.0, -1.0, 0.0],
+        [-1.0, -1.0, 0.0],
+        [1.0, 0.0, 1.0],
+        [-1.0, 0.0, 1.0],
+        [1.0, 0.0, -1.0],
+        [-1.0, 0.0, -1.0],
+        [0.0, 1.0, 1.0],
+        [0.0, -1.0, 1.0],
+        [0.0, 1.0, -1.0],
+        [0.0, -1.0, -1.0],
+        [1.0, 1.0, 0.0],
+        [0.0, -1.0, 1.0],
+        [-1.0, 1.0, 0.0],
+        [0.0, -1.0, -1.0],
+    ];
+    let d = distance - x * x - y * y;
+    if d < 0.0 {
+        return 0.0;
+    }
+    let d = d * d;
+    let g = GRADIENTS[gradient_index];
+    d * d * (g[0] * x + g[1] * y)
+}
+
+#[expect(clippy::many_single_char_names)]
+fn simplex_sample_2d(pool: &SamplerPool, sampler_index: usize, x: f32, y: f32) -> f32 {
+    let d = (x + y) * SIMPLEX_SKEW_2D;
+    let i = (x + d).floor() as i32;
+    let j = (y + d).floor() as i32;
+
+    let e = (i.wrapping_add(j)) as f32 * SIMPLEX_UNSKEW_2D;
+    let h = x - (i as f32 - e);
+    let k = y - (j as f32 - e);
+
+    let (l, m) = if h > k { (1, 0) } else { (0, 1) };
+
+    let n = h - l as f32 + SIMPLEX_UNSKEW_2D;
+    let o = k - m as f32 + SIMPLEX_UNSKEW_2D;
+    let p = 2.0f32.mul_add(SIMPLEX_UNSKEW_2D, h - 1.0);
+    let q = 2.0f32.mul_add(SIMPLEX_UNSKEW_2D, k - 1.0);
+
+    let r = i & 0xFF;
+    let s = j & 0xFF;
+
+    let t = simplex_perm(
+        pool,
+        sampler_index,
+        r.wrapping_add(simplex_perm(pool, sampler_index, s)),
+    ) % 12;
+    let u = simplex_perm(
+        pool,
+        sampler_index,
+        r.wrapping_add(l)
+            .wrapping_add(simplex_perm(pool, sampler_index, s.wrapping_add(m))),
+    ) % 12;
+    let v = simplex_perm(
+        pool,
+        sampler_index,
+        r.wrapping_add(1)
+            .wrapping_add(simplex_perm(pool, sampler_index, s.wrapping_add(1))),
+    ) % 12;
+
+    let w = simplex_grad(t as usize, h, k, 0.5);
+    let z = simplex_grad(u as usize, n, o, 0.5);
+    let aa = simplex_grad(v as usize, p, q, 0.5);
+
+    70.0 * (w + z + aa)
 }
 
 /// f32 mirror of `Spline::sample` in
@@ -1607,12 +1752,24 @@ pub(crate) mod test {
     /// A node type with no opcode has to be reported, not silently miscompiled.
     #[test]
     fn compile_reports_unsupported_nodes() {
+        use pumpkin_data::noise_router::FindTopSurfaceData;
+
+        // FindTopSurface walks Y re-evaluating the density subgraph at each step, which
+        // the single-pass interpreter cannot express; it stands in for any unlowered node.
+        static DATA: FindTopSurfaceData = FindTopSurfaceData {
+            lower_bound: -64,
+            cell_height: 8,
+        };
+
         let config = test_random_config();
-        // EndIslands has no opcode; it stands in for any future unlowered node.
-        let stack = [BaseNoiseFunctionComponent::EndIslands];
-        let err = compile(&stack, &config).expect_err("EndIslands has no opcode");
+        let stack = [BaseNoiseFunctionComponent::FindTopSurface {
+            density_index: 0,
+            upper_bound_index: 0,
+            data: &DATA,
+        }];
+        let err = compile(&stack, &config).expect_err("FindTopSurface has no opcode");
         assert_eq!(err.index, 0);
-        assert_eq!(err.name, "EndIslands");
+        assert_eq!(err.name, "FindTopSurface");
     }
 
     /// The GPU-side Noise opcode must reproduce the real CPU `DoublePerlinNoiseSampler`

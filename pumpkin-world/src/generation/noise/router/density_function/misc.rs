@@ -21,6 +21,7 @@ pub struct EndIsland {
 }
 
 impl EndIsland {
+    #[must_use]
     pub fn new(seed: u64) -> Self {
         let mut rand = LegacyRand::from_seed(seed);
         rand.skip(17292);
@@ -87,6 +88,7 @@ pub struct IntervalSelect {
 }
 
 impl IntervalSelect {
+    #[must_use]
     pub const fn new(
         input_index: usize,
         thresholds: &'static [f64],
@@ -186,6 +188,7 @@ pub struct ClampedYGradient {
 }
 
 impl ClampedYGradient {
+    #[must_use]
     pub const fn new(data: &'static ClampedYGradientData) -> Self {
         Self { data }
     }
@@ -225,6 +228,7 @@ pub struct RangeChoice {
 }
 
 impl RangeChoice {
+    #[must_use]
     pub const fn new(
         input_index: usize,
         when_in_index: usize,

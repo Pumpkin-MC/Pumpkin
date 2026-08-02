@@ -26,6 +26,13 @@
 //!
 //! Any future node that feeds a threshold comparison needs the same scrutiny: agreeing
 //! "to f32 precision" is not enough when the value is compared for ordering.
+//!
+//! Not every such case can be fixed. [`graph::OpCode::EndIslands`] decides whether an
+//! island contributes with `simplex < -0.9`, and the simplex value is a genuine float
+//! computation, so f32 and f64 legitimately land on opposite sides near the boundary
+//! and an island appears or does not. Measured over a sweep of End coordinates that
+//! affects roughly one point in 240. The Y-gradient case was fixable because the value
+//! was exact in principle; this one is not.
 
 use bytemuck::{Pod, Zeroable};
 use pumpkin_util::noise::perlin::OctavePerlinNoiseSampler;
@@ -266,6 +273,7 @@ impl GpuNoiseContext {
                     storage_entry(11, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(12, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(13, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(14, wgpu::BufferBindingType::Storage { read_only: true }),
                 ],
             });
 
@@ -400,6 +408,7 @@ impl GpuNoiseContext {
                 bind_entry(11, &dummy),
                 bind_entry(12, &dummy),
                 bind_entry(13, &dummy),
+                bind_entry(14, &dummy),
             ],
         })
     }
@@ -595,6 +604,7 @@ pub struct PreparedGraph<'a> {
     interpolated: wgpu::Buffer,
     interval_entries: wgpu::Buffer,
     outputs: wgpu::Buffer,
+    simplex_permutations: wgpu::Buffer,
     /// How many outputs the shader emits; 0 means "just the last instruction".
     outputs_len: usize,
 
@@ -638,6 +648,10 @@ impl<'a> PreparedGraph<'a> {
         let interval_entries =
             context.storage_from("graph interval entries", &compiled.interval_entries);
         let outputs = context.storage_from("graph outputs", &compiled.outputs);
+        let simplex_permutations = context.storage_from(
+            "graph simplex permutations",
+            &compiled.samplers.simplex_permutations,
+        );
 
         let point_capacity = 1;
         let (points, scratch, output, staging) = context.allocate_point_buffers(
@@ -660,6 +674,7 @@ impl<'a> PreparedGraph<'a> {
             interpolated,
             interval_entries,
             outputs,
+            simplex_permutations,
             outputs_len: compiled.outputs.len(),
             points,
             scratch,
@@ -708,6 +723,7 @@ impl<'a> PreparedGraph<'a> {
                     bind_entry(11, &self.junctions),
                     bind_entry(12, &self.interval_entries),
                     bind_entry(13, &self.outputs),
+                    bind_entry(14, &self.simplex_permutations),
                 ],
             });
     }
@@ -1453,5 +1469,106 @@ mod test {
             "only {slots_with_signal} of {slots} outputs produced any signal"
         );
         assert!(max_diff < 1e-2, "an output disagrees by {max_diff}");
+    }
+    /// `EndIslands` is the only node using simplex rather than Perlin noise, and it
+    /// sweeps a 25x25 neighbourhood per point. Checked against the real CPU
+    /// implementation, including coordinates far enough out to hit the island ring.
+    #[test]
+    fn gpu_end_islands_matches_cpu() {
+        use crate::graph::{CompiledGraph, Instruction, OpCode, SamplerPool};
+        use pumpkin_util::random::{RandomImpl, legacy_rand::LegacyRand};
+        use pumpkin_world::generation::noise::router::density_function::{
+            StaticIndependentChunkNoiseFunctionComponentImpl, misc::EndIsland,
+        };
+
+        const SEED: u64 = 55555;
+
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+        let cpu = EndIsland::new(SEED);
+
+        // Rebuild the same sampler the compiler would register for this seed.
+        let mut rand = LegacyRand::from_seed(SEED);
+        rand.skip(17292);
+        let sampler = pumpkin_util::noise::simplex::SimplexNoiseSampler::new(&mut rand);
+
+        let mut samplers = SamplerPool::default();
+        let mut node = Instruction::new_for_test(OpCode::EndIslands, 0);
+        node.sampler_index = samplers.push_simplex(&sampler);
+
+        let compiled = CompiledGraph {
+            instructions: vec![node],
+            samplers,
+            ..Default::default()
+        };
+
+        // The inner ring is flat; the interesting values are further out, so sweep
+        // across the transition where islands start appearing.
+        let points: Vec<[f32; 3]> = (0..240)
+            .map(|i| {
+                let f = i as f32;
+                [f * 64.0 - 2048.0, 64.0, f * 48.0 - 1536.0]
+            })
+            .collect();
+
+        let gpu_results = ctx.evaluate_graph(&compiled, &points);
+
+        // Two separate questions, kept separate.
+        //
+        // First: is the algorithm ported correctly? Compare against this crate's own
+        // f32 reference, which runs the same arithmetic, and demand a tight match.
+        let mut port_diff = 0.0f32;
+        let mut varied = 0usize;
+        let mut first: Option<f32> = None;
+        for (point, &gpu_value) in points.iter().zip(&gpu_results) {
+            let reference = crate::graph::evaluate_cpu(
+                &compiled,
+                &crate::graph::BeardifierData::default(),
+                point[0],
+                point[1],
+                point[2],
+            );
+            if first.is_none_or(|f| (f - gpu_value).abs() > 1e-6) {
+                varied += 1;
+            }
+            first.get_or_insert(gpu_value);
+            port_diff = port_diff.max((reference - gpu_value).abs());
+        }
+
+        // The island field is not constant over this sweep, so a shader returning one
+        // value everywhere would not pass.
+        assert!(
+            varied > 20,
+            "end island output barely varied ({varied} changes)"
+        );
+        assert!(
+            port_diff < 1e-3,
+            "GPU disagrees with the f32 reference by {port_diff}"
+        );
+
+        // Second: how far does f32 drift from vanilla's f64? This node decides island
+        // contributions with `simplex < -0.9`, so a value near that boundary lands on
+        // different sides in f32 and f64 and a whole island appears or does not. That
+        // cannot be engineered away — it is the f32 tradeoff showing up as a discrete
+        // jump — so the check is that it stays rare, not that it never happens.
+        let differing = points
+            .iter()
+            .zip(&gpu_results)
+            .filter(|&(point, &gpu)| {
+                let pos = pumpkin_util::math::vector3::Vector3::new(
+                    point[0] as i32,
+                    point[1] as i32,
+                    point[2] as i32,
+                );
+                (cpu.sample(&pos) - f64::from(gpu)).abs() > 1e-3
+            })
+            .count();
+        assert!(
+            differing * 50 < points.len(),
+            "{differing} of {} points differ from the f64 implementation, far more than \
+             boundary flips explain",
+            points.len()
+        );
     }
 }

@@ -9,7 +9,7 @@ use super::chunk_density_function::{
 
 pub mod beardifier;
 pub(crate) mod math;
-pub(crate) mod misc;
+pub mod misc;
 pub mod noise;
 pub(crate) mod spline;
 

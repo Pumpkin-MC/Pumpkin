@@ -39,6 +39,7 @@ const OP_BEARDIFIER: u32 = 23u;
 const OP_RANGE_CHOICE: u32 = 24u;
 const OP_INTERVAL_SELECT: u32 = 25u;
 const OP_CLAMPED_Y_IDENTITY: u32 = 26u;
+const OP_END_ISLANDS: u32 = 27u;
 
 struct Instruction {
     opcode: u32,
@@ -126,6 +127,8 @@ struct BeardJunction {
 @group(0) @binding(12) var<storage, read> interval_entries: array<IntervalEntry>;
 // Instruction indices to emit, in the order the caller expects them.
 @group(0) @binding(13) var<storage, read> outputs: array<u32>;
+// 256 entries per simplex sampler, concatenated.
+@group(0) @binding(14) var<storage, read> simplex_permutations: array<u32>;
 
 struct IntervalEntry {
     threshold: f32,
@@ -395,6 +398,87 @@ fn beardifier_sample(x: i32, y: i32, z: i32) -> f32 {
     return weight;
 }
 
+const SIMPLEX_SKEW_2D: f32 = 0.36602542;
+const SIMPLEX_UNSKEW_2D: f32 = 0.21132487;
+
+fn simplex_perm(sampler_index: u32, input: i32) -> i32 {
+    return i32(simplex_permutations[sampler_index * 256u + u32(input & 0xFF)]);
+}
+
+// GRADIENTS with z fixed at 0, matching the 2D simplex case.
+fn simplex_grad(gradient_index: u32, x: f32, y: f32, distance: f32) -> f32 {
+    var d = distance - x * x - y * y;
+    if (d < 0.0) {
+        return 0.0;
+    }
+    d = d * d;
+    let g = GRADIENTS[gradient_index];
+    return d * d * (g.x * x + g.y * y);
+}
+
+// Mirrors SimplexNoiseSampler::sample_2d.
+fn simplex_sample_2d(sampler_index: u32, x: f32, y: f32) -> f32 {
+    let d = (x + y) * SIMPLEX_SKEW_2D;
+    let i = i32(floor(x + d));
+    let j = i32(floor(y + d));
+
+    let e = f32(i + j) * SIMPLEX_UNSKEW_2D;
+    let h = x - (f32(i) - e);
+    let k = y - (f32(j) - e);
+
+    var l: i32 = 0;
+    var m: i32 = 1;
+    if (h > k) {
+        l = 1;
+        m = 0;
+    }
+
+    let n = h - f32(l) + SIMPLEX_UNSKEW_2D;
+    let o = k - f32(m) + SIMPLEX_UNSKEW_2D;
+    let p = 2.0 * SIMPLEX_UNSKEW_2D + (h - 1.0);
+    let q = 2.0 * SIMPLEX_UNSKEW_2D + (k - 1.0);
+
+    let r = i & 0xFF;
+    let s = j & 0xFF;
+
+    let t = simplex_perm(sampler_index, r + simplex_perm(sampler_index, s)) % 12;
+    let u = simplex_perm(sampler_index, r + l + simplex_perm(sampler_index, s + m)) % 12;
+    let v = simplex_perm(sampler_index, r + 1 + simplex_perm(sampler_index, s + 1)) % 12;
+
+    return 70.0 * (
+        simplex_grad(u32(t), h, k, 0.5)
+        + simplex_grad(u32(u), n, o, 0.5)
+        + simplex_grad(u32(v), p, q, 0.5)
+    );
+}
+
+// Mirrors EndIsland::sample_2d. Every invocation runs the full 25x25 sweep, so the
+// cost is uniform across the workgroup even though most cells contribute nothing.
+fn end_islands_2d(sampler_index: u32, x: i32, z: i32) -> f32 {
+    let i = x / 2;
+    let j = z / 2;
+    let k = x % 2;
+    let l = z % 2;
+
+    var f = clamp(100.0 - sqrt(f32(x * x + z * z)) * 8.0, -100.0, 80.0);
+
+    for (var m: i32 = -12; m <= 12; m = m + 1) {
+        for (var n: i32 = -12; n <= 12; n = n + 1) {
+            let o = i + m;
+            let p = j + n;
+
+            if (o * o + p * p > 4096 && simplex_sample_2d(sampler_index, f32(o), f32(p)) < -0.9) {
+                let g = (abs(f32(o)) * 3439.0 + abs(f32(p)) * 147.0) % 13.0 + 9.0;
+                let h = f32(k - m * 2);
+                let q = f32(l - n * 2);
+                let s = clamp(100.0 - length(vec2<f32>(h, q)) * g, -100.0, 80.0);
+                f = max(f, s);
+            }
+        }
+    }
+    return f;
+}
+
 fn clamp_lerp(start: f32, end: f32, delta: f32) -> f32 {
     if (delta < 0.0) { return start; }
     if (delta > 1.0) { return end; }
@@ -616,6 +700,13 @@ fn evaluate_graph(@builtin(global_invocation_id) gid: vec3<u32>) {
             case 26u: {
                 // Exact for integer Y, unlike the lerp form; see OpCode docs.
                 result = clamp(py, instruction.param0, instruction.param1);
+            }
+            case 27u: {
+                result = (end_islands_2d(
+                    instruction.sampler_index,
+                    i32(px) / 8,
+                    i32(pz) / 8,
+                ) - 8.0) / 128.0;
             }
             default: { result = 0.0; }
         }
