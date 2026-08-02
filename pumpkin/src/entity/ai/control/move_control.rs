@@ -79,11 +79,16 @@ impl MoveControlTrait for MoveControl {
                 .movement_input
                 .store(Vector3::new(0.0, 0.0, speed));
 
-            // TODO: Jump if needed (based on collision and height difference)
             let step_height = living_entity.get_attribute_value(&Attributes::STEP_HEIGHT);
-            if yd > step_height
-                && xd * xd + zd * zd < 1.0f64.max(entity.entity_dimension.load().width as f64)
-            {
+            let horizontal_distance_sq = xd * xd + zd * zd;
+            if should_jump(
+                entity.horizontal_collision.load(Ordering::Relaxed),
+                entity.on_ground.load(Ordering::Relaxed),
+                yd,
+                step_height,
+                horizontal_distance_sq,
+                entity.entity_dimension.load().width as f64,
+            ) {
                 living_entity.jumping.store(true, Ordering::SeqCst);
                 self.operation = Operation::Jumping;
             }
@@ -95,6 +100,7 @@ impl MoveControlTrait for MoveControl {
                 .store(Vector3::new(0.0, 0.0, speed));
 
             if entity.on_ground.load(Ordering::Relaxed) {
+                living_entity.jumping.store(false, Ordering::SeqCst);
                 self.operation = Operation::Wait;
             }
         } else {
@@ -103,6 +109,19 @@ impl MoveControlTrait for MoveControl {
                 .store(Vector3::new(0.0, 0.0, 0.0));
         }
     }
+}
+
+fn should_jump(
+    horizontal_collision: bool,
+    on_ground: bool,
+    vertical_delta: f64,
+    step_height: f64,
+    horizontal_distance_sq: f64,
+    entity_width: f64,
+) -> bool {
+    on_ground
+        && (horizontal_collision
+            || (vertical_delta > step_height && horizontal_distance_sq < 1.0f64.max(entity_width)))
 }
 
 impl MoveControl {
@@ -131,5 +150,22 @@ impl MoveControl {
         self.strafe_forwards = forwards;
         self.strafe_right = right;
         self.speed_modifier = 0.25;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_jump;
+
+    #[test]
+    fn grounded_collision_requests_a_jump_without_a_height_delta() {
+        assert!(should_jump(true, true, 0.0, 0.6, 4.0, 0.6));
+        assert!(!should_jump(true, false, 0.0, 0.6, 4.0, 0.6));
+    }
+
+    #[test]
+    fn nearby_higher_path_node_requests_a_jump() {
+        assert!(should_jump(false, true, 1.0, 0.6, 0.5, 0.6));
+        assert!(!should_jump(false, true, 1.0, 0.6, 2.0, 0.6));
     }
 }
