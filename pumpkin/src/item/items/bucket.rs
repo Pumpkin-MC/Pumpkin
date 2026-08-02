@@ -214,6 +214,21 @@ const fn mob_bucket_entity_type(item: &Item) -> Option<&'static EntityType> {
     }
 }
 
+const fn mob_bucket_empty_sound(item: &Item) -> Option<Sound> {
+    match item.id {
+        id if id == Item::AXOLOTL_BUCKET.id => Some(Sound::ItemBucketEmptyAxolotl),
+        id if id == Item::TADPOLE_BUCKET.id => Some(Sound::ItemBucketEmptyTadpole),
+        id if id == Item::COD_BUCKET.id
+            || id == Item::SALMON_BUCKET.id
+            || id == Item::TROPICAL_FISH_BUCKET.id
+            || id == Item::PUFFERFISH_BUCKET.id =>
+        {
+            Some(Sound::ItemBucketEmptyFish)
+        }
+        _ => None,
+    }
+}
+
 fn play_bucket_evaporation(world: &Arc<World>, player: &Player) {
     world.play_sound_raw(
         Sound::BlockFireExtinguish as u16,
@@ -319,6 +334,9 @@ async fn spawn_mob_bucket_entity(world: &Arc<World>, item: &Item, pos: BlockPos)
     world
         .spawn_entity(from_type(entity_type, spawn_pos, world, Uuid::new_v4()))
         .await;
+    if let Some(sound) = mob_bucket_empty_sound(item) {
+        world.play_sound(sound, SoundCategory::Neutral, &spawn_pos);
+    }
 }
 
 impl ItemBehaviour for EmptyBucketItem {
@@ -431,5 +449,22 @@ mod tests {
         }
         assert_eq!(mob_bucket_entity_type(&Item::WATER_BUCKET), None);
         assert_eq!(mob_bucket_entity_type(&Item::LAVA_BUCKET), None);
+    }
+
+    #[test]
+    fn mob_buckets_use_vanilla_empty_sounds() {
+        assert_eq!(
+            mob_bucket_empty_sound(&Item::AXOLOTL_BUCKET),
+            Some(Sound::ItemBucketEmptyAxolotl)
+        );
+        assert_eq!(
+            mob_bucket_empty_sound(&Item::TADPOLE_BUCKET),
+            Some(Sound::ItemBucketEmptyTadpole)
+        );
+        assert_eq!(
+            mob_bucket_empty_sound(&Item::COD_BUCKET),
+            Some(Sound::ItemBucketEmptyFish)
+        );
+        assert_eq!(mob_bucket_empty_sound(&Item::WATER_BUCKET), None);
     }
 }
