@@ -954,4 +954,12 @@ impl Level {
         })
         .unwrap_or(false)
     }
+
+    pub fn clear_block_tick_inflight(&self, active_chunks: &FxHashSet<Vector2<i32>>) {
+        for pos in active_chunks {
+            if let Some(chunk) = self.loaded_chunks.get(pos) {
+                chunk.block_ticks.clear_inflight();
+            }
+        }
+    }
 }
