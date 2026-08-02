@@ -10,13 +10,13 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::OakDoorLikeProperties;
+use pumpkin_data::block_properties::{OakDoorLikeProperties, OakTrapdoorLikeProperties};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag};
-use pumpkin_data::{BlockDirection, BlockId};
+use pumpkin_data::{BlockDirection, BlockId, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -52,9 +52,7 @@ impl ItemBehaviour for HoneyCombItem {
                 // create new properties for the new log.
                 let new_block = replacement.to_block();
 
-                let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS)
-                    && block.has_tag(&tag::Block::MINECRAFT_DOORS)
-                {
+                let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
                     // get block state of the old log.
                     let door_information = world.get_block_state_id(&location);
                     // get the log properties
@@ -68,6 +66,9 @@ impl ItemBehaviour for HoneyCombItem {
                     new_door_properties.hinge = door_props.hinge;
                     new_door_properties.powered = door_props.powered;
                     new_door_properties.to_state_id(new_block)
+                } else if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
+                    let trapdoor_information = world.get_block_state_id(&location);
+                    wax_trapdoor_state(trapdoor_information, block, new_block)
                 } else {
                     new_block.default_state.id
                 };
@@ -141,5 +142,47 @@ const fn get_waxed_equivalent(id: BlockId) -> Option<BlockId> {
         BlockId::EXPOSED_COPPER_TRAPDOOR => Some(BlockId::WAXED_EXPOSED_COPPER_TRAPDOOR),
         BlockId::COPPER_TRAPDOOR => Some(BlockId::WAXED_COPPER_TRAPDOOR),
         _ => None,
+    }
+}
+
+fn wax_trapdoor_state(state_id: BlockStateId, source: &Block, target: &Block) -> BlockStateId {
+    let source_properties = OakTrapdoorLikeProperties::from_state_id(state_id, source);
+    let mut target_properties = OakTrapdoorLikeProperties::default(target);
+    target_properties.facing = source_properties.facing;
+    target_properties.half = source_properties.half;
+    target_properties.open = source_properties.open;
+    target_properties.powered = source_properties.powered;
+    target_properties.waterlogged = source_properties.waterlogged;
+    target_properties.to_state_id(target)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{get_waxed_equivalent, wax_trapdoor_state};
+    use pumpkin_data::block_properties::{BlockProperties, OakTrapdoorLikeProperties};
+    use pumpkin_data::{Block, BlockState};
+
+    #[test]
+    fn copper_trapdoor_wax_mapping_preserves_state_properties() {
+        let source = &Block::COPPER_TRAPDOOR;
+        let target = &Block::WAXED_COPPER_TRAPDOOR;
+        assert_eq!(get_waxed_equivalent(source.id), Some(target.id));
+
+        let source_state = source
+            .states
+            .iter()
+            .find(|state| {
+                let properties = OakTrapdoorLikeProperties::from_state_id(state.id, source);
+                properties.open && properties.waterlogged
+            })
+            .expect("copper trapdoor should expose an open waterlogged state");
+        let source_properties = OakTrapdoorLikeProperties::from_state_id(source_state.id, source);
+        let target_state = BlockState::from_id(wax_trapdoor_state(source_state.id, source, target));
+        let target_properties = OakTrapdoorLikeProperties::from_state_id(target_state.id, target);
+        assert_eq!(source_properties.facing, target_properties.facing);
+        assert_eq!(source_properties.half, target_properties.half);
+        assert_eq!(source_properties.open, target_properties.open);
+        assert_eq!(source_properties.powered, target_properties.powered);
+        assert_eq!(source_properties.waterlogged, target_properties.waterlogged);
     }
 }
