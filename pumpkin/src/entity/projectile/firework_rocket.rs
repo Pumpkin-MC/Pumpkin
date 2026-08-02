@@ -1,5 +1,8 @@
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
+    entity::{
+        Entity, EntityBase, EntityBaseFuture, NBTStorage,
+        projectile::{ProjectileHit, ThrownItemEntity},
+    },
     server::Server,
     world::World,
 };
@@ -173,6 +176,12 @@ fn flight_duration(item_stack: &ItemStack) -> i32 {
         .map_or(0, |fireworks| fireworks.flight_duration)
 }
 
+fn has_explosion(item_stack: &ItemStack) -> bool {
+    item_stack
+        .get_data_component::<FireworksImpl>()
+        .is_some_and(|fireworks| !fireworks.explosions.is_empty())
+}
+
 fn firework_damage(base_damage: f32, distance: f64) -> Option<f32> {
     if !(0.0..=5.0).contains(&distance) {
         return None;
@@ -249,6 +258,19 @@ impl EntityBase for FireworkRocketEntity {
 
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
+    }
+
+    fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let should_explode = match hit {
+                ProjectileHit::Entity { .. } => true,
+                ProjectileHit::Block { .. } => has_explosion(&self.item_stack),
+            };
+            if should_explode {
+                let world = self.get_entity().world.load_full();
+                self.explode_and_remove(&world).await;
+            }
+        })
     }
 
     fn as_nbt_storage(&self) -> &dyn crate::entity::NBTStorage {
