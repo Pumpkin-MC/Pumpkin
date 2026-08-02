@@ -40,8 +40,8 @@ use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect, UseRemainderImpl};
 use pumpkin_data::data_component_impl::{
-    AttributeModifiersImpl, BlocksAttacksImpl, DeathProtectionImpl, EnchantmentsImpl,
-    EquipmentSlot, EquippableImpl, FoodImpl,
+    AttributeModifiersImpl, BlocksAttacksImpl, DamageResistantImpl, DamageResistantType,
+    DeathProtectionImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl, FoodImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -69,6 +69,39 @@ use uuid::Uuid;
 
 fn knockback_strength_with_resistance(strength: f64, resistance: f64) -> f64 {
     strength * (1.0 - resistance.clamp(0.0, 1.0))
+}
+
+fn armor_resists_damage(stack: &ItemStack, damage_type: &DamageType) -> bool {
+    let Some(resistant) = stack.get_data_component::<DamageResistantImpl>() else {
+        return false;
+    };
+
+    match resistant.res_type {
+        DamageResistantType::Fire => damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE),
+        DamageResistantType::Explosion => {
+            damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION)
+        }
+        DamageResistantType::Fall => damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FALL),
+        DamageResistantType::Freezing => {
+            damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FREEZING)
+        }
+        DamageResistantType::Lightning => {
+            damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_LIGHTNING)
+        }
+        DamageResistantType::Drowning => {
+            damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_DROWNING)
+        }
+        DamageResistantType::Projectile => {
+            damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_PROJECTILE)
+        }
+        DamageResistantType::PlayerAttack => {
+            damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_PLAYER_ATTACK)
+        }
+        DamageResistantType::MaceSmash => {
+            damage_type.has_tag(&tag::DamageType::MINECRAFT_MACE_SMASH)
+        }
+        _ => false,
+    }
 }
 
 /// Represents a living entity within the game world.
@@ -1788,7 +1821,7 @@ impl LivingEntity {
         for (slot_index, equipment, slot) in armor_slots {
             let (slot_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
-                if stack.is_empty() {
+                if stack.is_empty() || armor_resists_damage(&stack, damage_type) {
                     (pumpkin_data::item_stack::DamageResult::Untouched, None)
                 } else {
                     // Items without `EquippableImpl` component take damage freely.
@@ -3121,6 +3154,16 @@ mod tests {
     fn active_hand_maps_to_the_matching_equipment_slot() {
         assert!(equipment_slot_for_hand(Hand::Left) == EquipmentSlot::OFF_HAND);
         assert!(equipment_slot_for_hand(Hand::Right) == EquipmentSlot::MAIN_HAND);
+    }
+
+    #[test]
+    fn damage_resistant_armor_matches_damage_tags() {
+        let netherite_boots = ItemStack::new(1, &Item::NETHERITE_BOOTS);
+        assert!(armor_resists_damage(&netherite_boots, &DamageType::ON_FIRE));
+        assert!(!armor_resists_damage(
+            &netherite_boots,
+            &DamageType::PLAYER_ATTACK
+        ));
     }
 
     #[test]
