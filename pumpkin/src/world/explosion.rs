@@ -18,12 +18,26 @@ use super::{BlockFlags, World};
 pub struct Explosion {
     power: f32,
     pos: Vector3<f64>,
+    destroys_blocks: bool,
 }
 
 impl Explosion {
     #[must_use]
     pub const fn new(power: f32, pos: Vector3<f64>) -> Self {
-        Self { power, pos }
+        Self {
+            power,
+            pos,
+            destroys_blocks: true,
+        }
+    }
+
+    #[must_use]
+    pub const fn new_without_blocks(power: f32, pos: Vector3<f64>) -> Self {
+        Self {
+            power,
+            pos,
+            destroys_blocks: false,
+        }
     }
 
     fn get_blocks_to_destroy(
@@ -265,7 +279,11 @@ impl Explosion {
 
     /// Returns the removed block count
     pub async fn explode(&self, world: &Arc<World>) -> u32 {
-        let blocks = self.get_blocks_to_destroy(world);
+        let blocks = if self.destroys_blocks {
+            self.get_blocks_to_destroy(world)
+        } else {
+            FxHashMap::default()
+        };
         self.damage_entities(world).await;
         for (pos, (block, state)) in &blocks {
             world

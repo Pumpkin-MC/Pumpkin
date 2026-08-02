@@ -9,8 +9,10 @@ use std::{
 
 use crate::{
     entity::{
-        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity,
-        projectile::ThrownItemEntity, projectile_deflection::ProjectileDeflectionType,
+        Entity, EntityBase, EntityBaseFuture, NBTStorage,
+        living::LivingEntity,
+        projectile::{ProjectileHit, ThrownItemEntity},
+        projectile_deflection::ProjectileDeflectionType,
     },
     server::Server,
 };
@@ -67,7 +69,7 @@ impl WindChargeEntity {
         self.get_entity()
             .world
             .load()
-            .explode(position, EXPLOSION_POWER)
+            .explode_without_blocks(position, EXPLOSION_POWER)
             .await;
     }
 
@@ -129,5 +131,11 @@ impl EntityBase for WindChargeEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            self.create_explosion(hit.hit_pos()).await;
+        })
     }
 }

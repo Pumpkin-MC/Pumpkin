@@ -3361,7 +3361,24 @@ impl World {
     }
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        let explosion = Explosion::new(power, position);
+        self.explode_with_blocks(position, power, true).await;
+    }
+
+    pub async fn explode_without_blocks(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
+        self.explode_with_blocks(position, power, false).await;
+    }
+
+    async fn explode_with_blocks(
+        self: &Arc<Self>,
+        position: Vector3<f64>,
+        power: f32,
+        destroys_blocks: bool,
+    ) {
+        let explosion = if destroys_blocks {
+            Explosion::new(power, position)
+        } else {
+            Explosion::new_without_blocks(power, position)
+        };
         let block_count = explosion.explode(self).await;
         let particle = if power < 2.0 {
             Particle::Explosion
