@@ -337,6 +337,11 @@ pub fn check_spawn_rules(
         return rand::random_range(0u8..20) == 0 || !world.can_see_sky(pos);
     }
 
+    if id == EntityType::HUSK.id {
+        return world.can_see_sky(pos)
+            && mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering);
+    }
+
     if id == EntityType::DROWNED.id {
         if !world
             .get_fluid(&pos.down())
