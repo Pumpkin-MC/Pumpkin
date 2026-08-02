@@ -46,6 +46,7 @@ mod commands;
 mod chat;
 /// Chunk loading and saving configuration options.
 pub mod chunk;
+mod entity_tracking;
 /// Lighting engine configuration options.
 pub mod lighting;
 /// Operator permission level configuration options.
@@ -61,6 +62,7 @@ pub mod whitelist;
 pub mod world;
 
 use advancement::AdvancementConfig;
+pub use entity_tracking::EntityTrackingConfig;
 use networking::NetworkingConfig;
 use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
@@ -161,6 +163,8 @@ pub struct AdvancedConfiguration {
     pub plugins: PluginsConfig,
     /// Advancement configuration
     pub advancement: AdvancementConfig,
+    /// Client entity tracking range configuration.
+    pub entity_tracking: EntityTrackingConfig,
 }
 
 /// Basic configuration for core server settings.
