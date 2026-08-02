@@ -1,12 +1,7 @@
 use core::f32;
 
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
-use pumpkin_data::{
-    damage::DamageType,
-    meta_data_type::MetaDataType,
-    tag::{self, Taggable},
-    tracked_data::TrackedData,
-};
+use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -55,7 +50,7 @@ impl EntityBase for EndCrystalEntity {
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             self.entity.remove().await;
-            if !damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
+            if !is_explosion_damage(&damage_type) {
                 self.entity
                     .world
                     .load()
@@ -74,5 +69,27 @@ impl EntityBase for EndCrystalEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+const fn is_explosion_damage(damage_type: &DamageType) -> bool {
+    damage_type.id == DamageType::FIREWORKS.id
+        || damage_type.id == DamageType::EXPLOSION.id
+        || damage_type.id == DamageType::PLAYER_EXPLOSION.id
+        || damage_type.id == DamageType::BAD_RESPAWN_POINT.id
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_explosion_damage;
+    use pumpkin_data::damage::DamageType;
+
+    #[test]
+    fn all_vanilla_explosion_sources_are_recognized() {
+        assert!(is_explosion_damage(&DamageType::FIREWORKS));
+        assert!(is_explosion_damage(&DamageType::EXPLOSION));
+        assert!(is_explosion_damage(&DamageType::PLAYER_EXPLOSION));
+        assert!(is_explosion_damage(&DamageType::BAD_RESPAWN_POINT));
+        assert!(!is_explosion_damage(&DamageType::MAGIC));
     }
 }
