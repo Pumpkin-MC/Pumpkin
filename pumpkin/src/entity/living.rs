@@ -2692,6 +2692,15 @@ impl EntityBase for LivingEntity {
 
                     self.apply_consumable_effects(item).await;
 
+                    if let Some(consumable) = item.get_data_component::<ConsumableImpl>() {
+                        let world = self.entity.world.load();
+                        world.play_sound_event(
+                            &consumable.sound_event,
+                            SoundCategory::Players,
+                            &self.entity.pos.load(),
+                        );
+                    }
+
                     // Handle potion consumption
                     if item.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>().is_some() {
                         let effects = crate::item::potion::PotionContents::read_potion_effects(item);
