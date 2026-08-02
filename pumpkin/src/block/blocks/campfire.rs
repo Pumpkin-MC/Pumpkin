@@ -10,10 +10,11 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::tick::TickPriority;
 
 use crate::block::entities::campfire::CampfireBlockEntity;
+use crate::block::registry::BlockActionResult;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockIsReplacing, GetStateForNeighborUpdateArgs,
-        OnEntityCollisionArgs, OnPlaceArgs, PlacedArgs,
+        NormalUseArgs, OnEntityCollisionArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs,
     },
     entity::EntityBase,
 };
@@ -23,6 +24,51 @@ use std::sync::Arc;
 pub struct CampfireBlock;
 
 impl BlockBehaviour for CampfireBlock {
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let Some(block_entity) = args.world.get_block_entity(args.position) else {
+                return BlockActionResult::Pass;
+            };
+            let Some(inventory) = block_entity.get_inventory() else {
+                return BlockActionResult::Pass;
+            };
+            for slot in 0..inventory.size() {
+                let item = inventory.remove_stack(slot).await;
+                if !item.is_empty() {
+                    args.player
+                        .inventory
+                        .offer_or_drop_stack(item, args.player.as_ref())
+                        .await;
+                    return BlockActionResult::Success;
+                }
+            }
+            BlockActionResult::Pass
+        })
+    }
+
+    fn use_with_item<'a>(
+        &'a self,
+        args: UseWithItemArgs<'a>,
+    ) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let Some(block_entity) = args.world.get_block_entity(args.position) else {
+                return BlockActionResult::Pass;
+            };
+            let Some(campfire) = block_entity.as_any().downcast_ref::<CampfireBlockEntity>() else {
+                return BlockActionResult::Pass;
+            };
+            let mut item = args.item_stack.lock().await;
+            if campfire
+                .add_item(&mut item, args.player.is_creative())
+                .await
+            {
+                BlockActionResult::Success
+            } else {
+                BlockActionResult::Pass
+            }
+        })
+    }
+
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let entity = CampfireBlockEntity::new(*args.position);
@@ -30,7 +76,6 @@ impl BlockBehaviour for CampfireBlock {
         })
     }
 
-    // TODO: cooking food on campfire (CampfireBlockEntity)
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if CampfireLikeProperties::from_state_id(args.state.id, args.block).lit

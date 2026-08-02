@@ -6,6 +6,7 @@ use pumpkin_data::recipes::CookingRecipeKind;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -162,6 +163,10 @@ impl BlockEntity for CampfireBlockEntity {
     fn clear_dirty(&self) {
         self.dirty.store(false, Ordering::Relaxed);
     }
+
+    fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
+        Some(self)
+    }
 }
 
 impl CampfireBlockEntity {
@@ -175,5 +180,93 @@ impl CampfireBlockEntity {
             cooking_total_times: [Mutex::new(0), Mutex::new(0), Mutex::new(0), Mutex::new(0)],
             dirty: AtomicBool::new(false),
         }
+    }
+
+    pub async fn add_item(&self, stack: &mut ItemStack, creative: bool) -> bool {
+        let Some(recipe) = pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
+            stack.item,
+            CookingRecipeKind::CampfireCooking,
+        ) else {
+            return false;
+        };
+
+        for slot in 0..self.items.len() {
+            let mut slot_stack = self.items[slot].lock().await;
+            if slot_stack.is_empty() {
+                *slot_stack = stack.copy_with_count(1);
+                if !creative {
+                    stack.decrement(1);
+                }
+                *self.cooking_times[slot].lock().await = 0;
+                *self.cooking_total_times[slot].lock().await = recipe.cookingtime;
+                self.dirty.store(true, Ordering::Relaxed);
+                return true;
+            }
+        }
+        false
+    }
+}
+
+impl Inventory for CampfireBlockEntity {
+    fn size(&self) -> usize {
+        self.items.len()
+    }
+
+    fn is_empty(&self) -> InventoryFuture<'_, bool> {
+        Box::pin(async move {
+            for slot in &self.items {
+                if !slot.lock().await.is_empty() {
+                    return false;
+                }
+            }
+            true
+        })
+    }
+
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
+        Box::pin(async move { self.items[slot].clone() })
+    }
+
+    fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let mut removed = ItemStack::EMPTY.clone();
+            std::mem::swap(&mut removed, &mut *self.items[slot].lock().await);
+            self.dirty.store(true, Ordering::Relaxed);
+            removed
+        })
+    }
+
+    fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let removed = split_stack(&self.items, slot, amount).await;
+            self.dirty.store(true, Ordering::Relaxed);
+            removed
+        })
+    }
+
+    fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
+        Box::pin(async move {
+            *self.items[slot].lock().await = stack;
+            self.dirty.store(true, Ordering::Relaxed);
+        })
+    }
+
+    fn mark_dirty(&self) {
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl Clearable for CampfireBlockEntity {
+    fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async move {
+            for slot in &self.items {
+                *slot.lock().await = ItemStack::EMPTY.clone();
+            }
+            self.dirty.store(true, Ordering::Relaxed);
+        })
     }
 }
