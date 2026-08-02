@@ -386,7 +386,8 @@ impl ItemStack {
 
     #[must_use]
     pub fn is_stackable(&self) -> bool {
-        self.get_max_stack_size() > 1 // TODO: && (!this.isDamageable() || !this.isDamaged());
+        self.get_max_stack_size() > 1
+            && self.get_max_damage().is_none_or(|_| self.get_damage() == 0)
     }
 
     #[must_use]
@@ -1333,5 +1334,13 @@ mod tests {
         stack.enchant(&Enchantment::FLAME, 0);
         assert!(stack.has_enchantments());
         assert_eq!(stack.get_enchantment_level(&Enchantment::FLAME), 0);
+    }
+
+    #[test]
+    fn damaged_tools_are_never_stackable() {
+        let mut bow = ItemStack::new(1, &Item::BOW);
+        bow.set_damage(1);
+        assert!(!bow.is_stackable());
+        assert!(ItemStack::new(1, &Item::ARROW).is_stackable());
     }
 }
