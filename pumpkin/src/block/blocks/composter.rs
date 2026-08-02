@@ -64,8 +64,10 @@ impl BlockBehaviour for ComposterBlock {
                 return BlockActionResult::Pass;
             };
 
-            // Consume one item from the stack (if in survival mode)
-            if !args.player.has_infinite_materials() {
+            // Consume one item from the stack (if in survival mode). Vanilla only
+            // consumes below the "full" level (7); at 7 the interaction is a no-op
+            // until the composter is emptied.
+            if level < 7 && !args.player.has_infinite_materials() {
                 item_stack.decrement(1);
             }
 
