@@ -10,6 +10,21 @@
 //! returns `None` when there is no compatible adapter, and callers must fall back to
 //! the CPU sampler in that case.
 //!
+//! # What this can be worth end to end
+//!
+//! Measured with `cargo bench -p pumpkin-world --bench chunk_gen`, one overworld chunk
+//! costs ~41.9 ms and splits as: lighting 37.4%, noise 35.9%, surface 9.4%, carvers
+//! 5.2%, and the rest under 3% each. The stages account for 97% of the total, so the
+//! split is trustworthy.
+//!
+//! This crate accelerates the noise stage, which caps the whole-chunk gain at **1.56x**
+//! however fast the GPU gets — the measured 12-30x on the stage itself works out to
+//! about 1.5x per chunk. Lighting is the larger share and is untouched; accelerating
+//! both would raise the ceiling to ~3.7x. Chunk generation is also only part of what a
+//! server does, so this does not translate into a server-wide multiplier.
+//!
+//! Worth knowing before deciding how much more to invest here.
+//!
 //! # Where f32 stops being a small difference
 //!
 //! For smooth density values f32 only costs a little precision. It is not harmless at
