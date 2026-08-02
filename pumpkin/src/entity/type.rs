@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityType, MobCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -368,6 +368,10 @@ pub fn check_spawn_rules(
         }
 
         return pos.0.y < world.sea_level - 5 && rand::random_range(0u8..40) == 0;
+    }
+
+    if entity_type.category == &MobCategory::MONSTER {
+        return mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering);
     }
 
     if id == EntityType::BOGGED.id
