@@ -338,11 +338,13 @@ impl ScreenHandlerFactory for VillagerEntity {
                             if offer_index < offers.len() {
                                 let offer = &mut offers[offer_index];
                                 offer.uses += 1;
+                                let reward_exp = !offer.is_disabled;
 
                                 let xp_gain = offer.xp;
                                 let current_xp =
                                     villager.xp.fetch_add(xp_gain, Ordering::Relaxed) + xp_gain;
 
+                                let mut leveled_up = false;
                                 let mut data = villager.villager_data.lock().await;
                                 let current_level = data.level.0;
                                 if current_level < 5 {
@@ -358,6 +360,7 @@ impl ScreenHandlerFactory for VillagerEntity {
                                         let new_level = data.level.0;
                                         let prof = data.profession_enum();
                                         drop(data);
+                                        leveled_up = true;
 
                                         // Level up! Add new trades for the new level
                                         villager.add_trades(prof, new_level).await;
@@ -376,6 +379,20 @@ impl ScreenHandlerFactory for VillagerEntity {
                                     }
                                 } else {
                                     drop(data);
+                                }
+
+                                if reward_exp {
+                                    let mut player_xp: u32 = 3 + rand::random_range(0..4u32);
+                                    if leveled_up {
+                                        player_xp += 5;
+                                    }
+                                    let entity = villager.get_entity();
+                                    crate::entity::experience_orb::ExperienceOrbEntity::spawn(
+                                        &entity.world.load(),
+                                        entity.pos.load(),
+                                        player_xp,
+                                    )
+                                    .await;
                                 }
 
                                 let current_level = villager.villager_data.lock().await.level;
