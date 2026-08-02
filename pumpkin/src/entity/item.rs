@@ -244,9 +244,17 @@ impl ItemEntity {
     fn decrement_pickup_delay(&self) {
         self.pickup_delay
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
-                Some(val.saturating_sub(1))
+                Some(Self::next_pickup_delay(val))
             })
             .ok();
+    }
+
+    const fn next_pickup_delay(value: u8) -> u8 {
+        if value == 0 || value == u8::MAX {
+            value
+        } else {
+            value - 1
+        }
     }
 
     fn apply_fluid_drag_or_gravity(&self, mut velo: Vector3<f64>) -> Vector3<f64> {
@@ -650,5 +658,11 @@ mod tests {
         let second = ItemStack::new(1, &Item::SPECTRAL_ARROW);
 
         assert!(!ItemEntity::are_mergeable_stacks(&first, &second));
+    }
+
+    #[test]
+    fn permanent_pickup_delay_is_not_decremented() {
+        assert_eq!(ItemEntity::next_pickup_delay(u8::MAX), u8::MAX);
+        assert_eq!(ItemEntity::next_pickup_delay(1), 0);
     }
 }
