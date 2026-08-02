@@ -11,7 +11,6 @@ use crate::entity::{Entity, EntityBase};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{ChargedProjectilesImpl, EnchantmentsImpl};
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -90,7 +89,9 @@ impl ItemBehaviour for CrossbowItem {
                         let arrow_stack_arc = inventory.get_stack(slot).await;
                         let arrow_stack = arrow_stack_arc.lock().await;
                         let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
-                        arrow_stack.write_item_stack(&mut arrow_nbt);
+                        arrow_stack
+                            .copy_with_count(1)
+                            .write_item_stack(&mut arrow_nbt);
                         drop(arrow_stack);
                         (Some(arrow_nbt), slot)
                     } else if player.gamemode.load() == GameMode::Creative {
@@ -138,12 +139,11 @@ impl ItemBehaviour for CrossbowItem {
 
 impl CrossbowItem {
     async fn fire_projectiles(player: &Player, held: &Arc<Mutex<ItemStack>>) {
-        let mut stack = held.lock().await;
-        let projectiles = stack
-            .get_data_component::<ChargedProjectilesImpl>()
-            .cloned();
-
-        if let Some(charged) = projectiles {
+        let (projectiles, has_multishot) = {
+            let stack = held.lock().await;
+            let projectiles = stack
+                .get_data_component::<ChargedProjectilesImpl>()
+                .cloned();
             let has_multishot =
                 stack
                     .get_data_component::<EnchantmentsImpl>()
@@ -153,7 +153,10 @@ impl CrossbowItem {
                             .iter()
                             .any(|(e, _)| **e == pumpkin_data::Enchantment::MULTISHOT)
                     });
+            (projectiles, has_multishot)
+        };
 
+        if let Some(charged) = projectiles {
             let world = player.world();
             world.play_sound(
                 Sound::ItemCrossbowShoot,
@@ -163,7 +166,10 @@ impl CrossbowItem {
 
             let (yaw, pitch) = player.rotation();
 
-            for _ in charged.projectiles {
+            for projectile_nbt in charged.projectiles {
+                let Some(projectile) = ItemStack::read_item_stack(&projectile_nbt) else {
+                    continue;
+                };
                 let yaws = if has_multishot {
                     vec![yaw - 10.0, yaw, yaw + 10.0]
                 } else {
@@ -171,22 +177,31 @@ impl CrossbowItem {
                 };
 
                 for t_yaw in yaws {
-                    let arrow_entity =
-                        Entity::new(world.clone(), player.position(), &EntityType::ARROW);
+                    let arrow_entity = Entity::new(
+                        world.clone(),
+                        player.position(),
+                        ArrowEntity::entity_type_for_item(projectile.item),
+                    );
                     let pickup = if player.gamemode.load() == GameMode::Creative {
                         ArrowPickup::CreativeOnly
                     } else {
                         ArrowPickup::Allowed
                     };
 
-                    let arrow = ArrowEntity::new_shot(arrow_entity, player.get_entity(), pickup);
+                    let arrow = ArrowEntity::new_shot(
+                        arrow_entity,
+                        player.get_entity(),
+                        &projectile,
+                        pickup,
+                    );
                     arrow.set_velocity_from_rotation(pitch, t_yaw, 0.0, 3.15, 1.0);
                     let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
                     world.spawn_entity(arrow_arc).await;
                 }
             }
 
-            stack
+            held.lock()
+                .await
                 .patch
                 .retain(|(id, _)| *id != DataComponent::ChargedProjectiles);
             player.damage_held_item(1).await;
