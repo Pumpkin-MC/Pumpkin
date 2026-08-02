@@ -100,7 +100,6 @@ pub mod cake;
 pub mod cauldron;
 pub mod composter;
 pub mod ladder;
-pub mod respawn_anchor;
 pub mod slime;
 pub mod spawner;
 pub mod tnt;
