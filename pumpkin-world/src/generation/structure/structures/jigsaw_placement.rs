@@ -52,15 +52,56 @@ pub const MAX_TOTAL_STRUCTURE_RANGE: i32 = 128;
 pub const MIN_DEPTH: i32 = 0;
 pub const MAX_DEPTH: i32 = 20;
 
-/// Simple lookup for Pool Aliases introduced in 1.20+
-pub struct PoolAliasLookup;
+/// Dynamic lookup for Pool Aliases introduced in 1.20+ (e.g. Trial Chambers spawner/contents aliases).
+#[derive(Debug, Clone, Default)]
+pub struct PoolAliasLookup {
+    aliases: std::collections::HashMap<String, Vec<(String, u32)>>,
+}
 
 impl PoolAliasLookup {
     #[must_use]
-    pub const fn lookup<'a>(&self, id: &'a str) -> &'a str {
-        // In a complete implementation, this would look up the alias in the context/registry.
-        // Returning the ID directly acts as a fallback/default behavior.
-        id
+    pub fn new() -> Self {
+        Self {
+            aliases: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn add_direct(&mut self, alias: String, target: String) {
+        self.aliases.insert(alias, vec![(target, 1)]);
+    }
+
+    pub fn add_random(&mut self, alias: String, targets: Vec<(String, u32)>) {
+        self.aliases.insert(alias, targets);
+    }
+
+    #[must_use]
+    pub fn lookup<'a>(
+        &'a self,
+        id: &'a str,
+        random: &mut pumpkin_util::random::RandomGenerator,
+    ) -> &'a str {
+        if let Some(targets) = self.aliases.get(id) {
+            if targets.is_empty() {
+                return id;
+            }
+            if targets.len() == 1 {
+                return &targets[0].0;
+            }
+            let total_weight: u32 = targets.iter().map(|(_, w)| *w).sum();
+            if total_weight == 0 {
+                return &targets[0].0;
+            }
+            let mut r = random.next_bounded_i32(total_weight as i32) as u32;
+            for (target, weight) in targets {
+                if r < *weight {
+                    return target.as_str();
+                }
+                r -= *weight;
+            }
+            &targets[0].0
+        } else {
+            id
+        }
     }
 }
 
@@ -86,7 +127,7 @@ impl JigsawPlacement {
 
         let max_depth = max_depth.clamp(MIN_DEPTH, MAX_DEPTH);
 
-        let actual_start_pool_id = pool_alias_lookup.lookup(start_pool_id);
+        let actual_start_pool_id = pool_alias_lookup.lookup(start_pool_id, &mut context.random);
         let pool = TemplatePool::discover(actual_start_pool_id)?;
         let rotation = Rotation::from_index(context.random.next_bounded_i32(4) as u8);
         let element = pool.get_random_element(&mut context.random).clone();
@@ -235,7 +276,7 @@ impl JigsawPlacement {
                         continue;
                     }
 
-                    let target_pool_id = pool_alias_lookup.lookup(raw_pool_id);
+                    let target_pool_id = pool_alias_lookup.lookup(raw_pool_id, &mut context.random);
                     let Some(target_pool) = TemplatePool::discover(target_pool_id) else {
                         continue;
                     };
@@ -246,7 +287,8 @@ impl JigsawPlacement {
                             .extend(target_pool.get_shuffled_elements(&mut context.random));
                     }
 
-                    let fallback_pool_id = pool_alias_lookup.lookup(&target_pool.fallback);
+                    let fallback_pool_id =
+                        pool_alias_lookup.lookup(&target_pool.fallback, &mut context.random);
                     if let Some(fallback_pool) = TemplatePool::discover(fallback_pool_id) {
                         target_elements
                             .extend(fallback_pool.get_shuffled_elements(&mut context.random));
@@ -361,7 +403,8 @@ impl JigsawPlacement {
                                             rotated_tj_target_pos.y,
                                             rotated_tj_target_pos.z,
                                         ) {
-                                            let child_pool_id = pool_alias_lookup.lookup(&tj.pool);
+                                            let child_pool_id = pool_alias_lookup
+                                                .lookup(&tj.pool, &mut context.random);
                                             let child_pool_max_y =
                                                 get_pool_max_y_size(child_pool_id);
 
@@ -369,7 +412,8 @@ impl JigsawPlacement {
                                                 TemplatePool::discover(child_pool_id)
                                             {
                                                 get_pool_max_y_size(
-                                                    pool_alias_lookup.lookup(&cp.fallback),
+                                                    pool_alias_lookup
+                                                        .lookup(&cp.fallback, &mut context.random),
                                                 )
                                             } else {
                                                 0

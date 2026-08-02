@@ -24,7 +24,7 @@ impl<'a> WorldBlockPlacer<'a> {
     }
 
     #[allow(clippy::unused_async)]
-    pub async fn finalize(&self) {
+    pub fn finalize(&self) {
         for nbt in &self.block_entity_nbts {
             if let Some(block_entity) = crate::block::entities::block_entity_from_nbt(nbt) {
                 self.world.add_block_entity(block_entity);

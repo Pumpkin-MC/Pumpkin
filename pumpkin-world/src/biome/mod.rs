@@ -93,7 +93,7 @@ mod test {
         }
 
         let expected_data: Vec<BiomeData> =
-            read_data_from_file!("../../assets/biome_no_blend_no_beard_0.json");
+            read_data_from_file!("../../../assets/tests/biome_no_blend_no_beard_0.json");
 
         let seed = 0;
         let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
