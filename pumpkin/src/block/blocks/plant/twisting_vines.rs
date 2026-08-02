@@ -79,7 +79,7 @@ impl PlantBlockBase for TwistingVinesBlock {
         {
             return true;
         }
-        if support_block_state.is_side_solid(pumpkin_data::BlockDirection::Down)
+        if support_block_state.is_side_solid(pumpkin_data::BlockDirection::Up)
             && support_block.is_solid()
         {
             return true;
