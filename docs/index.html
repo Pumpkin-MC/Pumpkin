@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PumpkinPie</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #666666;
+    --border: #e0e0e0;
+    --accent: #d9730d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14100d;
+      --fg: #f0ece6;
+      --muted: #a89f94;
+      --border: #33291f;
+      --accent: #f0932b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+  }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 4rem 1.5rem 5rem;
+  }
+  h1 {
+    font-size: 2.25rem;
+    margin: 0 0 0.25rem;
+  }
+  .tagline {
+    color: var(--muted);
+    margin: 0 0 2.5rem;
+    font-size: 1.05rem;
+  }
+  h2 {
+    font-size: 1.15rem;
+    margin: 2.5rem 0 0.75rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.4rem;
+  }
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  a:hover { text-decoration: underline; }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.4rem 0; }
+  code {
+    background: color-mix(in srgb, var(--border) 50%, transparent);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .badges { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+  footer {
+    margin-top: 3.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>PumpkinPie</h1>
+  <p class="tagline">A bleeding-edge personal fork of <a href="https://github.com/Pumpkin-MC/Pumpkin">Pumpkin</a>, a Minecraft server written in Rust.</p>
+
+  <div class="badges">
+    <a href="https://github.com/eshankiyer/PumpkinPie/actions/workflows/rust.yml">
+      <img src="https://github.com/eshankiyer/PumpkinPie/actions/workflows/rust.yml/badge.svg" alt="Build status">
+    </a>
+  </div>
+
+  <h2>What this is</h2>
+  <p>
+    PumpkinPie tracks <code>master</code> on the upstream
+    <a href="https://github.com/Pumpkin-MC/Pumpkin">Pumpkin-MC/Pumpkin</a> repository and layers
+    in vanilla-parity fixes and features ahead of when they land upstream. It stays merged
+    forward against upstream regularly rather than drifting into a permanent divergence.
+  </p>
+
+  <h2>Links</h2>
+  <ul>
+    <li><a href="https://github.com/eshankiyer/PumpkinPie">Source (GitHub)</a></li>
+    <li><a href="https://github.com/Pumpkin-MC/Pumpkin">Upstream project</a></li>
+    <li><a href="https://pumpkinmc.org/">Upstream documentation</a></li>
+  </ul>
+
+  <h2>License</h2>
+  <p>
+    Distributed under the GNU General Public License v3.0, same as upstream. See
+    <a href="https://github.com/eshankiyer/PumpkinPie/blob/master/LICENSE">LICENSE</a>.
+  </p>
+
+  <footer>
+    Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB.
+  </footer>
+</main>
+</body>
+</html>
