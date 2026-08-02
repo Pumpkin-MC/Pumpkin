@@ -122,10 +122,14 @@ fn generate_consts(versions: &BTreeMap<JavaMinecraftVersion, BTreeMap<String, u8
         // Some versions prefix keys with DATA_ (Bedrock), others don't (Java)
         // Try both forms so every version resolves correctly
         let prefixed = format!("DATA_{final_name}");
-        let aliases: &[&str] = if final_name == "CUSTOM_NAME_VISIBLE" {
-            &["NAME_VISIBLE"]
-        } else {
-            &[]
+        let aliases: &[&str] = match final_name.as_str() {
+            "CUSTOM_NAME_VISIBLE" => &["NAME_VISIBLE"],
+            "SHARED_FLAGS_ID" => &["FLAGS"],
+            "LIVING_ENTITY_FLAGS" => &["LIVING_FLAGS"],
+            "MOB_FLAGS_ID" => &["MOB_FLAGS"],
+            "ID_FIREWORKS_ITEM" => &["ITEM"],
+            "ATTACHED_TO_TARGET" => &["SHOOTER_ENTITY_ID"],
+            _ => &[],
         };
 
         let mut fields = TokenStream::new();
@@ -156,13 +160,36 @@ fn normalize_name(name: &str) -> String {
         .strip_prefix("DATA_")
         .map_or(upper.clone(), str::to_string);
 
-    // Mojang renamed the shared entity custom-name visibility tracker from
-    // NAME_VISIBLE to DATA_CUSTOM_NAME_VISIBLE in newer mappings. Keep one
-    // generated constant usable across both naming schemes.
-    if normalized == "NAME_VISIBLE" {
-        "CUSTOM_NAME_VISIBLE".to_string()
-    } else {
-        normalized
+    // Keep semantic tracker names stable when Mojang mappings rename fields.
+    match normalized.as_str() {
+        "NAME_VISIBLE" => "CUSTOM_NAME_VISIBLE".to_string(),
+        "FLAGS" => "SHARED_FLAGS_ID".to_string(),
+        "LIVING_FLAGS" => "LIVING_ENTITY_FLAGS".to_string(),
+        "MOB_FLAGS" => "MOB_FLAGS_ID".to_string(),
+        "SHOOTER_ENTITY_ID" => "ATTACHED_TO_TARGET".to_string(),
+        _ => normalized,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_name;
+
+    #[test]
+    fn normalizes_renamed_java_trackers() {
+        assert_eq!(normalize_name("FLAGS"), "SHARED_FLAGS_ID");
+        assert_eq!(
+            normalize_name("DATA_SHARED_FLAGS_ID"),
+            "SHARED_FLAGS_ID"
+        );
+        assert_eq!(
+            normalize_name("SHOOTER_ENTITY_ID"),
+            "ATTACHED_TO_TARGET"
+        );
+        assert_eq!(
+            normalize_name("DATA_ATTACHED_TO_TARGET"),
+            "ATTACHED_TO_TARGET"
+        );
     }
 }
 
