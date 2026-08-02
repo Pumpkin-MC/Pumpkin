@@ -8,6 +8,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::particle::Particle;
+use pumpkin_data::tag;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -15,6 +16,7 @@ use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
+use crate::block::entities::sign::DyeColor;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
@@ -26,9 +28,13 @@ use crate::entity::{
     player::Player,
 };
 
+// Vanilla Wolf.java: `private static final DyeColor DEFAULT_COLLAR_COLOR = DyeColor.RED;`
+const DEFAULT_COLLAR_COLOR: u8 = DyeColor::Red as u8;
+
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
+    collar_color: AtomicU8,
 }
 
 impl WolfEntity {
@@ -37,6 +43,7 @@ impl WolfEntity {
         let wolf = Self {
             mob_entity,
             variant: AtomicU8::new(3), // Default to pale
+            collar_color: AtomicU8::new(DEFAULT_COLLAR_COLOR),
         };
         let mob_arc = Arc::new(wolf);
         let mob_weak: Weak<dyn Mob> = {
@@ -64,12 +71,29 @@ impl WolfEntity {
 
         mob_arc
     }
+
+    pub fn set_collar_color(&self, color: u8) {
+        self.collar_color.store(color, Ordering::Relaxed);
+        self.mob_entity.living_entity.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::COLLAR_COLOR,
+                MetaDataType::INTEGER,
+                VarInt(i32::from(color)),
+            )],
+            None,
+        );
+    }
 }
 
 impl NBTStorage for WolfEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.mob_entity.living_entity.write_nbt(nbt).await;
+            // Vanilla Wolf.java persists collar color as a legacy dye-color id (0-15).
+            nbt.put_byte(
+                "CollarColor",
+                self.collar_color.load(Ordering::Relaxed) as i8,
+            );
             let variant_str = match self.variant.load(Ordering::Relaxed) {
                 0 => "minecraft:ashen",
                 1 => "minecraft:black",
@@ -105,6 +129,9 @@ impl NBTStorage for WolfEntity {
                 };
                 self.variant.store(variant, Ordering::Relaxed);
             }
+            if let Some(color) = nbt.get_byte("CollarColor") {
+                self.collar_color.store(color as u8, Ordering::Relaxed);
+            }
         })
     }
 }
@@ -120,7 +147,26 @@ impl Mob for WolfEntity {
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            if self.mob_entity.is_tamed() || item_stack.item.id != Item::BONE.id {
+            // Vanilla Wolf.java#mobInteract: a tamed wolf, held item in the collar-dye tag,
+            // and owned by the interacting player recolors the collar instead of anything else.
+            if self.mob_entity.is_tamed() {
+                if tag::Item::MINECRAFT_WOLF_COLLAR_DYES
+                    .1
+                    .contains(&item_stack.item.id)
+                    && self.mob_entity.owner.load() == Some(player.gameprofile.id)
+                    && let Some(color_name) = item_stack.item.registry_key.strip_suffix("_dye")
+                {
+                    let new_color = DyeColor::from(color_name) as u8;
+                    if new_color != self.collar_color.load(Ordering::Relaxed) {
+                        self.set_collar_color(new_color);
+                        item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            if item_stack.item.id != Item::BONE.id {
                 return false;
             }
 
@@ -178,6 +224,14 @@ impl Mob for WolfEntity {
                     TrackedData::WOLF_VARIANT_ID,
                     MetaDataType::WOLF_VARIANT,
                     VarInt(self.variant.load(Ordering::Relaxed) as i32),
+                )],
+                None,
+            );
+            entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::COLLAR_COLOR,
+                    MetaDataType::INTEGER,
+                    VarInt(i32::from(self.collar_color.load(Ordering::Relaxed))),
                 )],
                 None,
             );
