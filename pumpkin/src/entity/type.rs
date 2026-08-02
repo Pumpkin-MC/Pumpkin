@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
@@ -320,6 +321,30 @@ pub fn check_spawn_rules(
     is_thundering: bool,
 ) -> bool {
     let id = entity_type.id;
+
+    if id == EntityType::DROWNED.id {
+        if !world
+            .get_fluid(&pos.down())
+            .has_tag(&tag::Fluid::MINECRAFT_WATER)
+        {
+            return false;
+        }
+
+        let can_spawn = world.get_fluid(pos).has_tag(&tag::Fluid::MINECRAFT_WATER)
+            && mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering);
+        if !can_spawn {
+            return false;
+        }
+
+        if world
+            .get_biome(pos)
+            .has_tag(&tag::WorldgenBiome::MINECRAFT_MORE_FREQUENT_DROWNED_SPAWNS)
+        {
+            return rand::random_range(0u8..15) == 0;
+        }
+
+        return pos.0.y < world.sea_level - 5 && rand::random_range(0u8..40) == 0;
+    }
 
     if id == EntityType::BOGGED.id
         || id == EntityType::CAVE_SPIDER.id
