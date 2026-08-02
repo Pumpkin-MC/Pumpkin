@@ -27,6 +27,10 @@ pub struct FishingBobberEntity {
     pub bite_countdown: AtomicI32,
 }
 
+const fn hooked_reel_damage(is_item: bool) -> i32 {
+    if is_item { 3 } else { 5 }
+}
+
 impl FishingBobberEntity {
     const WATER_INERTIA: f64 = 0.8;
     const AIR_INERTIA: f64 = 0.92;
@@ -64,7 +68,9 @@ impl FishingBobberEntity {
                     .multiply(0.1, 0.1, 0.1)
                     .add_raw(0.0, delta.length().sqrt() * 0.08, 0.0);
             hooked.get_entity().add_velocity(motion);
-            return 1;
+            return hooked_reel_damage(
+                hooked.get_entity().entity_type == &pumpkin_data::entity::EntityType::ITEM,
+            );
         }
 
         if self.bite_countdown.load(Ordering::Relaxed) > 0 {
@@ -268,5 +274,16 @@ impl EntityBase for FishingBobberEntity {
         Box::pin(async move {
             self.process_tick(caller, server).await;
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hooked_reel_damage;
+
+    #[test]
+    fn hooked_retrieval_damage_matches_vanilla_categories() {
+        assert_eq!(hooked_reel_damage(true), 3);
+        assert_eq!(hooked_reel_damage(false), 5);
     }
 }
