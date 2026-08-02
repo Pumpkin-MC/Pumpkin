@@ -2324,7 +2324,7 @@ impl EntityBase for LivingEntity {
                     .map(|entity| entity.get_entity().pos.load())
             });
             if self.is_blocking().await
-                && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_SHIELD)
+                && !bypasses_shield(&damage_type)
                 && let Some(pos) = shield_source_position
             {
                 let player_pos = self.entity.pos.load();
@@ -3046,6 +3046,43 @@ pub(crate) const fn damages_helmet(damage_type: &DamageType) -> bool {
         || damage_type.id == DamageType::FALLING_STALACTITE.id
 }
 
+/// Returns whether vanilla damage tags prevent shield blocking.
+pub(crate) const fn bypasses_shield(damage_type: &DamageType) -> bool {
+    matches!(
+        damage_type.id,
+        id if id == DamageType::ON_FIRE.id
+            || id == DamageType::IN_WALL.id
+            || id == DamageType::CRAMMING.id
+            || id == DamageType::DROWN.id
+            || id == DamageType::FLY_INTO_WALL.id
+            || id == DamageType::GENERIC.id
+            || id == DamageType::WITHER.id
+            || id == DamageType::DRAGON_BREATH.id
+            || id == DamageType::STARVE.id
+            || id == DamageType::FALL.id
+            || id == DamageType::ENDER_PEARL.id
+            || id == DamageType::FREEZE.id
+            || id == DamageType::STALAGMITE.id
+            || id == DamageType::MAGIC.id
+            || id == DamageType::INDIRECT_MAGIC.id
+            || id == DamageType::OUT_OF_WORLD.id
+            || id == DamageType::GENERIC_KILL.id
+            || id == DamageType::SONIC_BOOM.id
+            || id == DamageType::OUTSIDE_BORDER.id
+            || id == DamageType::CACTUS.id
+            || id == DamageType::CAMPFIRE.id
+            || id == DamageType::DRY_OUT.id
+            || id == DamageType::FALLING_ANVIL.id
+            || id == DamageType::FALLING_STALACTITE.id
+            || id == DamageType::HOT_FLOOR.id
+            || id == DamageType::SULFUR_CUBE_HOT.id
+            || id == DamageType::IN_FIRE.id
+            || id == DamageType::LAVA.id
+            || id == DamageType::LIGHTNING_BOLT.id
+            || id == DamageType::SWEET_BERRY_BUSH.id
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3254,5 +3291,12 @@ mod tests {
         assert!(damages_helmet(&DamageType::FALLING_BLOCK));
         assert!(damages_helmet(&DamageType::FALLING_STALACTITE));
         assert!(!damages_helmet(&DamageType::FALL));
+    }
+
+    #[test]
+    fn shield_bypass_sources_cannot_be_blocked() {
+        assert!(bypasses_shield(&DamageType::SONIC_BOOM));
+        assert!(bypasses_shield(&DamageType::CAMPFIRE));
+        assert!(!bypasses_shield(&DamageType::MOB_ATTACK));
     }
 }
