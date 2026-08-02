@@ -893,9 +893,10 @@ pub fn is_spawn_position_ok_cache(
             let above_pos = block_pos.up().0;
             let above_state = GenerationCache::get_block_state(cache, &above_pos).to_state();
 
-            state.is_liquid()
-                && Block::from_state_id(state.id).has_tag(&MINECRAFT_WATER)
-                && !above_state.is_full_cube()
+            can_spawn_in_water(
+                state.is_liquid() && Block::from_state_id(state.id).has_tag(&MINECRAFT_WATER),
+                above_state,
+            )
         }
         SpawnLocation::OnGround => {
             let down_pos = block_pos.down().0;
