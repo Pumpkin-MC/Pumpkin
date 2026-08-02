@@ -13,6 +13,7 @@ use pumpkin_data::data_component_impl::EnchantmentsImpl;
 
 const NAMES: [&str; 1] = ["enchant"];
 const DESCRIPTION: &str = "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.";
+const MIN_ENCHANTMENT_LEVEL: i32 = 1;
 
 struct Executor;
 
@@ -176,7 +177,7 @@ impl CommandExecutor for Executor {
 const fn enchantment_level_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()
         .name("level")
-        .min(0)
+        .min(MIN_ENCHANTMENT_LEVEL)
         .max(i32::MAX)
 }
 
@@ -188,4 +189,14 @@ pub fn init_command_tree() -> CommandTree {
                 .execute(Executor),
         ),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MIN_ENCHANTMENT_LEVEL;
+
+    #[test]
+    fn enchantment_levels_start_at_one() {
+        assert_eq!(MIN_ENCHANTMENT_LEVEL, 1);
+    }
 }
