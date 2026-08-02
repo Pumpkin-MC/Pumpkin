@@ -1855,8 +1855,9 @@ impl Entity {
                     let (fluid, state) = world.get_fluid_and_fluid_state(&pos);
 
                     if fluid.id != Fluid::EMPTY.id {
-                        let marginal_height =
-                            f64::from(state.height) + f64::from(y) - bounding_box.min.y;
+                        let marginal_height = world.get_fluid_height(&pos, fluid, state)
+                            + f64::from(y)
+                            - bounding_box.min.y;
 
                         if marginal_height >= 0.0 {
                             let i = usize::from(

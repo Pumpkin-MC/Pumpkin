@@ -1528,7 +1528,7 @@ impl World {
                     let (fluid, state) = self.get_fluid_and_fluid_state(&pos);
 
                     if fluid.id != Fluid::EMPTY.id {
-                        let height = f64::from(state.height);
+                        let height = self.get_fluid_height(&pos, fluid, state);
 
                         if height >= bounding_box.min.y {
                             collisions.push(fluid);
@@ -1554,7 +1554,7 @@ impl World {
                     let (fluid, state) = self.get_fluid_and_fluid_state(&pos);
 
                     if fluid.id != Fluid::EMPTY.id {
-                        let height = f64::from(state.height);
+                        let height = self.get_fluid_height(&pos, fluid, state);
 
                         if height >= bounding_box.min.y {
                             return true;
@@ -5140,6 +5140,17 @@ impl World {
         let state = &fluid.states[0];
 
         (fluid, state)
+    }
+
+    // FlowingFluid.getHeight()
+    pub fn get_fluid_height(&self, position: &BlockPos, fluid: &Fluid, state: &FluidState) -> f64 {
+        let (above_fluid, _) = self.get_fluid_and_fluid_state(&position.up());
+
+        if fluid.matches_type(above_fluid) {
+            1.0
+        } else {
+            f64::from(state.height)
+        }
     }
 
     pub fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
