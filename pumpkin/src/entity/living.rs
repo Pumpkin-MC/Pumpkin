@@ -1844,12 +1844,10 @@ impl LivingEntity {
         if let Some(player) = caller.get_player() {
             return player.inventory.held_item();
         }
-        // TODO: this is wrong
-        let slot = self
-            .equipment_slots
-            .get(&PlayerInventory::OFF_HAND_SLOT)
-            .unwrap();
-        self.entity_equipment.lock().await.get(slot)
+        self.entity_equipment
+            .lock()
+            .await
+            .get(&EquipmentSlot::MAIN_HAND)
     }
 
     pub async fn get_stack_in_hand(
