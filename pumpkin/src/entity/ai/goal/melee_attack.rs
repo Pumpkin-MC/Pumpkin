@@ -95,8 +95,7 @@ impl Goal for MeleeAttackGoal {
             if !target.get_entity().is_alive() {
                 return false;
             }
-            // TODO: add path when is implemented Navigation
-            true //TODO: modify that because if a path to the target not exists then call mob.is_in_attack_range(target)
+            has_melee_line_of_sight(mob, target.as_ref()).await
         })
     }
 
