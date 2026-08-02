@@ -1,5 +1,0 @@
-[default.extend-words]
-# Not a typo in our code - this is vanilla's own misspelled identifier name
-# (Aquifer.java: FLOWING_UPDATE_SIMULARITY), quoted verbatim in a source citation
-# comment so the name can be grepped against the decompiled vanilla source.
-SIMULARITY = "SIMULARITY"
