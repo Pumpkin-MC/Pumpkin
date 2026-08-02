@@ -112,7 +112,7 @@ impl BlockBehaviour for LayeredSnowBlock {
     }
 }
 
-fn can_place_at(block_accessor: &dyn BlockAccessor, position: &BlockPos) -> bool {
+pub(crate) fn can_place_at(block_accessor: &dyn BlockAccessor, position: &BlockPos) -> bool {
     let below_pos = position.down();
     let (below_block, state) = block_accessor.get_block_and_state(&below_pos);
 

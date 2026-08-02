@@ -54,7 +54,9 @@ use border::Worldborder;
 use bytes::BufMut;
 use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::block_properties::{blocks_movement, is_air};
+use pumpkin_data::block_properties::{
+    BlockProperties, SnowLikeProperties, blocks_movement, is_air,
+};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -62,6 +64,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{
     Block, BlockStateId,
@@ -1294,6 +1297,12 @@ impl World {
         let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
         let tick_data = self.level.get_tick_data(&active_chunks, random_tick_speed);
 
+        for chunk_pos in active_chunks.iter().copied() {
+            if rng().random_range(0..48) == 0 {
+                self.tick_precipitation_chunk(chunk_pos).await;
+            }
+        }
+
         // Vanilla executes these three phases serially. The JoinSet below is retained only for
         // independent natural-spawn work after all tick-induced block and fluid changes settle.
         let mut chunk_tasks = tokio::task::JoinSet::new();
@@ -1417,6 +1426,68 @@ impl World {
             if let Err(e) = res {
                 error!("Chunk task panicked: {:?}", e);
             }
+        }
+    }
+
+    async fn tick_precipitation_chunk(self: &Arc<Self>, chunk_pos: Vector2<i32>) {
+        let local_x = rng().random_range(0..16);
+        let local_z = rng().random_range(0..16);
+        let x = (chunk_pos.x << 4) + local_x;
+        let z = (chunk_pos.y << 4) + local_z;
+        let surface_y = self.get_heightmap_height(MotionBlocking, x, z);
+        let top = BlockPos::new(x, surface_y + 1, z);
+        let below = top.down();
+        let biome = self.level.get_rough_biome(&top);
+        let below_state_id = self.get_block_state_id(&below);
+        let below_fluid = Fluid::from_state_id(below_state_id).unwrap_or(&Fluid::EMPTY);
+
+        if biome.weather.is_snow_at(x, top.0.y, z, self.sea_level)
+            && self.can_see_sky(&top)
+            && below_fluid.is_source(below_state_id)
+            && below_fluid.has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER)
+        {
+            self.clone()
+                .set_block_state(&below, Block::ICE.default_state.id, BlockFlags::NOTIFY_ALL)
+                .await;
+        }
+
+        let raining = self.weather.lock().await.raining;
+        if !raining
+            || !biome.weather.is_snow_at(x, top.0.y, z, self.sea_level)
+            || !self.can_see_sky(&top)
+        {
+            return;
+        }
+
+        let maximum_layers = self
+            .level_info
+            .load()
+            .game_rules
+            .max_snow_accumulation_height
+            .clamp(0, 8) as u8;
+        if maximum_layers == 0 {
+            return;
+        }
+
+        let state_id = self.get_block_state_id(&top);
+        if state_id == Block::SNOW.default_state.id {
+            let mut properties = SnowLikeProperties::from_state_id(state_id, &Block::SNOW);
+            if properties.layers < maximum_layers {
+                properties.layers += 1;
+                self.clone()
+                    .set_block_state(
+                        &top,
+                        properties.to_state_id(&Block::SNOW),
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+            }
+        } else if self.get_block(&top) == &Block::AIR
+            && crate::block::blocks::snow::can_place_at(self.as_ref(), &top)
+        {
+            self.clone()
+                .set_block_state(&top, Block::SNOW.default_state.id, BlockFlags::NOTIFY_ALL)
+                .await;
         }
     }
 

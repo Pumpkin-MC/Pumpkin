@@ -107,6 +107,11 @@ impl Weather {
         self.temperature
     }
 
+    #[must_use]
+    pub const fn has_precipitation(&self) -> bool {
+        self.has_precipitation
+    }
+
     /// Computes the effective temperature at a given position.
     ///
     /// # Parameters
@@ -154,6 +159,11 @@ impl Weather {
     pub fn is_rain_at(&self, x: i32, y: i32, z: i32, sea_level: i32) -> bool {
         self.has_precipitation && self.warm_enough_to_rain(x, y, z, sea_level)
     }
+
+    #[must_use]
+    pub fn is_snow_at(&self, x: i32, y: i32, z: i32, sea_level: i32) -> bool {
+        self.has_precipitation && !self.warm_enough_to_rain(x, y, z, sea_level)
+    }
 }
 
 #[cfg(test)]
@@ -188,7 +198,13 @@ mod tests {
     #[test]
     fn cold_biomes_snow_rather_than_rain() {
         assert!(!frozen().is_rain_at(0, 64, 0, 63));
+        assert!(frozen().is_snow_at(0, 64, 0, 63));
         assert!(!frozen().warm_enough_to_rain(0, 64, 0, 63));
+    }
+
+    #[test]
+    fn dry_biomes_have_no_snow() {
+        assert!(!arid().is_snow_at(0, 64, 0, 63));
     }
 
     #[test]
