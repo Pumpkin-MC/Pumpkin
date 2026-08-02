@@ -444,10 +444,14 @@ impl Level {
 
     /// Marks chunks no longer "watched" by a unique player. When no players are watching a chunk,
     /// it is removed from memory. Should only be called on chunks the player was watching before
-    pub async fn mark_chunks_as_not_watched(&self, chunks: &[Vector2<i32>]) -> Vec<Vector2<i32>> {
+    pub async fn mark_chunks_as_not_watched(
+        &self,
+        chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
+    ) -> Vec<Vector2<i32>> {
         let mut chunks_to_clean = Vec::new();
+        let chunks_vec: Vec<Vector2<i32>> = chunks.into_iter().map(|c| *c.borrow()).collect();
 
-        for chunk in chunks {
+        for chunk in &chunks_vec {
             if let Entry::Occupied(mut entry) = self.chunk_watchers.entry(*chunk) {
                 *entry.get_mut() = entry.get().saturating_sub(1);
                 if *entry.get() == 0 {
@@ -458,7 +462,7 @@ impl Level {
         }
 
         self.entity_saver
-            .unwatch_chunks(&self.level_folder, chunks)
+            .unwatch_chunks(&self.level_folder, &chunks_vec)
             .await;
         chunks_to_clean
     }
@@ -466,14 +470,18 @@ impl Level {
     /// Returns whether the chunk should be removed from memory
     #[inline]
     pub async fn mark_chunk_as_not_watched(&self, chunk: Vector2<i32>) -> bool {
-        !self.mark_chunks_as_not_watched(&[chunk]).await.is_empty()
+        !self.mark_chunks_as_not_watched([chunk]).await.is_empty()
     }
 
     // In Level::clean_entity_chunks()
-    pub fn clean_entity_chunks(self: &Arc<Self>, chunks: &[Vector2<i32>]) {
+    pub fn clean_entity_chunks(
+        self: &Arc<Self>,
+        chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
+    ) {
         let chunks_to_process: Vec<_> = chunks
-            .iter()
-            .filter_map(|pos| {
+            .into_iter()
+            .filter_map(|pos_borrow| {
+                let pos = pos_borrow.borrow();
                 // Only include chunks with no watchers
                 let has_watchers = self
                     .chunk_watchers
@@ -581,7 +589,7 @@ impl Level {
     }
 
     pub fn clean_entity_chunk(self: &Arc<Self>, chunk: &Vector2<i32>) {
-        self.clean_entity_chunks(&[*chunk]);
+        self.clean_entity_chunks([*chunk]);
     }
 
     pub fn is_chunk_watched(&self, chunk: &Vector2<i32>) -> bool {
