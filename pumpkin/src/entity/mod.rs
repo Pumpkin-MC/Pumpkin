@@ -336,7 +336,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         if entity.fire_ticks.load(Ordering::Relaxed) < ticks as i32 {
             entity.fire_ticks.store(ticks as i32, Ordering::Relaxed);
         }
-        // TODO: defrost
+        entity.clear_freeze();
     }
 
     /// Called when a player collides with a entity
@@ -2475,6 +2475,27 @@ impl Entity {
         {
             caller.damage(caller, 1.0, DamageType::FREEZE).await;
         }
+    }
+
+    /// Mirrors vanilla `Entity.clearFreeze`, including the tracked-data update.
+    pub fn clear_freeze(&self) {
+        if self.frozen_ticks.swap(0, Ordering::Relaxed) == 0 {
+            return;
+        }
+
+        let mut bedrock_meta = EntityMetadata::new();
+        bedrock_meta.set(
+            entity_data_key::FREEZING_EFFECT_STRENGTH,
+            MetadataValue::Float(0.0),
+        );
+        self.send_meta_data(
+            &[Metadata::new(
+                TrackedData::TICKS_FROZEN,
+                MetaDataType::INTEGER,
+                VarInt(0),
+            )],
+            Some(&bedrock_meta),
+        );
     }
 
     /// Sets the `Entity` yaw & pitch rotation
