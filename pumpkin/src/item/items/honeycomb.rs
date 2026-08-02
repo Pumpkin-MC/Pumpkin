@@ -32,7 +32,7 @@ impl ItemMetadata for HoneyCombItem {
 impl ItemBehaviour for HoneyCombItem {
     fn use_on_block<'a>(
         &'a self,
-        _item: &'a mut ItemStack,
+        item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -73,10 +73,11 @@ impl ItemBehaviour for HoneyCombItem {
                     new_block.default_state.id
                 };
 
-                // TODO Implements trapdoors
                 world
                     .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
+                world.sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, location, 0);
+                item.decrement_unless_creative(player.gamemode.load(), 1);
             }
         })
     }
