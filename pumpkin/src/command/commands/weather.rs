@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
@@ -9,10 +11,27 @@ use crate::command::{
         builder::{argument, literal},
     },
 };
+use crate::world::World;
 
 const NAMES: [&str; 1] = ["weather"];
 const DESCRIPTION: &str = "Changes the weather.";
 const ARG_DURATION: &str = "duration";
+
+fn world_for_sender(
+    sender: &CommandSender,
+    server: &crate::server::Server,
+) -> Result<Arc<World>, CommandError> {
+    match sender {
+        CommandSender::Player(player) => Ok(player.world()),
+        CommandSender::CommandBlock(_, world) => Ok(world.clone()),
+        CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => server
+            .worlds
+            .load()
+            .first()
+            .cloned()
+            .ok_or(CommandError::InvalidRequirement),
+    }
+}
 
 struct Executor {
     mode: WeatherMode,
@@ -33,14 +52,7 @@ impl CommandExecutor for Executor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let duration = TimeArgumentConsumer::find_arg(args, ARG_DURATION).ok();
-            let world = {
-                let guard = server.worlds.load();
-
-                guard
-                    .first()
-                    .cloned()
-                    .ok_or(CommandError::InvalidRequirement)?
-            };
+            let world = world_for_sender(sender, server)?;
             let mut weather = world.weather.lock().await;
 
             match self.mode {
