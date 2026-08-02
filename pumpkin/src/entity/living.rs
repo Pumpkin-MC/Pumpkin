@@ -1740,19 +1740,28 @@ impl LivingEntity {
         false
     }
 
-    async fn damage_armor_items(&self, caller: &dyn EntityBase, damage_amount: f32) {
+    async fn damage_armor_items(
+        &self,
+        caller: &dyn EntityBase,
+        damage_amount: f32,
+        damage_type: &DamageType,
+    ) {
         // Formula: armor loses floor(incoming_damage / 4) durability, minimum 1.
         let armor_damage = (damage_amount / 4.0).floor().max(1.0) as i32;
         let mut equipment_updates = Vec::new();
 
-        // TODO: Falling anvil/stalactite should only damage the helmet slot.
         // TODO: Implement DAMAGE_RESISTANT component checks (e.g. netherite vs fire).
+
+        let helmet_only = damage_type.id == DamageType::FALLING_ANVIL.id
+            || damage_type.id == DamageType::FALLING_STALACTITE.id;
 
         let armor_slots: Vec<(usize, Arc<Mutex<ItemStack>>, EquipmentSlot)> = {
             let equipment_lock = self.entity_equipment.lock().await;
             self.equipment_slots
                 .iter()
-                .filter(|(_, slot)| slot.is_armor_slot())
+                .filter(|(_, slot)| {
+                    slot.is_armor_slot() && (!helmet_only || **slot == EquipmentSlot::HEAD)
+                })
                 .map(|(index, slot)| (*index, equipment_lock.get(slot), slot.clone()))
                 .collect()
         };
@@ -2561,7 +2570,8 @@ impl EntityBase for LivingEntity {
             // Armor loses floor(raw_damage / 4) durability, minimum 1.
             // Not applied when the source is in `#minecraft:bypasses_armor`.
             if damage_amount > 0.0 && !bypasses_armor_durability(&damage_type) {
-                self.damage_armor_items(caller, damage_amount).await;
+                self.damage_armor_items(caller, damage_amount, &damage_type)
+                    .await;
             }
 
             true
