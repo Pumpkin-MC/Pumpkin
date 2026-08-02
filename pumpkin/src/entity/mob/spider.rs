@@ -62,6 +62,52 @@ impl Goal for SpiderAttackGoal {
     }
 }
 
+struct SpiderTargetGoal {
+    inner: Box<ActiveTargetGoal>,
+}
+
+impl SpiderTargetGoal {
+    fn new(mob: &MobEntity, target_type: &'static EntityType) -> Self {
+        Self {
+            inner: ActiveTargetGoal::with_default(mob, target_type, true),
+        }
+    }
+
+    fn is_dark(mob: &dyn Mob) -> bool {
+        let entity = mob.get_entity();
+        let world = entity.world.load();
+        world.get_sky_light_level(&entity.get_eye_pos().to_block_pos()) as f32 / 15.0 < 0.5
+    }
+}
+
+impl Goal for SpiderTargetGoal {
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async move {
+            if !Self::is_dark(mob) {
+                self.inner.set_target(None);
+                return false;
+            }
+            self.inner.can_start(mob).await
+        })
+    }
+
+    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async move { Self::is_dark(mob) && self.inner.should_continue(mob).await })
+    }
+
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        self.inner.start(mob)
+    }
+
+    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        self.inner.stop(mob)
+    }
+
+    fn controls(&self) -> Controls {
+        self.inner.controls()
+    }
+}
+
 pub struct SpiderEntity {
     pub mob_entity: MobEntity,
 }
@@ -92,11 +138,17 @@ impl SpiderEntity {
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
                 2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+                Box::new(SpiderTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    &EntityType::PLAYER,
+                )),
             );
             target_selector.add_goal(
                 3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
+                Box::new(SpiderTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    &EntityType::IRON_GOLEM,
+                )),
             );
         };
 
