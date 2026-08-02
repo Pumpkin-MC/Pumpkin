@@ -82,6 +82,21 @@ impl EntityBase for ExperienceOrbEntity {
 
             let mut velo = original_velo;
 
+            let world = entity.world.load();
+            if let Some(player) = world.get_closest_player(entity.pos.load(), 8.0)
+                && !player.is_spectator()
+            {
+                let player_entity = player.get_entity();
+                let target = player_entity.pos.load()
+                    + Vector3::new(0.0, player_entity.get_eye_height() / 2.0, 0.0);
+                let delta = target - entity.pos.load();
+                let distance = delta.length();
+                if distance > 1.0e-4 {
+                    let power = (1.0 - distance / 8.0).max(0.0);
+                    velo += delta.normalize() * (power * power * 0.1);
+                }
+            }
+
             let no_clip = !self
                 .entity
                 .world
