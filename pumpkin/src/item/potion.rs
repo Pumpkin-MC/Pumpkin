@@ -164,23 +164,20 @@ impl PotionContents {
                     let amount = (4 * ((amplifier as i32) + 1)) as f32 * instant_scale;
                     target.heal(amount);
                 }
-
-                // For instant effects, still add a short visual effect entry as before
-                let eff = pumpkin_data::potion::Effect {
-                    effect_type,
-                    duration: 1,
-                    amplifier,
-                    ambient,
-                    show_particles,
-                    show_icon,
-                    blend: false,
-                };
-                target.add_effect(eff).await;
+                // Vanilla applies instant effects via a direct heal/damage call only
+                // (ThrownSplashPotion#applyInstantaneousEffect / HealOrHarmMobEffect), never
+                // through addEffect -- calling `target.add_effect` here as well would apply the
+                // heal/damage a second time, since `LivingEntity::add_effect` independently
+                // re-implements the instant-effect heal/damage branch.
             } else {
-                // Duration scaling
+                // Vanilla ThrownSplashPotion#applyEffects: duration is rounded (not truncated),
+                // and effects whose scaled duration would end within 20 ticks are dropped
+                // entirely rather than clamped to a minimum of 1 tick.
                 let duration_scale = source.duration_scale(scale);
-
-                let dur = ((duration as f32) * duration_scale).max(1.0) as i32;
+                let dur = (duration as f32 * duration_scale + 0.5) as i32;
+                if dur <= 20 {
+                    continue;
+                }
                 let eff = pumpkin_data::potion::Effect {
                     effect_type,
                     duration: dur,

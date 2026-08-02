@@ -3064,8 +3064,23 @@ fn consumable_remainder(item: &ItemStack) -> Option<&'static Item> {
 }
 
 const fn should_replace_effect(current: &Effect, candidate: &Effect) -> bool {
+    // Vanilla MobEffectInstance#isShorterDurationThan / #update: -1 is infinite duration, always
+    // considered longer than any finite duration. A raw `duration > duration` comparison treats
+    // -1 as shorter than everything, so an equal-amplifier infinite effect would never replace a
+    // finite one.
+    const fn is_longer(candidate_duration: i32, current_duration: i32) -> bool {
+        if current_duration == -1 {
+            false
+        } else if candidate_duration == -1 {
+            true
+        } else {
+            candidate_duration > current_duration
+        }
+    }
+
     candidate.amplifier > current.amplifier
-        || (candidate.amplifier == current.amplifier && candidate.duration > current.duration)
+        || (candidate.amplifier == current.amplifier
+            && is_longer(candidate.duration, current.duration))
 }
 
 #[cfg(test)]
