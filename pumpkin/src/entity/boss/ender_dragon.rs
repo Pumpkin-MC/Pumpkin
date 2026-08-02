@@ -1,3 +1,4 @@
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::{Block, BlockStateId};
@@ -571,10 +572,14 @@ impl EnderDragonEntity {
                 let zd = player_pos.z - zm;
                 let dd = (xd * xd + zd * zd).max(0.1);
 
-                player
+                let resistance = player
                     .living_entity
-                    .entity
-                    .apply_knockback(4.0, xd / dd, zd / dd);
+                    .get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+                player.living_entity.entity.apply_knockback(
+                    4.0 * (1.0 - resistance).max(0.0),
+                    xd / dd,
+                    zd / dd,
+                );
                 player.get_entity().send_velocity();
 
                 if !self.phase.lock().await.is_sitting() {
