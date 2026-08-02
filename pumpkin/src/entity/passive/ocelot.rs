@@ -5,7 +5,8 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, ocelot_attack::OcelotAttackGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -35,9 +36,23 @@ impl OcelotEntity {
             goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 2,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
+                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 6.0),
             );
             goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            // OcelotAttackGoal: Vanilla Ocelot.registerGoals() priority 8
+            goal_selector.add_goal(8, Box::new(OcelotAttackGoal::new()));
+
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            // Target chickens: Vanilla Ocelot.registerGoals() priority 1
+            target_selector.add_goal(
+                1,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::CHICKEN, true),
+            );
+            // Target baby turtles: Vanilla Ocelot.registerGoals() priority 1 with baby filter
+            target_selector.add_goal(
+                1,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, true),
+            );
         };
 
         mob_arc
