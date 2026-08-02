@@ -161,6 +161,8 @@ pumpkin-world = { path = "pumpkin-world", default-features = false }
 quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
 rand = { version = "0.10.2", default-features = false, features = ["std", "std_rng", "thread_rng"] }
 rsa = { version = "=0.10.0-rc.18", default-features = false, features = ["std", "encoding"] }
+ed25519-dalek = { version = "3.0", default-features = false, features = ["fast"] }
+hex = { version = "0.4", default-features = false, features = ["std"] }
 cipher = { version = "0.5.2", default-features = false }
 rustc-hash = { version = "2.1.3", default-features = false, features = ["std"] }
 rustyline = { version = "18.0.1", default-features = false, features = ["with-file-history"] }

@@ -172,6 +172,13 @@ impl StructurePieceBase for EndCityPiece {
                 &[],
                 Some(chunk_box),
             );
+            crate::generation::structure::template::place_template_entities(
+                chunk,
+                &self.ship,
+                ship_pos,
+                self.rotation,
+                chunk_box,
+            );
         }
     }
 }

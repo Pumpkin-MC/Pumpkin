@@ -2,11 +2,10 @@ use std::sync::{Arc, atomic::Ordering};
 
 use crate::block::entities::comparator::ComparatorBlockEntity;
 use pumpkin_data::{
-    Block, BlockDirection, BlockState, BlockStateId,
+    Block, BlockDirection, BlockState, BlockStateId, HorizontalFacingExt,
     block_properties::{
         BlockProperties, ComparatorLikeProperties, HorizontalFacing, ModeComparator,
     },
-    entity::EntityType,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
@@ -19,6 +18,7 @@ use crate::{
         NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
         PlacedArgs, PlayerPlacedArgs, registry::BlockActionResult,
     },
+    entity::decoration::item_frame::ItemFrameEntity,
     world::World,
 };
 
@@ -261,7 +261,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
                 let (deeper_block, deeper_state) = world.get_block_and_state(&deeper_source_pos);
 
                 let itemframe_level =
-                    Self::get_attached_itemframe_level(world, facing, deeper_source_pos);
+                    Self::get_attached_itemframe_level(world, facing, deeper_source_pos).await;
 
                 // This is the correct way to handle the async call within the Option
                 let block_level = if let Some(pumpkin_block) =
@@ -346,25 +346,27 @@ impl ComparatorBlock {
         }
     }
 
-    fn get_attached_itemframe_level(
+    async fn get_attached_itemframe_level(
         world: &World,
         facing: HorizontalFacing,
         pos: BlockPos,
     ) -> Option<u8> {
-        let mut itemframes = world
-            .get_entities_at_box(&BoundingBox::from_block(&pos))
-            .into_iter()
-            .filter(|entity| {
-                entity.get_entity().entity_type == &EntityType::ITEM_FRAME
-                    && entity.get_entity().get_horizontal_facing() == facing
-            });
-
-        if itemframes.next().is_some() && itemframes.next().is_none() {
-            // Vanilla Parity TODO:
-            // Return itemframe.getAnalogOutput() which calculates based on item rotation
-            return Some(1);
+        let direction = facing.to_block_direction();
+        let mut level = None;
+        for entity in world.get_entities_at_box(&BoundingBox::from_block(&pos)) {
+            let Some(itemframe) = entity.cast_any().downcast_ref::<ItemFrameEntity>() else {
+                continue;
+            };
+            if itemframe.get_facing() != direction {
+                continue;
+            }
+            if level.is_some() {
+                // Vanilla only reads a frame when exactly one hangs on this block.
+                return None;
+            }
+            level = Some(itemframe.get_analog_output().await);
         }
-        None
+        level
     }
 
     async fn update(&self, world: &Arc<World>, pos: BlockPos, state: &BlockState, block: &Block) {
