@@ -44,6 +44,11 @@ fn output_position(position: BlockPos, state: HopperLikeProperties) -> BlockPos 
     position.offset(to_offset(&state.facing))
 }
 
+fn can_merge_hopper_stack(destination: &ItemStack, source: &ItemStack) -> bool {
+    destination.item_count < destination.get_max_stack_size()
+        && destination.are_items_and_components_equal(source)
+}
+
 impl BlockEntity for HopperBlockEntity {
     fn write_nbt<'a>(
         &'a self,
@@ -268,8 +273,7 @@ impl HopperBlockEntity {
                 if dst.is_empty() {
                     *dst = item.clone();
                     success = true;
-                } else if dst.item_count < dst.get_max_stack_size() && dst.item == item.item {
-                    // TODO check Components equal
+                } else if can_merge_hopper_stack(&dst, &item) {
                     dst.item_count += 1;
                     success = true;
                 }
@@ -367,9 +371,11 @@ impl Clearable for HopperBlockEntity {
 
 #[cfg(test)]
 mod tests {
-    use super::output_position;
+    use super::{can_merge_hopper_stack, output_position};
     use pumpkin_data::Block;
     use pumpkin_data::block_properties::{BlockProperties, FacingHopper, HopperLikeProperties};
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
     use pumpkin_util::math::position::BlockPos;
 
     #[test]
@@ -379,5 +385,15 @@ mod tests {
         state.facing = FacingHopper::West;
 
         assert_eq!(output_position(position, state), BlockPos::new(3, 20, -3));
+    }
+
+    #[test]
+    fn hopper_does_not_merge_stacks_with_different_components() {
+        let plain = ItemStack::new(1, &Item::BOW);
+        let mut named = plain.clone();
+        named.set_custom_name("named".into());
+
+        assert!(!can_merge_hopper_stack(&plain, &named));
+        assert!(!can_merge_hopper_stack(&named, &plain));
     }
 }
