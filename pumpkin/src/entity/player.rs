@@ -2045,6 +2045,7 @@ impl Player {
         self.update_player_pose().await;
         self.breath_manager.tick(self).await;
         self.hunger_manager.tick(self).await;
+        self.tick_world_border().await;
         self.check_inventory_advancements().await;
         self.advancements.lock().await.flush_dirty(self, true);
 
@@ -2714,6 +2715,24 @@ impl Player {
                 ),
             )
             .await;
+    }
+
+    pub async fn tick_world_border(&self) {
+        let world = self.world();
+        let border = world.worldborder.lock().await;
+        let damage_per_block = f64::from(border.damage_per_block);
+        if damage_per_block <= 0.0 {
+            return;
+        }
+
+        let pos = self.get_entity().pos.load();
+        let dist = border.distance_to_border(pos.x, pos.z) + f64::from(border.buffer);
+        drop(border);
+
+        if dist < 0.0 {
+            let damage = (-dist * damage_per_block).floor().max(1.0) as f32;
+            self.damage(self, damage, DamageType::OUTSIDE_BORDER).await;
+        }
     }
 
     pub async fn tick_health(&self) {

@@ -39,8 +39,8 @@ impl Worldborder {
             portal_teleport_boundary: 29_999_984,
             warning_blocks,
             warning_time,
-            damage_per_block: 0.0,
-            buffer: 0.0,
+            damage_per_block: 0.2,
+            buffer: 5.0,
         }
     }
 
@@ -114,6 +114,23 @@ impl Worldborder {
     pub fn contains_block(&self, x: i32, z: i32) -> bool {
         self.contains(f64::from(x), f64::from(z))
             && self.contains(f64::from(x + 1), f64::from(z + 1))
+    }
+
+    /// Signed distance from `(x, z)` to the nearest border edge; negative when outside.
+    #[must_use]
+    pub fn distance_to_border(&self, x: f64, z: f64) -> f64 {
+        let half = self.new_diameter / 2.0;
+        let min_x = self.center_x - half;
+        let max_x = self.center_x + half;
+        let min_z = self.center_z - half;
+        let max_z = self.center_z + half;
+
+        let from_west = x - min_x;
+        let from_east = max_x - x;
+        let from_north = z - min_z;
+        let from_south = max_z - z;
+
+        from_west.min(from_east).min(from_north).min(from_south)
     }
 
     #[must_use]
