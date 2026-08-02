@@ -1,5 +1,6 @@
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_nbt::compound::NbtCompound;
@@ -65,56 +66,15 @@ impl DaylightDetectorBlockEntity {
         let (block, state) = world.get_block_and_state(block_pos);
         let mut props = DaylightDetectorProperties::from_state_id(state.id, block);
 
-        let level = world.level.clone();
-
         let inverted = props.inverted;
-
-        // TODO: finish power signal calculation
-        // see: https://minecraft.wiki/w/Light#Internal_sky_light
-        /*
-         * THIS IS A PLACE HOLDER
-         *
-         * For now the light engine is not finished and we do not have access to such things as
-         * getAmbientDarkness() or EnvironmentAttributes.SUN_ANGLE_VISUAL as in java code from yarn:
-         * see: net.minecraft.blocks.DaylightDetectorBlock.java
-         *
-         * so this is a fake implementation using the time of day...
-         * is not as accurate as vanilla and doesnt consider weather
-         */
-
         let time_of_day = world.get_time_of_day().await;
-
-        // Sun Angle
-        let sun_angle_fraction = (time_of_day as f32 / 24000.0) - 0.25;
-        let mut sun_angle_radians = sun_angle_fraction * (PI * 2.0);
-
-        // Ambient darkness (considering only night, not weather)
-        let cos_angle = sun_angle_radians.cos();
-        let ambient_darkness = if cos_angle < 0.0 {
-            // night time = ~11 darkness
-            (cos_angle.abs() * 11.0) as u8
-        } else {
-            0 // full daylight
-        };
-
-        let sky_light_level = level.light_engine.get_sky_light_level(&level, block_pos);
-
-        let mut power = sky_light_level.saturating_sub(ambient_darkness);
-
-        if inverted {
-            power = 15 - power;
-        } else if power > 0 {
-            let transition_offset = if sun_angle_radians < PI {
-                0.0
-            } else {
-                PI * 2.0
-            };
-
-            sun_angle_radians += (transition_offset - sun_angle_radians) * 0.2;
-            power = (power as f32 * sun_angle_radians.cos()).round() as u8;
-        }
-
-        let power = power.clamp(0, 15);
+        let sun_angle = ((time_of_day as f32 / 24_000.0) - 0.25) * (PI * 2.0);
+        let power = daylight_detector_power(
+            world.get_sky_light_level(block_pos),
+            world.sky_darken.load(Ordering::Relaxed),
+            sun_angle,
+            inverted,
+        );
         if power != props.power {
             props.power = power;
             let state = props.to_state_id(block);
@@ -123,5 +83,43 @@ impl DaylightDetectorBlockEntity {
                 .set_block_state(block_pos, state, BlockFlags::NOTIFY_ALL)
                 .await;
         }
+    }
+}
+
+fn daylight_detector_power(
+    sky_light: u8,
+    sky_darken: u8,
+    mut sun_angle: f32,
+    inverted: bool,
+) -> u8 {
+    let mut target = sky_light.saturating_sub(sky_darken);
+    if inverted {
+        target = 15 - target;
+    } else if target > 0 {
+        let offset = if sun_angle < std::f32::consts::PI {
+            0.0
+        } else {
+            std::f32::consts::PI * 2.0
+        };
+        sun_angle += (offset - sun_angle) * 0.2;
+        target = (target as f32 * sun_angle.cos()).round().clamp(0.0, 15.0) as u8;
+    }
+    target
+}
+
+#[cfg(test)]
+mod tests {
+    use super::daylight_detector_power;
+
+    #[test]
+    fn uses_effective_sky_brightness_before_sun_angle_adjustment() {
+        assert_eq!(daylight_detector_power(15, 0, 0.0, false), 15);
+        assert_eq!(daylight_detector_power(15, 11, 0.0, false), 4);
+    }
+
+    #[test]
+    fn inverted_power_complements_effective_sky_brightness() {
+        assert_eq!(daylight_detector_power(15, 0, 0.0, true), 0);
+        assert_eq!(daylight_detector_power(15, 11, 0.0, true), 11);
     }
 }
