@@ -7,7 +7,7 @@ use crate::entity::{
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        wander_around::WanderAroundGoal, witch_attack::WitchAttackGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -31,7 +31,7 @@ impl WitchEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            // TODO: WitchAttackGoal (potions)
+            goal_selector.add_goal(2, Box::new(WitchAttackGoal::new(60, 10.0)));
             goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 3,
