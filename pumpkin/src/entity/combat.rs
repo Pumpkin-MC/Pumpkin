@@ -2,6 +2,7 @@ use std::sync::atomic::Ordering;
 
 use crate::entity::EntityBase;
 use pumpkin_data::{
+    attributes::Attributes,
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
@@ -22,8 +23,44 @@ pub enum AttackType {
     MaceSmash,
 }
 
+#[expect(
+    clippy::fn_params_excessive_bools,
+    reason = "These flags directly mirror vanilla's critical-attack predicate"
+)]
+fn can_critical_attack(
+    on_ground: bool,
+    fall_distance: f32,
+    climbing: bool,
+    in_water: bool,
+    mounted: bool,
+    target_is_living: bool,
+    sprinting: bool,
+) -> bool {
+    !on_ground
+        && fall_distance > 0.0
+        && !climbing
+        && !in_water
+        && !mounted
+        && target_is_living
+        && !sprinting
+}
+
+fn can_sweep_attack(
+    sword: bool,
+    is_strong: bool,
+    on_ground: bool,
+    horizontal_speed_squared: f64,
+    movement_speed: f64,
+) -> bool {
+    sword && is_strong && on_ground && horizontal_speed_squared < (movement_speed * 2.5).powi(2)
+}
+
 impl AttackType {
-    pub async fn new(player: &Player, attack_cooldown_progress: f32) -> Self {
+    pub async fn new(
+        player: &Player,
+        target: &dyn EntityBase,
+        attack_cooldown_progress: f32,
+    ) -> Self {
         let entity = &player.get_entity();
 
         let sprinting = entity.is_sprinting();
@@ -44,16 +81,41 @@ impl AttackType {
             stack.is_sword()
         };
 
+        let in_water = player.living_entity.is_in_water();
+        let climbing = player.living_entity.climbing.load(Ordering::Relaxed);
+        let mounted = entity.has_vehicle().await;
+        let target_is_living = target.get_living_entity().is_some();
+        let movement = entity.velocity.load();
+        let movement_speed = player
+            .living_entity
+            .get_attribute_value(&Attributes::MOVEMENT_SPEED);
+
         let is_strong = attack_cooldown_progress > 0.9;
         if sprinting && is_strong {
             return Self::Knockback;
         }
 
-        if is_strong && !on_ground && fall_distance > 0.0 {
+        if is_strong
+            && can_critical_attack(
+                on_ground,
+                fall_distance,
+                climbing,
+                in_water,
+                mounted,
+                target_is_living,
+                sprinting,
+            )
+        {
             return Self::Critical;
         }
 
-        if sword && is_strong {
+        if can_sweep_attack(
+            sword,
+            is_strong,
+            on_ground,
+            movement.horizontal_length_squared(),
+            movement_speed,
+        ) {
             return Self::Sweeping;
         }
 
@@ -114,5 +176,33 @@ pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type:
         AttackType::MaceSmash => {
             world.play_sound(Sound::ItemMaceSmashAir, SoundCategory::Players, pos);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{can_critical_attack, can_sweep_attack};
+
+    #[test]
+    fn critical_attacks_require_vanilla_movement_conditions() {
+        assert!(can_critical_attack(
+            false, 1.0, false, false, false, true, false
+        ));
+        assert!(!can_critical_attack(
+            false, 1.0, true, false, false, true, false
+        ));
+        assert!(!can_critical_attack(
+            false, 1.0, false, true, false, true, false
+        ));
+        assert!(!can_critical_attack(
+            false, 1.0, false, false, false, false, false
+        ));
+    }
+
+    #[test]
+    fn sweep_attacks_stop_above_vanilla_speed_limit() {
+        assert!(can_sweep_attack(true, true, true, 1.0, 1.0));
+        assert!(!can_sweep_attack(true, true, true, 39.0625, 1.0));
+        assert!(!can_sweep_attack(true, false, true, 1.0, 1.0));
     }
 }
