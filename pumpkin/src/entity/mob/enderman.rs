@@ -427,12 +427,21 @@ impl Mob for EndermanEntity {
                 return;
             }
 
-            // TODO: also check rain
-            if entity.touching_water.load(Ordering::SeqCst) {
+            let world = entity.world.load();
+            let in_rain =
+                world.weather.lock().await.raining && world.can_see_sky(&entity.block_pos.load());
+            if entity.touching_water.load(Ordering::SeqCst) || in_rain {
                 self.mob_entity
                     .living_entity
                     .damage_with_context(self, 1.0, DamageType::DROWN, None, None, None)
                     .await;
+                if in_rain {
+                    for _ in 0..64 {
+                        if self.teleport_randomly() {
+                            break;
+                        }
+                    }
+                }
             }
 
             // NOTE: Enderman ambient portal particles are intentionally NOT sent server-side.
