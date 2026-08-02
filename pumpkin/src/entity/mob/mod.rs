@@ -270,6 +270,7 @@ impl MobEntity {
         let mut attack_damage = self
             .living_entity
             .get_attribute_value(&Attributes::ATTACK_DAMAGE);
+        let mut fire_aspect_level = 0u32;
         let held_item = self
             .living_entity
             .held_item(&self.living_entity.entity)
@@ -293,6 +294,8 @@ impl MobEntity {
                             .has_tag(&tag::EntityType::MINECRAFT_SENSITIVE_TO_BANE_OF_ARTHROPODS))
                 {
                     attack_damage += 2.5 * f64::from(*level);
+                } else if **enchantment == pumpkin_data::Enchantment::FIRE_ASPECT {
+                    fire_aspect_level = fire_aspect_ticks(*level) / 80;
                 }
             }
         }
@@ -317,6 +320,11 @@ impl MobEntity {
             .await;
 
         if damaged {
+            if fire_aspect_level != 0 {
+                target
+                    .get_entity()
+                    .set_on_fire_for_ticks(fire_aspect_ticks(fire_aspect_level as i32));
+            }
             self.living_entity
                 .last_attacking_id
                 .store(target.get_entity().entity_id, Relaxed);
@@ -816,6 +824,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 #[expect(dead_code)]
 const DEFAULT_PATHFINDING_FAVOR: f32 = 0.0;
 
+const fn fire_aspect_ticks(level: i32) -> u32 {
+    if level > 0 { level as u32 * 80 } else { 0 }
+}
+
 pub trait PathAwareEntity: Mob + Send + Sync {
     fn get_pathfinding_favor(&self, _block_pos: BlockPos, _world: Arc<World>) -> f32 {
         0.0
@@ -860,12 +872,18 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use super::MobEntity;
+    use super::{MobEntity, fire_aspect_ticks};
 
     #[test]
     fn thunderstorm_brightness_does_not_wrap_sky_light() {
         assert_eq!(MobEntity::monster_spawn_brightness(4, 0, true), 0);
         assert_eq!(MobEntity::monster_spawn_brightness(14, 3, true), 4);
         assert_eq!(MobEntity::monster_spawn_brightness(4, 7, true), 7);
+    }
+
+    #[test]
+    fn fire_aspect_uses_eighty_ticks_per_level() {
+        assert_eq!(fire_aspect_ticks(1), 80);
+        assert_eq!(fire_aspect_ticks(2), 160);
     }
 }
