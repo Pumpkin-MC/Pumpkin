@@ -47,6 +47,10 @@ impl BlockEntity for EnderChestBlockEntity {
         Box::pin(async {})
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        Some(NbtCompound::new())
+    }
+
     fn tick<'a>(&'a self, world: &'a Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             self.viewers

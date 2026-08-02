@@ -254,12 +254,17 @@ impl ChunkManager {
             let new_level = ChunkLoading::get_level_from_view_distance(view_distance);
             lock.add_ticket(center, new_level);
 
-            if old_center != center || old_view_distance != view_distance {
+            let sim_dist = self.world.server.upgrade().map_or(10, |s| {
+                s.advanced_config.networking.java.simulation_distance.get()
+            });
+            let sim_level = ChunkLoading::get_level_from_simulation_distance(sim_dist);
+            lock.add_ticket(center, sim_level);
+
+            if (old_center != center || old_view_distance != view_distance) && old_view_distance > 0
+            {
                 let old_level = ChunkLoading::get_level_from_view_distance(old_view_distance);
-                // Don't remove if it would be the same ticket
-                if old_center != center || old_level != new_level {
-                    lock.remove_ticket(old_center, old_level);
-                }
+                lock.remove_ticket(old_center, old_level);
+                lock.remove_ticket(old_center, sim_level);
             }
             lock.send_change();
         };
@@ -481,6 +486,7 @@ pub struct Player {
     pub last_food_saturation: AtomicBool,
     /// The player's permission level.
     pub permission_lvl: AtomicCell<PermissionLvl>,
+    pub subscribed_debug_sample: AtomicBool,
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
     pub bedrock_spawned: AtomicBool,
@@ -714,6 +720,7 @@ impl Player {
             last_sent_health: AtomicI32::new(-1),
             last_sent_food: AtomicU8::new(0),
             last_food_saturation: AtomicBool::new(true),
+            subscribed_debug_sample: AtomicBool::new(false),
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
@@ -891,7 +898,7 @@ impl Player {
         let level = &world.level;
 
         // Decrement the value of watched chunks
-        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
+        let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
         // Remove chunks with no watchers from the cache
         if !chunks_to_clean.is_empty() {
             world.remove_entities_in_chunks(&chunks_to_clean).await;
@@ -1151,7 +1158,7 @@ impl Player {
                 _ => {}
             }
             if config.knockback {
-                combat::handle_knockback(attacker_entity, victim_entity, knockback_strength);
+                combat::handle_knockback(attacker_entity, victim.as_ref(), knockback_strength);
             }
         }
 
@@ -2141,15 +2148,14 @@ impl Player {
         progress.clamp(0.0, 1.0)
     }
 
-    pub async fn fire_packet_sent<P: 'static + Send + Sync + std::any::Any + Clone>(
+    pub async fn fire_packet_sent<P: Send + Sync + std::any::Any>(
         self: &Arc<Self>,
-        packet: &P,
+        packet: P,
         packet_id: i32,
         payload: Bytes,
     ) -> bool {
         if let Some(server) = self.world().server.upgrade() {
-            let event =
-                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet.clone()));
+            let event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
             let event = server.plugin_manager.fire(event).await;
             return event.cancelled;
         }
@@ -2477,9 +2483,12 @@ impl Player {
     pub async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
-        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
-        // level.clean_chunks(&chunks_to_clean).await;
-        for chunk in chunks_to_clean {
+        let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
+        if !chunks_to_clean.is_empty() {
+            world.remove_entities_in_chunks(&chunks_to_clean).await;
+            level.clean_entity_chunks(&chunks_to_clean);
+        }
+        for chunk in &chunks_to_clean {
             self.client
                 .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                 .await;
@@ -3014,16 +3023,28 @@ impl Player {
         let config = self.config.load();
         self.living_entity.entity.send_meta_data(
             &[
+                // v26.x
                 Metadata::new(
                     TrackedData::PLAYER_MODE_CUSTOMISATION,
                     MetaDataType::BYTE,
                     config.skin_parts,
                 ),
-                // Metadata::new(
-                //     TrackedData::DATA_MAIN_ARM_ID,
-                //     MetaDataType::ARM,
-                //     VarInt(config.main_hand as u8 as i32),
-                // ),
+                Metadata::new(
+                    TrackedData::PLAYER_MAIN_HAND,
+                    MetaDataType::HUMANOID_ARM,
+                    config.main_hand as u8,
+                ),
+                // v1.21.x
+                Metadata::new(
+                    TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
+                    MetaDataType::BYTE,
+                    config.skin_parts,
+                ),
+                Metadata::new(
+                    TrackedData::MAIN_ARM_ID,
+                    MetaDataType::BYTE,
+                    config.main_hand as u8,
+                ),
             ],
             None,
         );
@@ -3676,7 +3697,7 @@ impl Player {
             .await;
     }
 
-    pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem) {
+    pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem<'_>) {
         self.update_last_action_time();
         let screen_handler_arc = self.current_screen_handler.lock().await.clone();
         let mut screen_handler = screen_handler_arc.lock().await;
@@ -3685,7 +3706,9 @@ impl Player {
             .as_any_mut()
             .downcast_mut::<pumpkin_inventory::anvil::AnvilScreenHandler>()
         {
-            anvil_handler.update_item_name(packet.item_name).await;
+            anvil_handler
+                .update_item_name(packet.item_name.to_string())
+                .await;
         }
     }
 

@@ -24,6 +24,10 @@ use crate::{
 
 use crate::world::WorldPortalExt;
 
+/// Loot table of the chest in the room variant that has one, matching vanilla
+/// `StrongholdPieces$RoomCrossing`.
+const CROSSING_LOOT_TABLE: &str = "minecraft:chests/stronghold_crossing";
+
 pub struct SquareRoomPiece {
     piece: StrongholdPiece,
     room_type: u32,
@@ -272,8 +276,7 @@ impl StructurePieceBase for SquareRoomPiece {
                 inner.add_block(chunk, ladder, 9, 3, 3, &box_limit);
 
                 // Chest
-                // p.add_chest(chunk, &box_limit, random, 3, 4, 8, LootTables::StrongholdCrossingChest);
-                inner.add_block(chunk, Block::CHEST.default_state, 3, 4, 8, &box_limit);
+                inner.add_chest(chunk, &box_limit, random, 3, 4, 8, CROSSING_LOOT_TABLE);
             }
             _ => {}
         }

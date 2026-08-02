@@ -636,36 +636,43 @@ impl GenerationSchedule {
         swap(&mut unload_chunks, &mut self.unload_chunks);
         let mut chunks = Vec::with_capacity(unload_chunks.len());
         for pos in unload_chunks {
-            let holder = self.chunk_map.get_mut(&pos).unwrap();
+            let Some(mut holder) = self.chunk_map.remove(&pos) else {
+                continue;
+            };
             debug_assert_eq!(holder.target_stage, StagedChunkEnum::None);
-            if holder.occupied.is_null() {
-                let mut tmp = None;
-                swap(&mut holder.chunk, &mut tmp);
-                let Some(tmp) = tmp else {
-                    continue;
-                };
+            if !holder.occupied.is_null() {
+                self.chunk_map.insert(pos, holder);
+                self.unload_chunks.insert(pos);
+                continue;
+            }
+
+            for task in holder.tasks {
+                if !task.is_null() {
+                    let is_in_flight = self.graph.nodes.get(task).is_some_and(|n| n.in_flight);
+                    if !is_in_flight {
+                        self.waiting_for_chunks.remove(&task);
+                        self.drop_node(task);
+                    }
+                }
+            }
+
+            if holder.public {
+                self.public_chunk_map.remove(&pos);
+                holder.public = false;
+            }
+
+            if let Some(tmp) = holder.chunk {
                 match tmp {
                     Chunk::Level(chunk) => {
-                        if holder.public {
-                            self.public_chunk_map.remove(&pos);
-                            holder.public = false;
-                        }
-
-                        // Forcefully drop chunks when unloaded to prevent memory leaks
-                        // from dangling strong references
+                        // Save chunk to disk if dirty
                         if chunk.is_dirty() {
                             chunks.push((pos, Chunk::Level(chunk)));
                         }
-                        self.chunk_map.remove(&pos);
                     }
                     Chunk::Proto(chunk) => {
-                        debug_assert!(!holder.public);
                         chunks.push((pos, Chunk::Proto(chunk)));
-                        self.chunk_map.remove(&pos);
                     }
                 }
-            } else {
-                self.unload_chunks.insert(pos);
             }
         }
         if chunks.is_empty() {
@@ -764,7 +771,10 @@ impl GenerationSchedule {
     }
 
     fn drop_satisfied_tasks(&mut self, holder: &mut ChunkHolder, stage: StagedChunkEnum) {
-        for task_idx in (holder.current_stage as usize + 1)..=(stage as usize) {
+        // A neighboring generation cache may already have advanced this holder past the
+        // returning task's stage. Drop every scheduled task satisfied by the returned data,
+        // including that task's stale in-flight node.
+        for task_idx in (StagedChunkEnum::None as usize + 1)..=(stage as usize) {
             if !holder.tasks[task_idx].is_null() {
                 self.waiting_for_chunks.remove(&holder.tasks[task_idx]);
                 self.drop_node(holder.tasks[task_idx]);
@@ -1059,6 +1069,7 @@ impl GenerationSchedule {
             if !self.unload_chunks.is_empty()
                 && self.last_unload.elapsed() >= std::time::Duration::from_secs(1)
             {
+                self.garbage_collect_dependencies();
                 self.process_unload_queue();
                 self.last_unload = std::time::Instant::now();
             }

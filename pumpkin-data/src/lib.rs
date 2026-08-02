@@ -1,6 +1,10 @@
 #![allow(unused_imports)]
 
 #[rustfmt::skip]
+#[path = "generated/chunk_view_lut.rs"]
+pub mod chunk_view_lut;
+
+#[rustfmt::skip]
 #[path = "generated/chest_loot.rs"]
 pub mod chest_loot_table;
 
@@ -249,6 +253,11 @@ pub mod entity_id_remap;
 #[rustfmt::skip]
 #[path = "generated/sound_id_remap.rs"]
 pub mod sound_id_remap;
+
+#[cfg(feature = "particle_id_remap")]
+#[rustfmt::skip]
+#[path = "generated/particle_id_remap.rs"]
+pub mod particle_id_remap;
 
 #[cfg(feature = "bedrock_creative")]
 #[rustfmt::skip]

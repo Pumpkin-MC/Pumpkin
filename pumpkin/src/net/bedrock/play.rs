@@ -450,7 +450,7 @@ impl BedrockClient {
         }
     }
 
-    pub async fn handle_emote(&self, player: &Arc<Player>, _server: &Server, packet: SEmote) {
+    pub async fn handle_emote(&self, player: &Arc<Player>, _server: &Server, packet: SEmote<'_>) {
         if !player.has_client_loaded() {
             return;
         }
@@ -673,6 +673,7 @@ impl BedrockClient {
                                 cursor_pos: &data.click_position,
                             },
                             &held_item,
+                            &EquipmentSlot::MAIN_HAND,
                             &server,
                             &world,
                         )
@@ -1009,12 +1010,17 @@ impl BedrockClient {
         .await;
     }
 
-    pub async fn handle_chat_message(&self, server: &Server, player: &Arc<Player>, packet: SText) {
+    pub async fn handle_chat_message(
+        &self,
+        server: &Server,
+        player: &Arc<Player>,
+        packet: SText<'_>,
+    ) {
         let gameprofile = &player.gameprofile;
 
         send_cancellable! {{
             server;
-            PlayerChatEvent::new(player.clone(), packet.message, vec![]);
+            PlayerChatEvent::new(player.clone(), packet.message.into_owned(), vec![]);
 
             'after: {
                 info!("<chat> {}: {}", gameprofile.name, event.message);
@@ -1188,11 +1194,11 @@ impl BedrockClient {
         &self,
         player: &Arc<Player>,
         server: &Arc<Server>,
-        packet: SCommandRequest,
+        packet: SCommandRequest<'_>,
     ) {
         let player_clone = player.clone();
         let server_clone = server.clone();
-        let command = packet.command.strip_prefix("/").unwrap_or(&packet.command);
+        let command = packet.command.strip_prefix('/').unwrap_or(&packet.command);
 
         send_cancellable! {{
             server;
@@ -1231,12 +1237,12 @@ impl BedrockClient {
         &self,
         player: &Arc<Player>,
         server: &Server,
-        packet: pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse,
+        packet: pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse<'_>,
     ) {
         let event = crate::plugin::api::events::player::bedrock_form_response::BedrockFormResponseEvent::new(
             player.clone(),
             packet.form_id.0 as u32,
-            packet.form_data,
+            packet.form_data.map(std::borrow::Cow::into_owned),
         );
         let _ = server.plugin_manager.fire(event).await;
     }

@@ -191,7 +191,10 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             }
         }
 
-        let payload = self.payload_scratch.split().freeze();
+        let payload = self
+            .payload_scratch
+            .split_to(self.payload_scratch.len())
+            .freeze();
 
         Ok(RawPacket {
             id: packet_id,
@@ -454,6 +457,42 @@ mod tests {
         let raw_packet = result.map_err(|e| e.to_string())?;
         assert_eq!(raw_packet.id, packet_id);
         assert_eq!(raw_packet.payload.as_ref(), payload);
+        Ok(())
+    }
+
+    /// Test decoding multiple packets sequentially to verify capacity is retained for zero allocation
+    #[tokio::test]
+    async fn decode_multiple_packets_zero_allocation() -> Result<(), Box<dyn std::error::Error>> {
+        let packet1 = build_packet(1, b"Hello", false, None, None)?;
+        let packet2 = build_packet(2, b"World", false, None, None)?;
+
+        let mut stream = Vec::new();
+        stream.extend_from_slice(&packet1);
+        stream.extend_from_slice(&packet2);
+
+        let mut decoder = TCPNetworkDecoder::new(stream.as_slice());
+
+        let p1 = decoder.get_raw_packet().await?;
+        assert_eq!(p1.id, 1);
+        assert_eq!(p1.payload.as_ref(), b"Hello");
+        drop(p1);
+
+        let cap_after_p1 = decoder.payload_scratch.capacity();
+        assert!(
+            cap_after_p1 > 0,
+            "Capacity should be allocated after first read"
+        );
+
+        let p2 = decoder.get_raw_packet().await?;
+        assert_eq!(p2.id, 2);
+        assert_eq!(p2.payload.as_ref(), b"World");
+        drop(p2);
+
+        let cap_after_p2 = decoder.payload_scratch.capacity();
+        assert_eq!(
+            cap_after_p2, cap_after_p1,
+            "Buffer capacity should be retained and reused without new heap allocations"
+        );
         Ok(())
     }
 }

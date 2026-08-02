@@ -1,3 +1,4 @@
+use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
@@ -429,11 +430,15 @@ pub fn build() -> TokenStream {
 
     let mut structure_const_defs = TokenStream::new();
     let mut structure_lookup_arms = TokenStream::new();
+    let mut structure_from_name_arms = Vec::new();
+    let mut structure_to_name_arms = Vec::new();
+    let mut structure_all_names: Vec<String> = Vec::new();
 
     for (name, structure) in &structures_json {
         let stripped_name = name.strip_prefix("minecraft:").unwrap_or(name);
         let upper_name = stripped_name.to_uppercase();
         let const_name = format_ident!("{}", upper_name);
+        let variant_ident = format_ident!("{}", stripped_name.to_pascal_case());
         let key_variant = structure_key_to_token(name);
 
         structure_const_defs.extend(quote!(
@@ -443,6 +448,14 @@ pub fn build() -> TokenStream {
         structure_lookup_arms.extend(quote!(
             #key_variant => &Self::#const_name,
         ));
+
+        structure_from_name_arms.push(quote! {
+            #stripped_name => Some(Self::#variant_ident),
+        });
+        structure_to_name_arms.push(quote! {
+            Self::#variant_ident => #name,
+        });
+        structure_all_names.push(stripped_name.to_string());
     }
 
     let mut structure_set_const_defs = TokenStream::new();
@@ -464,6 +477,14 @@ pub fn build() -> TokenStream {
 
         all_structure_set_idents.push(const_name);
     }
+
+    let structure_all_names_tokens: Vec<TokenStream> = structure_all_names
+        .iter()
+        .map(|name| {
+            let full = format!("minecraft:{name}");
+            quote! { #full }
+        })
+        .collect();
 
     quote!(
         use pumpkin_util::math::floor_div;
@@ -508,6 +529,28 @@ pub fn build() -> TokenStream {
             AncientCity,
             TrailRuins,
             TrialChambers,
+        }
+
+        impl StructureKeys {
+            pub fn from_name(name: &str) -> Option<Self> {
+                let name = name.strip_prefix("minecraft:").unwrap_or(name);
+                match name {
+                    #(#structure_from_name_arms)*
+                    _ => None,
+                }
+            }
+
+            #[must_use]
+            pub const fn to_name(&self) -> &'static str {
+                match self {
+                    #(#structure_to_name_arms)*
+                }
+            }
+
+            #[must_use]
+            pub const fn all_names() -> &'static [&'static str] {
+                &[#(#structure_all_names_tokens),*]
+            }
         }
 
         pub struct StructureSet {

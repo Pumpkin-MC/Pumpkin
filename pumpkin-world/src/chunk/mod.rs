@@ -13,6 +13,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -82,6 +83,7 @@ pub struct ChunkData {
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub unknown_nbt: NbtCompound,
     pub dirty: AtomicBool,
+    pub inhabited_time: AtomicU64,
 }
 
 pub struct ChunkEntityData {
@@ -356,6 +358,33 @@ impl ChunkSections {
 
         Self {
             count: num_sections,
+            block_sections: RwLock::new(block_sections),
+            random_tick_sections: RwLock::new(random_tick_sections),
+            randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
+            biome_sections: RwLock::new(biome_sections),
+            unknown_nbt: RwLock::new(unknown_nbt),
+            min_y,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn from_palettes(
+        block_sections: Box<[BlockPalette]>,
+        biome_sections: Box<[BiomePalette]>,
+        min_y: i32,
+    ) -> Self {
+        assert_eq!(
+            block_sections.len(),
+            biome_sections.len(),
+            "block and biome section counts must match"
+        );
+        let count = block_sections.len();
+        let (random_tick_sections, randomly_ticking_mask) =
+            Self::build_random_tick_sections_cache(&block_sections);
+        let unknown_nbt = vec![NbtCompound::new(); count].into_boxed_slice();
+
+        Self {
+            count,
             block_sections: RwLock::new(block_sections),
             random_tick_sections: RwLock::new(random_tick_sections),
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),

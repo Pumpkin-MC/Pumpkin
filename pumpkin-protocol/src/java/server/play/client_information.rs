@@ -1,17 +1,16 @@
 use crate::{
     ServerPacket,
-    ser::{NetworkReadExt, ReadingError},
+    ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 use pumpkin_data::packet::serverbound::PLAY_CLIENT_INFORMATION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 use crate::VarInt;
 
 #[java_packet(PLAY_CLIENT_INFORMATION)]
-pub struct SClientInformationPlay {
-    pub locale: String, // 16
+pub struct SClientInformationPlay<'a> {
+    pub locale: &'a str, // 16
     pub view_distance: i8,
     pub chat_mode: VarInt, // VarInt
     pub chat_colors: bool,
@@ -21,17 +20,38 @@ pub struct SClientInformationPlay {
     pub server_listing: bool,
 }
 
-impl ServerPacket for SClientInformationPlay {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SClientInformationPlay<'a> {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let locale = bytebuf.get_str_borrowed()?;
+        let view_distance = bytebuf.get_i8()?;
+        let chat_mode = bytebuf.get_var_int()?;
+        let chat_colors = bytebuf.get_bool()?;
+        let skin_parts = bytebuf.get_u8()?;
+        let main_hand = if version >= &JavaMinecraftVersion::V_1_9 {
+            bytebuf.get_var_int()?
+        } else {
+            VarInt(1)
+        };
+        let text_filtering = if version >= &JavaMinecraftVersion::V_1_17 {
+            bytebuf.get_bool()?
+        } else {
+            false
+        };
+        let server_listing = if version >= &JavaMinecraftVersion::V_1_18 {
+            bytebuf.get_bool()?
+        } else {
+            true
+        };
+
         Ok(Self {
-            locale: bytebuf.get_str()?.to_string(),
-            view_distance: bytebuf.get_i8()?,
-            chat_mode: bytebuf.get_var_int()?,
-            chat_colors: bytebuf.get_bool()?,
-            skin_parts: bytebuf.get_u8()?,
-            main_hand: bytebuf.get_var_int()?,
-            text_filtering: bytebuf.get_bool()?,
-            server_listing: bytebuf.get_bool()?,
+            locale,
+            view_distance,
+            chat_mode,
+            chat_colors,
+            skin_parts,
+            main_hand,
+            text_filtering,
+            server_listing,
         })
     }
 }

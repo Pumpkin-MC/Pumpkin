@@ -47,7 +47,9 @@ impl crate::block::BlockBehaviour for PumpkinBlock {
                 ItemStack::new(4, &Item::PUMPKIN_SEEDS),
             ));
             args.world.spawn_entity(item_entity).await;
-            args.player.damage_held_item(1).await;
+            args.player
+                .damage_item_in_slot(args.equipment_slot, 1)
+                .await;
             BlockActionResult::Consume
         })
     }

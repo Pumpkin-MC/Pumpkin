@@ -741,6 +741,20 @@ mod tests {
     }
 
     #[test]
+    fn items_with_different_components_are_not_equal_in_either_direction() {
+        let plain = ItemStack::new(1, &Item::COAL);
+
+        let mut customized = ItemStack::new(1, &Item::COAL);
+        customized
+            .patch
+            .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
+
+        assert!(!plain.are_items_and_components_equal(&customized));
+        assert!(!customized.are_items_and_components_equal(&plain));
+        assert!(customized.are_items_and_components_equal(&customized.clone()));
+    }
+
+    #[test]
     fn custom_data_sets_and_reads_typed_values() {
         let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
 

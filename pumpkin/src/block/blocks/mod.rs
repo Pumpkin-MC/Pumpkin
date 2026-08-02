@@ -80,6 +80,7 @@ pub mod pumpkin;
 pub mod vine;
 
 // Terrain / environment / physics
+pub mod bubble_column;
 pub mod cobweb;
 pub mod dirt_path;
 pub mod dragon_egg;

@@ -18,6 +18,7 @@ mod block;
 mod carver;
 pub mod chest_loot;
 mod chunk_gen_settings;
+mod chunk_view_lut;
 mod chunk_status;
 mod composter_increase_chance;
 mod configured_feature;
@@ -75,8 +76,6 @@ pub fn main() {
 
     fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
 
-    wit::main();
-
     let mut build_functions: Vec<(BuilderFn, &str)> = vec![
         (advancement::build, "advancement.rs"),
         (bedrock_creative::build, "bedrock_creative.rs"),
@@ -87,6 +86,7 @@ pub fn main() {
         (meta_data_type::build, "meta_data_type.rs"),
         (tracked_data::build, "tracked_data.rs"),
         (chunk_status::build, "chunk_status.rs"),
+        (chunk_view_lut::build, "chunk_view_lut.rs"),
         (game_event::build, "game_event.rs"),
         (game_rules::build, "game_rules.rs"),
         (registry::build, "registry.rs"),
@@ -146,6 +146,7 @@ pub fn main() {
     // e.g. `cargo run -- chest_loot` only regenerates chest_loot.rs.
     let filters: Vec<String> = std::env::args().skip(1).collect();
     let build_functions: Vec<_> = if filters.is_empty() {
+        wit::main();
         build_functions
     } else {
         build_functions

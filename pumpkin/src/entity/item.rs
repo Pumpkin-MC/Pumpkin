@@ -247,7 +247,7 @@ impl ItemEntity {
 
     fn decrement_pickup_delay(&self) {
         self.pickup_delay
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
                 Some(Self::next_pickup_delay(val))
             })
             .ok();

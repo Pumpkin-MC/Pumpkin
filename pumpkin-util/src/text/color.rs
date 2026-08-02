@@ -53,7 +53,7 @@ pub fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (u8, u8, u8) {
 
 impl<'de> Deserialize<'de> for Color {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
+        let s = <&str>::deserialize(deserializer)?;
 
         if s == "reset" {
             Ok(Self::Reset)
@@ -73,9 +73,9 @@ impl<'de> Deserialize<'de> for Color {
 
             Ok(Self::Rgb(RGBColor::new(r, g, b)))
         } else {
-            Ok(Self::Named(NamedColor::try_from(s.as_str()).map_err(
-                |()| serde::de::Error::custom("Invalid named color"),
-            )?))
+            Ok(Self::Named(NamedColor::try_from(s).map_err(|()| {
+                serde::de::Error::custom("Invalid named color")
+            })?))
         }
     }
 }

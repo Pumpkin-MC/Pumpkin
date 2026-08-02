@@ -69,13 +69,17 @@ impl ItemBehaviour for HoeItem {
                     }
                 }
 
-                world
-                    .set_block_state(
-                        &location,
-                        future_block.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
+                // Vanilla returns PASS without touching the block when nothing is tilled,
+                // otherwise the rewrite would reset properties such as `snowy` on grass blocks.
+                if changed {
+                    world
+                        .set_block_state(
+                            &location,
+                            future_block.default_state.id,
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                }
 
                 //Also rooted_dirt drop a hanging_root
                 if block == &Block::ROOTED_DIRT {

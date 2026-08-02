@@ -155,15 +155,14 @@ impl CustomBossbars {
             }
 
             let ratio = f64::from(value) / f64::from(max_value);
-            let health: f32;
 
-            if ratio < 0.0 {
-                health = 0.0;
+            let health: f32 = if ratio < 0.0 {
+                0.0
             } else if ratio > 1.0 {
-                health = 1.0;
+                1.0
             } else {
-                health = ratio as f32;
-            }
+                ratio as f32
+            };
 
             bossbar.value = value;
             bossbar.max = max_value;

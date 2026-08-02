@@ -16,3 +16,12 @@ impl ClientPacket for CFinishConfig {
         Ok(())
     }
 }
+
+impl<'a> crate::ServerPacket<'a> for CFinishConfig {
+    fn read(
+        _bytebuf: &mut &'a [u8],
+        _version: &JavaMinecraftVersion,
+    ) -> Result<Self, crate::ser::ReadingError> {
+        Ok(Self)
+    }
+}

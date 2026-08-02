@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
     sync::{
         RwLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -186,6 +186,7 @@ impl ChunkData {
             "fluid_ticks",
             "block_entities",
             "isLightOn",
+            "InhabitedTime",
         ] {
             unknown_nbt.child_tags.remove(key);
         }
@@ -260,12 +261,22 @@ impl ChunkData {
                     let block_light = section_compound
                         .get("BlockLight")
                         .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| arr.iter().map(|&x| x as u8).collect::<Box<[u8]>>());
+                        .map(|arr| unsafe {
+                            Box::from(std::slice::from_raw_parts(
+                                arr.as_ptr().cast::<u8>(),
+                                arr.len(),
+                            ))
+                        });
 
                     let sky_light = section_compound
                         .get("SkyLight")
                         .and_then(|tag| tag.extract_byte_array())
-                        .map(|arr| arr.iter().map(|&x| x as u8).collect::<Box<[u8]>>());
+                        .map(|arr| unsafe {
+                            Box::from(std::slice::from_raw_parts(
+                                arr.as_ptr().cast::<u8>(),
+                                arr.len(),
+                            ))
+                        });
 
                     block_lights[index] =
                         block_light.map_or(LightContainer::Empty(0), LightContainer::Full);
@@ -439,6 +450,7 @@ impl ChunkData {
             status,
             blending_data: None,
             unknown_nbt,
+            inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
         })
     }
 
@@ -599,6 +611,10 @@ impl ChunkData {
         root_compound.put_list("block_entities", block_entities_list);
 
         root_compound.put_bool("isLightOn", is_light_correct);
+        root_compound.put_long(
+            "InhabitedTime",
+            self.inhabited_time.load(Ordering::Relaxed) as i64,
+        );
 
         let mut result = Vec::new();
         pumpkin_nbt::serializer::to_bytes(&root_compound, &mut result)
@@ -917,7 +933,7 @@ mod chunk_codec_tests {
         pumpkin_nbt::serializer::to_bytes(&root, &mut bytes).unwrap();
         let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
         let encoded = chunk.internal_to_bytes().unwrap();
-        let mut cursor = std::io::Cursor::new(encoded);
+        let mut cursor = std::io::Cursor::new(encoded.as_ref());
         let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
         let decoded = pumpkin_nbt::Nbt::read(&mut reader).unwrap();
 
@@ -950,7 +966,7 @@ mod chunk_codec_tests {
         let bytes = encode_chunk(0, vec![NbtTag::Compound(section_compound)]);
         let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
         let encoded = chunk.internal_to_bytes().unwrap();
-        let mut cursor = std::io::Cursor::new(encoded);
+        let mut cursor = std::io::Cursor::new(encoded.as_ref());
         let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
         let decoded = pumpkin_nbt::Nbt::read(&mut reader).unwrap();
         let sections = decoded.root_tag.get_list("sections").unwrap();

@@ -6,6 +6,7 @@ use crate::generation::structure::{
 };
 use pumpkin_util::math::block_box::BlockBox;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::RandomImpl;
 use std::collections::BinaryHeap;
 use std::sync::Arc;
@@ -51,15 +52,56 @@ pub const MAX_TOTAL_STRUCTURE_RANGE: i32 = 128;
 pub const MIN_DEPTH: i32 = 0;
 pub const MAX_DEPTH: i32 = 20;
 
-/// Simple lookup for Pool Aliases introduced in 1.20+
-pub struct PoolAliasLookup;
+/// Dynamic lookup for Pool Aliases introduced in 1.20+ (e.g. Trial Chambers spawner/contents aliases).
+#[derive(Debug, Clone, Default)]
+pub struct PoolAliasLookup {
+    aliases: std::collections::HashMap<String, Vec<(String, u32)>>,
+}
 
 impl PoolAliasLookup {
     #[must_use]
-    pub const fn lookup<'a>(&self, id: &'a str) -> &'a str {
-        // In a complete implementation, this would look up the alias in the context/registry.
-        // Returning the ID directly acts as a fallback/default behavior.
-        id
+    pub fn new() -> Self {
+        Self {
+            aliases: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn add_direct(&mut self, alias: String, target: String) {
+        self.aliases.insert(alias, vec![(target, 1)]);
+    }
+
+    pub fn add_random(&mut self, alias: String, targets: Vec<(String, u32)>) {
+        self.aliases.insert(alias, targets);
+    }
+
+    #[must_use]
+    pub fn lookup<'a>(
+        &'a self,
+        id: &'a str,
+        random: &mut pumpkin_util::random::RandomGenerator,
+    ) -> &'a str {
+        if let Some(targets) = self.aliases.get(id) {
+            if targets.is_empty() {
+                return id;
+            }
+            if targets.len() == 1 {
+                return &targets[0].0;
+            }
+            let total_weight: u32 = targets.iter().map(|(_, w)| *w).sum();
+            if total_weight == 0 {
+                return &targets[0].0;
+            }
+            let mut r = random.next_bounded_i32(total_weight as i32) as u32;
+            for (target, weight) in targets {
+                if r < *weight {
+                    return target.as_str();
+                }
+                r -= *weight;
+            }
+            &targets[0].0
+        } else {
+            id
+        }
     }
 }
 
@@ -85,12 +127,11 @@ impl JigsawPlacement {
 
         let max_depth = max_depth.clamp(MIN_DEPTH, MAX_DEPTH);
 
-        let actual_start_pool_id = pool_alias_lookup.lookup(start_pool_id);
+        let actual_start_pool_id = pool_alias_lookup.lookup(start_pool_id, &mut context.random);
         let pool = TemplatePool::discover(actual_start_pool_id)?;
+        let rotation = Rotation::from_index(context.random.next_bounded_i32(4) as u8);
         let element = pool.get_random_element(&mut context.random).clone();
         let template = element.first_template()?;
-
-        let rotation = Rotation::from_index(context.random.next_bounded_i32(4) as u8);
 
         let mut anchored_position = position;
         if let Some(target_jigsaw_id) = start_jigsaw {
@@ -98,7 +139,7 @@ impl JigsawPlacement {
             let jigsaws = get_jigsaw_blocks(&template);
             for jigsaw in jigsaws {
                 if jigsaw.name == target_jigsaw_id {
-                    let rotated_pos = rotation.transform_pos(jigsaw.pos.0, template.size);
+                    let rotated_pos = rotate_pos(jigsaw.pos.0, rotation);
                     found_anchor = Some(position.add(rotated_pos.x, rotated_pos.y, rotated_pos.z));
                     break;
                 }
@@ -113,33 +154,26 @@ impl JigsawPlacement {
         let local_anchor_position = anchored_position.0.sub(&position.0);
         let adjusted_position = BlockPos(position.0.sub(&local_anchor_position));
 
-        let rotated_size = rotation.transform_size(template.size);
-        let mut box_ = BlockBox::new(
-            adjusted_position.0.x,
-            adjusted_position.0.y,
-            adjusted_position.0.z,
-            adjusted_position.0.x + rotated_size.x - 1,
-            adjusted_position.0.y + rotated_size.y - 1,
-            adjusted_position.0.z + rotated_size.z - 1,
-        );
+        let mut box_ = rotated_box(adjusted_position, template.size, rotation);
 
         let center_x = i32::midpoint(box_.max.x, box_.min.x);
         let center_z = i32::midpoint(box_.max.z, box_.min.z);
 
         let bottom_y = if project_start_to_heightmap {
-            if let Some(sampler) = &mut context.height_sampler {
-                sampler
-                    .estimate_height(center_x, center_z)
-                    .max(context.sea_level)
-            } else {
-                adjusted_position.0.y
-            }
+            context
+                .height_sampler
+                .as_mut()
+                .map_or(adjusted_position.0.y, |sampler| {
+                    sampler.estimate_height(center_x, center_z)
+                })
         } else {
             adjusted_position.0.y
         };
 
-        let old_min_y = box_.min.y;
-        box_.move_pos(0, bottom_y - old_min_y, 0);
+        let ground_level_delta = 1;
+        let y_offset = bottom_y - (box_.min.y + ground_level_delta);
+        box_.move_pos(0, y_offset, 0);
+        let piece_pos = adjusted_position.add(0, y_offset, 0);
 
         if box_.min.y < context.min_y + dimension_padding.bottom
             || box_.max.y > context.min_y + 320 - dimension_padding.top
@@ -165,12 +199,8 @@ impl JigsawPlacement {
             if let Some(mut jigsaw) =
                 JigsawBlock::from_template_block(block, &template.palette[block.state as usize])
             {
-                let rotated_pos = rotation.transform_pos(jigsaw.pos.0, template.size);
-                jigsaw.pos = BlockPos(rotated_pos).add(
-                    adjusted_position.0.x,
-                    bottom_y,
-                    adjusted_position.0.z,
-                );
+                let rotated_pos = rotate_pos(jigsaw.pos.0, rotation);
+                jigsaw.pos = BlockPos(rotated_pos).add(piece_pos.0.x, piece_pos.0.y, piece_pos.0.z);
                 jigsaw.facing = rotate_direction(jigsaw.facing, rotation);
                 jigsaw.up = rotate_direction(jigsaw.up, rotation);
                 jigsaw_blocks.push(jigsaw);
@@ -184,21 +214,29 @@ impl JigsawPlacement {
                 0,
             ),
             element: element.clone(),
-            pos: BlockPos::new(adjusted_position.0.x, bottom_y, adjusted_position.0.z),
+            pos: piece_pos,
             rotation,
             mirror: Mirror::None,
             jigsaw_blocks,
             junctions: Vec::new(),
-            ground_level_delta: 0,
+            ground_level_delta,
             liquid_settings,
             projection: element.projection,
         });
 
         let mut collector = super::StructurePiecesCollector::new();
         let mut pieces = Vec::new();
+        // The expansion hack enlarges free space for children without changing
+        // the template bounds stored on the resulting structure piece.
+        let mut piece_collision_boxes = Vec::new();
         let mut piece_projections = Vec::new();
+        let mut collision_spaces = vec![CollisionSpace {
+            bounds: global_bounding_box,
+            occupied: vec![box_],
+        }];
 
         pieces.push(first_piece);
+        piece_collision_boxes.push(box_);
         piece_projections.push(element.projection);
 
         if max_depth > 0 {
@@ -210,6 +248,7 @@ impl JigsawPlacement {
                 depth: 0,
                 priority: 0,
                 sequence,
+                collision_space: 0,
             });
 
             while let Some(state) = placing.pop() {
@@ -226,8 +265,10 @@ impl JigsawPlacement {
                 source_jigsaws.sort_by_key(|j| std::cmp::Reverse(j.selection_priority));
 
                 let source_box = pieces[source_piece_idx].piece.bounding_box;
+                let source_collision_box = piece_collision_boxes[source_piece_idx];
                 let source_projection = piece_projections[source_piece_idx];
                 let source_rigid = source_projection == JigsawProjection::Rigid;
+                let mut interior_collision_space = None;
 
                 'jigsaw_loop: for source_jigsaw in &source_jigsaws {
                     let raw_pool_id = &source_jigsaw.pool;
@@ -235,7 +276,7 @@ impl JigsawPlacement {
                         continue;
                     }
 
-                    let target_pool_id = pool_alias_lookup.lookup(raw_pool_id);
+                    let target_pool_id = pool_alias_lookup.lookup(raw_pool_id, &mut context.random);
                     let Some(target_pool) = TemplatePool::discover(target_pool_id) else {
                         continue;
                     };
@@ -246,7 +287,8 @@ impl JigsawPlacement {
                             .extend(target_pool.get_shuffled_elements(&mut context.random));
                     }
 
-                    let fallback_pool_id = pool_alias_lookup.lookup(&target_pool.fallback);
+                    let fallback_pool_id =
+                        pool_alias_lookup.lookup(&target_pool.fallback, &mut context.random);
                     if let Some(fallback_pool) = TemplatePool::discover(fallback_pool_id) {
                         target_elements
                             .extend(fallback_pool.get_shuffled_elements(&mut context.random));
@@ -300,37 +342,30 @@ impl JigsawPlacement {
                                 let source_jigsaw_local_y =
                                     source_jigsaw_pos.0.y - source_box.min.y;
                                 let target_jigsaw_local_pos =
-                                    target_rotation.transform_pos(target_jigsaw.pos.0, target_size);
+                                    rotate_pos(target_jigsaw.pos.0, target_rotation);
                                 let target_jigsaw_local_y = target_jigsaw_local_pos.y;
 
                                 let delta_y = source_jigsaw_local_y - target_jigsaw_local_y
                                     + source_facing.to_vector().y;
 
-                                let target_box_y;
                                 let mut source_jigsaw_base_height = i32::MIN;
 
-                                if source_rigid && target_rigid {
-                                    target_box_y = source_box.min.y + delta_y;
+                                let target_box_y = if source_rigid && target_rigid {
+                                    source_box.min.y + delta_y
                                 } else {
                                     if source_jigsaw_base_height == i32::MIN {
-                                        source_jigsaw_base_height =
-                                            if let Some(sampler) = &mut context.height_sampler {
-                                                let height = sampler.estimate_height(
+                                        source_jigsaw_base_height = context
+                                            .height_sampler
+                                            .as_mut()
+                                            .map_or(source_jigsaw_pos.0.y, |sampler| {
+                                                sampler.estimate_height(
                                                     source_jigsaw_pos.0.x,
                                                     source_jigsaw_pos.0.z,
-                                                );
-                                                if project_start_to_heightmap {
-                                                    height.max(context.sea_level)
-                                                } else {
-                                                    height
-                                                }
-                                            } else {
-                                                source_jigsaw_pos.0.y
-                                            };
+                                                )
+                                            });
                                     }
-                                    target_box_y =
-                                        source_jigsaw_base_height - target_jigsaw_local_y;
-                                }
+                                    source_jigsaw_base_height - target_jigsaw_local_y
+                                };
 
                                 let raw_target_pos = BlockPos::new(
                                     target_jigsaw_pos.0.x - target_jigsaw_local_pos.x,
@@ -342,16 +377,9 @@ impl JigsawPlacement {
                                 let mut target_pos = raw_target_pos;
                                 target_pos.0.y += y_offset;
 
-                                let rotated_target_size =
-                                    target_rotation.transform_size(target_size);
-                                let mut target_box = BlockBox::new(
-                                    target_pos.0.x,
-                                    target_pos.0.y,
-                                    target_pos.0.z,
-                                    target_pos.0.x + rotated_target_size.x - 1,
-                                    target_pos.0.y + rotated_target_size.y - 1,
-                                    target_pos.0.z + rotated_target_size.z - 1,
-                                );
+                                let target_box =
+                                    rotated_box(target_pos, target_size, target_rotation);
+                                let mut target_collision_box = target_box;
 
                                 let mut expand_to = 0;
                                 if do_expansion_hack
@@ -360,20 +388,14 @@ impl JigsawPlacement {
                                     for tj in &target_jigsaws {
                                         let tj_facing =
                                             rotate_direction(tj.facing, target_rotation);
-                                        let rotated_tj_pos =
-                                            target_rotation.transform_pos(tj.pos.0, target_size);
+                                        let rotated_tj_pos = rotate_pos(tj.pos.0, target_rotation);
                                         let rotated_tj_target_pos =
                                             rotated_tj_pos.add(&tj_facing.to_vector());
 
-                                        let rotated_size =
-                                            target_rotation.transform_size(target_size);
-                                        let hack_box = BlockBox::new(
-                                            0,
-                                            0,
-                                            0,
-                                            rotated_size.x - 1,
-                                            rotated_size.y - 1,
-                                            rotated_size.z - 1,
+                                        let hack_box = rotated_box(
+                                            BlockPos::new(0, 0, 0),
+                                            target_size,
+                                            target_rotation,
                                         );
 
                                         if hack_box.contains(
@@ -381,7 +403,8 @@ impl JigsawPlacement {
                                             rotated_tj_target_pos.y,
                                             rotated_tj_target_pos.z,
                                         ) {
-                                            let child_pool_id = pool_alias_lookup.lookup(&tj.pool);
+                                            let child_pool_id = pool_alias_lookup
+                                                .lookup(&tj.pool, &mut context.random);
                                             let child_pool_max_y =
                                                 get_pool_max_y_size(child_pool_id);
 
@@ -389,7 +412,8 @@ impl JigsawPlacement {
                                                 TemplatePool::discover(child_pool_id)
                                             {
                                                 get_pool_max_y_size(
-                                                    pool_alias_lookup.lookup(&cp.fallback),
+                                                    pool_alias_lookup
+                                                        .lookup(&cp.fallback, &mut context.random),
                                                 )
                                             } else {
                                                 0
@@ -403,20 +427,42 @@ impl JigsawPlacement {
                                 }
 
                                 if expand_to > 0 {
-                                    let new_size = (expand_to + 1)
-                                        .max(target_box.max.y - target_box.min.y + 1);
-                                    target_box.max.y = target_box.min.y + new_size - 1;
+                                    let max_y_offset = (expand_to + 1).max(
+                                        target_collision_box.max.y - target_collision_box.min.y,
+                                    );
+                                    target_collision_box.max.y =
+                                        target_collision_box.min.y + max_y_offset;
                                 }
 
-                                if !is_box_inside(&global_bounding_box, &target_box) {
-                                    continue;
-                                }
+                                let collision_space = if source_collision_box.contains(
+                                    target_jigsaw_pos.0.x,
+                                    target_jigsaw_pos.0.y,
+                                    target_jigsaw_pos.0.z,
+                                ) {
+                                    *interior_collision_space.get_or_insert_with(|| {
+                                        collision_spaces.push(CollisionSpace {
+                                            bounds: source_collision_box,
+                                            occupied: Vec::new(),
+                                        });
+                                        collision_spaces.len() - 1
+                                    })
+                                } else {
+                                    state.collision_space
+                                };
+                                let space = &collision_spaces[collision_space];
+                                let can_place = is_box_inside(&space.bounds, &target_collision_box)
+                                    && !space
+                                        .occupied
+                                        .iter()
+                                        .any(|box_| boxes_intersect(box_, &target_collision_box));
 
-                                if !intersects_any(&pieces, &target_box) {
+                                if can_place {
+                                    collision_spaces[collision_space]
+                                        .occupied
+                                        .push(target_collision_box);
                                     let mut child_jigsaw_blocks = Vec::new();
                                     for mut cj in get_element_jigsaw_blocks(&element) {
-                                        let rotated_pos =
-                                            target_rotation.transform_pos(cj.pos.0, target_size);
+                                        let rotated_pos = rotate_pos(cj.pos.0, target_rotation);
                                         cj.pos = BlockPos(rotated_pos).add(
                                             target_pos.0.x,
                                             target_pos.0.y,
@@ -432,7 +478,7 @@ impl JigsawPlacement {
                                     let target_ground_level_delta = if target_rigid {
                                         source_ground_level_delta - delta_y
                                     } else {
-                                        0
+                                        1
                                     };
 
                                     let target_piece = Box::new(PoolElementStructurePiece {
@@ -454,6 +500,7 @@ impl JigsawPlacement {
 
                                     let target_piece_idx = pieces.len();
                                     pieces.push(target_piece);
+                                    piece_collision_boxes.push(target_collision_box);
                                     piece_projections.push(target_projection);
 
                                     let junction_y = if source_rigid {
@@ -462,21 +509,15 @@ impl JigsawPlacement {
                                         target_box_y + target_jigsaw_local_y
                                     } else {
                                         if source_jigsaw_base_height == i32::MIN {
-                                            source_jigsaw_base_height = if let Some(sampler) =
-                                                &mut context.height_sampler
-                                            {
-                                                let height = sampler.estimate_height(
-                                                    source_jigsaw_pos.0.x,
-                                                    source_jigsaw_pos.0.z,
-                                                );
-                                                if project_start_to_heightmap {
-                                                    height.max(context.sea_level)
-                                                } else {
-                                                    height
-                                                }
-                                            } else {
-                                                source_jigsaw_pos.0.y
-                                            };
+                                            source_jigsaw_base_height = context
+                                                .height_sampler
+                                                .as_mut()
+                                                .map_or(source_jigsaw_pos.0.y, |sampler| {
+                                                    sampler.estimate_height(
+                                                        source_jigsaw_pos.0.x,
+                                                        source_jigsaw_pos.0.z,
+                                                    )
+                                                });
                                         }
                                         source_jigsaw_base_height + delta_y / 2
                                     };
@@ -505,6 +546,7 @@ impl JigsawPlacement {
                                             depth: depth + 1,
                                             priority: source_jigsaw.placement_priority,
                                             sequence,
+                                            collision_space,
                                         });
                                     }
 
@@ -556,21 +598,20 @@ const fn is_box_inside(outer: &BlockBox, inner: &BlockBox) -> bool {
         && inner.max.z <= outer.max.z
 }
 
-const fn intersects_exclusive(a: &BlockBox, b: &BlockBox) -> bool {
-    // Strictly greater/less than checks perfectly emulate Vanilla's AABB deflate(0.25)
-    // by completely ignoring touching boundaries where coords are equal.
-    a.max.x > b.min.x
-        && a.min.x < b.max.x
-        && a.max.y > b.min.y
-        && a.min.y < b.max.y
-        && a.max.z > b.min.z
-        && a.min.z < b.max.z
+const fn boxes_intersect(a: &BlockBox, b: &BlockBox) -> bool {
+    // Vanilla turns inclusive block boxes into AABBs, then deflates the candidate by 0.25.
+    // Two integer boxes therefore collide exactly when they share at least one block.
+    a.max.x >= b.min.x
+        && a.min.x <= b.max.x
+        && a.max.y >= b.min.y
+        && a.min.y <= b.max.y
+        && a.max.z >= b.min.z
+        && a.min.z <= b.max.z
 }
 
-fn intersects_any(pieces: &[Box<PoolElementStructurePiece>], box_: &BlockBox) -> bool {
-    pieces
-        .iter()
-        .any(|piece| intersects_exclusive(&piece.piece.bounding_box, box_))
+struct CollisionSpace {
+    bounds: BlockBox,
+    occupied: Vec<BlockBox>,
 }
 
 struct PieceState {
@@ -578,6 +619,7 @@ struct PieceState {
     depth: i32,
     priority: i32,
     sequence: usize,
+    collision_space: usize,
 }
 
 impl PartialEq for PieceState {
@@ -612,6 +654,23 @@ fn get_jigsaw_blocks(template: &StructureTemplate) -> Vec<JigsawBlock> {
         }
     }
     jigsaws
+}
+
+const fn rotate_pos(pos: Vector3<i32>, rotation: Rotation) -> Vector3<i32> {
+    let (x, z) = rotation.rotate_offset(pos.x, pos.z);
+    Vector3::new(x, pos.y, z)
+}
+
+fn rotated_box(origin: BlockPos, size: Vector3<i32>, rotation: Rotation) -> BlockBox {
+    let corner = rotate_pos(Vector3::new(size.x - 1, size.y - 1, size.z - 1), rotation);
+    BlockBox::new(
+        origin.0.x.min(origin.0.x + corner.x),
+        origin.0.y,
+        origin.0.z.min(origin.0.z + corner.z),
+        origin.0.x.max(origin.0.x + corner.x),
+        origin.0.y + corner.y,
+        origin.0.z.max(origin.0.z + corner.z),
+    )
 }
 
 fn get_element_size(element: &PoolElement) -> Option<pumpkin_util::math::vector3::Vector3<i32>> {
@@ -697,7 +756,13 @@ const fn rotate_direction(
             BlockDirection::West => BlockDirection::North,
             _ => dir,
         },
-        Rotation::Rotate180 => dir.opposite(),
+        Rotation::Rotate180 => match dir {
+            BlockDirection::North => BlockDirection::South,
+            BlockDirection::South => BlockDirection::North,
+            BlockDirection::West => BlockDirection::East,
+            BlockDirection::East => BlockDirection::West,
+            _ => dir,
+        },
         Rotation::CounterClockwise90 => match dir {
             BlockDirection::North => BlockDirection::West,
             BlockDirection::West => BlockDirection::South,

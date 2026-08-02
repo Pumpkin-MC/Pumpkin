@@ -5,22 +5,21 @@ use crate::VarInt;
 
 use crate::{
     ServerPacket,
-    ser::{NetworkReadExt, ReadingError},
+    ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_COMMAND_SUGGESTION)]
-pub struct SCommandSuggestion {
+pub struct SCommandSuggestion<'a> {
     pub id: VarInt,
-    pub command: String,
+    pub command: &'a str,
 }
 
-impl ServerPacket for SCommandSuggestion {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SCommandSuggestion<'a> {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             id: bytebuf.get_var_int()?,
-            command: bytebuf.get_str()?.into_string(),
+            command: bytebuf.get_str_borrowed()?,
         })
     }
 }

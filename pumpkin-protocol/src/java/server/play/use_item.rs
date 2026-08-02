@@ -5,7 +5,6 @@ use crate::{
 use pumpkin_data::packet::serverbound::PLAY_USE_ITEM;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 use crate::VarInt;
 
@@ -18,16 +17,21 @@ pub struct SUseItem {
     pub pitch: f32,
 }
 
-impl ServerPacket for SUseItem {
-    fn read(
-        mut bytebuf: impl Read,
-        _protocol_version: &JavaMinecraftVersion,
-    ) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SUseItem {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let hand = bytebuf.get_var_int()?;
+        let sequence = bytebuf.get_var_int()?;
+        let (yaw, pitch) = if version >= &JavaMinecraftVersion::V_1_21_2 {
+            (bytebuf.get_f32_be()?, bytebuf.get_f32_be()?)
+        } else {
+            (0.0, 0.0)
+        };
+
         Ok(Self {
-            hand: bytebuf.get_var_int()?,
-            sequence: bytebuf.get_var_int()?,
-            yaw: bytebuf.get_f32_be()?,
-            pitch: bytebuf.get_f32_be()?,
+            hand,
+            sequence,
+            yaw,
+            pitch,
         })
     }
 }

@@ -5,22 +5,22 @@ use std::sync::{
 
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
-use pumpkin_data::particle::Particle;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    ageable::AgeableMob,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
+    passive::animal::Animal,
     player::Player,
 };
 use pumpkin_nbt::compound::NbtCompound;
@@ -41,6 +41,7 @@ pub struct ChickenEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
     egg_lay_time: AtomicI32,
+    pub ageable_data: crate::entity::ageable::AgeableData,
 }
 
 impl ChickenEntity {
@@ -51,6 +52,7 @@ impl ChickenEntity {
             mob_entity,
             variant: AtomicU8::new(1), // Default to temperate
             egg_lay_time: AtomicI32::new(egg_lay_time),
+            ageable_data: crate::entity::ageable::AgeableData::default(),
         };
         let mob_arc = Arc::new(chicken);
         let mob_weak: Weak<dyn Mob> = {
@@ -78,10 +80,18 @@ impl ChickenEntity {
     }
 }
 
+impl crate::entity::ageable::AgeableMob for ChickenEntity {
+    fn get_ageable_data(&self) -> &crate::entity::ageable::AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl NBTStorage for ChickenEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.mob_entity.living_entity.write_nbt(nbt).await;
+            self.write_ageable_nbt(nbt);
+            self.write_animal_nbt(nbt);
             nbt.put_int("EggLayTime", self.egg_lay_time.load(Ordering::Relaxed));
             let variant_str = match self.variant.load(Ordering::Relaxed) {
                 0 => "minecraft:cold",
@@ -95,6 +105,8 @@ impl NBTStorage for ChickenEntity {
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.read_ageable_nbt(nbt);
+            self.read_animal_nbt(nbt);
             self.egg_lay_time
                 .store(nbt.get_int("EggLayTime").unwrap_or(6000), Ordering::Relaxed);
             if let Some(variant_str) = nbt.get_string("variant") {
@@ -109,6 +121,12 @@ impl NBTStorage for ChickenEntity {
                 self.variant.store(variant, Ordering::Relaxed);
             }
         })
+    }
+}
+
+impl super::animal::Animal for ChickenEntity {
+    fn is_food(&self, item_stack: &ItemStack) -> bool {
+        TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 
@@ -172,32 +190,7 @@ impl Mob for ChickenEntity {
         player: &'a Arc<Player>,
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            let is_food = TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id);
-            if is_food && self.is_breeding_ready() && !self.is_in_love() {
-                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-
-                self.mob_entity
-                    .set_love_ticks(600, Some(player.gameprofile.id));
-                let entity = &self.mob_entity.living_entity.entity;
-                let world = entity.world.load();
-                let pos = entity.pos.load();
-
-                world.spawn_particle(
-                    pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
-                    Vector3::new(0.5, 0.5, 0.5),
-                    1.0,
-                    7,
-                    Particle::Heart,
-                );
-                world.play_sound(
-                    Sound::EntityChickenAmbient,
-                    SoundCategory::Neutral,
-                    &entity.pos.load(),
-                );
-                return true;
-            }
-            false
-        })
+        use super::animal::Animal;
+        self.animal_interact(player, item_stack, Sound::EntityChickenAmbient)
     }
 }

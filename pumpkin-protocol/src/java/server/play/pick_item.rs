@@ -8,7 +8,6 @@ use crate::{
     ser::{NetworkReadExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 #[java_packet(PLAY_PICK_ITEM_FROM_BLOCK)]
 pub struct SPickItemFromBlock {
@@ -16,8 +15,8 @@ pub struct SPickItemFromBlock {
     pub include_data: bool,
 }
 
-impl ServerPacket for SPickItemFromBlock {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SPickItemFromBlock {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             pos: BlockPos::from_i64(bytebuf.get_i64_be()?),
             include_data: bytebuf.get_bool()?,
@@ -31,8 +30,8 @@ pub struct SPickItemFromEntity {
     pub include_data: bool,
 }
 
-impl ServerPacket for SPickItemFromEntity {
-    fn read(mut bytebuf: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+impl<'a> ServerPacket<'a> for SPickItemFromEntity {
+    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             id: bytebuf.get_var_int()?,
             include_data: bytebuf.get_bool()?,

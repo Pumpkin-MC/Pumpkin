@@ -419,13 +419,8 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .await)
     }
 
-    async fn get_data_folder(&mut self, context: Resource<Context>) -> wasmtime::Result<String> {
-        Ok(self
-            .get_context(&context)?
-            .provider
-            .get_data_folder()
-            .to_string_lossy()
-            .into_owned())
+    async fn get_data_folder(&mut self, _context: Resource<Context>) -> wasmtime::Result<String> {
+        Ok("data".to_string())
     }
 
     async fn get_server(

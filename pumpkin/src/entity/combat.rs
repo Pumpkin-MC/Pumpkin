@@ -135,13 +135,27 @@ impl AttackType {
     }
 }
 
-pub fn handle_knockback(attacker: &Entity, victim: &Entity, strength: f64) {
-    let yaw = attacker.yaw.load();
-    victim.knockback(
-        strength * 0.5,
-        f64::from((yaw.to_radians()).sin()),
-        f64::from(-(yaw.to_radians()).cos()),
-    );
+/// Scales a knockback `strength` by a living entity's knockback resistance,
+/// mirroring vanilla `LivingEntity.knockback`: `strength *= 1.0 - resistance`.
+/// A resistance of 1.0 (iron golem, warden, ...) cancels the knockback entirely.
+pub fn knockback_after_resistance(strength: f64, resistance: f64) -> f64 {
+    strength * (1.0 - resistance)
+}
+
+pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f64) {
+    let resistance = victim.get_living_entity().map_or(0.0, |living| {
+        living.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
+    });
+    let strength = knockback_after_resistance(strength * 0.5, resistance);
+
+    if strength > 0.0 {
+        let yaw = attacker.yaw.load();
+        victim.get_entity().knockback(
+            strength,
+            f64::from((yaw.to_radians()).sin()),
+            f64::from(-(yaw.to_radians()).cos()),
+        );
+    }
 
     let velocity = attacker.velocity.load();
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
@@ -193,7 +207,7 @@ pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type:
 
 #[cfg(test)]
 mod tests {
-    use super::{can_critical_attack, can_sweep_attack};
+    use super::{can_critical_attack, can_sweep_attack, knockback_after_resistance};
 
     #[test]
     fn critical_attacks_require_vanilla_movement_conditions() {
@@ -216,5 +230,29 @@ mod tests {
         assert!(can_sweep_attack(true, true, true, 1.0, 1.0));
         assert!(!can_sweep_attack(true, true, true, 39.0625, 1.0));
         assert!(!can_sweep_attack(true, false, true, 1.0, 1.0));
+    }
+
+    #[test]
+    fn zero_resistance_keeps_full_strength() {
+        assert_eq!(knockback_after_resistance(0.4, 0.0), 0.4);
+    }
+
+    #[test]
+    fn full_resistance_cancels_knockback() {
+        // Iron golem / warden have KNOCKBACK_RESISTANCE == 1.0.
+        assert_eq!(knockback_after_resistance(0.4, 1.0), 0.0);
+    }
+
+    #[test]
+    fn partial_resistance_scales_strength() {
+        // Ravager has KNOCKBACK_RESISTANCE == 0.75.
+        assert!((knockback_after_resistance(0.4, 0.75) - 0.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn over_full_resistance_is_negative_so_callers_skip_it() {
+        // Stacked armour modifiers can push resistance above 1.0; the result is
+        // negative and callers guard on `strength > 0.0`.
+        assert!(knockback_after_resistance(0.4, 1.2) < 0.0);
     }
 }

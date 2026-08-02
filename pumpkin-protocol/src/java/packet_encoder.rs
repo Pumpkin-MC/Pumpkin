@@ -204,9 +204,6 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     /// NOTE: This method does not flush. Call [`Self::flush`] to flush buffered data.
     #[allow(clippy::too_many_lines)]
     pub async fn write_packet(&mut self, packet_data: Bytes) -> Result<(), PacketEncodeError> {
-        // We need to know the length of the compressed buffer and serde is not async :(
-        // We need to write to a buffer here 😔
-
         let data_len = packet_data.len();
         if data_len > MAX_PACKET_DATA_SIZE {
             return Err(PacketEncodeError::TooLong(data_len));
@@ -218,14 +215,13 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             ))
         })?;
 
-        if let Some((compression_threshold, compression_level)) = self.compression {
-            if data_len >= compression_threshold {
-                // Pushed before data:
-                // Length of (Data Length) + length of compressed (Packet ID + Data)
-                // Length of uncompressed (Packet ID + Data)
+        let mut header_buf = [0u8; 10];
+        let mut header_cursor = std::io::Cursor::new(&mut header_buf[..]);
 
-                // TODO: We need the compressed length at the beginning of the packet so we need to write to
-                // buf here :( Is there a magic way to find a compressed length?
+        let payload_to_write: &[u8] = if let Some((compression_threshold, compression_level)) =
+            self.compression
+        {
+            if data_len >= compression_threshold {
                 self.compress_packet_data(packet_data.as_ref(), compression_level)?;
                 debug_assert!(!self.compression_scratch.is_empty());
 
@@ -245,24 +241,14 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 }
 
                 full_packet_len_var_int
-                    .encode_async(self.writer.as_mut().unwrap())
-                    .await
+                    .encode(&mut header_cursor)
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 data_len_var_int
-                    .encode_async(self.writer.as_mut().unwrap())
-                    .await
+                    .encode(&mut header_cursor)
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-                self.writer
-                    .as_mut()
-                    .unwrap()
-                    .write_all(&self.compression_scratch)
-                    .await
-                    .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-            } else {
-                // Pushed before data:
-                // Length of (Data Length) + length of compressed (Packet ID + Data)
-                // 0 to indicate uncompressed
 
+                self.compression_scratch.as_slice()
+            } else {
                 let data_len_var_int: VarInt = 0.into();
                 let full_packet_len_var_int: VarInt = (data_len_var_int.written_size() + data_len)
                     .try_into()
@@ -279,24 +265,15 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
                 }
 
                 full_packet_len_var_int
-                    .encode_async(self.writer.as_mut().unwrap())
-                    .await
+                    .encode(&mut header_cursor)
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
                 data_len_var_int
-                    .encode_async(self.writer.as_mut().unwrap())
-                    .await
+                    .encode(&mut header_cursor)
                     .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-                self.writer
-                    .as_mut()
-                    .unwrap()
-                    .write_all(&packet_data)
-                    .await
-                    .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
+
+                packet_data.as_ref()
             }
         } else {
-            // Pushed before data:
-            // Length of Packet ID + Data
-
             let full_packet_len_var_int: VarInt = data_len_var_int;
 
             let complete_serialization_length =
@@ -306,16 +283,27 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             }
 
             full_packet_len_var_int
-                .encode_async(self.writer.as_mut().unwrap())
-                .await
+                .encode(&mut header_cursor)
                 .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-            self.writer
-                .as_mut()
-                .unwrap()
-                .write_all(&packet_data)
-                .await
-                .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-        }
+
+            packet_data.as_ref()
+        };
+
+        let header_len = header_cursor.position() as usize;
+        let header_bytes = &header_buf[..header_len];
+        let writer = self
+            .writer
+            .as_mut()
+            .ok_or_else(|| PacketEncodeError::Message("Writer missing".into()))?;
+
+        writer
+            .write_all(header_bytes)
+            .await
+            .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
+        writer
+            .write_all(payload_to_write)
+            .await
+            .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
 
         Ok(())
     }
@@ -323,7 +311,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     pub async fn flush(&mut self) -> Result<(), PacketEncodeError> {
         self.writer
             .as_mut()
-            .unwrap()
+            .ok_or_else(|| PacketEncodeError::Message("Writer missing".into()))?
             .flush()
             .await
             .map_err(|err| PacketEncodeError::Message(err.to_string()))

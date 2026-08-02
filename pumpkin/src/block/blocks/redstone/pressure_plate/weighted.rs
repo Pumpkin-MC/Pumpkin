@@ -1,7 +1,7 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockState, BlockStateId, block_properties::BlockProperties,
 };
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     world::World,
 };
 
-use super::PressurePlate;
+use super::{PressurePlate, detection_box_at};
 
 /// This is for Gold and Iron Pressure Plate
 pub struct WeightedPressurePlateBlock;
@@ -109,8 +109,7 @@ impl PressurePlate for WeightedPressurePlateBlock {
             // Iron
             150
         };
-        // TODO: this is bad use real box
-        let aabb = BoundingBox::from_block(pos);
+        let aabb = detection_box_at(pos);
         let len = world.get_entities_at_box(&aabb).len() + world.get_players_at_box(&aabb).len();
         let len = len.min(weight);
         if len > 0 {

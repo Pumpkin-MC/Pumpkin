@@ -6,7 +6,6 @@ use pumpkin_data::packet::serverbound::PLAY_JIGSAW_GENERATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
-use std::io::Read;
 
 use crate::codec::var_int::VarInt;
 
@@ -17,9 +16,9 @@ pub struct SJigsawGenerate {
     pub keep_jigsaws: bool,
 }
 
-impl ServerPacket for SJigsawGenerate {
+impl<'a> ServerPacket<'a> for SJigsawGenerate {
     fn read(
-        mut bytebuf: impl Read,
+        bytebuf: &mut &'a [u8],
         _protocol_version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
         Ok(Self {

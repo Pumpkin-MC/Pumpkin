@@ -13,8 +13,21 @@ impl DataComponentImpl for DyeImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct DyedColorImpl;
+pub struct DyedColorImpl {
+    pub rgb: i32,
+}
+impl DyedColorImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_int().map(|rgb| Self { rgb })
+    }
+}
 impl DataComponentImpl for DyedColorImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.rgb)
+    }
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.rgb) as i32
+    }
     default_impl!(DyedColor);
 }
 
@@ -152,9 +165,51 @@ impl DataComponentImpl for BundleContentsImpl {
     default_impl!(BundleContents);
 }
 
+/// The dimension and block position a lodestone compass points to.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct LodestoneTrackerImpl;
+pub struct LodestoneTarget {
+    pub dimension: String,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct LodestoneTrackerImpl {
+    pub target: Option<LodestoneTarget>,
+    pub tracked: bool,
+}
+impl LodestoneTrackerImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let tracked = compound.get_bool("tracked").unwrap_or(true);
+        let target = compound.get_compound("target").and_then(|target| {
+            let dimension = target.get_string("dimension")?.to_string();
+            let pos = target.get_int_array("pos")?;
+            if pos.len() != 3 {
+                return None;
+            }
+            Some(LodestoneTarget {
+                dimension,
+                x: pos[0],
+                y: pos[1],
+                z: pos[2],
+            })
+        });
+        Some(Self { target, tracked })
+    }
+}
 impl DataComponentImpl for LodestoneTrackerImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        if let Some(target) = &self.target {
+            let mut target_compound = NbtCompound::new();
+            target_compound.put_string("dimension", target.dimension.clone());
+            target_compound.put("pos", NbtTag::IntArray(vec![target.x, target.y, target.z]));
+            compound.put_compound("target", target_compound);
+        }
+        compound.put_bool("tracked", self.tracked);
+        NbtTag::Compound(compound)
+    }
     default_impl!(LodestoneTracker);
 }
 

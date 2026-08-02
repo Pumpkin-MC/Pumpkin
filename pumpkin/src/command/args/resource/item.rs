@@ -1,7 +1,6 @@
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     data_component::DataComponent,
-    data_component_impl::DataComponentImpl,
     item::Item,
     tag::{RegistryKey, get_tag_ids},
 };
@@ -120,27 +119,15 @@ impl<'a> FindArg<'a> for ItemArgumentConsumer {
                                     )
                                 {
                                     // Match the DataComponent key
-                                    if let Some(data_comp) = DataComponent::try_from_name(comp_key)
-                                    {
-                                        // Handle Profile or other data components
-                                        match data_comp {
-                                                DataComponent::Profile => {
-                                                    if let Some(profile_impl) = pumpkin_data::data_component_impl::ProfileImpl::read_data(&nbt_tag) {
-                                                        patch.push((data_comp, Some(profile_impl.to_dyn())));
-                                                    }
-                                                }
-                                                DataComponent::CustomData => {
-                                                    if let pumpkin_nbt::tag::NbtTag::Compound(compound) = nbt_tag {
-                                                        patch.push((data_comp, Some(pumpkin_data::data_component_impl::CustomDataImpl { data: compound }.to_dyn())));
-                                                    }
-                                                }
-                                                DataComponent::CustomName => {
-                                                    if let pumpkin_nbt::tag::NbtTag::String(text_str) = nbt_tag {
-                                                        patch.push((data_comp, Some(pumpkin_data::data_component_impl::CustomNameImpl { name: pumpkin_util::text::TextComponent::text(String::from(text_str)) }.to_dyn())));
-                                                    }
-                                                }
-                                                _ => {}
-                                            }
+                                    if let (Some(data_comp), Some(comp_impl)) = (
+                                        DataComponent::try_from_name(comp_key),
+                                        pumpkin_data::data_component_impl::read_data(
+                                            DataComponent::try_from_name(comp_key)
+                                                .unwrap_or(DataComponent::CustomData),
+                                            &nbt_tag,
+                                        ),
+                                    ) {
+                                        patch.push((data_comp, Some(comp_impl)));
                                     }
                                 }
                             }
