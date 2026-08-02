@@ -93,7 +93,8 @@ impl Goal for LookAtEntityGoal {
             }
 
             let world = mob_entity.living_entity.entity.world.load();
-            let mob_pos = mob_entity.living_entity.entity.pos.load();
+            let mut mob_pos = mob_entity.living_entity.entity.pos.load();
+            mob_pos.y += mob_entity.living_entity.entity.get_eye_height();
 
             if *self.target_type == EntityType::PLAYER {
                 self.target = world
