@@ -288,10 +288,14 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
         }
 
         match slot {
-            // Slots 0-2 - potion bottles
-            0..=2 => stack
-                .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
-                .is_some(),
+            // Slots 0-2 - potion bottles (matches vanilla's PotionSlot.mayPlaceItem)
+            0..=2 => {
+                let id = stack.get_item().id;
+                id == Item::POTION.id
+                    || id == Item::SPLASH_POTION.id
+                    || id == Item::LINGERING_POTION.id
+                    || id == Item::GLASS_BOTTLE.id
+            }
             // Slot 3 - ingredient (must be tagged as brewable)
             3 => {
                 // Check if item is a valid brewing ingredient
