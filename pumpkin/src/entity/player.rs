@@ -4558,6 +4558,10 @@ impl NBTStorage for EnderChestInventory {
 
 impl NBTStorageInit for EnderChestInventory {}
 
+fn ability_invulnerability_blocks(damage_type: &DamageType) -> bool {
+    !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
+}
+
 impl EntityBase for Player {
     fn damage_with_context<'a>(
         &'a self,
@@ -4570,8 +4574,7 @@ impl EntityBase for Player {
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             if self.abilities.lock().await.invulnerable
-                && damage_type != DamageType::GENERIC_KILL
-                && damage_type != DamageType::OUT_OF_WORLD
+                && ability_invulnerability_blocks(&damage_type)
             {
                 return false;
             }
@@ -5330,12 +5333,19 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::Player;
+    use super::{Player, ability_invulnerability_blocks};
+    use pumpkin_data::damage::DamageType;
 
     #[test]
     fn submerged_mining_speed_requires_aqua_affinity_to_skip_penalty() {
         assert_eq!(Player::submerged_mining_speed(5.0, false, false, 0.2), 5.0);
         assert_eq!(Player::submerged_mining_speed(5.0, true, true, 0.2), 5.0);
         assert_eq!(Player::submerged_mining_speed(5.0, true, false, 0.2), 1.0);
+    }
+
+    #[test]
+    fn invulnerability_allows_bypass_tagged_damage() {
+        assert!(ability_invulnerability_blocks(&DamageType::MOB_ATTACK));
+        assert!(!ability_invulnerability_blocks(&DamageType::OUT_OF_WORLD));
     }
 }
