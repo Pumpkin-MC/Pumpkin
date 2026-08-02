@@ -609,6 +609,12 @@ impl PluginManager {
                         .insert(plugin_name.clone(), PluginState::Loaded);
                     state_notify.notify_waiters();
 
+                    let _ = self_ref_clone
+                        .fire(crate::plugin::server::plugin_load::PluginLoadEvent::new(
+                            &metadata,
+                        ))
+                        .await;
+
                     info!("Loaded {} ({})", metadata.name, metadata.version);
 
                     if !metadata.permissions.is_empty() {
