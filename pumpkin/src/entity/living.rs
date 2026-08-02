@@ -2684,6 +2684,7 @@ impl EntityBase for LivingEntity {
                         // 2) off-hand
                         // 3) fallback to active_hand if the above didn't match
                         let mut handled = false;
+                        let mut slot_to_sync = None;
 
                         // Check main hand (hotbar selected)
                         let held_arc = player.inventory.held_item();
@@ -2701,6 +2702,7 @@ impl EntityBase for LivingEntity {
                                     held_lock.decrement_unless_creative(player.gamemode.load(), 1);
                                 }
                                 handled = true;
+                                slot_to_sync = Some(player.inventory.get_selected_slot() as usize);
                             }
                         }
 
@@ -2721,6 +2723,7 @@ impl EntityBase for LivingEntity {
                                 }
 
                                 handled = true;
+                                slot_to_sync = Some(PlayerInventory::OFF_HAND_SLOT);
                             }
                         }
 
@@ -2743,6 +2746,19 @@ impl EntityBase for LivingEntity {
                             } else {
                                 item_lock.decrement_unless_creative(player.gamemode.load(), 1);
                             }
+                            slot_to_sync = Some(match hand_to_modify {
+                                Hand::Left => PlayerInventory::OFF_HAND_SLOT,
+                                Hand::Right => player.inventory.get_selected_slot() as usize,
+                            });
+                        }
+
+                        if let Some(slot) = slot_to_sync {
+                            let updated = if slot == PlayerInventory::OFF_HAND_SLOT {
+                                player.inventory.off_hand_item().await.lock().await.clone()
+                            } else {
+                                player.inventory.held_item().lock().await.clone()
+                            };
+                            player.sync_hand_slot(slot, updated).await;
                         }
 
                         if let Some(cooldown) = item.get_use_cooldown() {
