@@ -28,13 +28,25 @@ impl ItemBehaviour for NameTagItem {
             if entity.entity_type.saveable
                 && let Some(name) = item.get_data_component::<CustomNameImpl>()
             {
-                // TODO
                 entity.set_custom_name(name.name.clone());
+                entity.set_custom_name_visible(true);
                 item.decrement_unless_creative(player.gamemode.load(), 1);
             }
         })
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NameTagItem;
+    use crate::item::ItemMetadata;
+    use pumpkin_data::item::Item;
+
+    #[test]
+    fn name_tag_registers_only_the_name_tag_item() {
+        assert_eq!(NameTagItem::ids().as_ref(), [Item::NAME_TAG.id]);
     }
 }
