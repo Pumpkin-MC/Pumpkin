@@ -267,11 +267,7 @@ impl FishingBobberEntity {
             velocity.y += 0.02; // Buoyancy
 
             if !self.wait_adjusted.swap(true, Ordering::Relaxed) {
-                let mut reduction = if world.is_raining_at(&entity.block_pos.load()).await {
-                    20
-                } else {
-                    0
-                };
+                let mut reduction = 0;
                 if let Some(owner) = world.get_player_by_id(self.owner_id) {
                     let held = owner.inventory.held_item();
                     reduction += held
@@ -301,7 +297,16 @@ impl FishingBobberEntity {
             } else {
                 let wait = self.wait_countdown.load(Ordering::Relaxed);
                 if wait > 0 {
-                    self.wait_countdown.store(wait - 1, Ordering::Relaxed);
+                    let above = entity.block_pos.load().up();
+                    let mut fishing_speed = 1;
+                    if rand::random::<f32>() < 0.25 && world.is_raining_at(&above).await {
+                        fishing_speed += 1;
+                    }
+                    if rand::random::<f32>() < 0.5 && !world.can_see_sky(&above) {
+                        fishing_speed -= 1;
+                    }
+                    self.wait_countdown
+                        .store((wait - fishing_speed).max(0), Ordering::Relaxed);
                 } else {
                     // Start bite
                     self.bite_countdown.store(40, Ordering::Relaxed);
