@@ -7,7 +7,7 @@ use pumpkin_data::{
 use crate::entity::{
     Entity, NBTStorage, NbtFuture,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
+        active_target::ActiveTargetGoal, flee_sun::FleeSunGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
         ranged_bow_attack::RangedBowAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
@@ -61,6 +61,7 @@ impl SkeletonEntityBase {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(3, FleeSunGoal::new(1.0));
             if uses_bow {
                 // Vanilla `AbstractSkeleton#reassessWeaponGoal` selects this at priority 4.
                 goal_selector.add_goal(4, Box::new(RangedBowAttackGoal::new(20, 15.0)));
