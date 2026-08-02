@@ -10,6 +10,7 @@ use pumpkin_data::translation;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 
 const DESCRIPTION: &str = "Modifies a trigger scoreboard objective.";
 const PERMISSION: &str = "minecraft:command.trigger";
@@ -44,7 +45,7 @@ impl CommandExecutor for SimpleTriggerExecutor {
                 .get(objective_name)
                 .ok_or_else(|| INVALID_TRIGGER_ERROR.create_without_context())?;
 
-            if objective.criterion != "trigger" {
+            if &*objective.criterion != "trigger" {
                 return Err(INVALID_TRIGGER_ERROR.create_without_context());
             }
 
@@ -69,8 +70,8 @@ impl CommandExecutor for SimpleTriggerExecutor {
             let new_value = current_value + 1;
 
             let updated_score = ScoreboardScore {
-                entity_name: Box::leak(player_name.clone().into_boxed_str()),
-                objective_name: Box::leak(objective_name.to_string().into_boxed_str()),
+                entity_name: Arc::from(player_name.as_str()),
+                objective_name: Arc::from(objective_name),
                 value: VarInt(new_value),
                 display_name: None,
                 number_format: None,
@@ -114,7 +115,7 @@ impl CommandExecutor for AddTriggerExecutor {
                 .get(objective_name)
                 .ok_or_else(|| INVALID_TRIGGER_ERROR.create_without_context())?;
 
-            if objective.criterion != "trigger" {
+            if &*objective.criterion != "trigger" {
                 return Err(INVALID_TRIGGER_ERROR.create_without_context());
             }
 
@@ -139,8 +140,8 @@ impl CommandExecutor for AddTriggerExecutor {
             let new_value = current_value + value;
 
             let updated_score = ScoreboardScore {
-                entity_name: Box::leak(player_name.clone().into_boxed_str()),
-                objective_name: Box::leak(objective_name.to_string().into_boxed_str()),
+                entity_name: Arc::from(player_name.as_str()),
+                objective_name: Arc::from(objective_name),
                 value: VarInt(new_value),
                 display_name: None,
                 number_format: None,
@@ -187,7 +188,7 @@ impl CommandExecutor for SetTriggerExecutor {
                 .get(objective_name)
                 .ok_or_else(|| INVALID_TRIGGER_ERROR.create_without_context())?;
 
-            if objective.criterion != "trigger" {
+            if &*objective.criterion != "trigger" {
                 return Err(INVALID_TRIGGER_ERROR.create_without_context());
             }
 
@@ -204,8 +205,8 @@ impl CommandExecutor for SetTriggerExecutor {
             }
 
             let updated_score = ScoreboardScore {
-                entity_name: Box::leak(player_name.clone().into_boxed_str()),
-                objective_name: Box::leak(objective_name.to_string().into_boxed_str()),
+                entity_name: Arc::from(player_name.as_str()),
+                objective_name: Arc::from(objective_name),
                 value: VarInt(value),
                 display_name: None,
                 number_format: None,

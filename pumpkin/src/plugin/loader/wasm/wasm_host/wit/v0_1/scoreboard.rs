@@ -1,15 +1,19 @@
 use wasmtime::component::Resource;
 
+use std::sync::Arc;
+
 use crate::plugin::loader::wasm::wasm_host::{
     state::{PluginHostState, ScoreboardResource},
     wit::v0_1::pumpkin::{
         self,
         plugin::scoreboard::{
-            self, CollisionRule, DisplaySlot, NametagVisibility, RenderType, TeamSettings,
+            self, CollisionRule, DisplaySlot, NametagVisibility, RenderType as WitRenderType,
+            TeamSettings,
         },
     },
 };
 use crate::world::scoreboard::{ScoreboardObjective, ScoreboardScore, Team};
+use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::codec::var_int::VarInt;
 
 impl PluginHostState {
@@ -21,6 +25,68 @@ impl PluginHostState {
             .get::<ScoreboardResource>(&Resource::new_own(res.rep()))
             .map_err(wasmtime::Error::from)
     }
+
+    const fn to_wit_render_type(
+        rt: pumpkin_protocol::java::client::play::RenderType,
+    ) -> WitRenderType {
+        match rt {
+            pumpkin_protocol::java::client::play::RenderType::Integer => WitRenderType::Integer,
+            pumpkin_protocol::java::client::play::RenderType::Hearts => WitRenderType::Hearts,
+        }
+    }
+
+    const fn to_internal_render_type(
+        rt: WitRenderType,
+    ) -> pumpkin_protocol::java::client::play::RenderType {
+        match rt {
+            WitRenderType::Integer => pumpkin_protocol::java::client::play::RenderType::Integer,
+            WitRenderType::Hearts => pumpkin_protocol::java::client::play::RenderType::Hearts,
+        }
+    }
+
+    const fn to_internal_display_slot(slot: DisplaySlot) -> ScoreboardDisplaySlot {
+        match slot {
+            DisplaySlot::PlayerList => ScoreboardDisplaySlot::List,
+            DisplaySlot::Sidebar => ScoreboardDisplaySlot::Sidebar,
+            DisplaySlot::BelowName => ScoreboardDisplaySlot::BelowName,
+            DisplaySlot::SidebarTeamBlack => ScoreboardDisplaySlot::TeamBlack,
+            DisplaySlot::SidebarTeamDarkBlue => ScoreboardDisplaySlot::TeamDarkBlue,
+            DisplaySlot::SidebarTeamDarkGreen => ScoreboardDisplaySlot::TeamDarkGreen,
+            DisplaySlot::SidebarTeamDarkAqua => ScoreboardDisplaySlot::TeamDarkAqua,
+            DisplaySlot::SidebarTeamDarkRed => ScoreboardDisplaySlot::TeamDarkRed,
+            DisplaySlot::SidebarTeamDarkPurple => ScoreboardDisplaySlot::TeamDarkPurple,
+            DisplaySlot::SidebarTeamGold => ScoreboardDisplaySlot::TeamGold,
+            DisplaySlot::SidebarTeamGray => ScoreboardDisplaySlot::TeamGray,
+            DisplaySlot::SidebarTeamDarkGray => ScoreboardDisplaySlot::TeamDarkGray,
+            DisplaySlot::SidebarTeamBlue => ScoreboardDisplaySlot::TeamBlue,
+            DisplaySlot::SidebarTeamGreen => ScoreboardDisplaySlot::TeamGreen,
+            DisplaySlot::SidebarTeamAqua => ScoreboardDisplaySlot::TeamAqua,
+            DisplaySlot::SidebarTeamRed => ScoreboardDisplaySlot::TeamRed,
+            DisplaySlot::SidebarTeamLightPurple => ScoreboardDisplaySlot::TeamLightPurple,
+            DisplaySlot::SidebarTeamYellow => ScoreboardDisplaySlot::TeamYellow,
+            DisplaySlot::SidebarTeamWhite => ScoreboardDisplaySlot::TeamWhite,
+        }
+    }
+
+    fn to_objective_info(
+        obj: &crate::world::scoreboard::ScoreboardObjective,
+    ) -> scoreboard::ObjectiveInfo {
+        scoreboard::ObjectiveInfo {
+            name: obj.name.to_string(),
+            display_name: obj.display_name.clone().get_text(),
+            criteria_name: obj.criterion.to_string(),
+            render_type: Self::to_wit_render_type(obj.render_type),
+            display_auto_update: obj.display_auto_update,
+        }
+    }
+
+    fn to_team_info(team: &crate::world::scoreboard::Team) -> scoreboard::TeamInfo {
+        scoreboard::TeamInfo {
+            name: team.name.clone(),
+            display_name: team.display_name.clone().get_text(),
+            players: team.players.clone(),
+        }
+    }
 }
 
 impl scoreboard::Host for PluginHostState {}
@@ -31,29 +97,25 @@ impl scoreboard::HostScoreboard for PluginHostState {
         res: Resource<scoreboard::Scoreboard>,
         name: String,
         display_name: Resource<pumpkin::plugin::text::TextComponent>,
-        render_type: RenderType,
+        criteria: String,
+        render_type: WitRenderType,
     ) -> wasmtime::Result<()> {
         let world = self.get_scoreboard_res(&res)?.provider.clone();
         let display_name = self.get_text_provider(&display_name)?;
-
-        let rt = match render_type {
-            RenderType::Integer => pumpkin_protocol::java::client::play::RenderType::Integer,
-            RenderType::Hearts => pumpkin_protocol::java::client::play::RenderType::Hearts,
-        };
+        let rt = Self::to_internal_render_type(render_type);
 
         let objective = ScoreboardObjective::new(
-            Box::leak(name.into_boxed_str()),
+            Arc::from(name.as_str()),
             display_name,
             rt,
             None,
-            "dummy",
+            Arc::from(criteria.as_str()),
         );
         world
             .scoreboard
             .lock()
             .await
-            .add_objective(&world, objective)
-            .await;
+            .add_objective(&world, objective);
         Ok(())
     }
 
@@ -67,9 +129,46 @@ impl scoreboard::HostScoreboard for PluginHostState {
             .scoreboard
             .lock()
             .await
-            .remove_objective(&world, &name)
-            .await;
+            .remove_objective(&world, &name);
         Ok(())
+    }
+
+    async fn get_objective(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        name: String,
+    ) -> wasmtime::Result<Option<scoreboard::ObjectiveInfo>> {
+        let world = self.get_scoreboard_res(&res)?.provider.clone();
+        let sb = world.scoreboard.lock().await;
+        Ok(sb.get_objective(&name).map(Self::to_objective_info))
+    }
+
+    async fn get_objectives(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+    ) -> wasmtime::Result<Vec<scoreboard::ObjectiveInfo>> {
+        let world = self.get_scoreboard_res(&res)?.provider.clone();
+        let sb = world.scoreboard.lock().await;
+        Ok(sb
+            .get_objectives()
+            .values()
+            .map(Self::to_objective_info)
+            .collect())
+    }
+
+    async fn get_objectives_by_criteria(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        criteria: String,
+    ) -> wasmtime::Result<Vec<scoreboard::ObjectiveInfo>> {
+        let world = self.get_scoreboard_res(&res)?.provider.clone();
+        let sb = world.scoreboard.lock().await;
+        Ok(sb
+            .get_objectives()
+            .values()
+            .filter(|o| *o.criterion == *criteria)
+            .map(Self::to_objective_info)
+            .collect())
     }
 
     async fn set_display_slot(
@@ -79,62 +178,39 @@ impl scoreboard::HostScoreboard for PluginHostState {
         objective_name: String,
     ) -> wasmtime::Result<()> {
         let world = self.get_scoreboard_res(&res)?.provider.clone();
-        let slot = match slot {
-            DisplaySlot::PlayerList => pumpkin_data::scoreboard::ScoreboardDisplaySlot::List,
-            DisplaySlot::Sidebar => pumpkin_data::scoreboard::ScoreboardDisplaySlot::Sidebar,
-            DisplaySlot::BelowName => pumpkin_data::scoreboard::ScoreboardDisplaySlot::BelowName,
-            DisplaySlot::SidebarTeamBlack => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamBlack
-            }
-            DisplaySlot::SidebarTeamDarkBlue => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkBlue
-            }
-            DisplaySlot::SidebarTeamDarkGreen => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkGreen
-            }
-            DisplaySlot::SidebarTeamDarkAqua => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkAqua
-            }
-            DisplaySlot::SidebarTeamDarkRed => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkRed
-            }
-            DisplaySlot::SidebarTeamDarkPurple => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkPurple
-            }
-            DisplaySlot::SidebarTeamGold => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamGold
-            }
-            DisplaySlot::SidebarTeamGray => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamGray
-            }
-            DisplaySlot::SidebarTeamDarkGray => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkGray
-            }
-            DisplaySlot::SidebarTeamBlue => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamBlue
-            }
-            DisplaySlot::SidebarTeamGreen => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamGreen
-            }
-            DisplaySlot::SidebarTeamAqua => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamAqua
-            }
-            DisplaySlot::SidebarTeamRed => pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamRed,
-            DisplaySlot::SidebarTeamLightPurple => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamLightPurple
-            }
-            DisplaySlot::SidebarTeamYellow => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamYellow
-            }
-            DisplaySlot::SidebarTeamWhite => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamWhite
-            }
-        };
-
-        world.broadcast_packet_all(
-            &pumpkin_protocol::java::client::play::CDisplayObjective::new(slot, objective_name),
+        let internal_slot = Self::to_internal_display_slot(slot);
+        world.scoreboard.lock().await.set_display_objective(
+            &world,
+            internal_slot,
+            Some(&objective_name),
         );
         Ok(())
+    }
+
+    async fn clear_slot(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        slot: DisplaySlot,
+    ) -> wasmtime::Result<()> {
+        let world = self.get_scoreboard_res(&res)?.provider.clone();
+        let internal_slot = Self::to_internal_display_slot(slot);
+        world
+            .scoreboard
+            .lock()
+            .await
+            .set_display_objective(&world, internal_slot, None);
+        Ok(())
+    }
+
+    async fn get_display_slot(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        slot: DisplaySlot,
+    ) -> wasmtime::Result<Option<String>> {
+        let world = self.get_scoreboard_res(&res)?.provider.clone();
+        let internal_slot = Self::to_internal_display_slot(slot);
+        let sb = world.scoreboard.lock().await;
+        Ok(sb.get_display_objective(&internal_slot).map(String::from))
     }
 
     async fn update_score(
@@ -146,8 +222,8 @@ impl scoreboard::HostScoreboard for PluginHostState {
     ) -> wasmtime::Result<()> {
         let world = self.get_scoreboard_res(&res)?.provider.clone();
         let score = ScoreboardScore::new(
-            Box::leak(entity_name.into_boxed_str()),
-            Box::leak(objective_name.into_boxed_str()),
+            Arc::from(entity_name.as_str()),
+            Arc::from(objective_name.as_str()),
             VarInt(value),
             None,
             None,
@@ -175,6 +251,55 @@ impl scoreboard::HostScoreboard for PluginHostState {
             .remove_score(&world, &entity_name, &objective_name)
             .await;
         Ok(())
+    }
+
+    async fn get_scores(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        entry: String,
+    ) -> wasmtime::Result<Vec<scoreboard::ScoreInfo>> {
+        let world = self.get_scoreboard_res(&res)?.provider.clone();
+        let sb = world.scoreboard.lock().await;
+        let raw_scores = sb.list_scores_for_player(&entry);
+        let results: Vec<scoreboard::ScoreInfo> = raw_scores
+            .into_iter()
+            .filter_map(|(obj_name, _)| {
+                let score_info = sb.get_player_score_info(&entry, obj_name)?;
+                Some(scoreboard::ScoreInfo {
+                    objective_name: obj_name.to_string(),
+                    value: score_info.value.0,
+                    locked: score_info.locked,
+                })
+            })
+            .collect();
+        Ok(results)
+    }
+
+    async fn reset_scores(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        entry: String,
+    ) -> wasmtime::Result<()> {
+        let world = self.get_scoreboard_res(&res)?.provider.clone();
+        world
+            .scoreboard
+            .lock()
+            .await
+            .reset_all_player_scores(&world, &entry);
+        Ok(())
+    }
+
+    async fn get_tracked_entries(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+    ) -> wasmtime::Result<Vec<String>> {
+        let world = self.get_scoreboard_res(&res)?.provider.clone();
+        let sb = world.scoreboard.lock().await;
+        Ok(sb
+            .get_tracked_players()
+            .into_iter()
+            .map(ToString::to_string)
+            .collect())
     }
 
     async fn create_team(
@@ -209,6 +334,39 @@ impl scoreboard::HostScoreboard for PluginHostState {
         let team = map_team_settings(name, &settings, self)?;
         world.scoreboard.lock().await.update_team(&world, team);
         Ok(())
+    }
+
+    async fn get_team(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        name: String,
+    ) -> wasmtime::Result<Option<scoreboard::TeamInfo>> {
+        let world = self.get_scoreboard_res(&res)?.provider.clone();
+        let sb = world.scoreboard.lock().await;
+        Ok(sb.get_teams().get(&name).map(Self::to_team_info))
+    }
+
+    async fn get_teams(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+    ) -> wasmtime::Result<Vec<scoreboard::TeamInfo>> {
+        let world = self.get_scoreboard_res(&res)?.provider.clone();
+        let sb = world.scoreboard.lock().await;
+        Ok(sb.get_teams().values().map(Self::to_team_info).collect())
+    }
+
+    async fn get_entry_team(
+        &mut self,
+        res: Resource<scoreboard::Scoreboard>,
+        entry: String,
+    ) -> wasmtime::Result<Option<String>> {
+        let world = self.get_scoreboard_res(&res)?.provider.clone();
+        let sb = world.scoreboard.lock().await;
+        Ok(sb
+            .get_teams()
+            .values()
+            .find(|t| t.players.contains(&entry))
+            .map(|t| t.name.clone()))
     }
 
     async fn add_player_to_team(

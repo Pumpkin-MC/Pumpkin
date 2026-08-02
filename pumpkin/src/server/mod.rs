@@ -13,6 +13,7 @@ use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::WorldPortal;
 use crate::world::custom_bossbar::CustomBossbars;
+use crate::world::scoreboard::Scoreboard;
 use crate::{
     command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World,
     world::map::MapManager,
@@ -143,6 +144,8 @@ pub struct Server {
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
     world_info_writer: Arc<dyn WorldInfoWriter>,
+    /// Single global scoreboard shared across all dimensions.
+    pub scoreboard: Arc<tokio::sync::Mutex<Scoreboard>>,
 }
 
 impl Server {
@@ -199,6 +202,12 @@ impl Server {
 
         let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
+
+        // Create single global scoreboard from saved data
+        let scoreboard_data = level_info.load().scoreboard_data.clone();
+        let mut sb = Scoreboard::default();
+        sb.load_from_data(&scoreboard_data);
+        let scoreboard: Arc<tokio::sync::Mutex<Scoreboard>> = Arc::new(tokio::sync::Mutex::new(sb));
 
         let listing = Mutex::new(CachedStatus::new(
             &basic_config,
@@ -295,6 +304,7 @@ impl Server {
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
+            scoreboard,
         };
         let server = Arc::new(server);
 
@@ -317,6 +327,7 @@ impl Server {
             let path = world_path.clone();
             let registry = block_registry.clone();
             let l_info = server.level_info.clone(); // Access from struct
+            let sb = server.scoreboard.clone();
             let weak = Arc::downgrade(&server);
             let config = Arc::new(server.advanced_config.world.clone());
             let pool = gen_pool.clone();
@@ -329,7 +340,7 @@ impl Server {
                         .to_pretty_console()
                 );
                 let level = into_level(dim.clone(), &config, path, seed, Some(pool));
-                let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
+                let world = Arc::new(World::load(level.clone(), l_info, sb, dim, registry, weak));
                 let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
                 level.world_portal.store(Arc::new(Some(portal)));
                 world
@@ -428,6 +439,7 @@ impl Server {
             let world_path = server.basic_config.get_world_path().join(name_clone);
             let registry = server.block_registry.clone();
             let l_info = server.level_info.clone();
+            let sb = server.scoreboard.clone();
             let weak = Arc::downgrade(&server);
             let config = Arc::new(server.advanced_config.world.clone());
             let seed = server.level_info.load().world_gen_settings.seed;
@@ -440,7 +452,7 @@ impl Server {
                 seed,
                 None,
             );
-            let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
+            let world: World = World::load(level.clone(), l_info, sb, dimension, registry, weak);
             let world = Arc::new(world);
             let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
             level.world_portal.store(Arc::new(Some(portal)));
@@ -602,6 +614,16 @@ impl Server {
         for world in self.worlds.load().iter() {
             world.shutdown().await;
         }
+
+        // Save scoreboard into the shared LevelData
+        let sb_data = {
+            let sb = self.scoreboard.lock().await;
+            sb.to_data()
+        };
+        let mut level_data = self.level_info.load().as_ref().clone();
+        level_data.scoreboard_data = sb_data;
+        self.level_info.store(Arc::new(level_data));
+
         let level_data = self.level_info.load();
         // then lets save the world info
 

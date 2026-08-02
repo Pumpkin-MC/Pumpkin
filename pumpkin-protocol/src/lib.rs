@@ -14,6 +14,7 @@ use pumpkin_util::{
     version::JavaMinecraftVersion,
 };
 use ser::{ReadingError, WritingError};
+use serde::{Deserialize, Serialize};
 
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -382,7 +383,7 @@ impl KnownPack<'_> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum NumberFormat {
     /// Show nothing.
     Blank,
@@ -393,13 +394,16 @@ pub enum NumberFormat {
 }
 
 impl NumberFormat {
-    pub fn write(&self, write: &mut impl ser::NetworkWriteExt) -> Result<(), ser::WritingError> {
+    pub fn write(
+        &self,
+        write: &mut (impl ser::NetworkWriteExt + std::io::Write),
+    ) -> Result<(), ser::WritingError> {
         match self {
             Self::Blank => write.write_var_int(&0.into()),
-            Self::Styled(_style) => {
+            Self::Styled(style) => {
                 write.write_var_int(&1.into())?;
-                // TODO: Style write
-                Ok(())
+                pumpkin_nbt::serializer::to_bytes_unnamed(style, write)
+                    .map_err(|err| ser::WritingError::Serde(err.to_string()))
             }
             Self::Fixed(text) => {
                 write.write_var_int(&2.into())?;

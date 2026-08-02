@@ -415,3 +415,92 @@ pub fn write_scheduled_events_stub(
     pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, file)
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
+
+/// Serializable scoreboard data for `data/minecraft/scoreboard.dat`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct ScoreboardData {
+    #[serde(rename = "objectives", default)]
+    pub objectives: Vec<SerializableObjective>,
+    #[serde(rename = "scores", default)]
+    pub scores: Vec<SerializableScore>,
+    #[serde(rename = "teams", default)]
+    pub teams: Vec<SerializableTeam>,
+    /// Display slot bindings: slot name (e.g. "list", "sidebar") -> objective name
+    #[serde(rename = "displaySlots", default)]
+    pub display_slots: std::collections::HashMap<String, String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SerializableObjective {
+    #[serde(rename = "name")]
+    pub name: String,
+    #[serde(rename = "displayName")]
+    pub display_name: String,
+    #[serde(rename = "renderType")]
+    pub render_type: String,
+    #[serde(rename = "criteriaName")]
+    pub criteria_name: String,
+    /// Whether the score's display name is auto-updated when the score changes.
+    #[serde(rename = "displayAutoUpdate", default)]
+    pub display_auto_update: bool,
+    /// Optional number format for all scores in this objective (JSON-encoded).
+    #[serde(rename = "format", default, skip_serializing_if = "Option::is_none")]
+    pub number_format: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SerializableScore {
+    #[serde(rename = "entityName")]
+    pub entity_name: String,
+    #[serde(rename = "objectiveName")]
+    pub objective_name: String,
+    #[serde(rename = "value")]
+    pub value: i32,
+    #[serde(rename = "locked", default)]
+    pub locked: bool,
+    /// Optional per-score display name (`TextComponent` JSON).
+    #[serde(rename = "display", default, skip_serializing_if = "Option::is_none")]
+    pub display: Option<String>,
+    /// Optional per-score number format override (JSON-encoded).
+    #[serde(rename = "format", default, skip_serializing_if = "Option::is_none")]
+    pub number_format: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SerializableTeam {
+    #[serde(rename = "name")]
+    pub name: String,
+    #[serde(rename = "displayName")]
+    pub display_name: String,
+    #[serde(rename = "players", default)]
+    pub players: Vec<String>,
+}
+
+pub fn read_scoreboard(level_folder: &Path) -> ScoreboardData {
+    let path = minecraft_data_dir(level_folder).join("scoreboard.dat");
+    if !path.exists() {
+        return ScoreboardData::default();
+    }
+    match File::open(&path) {
+        Ok(f) => match from_gzip_bytes::<DataFileRoot<ScoreboardData>, _>(f) {
+            Ok(root) => root.data,
+            Err(e) => {
+                warn!("Failed to deserialize scoreboard.dat, using defaults: {e}");
+                ScoreboardData::default()
+            }
+        },
+        Err(e) => {
+            warn!("Failed to open scoreboard.dat, using defaults: {e}");
+            ScoreboardData::default()
+        }
+    }
+}
+
+pub fn write_scoreboard(level_folder: &Path, data: &ScoreboardData) -> Result<(), WorldInfoError> {
+    let dir = ensure_minecraft_data_dir(level_folder)?;
+    let path = dir.join("scoreboard.dat");
+    let file = File::create(&path)?;
+    let root = DataFileRoot { data: data.clone() };
+    to_gzip_bytes(&root, BufWriter::new(file))
+        .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
+}

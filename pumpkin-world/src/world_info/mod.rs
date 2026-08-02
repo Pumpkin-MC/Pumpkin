@@ -96,6 +96,10 @@ pub struct LevelData {
     /// Persisted to `data/minecraft/weather.dat`.
     #[serde(rename = "clearWeatherTime", skip_serializing, default)]
     pub clear_weather_time: i32,
+
+    /// Scoreboard data persisted to `data/minecraft/scoreboard.dat`.
+    #[serde(skip_serializing, default)]
+    pub scoreboard_data: data_files::ScoreboardData,
 }
 
 const DEFAULT_BORDER_DAMAGE_PER_BLOCK: f64 = 0.2;
@@ -353,6 +357,7 @@ impl LevelData {
             world_gen_settings: WorldGenSettings::new(seed),
             day_time: 0,
             clear_weather_time: -1,
+            scoreboard_data: data_files::ScoreboardData::default(),
         }
     }
 
