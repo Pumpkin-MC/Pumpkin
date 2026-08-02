@@ -9,6 +9,7 @@ use crate::{
     },
     server::Server,
 };
+use pumpkin_data::Block;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -122,6 +123,43 @@ impl FishingBobberEntity {
         }
     }
 
+    fn calculate_open_water(
+        world: &Arc<crate::world::World>,
+        pos: &pumpkin_util::math::position::BlockPos,
+    ) -> bool {
+        let mut previous_layer = 0u8;
+        for y in -1..=2 {
+            let mut layer = 0u8;
+            for x in -2..=2 {
+                for z in -2..=2 {
+                    let sample = pos.offset(pumpkin_util::math::vector3::Vector3::new(x, y, z));
+                    let (block, state) = world.get_block_and_state_id(&sample);
+                    let current = if block == &Block::AIR || block == &Block::LILY_PAD {
+                        1
+                    } else if block == &Block::WATER && state == Block::WATER.default_state.id {
+                        2
+                    } else {
+                        0
+                    };
+                    if layer == 0 {
+                        layer = current;
+                    } else if layer != current {
+                        return false;
+                    }
+                }
+            }
+
+            match layer {
+                1 if previous_layer == 0 => return false,
+                2 if previous_layer == 1 => return false,
+                0 => return false,
+                _ => {}
+            }
+            previous_layer = layer;
+        }
+        true
+    }
+
     pub async fn reel_in(&self, player: &Player) -> i32 {
         let world = self.entity.world.load();
         let hooked_id = self.hooked_entity_id.load(Ordering::Relaxed);
@@ -158,10 +196,12 @@ impl FishingBobberEntity {
                 .lock()
                 .await
                 .get_enchantment_level(&pumpkin_data::Enchantment::LUCK_OF_THE_SEA);
-            let mut item_stack = ItemStack::new(
-                1,
-                fishing_loot_item(rand::random(), rand::random(), luck_of_the_sea),
-            );
+            let item = if Self::calculate_open_water(&world, &self.entity.block_pos.load()) {
+                fishing_loot_item(rand::random(), rand::random(), luck_of_the_sea)
+            } else {
+                fishing_catch_item(rand::random())
+            };
+            let mut item_stack = ItemStack::new(1, item);
             if !player
                 .inventory
                 .insert_stack_anywhere(&mut item_stack)
