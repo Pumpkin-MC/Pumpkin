@@ -1,6 +1,6 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
 use crate::entity::attributes::Modifier;
@@ -47,6 +47,9 @@ use crate::world::loot::LootContextParameters;
 
 const SPEED_BOOST: f64 = 0.15;
 const ENDERMAN_SPEED_BOOST_ID: &str = "minecraft:attacking";
+const DAY_START: i64 = 23_460;
+const NIGHT_START: i64 = 12_542;
+const DEAGGRESSION_DELAY: i32 = 600;
 
 pub const ENDERMAN_EYE_HEIGHT: f64 = 2.55;
 pub const ENDERMAN_BODY_Y_OFFSET: f64 = 1.45;
@@ -63,6 +66,7 @@ pub struct EndermanEntity {
     angry: AtomicBool,
     provoked: AtomicBool,
     speed_boosted: AtomicBool,
+    target_change_time: AtomicI32,
 }
 
 impl EndermanEntity {
@@ -74,6 +78,7 @@ impl EndermanEntity {
             angry: AtomicBool::new(false),
             provoked: AtomicBool::new(false),
             speed_boosted: AtomicBool::new(false),
+            target_change_time: AtomicI32::new(0),
         };
         let mob_arc = Arc::new(entity);
         let mob_weak: Weak<dyn Mob> = {
@@ -240,6 +245,17 @@ impl EndermanEntity {
         let mut mob_target = self.mob_entity.target.lock().await;
         (*mob_target).clone_from(&target);
         drop(mob_target);
+
+        self.target_change_time.store(
+            target.as_ref().map_or(0, |_| {
+                self.mob_entity
+                    .living_entity
+                    .entity
+                    .age
+                    .load(Ordering::Relaxed)
+            }),
+            Ordering::Relaxed,
+        );
 
         if target.is_some() {
             self.set_angry(true);
@@ -420,7 +436,6 @@ impl Mob for EndermanEntity {
         })
     }
 
-    // TODO: sunlight avoidance, carried block drop on death, angerable system, ambient sound override
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.mob_entity.living_entity.entity;
@@ -443,6 +458,21 @@ impl Mob for EndermanEntity {
                         }
                     }
                 }
+            }
+
+            let day_time = world.get_time_of_day().await.rem_euclid(24000);
+            let bright_outside = !(NIGHT_START..DAY_START).contains(&day_time);
+            let eye_pos = entity.get_eye_pos().to_block_pos();
+            let brightness = world.get_sky_light_level(&eye_pos) as f32 / 15.0;
+            let age = entity.age.load(Ordering::Relaxed);
+            if bright_outside
+                && age >= self.target_change_time.load(Ordering::Relaxed) + DEAGGRESSION_DELAY
+                && brightness > 0.5
+                && world.can_see_sky(&entity.block_pos.load())
+                && self.get_random().random::<f32>() * 30.0 < (brightness - 0.4) * 2.0
+            {
+                self.set_target(None).await;
+                self.teleport_randomly();
             }
 
             // NOTE: Enderman ambient portal particles are intentionally NOT sent server-side.
