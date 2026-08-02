@@ -116,7 +116,10 @@ impl ItemEntity {
     }
 
     async fn can_merge(&self) -> bool {
-        if self.never_pickup.load(Ordering::Relaxed) || self.entity.removed.load(Ordering::Relaxed)
+        if self.never_pickup.load(Ordering::Relaxed)
+            || self.entity.removed.load(Ordering::Relaxed)
+            || self.item_age.load(Ordering::Relaxed) >= 6_000
+            || self.pickup_delay.load(Ordering::Relaxed) == u8::MAX
         {
             return false;
         }
@@ -168,9 +171,7 @@ impl ItemEntity {
             (high_stack, low_stack)
         };
 
-        if !self_stack.are_equal(&other_stack)
-            || self_stack.item_count + other_stack.item_count > self_stack.get_max_stack_size()
-        {
+        if !Self::are_mergeable_stacks(&self_stack, &other_stack) {
             return;
         }
 
@@ -234,6 +235,11 @@ impl ItemEntity {
         } else {
             source.init_data_tracker().await;
         }
+    }
+
+    fn are_mergeable_stacks(first: &ItemStack, second: &ItemStack) -> bool {
+        first.item_count + second.item_count <= first.get_max_stack_size()
+            && first.are_items_and_components_equal(second)
     }
 
     fn decrement_pickup_delay(&self) {
@@ -622,5 +628,28 @@ impl EntityBase for ItemEntity {
             };
             client.send_game_packet(&packet).await;
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ItemEntity;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+
+    #[test]
+    fn item_merge_ignores_stack_counts() {
+        let first = ItemStack::new(3, &Item::ARROW);
+        let second = ItemStack::new(5, &Item::ARROW);
+
+        assert!(ItemEntity::are_mergeable_stacks(&first, &second));
+    }
+
+    #[test]
+    fn item_merge_rejects_different_components() {
+        let first = ItemStack::new(3, &Item::ARROW);
+        let second = ItemStack::new(1, &Item::SPECTRAL_ARROW);
+
+        assert!(!ItemEntity::are_mergeable_stacks(&first, &second));
     }
 }
