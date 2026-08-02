@@ -45,12 +45,28 @@ impl ItemBehaviour for WindChargeItem {
             let (yaw, pitch) = player.rotation();
 
             wind_charge.set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
-            // TODO: player.incrementStat(Stats.USED)
-
-            // TODO: Implement that the projectile will explode on impact
             world
                 .spawn_entity(Arc::new(WindChargeEntity::new_normal(wind_charge)))
                 .await;
+
+            let held_item = player.inventory.held_item();
+            let consumed = {
+                let mut main_hand = held_item.lock().await;
+                if !main_hand.is_empty() && main_hand.item.id == Item::WIND_CHARGE.id {
+                    main_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if !consumed {
+                let off_hand_item = player.inventory.off_hand_item().await;
+                let mut off_hand = off_hand_item.lock().await;
+                if !off_hand.is_empty() && off_hand.item.id == Item::WIND_CHARGE.id {
+                    off_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                }
+            }
         })
     }
 
