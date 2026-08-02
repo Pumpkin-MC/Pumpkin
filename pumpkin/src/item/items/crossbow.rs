@@ -112,10 +112,19 @@ impl ItemBehaviour for CrossbowItem {
                             projectiles: vec![arrow_nbt],
                         })),
                     ));
+                    let updated_stack = stack.clone();
+                    drop(stack);
 
                     if player.gamemode.load() != GameMode::Creative {
                         player.consume_arrow(slot).await;
                     }
+
+                    player
+                        .sync_hand_slot(
+                            player.inventory.get_selected_slot() as usize,
+                            updated_stack,
+                        )
+                        .await;
 
                     player.world().play_sound(
                         Sound::ItemCrossbowLoadingEnd,
