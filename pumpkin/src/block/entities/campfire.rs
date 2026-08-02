@@ -1,10 +1,14 @@
 use super::BlockEntity;
+use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties};
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::recipes::CookingRecipeKind;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
 
 pub struct CampfireBlockEntity {
@@ -12,6 +16,7 @@ pub struct CampfireBlockEntity {
     pub items: [Arc<Mutex<ItemStack>>; 4],
     pub cooking_times: [tokio::sync::Mutex<i32>; 4],
     pub cooking_total_times: [tokio::sync::Mutex<i32>; 4],
+    pub dirty: AtomicBool,
 }
 
 impl BlockEntity for CampfireBlockEntity {
@@ -58,7 +63,61 @@ impl BlockEntity for CampfireBlockEntity {
             items,
             cooking_times,
             cooking_total_times,
+            dirty: AtomicBool::new(false),
         }
+    }
+
+    fn tick<'a>(
+        &'a self,
+        world: &'a Arc<crate::world::World>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let (block, state) = world.get_block_and_state(&self.position);
+            if !CampfireLikeProperties::from_state_id(state.id, block).lit {
+                return;
+            }
+
+            for slot in 0..self.items.len() {
+                let mut item = self.items[slot].lock().await;
+                if item.is_empty() {
+                    *self.cooking_times[slot].lock().await = 0;
+                    continue;
+                }
+
+                let Some(recipe) = pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
+                    item.item,
+                    CookingRecipeKind::CampfireCooking,
+                ) else {
+                    *self.cooking_times[slot].lock().await = 0;
+                    continue;
+                };
+
+                let mut cooking_time = self.cooking_times[slot].lock().await;
+                let mut total_time = self.cooking_total_times[slot].lock().await;
+                if *total_time <= 0 {
+                    *total_time = recipe.cookingtime;
+                }
+                *cooking_time += 1;
+                if *cooking_time < *total_time {
+                    continue;
+                }
+
+                let Some(result_item) = Item::from_registry_key(
+                    recipe
+                        .result
+                        .id
+                        .strip_prefix("minecraft:")
+                        .unwrap_or(recipe.result.id),
+                ) else {
+                    *cooking_time = 0;
+                    continue;
+                };
+                *item = ItemStack::new(recipe.result.count, result_item);
+                *cooking_time = 0;
+                *total_time = 0;
+                self.dirty.store(true, Ordering::Relaxed);
+            }
+        })
     }
 
     fn write_nbt<'a>(
@@ -95,6 +154,14 @@ impl BlockEntity for CampfireBlockEntity {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn is_dirty(&self) -> bool {
+        self.dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_dirty(&self) {
+        self.dirty.store(false, Ordering::Relaxed);
+    }
 }
 
 impl CampfireBlockEntity {
@@ -106,6 +173,7 @@ impl CampfireBlockEntity {
             items: std::array::from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             cooking_times: [Mutex::new(0), Mutex::new(0), Mutex::new(0), Mutex::new(0)],
             cooking_total_times: [Mutex::new(0), Mutex::new(0), Mutex::new(0), Mutex::new(0)],
+            dirty: AtomicBool::new(false),
         }
     }
 }
