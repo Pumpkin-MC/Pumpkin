@@ -409,6 +409,28 @@ impl BoundingBox {
 
         super::squared_magnitude(d, e, f)
     }
+
+    /// Computes the squared distance between this bounding box and another bounding box.
+    ///
+    /// # Arguments
+    /// * `other` – The other bounding box to measure the distance to.
+    #[must_use]
+    pub fn squared_distance_to_box(&self, other: &Self) -> f64 {
+        let d = f64::max(
+            f64::max(self.min.x - other.max.x, other.min.x - self.max.x),
+            0.0,
+        );
+        let e = f64::max(
+            f64::max(self.min.y - other.max.y, other.min.y - self.max.y),
+            0.0,
+        );
+        let f = f64::max(
+            f64::max(self.min.z - other.max.z, other.min.z - self.max.z),
+            0.0,
+        );
+
+        super::squared_magnitude(d, e, f)
+    }
 }
 
 /// Represents the dimensions of an entity.

@@ -8,8 +8,8 @@ use crate::{
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockId};
 use pumpkin_protocol::java::client::play::CWorldEvent;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::math::{boundingbox::BoundingBox, vector2::Vector2};
 use pumpkin_util::math::{position::BlockPos, vector2::to_chunk_pos};
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::RwLock;
@@ -100,6 +100,32 @@ pub(crate) async fn extinguish_fire_if_water_potion(
     }
 }
 
+fn average_effect_color(
+    effects: &[(
+        &'static pumpkin_data::effect::StatusEffect,
+        i32,
+        u8,
+        bool,
+        bool,
+        bool,
+    )],
+) -> i32 {
+    let mut r_sum = 0.0;
+    let mut g_sum = 0.0;
+    let mut b_sum = 0.0;
+    let count = effects.len() as f32;
+    for (eff, _, _, _, _, _) in effects {
+        let c = eff.color;
+        r_sum += ((c >> 16) & 0xFF) as f32;
+        g_sum += ((c >> 8) & 0xFF) as f32;
+        b_sum += (c & 0xFF) as f32;
+    }
+    let r = (r_sum / count) as i32;
+    let g = (g_sum / count) as i32;
+    let b = (b_sum / count) as i32;
+    (r << 16) | (g << 8) | b
+}
+
 impl EntityBase for SplashPotionEntity {
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
@@ -162,39 +188,11 @@ impl EntityBase for SplashPotionEntity {
                 if let Some(c) = pc.custom_color {
                     color = c;
                 } else if !effects.is_empty() {
-                    let mut r_sum = 0.0;
-                    let mut g_sum = 0.0;
-                    let mut b_sum = 0.0;
-                    let count = effects.len() as f32;
-                    for (eff, _, _, _, _, _) in &effects {
-                        let c = eff.color;
-                        r_sum += ((c >> 16) & 0xFF) as f32;
-                        g_sum += ((c >> 8) & 0xFF) as f32;
-                        b_sum += (c & 0xFF) as f32;
-                    }
-                    let r = (r_sum / count) as i32;
-                    let g = (g_sum / count) as i32;
-                    let b = (b_sum / count) as i32;
-                    color = (r << 16) | (g << 8) | b;
+                    color = average_effect_color(&effects);
                 }
-            } else {
+            } else if !effects.is_empty() {
                 // Try to guess from effects directly if potion contents missing but effects present
-                if !effects.is_empty() {
-                    let mut r_sum = 0.0;
-                    let mut g_sum = 0.0;
-                    let mut b_sum = 0.0;
-                    let count = effects.len() as f32;
-                    for (eff, _, _, _, _, _) in &effects {
-                        let c = eff.color;
-                        r_sum += ((c >> 16) & 0xFF) as f32;
-                        g_sum += ((c >> 8) & 0xFF) as f32;
-                        b_sum += (c & 0xFF) as f32;
-                    }
-                    let r = (r_sum / count) as i32;
-                    let g = (g_sum / count) as i32;
-                    let b = (b_sum / count) as i32;
-                    color = (r << 16) | (g << 8) | b;
-                }
+                color = average_effect_color(&effects);
             }
 
             // Play splash particles
@@ -220,35 +218,41 @@ impl EntityBase for SplashPotionEntity {
                 return;
             }
 
-            let radius = 4.0f64;
-            let min = Vector3::new(hit_pos.x - radius, hit_pos.y - radius, hit_pos.z - radius);
-            let max = Vector3::new(hit_pos.x + radius, hit_pos.y + radius, hit_pos.z + radius);
-            let aabb = BoundingBox::new(min, max);
+            let this_entity = self.get_entity();
+            let potion_aabb = this_entity
+                .bounding_box
+                .load()
+                .shift(hit_pos - this_entity.pos.load());
+            let effect_aabb = potion_aabb.expand(4.0, 2.0, 4.0);
 
             // Gather entity and player candidates
-            let mut candidates = world.get_entities_at_box(&aabb);
-            let players = world.get_players_at_box(&aabb);
+            let mut candidates = world.get_entities_at_box(&effect_aabb);
+            let players = world.get_players_at_box(&effect_aabb);
             for p in players {
                 candidates.push(p.clone() as Arc<dyn EntityBase>);
             }
 
+            let margin = ((this_entity.age.load(std::sync::atomic::Ordering::Relaxed) as f32 - 2.0)
+                / 20.0)
+                .clamp(0.0, 0.3) as f64;
+
             for cand in candidates {
                 let cand_clone = cand.clone();
                 let effs_clone: Vec<_> = effects.clone();
-                let hit_pos_clone = hit_pos;
                 tokio::spawn(async move {
                     if let Some(living) = cand_clone.get_living_entity() {
-                        let pos = cand_clone.get_entity().pos.load();
-                        let dx = pos.x - hit_pos_clone.x;
-                        let dy = pos.y - hit_pos_clone.y;
-                        let dz = pos.z - hit_pos_clone.z;
-                        let dist = (dx * dx + dy * dy + dz * dz).sqrt();
-                        if dist > radius {
+                        let target_aabb = cand_clone
+                            .get_entity()
+                            .bounding_box
+                            .load()
+                            .expand_all(margin);
+                        let dist_sq = potion_aabb.squared_distance_to_box(&target_aabb);
+                        if dist_sq >= 16.0 {
                             return;
                         }
 
                         // Distance scaling
-                        let scale = (1.0f32 - (dist as f32 / radius as f32)).max(0.0);
+                        let scale = (1.0f32 - (dist_sq.sqrt() as f32 / 4.0)).max(0.0);
 
                         crate::item::potion::PotionContents::apply_effects_to(
                             living,
