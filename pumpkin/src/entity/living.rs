@@ -490,6 +490,10 @@ impl LivingEntity {
         self.entity.entity_id
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "effect application also synchronizes attributes"
+    )]
     pub async fn add_effect(&self, effect: Effect) {
         let inverted = self.is_undead();
         let is_instant = effect.effect_type.id == StatusEffect::INSTANT_HEALTH.id
@@ -497,6 +501,7 @@ impl LivingEntity {
         if !Self::instant_effect_is_damage(effect.effect_type, inverted) && is_instant {
             let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
             self.heal(heal_amount);
+            return;
         } else if is_instant {
             let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
             if let Some(dyn_self) = self
