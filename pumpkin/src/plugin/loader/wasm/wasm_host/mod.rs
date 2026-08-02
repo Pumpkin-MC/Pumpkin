@@ -11,6 +11,7 @@ use crate::plugin::{
 
 pub mod args;
 pub mod logging;
+pub mod signature;
 pub mod state;
 pub mod wit;
 
@@ -87,6 +88,10 @@ impl PluginRuntime {
         path: P,
     ) -> Result<(Arc<WasmPlugin>, PluginMetadata), PluginInitError> {
         let wasm_bytes = std::fs::read(&path).map_err(PluginInitError::FileReadFailed)?;
+
+        signature::verify_wasm_plugin(&wasm_bytes, &path.as_ref().to_string_lossy());
+
+        let wasm_bytes = signature::strip_pumpkin_sections(&wasm_bytes).unwrap_or(wasm_bytes);
 
         let component = load_component(&self.engine, &wasm_bytes, &self.cache_dir)?;
 

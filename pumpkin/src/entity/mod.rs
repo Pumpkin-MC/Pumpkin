@@ -3532,28 +3532,37 @@ impl NBTStorage for Entity {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            let position = nbt.get_list("Pos").unwrap();
-            let x = position[0].extract_double().unwrap_or(0.0);
-            let y = position[1].extract_double().unwrap_or(0.0);
-            let z = position[2].extract_double().unwrap_or(0.0);
-            let pos = Vector3::new(x, y, z);
-            self.set_pos(pos);
-            self.last_sent_pos.store(pos);
-            let velocity = nbt.get_list("Motion").unwrap();
-            let x = velocity[0].extract_double().unwrap_or(0.0);
-            let y = velocity[1].extract_double().unwrap_or(0.0);
-            let z = velocity[2].extract_double().unwrap_or(0.0);
-            self.velocity.store(Vector3::new(x, y, z));
-            let rotation = nbt.get_list("Rotation").unwrap();
-            let yaw = rotation[0].extract_float().unwrap_or(0.0);
-            let pitch = rotation[1].extract_float().unwrap_or(0.0);
-            self.set_rotation(yaw, pitch);
-            let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
-            let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
-            self.last_sent_yaw.store(yaw_byte, Relaxed);
-            self.last_sent_pitch.store(pitch_byte, Relaxed);
-            self.head_yaw.store(yaw);
-            self.last_sent_head_yaw.store(yaw_byte, Relaxed);
+            if let Some(position) = nbt.get_list("Pos")
+                && position.len() >= 3
+            {
+                let x = position[0].extract_double().unwrap_or(0.0);
+                let y = position[1].extract_double().unwrap_or(0.0);
+                let z = position[2].extract_double().unwrap_or(0.0);
+                let pos = Vector3::new(x, y, z);
+                self.set_pos(pos);
+                self.last_sent_pos.store(pos);
+            }
+            if let Some(velocity) = nbt.get_list("Motion")
+                && velocity.len() >= 3
+            {
+                let x = velocity[0].extract_double().unwrap_or(0.0);
+                let y = velocity[1].extract_double().unwrap_or(0.0);
+                let z = velocity[2].extract_double().unwrap_or(0.0);
+                self.velocity.store(Vector3::new(x, y, z));
+            }
+            if let Some(rotation) = nbt.get_list("Rotation")
+                && rotation.len() >= 2
+            {
+                let yaw = rotation[0].extract_float().unwrap_or(0.0);
+                let pitch = rotation[1].extract_float().unwrap_or(0.0);
+                self.set_rotation(yaw, pitch);
+                let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
+                let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
+                self.last_sent_yaw.store(yaw_byte, Relaxed);
+                self.last_sent_pitch.store(pitch_byte, Relaxed);
+                self.head_yaw.store(yaw);
+                self.last_sent_head_yaw.store(yaw_byte, Relaxed);
+            }
             self.fire_ticks
                 .store(i32::from(nbt.get_short("Fire").unwrap_or(0)), Relaxed);
             self.on_ground

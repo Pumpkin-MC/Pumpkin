@@ -2245,11 +2245,11 @@ impl TrackedData {
         v26_2: 255u8,
     };
     pub const MAIN_ARM_ID: TrackedId = TrackedId {
-        v1_21: 255u8,
-        v1_21_2: 255u8,
-        v1_21_4: 255u8,
-        v1_21_5: 255u8,
-        v1_21_6: 255u8,
+        v1_21: 18u8,
+        v1_21_2: 18u8,
+        v1_21_4: 18u8,
+        v1_21_5: 18u8,
+        v1_21_6: 18u8,
         v1_21_7: 18u8,
         v1_21_9: 15u8,
         v1_21_11: 15u8,
@@ -2545,11 +2545,11 @@ impl TrackedData {
         v26_2: 16u8,
     };
     pub const PLAYER_MODE_CUSTOMIZATION_ID: TrackedId = TrackedId {
-        v1_21: 255u8,
-        v1_21_2: 255u8,
-        v1_21_4: 255u8,
-        v1_21_5: 255u8,
-        v1_21_6: 255u8,
+        v1_21: 17u8,
+        v1_21_2: 17u8,
+        v1_21_4: 17u8,
+        v1_21_5: 17u8,
+        v1_21_6: 17u8,
         v1_21_7: 17u8,
         v1_21_9: 16u8,
         v1_21_11: 16u8,

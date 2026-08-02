@@ -39,26 +39,16 @@ pub trait Plugin: Send + Sync + 'static {
     /// Asynchronous method called when the plugin is loaded.
     ///
     /// This method initializes the plugin within the server context.
-    ///
-    /// # Parameters
-    /// - `_server`: Reference to the server's context.
-    ///
-    /// # Returns
-    /// - `Ok(())` on success, or `Err(String)` on failure.
-    fn on_load(&mut self, _server: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
+    #[expect(unused)]
+    fn on_load(&self, server: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move { Ok(()) })
     }
 
     /// Asynchronous method called when the plugin is unloaded.
     ///
     /// This method cleans up resources when the plugin is removed from the server context.
-    ///
-    /// # Parameters
-    /// - `_server`: Reference to the server's context.
-    ///
-    /// # Returns
-    /// - `Ok(())` on success, or `Err(String)` on failure.
-    fn on_unload(&mut self, _server: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
+    #[expect(unused)]
+    fn on_unload(&self, server: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move { Ok(()) })
     }
 }
