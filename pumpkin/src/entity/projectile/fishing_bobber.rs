@@ -35,6 +35,15 @@ const fn fishing_experience_reward(random_value: u8) -> i32 {
     (random_value % 6) as i32 + 1
 }
 
+const fn fishing_catch_item(random_value: u8) -> &'static pumpkin_data::item::Item {
+    match random_value % 100 {
+        0..60 => &pumpkin_data::item::Item::COD,
+        60..85 => &pumpkin_data::item::Item::SALMON,
+        85..98 => &pumpkin_data::item::Item::PUFFERFISH,
+        _ => &pumpkin_data::item::Item::TROPICAL_FISH,
+    }
+}
+
 impl FishingBobberEntity {
     const WATER_INERTIA: f64 = 0.8;
     const AIR_INERTIA: f64 = 0.92;
@@ -57,7 +66,6 @@ impl FishingBobberEntity {
     }
 
     pub async fn reel_in(&self, player: &Player) -> i32 {
-        use pumpkin_data::item::Item;
         let world = self.entity.world.load();
         let hooked_id = self.hooked_entity_id.load(Ordering::Relaxed);
 
@@ -87,7 +95,7 @@ impl FishingBobberEntity {
                 )
                 .await;
 
-            let mut item_stack = ItemStack::new(1, &Item::COD);
+            let mut item_stack = ItemStack::new(1, fishing_catch_item(rand::random()));
             if !player
                 .inventory
                 .insert_stack_anywhere(&mut item_stack)
@@ -289,7 +297,7 @@ impl EntityBase for FishingBobberEntity {
 
 #[cfg(test)]
 mod tests {
-    use super::{fishing_experience_reward, hooked_reel_damage};
+    use super::{fishing_catch_item, fishing_experience_reward, hooked_reel_damage};
 
     #[test]
     fn hooked_retrieval_damage_matches_vanilla_categories() {
@@ -302,5 +310,31 @@ mod tests {
         for value in 0..=u8::MAX {
             assert!((1..=6).contains(&fishing_experience_reward(value)));
         }
+    }
+
+    #[test]
+    fn fishing_catch_weights_match_vanilla_fish_distribution() {
+        assert_eq!(fishing_catch_item(0).id, pumpkin_data::item::Item::COD.id);
+        assert_eq!(fishing_catch_item(59).id, pumpkin_data::item::Item::COD.id);
+        assert_eq!(
+            fishing_catch_item(60).id,
+            pumpkin_data::item::Item::SALMON.id
+        );
+        assert_eq!(
+            fishing_catch_item(84).id,
+            pumpkin_data::item::Item::SALMON.id
+        );
+        assert_eq!(
+            fishing_catch_item(85).id,
+            pumpkin_data::item::Item::PUFFERFISH.id
+        );
+        assert_eq!(
+            fishing_catch_item(97).id,
+            pumpkin_data::item::Item::PUFFERFISH.id
+        );
+        assert_eq!(
+            fishing_catch_item(98).id,
+            pumpkin_data::item::Item::TROPICAL_FISH.id
+        );
     }
 }
