@@ -189,6 +189,12 @@ impl MobEntity {
         self.love_ticks.store(0, Relaxed);
     }
 
+    pub fn try_claim_love(&self) -> bool {
+        self.love_ticks
+            .fetch_update(Relaxed, Relaxed, |ticks| (ticks > 0).then_some(0))
+            .is_ok()
+    }
+
     pub fn is_breeding_ready(&self) -> bool {
         self.living_entity.entity.age.load(Relaxed) >= 0
             && self.breeding_cooldown.load(Relaxed) <= 0
@@ -786,6 +792,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn reset_love(&self) {
         self.get_mob_entity().reset_love_ticks();
+    }
+
+    fn try_claim_love(&self) -> bool {
+        self.get_mob_entity().try_claim_love()
     }
 
     fn set_breeding_cooldown(&self, ticks: i32) {

@@ -589,6 +589,10 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
 
     fn reset_love(&self) {}
 
+    fn try_claim_love(&self) -> bool {
+        false
+    }
+
     fn set_breeding_cooldown(&self, _ticks: i32) {}
 
     fn is_panicking(&self) -> bool {
