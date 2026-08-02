@@ -37,6 +37,7 @@ use crate::block::blocks::fences::FenceBlock;
 use crate::block::blocks::fire::fire::FireBlock;
 use crate::block::blocks::fire::soul_fire::SoulFireBlock;
 use crate::block::blocks::flower_pots::FlowerPotBlock;
+use crate::block::blocks::frosted_ice::FrostedIceBlock;
 use crate::block::blocks::furnace::FurnaceBlock;
 use crate::block::blocks::glass_panes::GlassPaneBlock;
 use crate::block::blocks::glazed_terracotta::GlazedTerracottaBlock;
@@ -52,6 +53,7 @@ use crate::block::blocks::magma::MagmaBlock;
 use crate::block::blocks::mangrove_roots::MangroveRootsBlock;
 use crate::block::blocks::nether_portal::NetherPortalBlock;
 use crate::block::blocks::note::NoteBlock;
+use crate::block::blocks::nylium::NyliumBlock;
 use crate::block::blocks::piston::piston::PistonBlock;
 use crate::block::blocks::piston::piston_extension::PistonExtensionBlock;
 use crate::block::blocks::piston::piston_head::PistonHeadBlock;
@@ -303,6 +305,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(MangroveRootsBlock);
     manager.register(LayeredSnowBlock);
     manager.register(IceBlock);
+    manager.register(FrostedIceBlock);
     manager.register(CobwebBlock);
     manager.register(WitherRoseBlock);
     manager.register(FungusBlock);
@@ -323,6 +326,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CoralBlock);
     manager.register(AmethystBlock);
     manager.register(GrassBlock);
+    manager.register(NyliumBlock);
     manager.register(BubbleColumnBlock);
 
     manager.register(FallingBlock);

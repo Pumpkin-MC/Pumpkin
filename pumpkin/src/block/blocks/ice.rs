@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
 use pumpkin_data::{Block, dimension::Dimension};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::{BlockBehaviour, BlockFuture, RandomTickArgs};
+use crate::world::World;
 
 #[pumpkin_block("minecraft:ice")]
 pub struct IceBlock;
@@ -21,32 +25,34 @@ impl BlockBehaviour for IceBlock {
                 return;
             }
 
-            // `IceBlock.melt`: ultrawarm dimensions evaporate the ice, everything else leaves
-            // a water source behind. Melting never drops an ice item, so the state is
-            // overwritten instead of broken.
-            if args.world.dimension == Dimension::THE_NETHER {
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::AIR.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-                return;
-            }
-
-            args.world
-                .set_block_state(
-                    args.position,
-                    Block::WATER.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
-            // `level.neighborChanged(pos, Blocks.WATER, null)`: tell the fresh water source
-            // about its own surroundings so that it starts flowing right away.
-            args.world
-                .update_neighbor(args.position, &Block::WATER)
-                .await;
+            melt(args.world, args.position).await;
         })
     }
+}
+
+/// `IceBlock#melt`: ultrawarm dimensions evaporate the ice, everything else leaves a water
+/// source behind. Melting never drops an ice item, so the state is overwritten instead of
+/// broken. Shared with `FrostedIceBlock`, which inherits this method unchanged.
+pub(super) async fn melt(world: &Arc<World>, position: &BlockPos) {
+    if world.dimension == Dimension::THE_NETHER {
+        world
+            .set_block_state(
+                position,
+                Block::AIR.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            )
+            .await;
+        return;
+    }
+
+    world
+        .set_block_state(
+            position,
+            Block::WATER.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        )
+        .await;
+    // `level.neighborChanged(pos, Blocks.WATER, null)`: tell the fresh water source about its
+    // own surroundings so that it starts flowing right away.
+    world.update_neighbor(position, &Block::WATER).await;
 }
