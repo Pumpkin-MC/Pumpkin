@@ -322,6 +322,21 @@ pub fn check_spawn_rules(
 ) -> bool {
     let id = entity_type.id;
 
+    if id == EntityType::GUARDIAN.id || id == EntityType::ELDER_GUARDIAN.id {
+        if world.level_info.load().difficulty == pumpkin_util::Difficulty::Peaceful {
+            return false;
+        }
+        if !world.get_fluid(pos).has_tag(&tag::Fluid::MINECRAFT_WATER)
+            || !world
+                .get_fluid(&pos.down())
+                .has_tag(&tag::Fluid::MINECRAFT_WATER)
+        {
+            return false;
+        }
+
+        return rand::random_range(0u8..20) == 0 || !world.can_see_sky(pos);
+    }
+
     if id == EntityType::DROWNED.id {
         if !world
             .get_fluid(&pos.down())
