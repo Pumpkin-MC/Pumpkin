@@ -1994,7 +1994,35 @@ impl NBTStorage for LivingEntity {
                     nbt.put("active_effects", NbtTag::List(effects_list));
                 }
             }
-            //TODO: write equipment
+            let equipment = self.entity_equipment.lock().await;
+            let mut hand_items = Vec::with_capacity(2);
+            for slot in [EquipmentSlot::MAIN_HAND, EquipmentSlot::OFF_HAND] {
+                let stack_arc = equipment.get(&slot);
+                let stack = stack_arc.lock().await;
+                let mut item_nbt = NbtCompound::new();
+                if !stack.is_empty() {
+                    stack.write_item_stack(&mut item_nbt);
+                }
+                hand_items.push(NbtTag::Compound(item_nbt));
+            }
+            nbt.put("HandItems", NbtTag::List(hand_items));
+
+            let mut armor_items = Vec::with_capacity(4);
+            for slot in [
+                EquipmentSlot::FEET,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::HEAD,
+            ] {
+                let stack_arc = equipment.get(&slot);
+                let stack = stack_arc.lock().await;
+                let mut item_nbt = NbtCompound::new();
+                if !stack.is_empty() {
+                    stack.write_item_stack(&mut item_nbt);
+                }
+                armor_items.push(NbtTag::Compound(item_nbt));
+            }
+            nbt.put("ArmorItems", NbtTag::List(armor_items));
             // todo more...
         })
     }
@@ -2034,6 +2062,36 @@ impl NBTStorage for LivingEntity {
                             active_effects.insert(effect.effect_type, effect);
                         }
                     }
+                }
+            }
+            let mut equipment = self.entity_equipment.lock().await;
+            for (key, slot) in [
+                (
+                    "HandItems",
+                    [EquipmentSlot::MAIN_HAND, EquipmentSlot::OFF_HAND].as_slice(),
+                ),
+                (
+                    "ArmorItems",
+                    [
+                        EquipmentSlot::FEET,
+                        EquipmentSlot::LEGS,
+                        EquipmentSlot::CHEST,
+                        EquipmentSlot::HEAD,
+                    ]
+                    .as_slice(),
+                ),
+            ] {
+                let Some(items) = nbt.get_list(key) else {
+                    continue;
+                };
+                for (index, slot) in slot.iter().enumerate() {
+                    let Some(compound) = items.get(index).and_then(NbtTag::extract_compound) else {
+                        continue;
+                    };
+                    let Some(stack) = ItemStack::read_item_stack(compound) else {
+                        continue;
+                    };
+                    *equipment.get_or_insert(slot).lock().await = stack;
                 }
             }
         })
