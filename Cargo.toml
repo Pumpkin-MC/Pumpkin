@@ -134,7 +134,7 @@ crypto-bigint = { version = "0.7.5", default-features = false }
 dashmap = { version = "6.2", default-features = false }
 ecdsa = { version = "0.17.0", default-features = false, features = ["std"] }
 enum_dispatch = { version = "0.3.13", default-features = false }
-flate2 = { version = "1.1.9", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }
 heck = { version = "0.5", default-features = false }
 hmac = { version = "=0.13.0", default-features = false }
 indexmap = { version = "2.14", default-features = false, features = ["std"] }
