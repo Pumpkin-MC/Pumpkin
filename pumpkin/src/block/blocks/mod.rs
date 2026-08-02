@@ -100,6 +100,7 @@ pub mod cake;
 pub mod cauldron;
 pub mod composter;
 pub mod ladder;
+pub mod respawn_anchor;
 pub mod slime;
 pub mod spawner;
 pub mod tnt;
@@ -110,3 +111,6 @@ pub mod coral;
 pub mod abstract_wall_mounting;
 
 pub mod beacon;
+
+// Copper oxidation/weathering (shared utility)
+pub mod copper_weathering;

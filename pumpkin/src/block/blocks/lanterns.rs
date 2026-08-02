@@ -1,11 +1,12 @@
+use crate::block::blocks::copper_weathering;
 use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs,
+    OnScheduledTickArgs, RandomTickArgs,
 };
 use crate::world::World;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockStateId};
 use pumpkin_data::{BlockDirection, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
@@ -56,6 +57,42 @@ impl BlockBehaviour for LanternBlock {
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
             }
+        })
+    }
+
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // No tag gate needed: the oxidation_stages table below only contains the
+            // copper lantern family, so this is a no-op for every other lantern type.
+
+            let current_state_id = args.world.get_block_state_id(args.position);
+            let lantern_props =
+                pumpkin_data::block_properties::LanternLikeProperties::from_state_id(
+                    current_state_id,
+                    args.block,
+                );
+
+            let oxidation_stages = [
+                &Block::COPPER_LANTERN,
+                &Block::EXPOSED_COPPER_LANTERN,
+                &Block::WEATHERED_COPPER_LANTERN,
+                &Block::OXIDIZED_COPPER_LANTERN,
+            ];
+
+            copper_weathering::try_oxidize_copper(
+                args.world,
+                args.position,
+                args.block,
+                &oxidation_stages,
+                |next_block| {
+                    let mut new_props =
+                        pumpkin_data::block_properties::LanternLikeProperties::default(next_block);
+                    new_props.r#hanging = lantern_props.r#hanging;
+                    new_props.r#waterlogged = lantern_props.r#waterlogged;
+                    new_props.to_state_id(next_block)
+                },
+            )
+            .await;
         })
     }
 }

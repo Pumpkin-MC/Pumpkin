@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
+use crate::block::blocks::copper_weathering;
 use crate::block::{
     BlockBehaviour, BlockFuture, EmitsRedstonePowerArgs, GetRedstonePowerArgs, OnPlaceArgs,
-    OnScheduledTickArgs,
+    OnScheduledTickArgs, RandomTickArgs,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::{BlockProperties, Facing, LightningRodLikeProperties};
@@ -108,6 +109,35 @@ impl BlockBehaviour for LightningRodBlock {
                     .await;
                 Self::update_neighbors(args.world, args.position, &props).await;
             }
+        })
+    }
+
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let oxidation_stages = [
+                &pumpkin_data::Block::LIGHTNING_ROD,
+                &pumpkin_data::Block::EXPOSED_LIGHTNING_ROD,
+                &pumpkin_data::Block::WEATHERED_LIGHTNING_ROD,
+                &pumpkin_data::Block::OXIDIZED_LIGHTNING_ROD,
+            ];
+
+            let current_state_id = args.world.get_block_state_id(args.position);
+            let current_props =
+                LightningRodLikeProperties::from_state_id(current_state_id, args.block);
+
+            copper_weathering::try_oxidize_copper(
+                args.world,
+                args.position,
+                args.block,
+                &oxidation_stages,
+                |next_block| {
+                    let mut new_props = LightningRodLikeProperties::default(next_block);
+                    new_props.facing = current_props.facing;
+                    new_props.powered = current_props.powered;
+                    new_props.to_state_id(next_block)
+                },
+            )
+            .await;
         })
     }
 }

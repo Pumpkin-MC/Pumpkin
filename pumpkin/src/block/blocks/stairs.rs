@@ -5,7 +5,7 @@ use pumpkin_data::block_properties::Half;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::StairsShape;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{BlockDirection, tag};
+use pumpkin_data::{Block, BlockDirection, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -14,6 +14,8 @@ use crate::block::BlockBehaviour;
 use crate::block::BlockFuture;
 use crate::block::OnNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
+use crate::block::RandomTickArgs;
+use crate::block::blocks::copper_weathering;
 use crate::world::World;
 
 type StairsProperties = pumpkin_data::block_properties::OakStairsLikeProperties;
@@ -73,6 +75,39 @@ impl BlockBehaviour for StairBlock {
                     )
                     .await;
             }
+        })
+    }
+
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // No tag gate needed: the oxidation_stages table below only contains the
+            // cut copper stair family, so this is a no-op for every other stair type.
+
+            let current_state_id = args.world.get_block_state_id(args.position);
+            let stair_props = StairsProperties::from_state_id(current_state_id, args.block);
+
+            let oxidation_stages = [
+                &Block::CUT_COPPER_STAIRS,
+                &Block::EXPOSED_CUT_COPPER_STAIRS,
+                &Block::WEATHERED_CUT_COPPER_STAIRS,
+                &Block::OXIDIZED_CUT_COPPER_STAIRS,
+            ];
+
+            copper_weathering::try_oxidize_copper(
+                args.world,
+                args.position,
+                args.block,
+                &oxidation_stages,
+                |next_block| {
+                    let mut new_props = StairsProperties::default(next_block);
+                    new_props.facing = stair_props.facing;
+                    new_props.half = stair_props.half;
+                    new_props.shape = stair_props.shape;
+                    new_props.waterlogged = stair_props.waterlogged;
+                    new_props.to_state_id(next_block)
+                },
+            )
+            .await;
         })
     }
 }

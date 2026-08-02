@@ -1,5 +1,8 @@
+use crate::block::blocks::copper_weathering;
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
+use crate::block::{
+    BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs, RandomTickArgs,
+};
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
@@ -71,6 +74,35 @@ impl BlockBehaviour for CopperBulbBlock {
                     )
                     .await;
             }
+        })
+    }
+
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let oxidation_stages = [
+                &pumpkin_data::Block::COPPER_BULB,
+                &pumpkin_data::Block::EXPOSED_COPPER_BULB,
+                &pumpkin_data::Block::WEATHERED_COPPER_BULB,
+                &pumpkin_data::Block::OXIDIZED_COPPER_BULB,
+            ];
+
+            let current_state_id = args.world.get_block_state_id(args.position);
+            let current_props =
+                CopperBulbLikeProperties::from_state_id(current_state_id, args.block);
+
+            copper_weathering::try_oxidize_copper(
+                args.world,
+                args.position,
+                args.block,
+                &oxidation_stages,
+                |next_block| {
+                    let mut new_props = CopperBulbLikeProperties::default(next_block);
+                    new_props.lit = current_props.lit;
+                    new_props.powered = current_props.powered;
+                    new_props.to_state_id(next_block)
+                },
+            )
+            .await;
         })
     }
 }

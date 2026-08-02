@@ -1,6 +1,9 @@
+use crate::block::blocks::copper_weathering;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs};
+use crate::block::{
+    BlockBehaviour, BlockFuture, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, RandomTickArgs,
+};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
@@ -139,6 +142,40 @@ impl BlockBehaviour for TrapDoorBlock {
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
+        })
+    }
+
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // No tag gate needed: the oxidation_stages table below only contains the
+            // copper trapdoor family, so this is a no-op for every other trapdoor type.
+
+            let current_state_id = args.world.get_block_state_id(args.position);
+            let trapdoor_props = TrapDoorProperties::from_state_id(current_state_id, args.block);
+
+            let oxidation_stages = [
+                &Block::COPPER_TRAPDOOR,
+                &Block::EXPOSED_COPPER_TRAPDOOR,
+                &Block::WEATHERED_COPPER_TRAPDOOR,
+                &Block::OXIDIZED_COPPER_TRAPDOOR,
+            ];
+
+            copper_weathering::try_oxidize_copper(
+                args.world,
+                args.position,
+                args.block,
+                &oxidation_stages,
+                |next_block| {
+                    let mut new_props = TrapDoorProperties::default(next_block);
+                    new_props.facing = trapdoor_props.facing;
+                    new_props.half = trapdoor_props.half;
+                    new_props.open = trapdoor_props.open;
+                    new_props.powered = trapdoor_props.powered;
+                    new_props.waterlogged = trapdoor_props.waterlogged;
+                    new_props.to_state_id(next_block)
+                },
+            )
+            .await;
         })
     }
 }

@@ -26,6 +26,8 @@ use crate::block::OnNeighborUpdateArgs;
 use crate::block::OnPlaceArgs;
 use crate::block::OnStateReplacedArgs;
 use crate::block::PlacedArgs;
+use crate::block::RandomTickArgs;
+use crate::block::blocks::copper_weathering;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
@@ -36,10 +38,18 @@ use pumpkin_util::GameMode;
 
 type DoorProperties = pumpkin_data::block_properties::OakDoorLikeProperties;
 
-async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
+/// Sets a door to an absolute open state (true = open, false = closed).
+/// Does not play sound to a specific player; use `set_door_open_for_world` for that.
+pub async fn set_door_open(world: &Arc<World>, block_pos: &BlockPos, open: bool) {
     let (block, block_state) = world.get_block_and_state_id(block_pos);
     let mut door_props = DoorProperties::from_state_id(block_state, block);
-    door_props.open = !door_props.open;
+
+    // Only update if state actually changes
+    if door_props.open == open {
+        return;
+    }
+
+    door_props.open = open;
 
     let other_half = match door_props.half {
         DoubleBlockHalf::Upper => BlockDirection::Down,
@@ -49,11 +59,45 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
 
     let (other_block, other_state_id) = world.get_block_and_state_id(&other_pos);
     let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
-    other_door_props.open = door_props.open;
+    other_door_props.open = open;
+
+    world.play_block_sound(get_sound(block, open), SoundCategory::Blocks, *block_pos);
+
+    world
+        .set_block_state(
+            block_pos,
+            door_props.to_state_id(block),
+            BlockFlags::NOTIFY_LISTENERS,
+        )
+        .await;
+    world
+        .set_block_state(
+            &other_pos,
+            other_door_props.to_state_id(other_block),
+            BlockFlags::NOTIFY_LISTENERS,
+        )
+        .await;
+}
+
+async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
+    let (block, block_state) = world.get_block_and_state_id(block_pos);
+    let mut door_props = DoorProperties::from_state_id(block_state, block);
+    let new_open_state = !door_props.open;
+    door_props.open = new_open_state;
+
+    let other_half = match door_props.half {
+        DoubleBlockHalf::Upper => BlockDirection::Down,
+        DoubleBlockHalf::Lower => BlockDirection::Up,
+    };
+    let other_pos = block_pos.offset(other_half.to_offset());
+
+    let (other_block, other_state_id) = world.get_block_and_state_id(&other_pos);
+    let mut other_door_props = DoorProperties::from_state_id(other_state_id, other_block);
+    other_door_props.open = new_open_state;
 
     world.play_block_sound_expect(
         player,
-        get_sound(block, door_props.open),
+        get_sound(block, new_open_state),
         SoundCategory::Blocks,
         *block_pos,
     );
@@ -346,6 +390,44 @@ impl BlockBehaviour for DoorBlock {
                     BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL,
                 )
                 .await;
+        })
+    }
+
+    fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            // No tag gate needed here: try_oxidize_copper's oxidation_stages table below only
+            // contains the copper door family, so it's a no-op for every other door type.
+
+            // Only oxidize LOWER half of the door to prevent double oxidation
+            let current_state_id = args.world.get_block_state_id(args.position);
+            let door_props = DoorProperties::from_state_id(current_state_id, args.block);
+            if door_props.half != DoubleBlockHalf::Lower {
+                return;
+            }
+
+            let oxidation_stages = [
+                &Block::COPPER_DOOR,
+                &Block::EXPOSED_COPPER_DOOR,
+                &Block::WEATHERED_COPPER_DOOR,
+                &Block::OXIDIZED_COPPER_DOOR,
+            ];
+
+            copper_weathering::try_oxidize_copper(
+                args.world,
+                args.position,
+                args.block,
+                &oxidation_stages,
+                |next_block| {
+                    let mut new_props = DoorProperties::default(next_block);
+                    new_props.facing = door_props.facing;
+                    new_props.open = door_props.open;
+                    new_props.half = door_props.half;
+                    new_props.hinge = door_props.hinge;
+                    new_props.powered = door_props.powered;
+                    new_props.to_state_id(next_block)
+                },
+            )
+            .await;
         })
     }
 }
