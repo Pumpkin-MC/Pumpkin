@@ -189,6 +189,25 @@ impl ArmorStandEntity {
 
     async fn break_and_drop_items(&self) {
         let entity = self.get_entity();
+        let equipment = self.living_entity.entity_equipment.lock().await;
+        let equipped_items: Vec<_> = equipment.equipment.values().cloned().collect();
+        drop(equipment);
+
+        for equipped_item in equipped_items {
+            let mut stack = equipped_item.lock().await;
+            if stack.is_empty() {
+                continue;
+            }
+            let dropped = stack.clone();
+            stack.clear();
+            drop(stack);
+            entity
+                .world
+                .load()
+                .drop_stack(&entity.block_pos.load(), dropped)
+                .await;
+        }
+
         //let name = entity.custom_name.unwrap_or(entity.get_name());
 
         //TODO: i am stupid! let armor_stand_item = ItemStack::new_with_component(1, &Item::ARMOR_STAND, vec![(DataComponent::CustomName, self.get_custom_name())]);
@@ -209,8 +228,6 @@ impl ArmorStandEntity {
             SoundCategory::Neutral,
             &entity.pos.load(),
         );
-
-        // TODO: Implement equipment slots and make them drop all of their stored items.
     }
 
     /// Spawns break particles at the armor stand's position.
@@ -372,7 +389,7 @@ impl EntityBase for ArmorStandEntity {
                 || damage_type == DamageType::BAD_RESPAWN_POINT;
 
             if is_explosion {
-                Self::on_break(entity);
+                self.break_and_drop_items().await;
                 entity.kill(caller).await;
                 return false;
             }
