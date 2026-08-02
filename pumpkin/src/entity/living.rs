@@ -619,6 +619,10 @@ impl LivingEntity {
             .remove(&effect_type)
             .is_some();
 
+        if !succeeded {
+            return false;
+        }
+
         // Broadcast effect removal
         self.entity
             .world
