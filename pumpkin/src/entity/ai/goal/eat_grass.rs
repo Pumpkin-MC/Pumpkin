@@ -31,11 +31,16 @@ impl EatGrassGoal {
 impl Goal for EatGrassGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            if mob.get_random().random_range(0..1000) != 0 {
+            let entity = &mob.get_mob_entity().living_entity.entity;
+            let bound = if entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0 {
+                50
+            } else {
+                1000
+            };
+            if mob.get_random().random_range(0..bound) != 0 {
                 return false;
             }
 
-            let entity = &mob.get_mob_entity().living_entity.entity;
             let block_pos = entity.block_pos.load();
             let world = entity.world.load();
 
