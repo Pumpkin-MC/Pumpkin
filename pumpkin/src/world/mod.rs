@@ -1167,6 +1167,10 @@ impl World {
             )
         };
 
+        // This guard is held across the awaits below, including the `level_time` lock taken in
+        // the night-skip branch, so it establishes a `weather` -> `level_time` lock order.
+        // Nothing may take the `weather` lock while holding `level_time`, or the two paths can
+        // deadlock.
         let mut weather = self.weather.lock().await;
         weather.tick_weather(self);
 
