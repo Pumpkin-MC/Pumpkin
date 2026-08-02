@@ -2,6 +2,8 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crossbeam::atomic::AtomicCell;
+
 use crate::entity::projectile::ProjectileHit;
 use crate::{
     entity::{
@@ -23,6 +25,10 @@ use pumpkin_util::math::vector3::Vector3;
 
 const fn piercing_allows_next_hit(pierce_level: u8, pierced_count: usize) -> bool {
     pierce_level > 0 && pierced_count < pierce_level as usize + 1
+}
+
+const fn calculate_arrow_damage(power: f64, base_damage: f64) -> i32 {
+    (power * base_damage).ceil() as i32
 }
 
 type PotionEffect = (
@@ -89,7 +95,7 @@ impl ArrowPickup {
 pub struct ArrowEntity {
     pub entity: Entity,
     pub owner_id: Option<i32>,
-    pub base_damage: f64,
+    pub base_damage: AtomicCell<f64>,
     pub pickup: ArrowPickup,
     pub is_critical: AtomicBool,
     pub pierce_level: AtomicU8,
@@ -116,7 +122,7 @@ impl ArrowEntity {
         Self {
             entity,
             owner_id,
-            base_damage: Self::ARROW_BASE_DAMAGE,
+            base_damage: AtomicCell::new(Self::ARROW_BASE_DAMAGE),
             pickup: ArrowPickup::Disallowed,
             is_critical: AtomicBool::new(false),
             pierce_level: AtomicU8::new(0),
@@ -161,7 +167,7 @@ impl ArrowEntity {
         Self {
             entity,
             owner_id: Some(shooter.entity_id),
-            base_damage: Self::ARROW_BASE_DAMAGE,
+            base_damage: AtomicCell::new(Self::ARROW_BASE_DAMAGE),
             pickup,
             is_critical: AtomicBool::new(false),
             pierce_level: AtomicU8::new(0),
@@ -233,8 +239,8 @@ impl ArrowEntity {
         self.pierce_level.store(level, Ordering::Relaxed);
     }
 
-    pub const fn set_base_damage(&self, _damage: f64) {
-        // TODO: implement this
+    pub fn set_base_damage(&self, damage: f64) {
+        self.base_damage.store(damage);
     }
 
     #[allow(dead_code)]
@@ -481,7 +487,7 @@ impl EntityBase for ArrowEntity {
                     // Calculate damage
                     let velocity = entity.velocity.load();
                     let power = velocity.length();
-                    let mut damage = (power * self.base_damage).ceil() as i32;
+                    let mut damage = calculate_arrow_damage(power, self.base_damage.load());
 
                     // Apply critical hit bonus
                     if self.is_critical.load(Ordering::Relaxed) {
@@ -682,7 +688,7 @@ fn get_hit_face(hit_pos: Vector3<f64>, block_pos: BlockPos) -> pumpkin_data::Blo
 
 #[cfg(test)]
 mod tests {
-    use super::{arrow_potion_effects, piercing_allows_next_hit};
+    use super::{arrow_potion_effects, calculate_arrow_damage, piercing_allows_next_hit};
     use crate::item::potion::PotionContents;
     use pumpkin_data::data_component::DataComponent;
     use pumpkin_data::data_component_impl::{PotionContentsImpl, StatusEffectInstance};
@@ -698,6 +704,12 @@ mod tests {
         assert!(!piercing_allows_next_hit(1, 2));
         assert!(piercing_allows_next_hit(4, 4));
         assert!(!piercing_allows_next_hit(4, 5));
+    }
+
+    #[test]
+    fn arrow_damage_uses_configured_base_damage() {
+        assert_eq!(calculate_arrow_damage(1.5, 2.0), 3);
+        assert_eq!(calculate_arrow_damage(1.5, 4.0), 6);
     }
 
     #[test]
