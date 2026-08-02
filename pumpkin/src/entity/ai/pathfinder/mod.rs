@@ -449,6 +449,10 @@ impl Navigator {
     }
 
     #[must_use]
+    pub const fn get_current_path(&self) -> Option<&Path> {
+        self.current_path.as_ref()
+    }
+
     pub fn is_idle(&self) -> bool {
         self.is_idle.load(Ordering::Relaxed)
     }
