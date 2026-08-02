@@ -2996,16 +2996,28 @@ impl Player {
         let config = self.config.load();
         self.living_entity.entity.send_meta_data(
             &[
+                // v26.x
                 Metadata::new(
                     TrackedData::PLAYER_MODE_CUSTOMISATION,
                     MetaDataType::BYTE,
                     config.skin_parts,
                 ),
-                // Metadata::new(
-                //     TrackedData::DATA_MAIN_ARM_ID,
-                //     MetaDataType::ARM,
-                //     VarInt(config.main_hand as u8 as i32),
-                // ),
+                Metadata::new(
+                    TrackedData::PLAYER_MAIN_HAND,
+                    MetaDataType::HUMANOID_ARM,
+                    config.main_hand as u8,
+                ),
+                // v1.21.x
+                Metadata::new(
+                    TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
+                    MetaDataType::BYTE,
+                    config.skin_parts,
+                ),
+                Metadata::new(
+                    TrackedData::MAIN_ARM_ID,
+                    MetaDataType::BYTE,
+                    config.main_hand as u8,
+                ),
             ],
             None,
         );
