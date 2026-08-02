@@ -90,6 +90,10 @@ const fn pvp_allows_attack(pvp_enabled: bool, target_is_player: bool) -> bool {
     pvp_enabled || !target_is_player
 }
 
+const fn uses_main_hand(hand: Hand) -> bool {
+    matches!(hand, Hand::Right)
+}
+
 // `ServerGamePacketListenerImpl::handleAttack` calls
 // `Player::isWithinAttackRange(..., 3.0)`. The default attack-range component
 // reaches 3 blocks in Survival and 5 in Creative, with a 0.3 hitbox margin.
@@ -2607,7 +2611,7 @@ impl JavaClient {
         };
         self.update_sequence(player, use_item.sequence.0);
 
-        let item_in_hand = if hand == Hand::Left {
+        let item_in_hand = if uses_main_hand(hand) {
             inventory.held_item()
         } else {
             inventory.off_hand_item().await
@@ -3078,15 +3082,21 @@ impl JavaClient {
 #[cfg(test)]
 mod tests {
     use pumpkin_util::{
-        GameMode,
+        GameMode, Hand,
         math::{boundingbox::BoundingBox, vector3::Vector3},
     };
 
     use super::{
         MovementCheckContext, TeleportConfirmAction, attack_target_is_in_range,
         has_finite_position, movement_requires_correction, pvp_allows_attack,
-        teleport_confirm_action,
+        teleport_confirm_action, uses_main_hand,
     };
+
+    #[test]
+    fn right_hand_uses_the_selected_inventory_slot() {
+        assert!(uses_main_hand(Hand::Right));
+        assert!(!uses_main_hand(Hand::Left));
+    }
 
     #[test]
     fn movement_position_rejects_non_finite_components() {
