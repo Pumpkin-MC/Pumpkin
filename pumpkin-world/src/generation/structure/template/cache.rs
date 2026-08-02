@@ -143,3 +143,26 @@ pub fn global_cache() -> &'static TemplateCache {
 pub fn get_template(name: &str) -> Option<Arc<StructureTemplate>> {
     global_cache().get(name)
 }
+
+/// Returns a list of all available template names that can be loaded.
+///
+/// These are derived from the embedded structure files at compile time.
+/// Useful for tab-completion in commands.
+#[must_use]
+#[allow(clippy::used_underscore_items)]
+pub const fn all_template_names() -> &'static [&'static str] {
+    _generated_all_template_names()
+}
+
+/// Returns a list of all available structure names for `/place structure` tab-completion.
+#[must_use]
+pub const fn all_structure_names() -> &'static [&'static str] {
+    pumpkin_data::structures::StructureKeys::all_names()
+}
+
+/// Returns a list of all available pool names for `/place jigsaw` tab-completion.
+#[must_use]
+#[allow(clippy::used_underscore_items)]
+pub const fn all_pool_names() -> &'static [&'static str] {
+    _generated_all_pool_names()
+}

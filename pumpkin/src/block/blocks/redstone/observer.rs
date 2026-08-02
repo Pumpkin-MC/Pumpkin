@@ -65,7 +65,12 @@ impl BlockBehaviour for ObserverBlock {
         Box::pin(async move {
             let props = ObserverLikeProperties::from_state_id(args.state_id, args.block);
 
-            if props.facing.to_block_direction() == args.direction && !props.powered {
+            if props.facing.to_block_direction() == args.direction
+                && !props.powered
+                && !args
+                    .world
+                    .is_block_tick_scheduled(args.position, &Block::OBSERVER)
+            {
                 Self::schedule_tick(args.world, args.position);
             }
 
@@ -75,12 +80,9 @@ impl BlockBehaviour for ObserverBlock {
 
     fn emits_redstone_power<'a>(
         &'a self,
-        args: EmitsRedstonePowerArgs<'a>,
+        _args: EmitsRedstonePowerArgs<'a>,
     ) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let props = ObserverLikeProperties::from_state_id(args.state.id, args.block);
-            props.facing.to_block_direction() == args.direction
-        })
+        Box::pin(async move { true })
     }
 
     fn get_weak_redstone_power<'a>(
@@ -127,12 +129,12 @@ impl ObserverBlock {
         block_pos: &BlockPos,
         props: &ObserverLikeProperties,
     ) {
-        let facing = props.facing;
-        let opposite_facing_pos =
-            block_pos.offset(facing.to_block_direction().opposite().to_offset());
+        let facing = props.facing.to_block_direction();
+        let opposite_facing_pos = block_pos.offset(facing.opposite().to_offset());
+
         world.update_neighbor(&opposite_facing_pos, block).await;
         world
-            .update_neighbors(&opposite_facing_pos, Some(facing.to_block_direction()))
+            .update_neighbors(&opposite_facing_pos, Some(facing))
             .await;
     }
 
