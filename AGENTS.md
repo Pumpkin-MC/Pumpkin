@@ -25,6 +25,7 @@
 | Add a block (with entity)    | `campfire.rs` + `entities/campfire.rs` → `registry.rs` registration  |
 | Add a block (no entity)      | `dirt_path.rs` → `registry.rs` registration                          |
 | Add an item                  | `bucket.rs` → `items/mod.rs` `default_registry()`                    |
+| Add a mob/entity             | `entity/mob/bat.rs` (or a similar mob) → `entity/type.rs` registration |
 | Add a mob AI Goal            | `melee_attack.rs` → how goals are attached in entity                 |
 | Add a command                | `time.rs` → `commands/mod.rs` registration                           |
 | Add packet handling          | `net/java/play.rs` (find a similar packet's handler)                 |
@@ -49,12 +50,29 @@ pub struct DirtPathBlock;
 pub struct CampfireBlock;
 
 impl BlockBehaviour for DirtPathBlock {
-    fn on_entity_step<'a>(&'a self, args: OnEntityStepArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move { /* ... */ })
+    // The most commonly overridden methods:
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move { /* called when block is placed */ })
     }
-    // Use default trait impls for other methods; override only what you need.
-    // BlockBehaviour has ~28 methods, most with default implementations.
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move { /* determine initial block state */ })
+    }
+    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move { /* entity collision effects, e.g. campfire damage */ })
+    }
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move { /* right-click interaction */ })
+    }
+    fn on_entity_step<'a>(&'a self, args: OnEntityStepArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move { /* entity stepping on block, e.g. farmland trampling */ })
+    }
+    // BlockBehaviour has ~30+ methods, most with default implementations.
     // Note: mirror() and rotate() are not async and do not return BlockFuture.
+}
+
+// Every block must also implement BlockMetadata:
+impl BlockMetadata for DirtPathBlock {
+    fn ids() -> Box<[BlockId]> { Box::new([Block::DIRT_PATH.id]) }
 }
 ```
 
@@ -69,14 +87,18 @@ pub struct CampfireBlockEntity {
 }
 
 impl BlockEntity for CampfireBlockEntity {
-    // The following 5 methods have no default impl — must be hand-written
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move { /* serialize to NBT */ })
-    }
-    fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self { /* construct from NBT */ }
+    // required methods (no default impls)
     fn resource_location(&self) -> &'static str { "minecraft:campfire" }
     fn get_position(&self) -> BlockPos { self.position }
     fn as_any(&self) -> &dyn Any { self }
+
+    // NBT persistence: override write_nbt / read_nbt_non_mut (defaults are no-ops)
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move { /* serialize to NBT */ })
+    }
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move { /* restore from NBT */ })
+    }
 
     // tick has a default empty impl; override only when needed
     fn tick<'a>(&'a self, world: &'a Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
@@ -86,6 +108,8 @@ impl BlockEntity for CampfireBlockEntity {
 ```
 
 Create and register in the parent block's `BlockBehaviour::placed()` via `world.add_block_entity(Arc::new(entity))`.
+
+> **Note**: use the `NbtFuture<'a, T>` type alias (defined in `pumpkin/src/entity/mod.rs`) for NBT method return types.
 
 ### 3.3 Items
 
@@ -122,40 +146,74 @@ Registration: `manager.register(YourItem);` in `pumpkin/src/item/items/mod.rs`'s
 
 ### 3.4 Entities
 
+The entity hierarchy is: `Entity` (base) → `LivingEntity` (living properties) → `MobEntity` (AI, goals, navigation). Mobs implement the `Mob` trait (which auto-implements `EntityBase`).
+
 ```rust
+use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::{Entity, EntityBase, NBTStorage, NbtFuture, EntityBaseFuture};
+
 pub struct BatEntity {
-    entity: Entity,              // base entity (position, velocity, UUID…)
-    living_entity: LivingEntity, // living properties (health, effects…)
-    mob_entity: Mob,             // mob properties (AI, Goals, navigation…)
-  //mob: Arc<dyn MobBase>,       // if a Mob subtype, holds an Arc back-pointer
+    pub mob_entity: MobEntity,       // single field holding the full entity stack
+    // custom fields (use AtomicCell, AtomicBool, tokio::sync::Mutex)
+    hanging_position: Mutex<Option<BlockPos>>,
+    roosting: AtomicBool,
 }
 
-impl NBTStorage for BatEntity { /* NBT read/write */ }
+impl BatEntity {
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let mob_entity = MobEntity::new(entity);
+        Arc::new(Self { mob_entity, /* ... */ })
+    }
+}
 
-impl EntityBase for BatEntity {
-    // The following 3 methods have no default impl — must be hand-written
-    fn get_entity(&self) -> &Entity { &self.entity }
-    fn get_living_entity(&self) -> Option<&LivingEntity> { Some(&self.living_entity) }
-    fn cast_any(&self) -> &dyn std::any::Any { self }
-
-    fn tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, server: &'a Server)
-        -> EntityBaseFuture<'a, ()>
-    {
+impl NBTStorage for BatEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.get_entity().tick(caller, server).await;
-            self.living_entity.tick(caller, server).await;
-            // ...
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            // write custom fields
+        })
+    }
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            // read custom fields
         })
     }
 }
+
+impl Mob for BatEntity {
+    fn get_mob_entity(&self) -> &MobEntity { &self.mob_entity }
+
+    // Override mob_tick for per-mob behavior
+    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move { /* per-tick logic */ })
+    }
+
+    // Override other Mob trait methods only when needed:
+    // get_mob_gravity(), get_mob_y_velocity_drag(), on_damage(), post_tick(), ...
+}
+
+// Mob auto-implements EntityBase — no separate EntityBase impl needed.
 ```
 
-Registration: map by `EntityType` ID in the match arm at `pumpkin/src/entity/type.rs`:
+Registration: map by `EntityType` ID in `pumpkin/src/entity/type.rs`:
 ```rust
 id if id == EntityType::BAT.id => BatEntity::new(entity),
 ```
 
+For mob variants sharing behavior (e.g., zombie variants), use a shared base struct:
+```rust
+pub struct ZombieEntity {
+    entity: Arc<ZombieEntityBase>,  // shared behavior across zombie types
+}
+impl Mob for ZombieEntity {
+    fn get_mob_entity(&self) -> &MobEntity { &self.entity.mob_entity }
+}
+```
+
 ### 3.5 AI Goals
+
+All `Goal` trait methods have default implementations — only override what you need.
 
 ```rust
 pub struct MeleeAttackGoal {
@@ -181,12 +239,23 @@ impl Goal for MeleeAttackGoal {
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move { /* per-tick logic */ })
     }
+
+    // Declare which system controls this goal uses, so the goal selector knows
+    // which goals can run concurrently
+    fn controls(&self) -> Controls {
+        Controls::MOVE | Controls::LOOK
+    }
 }
 ```
 
-Registration: attach in the entity's constructor via `mob_entity.goals_selector`:
+> `Controls` flags: `MOVE`, `LOOK`, `JUMP`, `TARGET`. Two goals with overlapping controls can't run at the same time.
+
+Registration: attach in the entity's constructor via `mob_entity.goals_selector` or `mob_entity.target_selector`:
 ```rust
-mob_entity.goals_selector.add_goal(MeleeAttackGoal { mob: mob.clone(), ... });
+mob_entity.goals_selector
+    .lock().unwrap()
+    .add_goal(1, MeleeAttackGoal { mob: mob.clone(), speed: 1.0, cooldown: 0 });
+// First argument is priority (lower = higher priority). Target goals use target_selector instead.
 ```
 
 ---
@@ -335,12 +404,13 @@ pumpkin/                main crate (entrypoint, blocks, entities, items, command
 ├── pumpkin-inventory/  inventory (containers, recipes, crafting)
 ├── pumpkin-config/     TOML config loading
 ├── pumpkin-nbt/        NBT serialization
-├── pumpkin-util/        utilities (math, text, noise, rng)
+├── pumpkin-util/       utilities (math, text, noise, rng)
 ├── pumpkin-macros/     procedural macros
 ├── pumpkin-codegen/    build-time code generation
 ├── pumpkin-codecs/     optional codec
 ├── pumpkin-plugin-api/ Wasm plugin API
-└── pumpkin-api-macros/ plugin macros
+├── pumpkin-api-macros/ plugin macros
+└── pumpkin-plugin-wit/ WIT definitions for plugin interface
 ```
 
 Dependency direction (bottom → top): `pumpkin-data` → `pumpkin-util` → `pumpkin-nbt` → `pumpkin-world` / `pumpkin-protocol` / `pumpkin-inventory` → `pumpkin-config` → `pumpkin/`
@@ -366,16 +436,23 @@ Internal entity state relies heavily on lock-free atomics — this is the projec
 
 ## 10. Key File Index
 
-| Purpose               | Path                                               |
-|-----------------------|----------------------------------------------------|
-| Server entrypoint     | `pumpkin/src/lib.rs`                               |
-| Server core           | `pumpkin/src/server/mod.rs`                        |
-| World management      | `pumpkin/src/world/mod.rs`                         |
-| Block registry        | `pumpkin/src/block/registry.rs`                    |
-| Item registry         | `pumpkin/src/item/items/mod.rs` (default_registry) |
-| Java packet handling  | `pumpkin/src/net/java/play.rs`                     |
-| Command dispatch      | `pumpkin/src/command/commands/mod.rs`              |
-| Entity type matching  | `pumpkin/src/entity/type.rs`                       |
-| Config definition     | `pumpkin-config/src/lib.rs`                        |
-| World generation      | `pumpkin-world/src/generation/`                    |
-| Code generation       | `pumpkin-codegen/src/main.rs`                      |
+| Purpose                     | Path                                               |
+|-----------------------------|----------------------------------------------------|
+| Server entrypoint           | `pumpkin/src/lib.rs`                               |
+| Server core                 | `pumpkin/src/server/mod.rs`                        |
+| World management            | `pumpkin/src/world/mod.rs`                         |
+| Block trait definitions     | `pumpkin/src/block/mod.rs`                         |
+| Block registry              | `pumpkin/src/block/registry.rs`                    |
+| Block implementations       | `pumpkin/src/block/blocks/`                        |
+| Block entity implementations | `pumpkin/src/block/entities/`                      |
+| Item registry               | `pumpkin/src/item/items/mod.rs` (default_registry) |
+| Entity trait definitions    | `pumpkin/src/entity/mod.rs`                        |
+| Entity type matching        | `pumpkin/src/entity/type.rs`                       |
+| Mob trait & MobEntity       | `pumpkin/src/entity/mob/mod.rs`                    |
+| AI Goal trait & Controls    | `pumpkin/src/entity/ai/goal/mod.rs`                |
+| AI Goal implementations     | `pumpkin/src/entity/ai/goal/`                      |
+| Java packet handling        | `pumpkin/src/net/java/play.rs`                     |
+| Command dispatch            | `pumpkin/src/command/commands/mod.rs`              |
+| Config definition           | `pumpkin-config/src/lib.rs`                        |
+| World generation            | `pumpkin-world/src/generation/`                    |
+| Code generation             | `pumpkin-codegen/src/main.rs`                      |
