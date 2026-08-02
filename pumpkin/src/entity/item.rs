@@ -378,7 +378,7 @@ impl ItemEntity {
         let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
             || entity.touching_water.load(Ordering::SeqCst)
             || entity.touching_lava.load(Ordering::SeqCst)
-            || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
+            || entity.velocity.load().sub(&original_velo).length_squared() > 0.01;
 
         if velocity_dirty {
             entity.send_pos_rot();
