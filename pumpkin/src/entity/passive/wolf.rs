@@ -5,11 +5,15 @@ use std::sync::{
 
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::particle::Particle;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
+use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
@@ -19,6 +23,7 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
+    player::Player,
 };
 
 pub struct WolfEntity {
@@ -109,6 +114,36 @@ impl Mob for WolfEntity {
         &self.mob_entity
     }
 
+    fn mob_interact<'a>(
+        &'a self,
+        player: &'a Arc<Player>,
+        item_stack: &'a mut ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            if self.mob_entity.is_tamed() || item_stack.item.id != Item::BONE.id {
+                return false;
+            }
+
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+
+            let entity = &self.mob_entity.living_entity.entity;
+            let world = entity.world.load();
+            let pos = entity.pos.load() + Vector3::new(0.0, f64::from(entity.height()), 0.0);
+
+            if self.get_random().random_range(0..3) == 0 {
+                self.mob_entity.set_owner(player.gameprofile.id);
+                self.mob_entity
+                    .living_entity
+                    .set_health(self.mob_entity.living_entity.get_max_health());
+                world.spawn_particle(pos, Vector3::new(0.5, 0.5, 0.5), 1.0, 7, Particle::Heart);
+            } else {
+                world.spawn_particle(pos, Vector3::new(0.5, 0.5, 0.5), 1.0, 7, Particle::Smoke);
+            }
+
+            true
+        })
+    }
+
     fn mob_set_variant_name(&self, name: &str) {
         let variant = match name.strip_prefix("minecraft:").unwrap_or(name) {
             "ashen" => 0,
@@ -140,7 +175,7 @@ impl Mob for WolfEntity {
             }
             entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::WOLF_VARIANT_ID,
+                    TrackedData::VARIANT,
                     MetaDataType::WOLF_VARIANT,
                     VarInt(self.variant.load(Ordering::Relaxed) as i32),
                 )],

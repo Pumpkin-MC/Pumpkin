@@ -1,14 +1,26 @@
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
+use std::sync::Weak;
 
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::potion::Effect;
+use pumpkin_data::{
+    effect::StatusEffect,
+    tag::{self, Taggable},
+};
+use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
+    player::Player,
 };
 
 /// Represents a Parrot, a passive flying mob that can mimic nearby mob sounds.
@@ -49,5 +61,60 @@ impl NBTStorage for ParrotEntity {}
 impl Mob for ParrotEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_interact<'a>(
+        &'a self,
+        player: &'a Arc<Player>,
+        item_stack: &'a mut ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            let entity = &self.mob_entity.living_entity.entity;
+
+            if !self.mob_entity.is_tamed()
+                && item_stack.item.has_tag(&tag::Item::MINECRAFT_PARROT_FOOD)
+            {
+                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+
+                let world = entity.world.load();
+                let pos = entity.pos.load() + Vector3::new(0.0, f64::from(entity.height()), 0.0);
+
+                if self.get_random().random_range(0..10) == 0 {
+                    self.mob_entity.set_owner(player.gameprofile.id);
+                    world.spawn_particle(pos, Vector3::new(0.5, 0.5, 0.5), 1.0, 7, Particle::Heart);
+                } else {
+                    world.spawn_particle(pos, Vector3::new(0.5, 0.5, 0.5), 1.0, 7, Particle::Smoke);
+                }
+
+                return true;
+            }
+
+            if item_stack
+                .item
+                .has_tag(&tag::Item::MINECRAFT_PARROT_POISONOUS_FOOD)
+            {
+                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+
+                if let Some(living) = self.get_living_entity() {
+                    living
+                        .add_effect(Effect {
+                            effect_type: &StatusEffect::POISON,
+                            duration: 900,
+                            amplifier: 0,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                            blend: false,
+                        })
+                        .await;
+                }
+                self.damage(player.as_ref(), f32::MAX, DamageType::PLAYER_ATTACK)
+                    .await;
+
+                return true;
+            }
+
+            false
+        })
     }
 }
