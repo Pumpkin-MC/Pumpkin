@@ -49,15 +49,16 @@ impl FollowParentGoal {
                 continue;
             }
             let dist_sq = pos.squared_distance_to_vec(&c_pos);
-            if dist_sq < MIN_DISTANCE_SQ {
-                continue;
-            }
             if closest.as_ref().is_none_or(|(d, _)| dist_sq < *d) {
                 closest = Some((dist_sq, candidate.clone()));
             }
         }
 
-        closest.map(|(_, e)| e)
+        let (dist_sq, closest_entity) = closest?;
+        if dist_sq < MIN_DISTANCE_SQ {
+            return None;
+        }
+        Some(closest_entity)
     }
 }
 
