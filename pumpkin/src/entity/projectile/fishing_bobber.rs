@@ -49,6 +49,39 @@ const fn fishing_catch_item(random_value: u8) -> &'static pumpkin_data::item::It
     }
 }
 
+const fn fishing_junk_item(random_value: u8) -> &'static pumpkin_data::item::Item {
+    match random_value % 10 {
+        0 => &pumpkin_data::item::Item::LILY_PAD,
+        1 => &pumpkin_data::item::Item::LEATHER,
+        2 => &pumpkin_data::item::Item::LEATHER_BOOTS,
+        3 => &pumpkin_data::item::Item::ROTTEN_FLESH,
+        4 => &pumpkin_data::item::Item::STICK,
+        5 => &pumpkin_data::item::Item::STRING,
+        6 => &pumpkin_data::item::Item::POTION,
+        7 => &pumpkin_data::item::Item::BONE,
+        8 => &pumpkin_data::item::Item::INK_SAC,
+        _ => &pumpkin_data::item::Item::TRIPWIRE_HOOK,
+    }
+}
+
+const fn fishing_treasure_item(random_value: u8) -> &'static pumpkin_data::item::Item {
+    match random_value % 7 {
+        0 | 5 => &pumpkin_data::item::Item::BOW,
+        2 => &pumpkin_data::item::Item::NAME_TAG,
+        3 => &pumpkin_data::item::Item::NAUTILUS_SHELL,
+        4 => &pumpkin_data::item::Item::SADDLE,
+        _ => &pumpkin_data::item::Item::FISHING_ROD,
+    }
+}
+
+const fn fishing_loot_item(category_roll: u8, item_roll: u8) -> &'static pumpkin_data::item::Item {
+    match category_roll % 100 {
+        0..85 => fishing_catch_item(item_roll),
+        85..95 => fishing_junk_item(item_roll),
+        _ => fishing_treasure_item(item_roll),
+    }
+}
+
 impl FishingBobberEntity {
     const WATER_INERTIA: f64 = 0.8;
     const AIR_INERTIA: f64 = 0.92;
@@ -101,7 +134,8 @@ impl FishingBobberEntity {
                 )
                 .await;
 
-            let mut item_stack = ItemStack::new(1, fishing_catch_item(rand::random()));
+            let mut item_stack =
+                ItemStack::new(1, fishing_loot_item(rand::random(), rand::random()));
             if !player
                 .inventory
                 .insert_stack_anywhere(&mut item_stack)
@@ -324,7 +358,8 @@ impl EntityBase for FishingBobberEntity {
 #[cfg(test)]
 mod tests {
     use super::{
-        fishing_catch_item, fishing_experience_reward, fishing_wait_countdown, hooked_reel_damage,
+        fishing_catch_item, fishing_experience_reward, fishing_loot_item, fishing_wait_countdown,
+        hooked_reel_damage,
     };
 
     #[test]
@@ -373,6 +408,26 @@ mod tests {
         assert_eq!(
             fishing_catch_item(98).id,
             pumpkin_data::item::Item::TROPICAL_FISH.id
+        );
+    }
+
+    #[test]
+    fn fishing_loot_categories_match_vanilla_base_weights() {
+        assert_eq!(
+            fishing_loot_item(84, 0).id,
+            pumpkin_data::item::Item::COD.id
+        );
+        assert_eq!(
+            fishing_loot_item(85, 0).id,
+            pumpkin_data::item::Item::LILY_PAD.id
+        );
+        assert_eq!(
+            fishing_loot_item(94, 9).id,
+            pumpkin_data::item::Item::TRIPWIRE_HOOK.id
+        );
+        assert_eq!(
+            fishing_loot_item(95, 0).id,
+            pumpkin_data::item::Item::BOW.id
         );
     }
 }
