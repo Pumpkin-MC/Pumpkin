@@ -1,4 +1,4 @@
-use crate::block::blocks::amethyst::AmethystBlock;
+use crate::block::blocks::amethyst::{AmethystBlock, BuddingAmethystBlock};
 use crate::block::blocks::anvil::AnvilBlock;
 use crate::block::blocks::banners::BannerBlock;
 use crate::block::blocks::barrel::BarrelBlock;
@@ -30,7 +30,7 @@ use crate::block::blocks::doors::DoorBlock;
 use crate::block::blocks::dripstone::DripstoneBlock;
 use crate::block::blocks::end_portal::EndPortalBlock;
 use crate::block::blocks::end_portal_frame::EndPortalFrameBlock;
-use crate::block::blocks::falling::FallingBlock;
+use crate::block::blocks::falling::{ConcretePowderBlock, FallingBlock};
 use crate::block::blocks::farmland::FarmlandBlock;
 use crate::block::blocks::fence_gates::FenceGateBlock;
 use crate::block::blocks::fences::FenceBlock;
@@ -44,6 +44,8 @@ use crate::block::blocks::glazed_terracotta::GlazedTerracottaBlock;
 use crate::block::blocks::grass_block::GrassBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
 use crate::block::blocks::hay::HayBlock;
+use crate::block::blocks::heavy_core::HeavyCoreBlock;
+use crate::block::blocks::huge_mushroom::HugeMushroomBlock;
 use crate::block::blocks::ice::IceBlock;
 use crate::block::blocks::infested::InfestedBlock;
 use crate::block::blocks::iron_bars::IronBarsBlock;
@@ -70,6 +72,7 @@ use crate::block::blocks::plant::chorus_plant::ChorusPlantBlock;
 use crate::block::blocks::plant::crop::beetroot::BeetrootBlock;
 use crate::block::blocks::plant::crop::carrot::CarrotBlock;
 use crate::block::blocks::plant::crop::nether_wart::NetherWartBlock;
+use crate::block::blocks::plant::crop::pitcher_crop::PitcherCropBlock;
 use crate::block::blocks::plant::crop::potatoes::PotatoBlock;
 use crate::block::blocks::plant::crop::sweet_berry_bush::SweetBerryBushBlock;
 use crate::block::blocks::plant::crop::torch_flower::TorchFlowerBlock;
@@ -81,6 +84,7 @@ use crate::block::blocks::plant::fungus::FungusBlock;
 use crate::block::blocks::plant::kelp::KelpBlock;
 use crate::block::blocks::plant::leaf_litter::LeafLitterBlock;
 use crate::block::blocks::plant::lily_pad::LilyPadBlock;
+use crate::block::blocks::plant::mangrove_propagule::MangrovePropaguleBlock;
 use crate::block::blocks::plant::mushroom_plant::MushroomPlantBlock;
 use crate::block::blocks::plant::nether_sprouts::NetherSproutsBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
@@ -205,6 +209,10 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BeaconBlock);
     manager.register(BedBlock);
     manager.register(SaplingBlock);
+    // Registered after SaplingBlock: MangrovePropaguleBlock must win for
+    // `minecraft:mangrove_propagule`, which is also a member of the `minecraft:saplings` tag
+    // that SaplingBlock is registered from.
+    manager.register(MangrovePropaguleBlock);
     manager.register(CactusBlock);
     manager.register(ChorusFlowerBlock);
     manager.register(ChorusPlantBlock);
@@ -257,6 +265,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(PotatoBlock);
     manager.register(BeetrootBlock);
     manager.register(TorchFlowerBlock);
+    manager.register(PitcherCropBlock);
     manager.register(CarrotBlock);
     manager.register(SweetBerryBushBlock);
     manager.register(SeaGrassBlock);
@@ -327,11 +336,15 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CoralPlantBlock);
     manager.register(CoralBlock);
     manager.register(AmethystBlock);
+    manager.register(BuddingAmethystBlock);
     manager.register(GrassBlock);
     manager.register(NyliumBlock);
     manager.register(BubbleColumnBlock);
+    manager.register(HeavyCoreBlock);
+    manager.register(HugeMushroomBlock);
 
     manager.register(FallingBlock);
+    manager.register(ConcretePowderBlock);
     manager.register(LeavesBlock);
 
     // Fire

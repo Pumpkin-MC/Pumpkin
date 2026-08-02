@@ -70,14 +70,20 @@ impl EntityBase for FallingEntity {
             entity.tick_block_collisions(caller, server).await;
             if entity.on_ground.load(Ordering::Relaxed) {
                 entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
-                entity
-                    .world
-                    .load()
-                    .set_block_state(
-                        &self.entity.block_pos.load(),
-                        self.block_state_id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
+                let world = entity.world.load();
+                let landing_pos = self.entity.block_pos.load();
+                // `FallingBlock.onLand` / `ConcretePowderBlock.onLand`: concrete powder
+                // solidifies into solid concrete if it lands touching water; every other
+                // falling block (sand, gravel, ...) is unaffected.
+                let replaced_state = world.get_block_state(&landing_pos);
+                let final_state_id = crate::block::blocks::falling::on_land_state(
+                    &**world,
+                    &landing_pos,
+                    self.block_state_id,
+                    replaced_state,
+                );
+                world
+                    .set_block_state(&landing_pos, final_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
                 entity.remove().await;
             }

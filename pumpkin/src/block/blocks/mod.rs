@@ -112,6 +112,8 @@ pub mod coral;
 pub mod abstract_wall_mounting;
 
 pub mod beacon;
+pub mod heavy_core;
+pub mod huge_mushroom;
 
 // Copper oxidation/weathering (shared utility)
 pub mod copper_weathering;
