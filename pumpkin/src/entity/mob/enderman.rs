@@ -5,7 +5,7 @@ use std::sync::{
 
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
-use pumpkin_data::{BlockStateId, attributes::Attributes};
+use pumpkin_data::{Block, BlockState, BlockStateId, attributes::Attributes};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
@@ -43,6 +43,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     player::Player,
 };
+use crate::world::loot::LootContextParameters;
 
 const SPEED_BOOST: f64 = 0.15;
 const ENDERMAN_SPEED_BOOST_ID: &str = "minecraft:attacking";
@@ -475,6 +476,33 @@ impl Mob for EndermanEntity {
         source: Option<&'a dyn EntityBase>,
     ) -> GoalFuture<'a, ()> {
         Box::pin(async move {
+            let living = &self.mob_entity.living_entity;
+            if living.health.load() <= 0.0
+                && living.dead.load(Ordering::Relaxed)
+                && let Some(block_state) = self.carried_block.swap(None)
+            {
+                self.set_carried_block(None);
+                let world = living.entity.world.load();
+                let block_pos = living.entity.block_pos.load();
+                let position = living.entity.pos.load();
+                let params = LootContextParameters {
+                    block_state: Some(BlockState::from_id(block_state)),
+                    position: Some(position),
+                    world_time: world.level_info.load().day_time as u64,
+                    is_raining: Some(world.is_raining().await),
+                    is_thundering: Some(world.is_thundering().await),
+                    ..Default::default()
+                };
+                crate::block::drop_loot(
+                    &world,
+                    Block::from_state_id(block_state),
+                    &block_pos,
+                    false,
+                    params,
+                )
+                .await;
+            }
+
             if source.is_some_and(|s| s.get_living_entity().is_some()) {
                 return;
             }
