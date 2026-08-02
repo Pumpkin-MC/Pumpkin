@@ -356,7 +356,7 @@ impl EntityBase for MinecartEntity {
                     let passengers = self.vehicle.entity.passengers.lock().await;
                     let has_passengers = !passengers.is_empty();
                     drop(passengers);
-                    friction = if has_passengers { 0.99 } else { 0.96 };
+                    friction = if has_passengers { 0.997 } else { 0.96 };
                 } else {
                     let below_block_pos = BlockPos(Vector3::new(
                         block_pos.0.x,
