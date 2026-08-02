@@ -342,6 +342,10 @@ pub fn check_spawn_rules(
             && mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering);
     }
 
+    if id == EntityType::MAGMA_CUBE.id {
+        return world.level_info.load().difficulty != pumpkin_util::Difficulty::Peaceful;
+    }
+
     if id == EntityType::DROWNED.id {
         if !world
             .get_fluid(&pos.down())
