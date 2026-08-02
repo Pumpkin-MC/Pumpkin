@@ -1,5 +1,9 @@
 use crate::generation::proto_chunk::GenerationCache;
-use pumpkin_data::{Block, BlockState, chunk::Biome, tag};
+use pumpkin_data::{
+    Block, BlockState,
+    chunk::Biome,
+    tag::{self, Taggable},
+};
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
@@ -8,69 +12,6 @@ use pumpkin_util::{
 pub struct HugeFungusFeature;
 
 impl HugeFungusFeature {
-    /// Replaceable block list
-    const REPLACEABLE_BLOCKS: &[Block] = &[
-        Block::OAK_SAPLING,
-        Block::SPRUCE_SAPLING,
-        Block::BIRCH_SAPLING,
-        Block::JUNGLE_SAPLING,
-        Block::ACACIA_SAPLING,
-        Block::CHERRY_SAPLING,
-        Block::DARK_OAK_SAPLING,
-        Block::PALE_OAK_SAPLING,
-        Block::MANGROVE_PROPAGULE,
-        Block::DANDELION,
-        Block::TORCHFLOWER,
-        Block::POPPY,
-        Block::BLUE_ORCHID,
-        Block::ALLIUM,
-        Block::AZURE_BLUET,
-        Block::RED_TULIP,
-        Block::ORANGE_TULIP,
-        Block::WHITE_TULIP,
-        Block::PINK_TULIP,
-        Block::OXEYE_DAISY,
-        Block::CORNFLOWER,
-        Block::WITHER_ROSE,
-        Block::LILY_OF_THE_VALLEY,
-        Block::BROWN_MUSHROOM,
-        Block::RED_MUSHROOM,
-        Block::WHEAT,
-        Block::SUGAR_CANE,
-        Block::ATTACHED_PUMPKIN_STEM,
-        Block::ATTACHED_MELON_STEM,
-        Block::PUMPKIN_STEM,
-        Block::MELON_STEM,
-        Block::LILY_PAD,
-        Block::NETHER_WART,
-        Block::COCOA,
-        Block::CARROTS,
-        Block::POTATOES,
-        Block::CHORUS_PLANT,
-        Block::CHORUS_FLOWER,
-        Block::TORCHFLOWER_CROP,
-        Block::PITCHER_CROP,
-        Block::BEETROOTS,
-        Block::SWEET_BERRY_BUSH,
-        Block::WARPED_FUNGUS,
-        Block::CRIMSON_FUNGUS,
-        Block::WEEPING_VINES,
-        Block::WEEPING_VINES_PLANT,
-        Block::TWISTING_VINES,
-        Block::TWISTING_VINES_PLANT,
-        Block::CAVE_VINES,
-        Block::CAVE_VINES_PLANT,
-        Block::SPORE_BLOSSOM,
-        Block::AZALEA,
-        Block::FLOWERING_AZALEA,
-        Block::MOSS_CARPET,
-        Block::PINK_PETALS,
-        Block::WILDFLOWERS,
-        Block::BIG_DRIPLEAF,
-        Block::BIG_DRIPLEAF_STEM,
-        Block::SMALL_DRIPLEAF,
-    ];
-
     #[allow(clippy::unused_self)]
     pub fn generate<T: GenerationCache>(
         &self,
@@ -81,10 +22,6 @@ impl HugeFungusFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        /* Here we'd like to check something about the
-         * position, like if it's valid for a huge fungus to grow there.
-         */
-
         // Check: Is this generated in a warped/crimson forest? (Expected: yes)
         let is_warped = {
             // Get current biome
@@ -164,7 +101,7 @@ impl HugeFungusFeature {
         }
 
         if check_non_replaceable_plants {
-            return Self::REPLACEABLE_BLOCKS.contains(block);
+            return block.has_tag(&tag::Block::MINECRAFT_REPLACEABLE);
         }
 
         false
@@ -264,21 +201,40 @@ impl HugeFungusFeature {
                                     place_vines,
                                 );
                             }
-                        } else if inner {
-                            let vine_prob = if place_vines { 0.1 } else { 0.0 };
-                            self.generate_hat_block(
-                                chunk, random, block_pos, hat_state, 0.1, 0.2, vine_prob,
-                            );
-                        } else if corner {
-                            let vine_prob = if place_vines { 0.083 } else { 0.0 };
-                            self.generate_hat_block(
-                                chunk, random, block_pos, hat_state, 0.01, 0.7, vine_prob,
-                            );
                         } else {
-                            let vine_prob = if place_vines { 0.07 } else { 0.0 };
-                            self.generate_hat_block(
-                                chunk, random, block_pos, hat_state, 5.0e-4, 0.98, vine_prob,
-                            );
+                            // Basic config
+                            let base = match (inner, corner) {
+                                (true, _) => HatProbConfig {
+                                    decor: 0.1,
+                                    hat: 0.2,
+                                    vine: 0.0,
+                                },
+                                (false, true) => HatProbConfig {
+                                    decor: 0.01,
+                                    hat: 0.7,
+                                    vine: 0.0,
+                                },
+                                (false, false) => HatProbConfig {
+                                    decor: 5.0e-4,
+                                    hat: 0.98,
+                                    vine: 0.0,
+                                },
+                            };
+
+                            let prob_cfg = if place_vines {
+                                match (inner, corner) {
+                                    (true, _) => HatProbConfig { vine: 0.1, ..base },
+                                    (false, true) => HatProbConfig {
+                                        vine: 0.083,
+                                        ..base
+                                    },
+                                    (false, false) => HatProbConfig { vine: 0.07, ..base },
+                                }
+                            } else {
+                                base
+                            };
+
+                            self.generate_hat_block(chunk, random, block_pos, hat_state, prob_cfg);
                         }
                     }
                 }
@@ -294,10 +250,14 @@ impl HugeFungusFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
         hat_state: &BlockState,
-        decor_prob: f32,
-        hat_prob: f32,
-        vine_prob: f32,
+        prob_config: HatProbConfig,
     ) {
+        let HatProbConfig {
+            decor: decor_prob,
+            hat: hat_prob,
+            vine: vine_prob,
+        } = prob_config;
+
         // Set decor block in chance...
         if random.next_f32() < decor_prob {
             chunk.set_block_state(&pos.0, Block::SHROOMLIGHT.default_state);
@@ -346,6 +306,15 @@ impl HugeFungusFeature {
             // We place WEEPING_VINES_PLANT for the stem, and WEEPING_VINES at the tip.
             for i in 0..vine_length {
                 let current = vine_pos.offset(Vector3::new(0, -i, 0));
+                // Check: Is current block is replaceable
+                if !GenerationCache::get_block_state(chunk, &current.0)
+                    .to_block_id()
+                    .has_tag(tag::Block::MINECRAFT_REPLACEABLE)
+                {
+                    break;
+                }
+
+                // Place the vine block in different positions...
                 if i == vine_length - 1 {
                     // Tip of the vine
                     chunk.set_block_state(&current.0, Block::WEEPING_VINES.default_state);
@@ -356,4 +325,17 @@ impl HugeFungusFeature {
             }
         }
     }
+}
+
+/// Configuration of the probability of the hat.
+#[derive(Debug, Clone, Copy)]
+pub struct HatProbConfig {
+    /// Probability of placing a decor block.
+    pub decor: f32,
+
+    /// Probability of placing a hat block.
+    pub hat: f32,
+
+    /// Probability of placing weeping vines.
+    pub vine: f32,
 }
