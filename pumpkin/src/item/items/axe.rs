@@ -4,7 +4,9 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::{OakDoorLikeProperties, PaleOakWoodLikeProperties};
+use pumpkin_data::block_properties::{
+    OakDoorLikeProperties, OakTrapdoorLikeProperties, PaleOakWoodLikeProperties,
+};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -71,10 +73,12 @@ impl ItemBehaviour for AxeItem {
                     new_door_properties.hinge = door_props.hinge;
                     new_door_properties.powered = door_props.powered;
                     new_door_properties.to_state_id(new_block)
+                } else if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS) {
+                    let trapdoor_information = world.get_block_state_id(&location);
+                    axe_trapdoor_state(trapdoor_information, block, new_block)
                 } else {
                     new_block.default_state.id
                 };
-                // TODO Implements trapdoors when It's implemented
                 world
                     .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
                     .await;
@@ -92,6 +96,21 @@ impl ItemBehaviour for AxeItem {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+}
+
+fn axe_trapdoor_state(
+    state_id: pumpkin_data::BlockStateId,
+    source: &Block,
+    target: &Block,
+) -> pumpkin_data::BlockStateId {
+    let source_properties = OakTrapdoorLikeProperties::from_state_id(state_id, source);
+    let mut target_properties = OakTrapdoorLikeProperties::default(target);
+    target_properties.facing = source_properties.facing;
+    target_properties.half = source_properties.half;
+    target_properties.open = source_properties.open;
+    target_properties.powered = source_properties.powered;
+    target_properties.waterlogged = source_properties.waterlogged;
+    target_properties.to_state_id(target)
 }
 const fn try_use_axe(id: BlockId) -> Option<BlockId> {
     // Trying to get the strip equivalent
@@ -202,5 +221,42 @@ const fn get_unwaxed_equivalent(id: BlockId) -> Option<BlockId> {
         BlockId::WAXED_EXPOSED_COPPER_TRAPDOOR => Some(BlockId::EXPOSED_COPPER_TRAPDOOR),
         BlockId::WAXED_COPPER_TRAPDOOR => Some(BlockId::COPPER_TRAPDOOR),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{axe_trapdoor_state, get_unwaxed_equivalent};
+    use pumpkin_data::Block;
+    use pumpkin_data::BlockState;
+    use pumpkin_data::block_properties::{BlockProperties, OakTrapdoorLikeProperties};
+
+    #[test]
+    fn axe_trapdoor_replacement_preserves_state_properties() {
+        let source = &Block::WAXED_COPPER_TRAPDOOR;
+        let target = &Block::COPPER_TRAPDOOR;
+        assert_eq!(
+            get_unwaxed_equivalent(source.id),
+            Some(target.id),
+            "waxed copper trapdoors should be removable with an axe"
+        );
+
+        let source_state = source
+            .states
+            .iter()
+            .find(|state| {
+                let properties = OakTrapdoorLikeProperties::from_state_id(state.id, source);
+                properties.open && properties.waterlogged
+            })
+            .expect("waxed copper trapdoor should expose an open waterlogged state");
+        let source_properties = OakTrapdoorLikeProperties::from_state_id(source_state.id, source);
+        let target_state = BlockState::from_id(axe_trapdoor_state(source_state.id, source, target));
+        let target_properties = OakTrapdoorLikeProperties::from_state_id(target_state.id, target);
+
+        assert_eq!(source_properties.facing, target_properties.facing);
+        assert_eq!(source_properties.half, target_properties.half);
+        assert_eq!(source_properties.open, target_properties.open);
+        assert_eq!(source_properties.powered, target_properties.powered);
+        assert_eq!(source_properties.waterlogged, target_properties.waterlogged);
     }
 }
