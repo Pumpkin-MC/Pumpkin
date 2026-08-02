@@ -35,6 +35,10 @@ impl RangedBowAttackGoal {
         }
     }
 
+    const fn reset_attack_cooldown(&mut self) {
+        self.attack_cooldown = self.attack_interval;
+    }
+
     async fn has_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
         let entity = mob.get_entity();
         entity
@@ -126,7 +130,7 @@ impl Goal for RangedBowAttackGoal {
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            self.attack_cooldown = 0;
+            self.reset_attack_cooldown();
             mob.get_mob_entity().set_attacking(true);
         })
     }
@@ -192,6 +196,13 @@ mod tests {
         let goal = RangedBowAttackGoal::new(20, 15.0);
         assert_eq!(goal.attack_interval, 20);
         assert_eq!(goal.range, 15.0);
+    }
+
+    #[test]
+    fn waits_for_the_initial_bow_draw_interval() {
+        let mut goal = RangedBowAttackGoal::new(20, 15.0);
+        goal.reset_attack_cooldown();
+        assert_eq!(goal.attack_cooldown, 20);
     }
 
     #[test]
