@@ -199,7 +199,7 @@ impl BlockBehaviour for RedstoneWireBlock {
     ) -> BlockFuture<'a, u8> {
         Box::pin(async move {
             let wire = RedstoneWireProperties::from_state_id(args.state.id, args.block);
-            
+
             if args.direction == BlockDirection::Up {
                 return wire.power;
             }
@@ -213,7 +213,6 @@ impl BlockBehaviour for RedstoneWireBlock {
             0
         })
     }
-    
 
     fn get_strong_redstone_power<'a>(
         &'a self,
