@@ -418,12 +418,9 @@ impl Navigator {
                 entity.entity.body_yaw.store(target_yaw);
 
                 // Get movement speed from goal and mob attributes
-                let mob_speed =
-                    goal.speed * entity.get_attribute_value(&Attributes::MOVEMENT_SPEED);
-
                 entity
                     .movement_input
-                    .store(Vector3::new(0.0, 0.0, mob_speed));
+                    .store(Vector3::new(0.0, 0.0, goal.speed));
 
                 let bbox = entity.entity.bounding_box.load();
                 let width = bbox.max.x - bbox.min.x;
