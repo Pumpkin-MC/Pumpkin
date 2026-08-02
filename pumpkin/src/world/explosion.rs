@@ -2,13 +2,15 @@ use std::sync::Arc;
 
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::{
-    Block, BlockState, BlockStateId, damage::DamageType, entity::EntityType, fluid::Fluid,
+    Block, BlockDirection, BlockState, BlockStateId, damage::DamageType, entity::EntityType,
+    fluid::Fluid,
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_world::chunk::ChunkData;
 use rustc_hash::FxHashMap;
 
 use crate::{
+    block::blocks::fire::fire::FireBlock,
     block::{ExplodeArgs, drop_loot},
     entity::{Entity, EntityBase},
     world::loot::LootContextParameters,
@@ -20,6 +22,7 @@ pub struct Explosion {
     power: f32,
     pos: Vector3<f64>,
     destroys_blocks: bool,
+    creates_fire: bool,
 }
 
 impl Explosion {
@@ -29,6 +32,7 @@ impl Explosion {
             power,
             pos,
             destroys_blocks: true,
+            creates_fire: false,
         }
     }
 
@@ -38,6 +42,17 @@ impl Explosion {
             power,
             pos,
             destroys_blocks: false,
+            creates_fire: false,
+        }
+    }
+
+    #[must_use]
+    pub const fn new_with_fire(power: f32, pos: Vector3<f64>) -> Self {
+        Self {
+            power,
+            pos,
+            destroys_blocks: true,
+            creates_fire: true,
         }
     }
 
@@ -322,7 +337,37 @@ impl Explosion {
                     .await;
             }
         }
-        // TODO: fire
+        if self.creates_fire {
+            for pos in blocks.keys() {
+                if !world.get_block_state(pos).is_air()
+                    || !world
+                        .get_block_state(&pos.down())
+                        .is_side_solid(BlockDirection::Up)
+                    || rand::random_range(0..3) != 0
+                {
+                    continue;
+                }
+
+                let fire_state = FireBlock.get_state_for_position(world, &Block::FIRE, pos);
+                world
+                    .set_block_state(pos, fire_state, BlockFlags::NOTIFY_ALL)
+                    .await;
+            }
+        }
         blocks.len() as u32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Explosion;
+    use pumpkin_util::math::vector3::Vector3;
+
+    #[test]
+    fn fire_explosions_keep_block_destruction_enabled() {
+        let explosion = Explosion::new_with_fire(1.0, Vector3::new(0.0, 0.0, 0.0));
+
+        assert!(explosion.destroys_blocks);
+        assert!(explosion.creates_fire);
     }
 }

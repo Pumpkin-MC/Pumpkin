@@ -3361,11 +3361,16 @@ impl World {
     }
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        self.explode_with_blocks(position, power, true).await;
+        self.explode_with_blocks(position, power, true, false).await;
     }
 
     pub async fn explode_without_blocks(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
-        self.explode_with_blocks(position, power, false).await;
+        self.explode_with_blocks(position, power, false, false)
+            .await;
+    }
+
+    pub async fn explode_with_fire(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
+        self.explode_with_blocks(position, power, true, true).await;
     }
 
     async fn explode_with_blocks(
@@ -3373,8 +3378,11 @@ impl World {
         position: Vector3<f64>,
         power: f32,
         destroys_blocks: bool,
+        creates_fire: bool,
     ) {
-        let explosion = if destroys_blocks {
+        let explosion = if creates_fire {
+            Explosion::new_with_fire(power, position)
+        } else if destroys_blocks {
             Explosion::new(power, position)
         } else {
             Explosion::new_without_blocks(power, position)

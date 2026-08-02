@@ -538,15 +538,16 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         world: Resource<World>,
         pos: pumpkin::plugin::common::Position,
         power: f32,
-        _create_fire: bool,
+        create_fire: bool,
         _interaction: pumpkin::plugin::world::ExplosionInteraction,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
-        // Currently Explosion only supports power and position in this codebase
-        let explosion = Explosion::new(
-            power,
-            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-        );
+        let position = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
+        let explosion = if create_fire {
+            Explosion::new_with_fire(power, position)
+        } else {
+            Explosion::new(power, position)
+        };
         explosion.explode(&world_ref.provider).await;
         Ok(())
     }
