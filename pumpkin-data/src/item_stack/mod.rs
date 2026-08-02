@@ -547,8 +547,7 @@ impl ItemStack {
     }
 
     pub fn enchant(&mut self, enchantment: &'static Enchantment, level: i32) {
-        // TODO itemstack may not send update packet to client
-        if level <= 0 {
+        if level < 0 {
             return;
         }
         let level = min(level, 255);
@@ -1326,5 +1325,13 @@ mod tests {
                 "damage should clamp to 0 for set_damage({amount})"
             );
         }
+    }
+
+    #[test]
+    fn enchantment_level_zero_is_retained() {
+        let mut stack = ItemStack::new(1, &Item::BOW);
+        stack.enchant(&Enchantment::FLAME, 0);
+        assert!(stack.has_enchantments());
+        assert_eq!(stack.get_enchantment_level(&Enchantment::FLAME), 0);
     }
 }
