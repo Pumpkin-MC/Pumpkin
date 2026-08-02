@@ -35,6 +35,7 @@ pub mod offer_flower;
 pub mod owner_hurt_by_target;
 pub mod owner_hurt_target;
 pub mod pick_up_block;
+pub mod piglin_admire;
 pub mod place_block;
 pub mod raid_garden;
 pub mod ranged_bow_attack;
