@@ -26,7 +26,7 @@ use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
 use uuid::Uuid;
 
 pub mod bat;
@@ -78,6 +78,7 @@ pub struct MobEntity {
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
     pub owner: AtomicCell<Option<Uuid>>,
+    pub ordered_to_sit: AtomicBool,
     mob_flags: AtomicU8,
     last_sent_yaw: AtomicU8,
     last_sent_pitch: AtomicU8,
@@ -116,6 +117,7 @@ impl MobEntity {
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
             owner: AtomicCell::new(None),
+            ordered_to_sit: AtomicBool::new(false),
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -213,6 +215,14 @@ impl MobEntity {
 
     pub fn set_owner(&self, owner: Uuid) {
         self.owner.store(Some(owner));
+    }
+
+    pub fn is_ordered_to_sit(&self) -> bool {
+        self.ordered_to_sit.load(Relaxed)
+    }
+
+    pub fn set_ordered_to_sit(&self, value: bool) {
+        self.ordered_to_sit.store(value, Relaxed);
     }
 
     pub fn is_breeding_ready(&self) -> bool {
