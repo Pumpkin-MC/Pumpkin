@@ -52,9 +52,9 @@ fn can_be_lit(block: &Block, state_id: BlockStateId) -> Option<BlockStateId> {
     // See `CampfireBlock::canLight`, `CandleBlock::canLight` and `CandleCakeBlock::canLight`.
     // Everything else that merely carries a `lit` property (furnaces, redstone lamps, copper
     // bulbs, ...) must fall through to placing a fire block instead.
-    if !block.has_tag(&tag::Block::MINECRAFT_CAMPFIRES)
-        && !block.has_tag(&tag::Block::MINECRAFT_CANDLES)
-        && !block.has_tag(&tag::Block::MINECRAFT_CANDLE_CAKES)
+    if !block.has_tag(tag::Block::MINECRAFT_CAMPFIRES)
+        && !block.has_tag(tag::Block::MINECRAFT_CANDLES)
+        && !block.has_tag(tag::Block::MINECRAFT_CANDLE_CAKES)
     {
         return None;
     }

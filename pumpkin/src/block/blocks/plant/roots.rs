@@ -42,9 +42,9 @@ impl PlantBlockBase for RootsBlock {
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block_below = block_accessor.get_block(pos);
         if block_below == &Block::WARPED_ROOTS {
-            block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_WARPED_ROOTS)
+            block_below.has_tag(tag::Block::MINECRAFT_SUPPORTS_WARPED_ROOTS)
         } else {
-            block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CRIMSON_ROOTS)
+            block_below.has_tag(tag::Block::MINECRAFT_SUPPORTS_CRIMSON_ROOTS)
         }
     }
 

@@ -97,7 +97,7 @@ impl BlockBehaviour for BellBlock {
             if direction == BlockDirection::Up {
                 let block: &Block = world.get_block(args.position);
 
-                if block.has_tag(&tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER) {
+                if block.has_tag(tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER) {
                     false
                 } else {
                     let block_pos = args.position.offset(direction.to_offset());

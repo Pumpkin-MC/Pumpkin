@@ -56,6 +56,6 @@ impl PlantBlockBase for CactusFlowerBlock {
     }
 }
 fn supports_cactus_flower(block: &Block, block_state: &BlockState) -> bool {
-    block.has_tag(&tag::Block::MINECRAFT_SUPPORT_OVERRIDE_CACTUS_FLOWER)
+    block.has_tag(tag::Block::MINECRAFT_SUPPORT_OVERRIDE_CACTUS_FLOWER)
         || block_state.is_center_solid(BlockDirection::Up)
 }

@@ -20,7 +20,7 @@ impl BlockBehaviour for GrassBlock {
             let block_above = args.world.get_block(&args.position.up());
             let mut props =
                 GrassBlockLikeProperties::from_state_id(args.state_id, &Block::GRASS_BLOCK);
-            let should_be_snowy = block_above.has_tag(&tag::Block::MINECRAFT_SNOW);
+            let should_be_snowy = block_above.has_tag(tag::Block::MINECRAFT_SNOW);
             if props.snowy == should_be_snowy {
                 return args.state_id;
             }

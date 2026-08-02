@@ -51,7 +51,7 @@ impl BlockBehaviour for NetherWartBlock {
 impl PlantBlockBase for NetherWartBlock {
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos);
-        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_NETHER_WART)
+        block.has_tag(tag::Block::MINECRAFT_SUPPORTS_NETHER_WART)
     }
 
     fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {

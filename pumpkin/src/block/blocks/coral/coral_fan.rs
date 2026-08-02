@@ -189,7 +189,7 @@ fn get_default_coral_fan_state_id(block: &Block, waterlogged: bool) -> BlockStat
 }
 
 fn is_wall_fan(block: &Block) -> bool {
-    block.has_tag(&tag::Block::MINECRAFT_WALL_CORALS)
+    block.has_tag(tag::Block::MINECRAFT_WALL_CORALS)
         || block == &Block::DEAD_BRAIN_CORAL_WALL_FAN
         || block == &Block::DEAD_BUBBLE_CORAL_WALL_FAN
         || block == &Block::DEAD_FIRE_CORAL_WALL_FAN

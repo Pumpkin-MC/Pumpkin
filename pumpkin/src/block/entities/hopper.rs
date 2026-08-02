@@ -206,7 +206,7 @@ impl HopperBlockEntity {
             return false;
         }
         let (block, state) = world.get_block_and_state(pos_up);
-        if !(state.is_solid() && block.has_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS)) {
+        if !(state.is_solid() && block.has_tag(tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS)) {
             let pos_up_f = pos_up.to_f64();
             let search_box = pumpkin_util::math::boundingbox::BoundingBox::new(
                 pos_up_f,

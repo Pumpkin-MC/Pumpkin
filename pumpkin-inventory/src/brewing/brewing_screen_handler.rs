@@ -160,7 +160,7 @@ impl ScreenHandler for BrewingScreenHandler {
                     .is_some();
 
                 // Check if item is brewing fuel (for slot 4)
-                let is_fuel = stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL);
+                let is_fuel = stack.get_item().has_tag(tag::Item::MINECRAFT_BREWING_FUEL);
 
                 if has_potion_contents {
                     // Try to insert into potion slots (0-2)

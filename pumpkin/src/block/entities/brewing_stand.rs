@@ -295,14 +295,14 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
             // Slot 3 - ingredient (must be tagged as brewable)
             3 => {
                 // Check if item is a valid brewing ingredient
-                if stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL) {
+                if stack.get_item().has_tag(tag::Item::MINECRAFT_BREWING_FUEL) {
                     return false; // Fuel should not go in ingredient slot
                 }
                 // Allow any item that's not fuel (ingredient validation happens during brewing)
                 true
             }
             // Slot 4 - fuel
-            4 => stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL),
+            4 => stack.get_item().has_tag(tag::Item::MINECRAFT_BREWING_FUEL),
             _ => false,
         }
     }
@@ -423,7 +423,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 if !fuel_stack.is_empty()
                     && fuel_stack
                         .get_item()
-                        .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
+                        .has_tag(tag::Item::MINECRAFT_BREWING_FUEL)
                 {
                     self.fuel.store(20, Ordering::Relaxed);
                     fuel_stack.decrement(1);

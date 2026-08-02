@@ -30,7 +30,7 @@ impl BlockBehaviour for BambooBlock {
             let (block_below, state_id_below) =
                 args.world.get_block_and_state_id(&args.position.down());
 
-            if block_below.has_tag(&MINECRAFT_SUPPORTS_BAMBOO) {
+            if block_below.has_tag(MINECRAFT_SUPPORTS_BAMBOO) {
                 let mut props = BambooLikeProperties::from_state_id(
                     Block::BAMBOO.default_state.id,
                     &Block::BAMBOO,
@@ -265,7 +265,7 @@ impl PlantBlockBase for BambooBlock {
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
         let block = block_accessor.get_block(pos);
-        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_BAMBOO)
+        block.has_tag(tag::Block::MINECRAFT_SUPPORTS_BAMBOO)
     }
 
     fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {

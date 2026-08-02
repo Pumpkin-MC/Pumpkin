@@ -63,9 +63,9 @@ fn bubble_column_state(kind: BubbleColumnKind) -> BlockStateId {
 }
 
 fn kind_from_support(block: &Block) -> Option<BubbleColumnKind> {
-    if block.has_tag(&tag::Block::MINECRAFT_ENABLES_BUBBLE_COLUMN_PUSH_UP) {
+    if block.has_tag(tag::Block::MINECRAFT_ENABLES_BUBBLE_COLUMN_PUSH_UP) {
         Some(BubbleColumnKind::Upward)
-    } else if block.has_tag(&tag::Block::MINECRAFT_ENABLES_BUBBLE_COLUMN_DRAG_DOWN) {
+    } else if block.has_tag(tag::Block::MINECRAFT_ENABLES_BUBBLE_COLUMN_DRAG_DOWN) {
         Some(BubbleColumnKind::Downward)
     } else {
         None
@@ -94,7 +94,7 @@ fn is_source_water_state(state: BlockStateId) -> bool {
         return false;
     };
 
-    fluid.has_tag(&tag::Fluid::MINECRAFT_BUBBLE_COLUMN_CAN_OCCUPY)
+    fluid.has_tag(tag::Fluid::MINECRAFT_BUBBLE_COLUMN_CAN_OCCUPY)
         && fluid.is_source(state)
         && fluid.states.iter().any(|fluid_state| {
             fluid_state.block_state_id == state && fluid_state.is_still && fluid_state.is_source

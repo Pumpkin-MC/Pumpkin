@@ -49,7 +49,7 @@ fn can_survive(block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
     let block_below = block_accessor.get_block(&pos.down());
 
     if block_below == &Block::CHORUS_PLANT
-        || block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_FLOWER)
+        || block_below.has_tag(tag::Block::MINECRAFT_SUPPORTS_CHORUS_FLOWER)
     {
         return true;
     }

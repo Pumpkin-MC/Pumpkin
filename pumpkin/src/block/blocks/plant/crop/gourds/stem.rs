@@ -100,7 +100,7 @@ impl BlockBehaviour for StemBlock {
                     let under_block: &Block = args.world.get_block(&plant_block_pos.down());
                     if plant_block_state.is_air()
                         && (under_block == &Block::FARMLAND
-                            || under_block.has_tag(&tag::Block::MINECRAFT_DIRT))
+                            || under_block.has_tag(tag::Block::MINECRAFT_DIRT))
                     {
                         let attached_stem = Self::get_attached_stem(dir, block);
                         let gourd = Self::get_gourd(block);
@@ -129,9 +129,9 @@ impl PlantBlockBase for StemBlock {
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos);
         if block == &Block::PUMPKIN_STEM {
-            block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_PUMPKIN_STEM)
+            block.has_tag(tag::Block::MINECRAFT_SUPPORTS_PUMPKIN_STEM)
         } else {
-            block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_MELON_STEM)
+            block.has_tag(tag::Block::MINECRAFT_SUPPORTS_MELON_STEM)
         }
     }
 }

@@ -57,8 +57,8 @@ impl SignBlock {
     /// Checks if a block can provide support for a sign.
     fn is_valid_support(world: &World, pos: &BlockPos, direction: BlockDirection) -> bool {
         let (block, state) = world.get_block_and_state(pos);
-        let is_permissive = block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
-            || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
+        let is_permissive = block.has_tag(pumpkin_data::tag::Block::MINECRAFT_LEAVES)
+            || block.has_tag(pumpkin_data::tag::Block::MINECRAFT_SIGNS);
 
         match direction {
             BlockDirection::Up => state.is_side_solid(BlockDirection::Down) || is_permissive,
@@ -71,8 +71,8 @@ impl SignBlock {
     fn detect_support(world: &World, position: &BlockPos) -> SupportInfo {
         let (block_above, state_above) = world.get_block_and_state(&position.up());
         let above_is_valid = state_above.is_side_solid(BlockDirection::Down)
-            || block_above.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS)
-            || block_above.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES);
+            || block_above.has_tag(pumpkin_data::tag::Block::MINECRAFT_SIGNS)
+            || block_above.has_tag(pumpkin_data::tag::Block::MINECRAFT_LEAVES);
 
         let mut side_direction = None;
         for direction in BlockDirection::horizontal() {
@@ -343,8 +343,8 @@ impl BlockBehaviour for SignBlock {
                 let wall_pos = args.position.offset(d.to_offset());
                 let (block, state) = args.block_accessor.get_block_and_state(&wall_pos);
                 if state.is_side_solid(d.opposite().to_block_direction())
-                    || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
-                    || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS)
+                    || block.has_tag(pumpkin_data::tag::Block::MINECRAFT_LEAVES)
+                    || block.has_tag(pumpkin_data::tag::Block::MINECRAFT_SIGNS)
                 {
                     return true;
                 }
@@ -359,8 +359,8 @@ impl BlockBehaviour for SignBlock {
         };
 
         let (block, state) = args.block_accessor.get_block_and_state(&support_pos);
-        let is_permissive = block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
-            || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
+        let is_permissive = block.has_tag(pumpkin_data::tag::Block::MINECRAFT_LEAVES)
+            || block.has_tag(pumpkin_data::tag::Block::MINECRAFT_SIGNS);
 
         match clicked_face {
             BlockDirection::Up => {
@@ -407,9 +407,8 @@ impl BlockBehaviour for SignBlock {
                         args.world.get_block_and_state(&support_pos);
 
                     // Permissive support check
-                    let is_leaf =
-                        support_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES);
-                    let is_sign = support_block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
+                    let is_leaf = support_block.has_tag(pumpkin_data::tag::Block::MINECRAFT_LEAVES);
+                    let is_sign = support_block.has_tag(pumpkin_data::tag::Block::MINECRAFT_SIGNS);
 
                     let is_valid = match dir {
                         BlockDirection::Up => {

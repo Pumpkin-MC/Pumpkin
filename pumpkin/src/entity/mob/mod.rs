@@ -367,7 +367,7 @@ impl MobEntity {
             .living_entity
             .entity
             .entity_type
-            .has_tag(&tag::EntityType::MINECRAFT_BURN_IN_DAYLIGHT)
+            .has_tag(tag::EntityType::MINECRAFT_BURN_IN_DAYLIGHT)
         {
             return;
         }

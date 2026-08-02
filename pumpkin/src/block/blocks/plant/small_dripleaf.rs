@@ -131,8 +131,8 @@ impl PlantBlockBase for SmallDripleafBlock {
     }
 }
 fn supports_small_dripleaf(support_block: &Block, underwater: bool) -> bool {
-    if support_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SMALL_DRIPLEAF) {
+    if support_block.has_tag(tag::Block::MINECRAFT_SUPPORTS_SMALL_DRIPLEAF) {
         return true;
     }
-    underwater && support_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_BIG_DRIPLEAF)
+    underwater && support_block.has_tag(tag::Block::MINECRAFT_SUPPORTS_BIG_DRIPLEAF)
 }

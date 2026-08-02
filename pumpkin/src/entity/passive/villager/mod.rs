@@ -754,7 +754,7 @@ impl Mob for VillagerEntity {
             // Check if current bed is still valid
             if let Some(current_home) = self.get_home_pos() {
                 let (block, state) = world.get_block_and_state(&current_home);
-                let valid = if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
+                let valid = if block.has_tag(pumpkin_data::tag::Block::MINECRAFT_BEDS) {
                     let bed_props = BedProperties::from_state_id(state.id, block);
                     bed_props.part == BedPart::Head
                 } else {
@@ -814,7 +814,7 @@ impl Mob for VillagerEntity {
 
                 for p in BlockPos::iterate(start, end) {
                     let (block, state) = world.get_block_and_state(&p);
-                    if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
+                    if block.has_tag(pumpkin_data::tag::Block::MINECRAFT_BEDS) {
                         let bed_props = BedProperties::from_state_id(state.id, block);
                         let bed_head_pos = if bed_props.part == BedPart::Head {
                             p
@@ -856,7 +856,7 @@ impl Mob for VillagerEntity {
                         if dist <= 4.0 {
                             // Within 2 blocks (squared distance 4.0)
                             let (block, state) = world.get_block_and_state(&home_pos);
-                            if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
+                            if block.has_tag(pumpkin_data::tag::Block::MINECRAFT_BEDS) {
                                 let bed_props = BedProperties::from_state_id(state.id, block);
                                 if !bed_props.occupied {
                                     // Make bed occupied
@@ -881,7 +881,7 @@ impl Mob for VillagerEntity {
                 } else if is_sleeping {
                     // It is day, wake up!
                     let (block, state) = world.get_block_and_state(&home_pos);
-                    if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
+                    if block.has_tag(pumpkin_data::tag::Block::MINECRAFT_BEDS) {
                         let bed_props = BedProperties::from_state_id(state.id, block);
                         if bed_props.occupied {
                             BedBlock::set_occupied(false, &world, block, &home_pos, state.id).await;

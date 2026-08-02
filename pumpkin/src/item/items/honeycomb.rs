@@ -52,8 +52,8 @@ impl ItemBehaviour for HoneyCombItem {
                 // create new properties for the new log.
                 let new_block = replacement.to_block();
 
-                let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS)
-                    && block.has_tag(&tag::Block::MINECRAFT_DOORS)
+                let new_state_id = if block.has_tag(tag::Block::MINECRAFT_DOORS)
+                    && block.has_tag(tag::Block::MINECRAFT_DOORS)
                 {
                     // get block state of the old log.
                     let door_information = world.get_block_state_id(&location);

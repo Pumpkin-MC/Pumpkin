@@ -55,7 +55,7 @@ impl EntityBase for EndCrystalEntity {
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             self.entity.remove().await;
-            if !damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
+            if !damage_type.has_tag(tag::DamageType::MINECRAFT_IS_EXPLOSION) {
                 self.entity
                     .world
                     .load()

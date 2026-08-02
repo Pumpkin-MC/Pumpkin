@@ -54,8 +54,8 @@ impl PlantBlockBase for LilyPadBlock {
         // TODO: get and use fluids not blocks
         let block = block_accessor.get_block(pos);
         let above_fluid = block_accessor.get_block(&pos.up());
-        (block.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_LILY_PAD)
-            || block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_LILY_PAD))
+        (block.has_tag(tag::Fluid::MINECRAFT_SUPPORTS_LILY_PAD)
+            || block.has_tag(tag::Block::MINECRAFT_SUPPORTS_LILY_PAD))
             && above_fluid.is_air()
     }
 }

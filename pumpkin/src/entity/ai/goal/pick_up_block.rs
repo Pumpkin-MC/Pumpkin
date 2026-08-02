@@ -59,7 +59,7 @@ impl Goal for PickUpBlockGoal {
 
             let block = world.get_block(&target_pos);
 
-            if !block.has_tag(&tag::Block::MINECRAFT_ENDERMAN_HOLDABLE) {
+            if !block.has_tag(tag::Block::MINECRAFT_ENDERMAN_HOLDABLE) {
                 return;
             }
 

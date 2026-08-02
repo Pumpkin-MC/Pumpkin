@@ -39,7 +39,7 @@ pub mod wither_rose;
 trait PlantBlockBase {
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos);
-        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_VEGETATION)
+        block.has_tag(tag::Block::MINECRAFT_SUPPORTS_VEGETATION)
     }
 
     async fn get_state_for_neighbor_update(

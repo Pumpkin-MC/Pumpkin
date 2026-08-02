@@ -188,7 +188,7 @@ impl EndermanEntity {
 
         let dest_pos = BlockPos::new(block_x, block_y, block_z);
         let dest_fluid = world.get_fluid(&dest_pos);
-        if dest_fluid.has_tag(&tag::Fluid::MINECRAFT_WATER) {
+        if dest_fluid.has_tag(tag::Fluid::MINECRAFT_WATER) {
             return false;
         }
 

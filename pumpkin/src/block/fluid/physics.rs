@@ -24,14 +24,14 @@ pub fn can_be_replaced(block_state: &BlockState, block: &Block, fluid: &Fluid) -
     let id = block.id;
 
     // Blocks that fluid should never replace
-    if block.has_tag(&tag::Block::MINECRAFT_DOORS)
-        || block.has_tag(&tag::Block::MINECRAFT_BEDS)
-        || block.has_tag(&tag::Block::MINECRAFT_LEAVES)
-        || block.has_tag(&tag::Block::MINECRAFT_PRESSURE_PLATES)
-        || block.has_tag(&tag::Block::C_CLUSTERS)
-        || block.has_tag(&tag::Block::MINECRAFT_WALL_CORALS)
-        || block.has_tag(&tag::Block::MINECRAFT_SHULKER_BOXES)
-        || block.has_tag(&tag::Block::MINECRAFT_PORTALS)
+    if block.has_tag(tag::Block::MINECRAFT_DOORS)
+        || block.has_tag(tag::Block::MINECRAFT_BEDS)
+        || block.has_tag(tag::Block::MINECRAFT_LEAVES)
+        || block.has_tag(tag::Block::MINECRAFT_PRESSURE_PLATES)
+        || block.has_tag(tag::Block::C_CLUSTERS)
+        || block.has_tag(tag::Block::MINECRAFT_WALL_CORALS)
+        || block.has_tag(tag::Block::MINECRAFT_SHULKER_BOXES)
+        || block.has_tag(tag::Block::MINECRAFT_PORTALS)
         || id == Block::BELL.id
         || id == Block::BIG_DRIPLEAF.id
         || id == Block::BIG_DRIPLEAF_STEM.id
@@ -54,7 +54,7 @@ pub fn can_be_replaced(block_state: &BlockState, block: &Block, fluid: &Fluid) -
     // Only replace air, explicitly replaceable blocks, or carpets
     block_state.replaceable()
         || id == Block::AIR.id
-        || block.has_tag(&tag::Block::MINECRAFT_WOOL_CARPETS)
+        || block.has_tag(tag::Block::MINECRAFT_WOOL_CARPETS)
         // Only use PistonBehavior::Destroy if it didn't pass the checks above
         || block_state.piston_behavior == pumpkin_data::block_state::PistonBehavior::Destroy
 }

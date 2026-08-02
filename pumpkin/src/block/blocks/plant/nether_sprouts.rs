@@ -32,6 +32,6 @@ impl PlantBlockBase for NetherSproutsBlock {
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
         let block = block_accessor.get_block(pos);
-        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_NETHER_SPROUTS)
+        block.has_tag(tag::Block::MINECRAFT_SUPPORTS_NETHER_SPROUTS)
     }
 }

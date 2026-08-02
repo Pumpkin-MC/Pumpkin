@@ -43,7 +43,7 @@ impl ItemBehaviour for AxeItem {
             let changed = if let Some(replacement) = replacement_block {
                 let new_block = replacement.to_block();
                 // Bamboo blocks are pillars too, but they are not part of the logs tag.
-                let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_LOGS)
+                let new_state_id = if block.has_tag(tag::Block::MINECRAFT_LOGS)
                     || block == &Block::BAMBOO_BLOCK
                 {
                     let log_information = world.get_block_state_id(&location);
@@ -60,7 +60,7 @@ impl ItemBehaviour for AxeItem {
                     new_log_properties.to_state_id(new_block)
                 }
                 // Let's check if It's a door
-                else if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
+                else if block.has_tag(tag::Block::MINECRAFT_DOORS) {
                     // get block state of the old log.
                     let door_information = world.get_block_state_id(&location);
                     // get the log properties

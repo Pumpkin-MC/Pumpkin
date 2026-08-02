@@ -662,7 +662,7 @@ impl LivingEntity {
         let block_pos = self.entity.block_pos.load();
         let block = self.entity.world.load().get_block(&block_pos);
         (
-            block.has_tag(&tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING),
+            block.has_tag(tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING),
             block,
         )
     }
@@ -748,7 +748,7 @@ impl LivingEntity {
     pub fn is_immune_to_fall_damage(&self) -> bool {
         self.entity
             .entity_type
-            .has_tag(&tag::EntityType::MINECRAFT_FALL_DAMAGE_IMMUNE)
+            .has_tag(tag::EntityType::MINECRAFT_FALL_DAMAGE_IMMUNE)
     }
 
     async fn get_effective_gravity(&self, caller: &Arc<dyn EntityBase>) -> f64 {
@@ -2121,7 +2121,7 @@ impl EntityBase for LivingEntity {
                 && self
                     .entity
                     .entity_type
-                    .has_tag(&tag::EntityType::MINECRAFT_FREEZE_HURTS_EXTRA_TYPES)
+                    .has_tag(tag::EntityType::MINECRAFT_FREEZE_HURTS_EXTRA_TYPES)
             {
                 amount *= 5.0;
             }
@@ -2262,7 +2262,7 @@ impl EntityBase for LivingEntity {
 
             // Check for shield blocking
             if self.is_blocking().await
-                && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_SHIELD)
+                && !damage_type.has_tag(tag::DamageType::MINECRAFT_BYPASSES_SHIELD)
                 && let Some(pos) = position
             {
                 let player_pos = self.entity.pos.load();

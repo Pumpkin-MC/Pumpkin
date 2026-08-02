@@ -64,7 +64,7 @@ fn can_place_at(world: &World, position: &BlockPos) -> bool {
     //idk why this don't update with .is_center_solid so this is a 'temporary patch'
     if world
         .get_block(&position.down())
-        .has_tag(&tag::Block::C_FENCE_GATES)
+        .has_tag(tag::Block::C_FENCE_GATES)
     {
         let fence_gate_props =
             pumpkin_data::block_properties::OakFenceGateLikeProperties::from_state_id(
@@ -80,5 +80,5 @@ fn can_place_at(world: &World, position: &BlockPos) -> bool {
     let block_up_state = world.get_block_state(&position.up());
     block_down_state.is_center_solid(BlockDirection::Up)
         || block_up_state.is_center_solid(BlockDirection::Down)
-        || block_down.has_tag(&tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER)
+        || block_down.has_tag(tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER)
 }

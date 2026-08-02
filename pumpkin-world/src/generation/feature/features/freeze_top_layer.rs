@@ -55,7 +55,7 @@ impl FreezeTopLayerFeature {
                     if top_raw.to_state().is_air()
                         && !below.to_state().is_air()
                         && !Block::from_state_id(below.to_state().id)
-                            .has_tag(&tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER)
+                            .has_tag(tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER)
                     {
                         chunk.set_block_state(&top_vec, Block::SNOW.default_state);
 
