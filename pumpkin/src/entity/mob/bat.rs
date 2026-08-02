@@ -23,6 +23,14 @@ const CLOSE_PLAYER_DISTANCE: f64 = 4.0;
 /// Vanilla: `getMinAmbientSoundDelay()` returns 80 for most mobs
 const MIN_AMBIENT_SOUND_DELAY: i32 = 80;
 
+const fn bat_spawn_random_allows(sample: u8) -> bool {
+    sample == 0
+}
+
+const fn bat_spawn_light_allows(block_light: u8, threshold: u8) -> bool {
+    block_light <= threshold
+}
+
 pub struct BatEntity {
     pub mob_entity: MobEntity,
     hanging_position: Mutex<Option<BlockPos>>,
@@ -51,19 +59,21 @@ impl BatEntity {
         {
             return false;
         }
-        if rand::random_bool(1.0) {
+        if !bat_spawn_random_allows(rand::random_range(0u8..2)) {
             return false;
         }
-        if world.get_max_local_raw_brightness(pos) > rand::random_range(0..4) {
+        if !bat_spawn_light_allows(
+            world.get_max_local_raw_brightness(pos),
+            rand::random_range(0u8..4),
+        ) {
             return false;
         }
-        if world
-            .get_block(pos)
+        if !world
+            .get_block(&pos.down())
             .has_tag(&tag::Block::MINECRAFT_BATS_SPAWNABLE_ON)
         {
             return false;
         }
-        //TODO:check_mob_spawn_rules(entity_type, world, spawn_reason, pos).await
         true
     }
 
@@ -263,5 +273,23 @@ impl Mob for BatEntity {
                 self.set_roosting(false);
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{bat_spawn_light_allows, bat_spawn_random_allows};
+
+    #[test]
+    fn bat_spawn_random_gate_matches_vanilla_coin_flip() {
+        assert!(bat_spawn_random_allows(0));
+        assert!(!bat_spawn_random_allows(1));
+    }
+
+    #[test]
+    fn bat_spawn_light_gate_allows_only_dark_positions() {
+        assert!(bat_spawn_light_allows(0, 0));
+        assert!(bat_spawn_light_allows(3, 3));
+        assert!(!bat_spawn_light_allows(4, 3));
     }
 }
