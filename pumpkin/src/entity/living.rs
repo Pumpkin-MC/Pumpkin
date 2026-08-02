@@ -1093,54 +1093,16 @@ impl LivingEntity {
             return;
         }
 
-        // If spectator: return false
-
-        // TODO
-        // let mut pos = self.entity.block_pos.load();
-
-        // let world = self.entity.world.read().await;
-
-        // let (block, state) = world.get_block_and_state(&pos);
-
-        // let name = block.properties(state.id).map(|props| props.name());
-
-        // if let Some(name) = name {
-        //     if name == "LadderLikeProperties"
-        //         || name == "ScaffoldingLikeProperties"
-        //         || name == "CaveVinesLikeProperties"
-        //         || name == "CaveVinesPlantLikeProperties"
-        //     {
-        //         self.climbing.store(true, Relaxed);
-
-        //         self.climbing_pos.store(Some(pos));
-
-        //         return;
-        //     }
-
-        //     if name == "OakTrapdoorLikeProperties" {
-        //         let trapdoor = OakTrapdoorLikeProperties::from_state_id(state.id, &block);
-
-        //         pos.0.y -= 1;
-
-        //         let (down_block, down_state) = world.get_block_and_state(&pos);
-
-        //         let is_ladder = down_block
-        //             .properties(down_state.id)
-        //             .is_some_and(|down_props| down_props.name() == "LadderLikeProperties");
-
-        //         if is_ladder {
-        //             let ladder = LadderLikeProperties::from_state_id(down_state.id, &down_block);
-
-        //             if trapdoor.r#facing == ladder.r#facing {
-        //                 self.climbing.store(true, Relaxed);
-
-        //                 self.climbing_pos.store(Some(pos));
-
-        //                 return;
-        //             }
-        //         }
-        //     }
-        // }
+        let pos = self.entity.block_pos.load();
+        let world = self.entity.world.load();
+        if world
+            .get_block(&pos)
+            .has_tag(&tag::Block::MINECRAFT_CLIMBABLE)
+        {
+            self.climbing.store(true, Relaxed);
+            self.climbing_pos.store(Some(pos));
+            return;
+        }
 
         self.climbing.store(false, Relaxed);
 
