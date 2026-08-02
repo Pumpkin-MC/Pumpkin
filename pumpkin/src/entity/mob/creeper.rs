@@ -261,9 +261,29 @@ impl Mob for CreeperEntity {
                 None,
             );
 
-            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
-                let _ = item_stack.damage_item(1);
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative
+                && item_stack.damage_item(1) == pumpkin_data::item_stack::DamageResult::Broken
+            {
+                player
+                    .increment_stat(
+                        pumpkin_data::statistic::StatisticCategory::Broken,
+                        item_stack.item.id as i32,
+                        1,
+                    )
+                    .await;
+                world.send_entity_status(
+                    &player.living_entity.entity,
+                    crate::entity::equipment_break_status(
+                        &pumpkin_data::data_component_impl::EquipmentSlot::MAIN_HAND,
+                    ),
+                );
+                *item_stack = ItemStack::EMPTY.clone();
+                player
+                    .sync_hand_slot(
+                        player.inventory.get_selected_slot() as usize,
+                        item_stack.clone(),
+                    )
+                    .await;
             }
 
             true
