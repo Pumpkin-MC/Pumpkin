@@ -2888,12 +2888,14 @@ impl Entity {
 
     /// Checks if the entity is invulnerable to the given damage type, considering both general invulnerability and specific immunities.
     pub async fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
-        // Nothing is immune to void or kill
-        if matches!(
-            *damage_type,
-            DamageType::GENERIC_KILL | DamageType::OUT_OF_WORLD
-        ) {
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY) {
             return false;
+        }
+
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE)
+            && self.fire_immune.load(Ordering::Relaxed)
+        {
+            return true;
         }
 
         // General invulnerability
