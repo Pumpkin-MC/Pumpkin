@@ -2352,6 +2352,20 @@ impl World {
         };
 
         let gamemode = player.gamemode.load();
+
+        // Spectators must remain invisible in the world to everyone except other
+        // spectators, even though they still appear in the tab list like normal.
+        let mut world_spawn_except: Vec<uuid::Uuid> = vec![gameprofile.id];
+        if gamemode == GameMode::Spectator {
+            for other in self.players.load().iter() {
+                if other.gameprofile.id != gameprofile.id
+                    && other.gamemode.load() != GameMode::Spectator
+                {
+                    world_spawn_except.push(other.gameprofile.id);
+                }
+            }
+        }
+
         self.broadcast_packet_except_editioned_sync(
             &[gameprofile.id],
             &CPlayerInfoUpdate::new(
@@ -2416,7 +2430,7 @@ impl World {
         };
 
         self.broadcast_packet_except_editioned_sync(
-            &[gameprofile.id],
+            &world_spawn_except,
             &CSpawnEntity::new(
                 (runtime_id as i32).into(),
                 gameprofile.id,
@@ -2446,7 +2460,7 @@ impl World {
         java_meta_buf.put_u8(255);
 
         self.broadcast_packet_except_editioned_sync(
-            &[gameprofile.id],
+            &world_spawn_except,
             &CSetEntityMetadata::new((runtime_id as i32).into(), java_meta_buf.into()),
             &actor_data,
         );
@@ -2519,7 +2533,12 @@ impl World {
                 build_platform: 0,
             };
 
-            client.send_game_packet(&ex_add_player).await;
+            // Only spawn the existing player's in-world entity for us if they aren't a
+            // spectator hidden from us (spectators can still see other spectators).
+            let existing_is_spectator = existing_player.gamemode.load() == GameMode::Spectator;
+            if !existing_is_spectator || gamemode == GameMode::Spectator {
+                client.send_game_packet(&ex_add_player).await;
+            }
         }
 
         // 3. Trigger Join Event and Broadcast Join Message
@@ -2871,8 +2890,21 @@ impl World {
             velocity,
         );
 
+        // Spectators must remain invisible in the world to everyone except other
+        // spectators, even though they still appear in the tab list like normal.
+        let mut world_spawn_except: Vec<uuid::Uuid> = vec![player.gameprofile.id];
+        if gamemode == GameMode::Spectator {
+            for other in self.players.load().iter() {
+                if other.gameprofile.id != gameprofile.id
+                    && other.gamemode.load() != GameMode::Spectator
+                {
+                    world_spawn_except.push(other.gameprofile.id);
+                }
+            }
+        }
+
         self.broadcast_packet_except_editioned_sync(
-            &[player.gameprofile.id],
+            &world_spawn_except,
             &spawn_entity,
             &bedrock_add_player,
         );
@@ -2892,7 +2924,7 @@ impl World {
         java_meta_buf.put_u8(255);
 
         self.broadcast_packet_except_editioned_sync(
-            &[gameprofile.id],
+            &world_spawn_except,
             &CSetEntityMetadata::new((entity_id).into(), java_meta_buf.into()),
             &CSetActorData {
                 actor_runtime_id: VarULong(entity_id as u64),
@@ -3008,76 +3040,81 @@ impl World {
                 )
                 .await;
 
-            player
-                .client
-                .enqueue_packet_editioned(
-                    &CSpawnEntity::new(
-                        existing_player.entity_id().into(),
-                        gameprofile.id,
-                        i32::from(EntityType::PLAYER.id).into(),
-                        pos,
-                        entity.pitch.load(),
-                        entity.yaw.load(),
-                        entity.head_yaw.load(),
-                        0.into(),
-                        entity.velocity.load(),
-                    ),
-                    &bedrock_add_player,
-                )
-                .await;
+            // Only spawn the existing player's in-world entity for us if they aren't a
+            // spectator hidden from us (spectators can still see other spectators).
+            let existing_is_spectator = existing_player.gamemode.load() == GameMode::Spectator;
+            if !existing_is_spectator || gamemode == GameMode::Spectator {
+                player
+                    .client
+                    .enqueue_packet_editioned(
+                        &CSpawnEntity::new(
+                            existing_player.entity_id().into(),
+                            gameprofile.id,
+                            i32::from(EntityType::PLAYER.id).into(),
+                            pos,
+                            entity.pitch.load(),
+                            entity.yaw.load(),
+                            entity.head_yaw.load(),
+                            0.into(),
+                            entity.velocity.load(),
+                        ),
+                        &bedrock_add_player,
+                    )
+                    .await;
 
-            {
-                let config = existing_player.config.load();
-                let mut buf = Vec::new();
                 {
-                    let meta = Metadata::new(
-                        TrackedData::PLAYER_MODE_CUSTOMISATION,
-                        MetaDataType::BYTE,
-                        config.skin_parts,
-                    );
-                    meta.write(&mut buf, &client.version.load()).unwrap();
+                    let config = existing_player.config.load();
+                    let mut buf = Vec::new();
+                    {
+                        let meta = Metadata::new(
+                            TrackedData::PLAYER_MODE_CUSTOMISATION,
+                            MetaDataType::BYTE,
+                            config.skin_parts,
+                        );
+                        meta.write(&mut buf, &client.version.load()).unwrap();
+                    };
+                    drop(config);
+                    // END
+                    buf.put_u8(255);
+                    client
+                        .enqueue_packet(&CSetEntityMetadata::new(
+                            existing_player.get_entity().entity_id.into(),
+                            buf.into(),
+                        ))
+                        .await;
                 };
-                drop(config);
-                // END
-                buf.put_u8(255);
-                client
-                    .enqueue_packet(&CSetEntityMetadata::new(
-                        existing_player.get_entity().entity_id.into(),
-                        buf.into(),
-                    ))
-                    .await;
-            };
 
-            {
-                let mut equipment_list = Vec::new();
-
-                equipment_list.push((
-                    EquipmentSlot::MAIN_HAND.discriminant(),
-                    existing_player.inventory.held_item().lock().await.clone(),
-                ));
-
-                for (slot, item_arc_mutex) in &existing_player
-                    .inventory
-                    .entity_equipment
-                    .lock()
-                    .await
-                    .equipment
                 {
-                    let item_stack = item_arc_mutex.lock().await.clone();
-                    equipment_list.push((slot.discriminant(), item_stack));
+                    let mut equipment_list = Vec::new();
+
+                    equipment_list.push((
+                        EquipmentSlot::MAIN_HAND.discriminant(),
+                        existing_player.inventory.held_item().lock().await.clone(),
+                    ));
+
+                    for (slot, item_arc_mutex) in &existing_player
+                        .inventory
+                        .entity_equipment
+                        .lock()
+                        .await
+                        .equipment
+                    {
+                        let item_stack = item_arc_mutex.lock().await.clone();
+                        equipment_list.push((slot.discriminant(), item_stack));
+                    }
+
+                    let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
+                        .iter()
+                        .map(|(slot, stack)| (*slot, ItemStackSerializer::from(stack.clone())))
+                        .collect();
+
+                    client
+                        .enqueue_packet(&CSetEquipment::new(
+                            existing_player.entity_id().into(),
+                            equipment,
+                        ))
+                        .await;
                 }
-
-                let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
-                    .iter()
-                    .map(|(slot, stack)| (*slot, ItemStackSerializer::from(stack.clone())))
-                    .collect();
-
-                client
-                    .enqueue_packet(&CSetEquipment::new(
-                        existing_player.entity_id().into(),
-                        equipment,
-                    ))
-                    .await;
             }
         }
         player.send_client_information();
@@ -4039,6 +4076,140 @@ impl World {
             new_list
         });
         Ok(())
+    }
+
+    /// Removes `player`'s in-world entity from every currently-connected client that
+    /// is not itself a spectator. Used when a player switches into Spectator mode
+    /// mid-game (e.g. via `/gamemode`): they were already spawned to everyone as a
+    /// normal entity, so non-spectators need an explicit removal to become fully
+    /// invisible to them, matching vanilla behavior. Other spectators keep seeing
+    /// the entity (rendered as a translucent head by the client itself) and are
+    /// therefore excluded from this broadcast.
+    pub fn hide_spectator_from_non_spectators(&self, player: &Player) {
+        let except: Vec<uuid::Uuid> = self
+            .players
+            .load()
+            .iter()
+            .filter(|p| {
+                p.gameprofile.id == player.gameprofile.id
+                    || p.gamemode.load() == GameMode::Spectator
+            })
+            .map(|p| p.gameprofile.id)
+            .collect();
+
+        let entity_id = player.entity_id();
+        self.broadcast_packet_except_editioned_sync(
+            &except,
+            &CRemoveEntities::new(&[entity_id.into()]),
+            &CRemoveActor::new(VarLong(entity_id as i64)),
+        );
+    }
+
+    /// Re-spawns `player`'s in-world entity for every currently-connected client
+    /// that is not itself a spectator. Used when a player leaves Spectator mode
+    /// mid-game: other spectators already have them spawned (they were never
+    /// hidden from other spectators), so only non-spectators need to see them
+    /// appear again.
+    pub fn show_former_spectator_to_non_spectators(&self, player: &Player) {
+        let entity_id = player.entity_id();
+        let entity = player.get_entity();
+        let position = entity.pos.load();
+        let velocity = entity.velocity.load();
+        let pitch = entity.pitch.load();
+        let yaw = entity.yaw.load();
+        let head_yaw = entity.head_yaw.load();
+        let gameprofile = &player.gameprofile;
+
+        let bedrock_add_player = CAddPlayer {
+            uuid: gameprofile.id,
+            username: gameprofile.name.clone(),
+            entity_runtime_id: VarULong(entity_id as u64),
+            platform_chat_id: String::new(),
+            position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
+            velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+            pitch,
+            yaw,
+            head_yaw,
+            held_item: NetworkItemDescriptor::default(),
+            game_mode: VarInt(match player.gamemode.load() {
+                GameMode::Survival => 0,
+                GameMode::Creative => 1,
+                GameMode::Adventure => 2,
+                GameMode::Spectator => 6,
+            }),
+            metadata: entity.bedrock_metadata(),
+            properties: EntityProperties::default(),
+            ability_data: pumpkin_protocol::bedrock::client::add_player::AbilityData {
+                entity_unique_id: entity_id as i64,
+                player_permissions: 0,
+                command_permissions: 0,
+                layers: vec![pumpkin_protocol::bedrock::client::AbilityLayer {
+                    serialized_layer: 0,
+                    abilities_set: 0,
+                    ability_value: 0,
+                    fly_speed: 0.05,
+                    vertical_fly_speed: 0.05,
+                    walk_speed: 0.1,
+                }],
+            },
+            links: Vec::new(),
+            device_id: String::new(),
+            build_platform: 0,
+        };
+
+        let except: Vec<uuid::Uuid> = self
+            .players
+            .load()
+            .iter()
+            .filter(|p| {
+                p.gameprofile.id == gameprofile.id || p.gamemode.load() == GameMode::Spectator
+            })
+            .map(|p| p.gameprofile.id)
+            .collect();
+
+        self.broadcast_packet_except_editioned_sync(
+            &except,
+            &CSpawnEntity::new(
+                entity_id.into(),
+                gameprofile.id,
+                i32::from(EntityType::PLAYER.id).into(),
+                position,
+                pitch,
+                yaw,
+                head_yaw,
+                0.into(),
+                velocity,
+            ),
+            &bedrock_add_player,
+        );
+
+        // Broadcast metadata so clients render skin layers and equipment correctly again.
+        let config = player.config.load();
+        let mut java_meta_buf = Vec::new();
+        {
+            let meta = Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMISATION,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            );
+            meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
+                .unwrap();
+        };
+        java_meta_buf.put_u8(255);
+
+        self.broadcast_packet_except_editioned_sync(
+            &except,
+            &CSetEntityMetadata::new(entity_id.into(), java_meta_buf.into()),
+            &CSetActorData {
+                actor_runtime_id: VarULong(entity_id as u64),
+                metadata: entity.bedrock_metadata(),
+                synced_properties: PropertySyncData {
+                    int_properties: HashMap::new(),
+                    float_properties: HashMap::new(),
+                },
+                tick: VarULong(0),
+            },
+        );
     }
 
     /// Removes a player from the world and broadcasts a disconnect message if enabled.
