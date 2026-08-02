@@ -52,6 +52,16 @@ impl BlazeShootFireballGoal {
             .await
             .is_none()
     }
+
+    fn navigate_to_target(blaze: &BlazeEntity, target_pos: Vector3<f64>) {
+        blaze.entity.navigator.lock().unwrap().set_progress(
+            crate::entity::ai::pathfinder::NavigatorGoal {
+                current_progress: blaze.entity.living_entity.entity.pos.load(),
+                destination: target_pos,
+                speed: 1.0,
+            },
+        );
+    }
 }
 
 impl Goal for BlazeShootFireballGoal {
@@ -61,12 +71,7 @@ impl Goal for BlazeShootFireballGoal {
                 return false;
             };
             let target = blaze.entity.target.lock().await.clone();
-            if target.is_some() {
-                // TODO: check is_alive
-                true
-            } else {
-                false
-            }
+            target.is_some_and(|target| target.get_entity().is_alive())
         })
     }
 
@@ -76,12 +81,7 @@ impl Goal for BlazeShootFireballGoal {
                 return false;
             };
             let target = blaze.entity.target.lock().await.clone();
-            if target.is_some() {
-                // TODO: check is_alive
-                true
-            } else {
-                false
-            }
+            target.is_some_and(|target| target.get_entity().is_alive())
         })
     }
 
@@ -104,6 +104,10 @@ impl Goal for BlazeShootFireballGoal {
         true
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Blaze melee and ranged phases share one cadence"
+    )]
     fn tick<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             self.attack_time -= 1;
@@ -141,10 +145,10 @@ impl Goal for BlazeShootFireballGoal {
 
                 if self.attack_time <= 0 {
                     self.attack_time = 20;
-                    // TODO: doHurtTarget
+                    blaze.try_attack(target.as_ref()).await;
                 }
 
-                // TODO: set wanted position to target
+                Self::navigate_to_target(&blaze, target_pos);
             } else if Self::can_shoot_at_target(distance_sq, has_line_of_sight) {
                 let target_y_offset = target_pos.y + 0.5; // roughly target.getY(0.5)
                 let blaze_y_offset = blaze_pos.y + 0.5; // roughly blaze.getY(0.5)
@@ -229,7 +233,7 @@ impl Goal for BlazeShootFireballGoal {
                     .unwrap()
                     .look_at_entity(&*blaze, &target);
             } else if self.last_seen < 5 {
-                // TODO: set wanted position to target
+                Self::navigate_to_target(&blaze, target_pos);
             }
         })
     }
