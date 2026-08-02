@@ -24,8 +24,8 @@ pub mod owner_hurt_target;
 pub mod pick_up_block;
 pub mod place_block;
 pub mod ranged_bow_attack;
+pub mod ranged_crossbow_attack;
 pub mod ranged_snowball_attack;
-pub mod witch_attack;
 pub mod revenge;
 pub mod step_and_destroy_block;
 pub mod swim;
@@ -33,6 +33,7 @@ pub mod teleport_towards_player;
 pub mod tempt;
 pub(crate) mod track_target;
 pub mod wander_around;
+pub mod witch_attack;
 pub mod zombie_attack;
 
 #[must_use]

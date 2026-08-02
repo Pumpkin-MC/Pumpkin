@@ -1,13 +1,16 @@
-use std::sync::{Arc, Weak};
-
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
+use std::sync::{Arc, Weak};
+use tokio::sync::Mutex;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, ranged_crossbow_attack::RangedCrossbowAttackGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -21,6 +24,17 @@ impl PillagerEntity {
         let mob_entity = MobEntity::new(entity);
         let pillager = Self { mob_entity };
         let mob_arc = Arc::new(pillager);
+        mob_arc
+            .mob_entity
+            .living_entity
+            .entity_equipment
+            .try_lock()
+            .expect("new pillager equipment is uncontended")
+            .equipment
+            .insert(
+                EquipmentSlot::MAIN_HAND,
+                Arc::new(Mutex::new(ItemStack::new(1, &Item::CROSSBOW))),
+            );
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
@@ -30,8 +44,7 @@ impl PillagerEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            // Pillagers use crossbows, but for now we give them melee
-            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, true)));
+            goal_selector.add_goal(2, Box::new(RangedCrossbowAttackGoal::new(15.0)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 6,
