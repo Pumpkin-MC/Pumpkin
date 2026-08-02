@@ -62,6 +62,13 @@ impl BreedGoal {
 
     async fn breed(mob: &dyn Mob, mate: &dyn EntityBase) {
         let mob_entity = mob.get_mob_entity();
+        if !mob_entity.try_claim_love() {
+            return;
+        }
+        if !mate.try_claim_love() {
+            return;
+        }
+
         let entity = mob.get_entity();
         let world = entity.world.load();
 
@@ -87,12 +94,10 @@ impl BreedGoal {
                 .await;
         }
 
-        mob_entity.reset_love_ticks();
         mob_entity
             .breeding_cooldown
             .store(6000, std::sync::atomic::Ordering::Relaxed);
 
-        mate.reset_love();
         mate.set_breeding_cooldown(6000);
 
         let parent_pos = entity.pos.load();
