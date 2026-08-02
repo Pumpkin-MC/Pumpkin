@@ -1,6 +1,7 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::{
@@ -108,6 +109,60 @@ impl Goal for SpiderTargetGoal {
     }
 }
 
+struct SpiderLeapGoal;
+
+impl Goal for SpiderLeapGoal {
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async move {
+            let entity = &mob.get_mob_entity().living_entity.entity;
+            if !entity.on_ground.load(std::sync::atomic::Ordering::Relaxed)
+                || mob.get_random().random_range(0..5) != 0
+            {
+                return false;
+            }
+            let Some(target) = mob.get_mob_entity().target.lock().await.clone() else {
+                return false;
+            };
+            let distance = entity
+                .pos
+                .load()
+                .squared_distance_to_vec(&target.get_entity().pos.load());
+            (4.0..=16.0).contains(&distance)
+        })
+    }
+
+    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async move {
+            !mob.get_mob_entity()
+                .living_entity
+                .entity
+                .on_ground
+                .load(std::sync::atomic::Ordering::Relaxed)
+        })
+    }
+
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = &mob.get_mob_entity().living_entity.entity;
+            let Some(target) = mob.get_mob_entity().target.lock().await.clone() else {
+                return;
+            };
+            let target_pos = target.get_entity().pos.load();
+            let pos = entity.pos.load();
+            let delta = Vector3::new(target_pos.x - pos.x, 0.0, target_pos.z - pos.z);
+            if delta.length_squared() <= 1.0e-7 {
+                return;
+            }
+            let movement = delta.normalize() * 0.4 + entity.velocity.load() * 0.2;
+            entity.set_velocity(Vector3::new(movement.x, 0.4, movement.z));
+        })
+    }
+
+    fn controls(&self) -> Controls {
+        Controls::MOVE | Controls::JUMP
+    }
+}
+
 pub struct SpiderEntity {
     pub mob_entity: MobEntity,
 }
@@ -127,6 +182,7 @@ impl SpiderEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(2, Box::new(SpiderLeapGoal));
             goal_selector.add_goal(3, Box::new(SpiderAttackGoal::new()));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
