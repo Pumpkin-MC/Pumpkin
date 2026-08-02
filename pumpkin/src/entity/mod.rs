@@ -3431,7 +3431,9 @@ impl Entity {
     }
 
     pub async fn check_out_of_world(&self, dyn_self: &dyn EntityBase) {
-        if self.pos.load().y < f64::from(self.world.load().dimension.min_y) - 64.0 {
+        if self.pos.load().y < f64::from(self.world.load().dimension.min_y) - 64.0
+            && self.age.load(Relaxed) % 10 == 0
+        {
             dyn_self.tick_in_void(dyn_self).await;
         }
     }

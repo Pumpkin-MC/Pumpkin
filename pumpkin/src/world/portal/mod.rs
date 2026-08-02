@@ -15,6 +15,7 @@ pub mod poi;
 
 pub use nether::{NetherPortal, PortalSearchResult};
 pub use poi::PortalPoiStorage;
+use pumpkin_util::math::vector2::Vector2;
 
 #[derive(Clone)]
 pub struct SourcePortalInfo {
@@ -130,7 +131,12 @@ impl PortalType {
                             pitch: None,
                         })
                     } else {
-                        // Leaving the End through the exit portal: return to overworld spawn
+                        // Leaving the End through the exit portal: return to player's respawn point or overworld spawn
+                        let mut respawn_pos = None;
+                        let mut target_world = dest_world.clone();
+                        let mut respawn_yaw = None;
+                        let mut respawn_pitch = None;
+
                         if let Some(player) =
                             current_level.get_player_by_id(caller.get_entity().entity_id)
                         {
@@ -156,18 +162,52 @@ impl PortalType {
                                         .await;
                                 }
                             }
+
+                            // Check if player has a personal spawn point (bed or anchor)
+                            if let Some(respawn) = player.calculate_respawn_point().await {
+                                if respawn.dimension != dest_world.dimension
+                                    && let Some(server) = current_level.server.upgrade()
+                                {
+                                    let worlds = server.worlds.load();
+                                    if let Some(w) =
+                                        worlds.iter().find(|w| w.dimension == respawn.dimension)
+                                    {
+                                        target_world = w.clone();
+                                    }
+                                }
+
+                                respawn_pos = Some(respawn.position);
+                                respawn_yaw = Some(respawn.yaw);
+                                respawn_pitch = Some(respawn.pitch);
+                            }
                         }
 
-                        let info = dest_world.level_info.load();
+                        let position = if let Some(pos) = respawn_pos {
+                            pos
+                        } else {
+                            // Fallback to safe world spawn top block instead of hardcoded spawn_y (200)
+                            let info = target_world.level_info.load();
+                            let spawn_x = info.spawn_x;
+                            let spawn_z = info.spawn_z;
+                            let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
+                            target_world
+                                .level
+                                .get_or_fetch_chunk(chunk_pos, |_| ())
+                                .await;
+                            let top = target_world.get_top_block(Vector2::new(spawn_x, spawn_z));
+
+                            Vector3::new(
+                                f64::from(spawn_x) + 0.5,
+                                f64::from(top + 1),
+                                f64::from(spawn_z) + 0.5,
+                            )
+                        };
+
                         Some(TeleportTransition {
-                            new_world: dest_world,
-                            position: Vector3::new(
-                                f64::from(info.spawn_x) + 0.5,
-                                f64::from(info.spawn_y),
-                                f64::from(info.spawn_z) + 0.5,
-                            ),
-                            yaw: None,
-                            pitch: None,
+                            new_world: target_world,
+                            position,
+                            yaw: respawn_yaw,
+                            pitch: respawn_pitch,
                         })
                     }
                 } else {
