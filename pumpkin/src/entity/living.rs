@@ -2179,6 +2179,10 @@ impl EntityBase for LivingEntity {
                 amount *= 5.0;
             }
 
+            if damages_helmet(&damage_type) {
+                amount *= 0.75;
+            }
+
             // These damage types bypass the hurt cooldown and death protection
             let bypasses_cooldown_protection =
                 damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
@@ -3030,6 +3034,13 @@ pub(crate) const fn bypasses_enchantments(damage_type: &DamageType) -> bool {
     damage_type.id == DamageType::SONIC_BOOM.id
 }
 
+/// Returns whether vanilla routes this damage through helmet protection.
+pub(crate) const fn damages_helmet(damage_type: &DamageType) -> bool {
+    damage_type.id == DamageType::FALLING_ANVIL.id
+        || damage_type.id == DamageType::FALLING_BLOCK.id
+        || damage_type.id == DamageType::FALLING_STALACTITE.id
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3230,5 +3241,13 @@ mod tests {
     fn sonic_boom_bypasses_armor_enchantments() {
         assert!(bypasses_enchantments(&DamageType::SONIC_BOOM));
         assert!(!bypasses_enchantments(&DamageType::MAGIC));
+    }
+
+    #[test]
+    fn falling_damage_sources_use_helmet_protection() {
+        assert!(damages_helmet(&DamageType::FALLING_ANVIL));
+        assert!(damages_helmet(&DamageType::FALLING_BLOCK));
+        assert!(damages_helmet(&DamageType::FALLING_STALACTITE));
+        assert!(!damages_helmet(&DamageType::FALL));
     }
 }
