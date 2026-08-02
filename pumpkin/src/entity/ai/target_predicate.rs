@@ -1,3 +1,5 @@
+use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_util::Difficulty;
 
 use crate::entity::living::LivingEntity;
@@ -5,6 +7,7 @@ use crate::world::World;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::Ordering::Relaxed;
 
 const MIN_DISTANCE: f64 = 2.0;
 
@@ -115,8 +118,12 @@ impl TargetPredicate {
         if let Some(tester_ent) = tester
             && self.base_max_distance > 0.0
         {
-            // TODO: use distance_scaling_factor from target
-            let max_dist = self.base_max_distance.max(MIN_DISTANCE);
+            let visibility_modifier = if self.use_distance_scaling_factor {
+                targeter_visibility_modifier(tester_ent, target).await
+            } else {
+                1.0
+            };
+            let max_dist = (self.base_max_distance * visibility_modifier).max(MIN_DISTANCE);
             let dist_sq = tester_ent
                 .entity
                 .pos
@@ -146,5 +153,57 @@ impl TargetPredicate {
         }
 
         true
+    }
+}
+
+async fn targeter_visibility_modifier(targeter: &LivingEntity, target: &LivingEntity) -> f64 {
+    let mut modifier = 1.0;
+
+    if target.entity.invisible.load(Relaxed) {
+        let equipment = target.entity_equipment.lock().await;
+        let armor_slots = [
+            EquipmentSlot::HEAD,
+            EquipmentSlot::CHEST,
+            EquipmentSlot::LEGS,
+            EquipmentSlot::FEET,
+        ];
+        let mut covered = 0;
+        for slot in &armor_slots {
+            if !equipment.get(slot).lock().await.is_empty() {
+                covered += 1;
+            }
+        }
+        modifier *= 0.7 * (f64::from(covered as u8) / 4.0).max(0.1);
+    }
+
+    let head_item = target
+        .entity_equipment
+        .lock()
+        .await
+        .get(&EquipmentSlot::HEAD)
+        .lock()
+        .await
+        .item
+        .id;
+    let target_type = targeter.entity.entity_type;
+    let head_reduces_visibility = (target_type == &EntityType::SKELETON
+        && head_item == Item::SKELETON_SKULL.id)
+        || (target_type == &EntityType::ZOMBIE && head_item == Item::ZOMBIE_HEAD.id)
+        || ((target_type == &EntityType::PIGLIN || target_type == &EntityType::PIGLIN_BRUTE)
+            && head_item == Item::PIGLIN_HEAD.id)
+        || (target_type == &EntityType::CREEPER && head_item == Item::CREEPER_HEAD.id);
+    if head_reduces_visibility {
+        modifier *= 0.5;
+    }
+
+    modifier
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn invisible_targets_without_armor_keep_minimum_visibility() {
+        let modifier: f64 = 0.7 * 0.1;
+        assert!((modifier - 0.07).abs() < f64::EPSILON);
     }
 }
