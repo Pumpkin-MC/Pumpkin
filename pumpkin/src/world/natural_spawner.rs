@@ -642,6 +642,8 @@ pub fn spawn_category_for_position(
     let mut batch_buffer = vec![];
     let mut spawn_cluster_size = 0;
     let player_positions: Vec<_> = world.players.load().iter().map(|p| p.position()).collect();
+    let level_info = world.level_info.load();
+    let spawn_position = Vector3::new(level_info.spawn_x, level_info.spawn_y, level_info.spawn_z);
 
     'group_loop: for _ in 0..3 {
         let mut new_x = pos.0.x;
@@ -677,7 +679,12 @@ pub fn spawn_category_for_position(
             );
 
             let player_distance = get_nearest_player(&spawn_pos_f64, &player_positions);
-            if !is_right_distance_to_player_and_spawn_point(&new_pos, player_distance, chunk_pos) {
+            if !is_right_distance_to_player_and_spawn_point(
+                &new_pos,
+                player_distance,
+                chunk_pos,
+                &spawn_position,
+            ) {
                 inc += 1;
                 continue;
             }
@@ -734,12 +741,17 @@ pub fn is_right_distance_to_player_and_spawn_point(
     pos: &BlockPos,
     distance: f64,
     chunk_pos: &Vector2<i32>,
+    spawn_position: &Vector3<i32>,
 ) -> bool {
     if distance <= 24. * 24. {
         return false;
     }
-    // TODO getSharedSpawnPos/WorldSpawnPoint
-    if pos.to_centered_f64().squared_distance_to(0., 0., 0.) <= 24. * 24. {
+    if pos.to_centered_f64().squared_distance_to(
+        f64::from(spawn_position.x) + 0.5,
+        f64::from(spawn_position.y) + 0.5,
+        f64::from(spawn_position.z) + 0.5,
+    ) <= 24. * 24.
+    {
         return false;
     }
     #[expect(clippy::nonminimal_bool)]
@@ -970,9 +982,12 @@ pub fn is_valid_empty_spawn_block(
 
 #[cfg(test)]
 mod tests {
-    use super::is_valid_empty_spawn_block;
+    use super::{is_right_distance_to_player_and_spawn_point, is_valid_empty_spawn_block};
     use pumpkin_data::Block;
     use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::math::vector3::Vector3;
 
     #[test]
     fn dangerous_blocks_reject_nonimmune_spawns() {
@@ -987,6 +1002,25 @@ mod tests {
         assert!(is_valid_empty_spawn_block(
             Block::FIRE.default_state,
             &EntityType::BLAZE,
+        ));
+    }
+
+    #[test]
+    fn spawn_distance_uses_world_spawn_coordinates() {
+        let pos = BlockPos::new(100, 64, 100);
+        let chunk = Vector2::new(6, 6);
+
+        assert!(!is_right_distance_to_player_and_spawn_point(
+            &pos,
+            25. * 25.,
+            &chunk,
+            &Vector3::new(100, 64, 100),
+        ));
+        assert!(is_right_distance_to_player_and_spawn_point(
+            &pos,
+            25. * 25.,
+            &chunk,
+            &Vector3::new(0, 64, 0),
         ));
     }
 }
