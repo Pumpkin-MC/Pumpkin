@@ -5,7 +5,8 @@ use pumpkin_data::{entity::EntityType, item::Item};
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        breed::BreedGoal, climb_on_top_of_powder_snow::ClimbOnTopOfPowderSnowGoal,
+        escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         raid_garden::RaidGardenGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
@@ -33,6 +34,7 @@ impl RabbitEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(1, ClimbOnTopOfPowderSnowGoal::new());
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.2));
             goal_selector.add_goal(2, BreedGoal::new(0.8));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));

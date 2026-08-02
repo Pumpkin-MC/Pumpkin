@@ -19,8 +19,9 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, sit::SitGoal,
-        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        non_tame_random_target::NonTameRandomTargetGoal, sit::SitGoal, swim::SwimGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     player::Player,
@@ -62,6 +63,25 @@ impl CatEntity {
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
             );
             goal_selector.add_goal(12, Box::new(RandomLookAroundGoal::default()));
+
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            target_selector.add_goal(
+                1,
+                NonTameRandomTargetGoal::without_predicate(
+                    &mob_arc.mob_entity,
+                    &[&EntityType::RABBIT],
+                    false,
+                ),
+            );
+            target_selector.add_goal(
+                1,
+                NonTameRandomTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    crate::entity::ai::goal::non_tame_random_target::TURTLE_TYPES,
+                    false,
+                    Some(crate::entity::ai::goal::non_tame_random_target::baby_turtle_on_land),
+                ),
+            );
         };
 
         mob_arc

@@ -22,8 +22,8 @@ use crate::entity::{
     ai::goal::{
         beg::BegGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
         follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, sit::SitGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, non_tame_random_target::NonTameRandomTargetGoal,
+        sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     player::Player,
@@ -31,6 +31,12 @@ use crate::entity::{
 
 // Vanilla Wolf.java: `private static final DyeColor DEFAULT_COLLAR_COLOR = DyeColor.RED;`
 const DEFAULT_COLLAR_COLOR: u8 = DyeColor::Red as u8;
+
+/// Vanilla `Wolf.PREY_SELECTOR` target types (the selector predicate itself is trivial --
+/// "is one of these three types" -- so it's folded directly into the type list here rather than
+/// ported as a separate closure).
+const WOLF_PREY_TYPES: &[&EntityType] =
+    &[&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX];
 
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
@@ -68,6 +74,28 @@ impl WolfEntity {
             );
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(12, Box::new(WanderAroundGoal::new(1.0)));
+
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            // Vanilla priorities 1-3 (OwnerHurtByTarget/OwnerHurtTarget/HurtByTarget[+alert]) and
+            // 4/7 (angry-at-player / hostile-skeleton) target goals aren't ported here -- only
+            // the untamed prey-targeting behavior requested for this cluster.
+            target_selector.add_goal(
+                5,
+                NonTameRandomTargetGoal::without_predicate(
+                    &mob_arc.mob_entity,
+                    WOLF_PREY_TYPES,
+                    false,
+                ),
+            );
+            target_selector.add_goal(
+                6,
+                NonTameRandomTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    crate::entity::ai::goal::non_tame_random_target::TURTLE_TYPES,
+                    false,
+                    Some(crate::entity::ai::goal::non_tame_random_target::baby_turtle_on_land),
+                ),
+            );
         };
 
         mob_arc
