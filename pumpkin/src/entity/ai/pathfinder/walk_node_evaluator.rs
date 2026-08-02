@@ -32,10 +32,13 @@ impl WalkNodeEvaluator {
         self.base.can_float
     }
 
-    // TODO: Check collision shapes for partial blocks (slabs/stairs)
-    #[allow(clippy::unused_self)]
     fn get_floor_level(&self, pos: Vector3<i32>) -> f64 {
-        f64::from(pos.y)
+        self.base
+            .context
+            .as_ref()
+            .map_or(f64::from(pos.y), |context| {
+                f64::from(pos.y) + context.collision_height(pos)
+            })
     }
 
     fn get_mob_jump_height(&self) -> f64 {

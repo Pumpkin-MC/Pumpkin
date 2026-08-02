@@ -23,6 +23,13 @@ pub struct PathfindingContext {
     collision_cache: FxHashMap<Vector3<i32>, bool>,
 }
 
+fn collision_height_for_state(state: &BlockState) -> f64 {
+    state
+        .get_block_collision_shapes()
+        .map(|shape| shape.max.y)
+        .fold(0.0, f64::max)
+}
+
 impl PathfindingContext {
     pub fn new(mob_position: Vector3<i32>, world: Arc<World>) -> Self {
         Self {
@@ -238,10 +245,29 @@ impl PathfindingContext {
         has_collision
     }
 
+    #[must_use]
+    pub fn collision_height(&self, pos: Vector3<i32>) -> f64 {
+        let state_id = self.world.get_block_state_id(&pos.as_blockpos());
+        collision_height_for_state(BlockState::from_id(state_id))
+    }
+
     pub fn clear_caches(&mut self) {
         if let Some(ref mut cache) = self.path_type_cache {
             cache.clear();
         }
         self.collision_cache.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Block, collision_height_for_state};
+
+    #[test]
+    fn partial_collision_shapes_supply_their_actual_floor_height() {
+        let height = collision_height_for_state(Block::STONE_SLAB.default_state);
+
+        assert!(height > 0.0);
+        assert!(height < 1.0);
     }
 }
