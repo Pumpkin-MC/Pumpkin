@@ -162,6 +162,10 @@ impl EntityBase for EnderPearlEntity {
                     &teleport_pos,
                 );
 
+                if let Some(living) = owner.get_living_entity() {
+                    living.fall_distance.store(0.0);
+                }
+
                 // Deal 5 damage to owner
                 owner
                     .damage(
