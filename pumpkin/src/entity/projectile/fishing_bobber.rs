@@ -35,6 +35,10 @@ const fn fishing_experience_reward(random_value: u8) -> i32 {
     (random_value % 6) as i32 + 1
 }
 
+const fn fishing_wait_countdown(random_value: u32) -> i32 {
+    (random_value % 100 + 100) as i32
+}
+
 const fn fishing_catch_item(random_value: u8) -> &'static pumpkin_data::item::Item {
     match random_value % 100 {
         0..60 => &pumpkin_data::item::Item::COD,
@@ -60,7 +64,7 @@ impl FishingBobberEntity {
             hooked_entity_id: AtomicI32::new(0),
             in_ground: AtomicBool::new(false),
             has_hit: AtomicBool::new(false),
-            wait_countdown: AtomicI32::new(rand::random::<i32>().abs() % 600 + 100),
+            wait_countdown: AtomicI32::new(fishing_wait_countdown(rand::random())),
             bite_countdown: AtomicI32::new(0),
         }
     }
@@ -180,7 +184,7 @@ impl FishingBobberEntity {
                     // Start bite
                     self.bite_countdown.store(40, Ordering::Relaxed);
                     self.wait_countdown
-                        .store(rand::random::<i32>().abs() % 600 + 100, Ordering::Relaxed);
+                        .store(fishing_wait_countdown(rand::random()), Ordering::Relaxed);
 
                     world.play_sound(
                         Sound::EntityFishingBobberSplash,
@@ -297,7 +301,19 @@ impl EntityBase for FishingBobberEntity {
 
 #[cfg(test)]
 mod tests {
-    use super::{fishing_catch_item, fishing_experience_reward, hooked_reel_damage};
+    use super::{
+        fishing_catch_item, fishing_experience_reward, fishing_wait_countdown, hooked_reel_damage,
+    };
+
+    #[test]
+    fn fishing_wait_matches_vanilla_base_window() {
+        assert_eq!(fishing_wait_countdown(0), 100);
+        assert_eq!(fishing_wait_countdown(99), 199);
+        assert_eq!(fishing_wait_countdown(100), 100);
+        for value in [0, 1, 42, 99, 100, u32::MAX] {
+            assert!((100..=199).contains(&fishing_wait_countdown(value)));
+        }
+    }
 
     #[test]
     fn hooked_retrieval_damage_matches_vanilla_categories() {
