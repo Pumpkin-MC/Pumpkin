@@ -31,6 +31,10 @@ const fn hooked_reel_damage(is_item: bool) -> i32 {
     if is_item { 3 } else { 5 }
 }
 
+const fn fishing_experience_reward(random_value: u8) -> i32 {
+    (random_value % 6) as i32 + 1
+}
+
 impl FishingBobberEntity {
     const WATER_INERTIA: f64 = 0.8;
     const AIR_INERTIA: f64 = 0.92;
@@ -97,6 +101,12 @@ impl FishingBobberEntity {
                 );
                 world
                     .spawn_entity(Arc::new(ItemEntity::new(item_entity, item_stack)))
+                    .await;
+            }
+
+            if let Some(owner) = world.get_player_by_id(self.owner_id) {
+                owner
+                    .add_experience_points(fishing_experience_reward(rand::random()))
                     .await;
             }
 
@@ -279,11 +289,18 @@ impl EntityBase for FishingBobberEntity {
 
 #[cfg(test)]
 mod tests {
-    use super::hooked_reel_damage;
+    use super::{fishing_experience_reward, hooked_reel_damage};
 
     #[test]
     fn hooked_retrieval_damage_matches_vanilla_categories() {
         assert_eq!(hooked_reel_damage(true), 3);
         assert_eq!(hooked_reel_damage(false), 5);
+    }
+
+    #[test]
+    fn fishing_experience_reward_stays_within_vanilla_range() {
+        for value in 0..=u8::MAX {
+            assert!((1..=6).contains(&fishing_experience_reward(value)));
+        }
     }
 }
