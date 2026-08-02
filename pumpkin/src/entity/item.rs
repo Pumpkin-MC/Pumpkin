@@ -348,14 +348,15 @@ impl ItemEntity {
     }
 
     async fn process_age_and_merge(&self) -> bool {
-        if self.never_despawn.load(Ordering::Relaxed) {
-            return true;
-        }
-
         let entity = &self.entity;
-        let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
+        let never_despawn = self.never_despawn.load(Ordering::Relaxed);
+        let age = if never_despawn {
+            self.item_age.load(Ordering::Relaxed)
+        } else {
+            self.item_age.fetch_add(1, Ordering::Relaxed) + 1
+        };
 
-        if age >= 6000 {
+        if !never_despawn && age >= 6000 {
             entity.remove().await;
             return false;
         }
