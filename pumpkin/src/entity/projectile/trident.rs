@@ -361,7 +361,7 @@ impl EntityBase for TridentEntity {
                     }
 
                     target
-                        .damage(&*target, damage as f32, DamageType::TRIDENT)
+                        .damage(self, damage as f32, DamageType::TRIDENT)
                         .await;
 
                     // Play hit sound
