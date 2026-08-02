@@ -114,13 +114,15 @@ impl Goal for RangedSnowballAttackGoal {
             self.cooldown = (self.cooldown - 1).max(0);
 
             if distance_squared > self.range * self.range {
-                mob.get_mob_entity().navigator.lock().unwrap().set_progress(
-                    NavigatorGoal {
+                mob.get_mob_entity()
+                    .navigator
+                    .lock()
+                    .unwrap()
+                    .set_progress(NavigatorGoal {
                         current_progress: shooter_pos,
                         destination: target_pos,
                         speed: 1.0,
-                    },
-                );
+                    });
                 return;
             }
 

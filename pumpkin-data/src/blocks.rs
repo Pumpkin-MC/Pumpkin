@@ -215,7 +215,13 @@ impl Block {
 
         let valid_keys: Vec<&str> = block
             .properties(block.default_state.id)
-            .map(|properties| properties.to_props().into_iter().map(|(key, _)| key).collect())
+            .map(|properties| {
+                properties
+                    .to_props()
+                    .into_iter()
+                    .map(|(key, _)| key)
+                    .collect()
+            })
             .unwrap_or_default();
 
         let mut pairs = Vec::new();

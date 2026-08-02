@@ -175,8 +175,7 @@ impl BowItem {
             ArrowPickup::Allowed
         };
 
-        let arrow =
-            ArrowEntity::new_shot(arrow_entity, player.get_entity(), &projectile, pickup);
+        let arrow = ArrowEntity::new_shot(arrow_entity, player.get_entity(), &projectile, pickup);
 
         // Read enchantments of the held item (bow)
         let held = player.inventory().held_item();

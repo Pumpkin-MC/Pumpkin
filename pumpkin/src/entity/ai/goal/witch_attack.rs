@@ -4,9 +4,9 @@ use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{DataComponentImpl, PotionContentsImpl};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Potion;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::item_stack::ItemStack;
 
 use super::{Controls, Goal, GoalFuture};
 use crate::entity::ai::pathfinder::NavigatorGoal;
@@ -108,9 +108,19 @@ impl WitchAttackGoal {
         let projectile_entity = Entity::new(world.clone(), shooter_pos, &EntityType::SPLASH_POTION);
         let projectile = SplashPotionEntity::new_shot(projectile_entity, shooter);
         projectile.set_item_stack(stack).await;
-        projectile.thrown.set_velocity(x, y + distance * 0.2, z, if distance <= 2.0 { 0.45 } else { 0.75 }, 8.0);
+        projectile.thrown.set_velocity(
+            x,
+            y + distance * 0.2,
+            z,
+            if distance <= 2.0 { 0.45 } else { 0.75 },
+            8.0,
+        );
         world.spawn_entity(Arc::new(projectile)).await;
-        world.play_sound(Sound::EntityWitchThrow, SoundCategory::Hostile, &shooter_pos);
+        world.play_sound(
+            Sound::EntityWitchThrow,
+            SoundCategory::Hostile,
+            &shooter_pos,
+        );
     }
 }
 
@@ -160,14 +170,22 @@ impl Goal for WitchAttackGoal {
             let shooter_pos = shooter.pos.load();
             let target_pos = target.get_entity().pos.load();
             let distance_squared = shooter_pos.squared_distance_to_vec(&target_pos);
-            mob.get_mob_entity().look_control.lock().unwrap().look_at_entity_with_range(&target, 30.0, 30.0);
+            mob.get_mob_entity()
+                .look_control
+                .lock()
+                .unwrap()
+                .look_at_entity_with_range(&target, 30.0, 30.0);
             self.cooldown = (self.cooldown - 1).max(0);
             if distance_squared > self.range * self.range {
-                mob.get_mob_entity().navigator.lock().unwrap().set_progress(NavigatorGoal {
-                    current_progress: shooter_pos,
-                    destination: target_pos,
-                    speed: 1.0,
-                });
+                mob.get_mob_entity()
+                    .navigator
+                    .lock()
+                    .unwrap()
+                    .set_progress(NavigatorGoal {
+                        current_progress: shooter_pos,
+                        destination: target_pos,
+                        speed: 1.0,
+                    });
             } else {
                 mob.get_mob_entity().navigator.lock().unwrap().stop();
                 if self.cooldown == 0 {
@@ -194,9 +212,21 @@ mod tests {
 
     #[test]
     fn witch_potion_selection_matches_vanilla_priority() {
-        assert_eq!(WitchAttackGoal::choose_potion(10.0, 20.0, false, false, false, 1.0).id, Potion::SLOWNESS.id);
-        assert_eq!(WitchAttackGoal::choose_potion(6.0, 20.0, true, false, false, 1.0).id, Potion::POISON.id);
-        assert_eq!(WitchAttackGoal::choose_potion(2.0, 6.0, true, true, false, 0.1).id, Potion::WEAKNESS.id);
-        assert_eq!(WitchAttackGoal::choose_potion(4.0, 6.0, true, true, true, 1.0).id, Potion::HARMING.id);
+        assert_eq!(
+            WitchAttackGoal::choose_potion(10.0, 20.0, false, false, false, 1.0).id,
+            Potion::SLOWNESS.id
+        );
+        assert_eq!(
+            WitchAttackGoal::choose_potion(6.0, 20.0, true, false, false, 1.0).id,
+            Potion::POISON.id
+        );
+        assert_eq!(
+            WitchAttackGoal::choose_potion(2.0, 6.0, true, true, false, 0.1).id,
+            Potion::WEAKNESS.id
+        );
+        assert_eq!(
+            WitchAttackGoal::choose_potion(4.0, 6.0, true, true, true, 1.0).id,
+            Potion::HARMING.id
+        );
     }
 }

@@ -446,7 +446,10 @@ impl EntityBase for ArrowEntity {
         })
     }
 
-    #[expect(clippy::too_many_lines, reason = "projectile hit handling keeps vanilla branches together")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "projectile hit handling keeps vanilla branches together"
+    )]
     fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let entity = self.get_entity();
