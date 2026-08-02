@@ -3359,9 +3359,24 @@ impl Player {
     }
 
     pub async fn send_active_effects(&self) {
-        let effects = self.living_entity.active_effects.lock().await;
-        for effect in effects.values() {
-            self.send_effect(effect.clone()).await;
+        {
+            let effects = self.living_entity.active_effects.lock().await;
+            for effect in effects.values() {
+                self.send_effect(effect.clone()).await;
+            }
+        }
+
+        // The effects were restored from disk before this client existed, so the
+        // attribute modifiers they imply have never been sent. Without this the
+        // client keeps predicting movement from its base speed and a restored
+        // Speed or Slowness looks like it is being ignored.
+        let touched_attrs = self.living_entity.reapply_active_effect_state().await;
+        if !touched_attrs.is_empty() {
+            crate::entity::attributes::send_attribute_updates_for_living(
+                &self.living_entity,
+                touched_attrs,
+            )
+            .await;
         }
     }
 
