@@ -113,3 +113,6 @@ pub mod beacon;
 
 // Copper oxidation/weathering (shared utility)
 pub mod copper_weathering;
+
+pub mod copper_full;
+pub mod copper_grate;
