@@ -48,7 +48,7 @@ use crate::item::items::potions::{LingeringPotionItem, PotionItem, SplashPotionI
 use arrow::ArrowItem;
 use axe::AxeItem;
 use bow::BowItem;
-use bucket::{EmptyBucketItem, FilledBucketItem};
+use bucket::{EmptyBucketItem, FilledBucketItem, MilkBucketItem};
 use crossbow::CrossbowItem;
 use dye::DyeItem;
 use egg::EggItem;
@@ -86,6 +86,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     // TODO: Register CarrotOnAStickItem and WarpedFungusOnAStickItem with boost durability costs.
     manager.register(EmptyBucketItem);
     manager.register(FilledBucketItem);
+    manager.register(MilkBucketItem);
     manager.register(ShovelItem);
     manager.register(SpawnEggItem);
     manager.register(AxeItem);
