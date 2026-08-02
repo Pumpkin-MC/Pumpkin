@@ -74,11 +74,29 @@ const fn fishing_treasure_item(random_value: u8) -> &'static pumpkin_data::item:
     }
 }
 
-const fn fishing_loot_item(category_roll: u8, item_roll: u8) -> &'static pumpkin_data::item::Item {
-    match category_roll % 100 {
-        0..85 => fishing_catch_item(item_roll),
-        85..95 => fishing_junk_item(item_roll),
-        _ => fishing_treasure_item(item_roll),
+const fn fishing_loot_item(
+    category_roll: u8,
+    item_roll: u8,
+    luck_of_the_sea: i32,
+) -> &'static pumpkin_data::item::Item {
+    let luck = if luck_of_the_sea < 0 {
+        0
+    } else if luck_of_the_sea > 5 {
+        5
+    } else {
+        luck_of_the_sea
+    };
+    let junk_weight = if 10 - luck * 2 > 0 { 10 - luck * 2 } else { 0 };
+    let treasure_weight = 5 + luck * 2;
+    let roll = (category_roll % 100) as i32;
+    if roll < 85 {
+        fishing_catch_item(item_roll)
+    } else if roll < 85 + junk_weight {
+        fishing_junk_item(item_roll)
+    } else if roll < 85 + junk_weight + treasure_weight {
+        fishing_treasure_item(item_roll)
+    } else {
+        fishing_catch_item(item_roll)
     }
 }
 
@@ -134,8 +152,16 @@ impl FishingBobberEntity {
                 )
                 .await;
 
-            let mut item_stack =
-                ItemStack::new(1, fishing_loot_item(rand::random(), rand::random()));
+            let luck_of_the_sea = player
+                .inventory
+                .held_item()
+                .lock()
+                .await
+                .get_enchantment_level(&pumpkin_data::Enchantment::LUCK_OF_THE_SEA);
+            let mut item_stack = ItemStack::new(
+                1,
+                fishing_loot_item(rand::random(), rand::random(), luck_of_the_sea),
+            );
             if !player
                 .inventory
                 .insert_stack_anywhere(&mut item_stack)
@@ -414,19 +440,27 @@ mod tests {
     #[test]
     fn fishing_loot_categories_match_vanilla_base_weights() {
         assert_eq!(
-            fishing_loot_item(84, 0).id,
+            fishing_loot_item(84, 0, 0).id,
             pumpkin_data::item::Item::COD.id
         );
         assert_eq!(
-            fishing_loot_item(85, 0).id,
+            fishing_loot_item(85, 0, 0).id,
             pumpkin_data::item::Item::LILY_PAD.id
         );
         assert_eq!(
-            fishing_loot_item(94, 9).id,
+            fishing_loot_item(94, 9, 0).id,
             pumpkin_data::item::Item::TRIPWIRE_HOOK.id
         );
         assert_eq!(
-            fishing_loot_item(95, 0).id,
+            fishing_loot_item(95, 0, 0).id,
+            pumpkin_data::item::Item::BOW.id
+        );
+        assert_eq!(
+            fishing_loot_item(88, 0, 3).id,
+            pumpkin_data::item::Item::LILY_PAD.id
+        );
+        assert_eq!(
+            fishing_loot_item(89, 0, 3).id,
             pumpkin_data::item::Item::BOW.id
         );
     }
