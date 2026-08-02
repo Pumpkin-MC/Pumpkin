@@ -13,7 +13,7 @@ use pumpkin_data::data_component_impl::EnchantmentsImpl;
 
 const NAMES: [&str; 1] = ["enchant"];
 const DESCRIPTION: &str = "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.";
-const MIN_ENCHANTMENT_LEVEL: i32 = 1;
+const MIN_ENCHANTMENT_LEVEL: i32 = 0;
 
 struct Executor;
 
@@ -196,7 +196,7 @@ mod tests {
     use super::MIN_ENCHANTMENT_LEVEL;
 
     #[test]
-    fn enchantment_levels_start_at_one() {
-        assert_eq!(MIN_ENCHANTMENT_LEVEL, 1);
+    fn enchantment_levels_start_at_zero() {
+        assert_eq!(MIN_ENCHANTMENT_LEVEL, 0);
     }
 }
