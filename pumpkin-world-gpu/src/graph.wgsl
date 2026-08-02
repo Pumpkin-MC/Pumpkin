@@ -38,6 +38,7 @@ const OP_INTERPOLATED_NOISE: u32 = 22u;
 const OP_BEARDIFIER: u32 = 23u;
 const OP_RANGE_CHOICE: u32 = 24u;
 const OP_INTERVAL_SELECT: u32 = 25u;
+const OP_CLAMPED_Y_IDENTITY: u32 = 26u;
 
 struct Instruction {
     opcode: u32,
@@ -611,6 +612,10 @@ fn evaluate_graph(@builtin(global_invocation_id) gid: vec3<u32>) {
                         break;
                     }
                 }
+            }
+            case 26u: {
+                // Exact for integer Y, unlike the lerp form; see OpCode docs.
+                result = clamp(py, instruction.param0, instruction.param1);
             }
             default: { result = 0.0; }
         }

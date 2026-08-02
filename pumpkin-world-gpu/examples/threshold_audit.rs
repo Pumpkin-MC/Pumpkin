@@ -3,9 +3,14 @@
 //!
 //! `RangeChoice` and `IntervalSelect` compare a selector against a fixed threshold. When
 //! the selector lands on the threshold, one ulp of rounding decides which subgraph is
-//! evaluated, so the CPU and GPU can return values from different branches rather than
-//! near-equal numbers. This reports how many such nodes exist and how often a real
-//! sample lands close enough to a threshold to be at risk.
+//! evaluated, so the two backends can return values from different branches rather than
+//! near-equal numbers.
+//!
+//! This reports *exposure*: how many nodes compare against a threshold, and how often a
+//! real sample lands on one. Exposure is a property of the terrain, not a defect — the
+//! overworld genuinely samples y = -60. What matters is that the selector be computed
+//! exactly, which is why the Y gradient is lowered to `ClampedYIdentity`. Use this to
+//! find selectors that a future change might make inexact.
 //!
 //! Run with: `cargo run -p pumpkin-world-gpu --release --example threshold_audit`
 

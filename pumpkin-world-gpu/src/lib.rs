@@ -14,12 +14,18 @@
 //!
 //! For smooth density values f32 only costs a little precision. It is not harmless at
 //! `RangeChoice` and `IntervalSelect` nodes: those compare a selector against a fixed
-//! threshold, and the overworld router has cases where the selector is an exact
-//! integer-derived value sitting *on* the threshold (a Y gradient against -60, in the
-//! ore-vein subgraph). A rounding difference of one ulp flips which branch is taken, so
-//! the two backends return values from entirely different subgraphs rather than
-//! near-equal numbers. Callers that need the vein outputs to agree with the CPU must
-//! compute them on the CPU.
+//! threshold, so one ulp of rounding does not shift the result slightly, it selects a
+//! different subgraph.
+//!
+//! The overworld router hits this: seven of its threshold nodes read the same selector,
+//! a Y gradient, against integer thresholds (-60, 51, 321) that real block coordinates
+//! land on exactly. Vanilla computes that gradient as a lerp, which does not return an
+//! integer Y exactly in f32 — and rounds differently per backend. It is lowered to
+//! [`graph::OpCode::ClampedYIdentity`] instead, an exact clamp, which removes the
+//! divergence. The `threshold_audit` example reports how exposed a router is.
+//!
+//! Any future node that feeds a threshold comparison needs the same scrutiny: agreeing
+//! "to f32 precision" is not enough when the value is compared for ordering.
 
 use bytemuck::{Pod, Zeroable};
 use pumpkin_util::noise::perlin::OctavePerlinNoiseSampler;
@@ -1405,16 +1411,11 @@ mod test {
 
         // Results are grouped by output: [slot][point].
         //
-        // Most outputs agree to f32 precision. The vein outputs are excluded from the
-        // tight check on purpose: they sit behind RangeChoice nodes whose thresholds
-        // are compared against exact integer-derived values (a Y gradient), and f32
-        // rounding can push the selector across the boundary so the two backends take
-        // different branches. That is a real behavioural difference from the f32
-        // decision, not test noise — see the module docs.
-        let branch_sensitive = [
-            crate::graph::output_slot::VEIN_TOGGLE,
-            crate::graph::output_slot::VEIN_RIDGED,
-        ];
+        // Every output is checked, including the vein ones. Those sit behind
+        // RangeChoice nodes whose selector is a clamped-identity Y gradient, and they
+        // only agree because that node is lowered to an exact clamp rather than a lerp
+        // (see OpCode::ClampedYIdentity). If that lowering regresses, these are the
+        // outputs that break first.
 
         let mut max_diff = 0.0f32;
         let mut slots_with_signal = 0usize;
@@ -1439,13 +1440,11 @@ mod test {
             if slot_has_signal {
                 slots_with_signal += 1;
             }
-            if !branch_sensitive.contains(&slot) {
-                assert!(
-                    slot_diff < 1e-2,
-                    "output slot {slot} (node {node}) disagrees by {slot_diff}"
-                );
-                max_diff = max_diff.max(slot_diff);
-            }
+            assert!(
+                slot_diff < 1e-2,
+                "output slot {slot} (node {node}) disagrees by {slot_diff}"
+            );
+            max_diff = max_diff.max(slot_diff);
         }
 
         // Guards against every slot reading the same node or returning zeros.

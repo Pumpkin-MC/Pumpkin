@@ -82,6 +82,11 @@ pub enum OpCode {
     /// Picks a branch by which threshold `input0` falls under; `aux0`/`aux1` are the
     /// start and length of this node's run in the graph's interval table.
     IntervalSelect = 25,
+    /// A `ClampedYGradient` whose value range equals its Y range, i.e. clamped identity
+    /// on Y. Lowered separately because computing it as a lerp is not exact: an integer
+    /// Y comes back a hair off, and differently per backend, which flips the threshold
+    /// comparisons that read it. `param0`/`param1` are the bounds.
+    ClampedYIdentity = 26,
 }
 
 /// One branch of an [`OpCode::IntervalSelect`].
@@ -700,7 +705,15 @@ fn lower_simple(
             i
         }
         BaseNoiseFunctionComponent::ClampedYGradient { data } => {
-            let mut i = Instruction::new(OpCode::ClampedYGradient, index);
+            // The overworld uses this as plain clamped identity on Y; lowering that
+            // case to a clamp keeps it exact for integer Y on both backends.
+            let is_identity = data.from_y == data.from_value && data.to_y == data.to_value;
+            let op = if is_identity {
+                OpCode::ClampedYIdentity
+            } else {
+                OpCode::ClampedYGradient
+            };
+            let mut i = Instruction::new(op, index);
             i.param0 = data.from_y as f32;
             i.param1 = data.to_y as f32;
             i.param2 = data.from_value as f32;
@@ -1033,6 +1046,7 @@ fn eval_opcode(
         op if op == OpCode::ClampedYGradient as u32 => {
             clamped_map(y, p.param0, p.param1, p.param2, p.param3)
         }
+        op if op == OpCode::ClampedYIdentity as u32 => y.clamp(p.param0, p.param1),
         op if op == OpCode::Spline as u32 => sample_spline(
             &compiled.spline_points,
             p.aux0 as usize,
