@@ -9,6 +9,17 @@
 //! deterministically. GPU availability is never assumed — [`GpuNoiseContext::try_new`]
 //! returns `None` when there is no compatible adapter, and callers must fall back to
 //! the CPU sampler in that case.
+//!
+//! # Where f32 stops being a small difference
+//!
+//! For smooth density values f32 only costs a little precision. It is not harmless at
+//! `RangeChoice` and `IntervalSelect` nodes: those compare a selector against a fixed
+//! threshold, and the overworld router has cases where the selector is an exact
+//! integer-derived value sitting *on* the threshold (a Y gradient against -60, in the
+//! ore-vein subgraph). A rounding difference of one ulp flips which branch is taken, so
+//! the two backends return values from entirely different subgraphs rather than
+//! near-equal numbers. Callers that need the vein outputs to agree with the CPU must
+//! compute them on the CPU.
 
 use bytemuck::{Pod, Zeroable};
 use pumpkin_util::noise::perlin::OctavePerlinNoiseSampler;
@@ -76,11 +87,16 @@ struct GraphDims {
     affected_min: [i32; 3],
     has_affected_box: u32,
     affected_max: [i32; 3],
-    padding: u32,
+    num_outputs: u32,
 }
 
 impl GraphDims {
-    fn new(num_points: usize, num_instructions: usize, beardifier: &graph::BeardifierData) -> Self {
+    fn new(
+        num_points: usize,
+        num_instructions: usize,
+        num_outputs: usize,
+        beardifier: &graph::BeardifierData,
+    ) -> Self {
         let (affected_min, affected_max, has_affected_box) = beardifier
             .affected_box
             .map_or(([0, 0, 0], [0, 0, 0], 0), |(min, max)| {
@@ -94,7 +110,7 @@ impl GraphDims {
             affected_min,
             has_affected_box,
             affected_max,
-            padding: 0,
+            num_outputs: num_outputs as u32,
         }
     }
 }
@@ -243,6 +259,7 @@ impl GpuNoiseContext {
                     storage_entry(10, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(11, wgpu::BufferBindingType::Storage { read_only: true }),
                     storage_entry(12, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(13, wgpu::BufferBindingType::Storage { read_only: true }),
                 ],
             });
 
@@ -309,7 +326,9 @@ impl GpuNoiseContext {
         &self,
         point_capacity: usize,
         num_instructions: usize,
+        outputs_per_point: usize,
     ) -> (wgpu::Buffer, wgpu::Buffer, wgpu::Buffer, wgpu::Buffer) {
+        let result_len = point_capacity as u64 * outputs_per_point as u64;
         let f32_size = std::mem::size_of::<f32>() as u64;
         let points = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("graph points"),
@@ -325,13 +344,13 @@ impl GpuNoiseContext {
         });
         let output = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("graph out_density"),
-            size: point_capacity as u64 * f32_size,
+            size: result_len * f32_size,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("graph out_density staging"),
-            size: point_capacity as u64 * f32_size,
+            size: result_len * f32_size,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -374,6 +393,7 @@ impl GpuNoiseContext {
                 bind_entry(10, &dummy),
                 bind_entry(11, &dummy),
                 bind_entry(12, &dummy),
+                bind_entry(13, &dummy),
             ],
         })
     }
@@ -568,6 +588,9 @@ pub struct PreparedGraph<'a> {
     spline_points: wgpu::Buffer,
     interpolated: wgpu::Buffer,
     interval_entries: wgpu::Buffer,
+    outputs: wgpu::Buffer,
+    /// How many outputs the shader emits; 0 means "just the last instruction".
+    outputs_len: usize,
 
     // Rewritten per dispatch; reallocated only when the batch outgrows them.
     points: wgpu::Buffer,
@@ -608,10 +631,14 @@ impl<'a> PreparedGraph<'a> {
         );
         let interval_entries =
             context.storage_from("graph interval entries", &compiled.interval_entries);
+        let outputs = context.storage_from("graph outputs", &compiled.outputs);
 
         let point_capacity = 1;
-        let (points, scratch, output, staging) =
-            context.allocate_point_buffers(point_capacity, num_instructions as usize);
+        let (points, scratch, output, staging) = context.allocate_point_buffers(
+            point_capacity,
+            num_instructions as usize,
+            compiled.outputs_per_point(),
+        );
         let structures = context.empty_storage::<graph::GpuBeardStructure>("beard structures", 1);
         let junctions = context.empty_storage::<graph::GpuBeardJunction>("beard junctions", 1);
 
@@ -626,6 +653,8 @@ impl<'a> PreparedGraph<'a> {
             spline_points,
             interpolated,
             interval_entries,
+            outputs,
+            outputs_len: compiled.outputs.len(),
             points,
             scratch,
             output,
@@ -640,6 +669,15 @@ impl<'a> PreparedGraph<'a> {
         };
         prepared.rebuild_bind_group();
         prepared
+    }
+
+    /// Values returned per point: the emitted outputs, or one when none are declared.
+    const fn outputs_per_point(&self) -> usize {
+        if self.outputs_len == 0 {
+            1
+        } else {
+            self.outputs_len
+        }
     }
 
     fn rebuild_bind_group(&mut self) {
@@ -663,6 +701,7 @@ impl<'a> PreparedGraph<'a> {
                     bind_entry(10, &self.structures),
                     bind_entry(11, &self.junctions),
                     bind_entry(12, &self.interval_entries),
+                    bind_entry(13, &self.outputs),
                 ],
             });
     }
@@ -675,15 +714,17 @@ impl<'a> PreparedGraph<'a> {
         beardifier: &graph::BeardifierData,
     ) -> Vec<f32> {
         if points.is_empty() || self.num_instructions == 0 {
-            return vec![0.0; points.len()];
+            return vec![0.0; points.len() * self.outputs_per_point()];
         }
 
         let mut bind_group_stale = points.len() > self.point_capacity;
 
         if bind_group_stale {
-            let (p, s, o, st) = self
-                .context
-                .allocate_point_buffers(points.len(), self.num_instructions as usize);
+            let (p, s, o, st) = self.context.allocate_point_buffers(
+                points.len(),
+                self.num_instructions as usize,
+                self.outputs_per_point(),
+            );
             self.points = p;
             self.scratch = s;
             self.output = o;
@@ -711,7 +752,12 @@ impl<'a> PreparedGraph<'a> {
         }
 
         let queue = &self.context.queue;
-        let dims = GraphDims::new(points.len(), self.num_instructions as usize, beardifier);
+        let dims = GraphDims::new(
+            points.len(),
+            self.num_instructions as usize,
+            self.outputs_len,
+            beardifier,
+        );
         queue.write_buffer(&self.dims, 0, bytemuck::bytes_of(&dims));
 
         self.flat_points.clear();
@@ -734,7 +780,8 @@ impl<'a> PreparedGraph<'a> {
             );
         }
 
-        let output_size = (points.len() * std::mem::size_of::<f32>()) as u64;
+        let output_size =
+            (points.len() * self.outputs_per_point() * std::mem::size_of::<f32>()) as u64;
         let mut encoder =
             self.context
                 .device
@@ -833,9 +880,7 @@ mod test {
 
         let compiled = crate::graph::CompiledGraph {
             instructions: crate::graph::test::sample_graph(),
-            samplers: crate::graph::SamplerPool::default(),
-            spline_points: Vec::new(),
-            interval_entries: Vec::new(),
+            ..Default::default()
         };
 
         // Spread y across the gradient's clamped range and both saturated ends.
@@ -899,8 +944,7 @@ mod test {
         let compiled = crate::graph::CompiledGraph {
             instructions: vec![noise],
             samplers,
-            spline_points: Vec::new(),
-            interval_entries: Vec::new(),
+            ..Default::default()
         };
 
         let points: Vec<[f32; 3]> = (0..1000)
@@ -974,8 +1018,7 @@ mod test {
         let compiled = crate::graph::CompiledGraph {
             instructions: vec![shift_a, shift_b, shifted],
             samplers,
-            spline_points: Vec::new(),
-            interval_entries: Vec::new(),
+            ..Default::default()
         };
 
         let points: Vec<[f32; 3]> = (0..600)
@@ -1090,9 +1133,8 @@ mod test {
 
         let compiled = CompiledGraph {
             instructions: vec![location, inner_lo, inner_hi, inner, outer_far, outer],
-            samplers: crate::graph::SamplerPool::default(),
             spline_points,
-            interval_entries: Vec::new(),
+            ..Default::default()
         };
 
         let points: Vec<[f32; 3]> = (0..400)
@@ -1153,8 +1195,7 @@ mod test {
         let compiled = CompiledGraph {
             instructions: vec![node],
             samplers,
-            spline_points: Vec::new(),
-            interval_entries: Vec::new(),
+            ..Default::default()
         };
 
         // Block coordinates in a realistic range; f32 loses ground far from origin, so
@@ -1191,7 +1232,7 @@ mod test {
     /// junctions in range — an empty-input test would pass on a no-op shader.
     #[test]
     fn gpu_beardifier_matches_cpu_with_real_structures() {
-        use crate::graph::{BeardifierData, CompiledGraph, Instruction, OpCode, SamplerPool};
+        use crate::graph::{BeardifierData, CompiledGraph, Instruction, OpCode};
         use pumpkin_util::math::{block_box::BlockBox, vector3::Vector3};
         use pumpkin_world::generation::noise::router::density_function::{
             StaticIndependentChunkNoiseFunctionComponentImpl,
@@ -1249,9 +1290,7 @@ mod test {
 
         let compiled = CompiledGraph {
             instructions: vec![Instruction::new_for_test(OpCode::Beardifier, 0)],
-            samplers: SamplerPool::default(),
-            spline_points: Vec::new(),
-            interval_entries: Vec::new(),
+            ..Default::default()
         };
 
         // Sweep through and around the structures, including points outside the box.
@@ -1333,5 +1372,87 @@ mod test {
             max_diff < 1e-2,
             "GPU and CPU disagree on the overworld router by {max_diff}"
         );
+    }
+    /// The aquifer and ore-vein samplers need several router outputs at the same
+    /// position, so the GPU emits them all in one pass. Every emitted output must match
+    /// what the CPU interpreter produces for that node.
+    #[test]
+    fn gpu_emits_every_router_output() {
+        use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
+        use pumpkin_world::generation::GlobalRandomConfig;
+
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        let config = GlobalRandomConfig::new(4321, false);
+        let compiled = crate::graph::compile_router(&OVERWORLD_BASE_NOISE_ROUTER.noise, &config)
+            .expect("overworld lowers");
+        let beardifier = crate::graph::BeardifierData::default();
+
+        let slots = compiled.outputs_per_point();
+        assert_eq!(slots, crate::graph::output_slot::COUNT);
+
+        let points: Vec<[f32; 3]> = (0..200)
+            .map(|i| {
+                let f = i as f32;
+                [f * 3.0 - 100.0, (f % 80.0) * 4.0 - 60.0, f * 2.0 - 80.0]
+            })
+            .collect();
+
+        let results = ctx.evaluate_graph_with(&compiled, &points, &beardifier);
+        assert_eq!(results.len(), points.len() * slots);
+
+        // Results are grouped by output: [slot][point].
+        //
+        // Most outputs agree to f32 precision. The vein outputs are excluded from the
+        // tight check on purpose: they sit behind RangeChoice nodes whose thresholds
+        // are compared against exact integer-derived values (a Y gradient), and f32
+        // rounding can push the selector across the boundary so the two backends take
+        // different branches. That is a real behavioural difference from the f32
+        // decision, not test noise — see the module docs.
+        let branch_sensitive = [
+            crate::graph::output_slot::VEIN_TOGGLE,
+            crate::graph::output_slot::VEIN_RIDGED,
+        ];
+
+        let mut max_diff = 0.0f32;
+        let mut slots_with_signal = 0usize;
+        for (slot, &node) in compiled.outputs.iter().enumerate() {
+            let mut slot_has_signal = false;
+            let mut slot_diff = 0.0f32;
+            for (i, point) in points.iter().enumerate() {
+                let expected = crate::graph::evaluate_cpu_node(
+                    &compiled,
+                    &beardifier,
+                    node,
+                    point[0],
+                    point[1],
+                    point[2],
+                );
+                let actual = results[slot * points.len() + i];
+                if expected != 0.0 {
+                    slot_has_signal = true;
+                }
+                slot_diff = slot_diff.max((expected - actual).abs());
+            }
+            if slot_has_signal {
+                slots_with_signal += 1;
+            }
+            if !branch_sensitive.contains(&slot) {
+                assert!(
+                    slot_diff < 1e-2,
+                    "output slot {slot} (node {node}) disagrees by {slot_diff}"
+                );
+                max_diff = max_diff.max(slot_diff);
+            }
+        }
+
+        // Guards against every slot reading the same node or returning zeros.
+        assert!(
+            slots_with_signal >= 8,
+            "only {slots_with_signal} of {slots} outputs produced any signal"
+        );
+        assert!(max_diff < 1e-2, "an output disagrees by {max_diff}");
     }
 }

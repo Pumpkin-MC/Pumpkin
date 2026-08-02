@@ -78,6 +78,8 @@ struct SamplerRef {
     _pad2: f32,
 }
 
+// vec3 is 16-byte aligned in WGSL, so the scalars are interleaved to fill the gaps
+// that would otherwise be padding. Keep this layout in sync with GraphDims in lib.rs.
 struct Dims {
     num_points: u32,
     num_instructions: u32,
@@ -87,7 +89,8 @@ struct Dims {
     affected_min: vec3<i32>,
     has_affected_box: u32,
     affected_max: vec3<i32>,
-    _pad: u32,
+    // 0 means "emit the last instruction only".
+    num_outputs: u32,
 }
 
 struct BeardStructure {
@@ -120,6 +123,8 @@ struct BeardJunction {
 @group(0) @binding(10) var<storage, read> beard_structures: array<BeardStructure>;
 @group(0) @binding(11) var<storage, read> beard_junctions: array<BeardJunction>;
 @group(0) @binding(12) var<storage, read> interval_entries: array<IntervalEntry>;
+// Instruction indices to emit, in the order the caller expects them.
+@group(0) @binding(13) var<storage, read> outputs: array<u32>;
 
 struct IntervalEntry {
     threshold: f32,
@@ -613,5 +618,16 @@ fn evaluate_graph(@builtin(global_invocation_id) gid: vec3<u32>) {
         scratch[i * dims.num_points + point_index] = result;
     }
 
-    out_density[point_index] = scratch[(dims.num_instructions - 1u) * dims.num_points + point_index];
+    if (dims.num_outputs == 0u) {
+        out_density[point_index] =
+            scratch[(dims.num_instructions - 1u) * dims.num_points + point_index];
+        return;
+    }
+
+    // Results are grouped by output, matching the [output][point] layout the reader
+    // expects, so each output's values stay contiguous.
+    for (var i: u32 = 0u; i < dims.num_outputs; i = i + 1u) {
+        out_density[i * dims.num_points + point_index] =
+            scratch[outputs[i] * dims.num_points + point_index];
+    }
 }

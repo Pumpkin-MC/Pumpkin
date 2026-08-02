@@ -14,7 +14,8 @@ use bytemuck::{Pod, Zeroable};
 use pumpkin_data::{
     chunk::DoublePerlinNoiseParameters,
     noise_router::{
-        BaseNoiseFunctionComponent, BinaryOperation, LinearOperation, SplineRepr, UnaryOperation,
+        BaseNoiseFunctionComponent, BaseNoiseRouter, BinaryOperation, LinearOperation, SplineRepr,
+        UnaryOperation,
     },
 };
 use pumpkin_util::{
@@ -433,8 +434,62 @@ impl std::fmt::Display for UnsupportedNode {
 
 impl std::error::Error for UnsupportedNode {}
 
+/// Which instruction holds each of the router's named outputs.
+///
+/// The block-state samplers (aquifer, ore veins) need several of these at the same
+/// position, so the GPU emits them all in one pass and the CPU does the branchy,
+/// stateful decision work with the results.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RouterOutputs {
+    pub barrier_noise: u32,
+    pub fluid_level_floodedness_noise: u32,
+    pub fluid_level_spread_noise: u32,
+    pub lava_noise: u32,
+    pub erosion: u32,
+    pub depth: u32,
+    pub final_density: u32,
+    pub vein_toggle: u32,
+    pub vein_ridged: u32,
+    pub vein_gap: u32,
+}
+
+impl RouterOutputs {
+    /// The outputs in the order [`CompiledGraph::outputs`] emits them.
+    #[must_use]
+    pub const fn as_slots(&self) -> [u32; 10] {
+        [
+            self.barrier_noise,
+            self.fluid_level_floodedness_noise,
+            self.fluid_level_spread_noise,
+            self.lava_noise,
+            self.erosion,
+            self.depth,
+            self.final_density,
+            self.vein_toggle,
+            self.vein_ridged,
+            self.vein_gap,
+        ]
+    }
+}
+
+/// Position of each named output within one point's slice of the result, matching the
+/// order of [`RouterOutputs::as_slots`].
+pub mod output_slot {
+    pub const BARRIER_NOISE: usize = 0;
+    pub const FLUID_LEVEL_FLOODEDNESS_NOISE: usize = 1;
+    pub const FLUID_LEVEL_SPREAD_NOISE: usize = 2;
+    pub const LAVA_NOISE: usize = 3;
+    pub const EROSION: usize = 4;
+    pub const DEPTH: usize = 5;
+    pub const FINAL_DENSITY: usize = 6;
+    pub const VEIN_TOGGLE: usize = 7;
+    pub const VEIN_RIDGED: usize = 8;
+    pub const VEIN_GAP: usize = 9;
+    pub const COUNT: usize = 10;
+}
+
 /// A compiled graph plus the sampler tables its instructions index into.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CompiledGraph {
     pub instructions: Vec<Instruction>,
     pub samplers: SamplerPool,
@@ -442,6 +497,20 @@ pub struct CompiledGraph {
     pub spline_points: Vec<GpuSplinePoint>,
     /// All interval branches, concatenated; `IntervalSelect` instructions index runs.
     pub interval_entries: Vec<GpuIntervalEntry>,
+    /// Instruction indices whose values are written out, in `output_slot` order. Empty
+    /// means "just the last instruction", which is what the standalone graph tests use.
+    pub outputs: Vec<u32>,
+    /// Maps a node's index in the source component stack to its instruction index.
+    /// They differ because splines emit instructions for their nested values.
+    pub stack_to_instruction: Vec<u32>,
+}
+
+impl CompiledGraph {
+    /// How many values [`crate::PreparedGraph::evaluate`] returns per point.
+    #[must_use]
+    pub fn outputs_per_point(&self) -> usize {
+        self.outputs.len().max(1)
+    }
 }
 
 /// Lowers a component stack into GPU instructions.
@@ -519,6 +588,8 @@ pub fn compile(
         samplers,
         spline_points,
         interval_entries,
+        outputs: Vec::new(),
+        stack_to_instruction: map,
     })
 }
 
@@ -786,6 +857,38 @@ fn lower_noise_family(
     Some(instruction)
 }
 
+/// Lowers a whole router, recording where each of its named outputs landed.
+///
+/// Prefer this over [`compile`] when the caller needs more than the final density —
+/// the aquifer and ore-vein samplers each need several outputs at the same position.
+///
+/// # Errors
+/// Same as [`compile`].
+pub fn compile_router(
+    router: &BaseNoiseRouter,
+    random_config: &GlobalRandomConfig,
+) -> Result<CompiledGraph, UnsupportedNode> {
+    let mut compiled = compile(router.full_component_stack, random_config)?;
+
+    // compile() maps stack indices to instruction indices; recover that map by
+    // re-running the same lowering is wasteful, so compile() records it for us.
+    let map = &compiled.stack_to_instruction;
+    let outputs = RouterOutputs {
+        barrier_noise: map[router.barrier_noise],
+        fluid_level_floodedness_noise: map[router.fluid_level_floodedness_noise],
+        fluid_level_spread_noise: map[router.fluid_level_spread_noise],
+        lava_noise: map[router.lava_noise],
+        erosion: map[router.erosion],
+        depth: map[router.depth],
+        final_density: map[router.final_density],
+        vein_toggle: map[router.vein_toggle],
+        vein_ridged: map[router.vein_ridged],
+        vein_gap: map[router.vein_gap],
+    };
+    compiled.outputs = outputs.as_slots().to_vec();
+    Ok(compiled)
+}
+
 /// Builds a seeded sampler the same way `ProtoNoiseRouter` does and adds it to `pool`.
 fn push_sampler(
     pool: &mut SamplerPool,
@@ -838,6 +941,21 @@ pub fn evaluate_cpu(
     y: f32,
     z: f32,
 ) -> f32 {
+    let last = compiled.instructions.len().saturating_sub(1) as u32;
+    evaluate_cpu_node(compiled, beardifier, last, x, y, z)
+}
+
+/// Evaluates the graph and returns one specific instruction's value, for callers that
+/// need a named router output rather than the final density.
+#[must_use]
+pub fn evaluate_cpu_node(
+    compiled: &CompiledGraph,
+    beardifier: &BeardifierData,
+    node: u32,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> f32 {
     let instructions = &compiled.instructions;
     let mut values = vec![0.0f32; instructions.len()];
 
@@ -857,7 +975,7 @@ pub fn evaluate_cpu(
         );
     }
 
-    values.last().copied().unwrap_or(0.0)
+    values.get(node as usize).copied().unwrap_or(0.0)
 }
 
 /// The three already-computed input values an instruction may read.
@@ -1434,9 +1552,7 @@ pub(crate) mod test {
         let instructions = instructions.to_vec();
         CompiledGraph {
             instructions,
-            samplers: SamplerPool::default(),
-            spline_points: Vec::new(),
-            interval_entries: Vec::new(),
+            ..Default::default()
         }
     }
 
@@ -1518,8 +1634,7 @@ pub(crate) mod test {
         let graph = CompiledGraph {
             instructions: vec![noise],
             samplers: pool,
-            spline_points: Vec::new(),
-            interval_entries: Vec::new(),
+            ..Default::default()
         };
 
         let mut max_diff = 0.0f64;
