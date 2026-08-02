@@ -271,6 +271,7 @@ impl MobEntity {
             .living_entity
             .get_attribute_value(&Attributes::ATTACK_DAMAGE);
         let mut fire_aspect_level = 0u32;
+        let mut knockback_level = 0u32;
         let held_item = self
             .living_entity
             .held_item(&self.living_entity.entity)
@@ -296,6 +297,8 @@ impl MobEntity {
                     attack_damage += 2.5 * f64::from(*level);
                 } else if **enchantment == pumpkin_data::Enchantment::FIRE_ASPECT {
                     fire_aspect_level = fire_aspect_ticks(*level) / 80;
+                } else if **enchantment == pumpkin_data::Enchantment::KNOCKBACK {
+                    knockback_level = (*level).max(0) as u32;
                 }
             }
         }
@@ -324,6 +327,14 @@ impl MobEntity {
                 target
                     .get_entity()
                     .set_on_fire_for_ticks(fire_aspect_ticks(fire_aspect_level as i32));
+            }
+            if knockback_level != 0 {
+                let yaw = self.living_entity.entity.yaw.load().to_radians();
+                target.get_entity().knockback(
+                    knockback_enchantment_strength(knockback_level),
+                    f64::from(yaw.sin()),
+                    f64::from(-yaw.cos()),
+                );
             }
             self.living_entity
                 .last_attacking_id
@@ -828,6 +839,10 @@ const fn fire_aspect_ticks(level: i32) -> u32 {
     if level > 0 { level as u32 * 80 } else { 0 }
 }
 
+const fn knockback_enchantment_strength(level: u32) -> f64 {
+    level as f64 * 0.5
+}
+
 pub trait PathAwareEntity: Mob + Send + Sync {
     fn get_pathfinding_favor(&self, _block_pos: BlockPos, _world: Arc<World>) -> f32 {
         0.0
@@ -872,7 +887,7 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use super::{MobEntity, fire_aspect_ticks};
+    use super::{MobEntity, fire_aspect_ticks, knockback_enchantment_strength};
 
     #[test]
     fn thunderstorm_brightness_does_not_wrap_sky_light() {
@@ -885,5 +900,11 @@ mod tests {
     fn fire_aspect_uses_eighty_ticks_per_level() {
         assert_eq!(fire_aspect_ticks(1), 80);
         assert_eq!(fire_aspect_ticks(2), 160);
+    }
+
+    #[test]
+    fn knockback_enchantment_adds_half_strength_per_level() {
+        assert_eq!(knockback_enchantment_strength(1), 0.5);
+        assert_eq!(knockback_enchantment_strength(2), 1.0);
     }
 }
