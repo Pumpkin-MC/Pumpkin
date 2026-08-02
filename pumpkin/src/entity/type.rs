@@ -334,7 +334,7 @@ pub fn check_spawn_rules(
             return false;
         }
 
-        return rand::random_range(0u8..20) == 0 || !world.can_see_sky(pos);
+        return rand::random_range(0u8..20) == 0 || !world.can_see_sky_from_below_water(pos);
     }
 
     if id == EntityType::HUSK.id {

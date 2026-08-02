@@ -4591,6 +4591,26 @@ impl World {
         self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
     }
 
+    #[must_use]
+    pub fn can_see_sky_from_below_water(&self, position: &BlockPos) -> bool {
+        if position.0.y >= self.sea_level {
+            return self.can_see_sky(position);
+        }
+
+        let sea_level_pos = BlockPos::new(position.0.x, self.sea_level, position.0.z);
+        if !self.can_see_sky(&sea_level_pos) {
+            return false;
+        }
+
+        for y in (position.0.y + 1)..self.sea_level {
+            let state = self.get_block_state(&BlockPos::new(position.0.x, y, position.0.z));
+            if state.is_solid_block() && !state.is_liquid() {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {
         let _ = self
             .level
