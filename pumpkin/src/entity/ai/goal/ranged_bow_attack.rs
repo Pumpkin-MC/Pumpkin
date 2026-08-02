@@ -124,15 +124,17 @@ impl Goal for RangedBowAttackGoal {
         })
     }
 
-    fn start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             self.attack_cooldown = 0;
+            mob.get_mob_entity().set_attacking(true);
         })
     }
 
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             mob.get_mob_entity().navigator.lock().unwrap().stop();
+            mob.get_mob_entity().set_attacking(false);
         })
     }
 
