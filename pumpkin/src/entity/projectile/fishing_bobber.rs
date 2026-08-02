@@ -38,7 +38,7 @@ const fn fishing_experience_reward(random_value: u8) -> i32 {
 }
 
 const fn fishing_wait_countdown(random_value: u32) -> i32 {
-    (random_value % 100 + 100) as i32
+    (random_value % 501 + 100) as i32
 }
 
 const fn fishing_catch_item(random_value: u8) -> &'static pumpkin_data::item::Item {
@@ -431,10 +431,10 @@ mod tests {
     #[test]
     fn fishing_wait_matches_vanilla_base_window() {
         assert_eq!(fishing_wait_countdown(0), 100);
-        assert_eq!(fishing_wait_countdown(99), 199);
-        assert_eq!(fishing_wait_countdown(100), 100);
+        assert_eq!(fishing_wait_countdown(500), 600);
+        assert_eq!(fishing_wait_countdown(501), 100);
         for value in [0, 1, 42, 99, 100, u32::MAX] {
-            assert!((100..=199).contains(&fishing_wait_countdown(value)));
+            assert!((100..=600).contains(&fishing_wait_countdown(value)));
         }
     }
 
