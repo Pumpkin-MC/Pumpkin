@@ -1,5 +1,7 @@
 use crossbeam::atomic::AtomicCell;
+use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use tokio::sync::RwLock;
 
@@ -69,6 +71,7 @@ pub struct ArrowEntity {
     pub shake_time: AtomicU8,
     pub has_hit: AtomicBool,
     pub last_block_pos: Arc<std::sync::RwLock<Option<BlockPos>>>,
+    pierced_entity_ids: Mutex<HashSet<i32>>,
 }
 
 impl ArrowEntity {
@@ -105,6 +108,7 @@ impl ArrowEntity {
             shake_time: AtomicU8::new(0),
             has_hit: AtomicBool::new(false),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+            pierced_entity_ids: Mutex::new(HashSet::new()),
         }
     }
 
@@ -135,6 +139,7 @@ impl ArrowEntity {
             shake_time: AtomicU8::new(0),
             has_hit: AtomicBool::new(false),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+            pierced_entity_ids: Mutex::new(HashSet::new()),
         }
     }
 
@@ -431,16 +436,17 @@ impl EntityBase for ArrowEntity {
 
             // Handle hit
             if let Some(h) = hit {
-                // Ensure hit is only processed once
-                if self.has_hit.swap(true, Ordering::SeqCst) {
+                let is_piercing_entity = self.pierce_level.load(Ordering::Relaxed) > 0
+                    && matches!(&h, ProjectileHit::Entity { .. });
+                if !is_piercing_entity && self.has_hit.swap(true, Ordering::SeqCst) {
                     return;
                 }
-
                 caller.on_hit(h).await;
             }
         })
     }
 
+    #[expect(clippy::too_many_lines, reason = "projectile hit handling keeps vanilla branches together")]
     fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let entity = self.get_entity();
@@ -490,6 +496,15 @@ impl EntityBase for ArrowEntity {
                     hit_pos,
                     ..
                 } => {
+                    let pierce = self.pierce_level.load(Ordering::Relaxed);
+                    if pierce > 0 {
+                        let target_id = target.get_entity().entity_id;
+                        if !self.register_piercing_hit(target_id, pierce) {
+                            entity.remove().await;
+                            return;
+                        }
+                    }
+
                     // Calculate damage
                     let velocity = entity.velocity.load();
                     let power = velocity.length();
@@ -553,13 +568,10 @@ impl EntityBase for ArrowEntity {
                         }
                     }
 
-                    // Check pierce level
-                    let pierce = self.pierce_level.load(Ordering::Relaxed);
                     if pierce == 0 {
                         // No piercing - remove arrow
                         entity.remove().await;
                     }
-                    // If piercing > 0, arrow continues (TODO: would need to track pierced entities)
                 }
             }
         })
@@ -615,6 +627,17 @@ impl EntityBase for ArrowEntity {
 }
 
 impl ArrowEntity {
+    fn register_piercing_hit(&self, target_id: i32, pierce: u8) -> bool {
+        let Ok(mut pierced_entity_ids) = self.pierced_entity_ids.lock() else {
+            tracing::error!("arrow pierced-entity set is poisoned");
+            return false;
+        };
+        if pierced_entity_ids.len() >= piercing_hit_limit(pierce) {
+            return false;
+        }
+        pierced_entity_ids.insert(target_id)
+    }
+
     fn should_skip_collision(&self, self_ent: &Entity, other: &Arc<dyn EntityBase>) -> bool {
         let other_ent = other.get_entity();
 
@@ -633,6 +656,15 @@ impl ArrowEntity {
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::SPECTRAL_ARROW)
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::FALLING_BLOCK
+        {
+            return true;
+        }
+
+        if self.pierce_level.load(Ordering::Relaxed) > 0
+            && self
+                .pierced_entity_ids
+                .lock()
+                .is_ok_and(|pierced_entity_ids| pierced_entity_ids.contains(&other_ent.entity_id))
         {
             return true;
         }
@@ -697,9 +729,13 @@ const fn calculate_arrow_damage(power: f64, base_damage: f64) -> i32 {
     (power * base_damage).ceil() as i32
 }
 
+const fn piercing_hit_limit(pierce_level: u8) -> usize {
+    pierce_level as usize + 1
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ArrowEntity, calculate_arrow_damage};
+    use super::{ArrowEntity, calculate_arrow_damage, piercing_hit_limit};
     use pumpkin_data::data_component::DataComponent;
     use pumpkin_data::data_component_impl::{
         DataComponentImpl, PotionContentsImpl, PotionDurationScaleImpl,
@@ -792,5 +828,11 @@ mod tests {
     fn arrow_damage_uses_configured_base_damage() {
         assert_eq!(calculate_arrow_damage(1.5, 2.0), 3);
         assert_eq!(calculate_arrow_damage(1.5, 4.0), 6);
+    }
+
+    #[test]
+    fn piercing_hits_allow_one_more_target_than_the_level() {
+        assert_eq!(piercing_hit_limit(1), 2);
+        assert_eq!(piercing_hit_limit(4), 5);
     }
 }
