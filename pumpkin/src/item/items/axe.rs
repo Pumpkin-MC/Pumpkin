@@ -25,7 +25,7 @@ impl ItemMetadata for AxeItem {
 impl ItemBehaviour for AxeItem {
     fn use_on_block<'a>(
         &'a self,
-        item: &'a mut ItemStack,
+        _item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -84,8 +84,7 @@ impl ItemBehaviour for AxeItem {
             };
 
             if changed && player.gamemode.load() != GameMode::Creative {
-                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
-                let _ = item.damage_item(1);
+                player.damage_held_item(1).await;
             }
         })
     }

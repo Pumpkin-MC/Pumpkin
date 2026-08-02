@@ -26,7 +26,7 @@ impl ItemMetadata for FlintAndSteelItem {
 impl ItemBehaviour for FlintAndSteelItem {
     fn use_on_block<'a>(
         &'a self,
-        item: &'a mut ItemStack,
+        _item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         face: BlockDirection,
@@ -49,8 +49,7 @@ impl ItemBehaviour for FlintAndSteelItem {
             .await;
 
             if ignited && player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
-                let _ = item.damage_item(1);
+                player.damage_held_item(1).await;
             }
         })
     }
