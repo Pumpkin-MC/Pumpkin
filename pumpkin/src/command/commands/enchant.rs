@@ -84,6 +84,7 @@ impl CommandExecutor for Executor {
                 };
                 let lock = player.inventory.held_item();
                 let mut item = lock.lock().await;
+                let mut updated_item = None;
                 if item.is_empty() {
                     if only_one {
                         let msg = TextComponent::translate_cross(
@@ -110,6 +111,7 @@ impl CommandExecutor for Executor {
                     if enchantment.is_enchantment_compatible(data) {
                         item.enchant(enchantment, level);
                         success += 1;
+                        updated_item = Some(item.clone());
                     } else if only_one {
                         let msg = TextComponent::translate_cross(
                             translation::java::COMMANDS_ENCHANT_FAILED_INCOMPATIBLE,
@@ -121,6 +123,13 @@ impl CommandExecutor for Executor {
                 } else {
                     item.enchant(enchantment, level);
                     success += 1;
+                    updated_item = Some(item.clone());
+                }
+                drop(item);
+                if let Some(updated_item) = updated_item {
+                    player
+                        .sync_hand_slot(player.inventory.get_selected_slot() as usize, updated_item)
+                        .await;
                 }
             }
             if success == 0 {
