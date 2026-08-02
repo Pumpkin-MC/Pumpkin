@@ -845,9 +845,11 @@ pub fn is_spawn_position_ok(
     match entity_type.spawn_restriction.location {
         SpawnLocation::InLava => world.get_fluid(block_pos).has_tag(&MINECRAFT_LAVA),
         SpawnLocation::InWater => {
-            // TODO !level.getBlockState(blockPos).isRedstoneConductor(level, blockPos)
             let above_state = world.get_block_state(&block_pos.up());
-            world.get_fluid(block_pos).has_tag(&MINECRAFT_WATER) && !above_state.is_full_cube()
+            can_spawn_in_water(
+                world.get_fluid(block_pos).has_tag(&MINECRAFT_WATER),
+                above_state,
+            )
         }
         SpawnLocation::OnGround => {
             let down = world.get_block_state(&block_pos.down());
@@ -866,6 +868,11 @@ pub fn is_spawn_position_ok(
         }
         SpawnLocation::Unrestricted => true,
     }
+}
+
+#[must_use]
+const fn can_spawn_in_water(fluid_is_water: bool, above_state: &'static BlockState) -> bool {
+    fluid_is_water && !above_state.is_solid_block()
 }
 
 /// Cache-based version of `is_spawn_position_ok` used during world generation.
@@ -982,7 +989,9 @@ pub fn is_valid_empty_spawn_block(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_right_distance_to_player_and_spawn_point, is_valid_empty_spawn_block};
+    use super::{
+        can_spawn_in_water, is_right_distance_to_player_and_spawn_point, is_valid_empty_spawn_block,
+    };
     use pumpkin_data::Block;
     use pumpkin_data::entity::EntityType;
     use pumpkin_util::math::position::BlockPos;
@@ -1003,6 +1012,13 @@ mod tests {
             Block::FIRE.default_state,
             &EntityType::BLAZE,
         ));
+    }
+
+    #[test]
+    fn water_spawn_rejects_redstone_conductors_above() {
+        assert!(!can_spawn_in_water(true, Block::STONE.default_state));
+        assert!(can_spawn_in_water(true, Block::AIR.default_state));
+        assert!(!can_spawn_in_water(false, Block::AIR.default_state));
     }
 
     #[test]
