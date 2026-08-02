@@ -67,18 +67,10 @@ impl EntityBase for SmallFireballEntity {
         Box::pin(async move {
             match hit {
                 ProjectileHit::Entity { ref entity, .. } => {
-                    let entity_clone = entity.clone();
-
-                    tokio::spawn(async move {
-                        entity_clone.get_entity().set_on_fire_for(5.0);
-                        let _ = entity_clone
-                            .damage(
-                                entity_clone.as_ref(),
-                                5.0,
-                                pumpkin_data::damage::DamageType::FIREBALL,
-                            )
-                            .await;
-                    });
+                    entity.get_entity().set_on_fire_for(5.0);
+                    let _ = entity
+                        .damage(self, 5.0, pumpkin_data::damage::DamageType::FIREBALL)
+                        .await;
                 }
                 ProjectileHit::Block { pos, face, .. } => {
                     // Try to place fire

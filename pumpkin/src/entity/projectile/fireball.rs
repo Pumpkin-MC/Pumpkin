@@ -77,19 +77,10 @@ impl EntityBase for FireballEntity {
 
             // Handle entity/block hit
             if let ProjectileHit::Entity { ref entity, .. } = hit {
-                let entity_clone = entity.clone();
-
-                tokio::spawn(async move {
-                    // Fireball does 6.0 damage in vanilla
-                    entity_clone.get_entity().set_on_fire_for(5.0);
-                    let _ = entity_clone
-                        .damage(
-                            entity_clone.as_ref(),
-                            6.0,
-                            pumpkin_data::damage::DamageType::FIREBALL,
-                        )
-                        .await;
-                });
+                entity.get_entity().set_on_fire_for(5.0);
+                let _ = entity
+                    .damage(self, 6.0, pumpkin_data::damage::DamageType::FIREBALL)
+                    .await;
             }
 
             let hit_pos = hit.hit_pos();
