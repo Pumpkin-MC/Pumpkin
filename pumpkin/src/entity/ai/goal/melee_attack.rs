@@ -135,6 +135,7 @@ impl Goal for MeleeAttackGoal {
                 });
                 self.last_target_position = Some(target_pos);
             }
+            mob.get_mob_entity().set_attacking(true);
             self.update_countdown_ticks = 0;
             self.cooldown = 0;
         })
@@ -159,6 +160,7 @@ impl Goal for MeleeAttackGoal {
 
             // Vanilla: this.mob.getNavigation().stop()
             mob.get_mob_entity().navigator.lock().unwrap().stop();
+            mob.get_mob_entity().set_attacking(false);
             self.last_target_position = None;
         })
     }
