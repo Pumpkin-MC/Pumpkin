@@ -189,8 +189,8 @@ mod tests {
 
     #[test]
     fn preserves_vanilla_skeleton_bow_interval() {
-        let goal = RangedBowAttackGoal::new(40, 15.0);
-        assert_eq!(goal.attack_interval, 40);
+        let goal = RangedBowAttackGoal::new(20, 15.0);
+        assert_eq!(goal.attack_interval, 20);
         assert_eq!(goal.range, 15.0);
     }
 

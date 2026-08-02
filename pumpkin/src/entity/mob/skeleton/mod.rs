@@ -63,7 +63,7 @@ impl SkeletonEntityBase {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             if uses_bow {
                 // Vanilla `AbstractSkeleton#reassessWeaponGoal` selects this at priority 4.
-                goal_selector.add_goal(4, Box::new(RangedBowAttackGoal::new(40, 15.0)));
+                goal_selector.add_goal(4, Box::new(RangedBowAttackGoal::new(20, 15.0)));
             } else {
                 goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.2, false)));
             }
