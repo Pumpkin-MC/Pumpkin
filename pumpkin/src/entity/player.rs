@@ -3044,11 +3044,45 @@ impl Player {
             };
             speed *= fatigue_speed;
         }
-        // TODO: Handle when in water
+        let entity = self.get_entity();
+        let bounds = entity.bounding_box.load();
+        let eye_height = entity.get_eye_y() - bounds.min.y;
+        let submerged = entity.touching_water.load(Ordering::Relaxed)
+            && entity.water_height.load() >= eye_height;
+        let helmet = self.inventory.get_stack(39).await;
+        let has_aqua_affinity = helmet
+            .lock()
+            .await
+            .get_data_component::<EnchantmentsImpl>()
+            .is_some_and(|enchantments| {
+                enchantments.enchantment.iter().any(|(enchantment, level)| {
+                    **enchantment == Enchantment::AQUA_AFFINITY && *level > 0
+                })
+            });
+        speed = Self::submerged_mining_speed(
+            speed,
+            submerged,
+            has_aqua_affinity,
+            self.living_entity
+                .get_attribute_value(&Attributes::SUBMERGED_MINING_SPEED),
+        );
         if !self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
             speed /= 5.0;
         }
         speed
+    }
+
+    fn submerged_mining_speed(
+        speed: f32,
+        submerged: bool,
+        aqua_affinity: bool,
+        modifier: f64,
+    ) -> f32 {
+        if submerged && !aqua_affinity {
+            speed * modifier as f32
+        } else {
+            speed
+        }
     }
 
     async fn get_haste_amplifier(&self) -> u32 {
@@ -5290,5 +5324,17 @@ impl InventoryPlayer for Player {
         Box::pin(async move {
             self.increment_stat(category, stat_id, amount).await;
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Player;
+
+    #[test]
+    fn submerged_mining_speed_requires_aqua_affinity_to_skip_penalty() {
+        assert_eq!(Player::submerged_mining_speed(5.0, false, false, 0.2), 5.0);
+        assert_eq!(Player::submerged_mining_speed(5.0, true, true, 0.2), 5.0);
+        assert_eq!(Player::submerged_mining_speed(5.0, true, false, 0.2), 1.0);
     }
 }
