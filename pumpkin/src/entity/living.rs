@@ -2298,11 +2298,7 @@ impl EntityBase for LivingEntity {
 
                     let active_hand = self.active_hand.lock().await;
                     if let Some(hand) = *active_hand {
-                        let slot = if hand == Hand::Left {
-                            EquipmentSlot::MAIN_HAND
-                        } else {
-                            EquipmentSlot::OFF_HAND
-                        };
+                        let slot = equipment_slot_for_hand(hand);
 
                         let equipment_lock = self.entity_equipment.lock().await;
                         let stack_arc = equipment_lock.get(&slot);
@@ -2775,6 +2771,13 @@ impl EntityBase for LivingEntity {
     }
 }
 
+const fn equipment_slot_for_hand(hand: Hand) -> EquipmentSlot {
+    match hand {
+        Hand::Left => EquipmentSlot::OFF_HAND,
+        Hand::Right => EquipmentSlot::MAIN_HAND,
+    }
+}
+
 impl LivingEntity {
     /// Applies data-driven `apply_effects` consume effects after an item completes use.
     /// Vanilla: `Consumable.onConsume` invokes every configured effect server-side.
@@ -2949,6 +2952,12 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn active_hand_maps_to_the_matching_equipment_slot() {
+        assert!(equipment_slot_for_hand(Hand::Left) == EquipmentSlot::OFF_HAND);
+        assert!(equipment_slot_for_hand(Hand::Right) == EquipmentSlot::MAIN_HAND);
+    }
 
     #[test]
     fn spiders_climb_only_during_horizontal_collisions() {
