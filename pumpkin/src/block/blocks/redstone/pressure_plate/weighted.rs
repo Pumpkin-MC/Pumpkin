@@ -113,7 +113,9 @@ impl PressurePlate for WeightedPressurePlateBlock {
         let len = world.get_entities_at_box(&aabb).len() + world.get_players_at_box(&aabb).len();
         let len = len.min(weight);
         if len > 0 {
-            let f = (weight.min(len) / weight) as f32;
+            // Vanilla casts both operands to float before dividing, so the output
+            // scales with the entity count instead of collapsing to 0 or 15.
+            let f = weight.min(len) as f32 / weight as f32;
             return (f * 15.0).ceil() as u8;
         }
         0

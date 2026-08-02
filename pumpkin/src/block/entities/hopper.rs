@@ -78,7 +78,14 @@ impl BlockEntity for HopperBlockEntity {
         Box::pin(async move {
             self.ticked_game_time
                 .store(world.get_world_age().await, Ordering::Relaxed);
-            if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
+            // Vanilla decrements first and then tests the new value, so the transfer
+            // happens on the tick the counter reaches 0. `fetch_sub` returns the
+            // *previous* value, so the comparison is against 1 rather than 0;
+            // gating on 0 here spent an extra tick and made hoppers run every 9
+            // ticks instead of 8. This stays a single atomic read-modify-write
+            // because a neighbouring hopper can write this field from its own
+            // concurrently spawned tick task.
+            if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 1 {
                 self.cooldown_time.store(0, Ordering::Relaxed);
                 let state = HopperLikeProperties::from_state_id(
                     world.get_block_state(&self.position).id,
