@@ -5,6 +5,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
@@ -150,23 +151,23 @@ impl SlimeEntity {
         // TODO: check spawn reason. if it's spawner, we should return true if block below is valid
         // For now, we assume natural spawning as that's what we are implementing.
 
-        // Swamp/Surface Spawning
-        // TODO: fix
-        // let biome = world.get_biome(pos);
-        // if biome.has_tag(&pumpkin_data::tag::WorldgenBiome::MINECRAFT_ALLOWS_SURFACE_SLIME_SPAWNS)
-        //     && pos.0.y > 50
-        //     && pos.0.y < 70
-        // {
-        //     let time = world.level_time.lock().await.time_of_day;
-        //     let moon_phase = (time / 24000) % 8;
-        //     let surface_slime_spawn_chance = Self::get_spawn_chance(moon_phase);
-        //     let mut rng = rand::rng();
-        //     if rng.random::<f32>() < surface_slime_spawn_chance
-        //         && world.get_max_local_raw_brightness(pos) <= rng.random_range(0..8)
-        //     {
-        //         return true;
-        //     }
-        // }
+        if world
+            .get_biome(pos)
+            .has_tag(&tag::WorldgenBiome::MINECRAFT_ALLOWS_SURFACE_SLIME_SPAWNS)
+            && (51..70).contains(&pos.0.y)
+        {
+            let time = world
+                .level_time
+                .try_lock()
+                .map_or(0, |level_time| level_time.time_of_day);
+            let chance = Self::surface_spawn_chance(time);
+            let mut rng = rand::rng();
+            if rng.random::<f32>() < chance
+                && world.get_max_local_raw_brightness(pos) <= rng.random_range(0..8)
+            {
+                return true;
+            }
+        }
 
         // Slime Chunk Spawning
         let chunk_pos = pos.chunk_position();
@@ -187,15 +188,15 @@ impl SlimeEntity {
         false
     }
 
-    // const fn get_spawn_chance(moon_phase: i64) -> f32 {
-    //     match moon_phase {
-    //         0 => 1.0,
-    //         1 | 7 => 0.75,
-    //         2 | 6 => 0.5,
-    //         3 | 5 => 0.25,
-    //         _ => 0.0,
-    //     }
-    // }
+    const fn surface_spawn_chance(time_of_day: i64) -> f32 {
+        match time_of_day.rem_euclid(192_000) / 24_000 {
+            0 => 0.5,
+            1 | 7 => 0.375,
+            2 | 6 => 0.25,
+            3 | 5 => 0.125,
+            _ => 0.0,
+        }
+    }
 
     pub(crate) const fn hurt_sound_for_size(size: i32) -> Sound {
         if size == 1 {
@@ -654,5 +655,13 @@ mod tests {
         );
         assert_eq!(SlimeEntity::hurt_sound_for_size(0), Sound::EntitySlimeHurt);
         assert_eq!(SlimeEntity::hurt_sound_for_size(2), Sound::EntitySlimeHurt);
+    }
+
+    #[test]
+    fn follows_the_moon_timeline_for_surface_spawn_chance() {
+        assert_eq!(SlimeEntity::surface_spawn_chance(0), 0.5);
+        assert_eq!(SlimeEntity::surface_spawn_chance(24_000), 0.375);
+        assert_eq!(SlimeEntity::surface_spawn_chance(96_000), 0.0);
+        assert_eq!(SlimeEntity::surface_spawn_chance(-24_000), 0.375);
     }
 }
