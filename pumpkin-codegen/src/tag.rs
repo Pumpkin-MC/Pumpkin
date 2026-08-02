@@ -292,10 +292,11 @@ pub(crate) fn build() -> TokenStream {
                 Some(items.contains(&self.registry_id()))
             }
 
-            #[must_use]
-            fn has_tag(&self, tag: &'static Tag) -> bool {
+           #[must_use]
+           fn has_tag(&self, tag: &'static Tag) -> bool {
                 tag.1.contains(&self.registry_id())
-            }
+                    || (tag.1.is_empty() && tag.0.contains(&self.registry_key()))
+           }
 
             #[must_use]
             fn get_tag_values(tag: &str) -> Option<&'static [&'static str]> {

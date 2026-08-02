@@ -260,6 +260,21 @@ pub mod bedrock_creative;
 #[path = "generated/tag.rs"]
 pub mod tag;
 
+#[cfg(all(test, feature = "damage", feature = "tag"))]
+mod damage_tag_tests {
+    use super::{
+        damage::DamageType,
+        tag::{self, Taggable},
+    };
+
+    #[test]
+    fn damage_tags_match_registry_names() {
+        assert!(DamageType::SONIC_BOOM.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_ENCHANTMENTS));
+        assert!(DamageType::PLAYER_EXPLOSION.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION));
+        assert!(DamageType::CAMPFIRE.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_SHIELD));
+    }
+}
+
 #[cfg(feature = "noise_router")]
 #[rustfmt::skip]
 #[path = "generated/noise_router.rs"]

@@ -77,6 +77,7 @@ pub fn build() -> TokenStream {
         });
 
         let data = &entry.components;
+        let registry_name = &name;
         let death_message_type = if let Some(msg) = &data.death_message_type {
             let msg_ident = Ident::new(&format!("{msg:?}"), proc_macro2::Span::call_site());
             quote! { DeathMessageType::#msg_ident }
@@ -106,6 +107,7 @@ pub fn build() -> TokenStream {
                 exhaustion: #exhaustion,
                 effects: #effects,
                 message_id: #message_id,
+                registry_name: #registry_name,
                 scaling: #scaling,
                 id: #id_lit,
             };
@@ -121,6 +123,7 @@ pub fn build() -> TokenStream {
             pub exhaustion: f32,
             pub effects: Option<DamageEffects>,
             pub message_id: &'static str,
+            pub registry_name: &'static str,
             pub scaling: DamageScaling,
             pub id: u8,
         }
@@ -169,7 +172,7 @@ pub fn build() -> TokenStream {
             }
             #[inline]
             fn registry_key(&self) -> &str {
-                self.message_id
+                self.registry_name
             }
             #[inline]
             fn registry_id(&self) -> u16 {

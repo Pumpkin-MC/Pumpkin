@@ -6,6 +6,7 @@ pub struct DamageType {
     pub exhaustion: f32,
     pub effects: Option<DamageEffects>,
     pub message_id: &'static str,
+    pub registry_name: &'static str,
     pub scaling: DamageScaling,
     pub id: u8,
 }
@@ -36,6 +37,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "arrow",
+        registry_name: "arrow",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 0,
     };
@@ -44,6 +46,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "badRespawnPoint",
+        registry_name: "bad_respawn_point",
         scaling: DamageScaling::Always,
         id: 1,
     };
@@ -52,6 +55,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "cactus",
+        registry_name: "cactus",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 2,
     };
@@ -60,6 +64,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: Some(DamageEffects::Burning),
         message_id: "inFire",
+        registry_name: "campfire",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 3,
     };
@@ -68,6 +73,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "cramming",
+        registry_name: "cramming",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 4,
     };
@@ -76,6 +82,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "dragonBreath",
+        registry_name: "dragon_breath",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 5,
     };
@@ -84,6 +91,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: Some(DamageEffects::Drowning),
         message_id: "drown",
+        registry_name: "drown",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 6,
     };
@@ -92,6 +100,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "dryout",
+        registry_name: "dry_out",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 7,
     };
@@ -100,6 +109,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "fall",
+        registry_name: "ender_pearl",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 8,
     };
@@ -108,6 +118,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "explosion",
+        registry_name: "explosion",
         scaling: DamageScaling::Always,
         id: 9,
     };
@@ -116,6 +127,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "fall",
+        registry_name: "fall",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 10,
     };
@@ -124,6 +136,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "anvil",
+        registry_name: "falling_anvil",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 11,
     };
@@ -132,6 +145,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "fallingBlock",
+        registry_name: "falling_block",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 12,
     };
@@ -140,6 +154,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "fallingStalactite",
+        registry_name: "falling_stalactite",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 13,
     };
@@ -148,6 +163,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: Some(DamageEffects::Burning),
         message_id: "fireball",
+        registry_name: "fireball",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 14,
     };
@@ -156,6 +172,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "fireworks",
+        registry_name: "fireworks",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 15,
     };
@@ -164,6 +181,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "flyIntoWall",
+        registry_name: "fly_into_wall",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 16,
     };
@@ -172,6 +190,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: Some(DamageEffects::Freezing),
         message_id: "freeze",
+        registry_name: "freeze",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 17,
     };
@@ -180,6 +199,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "generic",
+        registry_name: "generic",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 18,
     };
@@ -188,6 +208,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "genericKill",
+        registry_name: "generic_kill",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 19,
     };
@@ -196,6 +217,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: Some(DamageEffects::Burning),
         message_id: "hotFloor",
+        registry_name: "hot_floor",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 20,
     };
@@ -204,6 +226,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: Some(DamageEffects::Burning),
         message_id: "inFire",
+        registry_name: "in_fire",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 21,
     };
@@ -212,6 +235,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "inWall",
+        registry_name: "in_wall",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 22,
     };
@@ -220,6 +244,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "indirectMagic",
+        registry_name: "indirect_magic",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 23,
     };
@@ -228,6 +253,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: Some(DamageEffects::Burning),
         message_id: "lava",
+        registry_name: "lava",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 24,
     };
@@ -236,6 +262,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "lightningBolt",
+        registry_name: "lightning_bolt",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 25,
     };
@@ -244,6 +271,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "mace_smash",
+        registry_name: "mace_smash",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 26,
     };
@@ -252,6 +280,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "magic",
+        registry_name: "magic",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 27,
     };
@@ -260,6 +289,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "mob",
+        registry_name: "mob_attack",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 28,
     };
@@ -268,6 +298,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "mob",
+        registry_name: "mob_attack_no_aggro",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 29,
     };
@@ -276,6 +307,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "mob",
+        registry_name: "mob_projectile",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 30,
     };
@@ -284,6 +316,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: Some(DamageEffects::Burning),
         message_id: "onFire",
+        registry_name: "on_fire",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 31,
     };
@@ -292,6 +325,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "outOfWorld",
+        registry_name: "out_of_world",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 32,
     };
@@ -300,6 +334,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "outsideBorder",
+        registry_name: "outside_border",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 33,
     };
@@ -308,6 +343,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "player",
+        registry_name: "player_attack",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 34,
     };
@@ -316,6 +352,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "explosion.player",
+        registry_name: "player_explosion",
         scaling: DamageScaling::Always,
         id: 35,
     };
@@ -324,6 +361,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "sonic_boom",
+        registry_name: "sonic_boom",
         scaling: DamageScaling::Always,
         id: 36,
     };
@@ -332,6 +370,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "spear",
+        registry_name: "spear",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 37,
     };
@@ -340,6 +379,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "mob",
+        registry_name: "spit",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 38,
     };
@@ -348,6 +388,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "stalagmite",
+        registry_name: "stalagmite",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 39,
     };
@@ -356,6 +397,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "starve",
+        registry_name: "starve",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 40,
     };
@@ -364,6 +406,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "sting",
+        registry_name: "sting",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 41,
     };
@@ -372,6 +415,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: Some(DamageEffects::Burning),
         message_id: "sulfurCubeHot",
+        registry_name: "sulfur_cube_hot",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 42,
     };
@@ -380,6 +424,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: Some(DamageEffects::Poking),
         message_id: "sweetBerryBush",
+        registry_name: "sweet_berry_bush",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 43,
     };
@@ -388,6 +433,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: Some(DamageEffects::Thorns),
         message_id: "thorns",
+        registry_name: "thorns",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 44,
     };
@@ -396,6 +442,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "thrown",
+        registry_name: "thrown",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 45,
     };
@@ -404,6 +451,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "trident",
+        registry_name: "trident",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 46,
     };
@@ -412,6 +460,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: Some(DamageEffects::Burning),
         message_id: "onFire",
+        registry_name: "unattributed_fireball",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 47,
     };
@@ -420,6 +469,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "mob",
+        registry_name: "wind_charge",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 48,
     };
@@ -428,6 +478,7 @@ impl DamageType {
         exhaustion: 0f32,
         effects: None,
         message_id: "wither",
+        registry_name: "wither",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 49,
     };
@@ -436,6 +487,7 @@ impl DamageType {
         exhaustion: 0.1f32,
         effects: None,
         message_id: "witherSkull",
+        registry_name: "wither_skull",
         scaling: DamageScaling::WhenCausedByLivingNonPlayer,
         id: 50,
     };
@@ -504,7 +556,7 @@ impl Taggable for DamageType {
     }
     #[inline]
     fn registry_key(&self) -> &str {
-        self.message_id
+        self.registry_name
     }
     #[inline]
     fn registry_id(&self) -> u16 {
