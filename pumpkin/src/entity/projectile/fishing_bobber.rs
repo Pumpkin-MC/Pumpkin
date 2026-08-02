@@ -240,6 +240,27 @@ impl FishingBobberEntity {
         let entity = self.get_entity();
         let world = entity.world.load();
 
+        let Some(owner) = world.get_player_by_id(self.owner_id) else {
+            entity.remove().await;
+            return;
+        };
+        let owner_position = owner.get_entity().pos.load();
+        let hook_position = entity.pos.load();
+        if (owner_position - hook_position).length_squared() > 1024.0 {
+            owner.fishing_bobber.store(-1, Ordering::Relaxed);
+            entity.remove().await;
+            return;
+        }
+        let main_hand_is_rod = owner.inventory.held_item().lock().await.item.id
+            == pumpkin_data::item::Item::FISHING_ROD.id;
+        let off_hand_is_rod = owner.inventory.off_hand_item().await.lock().await.item.id
+            == pumpkin_data::item::Item::FISHING_ROD.id;
+        if !main_hand_is_rod && !off_hand_is_rod {
+            owner.fishing_bobber.store(-1, Ordering::Relaxed);
+            entity.remove().await;
+            return;
+        }
+
         if self.in_ground.load(Ordering::Relaxed) {
             return;
         }
