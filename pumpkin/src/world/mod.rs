@@ -1254,24 +1254,35 @@ impl World {
         }
 
         let time_of_day = self.level_time.lock().await.time_of_day;
-        self.sky_darken
-            .store(Self::sky_darken_for_time(time_of_day), Relaxed);
+        self.sky_darken.store(
+            Self::sky_darken_for_time(time_of_day, weather.rain_level, weather.thunder_level),
+            Relaxed,
+        );
     }
 
     /// The ambient darkness sky light is reduced by for the given time of
     /// day: `0` at midday, ramping up to `11` at night.
-    fn sky_darken_for_time(time_of_day: i64) -> u8 {
+    fn sky_darken_for_time(time_of_day: i64, rain_level: f32, thunder_level: f32) -> u8 {
         use std::f32::consts::PI;
 
         let day_progress = (time_of_day.rem_euclid(24_000) as f32) / 24_000.0;
         let sun_angle_radians = (day_progress - 0.25) * (PI * 2.0);
         let cos_angle = sun_angle_radians.cos();
-
-        if cos_angle < 0.0 {
-            (cos_angle.abs() * 11.0) as u8
+        let time_sky_light = if cos_angle < 0.0 {
+            15.0 - cos_angle.abs() * 11.0
         } else {
-            0
-        }
+            15.0
+        };
+        let rain_level = rain_level.clamp(0.0, 1.0);
+        let thunder_level = thunder_level.clamp(0.0, 1.0);
+        let rain_sky_light =
+            time_sky_light.mul_add(1.0 - 0.3125 * rain_level, 4.0 * 0.3125 * rain_level);
+        let weather_sky_light = rain_sky_light.mul_add(
+            1.0 - 0.52734375 * thunder_level,
+            4.0 * 0.52734375 * thunder_level,
+        );
+
+        (15.0 - weather_sky_light).round().clamp(0.0, 15.0) as u8
     }
 
     #[expect(clippy::too_many_lines)]
@@ -5703,6 +5714,16 @@ impl WorldPortalExt for WorldPortal {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sky_darken_applies_weather_blending() {
+        assert_eq!(World::sky_darken_for_time(6_000, 0.0, 0.0), 0);
+        assert!(World::sky_darken_for_time(6_000, 1.0, 0.0) > 0);
+        assert!(
+            World::sky_darken_for_time(6_000, 1.0, 1.0)
+                > World::sky_darken_for_time(6_000, 1.0, 0.0)
+        );
+    }
 
     #[test]
     fn lightning_target_uses_chunk_column_surface() {
