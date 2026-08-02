@@ -1753,6 +1753,7 @@ impl LivingEntity {
         // TODO: Implement DAMAGE_RESISTANT component checks (e.g. netherite vs fire).
 
         let helmet_only = damage_type.id == DamageType::FALLING_ANVIL.id
+            || damage_type.id == DamageType::FALLING_BLOCK.id
             || damage_type.id == DamageType::FALLING_STALACTITE.id;
 
         let armor_slots: Vec<(usize, Arc<Mutex<ItemStack>>, EquipmentSlot)> = {
