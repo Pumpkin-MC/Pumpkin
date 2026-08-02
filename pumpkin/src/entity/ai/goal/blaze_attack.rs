@@ -94,7 +94,7 @@ impl Goal for BlazeShootFireballGoal {
     fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             if let Some(blaze) = self.blaze.upgrade() {
-                blaze.set_charged(false);
+                blaze.set_charged(false).await;
             }
             self.last_seen = 0;
         })
@@ -158,13 +158,13 @@ impl Goal for BlazeShootFireballGoal {
                     self.attack_step += 1;
                     if self.attack_step == 1 {
                         self.attack_time = 60;
-                        blaze.set_charged(true);
+                        blaze.set_charged(true).await;
                     } else if self.attack_step <= 4 {
                         self.attack_time = 6;
                     } else {
                         self.attack_time = 100;
                         self.attack_step = 0;
-                        blaze.set_charged(false);
+                        blaze.set_charged(false).await;
                     }
 
                     if self.attack_step > 1 {

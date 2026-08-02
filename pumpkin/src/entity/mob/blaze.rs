@@ -55,24 +55,8 @@ impl BlazeEntity {
         mob_arc
     }
 
-    pub const fn set_charged(&self, _charged: bool) {
-        // TODO:
-        // let flags = &self.entity.living_entity.entity.flags;
-
-        // let new_je_flags = if charged {
-        //     flags.fetch_or(1, Ordering::Relaxed) | 1
-        // } else {
-        //     flags.fetch_and(!1, Ordering::Relaxed) & !1
-        // };
-        // self.entity
-        //     .living_entity
-        //     .entity
-        //     .send_meta_data(&[Metadata::new(
-        //         TrackedData::FLAGS_ID,
-        //         MetaDataType::BYTE,
-        //         new_je_flags,
-        //     )])
-        //     .await;
+    pub async fn set_charged(&self, charged: bool) {
+        self.entity.living_entity.entity.set_on_fire(charged).await;
     }
 }
 
