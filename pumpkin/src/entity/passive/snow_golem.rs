@@ -6,7 +6,8 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, ranged_snowball_attack::RangedSnowballAttackGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -29,7 +30,7 @@ impl SnowGolemEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            // TODO: SnowballAttackGoal
+            goal_selector.add_goal(1, Box::new(RangedSnowballAttackGoal::new(20, 10.0)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 6,
