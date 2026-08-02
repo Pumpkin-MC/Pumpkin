@@ -1,3 +1,4 @@
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
@@ -69,20 +70,19 @@ impl CommandExecutor for Executor {
             let mut success = 0;
 
             for target in targets {
-                // let Some(target) = target.get_living_entity() else {
-                //     if only_one {
-                //         let msg = TextComponent::translate_cross(//             "commands.enchant.failed.entity".clone(), //             "commands.enchant.failed.entity", //             [targets[0].get_display_name().await],
-                //         );
-                //         sender.send_message(msg).await;
-                //         return Ok(());
-                //     }
-                //     continue;
-                // };
-                // let lock = target.entity_equipment.lock().await.get(&EquipmentSlot::MAIN_HAND); TODO this dont work
-                let Some(player) = target.get_player() else {
+                let Some(living) = target.get_living_entity() else {
                     continue;
                 };
-                let lock = player.inventory.held_item();
+                let player = target.get_player();
+                let lock = if let Some(player) = player {
+                    player.inventory.held_item()
+                } else {
+                    living
+                        .entity_equipment
+                        .lock()
+                        .await
+                        .get(&EquipmentSlot::MAIN_HAND)
+                };
                 let mut item = lock.lock().await;
                 let mut updated_item = None;
                 if item.is_empty() {
@@ -127,9 +127,16 @@ impl CommandExecutor for Executor {
                 }
                 drop(item);
                 if let Some(updated_item) = updated_item {
-                    player
-                        .sync_hand_slot(player.inventory.get_selected_slot() as usize, updated_item)
-                        .await;
+                    if let Some(player) = player {
+                        player
+                            .sync_hand_slot(
+                                player.inventory.get_selected_slot() as usize,
+                                updated_item,
+                            )
+                            .await;
+                    } else {
+                        living.send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, updated_item)]);
+                    }
                 }
             }
             if success == 0 {
