@@ -619,9 +619,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             self.mob_tick(caller).await;
 
-            let age = mob_entity.living_entity.entity.age.load(Relaxed);
-            let entity_id = mob_entity.living_entity.entity.entity_id;
-
             // 1. "Take" selectors out of the mutexes
             let mut target_selector = {
                 let mut guard = mob_entity.target_selector.lock().unwrap();
@@ -633,13 +630,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             };
 
             // 2. Perform AI logic (No locks held, so .await is safe!)
-            if (age + entity_id) % 2 != 0 && age > 1 {
-                target_selector.tick_goals(self, false).await;
-                goals_selector.tick_goals(self, false).await;
-            } else {
-                target_selector.tick(self).await;
-                goals_selector.tick(self).await;
-            }
+            target_selector.tick(self).await;
+            goals_selector.tick(self).await;
 
             // 3. "Put back" selectors
             {
