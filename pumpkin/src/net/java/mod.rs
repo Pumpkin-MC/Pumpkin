@@ -254,8 +254,7 @@ impl JavaClient {
 
         // Send block updates every tick
         // TODO: Match the server tickrate
-        let mut block_update_interval =
-            tokio::time::interval(std::time::Duration::from_millis(50));
+        let mut block_update_interval = tokio::time::interval(std::time::Duration::from_millis(50));
 
         // Skip the immediate first tick so we don't send a keep-alive the exact millisecond they join
         keep_alive_interval.tick().await;
