@@ -4268,6 +4268,19 @@ impl World {
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
         self.broadcast_entity_spawn(&entity);
         entity.init_data_tracker().await;
+        if let Some(living) = entity.get_living_entity() {
+            let equipment = {
+                let equipment_guard = living.entity_equipment.lock().await;
+                let mut equipment = Vec::with_capacity(equipment_guard.equipment.len());
+                for (slot, stack) in &equipment_guard.equipment {
+                    equipment.push((slot.clone(), stack.lock().await.clone()));
+                }
+                equipment
+            };
+            if !equipment.is_empty() {
+                living.send_equipment_changes(&equipment);
+            }
+        }
         self.add_entity_silent(entity).await;
     }
 
