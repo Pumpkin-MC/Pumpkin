@@ -111,7 +111,40 @@ impl CreeperEntity {
         let world = entity.world.load();
         let pos = entity.pos.load();
         world.explode(pos, radius * multiplier).await;
-        // TODO: spawn area effect cloud with potion effects
+
+        let effects = self
+            .mob_entity
+            .living_entity
+            .active_effects
+            .lock()
+            .await
+            .values()
+            .map(|effect| {
+                (
+                    effect.effect_type,
+                    (effect.duration / 4).max(1),
+                    effect.amplifier,
+                    effect.ambient,
+                    effect.show_particles,
+                    effect.show_icon,
+                )
+            })
+            .collect::<Vec<_>>();
+        if !effects.is_empty() {
+            let cloud_entity = Entity::new(world.clone(), pos, &EntityType::AREA_EFFECT_CLOUD);
+            let cloud = crate::entity::area_effect_cloud::AreaEffectCloudEntity::create(
+                cloud_entity,
+                ItemStack::new(0, &Item::DRAGON_BREATH),
+                effects,
+                300,
+                2.5,
+                20,
+                10,
+                -0.5,
+                -100,
+            );
+            world.spawn_entity(cloud).await;
+        }
         entity.remove().await;
     }
 }
