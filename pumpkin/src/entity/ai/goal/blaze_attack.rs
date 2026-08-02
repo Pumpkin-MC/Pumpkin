@@ -1,3 +1,4 @@
+use pumpkin_data::attributes::Attributes;
 use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -29,14 +30,12 @@ impl BlazeShootFireballGoal {
         }
     }
 
-    const fn get_follow_distance() -> f64 {
-        // TODO: use FOLLOW_RANGE
-        48.0
-    }
-
-    const fn can_shoot_at_target(distance_squared: f64, has_line_of_sight: bool) -> bool {
-        distance_squared < Self::get_follow_distance() * Self::get_follow_distance()
-            && has_line_of_sight
+    const fn can_shoot_at_target(
+        distance_squared: f64,
+        has_line_of_sight: bool,
+        follow_distance: f64,
+    ) -> bool {
+        distance_squared < follow_distance * follow_distance && has_line_of_sight
     }
 
     async fn has_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
@@ -149,7 +148,14 @@ impl Goal for BlazeShootFireballGoal {
                 }
 
                 Self::navigate_to_target(&blaze, target_pos);
-            } else if Self::can_shoot_at_target(distance_sq, has_line_of_sight) {
+            } else if Self::can_shoot_at_target(
+                distance_sq,
+                has_line_of_sight,
+                blaze
+                    .entity
+                    .living_entity
+                    .get_attribute_value(&Attributes::FOLLOW_RANGE),
+            ) {
                 let target_y_offset = target_pos.y + 0.5; // roughly target.getY(0.5)
                 let blaze_y_offset = blaze_pos.y + 0.5; // roughly blaze.getY(0.5)
                 let yd = target_y_offset - blaze_y_offset;
@@ -249,10 +255,14 @@ mod tests {
 
     #[test]
     fn shooting_requires_visible_target_within_follow_range() {
-        assert!(BlazeShootFireballGoal::can_shoot_at_target(2_303.99, true));
-        assert!(!BlazeShootFireballGoal::can_shoot_at_target(
-            2_303.99, false
+        assert!(BlazeShootFireballGoal::can_shoot_at_target(
+            2_303.99, true, 48.0
         ));
-        assert!(!BlazeShootFireballGoal::can_shoot_at_target(2_304.0, true));
+        assert!(!BlazeShootFireballGoal::can_shoot_at_target(
+            2_303.99, false, 48.0
+        ));
+        assert!(!BlazeShootFireballGoal::can_shoot_at_target(
+            2_304.0, true, 48.0
+        ));
     }
 }
