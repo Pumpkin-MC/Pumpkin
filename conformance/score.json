@@ -1,0 +1,90 @@
+{
+ "milestone": "26.2",
+ "coverage": {
+  "pct": 28.35,
+  "covered": 453,
+  "total": 1598,
+  "method": "mechanical name match (exact struct/enum name, case-insensitive struct name, or exact snake_case filename) across the full enumerated vanilla class list -- no AI, no sampling",
+  "by_subsystem": {
+   "block": {
+    "total": 468,
+    "covered": 239,
+    "coverage_pct": 51.07
+   },
+   "entity": {
+    "total": 716,
+    "covered": 147,
+    "coverage_pct": 20.53
+   },
+   "item": {
+    "total": 314,
+    "covered": 59,
+    "coverage_pct": 18.79
+   },
+   "inventory": {
+    "total": 64,
+    "covered": 4,
+    "coverage_pct": 6.25
+   },
+   "material": {
+    "total": 12,
+    "covered": 2,
+    "coverage_pct": 16.67
+   },
+   "food": {
+    "total": 5,
+    "covered": 0,
+    "coverage_pct": 0.0
+   },
+   "border": {
+    "total": 4,
+    "covered": 1,
+    "coverage_pct": 25.0
+   },
+   "gameevent": {
+    "total": 15,
+    "covered": 1,
+    "coverage_pct": 6.67
+   }
+  }
+ },
+ "fidelity_sample": {
+  "pass_rate_pct": 50.0,
+  "n": 16,
+  "passed": 8,
+  "failed": 8,
+  "method": "stratified random sample (seed 262, up to 6 per subsystem) of COVERED classes only, compared against decompiled vanilla by an AI agent reading both sides",
+  "checked_subsystems": [
+   "block",
+   "entity",
+   "inventory"
+  ],
+  "unchecked_subsystems": [
+   "border",
+   "food",
+   "gameevent",
+   "item",
+   "material"
+  ],
+  "by_subsystem": {
+   "block": {
+    "n": 6,
+    "pass": 4,
+    "fail": 2
+   },
+   "entity": {
+    "n": 6,
+    "pass": 2,
+    "fail": 4
+   },
+   "inventory": {
+    "n": 4,
+    "pass": 2,
+    "fail": 2
+   }
+  },
+  "caveat": "This is a partial sample, not a full measurement. Do not report fidelity_pass_rate_pct as if it applies to unchecked_subsystems."
+ },
+ "composite_estimate_pct": 14.18,
+ "composite_caveat": "coverage_pct (28.35%) is a real full-population measurement. fidelity_pass_rate_pct (50.0%) is from a 16-unit sample covering only ['block', 'entity', 'inventory'], not ['border', 'food', 'gameevent', 'item', 'material']. composite_estimate_pct = coverage * fidelity is therefore an ESTIMATE that assumes the sampled fidelity rate generalizes to unchecked subsystems and to match-kind categories not yet spot-checked. State the sample size whenever this number is quoted."
+}
