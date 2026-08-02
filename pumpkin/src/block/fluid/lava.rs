@@ -294,9 +294,9 @@ impl FlowingFluid for FlowingLava {
     fn get_max_flow_distance(&self, world: &World) -> i32 {
         // Ultrawarm logic
         if world.dimension == Dimension::THE_NETHER {
-            5
+            4
         } else {
-            3
+            2
         }
     }
 
