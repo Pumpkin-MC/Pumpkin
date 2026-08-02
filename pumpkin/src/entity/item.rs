@@ -30,6 +30,7 @@ use super::{Entity, EntityBase, NBTStorage, NbtFuture, living::LivingEntity, pla
 pub struct ItemEntity {
     entity: Entity,
     item_age: AtomicU32,
+    merge_tick: AtomicU32,
     // These cannot be atomic values because we mutate their state based on what they are; we run
     // into the ABA problem
     item_stack: Mutex<ItemStack>,
@@ -59,6 +60,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
+            merge_tick: AtomicU32::new(0),
             pickup_delay: AtomicU8::new(10), // Vanilla pickup delay is 10 ticks
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
@@ -86,6 +88,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
+            merge_tick: AtomicU32::new(0),
             pickup_delay: AtomicU8::new(pickup_delay), // Vanilla pickup delay is 10 ticks
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
@@ -100,6 +103,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(ItemStack::new(1, &pumpkin_data::item::Item::AIR)),
             item_age: AtomicU32::new(0),
+            merge_tick: AtomicU32::new(0),
             pickup_delay: AtomicU8::new(10),
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
@@ -350,6 +354,7 @@ impl ItemEntity {
     async fn process_age_and_merge(&self) -> bool {
         let entity = &self.entity;
         let never_despawn = self.never_despawn.load(Ordering::Relaxed);
+        let merge_tick = self.merge_tick.fetch_add(1, Ordering::Relaxed) + 1;
         let age = if never_despawn {
             self.item_age.load(Ordering::Relaxed)
         } else {
@@ -373,7 +378,7 @@ impl ItemEntity {
             2
         };
 
-        if age.is_multiple_of(n) && self.can_merge().await {
+        if merge_tick.is_multiple_of(n) && self.can_merge().await {
             self.try_merge().await;
         }
 
