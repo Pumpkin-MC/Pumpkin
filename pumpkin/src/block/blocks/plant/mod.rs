@@ -9,6 +9,7 @@ pub mod big_dripleaf_stem;
 pub mod bush;
 pub mod cactus;
 pub mod cactus_flower;
+pub mod cave_vines;
 pub mod chorus_flower;
 pub mod chorus_plant;
 pub mod crop;
