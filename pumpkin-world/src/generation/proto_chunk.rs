@@ -180,7 +180,7 @@ impl ProtoChunk {
     #[must_use]
     pub fn new(x: i32, z: i32, generator: &super::generator::WorldGenerator) -> Self {
         let dimension = generator.dimension();
-        let height = dimension.logical_height as u16;
+        let height = dimension.height as u16;
         let section_count = (height as usize) / 16;
 
         let default_block = match generator {
