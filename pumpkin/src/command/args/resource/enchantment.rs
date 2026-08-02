@@ -15,7 +15,7 @@ use pumpkin_util::identifier::Identifier;
 pub struct EnchantmentArgumentConsumer;
 
 fn parse_enchantment_name(name: &str) -> Option<&'static Enchantment> {
-    Enchantment::from_name(name.strip_prefix("minecraft:").unwrap_or(name))
+    Enchantment::from_name(name).or_else(|| Enchantment::from_name(&format!("minecraft:{name}")))
 }
 
 impl GetClientSideArgParser for EnchantmentArgumentConsumer {
@@ -70,9 +70,10 @@ mod tests {
 
     #[test]
     fn accepts_short_and_namespaced_enchantment_names() {
-        assert_eq!(
-            parse_enchantment_name("flame").map(|enchantment| enchantment.registry_key),
-            parse_enchantment_name("minecraft:flame").map(|enchantment| enchantment.registry_key)
-        );
+        let short = parse_enchantment_name("flame").expect("short enchantment name");
+        let namespaced =
+            parse_enchantment_name("minecraft:flame").expect("namespaced enchantment name");
+        assert_eq!(short.registry_key, "flame");
+        assert_eq!(short.registry_key, namespaced.registry_key);
     }
 }
