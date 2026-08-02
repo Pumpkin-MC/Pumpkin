@@ -189,6 +189,10 @@ pub struct WorldAquiferSampler {
     packed_positions: Box<[i64]>,
 }
 
+// Vanilla Aquifer.java: `FLOWING_UPDATE_SIMULARITY = similarity(square(10), square(12))`, where
+// `similarity(a, b) = 1.0 - (b - a) / 25.0`, i.e. `1.0 - (144 - 100) / 25.0 = -0.76`.
+const FLOWING_UPDATE_SIMILARITY: f64 = 1.0 - (144.0 - 100.0) / 25.0;
+
 impl WorldAquiferSampler {
     const CHUNK_POS_OFFSETS: [(i8, i8); 13] = [
         (0, 0),
@@ -637,8 +641,7 @@ impl WorldAquiferSampler {
         let sim12 = Self::max_distance(nearest[0].1, nearest[1].1);
 
         if sim12 <= 0f64 {
-            let should_schedule = if sim12 >= -0.12f64 {
-                // FLOWING_UPDATE_SIMILARITY
+            let should_schedule = if sim12 >= FLOWING_UPDATE_SIMILARITY {
                 let fluid_level3 =
                     self.get_water_level(nearest[1].0, router, height_estimator, sample_options);
                 fluid_level2.block != fluid_level3.block || fluid_level2.max_y != fluid_level3.max_y
@@ -713,10 +716,10 @@ impl WorldAquiferSampler {
 
         let may_flow12 =
             fluid_level2.block != fluid_level3.block || fluid_level2.max_y != fluid_level3.max_y;
-        let may_flow23 = sim23 >= -0.12f64
+        let may_flow23 = sim23 >= FLOWING_UPDATE_SIMILARITY
             && (fluid_level3.block != fluid_level4.block
                 || fluid_level3.max_y != fluid_level4.max_y);
-        let may_flow13 = sim13 >= -0.12f64
+        let may_flow13 = sim13 >= FLOWING_UPDATE_SIMILARITY
             && (fluid_level2.block != fluid_level4.block
                 || fluid_level2.max_y != fluid_level4.max_y);
 
@@ -725,8 +728,8 @@ impl WorldAquiferSampler {
         } else {
             let fluid_level5 =
                 self.get_water_level(nearest[3].0, router, height_estimator, sample_options);
-            sim13 >= -0.12f64
-                && Self::max_distance(nearest[0].1, nearest[3].1) >= -0.12f64
+            sim13 >= FLOWING_UPDATE_SIMILARITY
+                && Self::max_distance(nearest[0].1, nearest[3].1) >= FLOWING_UPDATE_SIMILARITY
                 && (fluid_level2.block != fluid_level5.block
                     || fluid_level2.max_y != fluid_level5.max_y)
         };
