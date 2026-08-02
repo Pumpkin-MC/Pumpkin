@@ -25,6 +25,7 @@ pub struct FishingBobberEntity {
     pub has_hit: AtomicBool,
     pub wait_countdown: AtomicI32,
     pub bite_countdown: AtomicI32,
+    wait_adjusted: AtomicBool,
 }
 
 const fn hooked_reel_damage(is_item: bool) -> i32 {
@@ -66,6 +67,7 @@ impl FishingBobberEntity {
             has_hit: AtomicBool::new(false),
             wait_countdown: AtomicI32::new(fishing_wait_countdown(rand::random())),
             bite_countdown: AtomicI32::new(0),
+            wait_adjusted: AtomicBool::new(false),
         }
     }
 
@@ -163,6 +165,26 @@ impl FishingBobberEntity {
 
         if entity.touching_water.load(Ordering::Relaxed) {
             velocity.y += 0.02; // Buoyancy
+
+            if !self.wait_adjusted.swap(true, Ordering::Relaxed) {
+                let mut reduction = if world.is_raining_at(&entity.block_pos.load()).await {
+                    20
+                } else {
+                    0
+                };
+                if let Some(owner) = world.get_player_by_id(self.owner_id) {
+                    let held = owner.inventory.held_item();
+                    reduction += held
+                        .lock()
+                        .await
+                        .get_enchantment_level(&pumpkin_data::Enchantment::LURE)
+                        .max(0)
+                        * 20;
+                }
+                let wait = self.wait_countdown.load(Ordering::Relaxed);
+                self.wait_countdown
+                    .store((wait - reduction).max(0), Ordering::Relaxed);
+            }
 
             let bite = self.bite_countdown.load(Ordering::Relaxed);
             if bite > 0 {
