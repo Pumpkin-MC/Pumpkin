@@ -2935,26 +2935,13 @@ impl Player {
                     }
                 }
 
-                // Reset fall distance when switching to Spectator or Creative to prevent
-                // fall damage upon switching back to Survival.
-                //
-                // This is a pragmatic workaround: vanilla does NOT reset fallDistance in
-                // setGameMode(). Instead, vanilla relies on multiple defense layers:
-                //   1. noPhysics=true for Spectator — Entity.move() skips checkFallDamage()
-                //   2. abilities.flying=true → Player.aiStep() resets fallDistance every tick
-                //   3. setOnGround(false) forced for Spectators — prevents fallOn() invocation
-                //   4. abilities.mayfly=true → Player.causeFallDamage() returns false
-                //
-                // Pumpkin currently lacks layers 1-4. This explicit reset compensates for
-                // their absence until the full vanilla fall-damage pipeline is implemented.
-                // TODO: Implement vanilla's noPhysics path for Spectator in Entity::move()
-                // TODO: Add per-tick fall_distance reset when abilities.flying is true (mirrors Player.aiStep())
-                // TODO: Force on_ground=false for Spectator players each tick (mirrors Player.tick())
-                // TODO: Add abilities.allow_flying check in LivingEntity::handle_fall_damage() as defense-in-depth
-                // TODO: Once layers 1-4 above are implemented, restrict this reset to Spectator only.
-                //       In vanilla, a Creative player falling without flight keeps their fallDistance
-                //       across a Survival switch (layer 4/abilities.mayfly guards damage server-side);
-                //       resetting here over-forgives that edge case for Creative.
+                /* Vanilla doesn't reset fallDistance in setGameMode(), instead relies on
+                 * Player.aiStep() resetting when abilities.flying=true and
+                 * Player.causeFallDamage() returning false when abilities.mayfly=true.
+                 * TODO: Reset fall_distance each tick when abilities.flying=true (mirrors Player.aiStep())
+                 * TODO: Add abilities.allow_flying check in LivingEntity::handle_fall_damage() (mirrors Player.causeFallDamage())
+                 * TODO: Once implemented, restrict this reset to Spectator only.
+                 */
                 if matches!(gamemode, GameMode::Creative | GameMode::Spectator) {
                     self.living_entity.fall_distance.store(0.0);
                 }
