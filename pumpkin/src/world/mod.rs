@@ -1757,9 +1757,12 @@ impl World {
             let target = lightning_target_position(chunk_pos, local_x, local_z, y);
 
             if self.is_raining_at_unchecked(&target) {
-                if rng().random::<f32>() < 0.0675
-                    && self.get_block(&target.down()) != &Block::LIGHTNING_ROD
-                {
+                let spawn_mobs = self.level_info.load().game_rules.spawn_mobs;
+                if lightning_trap_allowed(
+                    spawn_mobs,
+                    rng().random::<f32>() < 0.0675,
+                    self.get_block(&target.down()) == &Block::LIGHTNING_ROD,
+                ) {
                     let entity =
                         Entity::new(self.clone(), target.to_f64(), &EntityType::SKELETON_HORSE);
                     self.spawn_entity(Arc::new(entity)).await;
@@ -5640,6 +5643,10 @@ const fn lightning_target_position(
     ))
 }
 
+const fn lightning_trap_allowed(spawn_mobs: bool, chance_hit: bool, below_is_rod: bool) -> bool {
+    spawn_mobs && chance_hit && !below_is_rod
+}
+
 impl BlockAccessor for World {
     fn get_block(&self, position: &BlockPos) -> &'static Block {
         self.get_block_state_id_if_loaded(position)
@@ -5731,6 +5738,14 @@ mod tests {
             lightning_target_position(Vector2::new(-2, 3), 7, 11, 96),
             BlockPos::new(-25, 96, 59)
         );
+    }
+
+    #[test]
+    fn lightning_traps_follow_spawn_mobs_and_rod_rules() {
+        assert!(lightning_trap_allowed(true, true, false));
+        assert!(!lightning_trap_allowed(false, true, false));
+        assert!(!lightning_trap_allowed(true, true, true));
+        assert!(!lightning_trap_allowed(true, false, false));
     }
 
     #[test]
