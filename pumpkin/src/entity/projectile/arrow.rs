@@ -408,9 +408,7 @@ impl EntityBase for ArrowEntity {
                         target.get_entity().set_on_fire_for_ticks(100);
                     }
 
-                    target
-                        .damage(&*target, damage as f32, DamageType::ARROW)
-                        .await;
+                    target.damage(self, damage as f32, DamageType::ARROW).await;
 
                     if target.get_living_entity().is_some() {
                         let punch = self.punch_level.load(Ordering::Relaxed);
