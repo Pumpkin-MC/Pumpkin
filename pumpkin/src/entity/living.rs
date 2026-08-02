@@ -2385,7 +2385,7 @@ impl EntityBase for LivingEntity {
                         let stack_arc = equipment_lock.get(&slot);
                         let mut stack = stack_arc.lock().await;
 
-                        let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
+                        let durability_damage = amount.floor() as i32 + 1;
                         if stack.damage_item(durability_damage) == DamageResult::Broken {
                             if let Some(player) = caller.get_player() {
                                 player
