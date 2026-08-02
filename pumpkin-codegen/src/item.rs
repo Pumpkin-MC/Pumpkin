@@ -699,8 +699,31 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (Enchantable, &EnchantableImpl { value: #value }), });
         }
 
-        if self.attack_range.is_some() {
-            tokens.extend(quote! { (AttackRange, &AttackRangeImpl), });
+        if let Some(attack_range) = &self.attack_range {
+            let attack_range = attack_range
+                .as_object()
+                .expect("attack_range components must be objects");
+            let value = |name: &str, default: f64| {
+                let value = attack_range
+                    .get(name)
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(default);
+                LitFloat::new(&format!("{value:?}"), Span::call_site())
+            };
+            let min_reach = value("min_reach", 0.0);
+            let max_reach = value("max_reach", 3.0);
+            let min_creative_reach = value("min_creative_reach", 0.0);
+            let max_creative_reach = value("max_creative_reach", 5.0);
+            let hitbox_margin = value("hitbox_margin", 0.3);
+            let mob_factor = value("mob_factor", 1.0);
+            tokens.extend(quote! { (AttackRange, &AttackRangeImpl {
+                min_reach: #min_reach,
+                max_reach: #max_reach,
+                min_creative_reach: #min_creative_reach,
+                max_creative_reach: #max_creative_reach,
+                hitbox_margin: #hitbox_margin,
+                mob_factor: #mob_factor,
+            }), });
         }
         if self.banner_patterns.is_some() {
             tokens.extend(quote! { (BannerPatterns, &BannerPatternsImpl), });

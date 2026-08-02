@@ -197,9 +197,19 @@ impl MobEntity {
     pub async fn is_in_attack_range(&self, target: &dyn EntityBase) -> bool {
         const DEFAULT_ATTACK_RANGE: f64 = 0.828_427_12; // sqrt(2.04) - 0.6
 
-        // TODO: Implement DataComponent lookup for ATTACK_RANGE when components are ready
-        let max_range = DEFAULT_ATTACK_RANGE;
-        let min_range = 0.0;
+        let held_item = self
+            .living_entity
+            .held_item(&self.living_entity.entity)
+            .await;
+        let held_item = held_item.lock().await;
+        let (max_range, min_range) = held_item
+            .get_data_component::<pumpkin_data::data_component_impl::AttackRangeImpl>()
+            .map_or((DEFAULT_ATTACK_RANGE, 0.0), |attack_range| {
+                (
+                    f64::from(attack_range.max_reach * attack_range.mob_factor),
+                    f64::from(attack_range.min_reach * attack_range.mob_factor),
+                )
+            });
 
         let target_hitbox = target.get_entity().bounding_box.load();
 

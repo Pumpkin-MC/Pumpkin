@@ -382,10 +382,52 @@ impl DataComponentImpl for WeaponImpl {
     default_impl!(Weapon);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct AttackRangeImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct AttackRangeImpl {
+    pub min_reach: f32,
+    pub max_reach: f32,
+    pub min_creative_reach: f32,
+    pub max_creative_reach: f32,
+    pub hitbox_margin: f32,
+    pub mob_factor: f32,
+}
+
+impl Eq for AttackRangeImpl {}
+
+impl Hash for AttackRangeImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.min_reach.to_bits().hash(state);
+        self.max_reach.to_bits().hash(state);
+        self.min_creative_reach.to_bits().hash(state);
+        self.max_creative_reach.to_bits().hash(state);
+        self.hitbox_margin.to_bits().hash(state);
+        self.mob_factor.to_bits().hash(state);
+    }
+}
+
 impl DataComponentImpl for AttackRangeImpl {
     default_impl!(AttackRange);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AttackRangeImpl;
+    use crate::{item::Item, item_stack::ItemStack};
+
+    #[test]
+    fn spear_items_preserve_vanilla_attack_range_values() {
+        let stack = ItemStack::new(1, &Item::WOODEN_SPEAR);
+        let range = stack
+            .get_data_component::<AttackRangeImpl>()
+            .expect("spear items should have an attack range component");
+
+        assert_eq!(range.min_reach, 2.0);
+        assert_eq!(range.max_reach, 4.5);
+        assert_eq!(range.min_creative_reach, 2.0);
+        assert_eq!(range.max_creative_reach, 6.5);
+        assert_eq!(range.hitbox_margin, 0.125);
+        assert_eq!(range.mob_factor, 0.5);
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
