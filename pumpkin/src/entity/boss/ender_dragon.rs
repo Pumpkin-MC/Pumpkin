@@ -5,7 +5,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
 
 use crate::entity::{
@@ -203,6 +203,7 @@ impl EntityBase for EnderDragonPart {
 pub struct EnderDragonEntity {
     pub mob_entity: MobEntity,
     pub parts: Vec<Arc<EnderDragonPart>>,
+    parts_registered: AtomicBool,
 
     pub flight_history: Mutex<DragonFlightHistory>,
     pub flap_time: Mutex<f32>,
@@ -254,13 +255,13 @@ impl EnderDragonEntity {
                 &EntityType::ENDER_DRAGON,
             );
             let part = Arc::new(EnderDragonPart::new(part_entity, dragon_uuid));
-            // TODO: world.add_entity_silent(part.clone() as Arc<dyn EntityBase>);
             parts.push(part);
         }
 
         Arc::new(Self {
             mob_entity: MobEntity::new(entity),
             parts,
+            parts_registered: AtomicBool::new(false),
             flight_history: Mutex::new(DragonFlightHistory::default()),
             flap_time: Mutex::new(0.0),
             o_flap_time: Mutex::new(0.0),
@@ -717,6 +718,15 @@ impl EnderDragonEntity {
     }
 
     pub async fn ai_step(&self) {
+        if !self.parts_registered.swap(true, Ordering::AcqRel) {
+            let world = self.mob_entity.living_entity.entity.world.load();
+            for part in &self.parts {
+                world
+                    .add_entity_silent(part.clone() as Arc<dyn EntityBase>)
+                    .await;
+            }
+        }
+
         self.mob_entity.living_entity.entity.update_last_pos();
         self.ensure_nodes_initialized().await;
         self.update_flap_time().await;
