@@ -46,6 +46,10 @@ fn output_position(position: BlockPos, state: HopperLikeProperties) -> BlockPos 
     position.offset(to_offset(&state.facing))
 }
 
+fn blocks_hopper_suction(block: &Block, state: &pumpkin_data::BlockState) -> bool {
+    state.is_full_cube() && !block.has_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS)
+}
+
 fn can_merge_hopper_stack(destination: &ItemStack, source: &ItemStack) -> bool {
     destination.item_count < destination.get_max_stack_size()
         && destination.are_items_and_components_equal(source)
@@ -221,7 +225,7 @@ impl HopperBlockEntity {
             return false;
         }
         let (block, state) = world.get_block_and_state(pos_up);
-        if !(state.is_solid() && block.has_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS)) {
+        if !blocks_hopper_suction(block, state) {
             let pos_up_f = pos_up.to_f64();
             let search_box = pumpkin_util::math::boundingbox::BoundingBox::new(
                 pos_up_f,
@@ -417,7 +421,7 @@ impl Clearable for HopperBlockEntity {
 
 #[cfg(test)]
 mod tests {
-    use super::{can_merge_hopper_stack, output_position};
+    use super::{blocks_hopper_suction, can_merge_hopper_stack, output_position};
     use pumpkin_data::Block;
     use pumpkin_data::block_properties::{BlockProperties, FacingHopper, HopperLikeProperties};
     use pumpkin_data::item::Item;
@@ -441,5 +445,16 @@ mod tests {
 
         assert!(!can_merge_hopper_stack(&plain, &named));
         assert!(!can_merge_hopper_stack(&named, &plain));
+    }
+
+    #[test]
+    fn full_cubes_block_hopper_suction_except_beehives() {
+        for block in [&Block::STONE, &Block::GLASS] {
+            assert!(blocks_hopper_suction(block, block.default_state));
+        }
+
+        for block in [&Block::BEEHIVE, &Block::BEE_NEST, &Block::OAK_SLAB] {
+            assert!(!blocks_hopper_suction(block, block.default_state));
+        }
     }
 }
