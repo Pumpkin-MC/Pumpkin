@@ -49,6 +49,19 @@ impl BrewingStandBlockEntity {
         }
     }
 
+    /// Vanilla `PotionBrewing.isIngredient`: an item usable as the ingredient of any
+    /// container mix or potion mix, regardless of what is currently in the bottle slots.
+    #[must_use]
+    pub fn is_brewing_ingredient(stack: &ItemStack) -> bool {
+        let id = stack.get_item().id;
+        ITEM_RECIPES
+            .iter()
+            .any(|recipe| recipe.ingredient().iter().any(|i| i.id == id))
+            || POTION_RECIPES
+                .iter()
+                .any(|recipe| recipe.ingredient().iter().any(|i| i.id == id))
+    }
+
     /// Check if the current ingredient matches the stored ingredient
     fn ingredient_matches(&self, ingredient: &ItemStack) -> bool {
         self.ingredient_item
@@ -282,6 +295,38 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
         self
     }
 
+    fn slots_for_face(&self, direction: pumpkin_data::BlockDirection) -> Vec<usize> {
+        match direction {
+            pumpkin_data::BlockDirection::Up => vec![3],
+            pumpkin_data::BlockDirection::Down => vec![0, 1, 2, 3],
+            _ => vec![0, 1, 2, 4],
+        }
+    }
+
+    fn can_insert_through_face<'a>(
+        &'a self,
+        slot: usize,
+        stack: &'a ItemStack,
+        _direction: pumpkin_data::BlockDirection,
+    ) -> pumpkin_world::inventory::InventoryFuture<'a, bool> {
+        Box::pin(async move {
+            // Vanilla's `canPlaceItem` additionally refuses to top up an occupied bottle
+            // slot; that part needs to read the slot, so it cannot live in the sync
+            // `is_valid_slot_for`.
+            self.is_valid_slot_for(slot, stack)
+                && (slot > 2 || self.items[slot].lock().await.is_empty())
+        })
+    }
+
+    fn can_extract_through_face<'a>(
+        &'a self,
+        slot: usize,
+        stack: &'a ItemStack,
+        _direction: pumpkin_data::BlockDirection,
+    ) -> pumpkin_world::inventory::InventoryFuture<'a, bool> {
+        Box::pin(async move { slot != 3 || stack.get_item().id == Item::GLASS_BOTTLE.id })
+    }
+
     fn is_valid_slot_for(&self, slot: usize, stack: &ItemStack) -> bool {
         if stack.is_empty() {
             return true;
@@ -296,15 +341,8 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
                     || id == Item::LINGERING_POTION.id
                     || id == Item::GLASS_BOTTLE.id
             }
-            // Slot 3 - ingredient (must be tagged as brewable)
-            3 => {
-                // Check if item is a valid brewing ingredient
-                if stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL) {
-                    return false; // Fuel should not go in ingredient slot
-                }
-                // Allow any item that's not fuel (ingredient validation happens during brewing)
-                true
-            }
+            // Slot 3 - ingredient
+            3 => Self::is_brewing_ingredient(stack),
             // Slot 4 - fuel
             4 => stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL),
             _ => false,
@@ -544,5 +582,36 @@ impl PropertyDelegate for BrewingStandBlockEntity {
 
     fn get_properties_size(&self) -> i32 {
         2
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BrewingStandBlockEntity;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+
+    #[test]
+    fn only_brewing_mix_ingredients_are_accepted() {
+        for item in [
+            &Item::NETHER_WART,
+            &Item::GLOWSTONE_DUST,
+            &Item::REDSTONE,
+            &Item::FERMENTED_SPIDER_EYE,
+            &Item::GUNPOWDER,
+            &Item::DRAGON_BREATH,
+        ] {
+            assert!(BrewingStandBlockEntity::is_brewing_ingredient(
+                &ItemStack::new(1, item)
+            ));
+        }
+
+        // Blaze powder is deliberately absent: it is both the fuel and the strength
+        // ingredient, so vanilla accepts it in slot 3 as well.
+        for item in [&Item::COBBLESTONE, &Item::POTION, &Item::GLASS_BOTTLE] {
+            assert!(!BrewingStandBlockEntity::is_brewing_ingredient(
+                &ItemStack::new(1, item)
+            ));
+        }
     }
 }
