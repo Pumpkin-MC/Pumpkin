@@ -47,7 +47,11 @@ impl ItemBehaviour for EndCrystalItem {
                 || !world
                     .get_entities_at_box(&BoundingBox::new(
                         Vector3::new(location_vec.x, location_vec.y, location_vec.z),
-                        Vector3::new(location_vec.x + 1.0, location_vec.y + 2.0, location_vec.z),
+                        Vector3::new(
+                            location_vec.x + 1.0,
+                            location_vec.y + 2.0,
+                            location_vec.z + 1.0,
+                        ),
                     ))
                     .is_empty()
             {
