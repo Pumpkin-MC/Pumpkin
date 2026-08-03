@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::player::Player;
 use crate::entity::vehicle::minecart::MinecartEntity;
@@ -61,12 +62,12 @@ impl ItemBehaviour for MinecartItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
 
             if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
-                return;
+                return BlockActionResult::Fail;
             }
             let state_id = world.get_block_state_id(&location);
             let is_ascending = if PoweredRailLikeProperties::handles_block_id(block.id) {
@@ -88,6 +89,7 @@ impl ItemBehaviour for MinecartItem {
             );
             let minecart_entity = Arc::new(MinecartEntity::new(entity));
             world.spawn_entity(minecart_entity).await;
+            BlockActionResult::Success
         })
     }
 

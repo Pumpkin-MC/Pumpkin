@@ -47,6 +47,7 @@ use pumpkin_util::{GameMode, Hand, math::position::BlockPos, text::TextComponent
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 
+use crate::item::registry::should_try_block_placement;
 use crate::{
     block::{BlockHitResult, registry::BlockActionResult},
     entity::{
@@ -684,7 +685,7 @@ impl BedrockClient {
                     }
 
                     if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
-                        server
+                        let result = server
                             .block_registry
                             .on_use(
                                 block,
@@ -698,11 +699,15 @@ impl BedrockClient {
                                 &world,
                             )
                             .await;
+
+                        if result.consumes_action() {
+                            return;
+                        }
                     }
 
                     let mut stack = held_item.lock().await;
                     if !stack.is_empty() {
-                        server
+                        let item_result = server
                             .item_registry
                             .use_on_block(
                                 &mut stack,
@@ -715,32 +720,33 @@ impl BedrockClient {
                             )
                             .await;
 
-                        let item_id = stack.item.id;
-                        if let Some(placed_block) = pumpkin_data::Block::from_item_id(item_id) {
-                            let dummy_use_item_on =
-                                pumpkin_protocol::java::server::play::SUseItemOn {
-                                    hand: VarInt(0),
-                                    position: data.block_position,
-                                    face: VarInt(data.block_face),
-                                    cursor_pos: data.click_position,
-                                    inside_block: false,
-                                    is_against_world_border: false,
-                                    sequence: VarInt(0),
-                                };
+                        if should_try_block_placement(&item_result) {
+                            let item_id = stack.item.id;
+                            if let Some(placed_block) = pumpkin_data::Block::from_item_id(item_id) {
+                                let dummy_use_item_on =
+                                    pumpkin_protocol::java::server::play::SUseItemOn {
+                                        hand: VarInt(0),
+                                        position: data.block_position,
+                                        face: VarInt(data.block_face),
+                                        cursor_pos: data.click_position,
+                                        inside_block: false,
+                                        is_against_world_border: false,
+                                        sequence: VarInt(0),
+                                    };
 
-                            if let Ok(Some(_)) = server
-                                .block_registry
-                                .place_block(
-                                    player,
-                                    placed_block,
-                                    &server,
-                                    &dummy_use_item_on,
-                                    data.block_position,
-                                    face,
-                                )
-                                .await
-                            {
-                                if player.gamemode.load() != GameMode::Creative {
+                                if let Ok(Some(_)) = server
+                                    .block_registry
+                                    .place_block(
+                                        player,
+                                        placed_block,
+                                        &server,
+                                        &dummy_use_item_on,
+                                        data.block_position,
+                                        face,
+                                    )
+                                    .await
+                                    && player.gamemode.load() != GameMode::Creative
+                                {
                                     stack.decrement(1);
                                 }
                             }

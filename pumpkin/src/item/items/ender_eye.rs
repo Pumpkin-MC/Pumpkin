@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::projectile::eye_of_ender::EyeOfEnder;
@@ -40,10 +41,10 @@ impl ItemBehaviour for EnderEyeItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             if block.id != Block::END_PORTAL_FRAME.id {
-                return;
+                return BlockActionResult::Pass;
             }
 
             let world = player.world();
@@ -52,7 +53,7 @@ impl ItemBehaviour for EnderEyeItem {
             // Skip if the frame already holds an eye.
             let props_raw = block.properties(state_id).unwrap().to_props();
             if props_raw.iter().any(|(k, v)| *k == "eye" && *v == "true") {
-                return;
+                return BlockActionResult::Pass;
             }
 
             // Build new state with eye=true.
@@ -71,6 +72,7 @@ impl ItemBehaviour for EnderEyeItem {
 
             // Try to complete the portal.
             EndPortal::get_new_portal(&world, location).await;
+            BlockActionResult::Success
         })
     }
 

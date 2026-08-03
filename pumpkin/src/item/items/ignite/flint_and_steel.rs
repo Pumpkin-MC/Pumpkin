@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::ItemBehaviour;
 use crate::item::ItemMetadata;
@@ -33,7 +34,7 @@ impl ItemBehaviour for FlintAndSteelItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             let ignited = Ignition::ignite_block(
                 |world: Arc<World>, pos: BlockPos, new_state_id: BlockStateId| async move {
@@ -51,6 +52,12 @@ impl ItemBehaviour for FlintAndSteelItem {
             if ignited && player.gamemode.load() != pumpkin_util::GameMode::Creative {
                 // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
                 let _ = item.damage_item(1);
+            }
+
+            if ignited {
+                BlockActionResult::Success
+            } else {
+                BlockActionResult::Fail
             }
         })
     }

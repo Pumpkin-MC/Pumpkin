@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
@@ -33,8 +34,10 @@ impl ItemBehaviour for HoeItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
+            let mut changed = false;
+
             // Yes, Minecraft does hardcode these
             if block == &Block::GRASS_BLOCK
                 || block == &Block::DIRT_PATH
@@ -44,8 +47,6 @@ impl ItemBehaviour for HoeItem {
             {
                 let mut future_block = block;
                 let world = player.world();
-                let mut changed = false;
-
                 //Only rooted can be right-clicked on the bottom of the block
                 if face == BlockDirection::Down {
                     if block == &Block::ROOTED_DIRT {
@@ -104,6 +105,12 @@ impl ItemBehaviour for HoeItem {
                     // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
                     let _ = item.damage_item(1);
                 }
+            }
+
+            if changed {
+                BlockActionResult::Success
+            } else {
+                BlockActionResult::Pass
             }
         })
     }
