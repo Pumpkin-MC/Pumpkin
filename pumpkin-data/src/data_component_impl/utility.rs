@@ -145,22 +145,30 @@ impl BundleContentsImpl {
             return false;
         }
         let weight_per_item = (64 / stack.get_max_stack_size() as u32).max(1);
-        let mut inserted_anything = false;
-        while stack.item_count > 0 && self.get_weight() + weight_per_item <= 64 {
-            if let Some(top) = self.items.first_mut()
-                && crate::item_stack::ItemStack::are_items_and_components_equal(top, stack)
-                && top.item_count < top.get_max_stack_size()
-            {
-                top.item_count += 1;
-                stack.item_count -= 1;
-                inserted_anything = true;
-                continue;
-            }
-            self.items.insert(0, stack.copy_with_count(1));
-            stack.item_count -= 1;
-            inserted_anything = true;
+        let available = 64u32.saturating_sub(self.get_weight()) / weight_per_item;
+        let amount_to_add = stack.item_count.min(available as u8);
+        if amount_to_add == 0 {
+            return false;
         }
-        inserted_anything
+
+        let matching_index = if stack.is_stackable() {
+            self.items
+                .iter()
+                .position(|item| item.are_items_and_components_equal(stack))
+        } else {
+            None
+        };
+
+        if let Some(index) = matching_index {
+            let mut merged_stack = self.items.remove(index);
+            merged_stack.increment(amount_to_add);
+            stack.decrement(amount_to_add);
+            self.items.insert(0, merged_stack);
+        } else {
+            self.items.insert(0, stack.split(amount_to_add));
+        }
+
+        true
     }
     pub fn toggle_selected_item(&mut self, selected_item_index: i32) {
         self.selected_item_index = if self.selected_item_index != selected_item_index
@@ -246,6 +254,26 @@ mod bundle_tests {
         };
 
         assert_eq!(contents, selected_contents);
+    }
+
+    #[test]
+    fn insertion_merges_matching_stack_and_moves_it_to_front() {
+        let mut contents = BundleContentsImpl {
+            items: vec![
+                ItemStack::new(2, &Item::DIAMOND),
+                ItemStack::new(3, &Item::APPLE),
+            ],
+            selected_item_index: -1,
+        };
+        let mut apples = ItemStack::new(4, &Item::APPLE);
+
+        assert!(contents.try_insert(&mut apples));
+
+        assert!(apples.is_empty());
+        assert_eq!(contents.items.len(), 2);
+        assert_eq!(contents.items[0].item.id, Item::APPLE.id);
+        assert_eq!(contents.items[0].item_count, 7);
+        assert_eq!(contents.items[1].item.id, Item::DIAMOND.id);
     }
 }
 
