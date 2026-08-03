@@ -193,6 +193,16 @@ impl ArrowEntity {
         damage_succeeded
     }
 
+    /// `Arrow#doPostHurtEffects` scales durations via `MobEffectInstance#withScaledDuration`:
+    /// floor (not round), min 1 tick, infinite (-1) and zero durations untouched
+    /// (`#mapDuration`). Distinct from the splash-potion scale-down in `PotionContents`.
+    fn scale_arrow_effect_duration(duration: i32, scale: f32) -> i32 {
+        if duration == -1 || duration == 0 {
+            return duration;
+        }
+        ((duration as f32 * scale).floor() as i32).max(1)
+    }
+
     pub fn set_velocity_from_rotation(
         &self,
         pitch: f32,
@@ -555,15 +565,31 @@ impl EntityBase for ArrowEntity {
                             let scale = item_stack
                                 .get_data_component::<PotionDurationScaleImpl>()
                                 .map_or(1.0, |component| component.scale);
-                            crate::item::potion::PotionContents::apply_effects_to(
-                                living,
-                                crate::item::potion::PotionContents::read_potion_effects(
-                                    &item_stack,
-                                ),
-                                scale,
-                                crate::item::potion::PotionApplicationSource::Arrow,
-                            )
-                            .await;
+
+                            for (
+                                effect_type,
+                                duration,
+                                amplifier,
+                                ambient,
+                                show_particles,
+                                show_icon,
+                            ) in crate::item::potion::PotionContents::read_potion_effects(
+                                &item_stack,
+                            ) {
+                                living
+                                    .add_effect(pumpkin_data::potion::Effect {
+                                        effect_type,
+                                        duration: Self::scale_arrow_effect_duration(
+                                            duration, scale,
+                                        ),
+                                        amplifier,
+                                        ambient,
+                                        show_particles,
+                                        show_icon,
+                                        blend: false,
+                                    })
+                                    .await;
+                            }
 
                             if entity.entity_type.id == EntityType::SPECTRAL_ARROW.id {
                                 living.add_effect(Self::spectral_glowing_effect()).await;
@@ -837,5 +863,14 @@ mod tests {
     fn piercing_hits_allow_one_more_target_than_the_level() {
         assert_eq!(piercing_hit_limit(1), 2);
         assert_eq!(piercing_hit_limit(4), 5);
+    }
+
+    #[test]
+    fn arrow_effect_duration_scale_floors_and_clamps_to_one_tick() {
+        assert_eq!(ArrowEntity::scale_arrow_effect_duration(900, 0.125), 112);
+        assert_eq!(ArrowEntity::scale_arrow_effect_duration(160, 0.125), 20);
+        assert_eq!(ArrowEntity::scale_arrow_effect_duration(1, 0.125), 1);
+        assert_eq!(ArrowEntity::scale_arrow_effect_duration(-1, 0.125), -1);
+        assert_eq!(ArrowEntity::scale_arrow_effect_duration(0, 0.125), 0);
     }
 }
