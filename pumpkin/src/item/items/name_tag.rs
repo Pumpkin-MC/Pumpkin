@@ -28,8 +28,9 @@ impl ItemBehaviour for NameTagItem {
             if entity.entity_type.saveable
                 && let Some(name) = item.get_data_component::<CustomNameImpl>()
             {
+                // Vanilla `NameTagItem#interactLivingEntity` only calls `setCustomName`; it never
+                // calls `setCustomNameVisible`, so a named mob shows its name on hover only.
                 entity.set_custom_name(name.name.clone());
-                entity.set_custom_name_visible(true);
                 item.decrement_unless_creative(player.gamemode.load(), 1);
             }
         })
