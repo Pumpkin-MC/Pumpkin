@@ -19,8 +19,10 @@ use crate::{
         PlacedArgs, PlayerPlacedArgs, registry::BlockActionResult,
     },
     entity::decoration::item_frame::ItemFrameEntity,
+    entity::player::Player,
     world::World,
 };
+use pumpkin_data::sound::{Sound, SoundCategory};
 
 use super::abstract_redstone_gate::{self, RedstoneGateBlock, RedstoneGateBlockProperties};
 
@@ -36,7 +38,7 @@ impl BlockBehaviour for ComparatorBlock {
         Box::pin(async move {
             let state = args.world.get_block_state(args.position);
             let props = ComparatorLikeProperties::from_state_id(state.id, args.block);
-            self.on_use(props, args.world, *args.position, args.block)
+            self.on_use(props, args.world, *args.position, args.block, args.player)
                 .await;
 
             BlockActionResult::Success
@@ -299,15 +301,26 @@ impl ComparatorBlock {
         world: &Arc<World>,
         block_pos: BlockPos,
         block: &Block,
+        player: &Player,
     ) {
-        // Vanilla Parity TODO:
-        // playSound(player, pos, SoundEvents.COMPARATOR_CLICK, SoundSource.BLOCKS, 0.3F, pitch);
-        // Pitch is 0.55F if SUBTRACT, 0.5F if COMPARE.
-
         props.mode = match props.mode {
             ModeComparator::Compare => ModeComparator::Subtract,
             ModeComparator::Subtract => ModeComparator::Compare,
         };
+
+        let pitch = if props.mode == ModeComparator::Subtract {
+            0.55
+        } else {
+            0.5
+        };
+        world.play_sound_raw_expect(
+            player,
+            Sound::BlockComparatorClick as u16,
+            SoundCategory::Blocks,
+            &block_pos.to_centered_f64(),
+            0.3,
+            pitch,
+        );
 
         let state_id = props.to_state_id(block);
         world
