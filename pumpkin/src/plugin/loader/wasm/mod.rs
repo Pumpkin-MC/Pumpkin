@@ -9,22 +9,24 @@ use crate::plugin::{
 
 pub mod wasm_host;
 
-impl Plugin for Arc<WasmPlugin> {
-    fn on_load(&mut self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
+impl Plugin for WasmPlugin {
+    fn on_load(&self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move {
-            self.as_ref()
-                .on_load(context)
+            // More qualified syntax to not call the current on_load function recursively and instead call
+            // WasmPlugin::on_load
+            Self::on_load(self, context)
                 .await
-                .map_err(|err| err.to_string())?
+                .map_err(|err| err.to_string())
+                .flatten()
         })
     }
 
-    fn on_unload(&mut self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
+    fn on_unload(&self, context: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move {
-            self.as_ref()
-                .on_unload(context)
+            Self::on_unload(self, context)
                 .await
-                .map_err(|err| err.to_string())?
+                .map_err(|err| err.to_string())
+                .flatten()
         })
     }
 }
@@ -39,7 +41,7 @@ impl PluginLoader for WasmPluginLoader {
             let (plugin, metadata) = runtime.init_plugin(&path).await?;
 
             Ok((
-                Box::new(plugin) as Box<dyn Plugin>,
+                plugin as Arc<dyn Plugin>,
                 metadata,
                 Box::new(()) as Box<dyn Any + Send + Sync>,
             ))

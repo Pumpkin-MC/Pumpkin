@@ -488,7 +488,7 @@ impl StructurePieceBase for PoolElementStructurePiece {
     fn place(
         &mut self,
         chunk: &mut crate::ProtoChunk,
-        _block_registry: &dyn crate::world::WorldPortalExt,
+        block_registry: &dyn crate::world::WorldPortalExt,
         random: &mut pumpkin_util::random::RandomGenerator,
         _seed: i64,
         chunk_box: &pumpkin_util::math::block_box::BlockBox,
@@ -497,7 +497,7 @@ impl StructurePieceBase for PoolElementStructurePiece {
             pumpkin_util::math::vector3::Vector3::new(self.pos.0.x, self.pos.0.y, self.pos.0.z);
 
         self.element
-            .for_each_template(|name, processor_list, legacy, template| {
+            .for_each_template(|_name, processor_list, legacy, template| {
                 let corner = self.rotation.rotate_offset(
                     template.size.x.saturating_sub(1),
                     template.size.z.saturating_sub(1),
@@ -524,22 +524,26 @@ impl StructurePieceBase for PoolElementStructurePiece {
                     processors.as_ref(),
                     Some(chunk_box),
                 );
-                if name.starts_with("minecraft:pillager_outpost/") {
-                    crate::generation::structure::template::place_template_entities(
-                        chunk,
-                        &template,
-                        placement_origin,
-                        self.rotation,
-                        chunk_box,
-                    );
-                }
+                crate::generation::structure::template::place_template_entities(
+                    chunk,
+                    &template,
+                    placement_origin,
+                    self.rotation,
+                    chunk_box,
+                );
             });
 
         if let Some(feature) = self.element.feature()
             && let Some(placed_feature) =
                 crate::generation::feature::placed_features::PLACED_FEATURES.get(&feature)
         {
-            placed_feature.generate_in_proto_chunk(chunk, feature, random, self.pos);
+            placed_feature.generate_in_proto_chunk(
+                chunk,
+                block_registry,
+                feature,
+                random,
+                self.pos,
+            );
         }
     }
 }
@@ -677,7 +681,7 @@ impl StructureGenerator for JigsawGenerator {
             &MaxDistance::new(max_distance),
             &dimension_padding,
             liquid_settings,
-            &PoolAliasLookup,
+            &PoolAliasLookup::default(),
         )
     }
 }

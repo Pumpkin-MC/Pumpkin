@@ -372,8 +372,8 @@ impl BedrockClient {
 
         let mut valid_chunks = Vec::with_capacity(chunks.len());
         for chunk in chunks {
-            let event = ChunkSend::new(player.world(), chunk.clone());
-            let event = server.plugin_manager.fire(event).await;
+            let mut event = ChunkSend::new(player.world(), chunk.clone());
+            server.plugin_manager.fire(&server, &mut event).await;
             if !event.cancelled {
                 valid_chunks.push(chunk.clone());
             }
@@ -1106,7 +1106,7 @@ impl BedrockClient {
                 packet.id,
                 packet.payload.clone(),
             );
-            event = server.plugin_manager.fire(event).await;
+            server.plugin_manager.fire(server, &mut event).await;
             if event.cancelled {
                 continue;
             }
@@ -1208,7 +1208,7 @@ impl BedrockClient {
                     .await;
             }
             SMobEquipment::PACKET_ID => {
-                self.handle_mob_equipment(player, SMobEquipment::read(reader)?)
+                self.handle_mob_equipment(server, player, SMobEquipment::read(reader)?)
                     .await;
             }
             _ => {

@@ -254,12 +254,17 @@ impl ChunkManager {
             let new_level = ChunkLoading::get_level_from_view_distance(view_distance);
             lock.add_ticket(center, new_level);
 
-            if old_center != center || old_view_distance != view_distance {
+            let sim_dist = self.world.server.upgrade().map_or(10, |s| {
+                s.advanced_config.networking.java.simulation_distance.get()
+            });
+            let sim_level = ChunkLoading::get_level_from_simulation_distance(sim_dist);
+            lock.add_ticket(center, sim_level);
+
+            if (old_center != center || old_view_distance != view_distance) && old_view_distance > 0
+            {
                 let old_level = ChunkLoading::get_level_from_view_distance(old_view_distance);
-                // Don't remove if it would be the same ticket
-                if old_center != center || old_level != new_level {
-                    lock.remove_ticket(old_center, old_level);
-                }
+                lock.remove_ticket(old_center, old_level);
+                lock.remove_ticket(old_center, sim_level);
             }
             lock.send_change();
         };
@@ -540,6 +545,14 @@ struct Textures {
 #[derive(Deserialize)]
 struct SkinTexture {
     url: String,
+    #[serde(default)]
+    metadata: Option<SkinMetadata>,
+}
+
+#[derive(Deserialize)]
+struct SkinMetadata {
+    #[serde(default)]
+    model: Option<String>,
 }
 
 impl Player {
@@ -550,7 +563,13 @@ impl Player {
             .decode(textures_prop.value.as_bytes())
             .ok()?;
         let textures: TexturesProperty = serde_json::from_slice(&decoded).ok()?;
-        let url = textures.textures.skin?.url;
+        let skin_texture = textures.textures.skin?;
+        let url = skin_texture.url;
+        let is_slim = skin_texture
+            .metadata
+            .as_ref()
+            .and_then(|m| m.model.as_deref())
+            .is_some_and(|model| model == "slim");
 
         let resp = ureq::get(&url).call().ok()?;
         let mut buf = Vec::new();
@@ -572,6 +591,9 @@ impl Player {
         }
 
         let mut skin = pumpkin_protocol::bedrock::client::Skin::steve();
+        if is_slim {
+            skin.arm_size = "slim".to_string();
+        }
         skin.image_width = width;
         skin.image_height = height;
         skin.skin_data = rgba;
@@ -893,7 +915,7 @@ impl Player {
         let level = &world.level;
 
         // Decrement the value of watched chunks
-        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
+        let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
         // Remove chunks with no watchers from the cache
         if !chunks_to_clean.is_empty() {
             world.remove_entities_in_chunks(&chunks_to_clean).await;
@@ -940,7 +962,11 @@ impl Player {
 
         {
             let stack = item_stack.lock().await;
-            if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+            if stack.is_empty() {
+                // Vanilla fist: base_attack_damage = -1.0, base_attack_speed = -2.4
+                add_damage = -1.0;
+                add_speed = -2.4;
+            } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
                 for item_mod in modifiers.attribute_modifiers.iter() {
                     if item_mod.operation == Operation::AddValue {
                         if item_mod.id == "minecraft:base_attack_damage" {
@@ -1007,7 +1033,7 @@ impl Player {
         }
 
         // Modify the added damage based on the multiplier.
-        let mut damage = base_damage + add_damage * damage_multiplier;
+        let mut damage = (base_damage + add_damage) * damage_multiplier;
         damage += extra_ench_damage * attack_cooldown_progress;
 
         if let Some(strength) = self
@@ -2148,8 +2174,9 @@ impl Player {
         payload: Bytes,
     ) -> bool {
         if let Some(server) = self.world().server.upgrade() {
-            let event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
-            let event = server.plugin_manager.fire(event).await;
+            let mut event =
+                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
+            server.plugin_manager.fire(&server, &mut event).await;
             return event.cancelled;
         }
         false
@@ -2160,8 +2187,9 @@ impl Player {
             // This is a dummy object to satisfy the non-optional requirement in WIT
             // In the future we should make all packets 'static or have a way to represent raw packets in WIT
             struct RawPacket;
-            let event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
-            let event = server.plugin_manager.fire(event).await;
+            let mut event =
+                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
+            server.plugin_manager.fire(&server, &mut event).await;
             return event.cancelled;
         }
         false
@@ -2476,9 +2504,12 @@ impl Player {
     pub async fn unload_watched_chunks(&self, world: &World) {
         let radial_chunks = self.watched_section.load().all_chunks_within();
         let level = &world.level;
-        let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
-        // level.clean_chunks(&chunks_to_clean).await;
-        for chunk in chunks_to_clean {
+        let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
+        if !chunks_to_clean.is_empty() {
+            world.remove_entities_in_chunks(&chunks_to_clean).await;
+            level.clean_entity_chunks(&chunks_to_clean);
+        }
+        for chunk in &chunks_to_clean {
             self.client
                 .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                 .await;
@@ -2949,6 +2980,17 @@ impl Player {
                     }
                 }
 
+                /* Vanilla doesn't reset fallDistance in setGameMode(), instead relies on
+                 * Player.aiStep() resetting when abilities.flying=true and
+                 * Player.causeFallDamage() returning false when abilities.mayfly=true.
+                 * TODO: Reset fall_distance each tick when abilities.flying=true (mirrors Player.aiStep())
+                 * TODO: Add abilities.allow_flying check in LivingEntity::handle_fall_damage() (mirrors Player.causeFallDamage())
+                 * TODO: Once implemented, restrict this reset to Spectator only.
+                 */
+                if matches!(gamemode, GameMode::Creative | GameMode::Spectator) {
+                    self.living_entity.fall_distance.store(0.0);
+                }
+
                 if gamemode != GameMode::Spectator && self.camera_target_id.load().is_some() {
                     self.camera_target_id.store(None);
                     self.client.send_packet_now(&CSetCamera::new(
@@ -2995,16 +3037,28 @@ impl Player {
         let config = self.config.load();
         self.living_entity.entity.send_meta_data(
             &[
+                // v26.x
                 Metadata::new(
                     TrackedData::PLAYER_MODE_CUSTOMISATION,
                     MetaDataType::BYTE,
                     config.skin_parts,
                 ),
-                // Metadata::new(
-                //     TrackedData::DATA_MAIN_ARM_ID,
-                //     MetaDataType::ARM,
-                //     VarInt(config.main_hand as u8 as i32),
-                // ),
+                Metadata::new(
+                    TrackedData::PLAYER_MAIN_HAND,
+                    MetaDataType::HUMANOID_ARM,
+                    config.main_hand as u8,
+                ),
+                // v1.21.x
+                Metadata::new(
+                    TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
+                    MetaDataType::BYTE,
+                    config.skin_parts,
+                ),
+                Metadata::new(
+                    TrackedData::MAIN_ARM_ID,
+                    MetaDataType::BYTE,
+                    config.main_hand as u8,
+                ),
             ],
             None,
         );
@@ -3449,8 +3503,8 @@ impl Player {
     /// Add experience points to the player.
     pub async fn add_experience_points(self: &Arc<Self>, mut added_points: i32) {
         if let Some(server) = self.world().server.upgrade() {
-            let event = PlayerExpChangeEvent::new(self.clone(), added_points);
-            let event = server.plugin_manager.fire(event).await;
+            let mut event = PlayerExpChangeEvent::new(self.clone(), added_points);
+            server.plugin_manager.fire(&server, &mut event).await;
             added_points = event.amount;
         }
 
@@ -3585,15 +3639,12 @@ impl Player {
         };
 
         if let Some(server) = self.living_entity.entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire(
-                    crate::plugin::api::events::player::inventory_close::InventoryCloseEvent::new(
-                        self,
-                        window_type,
-                    ),
-                )
-                .await;
+            let mut event =
+                crate::plugin::api::events::player::inventory_close::InventoryCloseEvent::new(
+                    self,
+                    window_type,
+                );
+            server.plugin_manager.fire(&server, &mut event).await;
         }
 
         let player_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
@@ -3777,7 +3828,7 @@ impl Player {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Server) {
+    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Arc<Server>) {
         self.update_last_action_time();
         let screen_handler_arc = self.current_screen_handler.lock().await.clone();
         let mut screen_handler = screen_handler_arc.lock().await;
@@ -4008,14 +4059,13 @@ impl Player {
             .await;
         drop(perm_manager);
 
-        let event = server
-            .plugin_manager
-            .fire(PlayerPermissionCheckEvent::new(
-                self.clone(),
-                node.to_string(),
-                result,
-            ))
-            .await;
+        let mut event = PlayerPermissionCheckEvent::new(self.clone(), node.to_string(), result);
+        if let Some(server_arc) = self.world().server.upgrade() {
+            server_arc
+                .plugin_manager
+                .fire(&server_arc, &mut event)
+                .await;
+        }
         event.result
     }
 
@@ -4084,7 +4134,13 @@ impl Player {
         // Check offhand first
         let stack = inventory.get_stack(PlayerInventory::OFF_HAND_SLOT).await;
         let item = stack.lock().await;
-        if item.item.id == Item::ARROW.id && item.item_count > 0 {
+        if matches!(
+            item.item.id,
+            id if id == Item::ARROW.id
+                || id == Item::TIPPED_ARROW.id
+                || id == Item::SPECTRAL_ARROW.id
+        ) && item.item_count > 0
+        {
             return Some(PlayerInventory::OFF_HAND_SLOT);
         }
         drop(item);
@@ -4093,7 +4149,13 @@ impl Player {
         for slot in 0..PlayerInventory::MAIN_SIZE {
             let stack = inventory.get_stack(slot).await;
             let item = stack.lock().await;
-            if item.item.id == Item::ARROW.id && item.item_count > 0 {
+            if matches!(
+                item.item.id,
+                id if id == Item::ARROW.id
+                    || id == Item::TIPPED_ARROW.id
+                    || id == Item::SPECTRAL_ARROW.id
+            ) && item.item_count > 0
+            {
                 return Some(slot);
             }
         }
@@ -4283,6 +4345,21 @@ impl NBTStorage for Player {
             // Store food level, saturation, exhaustion, and tick timer
             self.hunger_manager.write_nbt(nbt).await;
 
+            nbt.put_int(
+                "AirSupply",
+                self.breath_manager
+                    .air_supply
+                    .load(Ordering::Relaxed)
+                    .clamp(0, super::breath::MAX_AIR),
+            );
+            nbt.put_int(
+                "DrowningTick",
+                self.breath_manager
+                    .drowning_tick
+                    .load(Ordering::Relaxed)
+                    .clamp(0, super::breath::DROWNING_INTERVAL - 1),
+            );
+
             nbt.put_string(
                 "Dimension",
                 self.world().dimension.minecraft_name.to_string(),
@@ -4334,6 +4411,18 @@ impl NBTStorage for Player {
             );
 
             self.hunger_manager.read_nbt(nbt).await;
+
+            if let Some(air) = nbt.get_int("AirSupply") {
+                self.breath_manager
+                    .air_supply
+                    .store(air.clamp(0, super::breath::MAX_AIR), Ordering::Relaxed);
+            }
+            if let Some(tick) = nbt.get_int("DrowningTick") {
+                self.breath_manager.drowning_tick.store(
+                    tick.clamp(0, super::breath::DROWNING_INTERVAL - 1),
+                    Ordering::Relaxed,
+                );
+            }
 
             // Load any saved spawnpoint data (SpawnX/SpawnY/SpawnZ, SpawnDimension, SpawnForced)
             if let (Some(x), Some(y), Some(z)) = (

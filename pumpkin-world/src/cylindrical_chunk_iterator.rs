@@ -17,39 +17,40 @@ impl Cylindrical {
         }
     }
 
-    pub fn for_each_changed_chunk(
-        old_cylindrical: Self,
-        new_cylindrical: Self,
-        newly_included: &mut Vec<Vector2<i32>>,
-        just_removed: &mut Vec<Vector2<i32>>,
+    pub fn changed_chunks(
+        old: Self,
+        new: Self,
+    ) -> (
+        impl Iterator<Item = Vector2<i32>>,
+        impl Iterator<Item = Vector2<i32>>,
     ) {
-        for new_cylindrical_chunk in new_cylindrical.all_chunks_within() {
-            if !old_cylindrical.is_within_distance(new_cylindrical_chunk.x, new_cylindrical_chunk.y)
-            {
-                newly_included.push(new_cylindrical_chunk);
-            }
-        }
+        let loading = new
+            .all_chunks_within()
+            .filter(move |c| !old.is_within_distance(c.x, c.y));
 
-        for old_cylindrical_chunk in old_cylindrical.all_chunks_within() {
-            if !new_cylindrical.is_within_distance(old_cylindrical_chunk.x, old_cylindrical_chunk.y)
-            {
-                just_removed.push(old_cylindrical_chunk);
-            }
-        }
+        let unloading = old
+            .all_chunks_within()
+            .filter(move |c| !new.is_within_distance(c.x, c.y));
+
+        (loading, unloading)
     }
 
+    #[allow(dead_code)]
     const fn left(&self) -> i32 {
         self.center.x - self.view_distance.get() as i32 - 1
     }
 
+    #[allow(dead_code)]
     const fn bottom(&self) -> i32 {
         self.center.y - self.view_distance.get() as i32 - 1
     }
 
+    #[allow(dead_code)]
     const fn right(&self) -> i32 {
         self.center.x + self.view_distance.get() as i32 + 1
     }
 
+    #[allow(dead_code)]
     const fn top(&self) -> i32 {
         self.center.y + self.view_distance.get() as i32 + 1
     }
@@ -67,32 +68,22 @@ impl Cylindrical {
         hyp_sqr < (self.view_distance.get() as i64).pow(2)
     }
 
-    /// Returns an iterator of all chunks within this cylinder
+    /// Returns a precomputed list of relative chunk offset pairs `(dx, dy)` for a given view distance.
     #[must_use]
-    pub fn all_chunks_within(&self) -> Vec<Vector2<i32>> {
-        if self.view_distance.get() == 1 {
-            return Vec::new();
-        }
-        // I came up with this values by testing
-        // for view distances 2-32 it usually gives 5 - 20 chunks more than needed if the player is on ground
-        // this looks scary but this few calculations are definitely faster than ~5 reallocations
-        // this part "3167) >> 10" is a replacement for flointing point multiplication
-        let estimated_capacity = ((self.view_distance.get() as usize + 3).pow(2) * 3167) >> 10;
-        let mut all_chunks = Vec::with_capacity(estimated_capacity);
+    #[inline]
+    pub fn get_offsets(view_distance: u8) -> &'static [(i8, i8)] {
+        let idx =
+            (view_distance as usize).min(pumpkin_data::chunk_view_lut::MAX_VIEW_DISTANCE as usize);
+        pumpkin_data::chunk_view_lut::CHUNK_VIEW_LUT[idx]
+    }
 
-        for x in self.left()..=self.right() {
-            let mut was_in = false;
-            'inner: for z in self.bottom()..=self.top() {
-                if self.is_within_distance(x, z) {
-                    all_chunks.push(Vector2::new(x, z));
-                    was_in = true;
-                } else if was_in {
-                    break 'inner;
-                }
-            }
-        }
-
-        all_chunks
+    /// Returns an iterator of all chunks within this cylinder using the precomputed LUT
+    #[must_use]
+    pub fn all_chunks_within(self) -> impl ExactSizeIterator<Item = Vector2<i32>> {
+        let offsets = Self::get_offsets(self.view_distance.get());
+        offsets.iter().map(move |&(dx, dy)| {
+            Vector2::new(self.center.x + i32::from(dx), self.center.y + i32::from(dy))
+        })
     }
 }
 

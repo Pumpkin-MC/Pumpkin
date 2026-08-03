@@ -18,6 +18,7 @@ mod block;
 mod carver;
 pub mod chest_loot;
 mod chunk_gen_settings;
+mod chunk_view_lut;
 mod chunk_status;
 mod composter_increase_chance;
 mod configured_feature;
@@ -85,6 +86,7 @@ pub fn main() {
         (meta_data_type::build, "meta_data_type.rs"),
         (tracked_data::build, "tracked_data.rs"),
         (chunk_status::build, "chunk_status.rs"),
+        (chunk_view_lut::build, "chunk_view_lut.rs"),
         (game_event::build, "game_event.rs"),
         (game_rules::build, "game_rules.rs"),
         (registry::build, "registry.rs"),
