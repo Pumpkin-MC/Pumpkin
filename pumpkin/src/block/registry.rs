@@ -657,6 +657,22 @@ impl BlockRegistry {
             .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
             .await;
 
+        // BlockItem.place, line 88: level.gameEvent(GameEvent.BLOCK_PLACE, pos,
+        // GameEvent.Context.of(player, placedState)).
+        crate::world::game_event::emit_game_event(
+            &world,
+            pumpkin_data::game_event::GameEvent::BlockPlace,
+            pumpkin_util::math::vector3::Vector3::new(
+                f64::from(final_block_pos.0.x) + 0.5,
+                f64::from(final_block_pos.0.y) + 0.5,
+                f64::from(final_block_pos.0.z) + 0.5,
+            ),
+            crate::world::game_event::GameEventContext::of_entity(
+                player.clone() as std::sync::Arc<dyn EntityBase>
+            ),
+        )
+        .await;
+
         self.player_placed(
             &world,
             placed_block,
