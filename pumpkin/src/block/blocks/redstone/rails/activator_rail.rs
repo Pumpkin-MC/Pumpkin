@@ -22,19 +22,6 @@ use super::common::{
     update_flanking_rails_shape,
 };
 
-// TODO: Fix redstone rail power extension behavior
-// Currently, redstone sources (like redstone torch) can incorrectly extend rail power
-// when placed at any powered rail position. In Minecraft, power should only extend
-// when a redstone source is placed at the LAST powered rail or at an unpowered rail.
-//
-// Example of INCORRECT current behavior:
-// redstone_torch [powered_rail×9] [unpowered_rail×3]
-// If redstone torch is placed at 6th powered rail → power extends (WRONG)
-//
-// Example of CORRECT Minecraft behavior:
-// redstone_torch [powered_rail×9] [unpowered_rail×3]
-// Power should only extend when redstone source is at 9th rail (last powered) or unpowered rail
-
 #[pumpkin_block("minecraft:activator_rail")]
 pub struct ActivatorRailBlock;
 
