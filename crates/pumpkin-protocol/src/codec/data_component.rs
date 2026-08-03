@@ -5,19 +5,19 @@ use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    AxolotlVariantImpl, BundleContentsImpl, CatCollarImpl, CatSoundVariantImpl, CatVariantImpl,
-    ChickenSoundVariantImpl, ChickenVariantImpl, ConsumableImpl, ConsumeAnimation, ConsumeEffect,
-    CowSoundVariantImpl, CowVariantImpl, CustomDataImpl, CustomNameImpl, DamageImpl,
-    DataComponentImpl, DyedColorImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl,
-    FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl,
-    HorseVariantImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, ItemNameImpl, LlamaVariantImpl,
-    MapIdImpl, MaxStackSizeImpl, MooshroomVariantImpl, PaintingVariantImpl, ParrotVariantImpl,
-    PigSoundVariantImpl, PigVariantImpl, PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl,
-    SheepColorImpl, ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
-    SuspiciousStewEffect, SuspiciousStewEffectsImpl, TropicalFishBaseColorImpl,
-    TropicalFishPatternColorImpl, TropicalFishPatternImpl, UnbreakableImpl, UseCooldownImpl,
-    VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl, WolfVariantImpl,
-    ZombieNautilusVariantImpl, get,
+    AxolotlVariantImpl, BlockStateImpl, BundleContentsImpl, CatCollarImpl, CatSoundVariantImpl,
+    CatVariantImpl, ChickenSoundVariantImpl, ChickenVariantImpl, ConsumableImpl, ConsumeAnimation,
+    ConsumeEffect, CowSoundVariantImpl, CowVariantImpl, CustomDataImpl, CustomModelDataImpl,
+    CustomNameImpl, DamageImpl, DataComponentImpl, DyedColorImpl, EnchantmentsImpl, EquipmentSlot,
+    EquippableImpl, FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, FoxVariantImpl,
+    FrogVariantImpl, HorseVariantImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, ItemNameImpl,
+    LlamaVariantImpl, MapIdImpl, MaxStackSizeImpl, MooshroomVariantImpl, PaintingVariantImpl,
+    ParrotVariantImpl, PigSoundVariantImpl, PigVariantImpl, PotionContentsImpl, RabbitVariantImpl,
+    SalmonSizeImpl, SheepColorImpl, ShulkerColorImpl, SoundEvent, StatusEffectInstance,
+    StoredEnchantmentsImpl, SuspiciousStewEffect, SuspiciousStewEffectsImpl,
+    TropicalFishBaseColorImpl, TropicalFishPatternColorImpl, TropicalFishPatternImpl,
+    UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl,
+    WolfVariantImpl, ZombieNautilusVariantImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -241,6 +241,22 @@ trait DataComponentCodec<Impl: DataComponentImpl> {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Impl, ReadingError>;
 }
 
+const MAX_COMPONENT_COLLECTION_SIZE: usize = 256;
+
+fn read_component_collection_len(
+    seq: &mut impl NetworkReadExt,
+    collection: &str,
+) -> Result<usize, ReadingError> {
+    let len = usize::try_from(seq.get_var_int()?.0)
+        .map_err(|_| ReadingError::Message(format!("Negative {collection} length")))?;
+    if len > MAX_COMPONENT_COLLECTION_SIZE {
+        return Err(ReadingError::Message(format!(
+            "Too many entries in {collection}"
+        )));
+    }
+    Ok(len)
+}
+
 impl DataComponentCodec<Self> for MaxStackSizeImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt::from(self.size))
@@ -313,6 +329,89 @@ impl DataComponentCodec<Self> for ItemModelImpl {
         let id = seq.get_str()?;
         Ok(Self {
             id: Cow::Owned(id.into()),
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for BlockStateImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_var_int(&VarInt(self.properties.len() as i32))?;
+        for (name, value) in self.properties.iter() {
+            seq.write_string(name)?;
+            seq.write_string(value)?;
+        }
+        Ok(())
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let len = read_component_collection_len(seq, "block-state property map")?;
+        let mut properties = Vec::with_capacity(len);
+        for _ in 0..len {
+            properties.push((
+                Cow::Owned(seq.get_str()?.into()),
+                Cow::Owned(seq.get_str()?.into()),
+            ));
+        }
+        Ok(Self {
+            properties: Cow::Owned(properties),
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for CustomModelDataImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_var_int(&VarInt(self.floats.len() as i32))?;
+        for value in &self.floats {
+            seq.write_f32(*value)?;
+        }
+
+        seq.write_var_int(&VarInt(self.flags.len() as i32))?;
+        for value in &self.flags {
+            seq.write_bool(*value)?;
+        }
+
+        seq.write_var_int(&VarInt(self.strings.len() as i32))?;
+        for value in &self.strings {
+            seq.write_string(value)?;
+        }
+
+        seq.write_var_int(&VarInt(self.colors.len() as i32))?;
+        for value in &self.colors {
+            seq.write_i32(*value)?;
+        }
+        Ok(())
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let float_len = read_component_collection_len(seq, "custom-model-data float list")?;
+        let mut floats = Vec::with_capacity(float_len);
+        for _ in 0..float_len {
+            floats.push(seq.get_f32()?);
+        }
+
+        let flag_len = read_component_collection_len(seq, "custom-model-data flag list")?;
+        let mut flags = Vec::with_capacity(flag_len);
+        for _ in 0..flag_len {
+            flags.push(seq.get_bool()?);
+        }
+
+        let string_len = read_component_collection_len(seq, "custom-model-data string list")?;
+        let mut strings = Vec::with_capacity(string_len);
+        for _ in 0..string_len {
+            strings.push(seq.get_str()?.to_string());
+        }
+
+        let color_len = read_component_collection_len(seq, "custom-model-data color list")?;
+        let mut colors = Vec::with_capacity(color_len);
+        for _ in 0..color_len {
+            colors.push(seq.get_i32()?);
+        }
+
+        Ok(Self {
+            floats,
+            flags,
+            strings,
+            colors,
         })
     }
 }
@@ -863,6 +962,8 @@ pub fn deserialize(
         DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
         DataComponent::ItemModel => Ok(ItemModelImpl::deserialize(seq)?.to_dyn()),
         DataComponent::ItemName => Ok(ItemNameImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::BlockState => Ok(BlockStateImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::CustomModelData => Ok(CustomModelDataImpl::deserialize(seq)?.to_dyn()),
         DataComponent::CustomName => Ok(CustomNameImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Consumable => Ok(ConsumableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Equippable => Ok(EquippableImpl::deserialize(seq)?.to_dyn()),
@@ -893,6 +994,8 @@ pub fn serialize(
         DataComponent::Fireworks => get::<FireworksImpl>(value).serialize(seq),
         DataComponent::ItemModel => get::<ItemModelImpl>(value).serialize(seq),
         DataComponent::ItemName => get::<ItemNameImpl>(value).serialize(seq),
+        DataComponent::BlockState => get::<BlockStateImpl>(value).serialize(seq),
+        DataComponent::CustomModelData => get::<CustomModelDataImpl>(value).serialize(seq),
         DataComponent::CustomName => get::<CustomNameImpl>(value).serialize(seq),
         DataComponent::Consumable => get::<ConsumableImpl>(value).serialize(seq),
         DataComponent::Equippable => get::<EquippableImpl>(value).serialize(seq),
@@ -1104,3 +1207,40 @@ codec_string_variant!(CatSoundVariantImpl);
 codec_string_variant!(CatCollarImpl);
 codec_string_variant!(SheepColorImpl);
 codec_string_variant!(ShulkerColorImpl);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn block_state_round_trips_through_component_dispatch() {
+        let component = BlockStateImpl {
+            properties: Cow::Owned(vec![
+                (Cow::Borrowed("lit"), Cow::Borrowed("false")),
+                (Cow::Borrowed("waterlogged"), Cow::Borrowed("true")),
+            ]),
+        };
+        let mut encoded = Vec::new();
+        serialize(DataComponent::BlockState, &component, &mut encoded).unwrap();
+
+        let decoded = deserialize(DataComponent::BlockState, &mut Cursor::new(encoded)).unwrap();
+        assert_eq!(get::<BlockStateImpl>(decoded.as_ref()), &component);
+    }
+
+    #[test]
+    fn custom_model_data_round_trips_through_component_dispatch() {
+        let component = CustomModelDataImpl {
+            floats: vec![1.0, 2.5],
+            flags: vec![true, false],
+            strings: vec!["matcha:ramen".into()],
+            colors: vec![0x12_34_56, -1],
+        };
+        let mut encoded = Vec::new();
+        serialize(DataComponent::CustomModelData, &component, &mut encoded).unwrap();
+
+        let decoded =
+            deserialize(DataComponent::CustomModelData, &mut Cursor::new(encoded)).unwrap();
+        assert_eq!(get::<CustomModelDataImpl>(decoded.as_ref()), &component);
+    }
+}
