@@ -13,22 +13,35 @@ pub struct DragonEggBlock;
 
 impl DragonEggBlock {
     async fn teleport(&self, world: &Arc<World>, pos: &BlockPos) {
+        let min_y = world.dimension.min_y;
+        let max_y = min_y + world.dimension.height;
         for _ in 0..1000 {
-            let x = pos.0.x + rng().random_range(-16..16);
-            let y = pos.0.y + rng().random_range(-8..8);
-            let z = pos.0.z + rng().random_range(-16..16);
+            let (x, y, z) = {
+                let mut rng = rng();
+                (
+                    pos.0.x + rng.random_range(0..16) - rng.random_range(0..16),
+                    pos.0.y + rng.random_range(0..8) - rng.random_range(0..8),
+                    pos.0.z + rng.random_range(0..16) - rng.random_range(0..16),
+                )
+            };
+            if y < min_y || y >= max_y {
+                continue;
+            }
             let test_pos = BlockPos::new(x, y, z);
 
             let state = world.get_block_state(&test_pos);
             let below_state = world.get_block_state(&test_pos.down());
 
-            if state.is_air() && !below_state.is_air() {
+            if state.is_air()
+                && !below_state.is_air()
+                && world.worldborder.lock().await.contains_block(x, z)
+            {
                 let current_state = world.get_block_state(pos);
                 world
                     .set_block_state(
                         &test_pos,
                         current_state.id,
-                        pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                        pumpkin_world::world::BlockFlags::NOTIFY_LISTENERS,
                     )
                     .await;
                 world
