@@ -81,6 +81,10 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
+    fn on_projectile_hit<'a>(&'a self, _args: OnProjectileHitArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     /// Called when an entity is standing on / walking over the top face of this block.
     fn on_entity_step<'a>(&'a self, _args: OnEntityStepArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
@@ -263,6 +267,16 @@ pub struct OnEntityCollisionArgs<'a> {
     pub state: &'a BlockState,
     pub position: &'a BlockPos,
     pub entity: &'a dyn EntityBase,
+}
+
+pub struct OnProjectileHitArgs<'a> {
+    pub server: &'a Server,
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+    pub projectile: &'a dyn EntityBase,
+    pub hit: &'a BlockHitResult<'a>,
 }
 
 pub struct OnEntityStepArgs<'a> {

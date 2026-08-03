@@ -8,17 +8,20 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::tick::TickPriority;
+use pumpkin_world::world::BlockFlags;
 
 use crate::block::entities::campfire::CampfireBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockIsReplacing, GetStateForNeighborUpdateArgs,
-        NormalUseArgs, OnEntityCollisionArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs,
+        NormalUseArgs, OnEntityCollisionArgs, OnPlaceArgs, OnProjectileHitArgs, PlacedArgs,
+        UseWithItemArgs,
     },
     entity::EntityBase,
 };
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 #[pumpkin_block_from_tag("minecraft:campfires")]
 pub struct CampfireBlock;
@@ -162,7 +165,30 @@ impl BlockBehaviour for CampfireBlock {
         })
     }
 
-    // TODO: onProjectileHit
+    fn on_projectile_hit<'a>(&'a self, args: OnProjectileHitArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let props = CampfireLikeProperties::from_state_id(args.state.id, args.block);
+            if args
+                .projectile
+                .get_entity()
+                .fire_ticks
+                .load(Ordering::Relaxed)
+                > 0
+                && !props.lit
+                && !props.waterlogged
+            {
+                let mut lit_props = props;
+                lit_props.lit = true;
+                args.world
+                    .set_block_state(
+                        args.position,
+                        lit_props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_LISTENERS,
+                    )
+                    .await;
+            }
+        })
+    }
 }
 
 fn is_signal_fire_base_block(block: &Block) -> bool {
