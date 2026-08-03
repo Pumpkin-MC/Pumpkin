@@ -95,7 +95,6 @@ impl SimplexNoiseSampler {
     ///
     /// # Returns
     /// A hashed value in the range [0, 255].
-    #[inline]
     /// The permutation table used to hash coordinates.
     ///
     /// Exposed read-only so a GPU-side reimplementation can mirror this exact instance
