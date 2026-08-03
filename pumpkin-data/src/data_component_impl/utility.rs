@@ -1,6 +1,8 @@
 use crate::data_component_impl::{
     DataComponentImpl, default_impl, get_f32_hash, get_i32_hash, get_str_hash,
 };
+use crate::tag;
+use crate::tag::Taggable;
 use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
@@ -152,7 +154,7 @@ impl BundleContentsImpl {
             .sum()
     }
     pub fn try_insert(&mut self, stack: &mut crate::item_stack::ItemStack) -> bool {
-        if stack.is_empty() {
+        if stack.is_empty() || stack.item.has_tag(&tag::Item::MINECRAFT_SHULKER_BOXES) {
             return false;
         }
         let weight_per_item = Self::get_item_weight(stack);
