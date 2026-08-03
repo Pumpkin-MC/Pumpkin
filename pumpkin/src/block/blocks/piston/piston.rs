@@ -302,8 +302,11 @@ async fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDir
         }
         return true;
     }
-    let neighbor_pos = block_pos.offset(BlockDirection::Down.to_offset());
-    let (block, state) = world.get_block_and_state(&neighbor_pos);
+    // Vanilla checks `hasSignal(pos, Direction.DOWN)` here, i.e. whether the piston's own
+    // position is quasi-powered as a solid block by *its own* six neighbours
+    // (PistonBaseBlock#getNeighborSignal, SignalGetter#getSignal). This must use the piston's
+    // own block/state, not the block below it.
+    let (block, state) = world.get_block_and_state(block_pos);
     if is_emitting_redstone_power(block, state, world, block_pos, BlockDirection::Down).await {
         return true;
     }
