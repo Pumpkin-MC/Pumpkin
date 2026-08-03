@@ -35,6 +35,9 @@ pub const DIG_COOLDOWN_TICKS: i32 = 1200;
 pub const DISTURBANCE_LOCATION_EXPIRY_TICKS: i32 = 100;
 /// `net.minecraft.world.entity.ai.behavior.warden.SonicBoom.COOLDOWN`
 pub const SONIC_BOOM_COOLDOWN_TICKS: i32 = 40;
+/// `Warden.TIME_TO_USE_MELEE_UNTIL_SONIC_BOOM`: the longer grace period set when a new
+/// attack target is acquired, distinct from `SonicBoom.COOLDOWN`'s post-use cooldown.
+pub const SONIC_BOOM_NEW_TARGET_COOLDOWN_TICKS: i32 = 200;
 /// `SonicBoom.DISTANCE_XZ`
 pub const SONIC_BOOM_DISTANCE_XZ: f64 = 15.0;
 /// `SonicBoom.DISTANCE_Y`

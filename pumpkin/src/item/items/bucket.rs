@@ -448,23 +448,34 @@ impl ItemBehaviour for FilledBucketItem {
                 return;
             };
 
-            if should_evaporate_in_nether(item, &world) {
-                play_bucket_evaporation(&world, player);
-                return;
-            }
-            let Some(placed_pos) = try_place_filled_bucket(&world, item, pos, direction).await
-            else {
-                return;
-            };
-
             let player_arc = world.get_player_by_id(player.get_entity().entity_id);
+
+            // BucketItem.emptyContents: the water-evaporates branch still returns true (a
+            // successful use), it just skips placing the fluid -- checkExtraContent (which
+            // spawns the bucketed mob) still runs afterward. Pumpkin previously returned
+            // early here, silently losing both the water AND the mob for a mob bucket used
+            // in the Nether.
+            let evaporated = should_evaporate_in_nether(item, &world);
+            let placed_pos = if evaporated {
+                play_bucket_evaporation(&world, player);
+                pos
+            } else {
+                let Some(placed_pos) = try_place_filled_bucket(&world, item, pos, direction).await
+                else {
+                    return;
+                };
+                placed_pos
+            };
 
             // BucketItem.playEmptySound / SolidBucketItem.emptyContents: both call
             // level.gameEvent(user, GameEvent.FLUID_PLACE, pos) (BucketItem.java:157,
-            // SolidBucketItem.java, emptyContents). MobBucketItem overrides
-            // playEmptySound (MobBucketItem.java:42-44) without that call, so mob
-            // buckets (axolotl/fish/tadpole/etc.) must not emit FLUID_PLACE here.
-            if mob_bucket_entity_type(item).is_none()
+            // SolidBucketItem.java, emptyContents) -- but the evaporation branch returns
+            // before either is reached (BucketItem.java:122-130), so no fluid was actually
+            // placed and no event fires. MobBucketItem also overrides playEmptySound
+            // (MobBucketItem.java:42-44) without that call, so mob buckets (axolotl/fish/
+            // tadpole/etc.) must not emit FLUID_PLACE here either.
+            if !evaporated
+                && mob_bucket_entity_type(item).is_none()
                 && let Some(player_arc) = player_arc.clone()
             {
                 crate::world::game_event::emit_game_event(

@@ -368,8 +368,10 @@ impl WardenEntity {
     async fn set_attack_target(&self, target: Arc<dyn EntityBase>) {
         self.cancel_roar();
         *self.mob_entity.target.lock().await = Some(target);
-        self.sonic_boom_cooldown
-            .store(warden_anger::SONIC_BOOM_COOLDOWN_TICKS, Ordering::Relaxed);
+        self.sonic_boom_cooldown.store(
+            warden_anger::SONIC_BOOM_NEW_TARGET_COOLDOWN_TICKS,
+            Ordering::Relaxed,
+        );
     }
 
     /// `WardenAi.setDisturbanceLocation`, redirected onto the existing goal system by
