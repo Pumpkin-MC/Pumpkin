@@ -54,7 +54,13 @@ impl AttackType {
             return Self::Critical;
         }
 
-        if sword && is_strong {
+        // Vanilla only awards a sweep attack while the attacker is standing on the ground.
+        // Without this check, a strong-charged sword swing performed while airborne but not
+        // yet falling (e.g. during the rising part of a jump, where `fall_distance` is still
+        // 0.0 so the `Critical` branch above doesn't match) was incorrectly classified as a
+        // sweep attack instead of a plain hit, which players observed as a crit "turning into"
+        // a sweep (see #1330).
+        if sword && is_strong && on_ground {
             return Self::Sweeping;
         }
 
