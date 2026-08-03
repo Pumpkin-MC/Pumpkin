@@ -5,7 +5,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use tokio::sync::RwLock;
 
-use crate::entity::projectile::ProjectileHit;
+use crate::block::blocks::redstone::target_block::TargetBlock;
+use crate::entity::projectile::{ProjectileHit, on_target_block_hit};
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
@@ -467,10 +468,7 @@ impl EntityBase for ArrowEntity {
 
             match hit {
                 ProjectileHit::Block {
-                    pos,
-                    face: _,
-                    hit_pos,
-                    ..
+                    pos, face, hit_pos, ..
                 } => {
                     // Arrow hit a block - stick into it
                     self.in_ground.store(true, Ordering::Relaxed);
@@ -479,10 +477,15 @@ impl EntityBase for ArrowEntity {
 
                     let block = world.get_block(&pos);
                     if block == &pumpkin_data::Block::TARGET {
-                        let player_opt = self.owner_id.and_then(|id| world.get_player_by_id(id));
-                        if let Some(player) = player_opt {
-                            player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::Bullseye).await;
-                        }
+                        on_target_block_hit(
+                            &world,
+                            &pos,
+                            face,
+                            hit_pos,
+                            self.owner_id,
+                            TargetBlock::PERSISTENT_PROJECTILE_DELAY,
+                        )
+                        .await;
                     }
 
                     // Stop the arrow
@@ -532,9 +535,8 @@ impl EntityBase for ArrowEntity {
                         target.get_entity().set_on_fire_for_ticks(100);
                     }
 
-                    let damage_succeeded = target
-                        .damage(&*target, damage as f32, DamageType::ARROW)
-                        .await;
+                    let damage_succeeded =
+                        target.damage(self, damage as f32, DamageType::ARROW).await;
 
                     if let Some(living) = target.get_living_entity() {
                         let punch = self.punch_level.load(Ordering::Relaxed);

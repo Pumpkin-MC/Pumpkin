@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use tokio::sync::Mutex;
 
 use crate::{
+    block::blocks::redstone::target_block::TargetBlock,
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity, player::Player,
     },
@@ -20,8 +21,8 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
-use super::ProjectileHit;
 use super::arrow::ArrowPickup;
+use super::{ProjectileHit, on_target_block_hit};
 
 pub struct TridentEntity {
     pub entity: Entity,
@@ -318,10 +319,24 @@ impl EntityBase for TridentEntity {
             let world = entity.world.load();
 
             match hit {
-                ProjectileHit::Block { pos, hit_pos, .. } => {
+                ProjectileHit::Block {
+                    pos, face, hit_pos, ..
+                } => {
                     self.in_ground.store(true, Ordering::Relaxed);
                     self.shake_time.store(7, Ordering::Relaxed);
                     *self.last_block_pos.write().unwrap() = Some(pos);
+
+                    if world.get_block(&pos) == &pumpkin_data::Block::TARGET {
+                        on_target_block_hit(
+                            &world,
+                            &pos,
+                            face,
+                            hit_pos,
+                            self.owner_id,
+                            TargetBlock::PERSISTENT_PROJECTILE_DELAY,
+                        )
+                        .await;
+                    }
 
                     // Stop the trident
                     entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));

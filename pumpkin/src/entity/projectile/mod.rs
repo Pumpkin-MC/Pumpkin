@@ -1,5 +1,8 @@
 use super::{Entity, EntityBase, NBTStorage, living::LivingEntity};
+use crate::block::blocks::redstone::target_block::TargetBlock;
+use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::server::Server;
+use crate::world::World;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
@@ -42,6 +45,40 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::SMALL_FIREBALL
         || *entity_type == EntityType::FISHING_BOBBER
         || *entity_type == EntityType::EXPERIENCE_BOTTLE
+}
+
+/// Minimum horizontal distance between the shooter and the impact for `adventure/bullseye`.
+const BULLSEYE_MIN_HORIZONTAL_DISTANCE: f64 = 30.0;
+
+/// Powers a target block that a projectile just hit and grants the `adventure/bullseye`
+/// advancement to the shooter when the hit was worth a full signal from far enough away.
+pub async fn on_target_block_hit(
+    world: &Arc<World>,
+    position: &BlockPos,
+    face: BlockDirection,
+    hit_pos: Vector3<f64>,
+    owner_id: Option<i32>,
+    delay: u8,
+) {
+    let power = TargetBlock::trigger(world, position, face, hit_pos, delay).await;
+    if power != TargetBlock::MAX_POWER {
+        return;
+    }
+    let Some(player) = owner_id.and_then(|id| world.get_player_by_id(id)) else {
+        return;
+    };
+    let distance = player
+        .living_entity
+        .entity
+        .pos
+        .load()
+        .sub(&hit_pos)
+        .horizontal_length();
+    if distance >= BULLSEYE_MIN_HORIZONTAL_DISTANCE {
+        player
+            .trigger_advancement(AdvancementTrigger::Bullseye)
+            .await;
+    }
 }
 
 pub struct ThrownItemEntity {
