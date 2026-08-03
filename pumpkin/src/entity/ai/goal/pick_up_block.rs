@@ -3,7 +3,9 @@ use std::sync::Arc;
 use super::{Goal, GoalFuture, to_goal_ticks};
 use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::EndermanEntity;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::BlockStateId;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
@@ -83,7 +85,20 @@ impl Goal for PickUpBlockGoal {
 
             let default_state_id = block.default_state.id;
 
-            // TODO: Emit game event (BLOCK_DESTROY)
+            // Vanilla EnderMan.java:609 -- emits BLOCK_DESTROY before clearing the block.
+            // Vanilla's context carries both the enderman and the block state; Pumpkin's
+            // GameEventContext has no block-state variant and no Arc<dyn EntityBase> is
+            // available here (mob: &dyn Mob isn't behind an Arc), so this uses none() as a
+            // documented simplification, matching the pattern used in eat_grass.rs.
+            let block_center = Vector3::new(bx as f64 + 0.5, by as f64 + 0.5, bz as f64 + 0.5);
+            emit_game_event(
+                &world,
+                GameEvent::BlockDestroy,
+                block_center,
+                GameEventContext::none(),
+            )
+            .await;
+
             world
                 .set_block_state(&target_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
                 .await;
