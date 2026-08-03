@@ -1474,6 +1474,10 @@ impl LivingEntity {
                 ..Default::default()
             };
 
+            if let Some(mob) = dyn_self.get_mob() {
+                mob.on_mob_death(cause).await;
+            }
+
             // Drop loot
             self.drop_loot(params.clone()).await;
 

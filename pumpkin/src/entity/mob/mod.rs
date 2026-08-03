@@ -602,6 +602,13 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
+    /// Called on the killed mob once its death is confirmed, with `cause` as the
+    /// killer entity (mirrors `LivingEntity::on_death`'s `cause` parameter). Used by
+    /// villagers to notify nearby witnesses of a murder.
+    fn on_mob_death<'a>(&'a self, _cause: Option<&'a dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     fn on_eating_grass(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {})
     }

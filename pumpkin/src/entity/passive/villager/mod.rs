@@ -8,6 +8,7 @@ use pumpkin_data::Block;
 use pumpkin_data::block_properties::{
     BedPart, BlockProperties, WhiteBedLikeProperties as BedProperties,
 };
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -36,10 +37,12 @@ use crate::entity::{
 };
 
 pub mod data;
+pub mod gossip;
 pub use data::{
     BREEDING_FOOD_THRESHOLD, GossipType, VillagerData, VillagerProfession, VillagerType,
     get_food_points,
 };
+pub use gossip::GossipContainer;
 
 pub struct VillagerEntity {
     pub mob_entity: MobEntity,
@@ -48,7 +51,8 @@ pub struct VillagerEntity {
     pub xp: AtomicI32,
     pub last_restock_time: AtomicI64,
     pub restocks_today: AtomicI32,
-    pub gossips: Mutex<HashMap<Uuid, HashMap<GossipType, i32>>>,
+    pub gossips: Mutex<GossipContainer>,
+    pub last_gossip_decay_time: AtomicI64,
     pub inventory: Arc<Mutex<Vec<Arc<Mutex<ItemStack>>>>>,
     pub merchant_inventory: Arc<SimpleInventory>,
     pub offers: Mutex<Vec<pumpkin_protocol::java::client::play::MerchantOffer>>,
@@ -74,7 +78,8 @@ impl VillagerEntity {
             xp: AtomicI32::new(0),
             last_restock_time: AtomicI64::new(0),
             restocks_today: AtomicI32::new(0),
-            gossips: Mutex::new(HashMap::new()),
+            gossips: Mutex::new(GossipContainer::new()),
+            last_gossip_decay_time: AtomicI64::new(0),
             inventory,
             merchant_inventory: Arc::new(SimpleInventory::new(3)),
             offers: Mutex::new(Vec::new()),
@@ -287,7 +292,18 @@ impl VillagerEntity {
 
         // Open the merchant screen and then send the current offers packet
         if let Some(sync_id) = player.open_handled_screen(self, None).await {
-            let offers = self.offers.lock().await.clone();
+            let mut offers = self.offers.lock().await.clone();
+            let reputation = self
+                .gossips
+                .lock()
+                .await
+                .get_reputation(player.get_entity().entity_uuid, |_| true);
+            if reputation != 0 {
+                for offer in &mut offers {
+                    offer.special_price =
+                        gossip::reputation_price_discount(reputation, offer.price_multiplier);
+                }
+            }
             let villager_data = self.villager_data.lock().await;
 
             player
@@ -339,6 +355,14 @@ impl ScreenHandlerFactory for VillagerEntity {
                                 let offer = &mut offers[offer_index];
                                 offer.uses += 1;
                                 let reward_exp = !offer.is_disabled;
+
+                                // `Villager::customServerAiStep` -> `onReputationEventFrom(TRADE, ...)`
+                                // (Villager.java:257-258, 859-860): TRADING gossip, +2 (`REPUTATION_CHANGE_PER_TRADE`).
+                                villager.gossips.lock().await.add(
+                                    player_uuid,
+                                    GossipType::Trading,
+                                    2,
+                                );
 
                                 let xp_gain = offer.xp;
                                 let current_xp =
@@ -510,7 +534,7 @@ impl NBTStorage for VillagerEntity {
             // Gossips
             let gossips = self.gossips.lock().await;
             let mut gossip_list = Vec::new();
-            for (uuid, types) in gossips.iter() {
+            for (uuid, types) in gossips.raw() {
                 for (gtype, value) in types {
                     let mut gossip_nbt = NbtCompound::new();
                     let uuid_val = uuid.as_u128();
@@ -645,8 +669,7 @@ impl NBTStorage for VillagerEntity {
 
             // Gossips
             if let Some(gossip_list) = nbt.get_list("Gossips") {
-                let mut gossips = self.gossips.lock().await;
-                gossips.clear();
+                let mut raw: HashMap<Uuid, HashMap<GossipType, i32>> = HashMap::new();
                 for tag in gossip_list {
                     if let Some(gossip_nbt) = tag.extract_compound() {
                         let uuid = gossip_nbt.get_int_array("Target").map(|uuid_array| {
@@ -670,10 +693,11 @@ impl NBTStorage for VillagerEntity {
                                 4 => GossipType::Trading,
                                 _ => continue,
                             };
-                            gossips.entry(uuid).or_default().insert(gossip_type, val);
+                            raw.entry(uuid).or_default().insert(gossip_type, val);
                         }
                     }
                 }
+                *self.gossips.lock().await = GossipContainer::from_raw(raw);
             }
         })
     }
@@ -752,6 +776,71 @@ impl Mob for VillagerEntity {
         *self.home_pos.lock().unwrap()
     }
 
+    /// `Villager::setLastHurtByMob` -> `onReputationEventFrom(VILLAGER_HURT, ...)`
+    /// (Villager.java:585-593, 861-862): the hurt villager itself records
+    /// `MINOR_NEGATIVE` gossip against its attacker.
+    fn on_damage<'a>(
+        &'a self,
+        _damage_type: DamageType,
+        _source: Option<&'a dyn EntityBase>,
+    ) -> crate::entity::EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let attacker_id = self
+                .mob_entity
+                .living_entity
+                .last_attacker_id
+                .load(Ordering::Relaxed);
+            if attacker_id == 0 {
+                return;
+            }
+            let world = self.get_entity().world.load();
+            if let Some(attacker) = world.get_entity_by_id(attacker_id) {
+                self.gossips.lock().await.add(
+                    attacker.get_entity().entity_uuid,
+                    GossipType::MinorNegative,
+                    25,
+                );
+            }
+        })
+    }
+
+    /// `Villager::tellWitnessesThatIWasMurdered` -> `onReputationEventFrom(VILLAGER_KILLED, ...)`
+    /// (Villager.java:615-624, 863-864): every witnessing villager (vanilla uses the brain's
+    /// `NEAREST_VISIBLE_LIVING_ENTITIES` memory; approximated here with a 16-block box, the
+    /// default `FOLLOW_RANGE` vanilla's sensor inflates by -- `Mob.java:167` -- since Pumpkin
+    /// has no brain/sensor system) records `MAJOR_NEGATIVE` gossip against the murderer.
+    fn on_mob_death<'a>(
+        &'a self,
+        cause: Option<&'a dyn EntityBase>,
+    ) -> crate::entity::EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let Some(murderer) = cause else {
+                return;
+            };
+            let murderer_uuid = murderer.get_entity().entity_uuid;
+            let world = self.get_entity().world.load();
+            let pos = self.get_entity().pos.load();
+            let aabb = BoundingBox::new(
+                Vector3::new(pos.x - 16.0, pos.y - 16.0, pos.z - 16.0),
+                Vector3::new(pos.x + 16.0, pos.y + 16.0, pos.z + 16.0),
+            );
+            for entity in world.get_all_at_box(&aabb) {
+                if entity.get_entity().entity_id == self.get_entity().entity_id
+                    || entity.get_entity().entity_type != &EntityType::VILLAGER
+                {
+                    continue;
+                }
+                if let Some(villager) = entity.cast_any().downcast_ref::<Self>() {
+                    villager
+                        .gossips
+                        .lock()
+                        .await
+                        .add(murderer_uuid, GossipType::MajorNegative, 25);
+                }
+            }
+        })
+    }
+
     #[expect(clippy::too_many_lines)]
     fn mob_tick<'a>(
         &'a self,
@@ -764,6 +853,19 @@ impl Mob for VillagerEntity {
             }
 
             let world = self.get_entity().world.load();
+
+            // `Villager::maybeDecayGossip` (Villager.java:824-832): decays gossip once
+            // per in-game day (24000 ticks), tracked from a baseline set on first tick.
+            let world_age = world.get_world_age().await;
+            let last_decay = self.last_gossip_decay_time.load(Ordering::Relaxed);
+            if last_decay == 0 {
+                self.last_gossip_decay_time
+                    .store(world_age, Ordering::Relaxed);
+            } else if world_age >= last_decay + 24000 {
+                self.gossips.lock().await.decay();
+                self.last_gossip_decay_time
+                    .store(world_age, Ordering::Relaxed);
+            }
 
             // 1. Bed / Sleeping logic (for all villagers: babies, nitwits, adults)
             let is_sleeping = self.get_entity().pose.load() == EntityPose::Sleeping;
