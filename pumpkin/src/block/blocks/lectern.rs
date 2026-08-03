@@ -73,8 +73,10 @@ impl BlockBehaviour for LecternBlock {
             {
                 let book = lectern_entity.remove_stack(0).await;
                 if !book.is_empty() {
-                    // Logic to give the book to the player
-                    // Need to find a proper way to give items to player. For now skip.
+                    args.player
+                        .inventory
+                        .offer_or_drop_stack(book, args.player.as_ref())
+                        .await;
 
                     let mut props = LecternLikeProperties::from_state_id(
                         args.world.get_block_state(args.position).id,
