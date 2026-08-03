@@ -1,9 +1,40 @@
+use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::Item;
 pub use pumpkin_data::villager::{VillagerProfession, VillagerType};
 use pumpkin_protocol::codec::var_int::VarInt;
 use serde::Serialize;
 
 pub const BREEDING_FOOD_THRESHOLD: i32 = 12;
+
+/// Vanilla `VillagerType#byBiome` / `BY_BIOME`
+/// (`net/minecraft/world/entity/npc/villager/VillagerType.java`). Biomes absent from the
+/// table fall back to `VillagerData.DEFAULT_TYPE`, which is `plains`.
+#[must_use]
+pub fn villager_type_at(entity: &crate::entity::Entity) -> VillagerType {
+    villager_type_by_biome(entity.world.load().get_biome(
+        &pumpkin_util::math::position::BlockPos::floored_v(entity.pos.load()),
+    ))
+}
+
+#[must_use]
+pub fn villager_type_by_biome(biome: &Biome) -> VillagerType {
+    match biome.registry_id {
+        "badlands" | "desert" | "eroded_badlands" | "wooded_badlands" => VillagerType::Desert,
+        "bamboo_jungle" | "jungle" | "sparse_jungle" => VillagerType::Jungle,
+        "savanna_plateau" | "savanna" | "windswept_savanna" => VillagerType::Savanna,
+        "deep_frozen_ocean" | "frozen_ocean" | "frozen_river" | "ice_spikes" | "snowy_beach"
+        | "snowy_taiga" | "snowy_plains" | "grove" | "snowy_slopes" | "frozen_peaks"
+        | "jagged_peaks" => VillagerType::Snow,
+        "swamp" | "mangrove_swamp" => VillagerType::Swamp,
+        "old_growth_spruce_taiga"
+        | "old_growth_pine_taiga"
+        | "windswept_gravelly_hills"
+        | "windswept_hills"
+        | "taiga"
+        | "windswept_forest" => VillagerType::Taiga,
+        _ => VillagerType::Plains,
+    }
+}
 
 #[must_use]
 pub const fn get_food_points(item: &Item) -> i32 {
@@ -63,5 +94,38 @@ impl VillagerData {
     #[must_use]
     pub fn profession_enum(&self) -> VillagerProfession {
         VillagerProfession::from_i32(self.profession.0).unwrap_or(VillagerProfession::None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{VillagerType, villager_type_by_biome};
+    use pumpkin_data::chunk::Biome;
+
+    #[test]
+    fn maps_vanilla_by_biome_table() {
+        for (biome, expected) in [
+            (&Biome::DESERT, VillagerType::Desert),
+            (&Biome::BADLANDS, VillagerType::Desert),
+            (&Biome::BAMBOO_JUNGLE, VillagerType::Jungle),
+            (&Biome::WINDSWEPT_SAVANNA, VillagerType::Savanna),
+            (&Biome::FROZEN_RIVER, VillagerType::Snow),
+            (&Biome::JAGGED_PEAKS, VillagerType::Snow),
+            (&Biome::MANGROVE_SWAMP, VillagerType::Swamp),
+            (&Biome::WINDSWEPT_FOREST, VillagerType::Taiga),
+            (&Biome::OLD_GROWTH_PINE_TAIGA, VillagerType::Taiga),
+        ] {
+            assert_eq!(villager_type_by_biome(biome), expected);
+        }
+    }
+
+    #[test]
+    fn unlisted_biomes_fall_back_to_the_default_type() {
+        assert_eq!(villager_type_by_biome(&Biome::PLAINS), VillagerType::Plains);
+        assert_eq!(villager_type_by_biome(&Biome::FOREST), VillagerType::Plains);
+        assert_eq!(
+            villager_type_by_biome(&Biome::NETHER_WASTES),
+            VillagerType::Plains
+        );
     }
 }

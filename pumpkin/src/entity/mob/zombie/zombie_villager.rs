@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::passive::villager::VillagerEntity;
-use crate::entity::passive::villager::data::{VillagerData, VillagerProfession, VillagerType};
+use crate::entity::passive::villager::data::{VillagerData, VillagerProfession, villager_type_at};
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture};
 
@@ -62,9 +62,12 @@ pub struct ZombieVillagerEntity {
 
 impl ZombieVillagerEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
+        // Vanilla `ZombieVillager#finalizeSpawn` -> `VillagerDataHolder#finalizeVillagerType`
+        // picks the type from `VillagerType.byBiome` at the spawn position.
+        let villager_type = villager_type_at(&entity);
         let mob_entity = ZombieEntityBase::new(entity);
         let profession = PROFESSIONS[rand::random_range(0..PROFESSIONS.len())];
-        let villager_data = VillagerData::new(VillagerType::Plains, profession, 1);
+        let villager_data = VillagerData::new(villager_type, profession, 1);
         let zombie = Self {
             mob_entity,
             villager_data: Mutex::new(villager_data),
@@ -142,8 +145,7 @@ impl ZombieVillagerEntity {
     ///
     /// Not ported: `dropPreservedEquipment` (no equipment kept -- `keepEquipment` is
     /// `false` in vanilla's own call), gossip/trade-offer carryover (only ever populated
-    /// by the villager-to-zombie-villager infection path, out of scope here),
-    /// `finalizeVillagerType`'s biome-based type (defaults to Plains), `refreshBrain`,
+    /// by the villager-to-zombie-villager infection path, out of scope here), `refreshBrain`,
     /// and the `CriteriaTriggers.CURED_ZOMBIE_VILLAGER` / reputation-event grant (no
     /// per-player conversion-credit infrastructure to hook into cheaply).
     async fn finish_conversion(&self) {
