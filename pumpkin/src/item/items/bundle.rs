@@ -1,7 +1,11 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::entity::{Entity, item::ItemEntity, player::Player};
+use crate::entity::{
+    Entity,
+    item::ItemEntity,
+    player::{Player, statistics::StatisticCategory},
+};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::data_component_impl::BundleContentsImpl;
 use pumpkin_data::entity::EntityType;
@@ -133,6 +137,7 @@ impl BundleItem {
         let Some(extracted_stack) = bundle_contents.try_extract() else {
             return false;
         };
+        let item_id = bundle.item.id;
         let updated_bundle = bundle.clone();
         drop(bundle);
 
@@ -148,6 +153,9 @@ impl BundleItem {
             SoundCategory::Players,
             &position,
         );
+        player
+            .increment_stat(StatisticCategory::Used, item_id as i32, 1)
+            .await;
         player.sync_hand_slot(slot_index, updated_bundle).await;
         true
     }
