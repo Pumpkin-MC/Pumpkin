@@ -3,6 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
     block_properties::BlockProperties,
+    game_event::GameEvent,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
@@ -20,6 +21,7 @@ use crate::{
         PlayerPlacedArgs,
     },
     world::World,
+    world::game_event::{GameEventContext, emit_game_event},
 };
 
 type TripwireProperties = pumpkin_data::block_properties::TripwireLikeProperties;
@@ -262,7 +264,8 @@ impl TripwireHookBlock {
                 future_powered,
                 start_hook_props.attached,
                 start_hook_props.powered,
-            );
+            )
+            .await;
         }
 
         Self::play_sound(
@@ -272,7 +275,8 @@ impl TripwireHookBlock {
             future_powered,
             start_hook_props.attached,
             start_hook_props.powered,
-        );
+        )
+        .await;
 
         if !skip_state_update {
             let mut future_start_hook_state = future_hook_state;
@@ -315,7 +319,7 @@ impl TripwireHookBlock {
     }
 
     #[expect(clippy::fn_params_excessive_bools)]
-    fn play_sound(
+    async fn play_sound(
         world: &Arc<World>,
         block_pos: &BlockPos,
         attached: bool,
@@ -327,17 +331,29 @@ impl TripwireHookBlock {
         let pos = block_pos.to_f64();
         if on && !off {
             world.play_sound_raw(Sound::BlockTripwireClickOn as u16, cat, &pos, 0.4, 0.6);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_ACTIVATE, pos);
+            emit_game_event(
+                world,
+                GameEvent::BlockActivate,
+                pos,
+                GameEventContext::none(),
+            )
+            .await;
         } else if !on && off {
             world.play_sound_raw(Sound::BlockTripwireClickOff as u16, cat, &pos, 0.4, 0.5);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_DEACTIVATE, pos);
+            emit_game_event(
+                world,
+                GameEvent::BlockDeactivate,
+                pos,
+                GameEventContext::none(),
+            )
+            .await;
         } else if attached && !detached {
             world.play_sound_raw(Sound::BlockTripwireAttach as u16, cat, &pos, 0.4, 0.7);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_ATTACH, pos);
+            emit_game_event(world, GameEvent::BlockAttach, pos, GameEventContext::none()).await;
         } else if !attached && detached {
             let pitch = 1.2 / rng().random::<f32>().mul_add(0.2, 0.9);
             world.play_sound_raw(Sound::BlockTripwireDetach as u16, cat, &pos, 0.4, pitch);
-            // TODO world.emitGameEvent((Entity)null, GameEvent.BLOCK_DETACH, pos);
+            emit_game_event(world, GameEvent::BlockDetach, pos, GameEventContext::none()).await;
         }
     }
 
