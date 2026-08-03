@@ -49,7 +49,6 @@ impl MobSpawnerBlockEntity {
     }
 
     pub fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) {
-        // TODO: this is ugly af
         nbt.put_string("id", self.resource_location().to_string());
         let position = self.get_position();
         nbt.put_int("x", position.0.x);
@@ -121,7 +120,6 @@ impl BlockEntity for MobSpawnerBlockEntity {
                             + (rand::random::<f64>() + rand::random::<f64>()) * spawn_range as f64
                             + 0.5,
                     );
-                    // TODO: we should use getSpawnBox, but this is only modified for slimes and magma slimes
                     if !world.is_space_empty(BoundingBox::new_from_pos(
                         spawn_pos.x,
                         spawn_pos.y,
