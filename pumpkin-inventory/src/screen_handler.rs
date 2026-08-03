@@ -36,6 +36,7 @@ use pumpkin_data::{
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     screen::WindowType,
     statistic::StatisticCategory,
+    world::WorldEvent,
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::OptionalItemStackHash,
@@ -189,6 +190,9 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Awards experience points to the player (used for furnace smelting, etc.)
     fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()>;
+
+    /// Plays a world event (e.g. anvil used) at the open container position.
+    fn play_sound_event(&self, event: WorldEvent) -> PlayerFuture<'_, ()>;
 
     /// Increments a statistic for the player.
     fn increment_stat(

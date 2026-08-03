@@ -5361,6 +5361,14 @@ impl InventoryPlayer for Player {
         })
     }
 
+    fn play_sound_event(&self, event: pumpkin_data::world::WorldEvent) -> PlayerFuture<'_, ()> {
+        Box::pin(async move {
+            if let Some(pos) = self.open_container_pos.load() {
+                self.world().sync_world_event(event, pos, 0);
+            }
+        })
+    }
+
     fn increment_stat(
         &self,
         category: StatisticCategory,
