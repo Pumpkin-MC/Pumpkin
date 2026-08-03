@@ -58,7 +58,7 @@ impl BlastingFurnaceBlockEntity {
 
 impl_cooking_block_entity_base!(BlastingFurnaceBlockEntity);
 impl_block_entity_for_cooking!(BlastingFurnaceBlockEntity, CookingRecipeKind::Blasting);
-impl_inventory_for_cooking!(BlastingFurnaceBlockEntity);
+impl_inventory_for_cooking!(BlastingFurnaceBlockEntity, CookingRecipeKind::Blasting);
 impl_clearable_for_cooking!(BlastingFurnaceBlockEntity);
 impl_property_delegate_for_cooking!(BlastingFurnaceBlockEntity);
 impl_experience_container_for_cooking!(BlastingFurnaceBlockEntity);

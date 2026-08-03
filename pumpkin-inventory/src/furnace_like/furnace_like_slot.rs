@@ -86,6 +86,22 @@ impl Slot for FurnaceLikeSlot {
         })
     }
 
+    fn get_max_item_count_for_stack<'a>(
+        &'a self,
+        stack: &'a pumpkin_data::item_stack::ItemStack,
+    ) -> BoxFuture<'a, u8> {
+        Box::pin(async move {
+            if matches!(self.slot_type, FurnaceLikeSlotType::Bottom)
+                && stack.item.id == Item::BUCKET.id
+            {
+                return 1;
+            }
+            self.get_max_item_count()
+                .await
+                .min(stack.get_max_stack_size())
+        })
+    }
+
     fn mark_dirty(&self) -> BoxFuture<'_, ()> {
         Box::pin(async move {
             self.inventory.mark_dirty();

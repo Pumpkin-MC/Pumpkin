@@ -293,7 +293,7 @@ macro_rules! impl_experience_container_for_cooking {
 
 #[macro_export]
 macro_rules! impl_inventory_for_cooking {
-    ($struct_name:ty) => {
+    ($struct_name:ty,$recipe_kind:expr) => {
         impl pumpkin_world::inventory::Inventory for $struct_name {
             fn size(&self) -> usize {
                 self.items.len()
@@ -410,16 +410,12 @@ macro_rules! impl_inventory_for_cooking {
                     drop(furnace_stack);
 
                     if slot == 0 && !is_same_item {
-                        if let Some(recipe) =
-                            pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
-                                stack.item,
-                                CookingRecipeKind::Smelting,
-                            )
-                        {
-                            self.set_cooking_total_time(recipe.cookingtime as u16);
-                        } else {
-                            self.set_cooking_total_time(0);
-                        }
+                        let total_time = pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
+                            stack.item,
+                            $recipe_kind,
+                        )
+                        .map_or(200, |recipe| recipe.cookingtime as u16);
+                        self.set_cooking_total_time(total_time);
                         self.set_cooking_time_spent(0);
                     }
 
