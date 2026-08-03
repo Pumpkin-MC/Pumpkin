@@ -95,7 +95,11 @@ impl HoneyCombItem {
         block_entity: &Arc<dyn BlockEntity>,
         sign_entity: &SignBlockEntity,
     ) -> BlockActionResult {
-        sign_entity.is_waxed.store(true, Ordering::Relaxed);
+        // Vanilla `HoneycombItem#tryApplyToSign` returns the result of `SignBlockEntity#setWaxed`,
+        // which is false when the sign is already waxed, so the honeycomb is not consumed.
+        if sign_entity.is_waxed.swap(true, Ordering::Relaxed) {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
 
         args.world.update_block_entity(block_entity);
         args.world
