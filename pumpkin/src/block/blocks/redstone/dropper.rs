@@ -171,11 +171,29 @@ impl BlockBehaviour for DropperBlock {
                     if let Some(entity) = args.world.get_block_entity(&target_pos)
                         && let Some(container) = entity.get_inventory()
                     {
+                        // The face of the target container the dropper touches is the face
+                        // pointing back at the dropper, i.e. the opposite of its facing.
+                        let target_face = props.facing.to_block_direction().opposite();
+                        let mut insertable_slots = Vec::new();
+                        for slot in container.slots_for_face(target_face) {
+                            if container
+                                .can_insert_through_face(slot, &item, target_face)
+                                .await
+                            {
+                                insertable_slots.push(slot);
+                            }
+                        }
+
                         let backup = item.clone();
                         let one_item = item.split(1);
 
-                        if HopperBlockEntity::add_one_item(dropper, container.as_ref(), one_item)
-                            .await
+                        if HopperBlockEntity::add_one_item(
+                            dropper,
+                            container.as_ref(),
+                            one_item,
+                            &insertable_slots,
+                        )
+                        .await
                         {
                             return;
                         }

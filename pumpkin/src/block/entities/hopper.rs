@@ -185,15 +185,22 @@ impl HopperBlockEntity {
         if let Some(entity) = world.get_block_entity(pos_up)
             && let Some(container) = entity.clone().get_inventory()
         {
-            // TODO check WorldlyContainer
-            for i in 0..container.size() {
+            // The hopper sits below the container, i.e. touches its bottom (Down) face.
+            let slots = container.slots_for_face(pumpkin_data::BlockDirection::Down);
+            for i in slots {
                 let bind = container.get_stack(i).await;
                 let mut item = bind.lock().await;
-                if !item.is_empty() && container.can_transfer_to(self, i, &item) {
-                    //TODO WorldlyContainer
+                if !item.is_empty()
+                    && container.can_transfer_to(self, i, &item)
+                    && container
+                        .can_extract_through_face(i, &item, pumpkin_data::BlockDirection::Down)
+                        .await
+                {
                     let backup = item.clone();
                     let one_item = item.split(1);
-                    if Self::add_one_item(container.as_ref(), self, one_item).await {
+                    if Self::add_one_item(container.as_ref(), self, one_item, &[0, 1, 2, 3, 4])
+                        .await
+                    {
                         // If extracting from furnace output slot (index 2), drop XP as orbs
                         const FURNACE_OUTPUT_SLOT: usize = 2;
                         if i == FURNACE_OUTPUT_SLOT
@@ -227,7 +234,7 @@ impl HopperBlockEntity {
                     if !stack.is_empty() {
                         let backup = stack.clone();
                         let one_item = stack.split(1);
-                        if Self::add_one_item(self, self, one_item).await {
+                        if Self::add_one_item(self, self, one_item, &[0, 1, 2, 3, 4]).await {
                             if stack.is_empty() {
                                 item_entity.get_entity().remove().await;
                             }
@@ -247,9 +254,19 @@ impl HopperBlockEntity {
         if let Some(entity) = world.get_block_entity(&output_position(self.position, *state))
             && let Some(container) = entity.get_inventory()
         {
-            // TODO check WorldlyContainer
+            // The face of the target container the hopper touches is the face pointing
+            // back at the hopper, i.e. the opposite of the hopper's own facing.
+            let target_face = match state.facing {
+                FacingHopper::Down => pumpkin_data::BlockDirection::Up,
+                FacingHopper::North => pumpkin_data::BlockDirection::South,
+                FacingHopper::South => pumpkin_data::BlockDirection::North,
+                FacingHopper::West => pumpkin_data::BlockDirection::East,
+                FacingHopper::East => pumpkin_data::BlockDirection::West,
+            };
+            let target_slots = container.slots_for_face(target_face);
+
             let mut is_full = true;
-            for i in 0..container.size() {
+            for &i in &target_slots {
                 let bind = container.get_stack(i).await;
                 let item = bind.lock().await;
                 if item.item_count < item.get_max_stack_size() {
@@ -263,10 +280,20 @@ impl HopperBlockEntity {
             for i in &self.items {
                 let mut item = i.lock().await;
                 if !item.is_empty() {
-                    //TODO WorldlyContainer
+                    let mut insertable_slots = Vec::new();
+                    for &slot in &target_slots {
+                        if container
+                            .can_insert_through_face(slot, &item, target_face)
+                            .await
+                        {
+                            insertable_slots.push(slot);
+                        }
+                    }
                     let backup = item.clone();
                     let one_item = item.split(1);
-                    if Self::add_one_item(self, container.as_ref(), one_item).await {
+                    if Self::add_one_item(self, container.as_ref(), one_item, &insertable_slots)
+                        .await
+                    {
                         return true;
                     }
                     *item = backup;
@@ -275,10 +302,15 @@ impl HopperBlockEntity {
         }
         false
     }
-    pub async fn add_one_item(from: &dyn Inventory, to: &dyn Inventory, item: ItemStack) -> bool {
+    pub async fn add_one_item(
+        from: &dyn Inventory,
+        to: &dyn Inventory,
+        item: ItemStack,
+        to_slots: &[usize],
+    ) -> bool {
         let mut success = false;
         let to_empty = to.is_empty().await;
-        for j in 0..to.size() {
+        for &j in to_slots {
             if to.is_valid_slot_for(j, &item) {
                 let bind = to.get_stack(j).await;
                 let mut dst = bind.lock().await;

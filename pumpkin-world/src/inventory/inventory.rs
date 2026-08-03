@@ -1,3 +1,4 @@
+use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
@@ -29,6 +30,32 @@ pub trait Inventory: Send + Sync + Clearable {
     }
     fn on_close(&self) -> InventoryFuture<'_, ()> {
         Box::pin(async {})
+    }
+
+    /// Vanilla `WorldlyContainer.getSlotsForFace`. Default: unrestricted, matching plain
+    /// `Container`s (chests, barrels, etc), which hoppers may access from any face/slot.
+    fn slots_for_face(&self, _direction: BlockDirection) -> Vec<usize> {
+        (0..self.size()).collect()
+    }
+
+    /// Vanilla `WorldlyContainer.canPlaceItemThroughFace`. Default: unrestricted.
+    fn can_insert_through_face<'a>(
+        &'a self,
+        _slot: usize,
+        _stack: &'a ItemStack,
+        _direction: BlockDirection,
+    ) -> InventoryFuture<'a, bool> {
+        Box::pin(async { true })
+    }
+
+    /// Vanilla `WorldlyContainer.canTakeItemThroughFace`. Default: unrestricted.
+    fn can_extract_through_face<'a>(
+        &'a self,
+        _slot: usize,
+        _stack: &'a ItemStack,
+        _direction: BlockDirection,
+    ) -> InventoryFuture<'a, bool> {
+        Box::pin(async { true })
     }
 
     fn count<'a>(&'a self, item: &'a Item) -> InventoryFuture<'a, u8> {

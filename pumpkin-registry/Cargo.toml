@@ -23,3 +23,8 @@ tokio = { workspace = true, features = ["net"] }
 
 [lints]
 workspace = true
+
+[package.metadata.cargo-machete]
+# Not yet used: this crate is infrastructure only so far (see module docs). These are
+# needed once it actually registers Pumpkin's built-in registries and loads data packs.
+ignored = ["pumpkin-data", "pumpkin-macros", "pumpkin-nbt", "pumpkin-world", "tokio"]
