@@ -70,6 +70,7 @@ use pumpkin_protocol::{
     packet::Packet,
     serial::{PacketRead, PacketReadSlice},
 };
+use pumpkin_util::math::vector2::Vector2;
 use std::net::SocketAddr;
 use tokio::{
     net::UdpSocket,
@@ -357,17 +358,17 @@ impl BedrockClient {
         self.close().await;
     }
 
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> Vec<Vector2<i32>> {
         let player = self.player.lock().await.clone();
         let Some(player) = player.as_ref() else {
             debug!(
                 "send_chunks: player not set yet, dropping {} chunks",
                 chunks.len()
             );
-            return;
+            return Vec::new();
         };
         let Some(server) = player.world().server.upgrade() else {
-            return;
+            return Vec::new();
         };
 
         let mut valid_chunks = Vec::with_capacity(chunks.len());
@@ -380,11 +381,12 @@ impl BedrockClient {
         }
 
         if valid_chunks.is_empty() {
-            return;
+            return Vec::new();
         }
 
         let mut serialize_tasks = Vec::with_capacity(valid_chunks.len());
         for chunk in valid_chunks {
+            let position = Vector2::new(chunk.x, chunk.z);
             serialize_tasks.push(tokio::task::spawn_blocking(move || {
                 let mut packet_payload = Vec::new();
                 let packet = CLevelChunk {
@@ -394,7 +396,7 @@ impl BedrockClient {
                 };
                 packet
                     .write_packet(&mut packet_payload)
-                    .map(|()| packet_payload)
+                    .map(|()| (position, packet_payload))
             }));
         }
 
@@ -410,7 +412,7 @@ impl BedrockClient {
         let mut packets_to_enqueue = Vec::with_capacity(encoded_payloads.len());
         {
             let encoder = self.network_writer.read().await;
-            for payload in encoded_payloads {
+            for (position, payload) in encoded_payloads {
                 let mut packet_buf = Vec::new();
                 match encoder.write_game_packet(
                     CLevelChunk::PACKET_ID as u16,
@@ -419,14 +421,17 @@ impl BedrockClient {
                     &payload,
                     &mut packet_buf,
                 ) {
-                    Ok(()) => packets_to_enqueue.push(packet_buf),
+                    Ok(()) => packets_to_enqueue.push((position, packet_buf)),
                     Err(err) => error!("Failed to write game packet wrapper: {err}"),
                 }
             }
         }
-        for packet_buf in packets_to_enqueue {
+        let mut delivered_chunks = Vec::with_capacity(packets_to_enqueue.len());
+        for (position, packet_buf) in packets_to_enqueue {
             self.enqueue_packet_data(packet_buf.into()).await;
+            delivered_chunks.push(position);
         }
+        delivered_chunks
     }
 
     pub async fn enqueue_packet<P: BClientPacket>(&self, packet: &P) {

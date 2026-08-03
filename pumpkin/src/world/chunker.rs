@@ -98,6 +98,11 @@ pub async fn update_position(player: &Arc<Player>) {
 
     player.watched_section.store(new_cylindrical);
 
+    for chunk in &unloading_chunks {
+        player.delivered_chunks.remove(chunk);
+    }
+    world.update_entity_tracking_for_player(player);
+
     if let ClientPlatform::Java(_) = player.client.as_ref() {
         for chunk in &unloading_chunks {
             player
