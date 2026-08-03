@@ -545,6 +545,14 @@ struct Textures {
 #[derive(Deserialize)]
 struct SkinTexture {
     url: String,
+    #[serde(default)]
+    metadata: Option<SkinMetadata>,
+}
+
+#[derive(Deserialize)]
+struct SkinMetadata {
+    #[serde(default)]
+    model: Option<String>,
 }
 
 impl Player {
@@ -555,7 +563,13 @@ impl Player {
             .decode(textures_prop.value.as_bytes())
             .ok()?;
         let textures: TexturesProperty = serde_json::from_slice(&decoded).ok()?;
-        let url = textures.textures.skin?.url;
+        let skin_texture = textures.textures.skin?;
+        let url = skin_texture.url;
+        let is_slim = skin_texture
+            .metadata
+            .as_ref()
+            .and_then(|m| m.model.as_deref())
+            .is_some_and(|model| model == "slim");
 
         let resp = ureq::get(&url).call().ok()?;
         let mut buf = Vec::new();
@@ -577,6 +591,9 @@ impl Player {
         }
 
         let mut skin = pumpkin_protocol::bedrock::client::Skin::steve();
+        if is_slim {
+            skin.arm_size = "slim".to_string();
+        }
         skin.image_width = width;
         skin.image_height = height;
         skin.skin_data = rgba;
@@ -2979,6 +2996,17 @@ impl Player {
                     if entity.is_sneaking() {
                         entity.set_sneaking(false).await;
                     }
+                }
+
+                /* Vanilla doesn't reset fallDistance in setGameMode(), instead relies on
+                 * Player.aiStep() resetting when abilities.flying=true and
+                 * Player.causeFallDamage() returning false when abilities.mayfly=true.
+                 * TODO: Reset fall_distance each tick when abilities.flying=true (mirrors Player.aiStep())
+                 * TODO: Add abilities.allow_flying check in LivingEntity::handle_fall_damage() (mirrors Player.causeFallDamage())
+                 * TODO: Once implemented, restrict this reset to Spectator only.
+                 */
+                if matches!(gamemode, GameMode::Creative | GameMode::Spectator) {
+                    self.living_entity.fall_distance.store(0.0);
                 }
 
                 if gamemode != GameMode::Spectator && self.camera_target_id.load().is_some() {

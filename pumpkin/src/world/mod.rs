@@ -2565,7 +2565,8 @@ impl World {
                     | PlayerInfoFlags::UPDATE_GAME_MODE
                     | PlayerInfoFlags::UPDATE_LISTED
                     | PlayerInfoFlags::UPDATE_LATENCY
-                    | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                    | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                    | PlayerInfoFlags::UPDATE_HAT)
                     .bits(),
                 &[pumpkin_protocol::java::client::play::Player {
                     uuid: gameprofile.id,
@@ -2578,6 +2579,7 @@ impl World {
                         PlayerAction::UpdateListed(true),
                         PlayerAction::UpdateLatency(VarInt(0)),
                         PlayerAction::UpdateListOrder(VarInt(0)),
+                        PlayerAction::UpdateHat(true),
                     ],
                 }],
             ),
@@ -2643,6 +2645,15 @@ impl World {
         {
             let meta = Metadata::new(
                 TrackedData::PLAYER_MODE_CUSTOMISATION,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            );
+            meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
+                .unwrap();
+        };
+        {
+            let meta = Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
                 MetaDataType::BYTE,
                 config.skin_parts,
             );
@@ -2904,6 +2915,7 @@ impl World {
             PlayerAction::UpdateListed(true),
             PlayerAction::UpdateLatency(VarInt(0)),
             PlayerAction::UpdateListOrder(VarInt(0)),
+            PlayerAction::UpdateHat(true),
         ];
         let java_player = [pumpkin_protocol::java::client::play::Player {
             uuid: gameprofile.id,
@@ -2914,7 +2926,8 @@ impl World {
                 | PlayerInfoFlags::UPDATE_GAME_MODE
                 | PlayerInfoFlags::UPDATE_LISTED
                 | PlayerInfoFlags::UPDATE_LATENCY
-                | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                | PlayerInfoFlags::UPDATE_HAT)
                 .bits(),
             &java_player,
         );
@@ -2953,20 +2966,10 @@ impl World {
                 let chat_session = player.chat_session.lock().await;
                 let tab_list_name = player.get_tab_list_name().await;
 
-                let mut player_actions = vec![
-                    PlayerAction::AddPlayer {
-                        name: &player.gameprofile.name,
-                        properties,
-                    },
-                    PlayerAction::UpdateGameMode(VarInt(player.gamemode.load() as i32)),
-                    PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
-                    PlayerAction::UpdateLatency(VarInt(
-                        player.tab_list_latency.load(Ordering::Relaxed),
-                    )),
-                    PlayerAction::UpdateListOrder(VarInt(
-                        player.tab_list_order.load(Ordering::Relaxed),
-                    )),
-                ];
+                let mut player_actions = vec![PlayerAction::AddPlayer {
+                    name: &player.gameprofile.name,
+                    properties,
+                }];
 
                 if base_config.allow_chat_reports {
                     player_actions.push(PlayerAction::InitializeChat(Some(InitChat {
@@ -2976,6 +2979,18 @@ impl World {
                         signature: chat_session.signature.clone(),
                     })));
                 }
+
+                player_actions.extend([
+                    PlayerAction::UpdateGameMode(VarInt(player.gamemode.load() as i32)),
+                    PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
+                    PlayerAction::UpdateLatency(VarInt(
+                        player.tab_list_latency.load(Ordering::Relaxed),
+                    )),
+                    PlayerAction::UpdateListOrder(VarInt(
+                        player.tab_list_order.load(Ordering::Relaxed),
+                    )),
+                    PlayerAction::UpdateHat(true),
+                ]);
                 drop(chat_session);
 
                 current_player_data.push((&player.gameprofile.id, player_actions));
@@ -2990,7 +3005,8 @@ impl World {
                 | PlayerInfoFlags::UPDATE_LISTED
                 | PlayerInfoFlags::UPDATE_LATENCY
                 | PlayerInfoFlags::UPDATE_LIST_PRIORITY
-                | PlayerInfoFlags::UPDATE_GAME_MODE;
+                | PlayerInfoFlags::UPDATE_GAME_MODE
+                | PlayerInfoFlags::UPDATE_HAT;
             if base_config.allow_chat_reports {
                 action_flags |= PlayerInfoFlags::INITIALIZE_CHAT;
             }
@@ -3096,6 +3112,15 @@ impl World {
             meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
                 .unwrap();
         };
+        {
+            let meta = Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            );
+            meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
+                .unwrap();
+        };
         java_meta_buf.put_u8(255);
 
         self.broadcast_packet_except_editioned_sync(
@@ -3194,6 +3219,7 @@ impl World {
                 PlayerAction::UpdateListOrder(VarInt(
                     existing_player.tab_list_order.load(Ordering::Relaxed),
                 )),
+                PlayerAction::UpdateHat(true),
             ];
             let java_player = [pumpkin_protocol::java::client::play::Player {
                 uuid: gameprofile.id,
@@ -3207,7 +3233,8 @@ impl World {
                             | PlayerInfoFlags::UPDATE_LISTED
                             | PlayerInfoFlags::UPDATE_GAME_MODE
                             | PlayerInfoFlags::UPDATE_LATENCY
-                            | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                            | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                            | PlayerInfoFlags::UPDATE_HAT)
                             .bits(),
                         &java_player,
                     ),
@@ -3239,6 +3266,14 @@ impl World {
                 {
                     let meta = Metadata::new(
                         TrackedData::PLAYER_MODE_CUSTOMISATION,
+                        MetaDataType::BYTE,
+                        config.skin_parts,
+                    );
+                    meta.write(&mut buf, &client.version.load()).unwrap();
+                };
+                {
+                    let meta = Metadata::new(
+                        TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
                         MetaDataType::BYTE,
                         config.skin_parts,
                     );

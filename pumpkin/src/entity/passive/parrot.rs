@@ -5,7 +5,6 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
-use pumpkin_data::potion::Effect;
 use pumpkin_data::{
     effect::StatusEffect,
     tag::{self, Taggable},
@@ -22,6 +21,10 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     player::Player,
 };
+
+/// Duration in ticks of the poison a parrot gets from eating a cookie, matching
+/// vanilla `Parrot.mobInteract`.
+const COOKIE_POISON_DURATION: i32 = 900;
 
 /// Represents a Parrot, a passive flying mob that can mimic nearby mob sounds.
 ///
@@ -54,6 +57,38 @@ impl ParrotEntity {
 
         mob_arc
     }
+
+    /// Feeds the parrot a cookie: it is poisoned and then killed, as in vanilla
+    /// `Parrot.mobInteract`.
+    async fn eat_cookie(&self, player: &Arc<Player>, item_stack: &mut ItemStack) {
+        item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+
+        self.mob_entity
+            .living_entity
+            .add_effect(pumpkin_data::potion::Effect {
+                effect_type: &StatusEffect::POISON,
+                duration: COOKIE_POISON_DURATION,
+                amplifier: 0,
+                ambient: false,
+                show_particles: true,
+                show_icon: true,
+                blend: true,
+            })
+            .await;
+
+        // Vanilla guards this call with `player.isCreative() || !this.isInvulnerable()`,
+        // but `hurt` re-checks invulnerability itself and `player_attack` doesn't bypass
+        // it, so the guard only skips a call that would do nothing anyway.
+        self.damage_with_context(
+            self,
+            f32::MAX,
+            DamageType::PLAYER_ATTACK,
+            None,
+            Some(player.as_ref()),
+            Some(player.as_ref()),
+        )
+        .await;
+    }
 }
 
 impl NBTStorage for ParrotEntity {}
@@ -69,8 +104,15 @@ impl Mob for ParrotEntity {
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            let entity = &self.mob_entity.living_entity.entity;
+            if item_stack
+                .item
+                .has_tag(&tag::Item::MINECRAFT_PARROT_POISONOUS_FOOD)
+            {
+                self.eat_cookie(player, item_stack).await;
+                return true;
+            }
 
+            let entity = &self.mob_entity.living_entity.entity;
             if !self.mob_entity.is_tamed()
                 && item_stack.item.has_tag(&tag::Item::MINECRAFT_PARROT_FOOD)
             {
@@ -89,32 +131,34 @@ impl Mob for ParrotEntity {
                 return true;
             }
 
-            if item_stack
-                .item
-                .has_tag(&tag::Item::MINECRAFT_PARROT_POISONOUS_FOOD)
-            {
-                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-
-                if let Some(living) = self.get_living_entity() {
-                    living
-                        .add_effect(Effect {
-                            effect_type: &StatusEffect::POISON,
-                            duration: 900,
-                            amplifier: 0,
-                            ambient: false,
-                            show_particles: true,
-                            show_icon: true,
-                            blend: false,
-                        })
-                        .await;
-                }
-                self.damage(player.as_ref(), f32::MAX, DamageType::PLAYER_ATTACK)
-                    .await;
-
-                return true;
-            }
-
-            false
+            self.mob_entity.mob_interact(player, item_stack).await
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::COOKIE_POISON_DURATION;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::tag::{self, Taggable};
+
+    /// The interaction is gated on the vanilla `parrot_poisonous_food` tag rather than
+    /// on a hardcoded cookie id, so check the tag actually resolves the way the
+    /// interaction assumes.
+    #[test]
+    fn cookie_is_poisonous_parrot_food() {
+        assert!(Item::COOKIE.has_tag(&tag::Item::MINECRAFT_PARROT_POISONOUS_FOOD));
+    }
+
+    /// Seeds tame a parrot in vanilla and must not reach the poison branch.
+    #[test]
+    fn parrot_food_is_not_poisonous() {
+        assert!(!Item::WHEAT_SEEDS.has_tag(&tag::Item::MINECRAFT_PARROT_POISONOUS_FOOD));
+        assert!(!Item::COOKED_CHICKEN.has_tag(&tag::Item::MINECRAFT_PARROT_POISONOUS_FOOD));
+    }
+
+    #[test]
+    fn poison_lasts_45_seconds() {
+        assert_eq!(COOKIE_POISON_DURATION, 900);
     }
 }
