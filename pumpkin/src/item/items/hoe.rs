@@ -7,6 +7,7 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, tag};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
@@ -77,6 +78,12 @@ impl ItemBehaviour for HoeItem {
                 // Vanilla returns PASS without touching the block when nothing is tilled,
                 // otherwise the rewrite would reset properties such as `snowy` on grass blocks.
                 if changed {
+                    world.play_block_sound_expect(
+                        player,
+                        Sound::ItemHoeTill,
+                        SoundCategory::Blocks,
+                        location,
+                    );
                     world
                         .set_block_state(
                             &location,
