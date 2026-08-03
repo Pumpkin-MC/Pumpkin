@@ -1,4 +1,5 @@
-use pumpkin_util::Difficulty;
+use pumpkin_data::entity::EntityType;
+use pumpkin_util::{Difficulty, GameMode};
 
 use crate::entity::living::LivingEntity;
 use crate::world::World;
@@ -105,6 +106,18 @@ impl TargetPredicate {
             return false;
         }
 
+        // Vanilla parity (`EntityPredicates.EXCEPT_CREATIVE_OR_SPECTATOR`): hostile AI
+        // must never acquire, nor keep tracking, a Creative/Spectator player. `target`
+        // is a bare `LivingEntity`, which has no way to answer "am I a Player in
+        // Creative mode" by itself (that state only lives on `Player`), so it's
+        // resolved via a fresh world lookup instead. This runs on every call to
+        // `test`, not just on first acquisition: `TrackTargetGoal::can_track` re-runs
+        // it for the currently tracked target on every `should_continue` check, so an
+        // in-progress chase is dropped as soon as the target leaves Survival/Adventure.
+        if is_untargetable_player(world, target) {
+            return false;
+        }
+
         if self.attackable
             && (!target.can_take_damage()
                 || world.level_info.load().difficulty == Difficulty::Peaceful)
@@ -130,5 +143,36 @@ impl TargetPredicate {
         }
 
         true
+    }
+}
+
+/// Returns `true` if `target` is a player currently in a gamemode that vanilla
+/// excludes from hostile targeting (Creative or Spectator).
+fn is_untargetable_player(world: &World, target: &LivingEntity) -> bool {
+    target.entity.entity_type == &EntityType::PLAYER
+        && world
+            .get_player_by_uuid(target.entity.entity_uuid)
+            .is_some_and(|player| is_untargetable_gamemode(player.gamemode.load()))
+}
+
+/// Returns `true` for the gamemodes vanilla excludes from hostile targeting.
+const fn is_untargetable_gamemode(mode: GameMode) -> bool {
+    matches!(mode, GameMode::Creative | GameMode::Spectator)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn survival_and_adventure_remain_targetable() {
+        assert!(!is_untargetable_gamemode(GameMode::Survival));
+        assert!(!is_untargetable_gamemode(GameMode::Adventure));
+    }
+
+    #[test]
+    fn creative_and_spectator_are_untargetable() {
+        assert!(is_untargetable_gamemode(GameMode::Creative));
+        assert!(is_untargetable_gamemode(GameMode::Spectator));
     }
 }
