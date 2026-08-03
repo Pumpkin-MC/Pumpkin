@@ -8,6 +8,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::inventory::{
@@ -44,6 +45,17 @@ pub fn to_offset(facing: &FacingHopper) -> Vector3<i32> {
 
 fn output_position(position: BlockPos, state: HopperLikeProperties) -> BlockPos {
     position.offset(to_offset(&state.facing))
+}
+
+/// `Hopper.SUCK_AABB` is `Block.column(16.0, 11.0, 32.0)`, i.e. the hopper's own
+/// column starting at its inner floor, so items resting in the funnel count too.
+fn suck_box(position: BlockPos) -> BoundingBox {
+    let min = Vector3::new(
+        f64::from(position.0.x),
+        f64::from(position.0.y) + 11.0 / 16.0,
+        f64::from(position.0.z),
+    );
+    BoundingBox::new(min, min.add_raw(1.0, 32.0 / 16.0 - 11.0 / 16.0, 1.0))
 }
 
 fn blocks_hopper_suction(block: &Block, state: &pumpkin_data::BlockState) -> bool {
@@ -226,12 +238,7 @@ impl HopperBlockEntity {
         }
         let (block, state) = world.get_block_and_state(pos_up);
         if !blocks_hopper_suction(block, state) {
-            let pos_up_f = pos_up.to_f64();
-            let search_box = pumpkin_util::math::boundingbox::BoundingBox::new(
-                pos_up_f,
-                pos_up_f.add_raw(1.0, 1.0, 1.0),
-            );
-            let entities = world.get_entities_at_box(&search_box);
+            let entities = world.get_entities_at_box(&suck_box(self.position));
             for entity_base in entities {
                 if let Some(item_entity) = entity_base.clone().get_item_entity() {
                     let mut stack = item_entity.get_item_stack().lock().await;
@@ -421,12 +428,14 @@ impl Clearable for HopperBlockEntity {
 
 #[cfg(test)]
 mod tests {
-    use super::{blocks_hopper_suction, can_merge_hopper_stack, output_position};
+    use super::{blocks_hopper_suction, can_merge_hopper_stack, output_position, suck_box};
     use pumpkin_data::Block;
     use pumpkin_data::block_properties::{BlockProperties, FacingHopper, HopperLikeProperties};
     use pumpkin_data::item::Item;
     use pumpkin_data::item_stack::ItemStack;
+    use pumpkin_util::math::boundingbox::BoundingBox;
     use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector3::Vector3;
 
     #[test]
     fn hopper_output_uses_current_facing() {
@@ -456,5 +465,19 @@ mod tests {
         for block in [&Block::BEEHIVE, &Block::BEE_NEST, &Block::OAK_SLAB] {
             assert!(!blocks_hopper_suction(block, block.default_state));
         }
+    }
+
+    #[test]
+    fn suck_box_covers_the_hopper_funnel_and_the_block_above() {
+        let box_ = suck_box(BlockPos::new(4, 20, -3));
+
+        assert_eq!(box_.min, Vector3::new(4.0, 20.6875, -3.0));
+        assert_eq!(box_.max, Vector3::new(5.0, 22.0, -2.0));
+
+        // An item resting on the hopper's inner floor.
+        assert!(box_.intersects(&BoundingBox::new(
+            Vector3::new(4.375, 20.6875, -2.625),
+            Vector3::new(4.625, 20.9375, -2.375),
+        )));
     }
 }
