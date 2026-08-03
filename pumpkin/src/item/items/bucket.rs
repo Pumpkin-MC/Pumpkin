@@ -223,6 +223,37 @@ const fn mob_bucket_entity_type(item: &Item) -> Option<&'static EntityType> {
     }
 }
 
+/// Reverse of `mob_bucket_entity_type`: the filled bucket item obtained by catching
+/// this species with an empty bucket.
+const fn bucket_item_for_entity_type(entity_type: &EntityType) -> Option<&'static Item> {
+    match entity_type.id {
+        id if id == EntityType::AXOLOTL.id => Some(&Item::AXOLOTL_BUCKET),
+        id if id == EntityType::COD.id => Some(&Item::COD_BUCKET),
+        id if id == EntityType::SALMON.id => Some(&Item::SALMON_BUCKET),
+        id if id == EntityType::TROPICAL_FISH.id => Some(&Item::TROPICAL_FISH_BUCKET),
+        id if id == EntityType::PUFFERFISH.id => Some(&Item::PUFFERFISH_BUCKET),
+        id if id == EntityType::TADPOLE.id => Some(&Item::TADPOLE_BUCKET),
+        _ => None,
+    }
+}
+
+/// Vanilla `Bucketable.getPickupSound` per species (Axolotl/Tadpole have their own
+/// sound, the four fish species all share `item.bucket.fill_fish`).
+const fn pickup_sound_for_entity_type(entity_type: &EntityType) -> Option<Sound> {
+    match entity_type.id {
+        id if id == EntityType::AXOLOTL.id => Some(Sound::ItemBucketFillAxolotl),
+        id if id == EntityType::TADPOLE.id => Some(Sound::ItemBucketFillTadpole),
+        id if id == EntityType::COD.id
+            || id == EntityType::SALMON.id
+            || id == EntityType::TROPICAL_FISH.id
+            || id == EntityType::PUFFERFISH.id =>
+        {
+            Some(Sound::ItemBucketFillFish)
+        }
+        _ => None,
+    }
+}
+
 const fn mob_bucket_empty_sound(item: &Item) -> Option<Sound> {
     match item.id {
         id if id == Item::AXOLOTL_BUCKET.id => Some(Sound::ItemBucketEmptyAxolotl),
@@ -419,6 +450,37 @@ impl ItemBehaviour for EmptyBucketItem {
             }
 
             give_player_bucket_item(player, item).await;
+        })
+    }
+
+    fn use_on_entity<'a>(
+        &'a self,
+        _item: &'a mut ItemStack,
+        player: &'a Player,
+        entity: Arc<dyn EntityBase>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let entity_type = entity.get_entity().entity_type;
+            let Some(bucket_item) = bucket_item_for_entity_type(entity_type) else {
+                return;
+            };
+            let is_alive = entity
+                .get_living_entity()
+                .is_some_and(|living| living.health.load() > 0.0);
+            if !is_alive {
+                return;
+            }
+
+            if let Some(sound) = pickup_sound_for_entity_type(entity_type) {
+                player.world().play_sound(
+                    sound,
+                    SoundCategory::Neutral,
+                    &entity.get_entity().pos.load(),
+                );
+            }
+
+            give_player_bucket_item(player, bucket_item).await;
+            player.world().remove_entity(entity.as_ref()).await;
         })
     }
 
