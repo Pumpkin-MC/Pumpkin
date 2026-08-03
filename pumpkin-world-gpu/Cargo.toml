@@ -1,0 +1,24 @@
+[package]
+name = "pumpkin-world-gpu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+bytemuck = { workspace = true, features = ["derive"] }
+pollster.workspace = true
+pumpkin-data = { workspace = true, features = ["default"] }
+pumpkin-util.workspace = true
+pumpkin-world.workspace = true
+wgpu.workspace = true
+
+[dev-dependencies]
+criterion = { workspace = true, features = ["html_reports"] }
+
+[[bench]]
+name = "noise_bench"
+harness = false
+
+[lints]
+workspace = true

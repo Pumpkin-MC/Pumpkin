@@ -76,6 +76,23 @@ impl PerlinNoiseSampler {
         self.sample_no_fade(x, y, z, 0.0, 0.0)
     }
 
+    /// Returns the permutation table used to hash coordinates.
+    ///
+    /// Exposed read-only so external code (e.g. a GPU-side reimplementation of this
+    /// sampler) can mirror this exact instance's state instead of re-deriving it.
+    #[inline]
+    #[must_use]
+    pub const fn permutation(&self) -> &[u8; 256] {
+        &self.permutation
+    }
+
+    /// Returns the `(x, y, z)` origin offsets randomized at construction time.
+    #[inline]
+    #[must_use]
+    pub const fn origin(&self) -> (f64, f64, f64) {
+        (self.x_origin, self.y_origin, self.z_origin)
+    }
+
     /// Samples noise with optional vertical scaling and clamping.
     ///
     /// This method applies the origin offsets, computes the integer lattice points,

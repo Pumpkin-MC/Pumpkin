@@ -1,5 +1,6 @@
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
-use pumpkin_util::{noise::perlin::OctavePerlinNoiseSampler, random::RandomImpl};
+pub use pumpkin_util::noise::perlin::OctavePerlinNoiseSampler;
+use pumpkin_util::random::RandomImpl;
 
 pub struct DoublePerlinNoiseSampler {
     first_sampler: OctavePerlinNoiseSampler,
@@ -74,6 +75,21 @@ impl DoublePerlinNoiseSampler {
         let f = z * 1.0181268882175227f64;
 
         (self.first_sampler.sample(x, y, z) + self.second_sampler.sample(d, e, f)) * self.amplitude
+    }
+
+    /// The two octave samplers backing this one, in `(first, second)` order.
+    ///
+    /// Exposed read-only so a GPU-side reimplementation can mirror this exact
+    /// instance's state instead of re-deriving it from the seed.
+    #[must_use]
+    pub const fn samplers(&self) -> (&OctavePerlinNoiseSampler, &OctavePerlinNoiseSampler) {
+        (&self.first_sampler, &self.second_sampler)
+    }
+
+    /// The scaling factor applied to the summed octave samples.
+    #[must_use]
+    pub const fn amplitude(&self) -> f64 {
+        self.amplitude
     }
 }
 

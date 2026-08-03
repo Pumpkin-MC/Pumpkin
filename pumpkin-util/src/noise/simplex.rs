@@ -96,6 +96,16 @@ impl SimplexNoiseSampler {
     /// # Returns
     /// A hashed value in the range [0, 255].
     #[inline]
+    /// The permutation table used to hash coordinates.
+    ///
+    /// Exposed read-only so a GPU-side reimplementation can mirror this exact instance
+    /// instead of re-deriving it from the seed.
+    #[inline]
+    #[must_use]
+    pub const fn permutation(&self) -> &[u8; 256] {
+        &self.permutation
+    }
+
     fn map(&self, input: i32) -> i32 {
         i32::from(self.permutation[(input & 0xFF) as usize])
     }
