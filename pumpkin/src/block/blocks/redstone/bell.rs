@@ -8,10 +8,12 @@ use crate::block::{
     OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
 };
 use crate::world::World;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::{AttachFace, BellAttachment, BellLikeProperties};
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
@@ -21,7 +23,11 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
-fn ring_bell(position: BlockPos, world: &Arc<World>, hit_direction: Option<HorizontalFacing>) {
+async fn ring_bell(
+    position: BlockPos,
+    world: &Arc<World>,
+    hit_direction: Option<HorizontalFacing>,
+) {
     let (block, state_id) = world.get_block_and_state_id(&position);
 
     let props = BellLikeProperties::from_state_id(state_id, block);
@@ -41,7 +47,13 @@ fn ring_bell(position: BlockPos, world: &Arc<World>, hit_direction: Option<Horiz
         2.0,
     );
 
-    //TODO Emit game event: BLOCK_CHANGE -> Send block update Packet
+    emit_game_event(
+        world,
+        GameEvent::BlockChange,
+        position.to_centered_f64(),
+        GameEventContext::none(),
+    )
+    .await;
 }
 
 fn is_point_on_bell(
@@ -137,7 +149,8 @@ impl BlockBehaviour for BellBlock {
                 *args.position,
                 args.world,
                 args.hit.face.to_horizontal_facing(),
-            );
+            )
+            .await;
 
             args.player
                 .increment_stat(
@@ -202,7 +215,7 @@ impl BlockBehaviour for BellBlock {
                     .await;
 
                 if is_receiving_power {
-                    ring_bell(*args.position, args.world, None);
+                    ring_bell(*args.position, args.world, None).await;
                 }
             }
         })
