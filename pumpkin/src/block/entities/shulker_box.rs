@@ -17,6 +17,9 @@ use crate::block::viewer::{
     ViewerCountListener, ViewerCountTracker, ViewerCountTrackerExt, ViewerFuture,
 };
 use crate::world::World;
+use crate::world::game_event::{GameEventContext, emit_game_event};
+use pumpkin_data::game_event::GameEvent;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::inventory::InventoryFuture;
 use pumpkin_world::inventory::{
     split_stack, sync_write_items_to_nbt, {Clearable, Inventory},
@@ -117,7 +120,17 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
             Self::play_sound(world, position, Sound::BlockShulkerBoxOpen);
-            // TODO: this.world.emitGameEvent(player, GameEvent.CONTAINER_OPEN, this.pos);
+            emit_game_event(
+                world,
+                GameEvent::ContainerOpen,
+                Vector3::new(
+                    f64::from(position.0.x) + 0.5,
+                    f64::from(position.0.y) + 0.5,
+                    f64::from(position.0.z) + 0.5,
+                ),
+                GameEventContext::none(),
+            )
+            .await;
         })
     }
 
@@ -128,7 +141,17 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
             Self::play_sound(world, position, Sound::BlockShulkerBoxClose);
-            // TODO: this.world.emitGameEvent(player, GameEvent.CONTAINER_CLOSE, this.pos);
+            emit_game_event(
+                world,
+                GameEvent::ContainerClose,
+                Vector3::new(
+                    f64::from(position.0.x) + 0.5,
+                    f64::from(position.0.y) + 0.5,
+                    f64::from(position.0.z) + 0.5,
+                ),
+                GameEventContext::none(),
+            )
+            .await;
         })
     }
 
