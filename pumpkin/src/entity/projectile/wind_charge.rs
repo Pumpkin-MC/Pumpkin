@@ -149,6 +149,11 @@ impl EntityBase for WindChargeEntity {
 
     fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
+            if let ProjectileHit::Entity { entity, .. } = &hit {
+                let _ = entity
+                    .damage(self, 1.0, pumpkin_data::damage::DamageType::WIND_CHARGE)
+                    .await;
+            }
             self.create_explosion(hit.hit_pos()).await;
         })
     }

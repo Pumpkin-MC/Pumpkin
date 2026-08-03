@@ -49,6 +49,7 @@ use crate::item::items::wind_charge::WindChargeItem;
 use firework_rocket::FireworkRocketItem;
 use fishing_rod::FishingRodItem;
 use glowing_ink_sac::GlowingInkSacItem;
+use pumpkin_data::{Block, BlockStateId};
 
 use super::registry::ItemRegistry;
 use crate::item::items::potions::{LingeringPotionItem, PotionItem, SplashPotionItem};
@@ -73,6 +74,31 @@ use snowball::SnowBallItem;
 use std::sync::Arc;
 use swords::SwordItem;
 use trident::TridentItem;
+
+/// Returns the state of `new_block` that carries over every property it shares
+/// with `old_block` in `old_state_id`.
+///
+/// Equivalent to vanilla's `Block#withPropertiesOf`, used by stripping, waxing,
+/// scraping and de-oxidizing to keep facing, waterlogging, slab type, and so on.
+/// Falls back to the default state when either block carries no properties.
+#[must_use]
+pub fn state_with_properties_of(
+    old_block: &Block,
+    old_state_id: BlockStateId,
+    new_block: &Block,
+) -> BlockStateId {
+    let default_state_id = new_block.default_state.id;
+    if new_block.properties(default_state_id).is_none() {
+        return default_state_id;
+    }
+    old_block
+        .properties(old_state_id)
+        .map_or(default_state_id, |properties| {
+            new_block
+                .from_properties(&properties.to_props())
+                .to_state_id(new_block)
+        })
+}
 
 #[must_use]
 pub fn default_registry() -> Arc<ItemRegistry> {

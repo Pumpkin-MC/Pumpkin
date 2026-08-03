@@ -83,7 +83,8 @@ impl ItemBehaviour for AxeItem {
                     let trapdoor_information = world.get_block_state_id(&location);
                     axe_trapdoor_state(trapdoor_information, block, new_block)
                 } else {
-                    new_block.default_state.id
+                    let old_state_id = world.get_block_state_id(&location);
+                    crate::item::items::state_with_properties_of(block, old_state_id, new_block)
                 };
                 world
                     .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL)
