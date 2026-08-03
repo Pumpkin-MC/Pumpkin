@@ -1,29 +1,32 @@
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::{Block, tracked_data::TrackedData};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::generation::structure::template::{BlockStateResolver, PaletteEntry};
 use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, atomic::Ordering};
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity},
+    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity},
     server::Server,
     world::World,
 };
 
 pub struct FallingEntity {
     entity: Entity,
-    block_state_id: BlockStateId,
+    block_state_id: AtomicCell<BlockStateId>,
 }
 
 impl FallingEntity {
     pub const fn new(entity: Entity, block_state_id: BlockStateId) -> Self {
         Self {
             entity,
-            block_state_id,
+            block_state_id: AtomicCell::new(block_state_id),
         }
     }
 
@@ -48,7 +51,61 @@ impl FallingEntity {
     }
 }
 
-impl NBTStorage for FallingEntity {}
+impl NBTStorage for FallingEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            // Vanilla `FallingBlockEntity.addAdditionalSaveData` stores the carried state
+            // under "BlockState"; the damage/drop fields it also writes are not modelled here.
+            let state_id = self.block_state_id.load();
+            let block = Block::from_state_id(state_id);
+            let mut block_state_compound = NbtCompound::new();
+            block_state_compound.put_string("Name", format!("minecraft:{}", block.name));
+            if let Some(properties) = block.properties(state_id) {
+                let props = properties.to_props();
+                if !props.is_empty() {
+                    let mut properties_compound = NbtCompound::new();
+                    for (key, value) in props {
+                        properties_compound.put_string(key, value.to_string());
+                    }
+                    block_state_compound.put_compound("Properties", properties_compound);
+                }
+            }
+            nbt.put_compound("BlockState", block_state_compound);
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(block_state_compound) = nbt.get_compound("BlockState")
+                && let Some(name) = block_state_compound.get_string("Name")
+            {
+                let properties = block_state_compound.get_compound("Properties").map_or_else(
+                    Vec::new,
+                    |props_compound| {
+                        props_compound
+                            .child_tags
+                            .iter()
+                            .filter_map(|(key, value)| {
+                                if let pumpkin_nbt::tag::NbtTag::String(v) = value {
+                                    Some((key.to_string(), v.to_string()))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect()
+                    },
+                );
+                let entry = PaletteEntry::with_properties(name.to_string(), properties);
+                if let Some(state) = BlockStateResolver::resolve_simple(&entry) {
+                    self.block_state_id.store(state.id);
+                    self.entity
+                        .data
+                        .store(i32::from(state.id.as_u16()), Ordering::Relaxed);
+                }
+            }
+        })
+    }
+}
 
 impl EntityBase for FallingEntity {
     fn tick<'a>(
@@ -79,7 +136,7 @@ impl EntityBase for FallingEntity {
                 let final_state_id = crate::block::blocks::falling::on_land_state(
                     &**world,
                     &landing_pos,
-                    self.block_state_id,
+                    self.block_state_id.load(),
                     replaced_state,
                 );
                 world
