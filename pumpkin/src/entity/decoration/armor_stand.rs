@@ -6,6 +6,7 @@ use crate::entity::{
 use crate::world::game_event::{GameEventContext, emit_game_event};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{
     damage::DamageType,
     data_component_impl::{EquipmentSlot, EquipmentType},
@@ -405,8 +406,24 @@ impl EntityBase for ArmorStandEntity {
                 return false;
             }
 
-            // TODO: IGNITES_ARMOR_STANDS (in_fire, campfire) - set on fire
-            // TODO: BURNS_ARMOR_STANDS (on_fire) - reduce health
+            // ArmorStand.java:303 -- fire/campfire damage ignites the stand for 5s instead
+            // of applying normal damage; if it's already on fire, vanilla instead chips
+            // 0.15 off the stand's health. Pumpkin's armor stand has no health concept to
+            // reduce (unlike vanilla's ArmorStand.getHealth()/causeDamage), so that
+            // already-on-fire sub-case is skipped as a documented simplification -- the
+            // stand just stays on fire rather than eventually breaking from repeated
+            // fire ticks.
+            if damage_type.has_tag(&tag::DamageType::MINECRAFT_IGNITES_ARMOR_STANDS) {
+                entity.set_on_fire_for(5.0);
+                return false;
+            }
+
+            // ArmorStand.java:311 -- BURNS_ARMOR_STANDS damage (fire-tick damage while
+            // already burning) chips health directly rather than going through the normal
+            // damage path. Same health-concept gap as above -- skipped, documented.
+            if damage_type.has_tag(&tag::DamageType::MINECRAFT_BURNS_ARMOR_STANDS) {
+                return false;
+            }
 
             let can_break = damage_type == DamageType::PLAYER_EXPLOSION
                 || damage_type == DamageType::PLAYER_ATTACK
