@@ -35,6 +35,10 @@ impl ItemMetadata for LingeringPotionItem {
     }
 }
 
+// Vanilla ThrowablePotionItem#use:
+// Projectile.spawnProjectileFromRotation(..., -20.0F, 0.5F, 1.0F). The -20.0F is the `yOffset` of
+// Projectile#shootFromRotation (`yd = -sin(xRot + yOffset)`), the extra upward arc of the throw.
+const Y_OFFSET: f32 = -20.0;
 const POWER: f32 = 0.5;
 
 impl ItemBehaviour for PotionItem {
@@ -91,7 +95,7 @@ impl ItemBehaviour for SplashPotionItem {
             let (yaw, pitch) = player.rotation();
             splash
                 .thrown
-                .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
+                .set_velocity_from(player.get_entity(), pitch, yaw, Y_OFFSET, POWER, 1.0);
 
             world.spawn_entity(Arc::new(splash)).await;
 
@@ -158,7 +162,7 @@ impl ItemBehaviour for LingeringPotionItem {
 
             let (yaw, pitch) = player.rotation();
             ling.thrown
-                .set_velocity_from(player.get_entity(), pitch, yaw, 0.0, POWER, 1.0);
+                .set_velocity_from(player.get_entity(), pitch, yaw, Y_OFFSET, POWER, 1.0);
 
             world.spawn_entity(Arc::new(ling)).await;
 

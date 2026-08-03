@@ -30,10 +30,12 @@ impl ItemBehaviour for EggItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world.play_sound(
+            world.play_sound_fine(
                 Sound::EntityEggThrow,
                 pumpkin_data::sound::SoundCategory::Players,
                 &position,
+                0.5,
+                super::throw_sound_pitch(rand::random()),
             );
 
             // Capture the held item stack and pass it to the thrown egg entity

@@ -17,11 +17,11 @@ impl ItemMetadata for ExperienceBottleItem {
     }
 }
 
-// Vanilla values from ExperienceBottleItem.java:
-// Projectile.spawnProjectileFromRotation(..., -20.0F, 0.7F, 1.0F);
-// The -20.0F is a pitch offset (not used in set_velocity_from directly)
-// 0.7F is the power
-// 1.0F is the divergence/uncertainty
+// Vanilla ExperienceBottleItem#use:
+// Projectile.spawnProjectileFromRotation(..., -20.0F, 0.7F, 1.0F), where the first value is the
+// `yOffset` of Projectile#shootFromRotation (`yd = -sin(xRot + yOffset)`), i.e. the extra upward
+// arc the bottle is lobbed with.
+const Y_OFFSET: f32 = -20.0;
 const POWER: f32 = 0.7;
 const DIVERGENCE: f32 = 1.0;
 
@@ -34,10 +34,12 @@ impl ItemBehaviour for ExperienceBottleItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world.play_sound(
+            world.play_sound_fine(
                 Sound::EntityExperienceBottleThrow,
                 pumpkin_data::sound::SoundCategory::Neutral,
                 &position,
+                0.5,
+                super::throw_sound_pitch(rand::random()),
             );
             let entity = Entity::new(
                 world.clone(),
@@ -50,7 +52,7 @@ impl ItemBehaviour for ExperienceBottleItem {
                 player.get_entity(),
                 pitch,
                 yaw,
-                0.0,
+                Y_OFFSET,
                 POWER,
                 DIVERGENCE,
             );

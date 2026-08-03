@@ -29,10 +29,12 @@ impl ItemBehaviour for SnowBallItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world.play_sound(
+            world.play_sound_fine(
                 Sound::EntitySnowballThrow,
                 pumpkin_data::sound::SoundCategory::Neutral,
                 &position,
+                0.5,
+                super::throw_sound_pitch(rand::random()),
             );
             let entity = Entity::new(world.clone(), position, &EntityType::SNOWBALL);
             let snowball = SnowballEntity::new_shot(entity, player.get_entity());

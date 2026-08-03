@@ -75,6 +75,13 @@ use std::sync::Arc;
 use swords::SwordItem;
 use trident::TridentItem;
 
+/// Pitch shared by the vanilla throw sounds of `SnowballItem`, `EggItem`,
+/// `ExperienceBottleItem` and `FishingRodItem`: `0.4F / (random.nextFloat() * 0.4F + 0.8F)`.
+#[must_use]
+pub fn throw_sound_pitch(random_value: f32) -> f32 {
+    0.4 / (random_value * 0.4 + 0.8)
+}
+
 /// Returns the state of `new_block` that carries over every property it shares
 /// with `old_block` in `old_state_id`.
 ///
