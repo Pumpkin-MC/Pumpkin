@@ -211,6 +211,16 @@ impl BundleContentsImpl {
     }
 }
 impl DataComponentImpl for BundleContentsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut items = Vec::new();
+        for item in &self.items {
+            let mut compound = NbtCompound::new();
+            item.write_item_stack(&mut compound);
+            items.push(NbtTag::Compound(compound));
+        }
+        NbtTag::List(items)
+    }
+
     default_impl!(BundleContents);
 }
 
