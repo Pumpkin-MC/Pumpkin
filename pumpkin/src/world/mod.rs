@@ -162,6 +162,8 @@ use weather::Weather;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
+const MAX_LIGHT_LEVEL: u8 = 15;
+
 use rustc_hash::{FxHashMap, FxHashSet};
 
 impl PumpkinError for GetBlockError {
@@ -319,11 +321,13 @@ impl World {
 
     pub fn update_active_chunks(self: &Arc<Self>) {
         let mut active_chunks = FxHashSet::default();
+        let sim_dist = self.server.upgrade().map_or(10, |s| {
+            s.advanced_config.networking.java.simulation_distance.get()
+        }) as i32;
         for player in self.players.load().iter() {
             let center = player.get_entity().chunk_pos.load();
-            // TODO: gamerule for view distance/ticking distance
-            for dx in -8..=8 {
-                for dy in -8..=8 {
+            for dx in -sim_dist..=sim_dist {
+                for dy in -sim_dist..=sim_dist {
                     active_chunks.insert(center.add_raw(dx, dy));
                 }
             }
@@ -1728,6 +1732,20 @@ impl World {
         self.weather.lock().await.raining
     }
 
+    pub async fn is_raining_at(&self, pos: &BlockPos) -> bool {
+        if !self.is_raining().await {
+            return false;
+        }
+        if self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1 > pos.0.y {
+            return false;
+        }
+        self.can_see_sky(pos)
+            && self
+                .get_biome(pos)
+                .weather
+                .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
+    }
+
     pub async fn set_raining(&self, raining: bool) {
         let mut weather = self.weather.lock().await;
         if weather.raining != raining {
@@ -1800,7 +1818,7 @@ impl World {
         &self,
         base_config: &BasicConfiguration,
         player: Arc<Player>,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         static CREATIVE_CONTENT: std::sync::OnceLock<(Vec<Group>, Vec<Entry>)> =
             std::sync::OnceLock::new();
@@ -2357,7 +2375,8 @@ impl World {
                     | PlayerInfoFlags::UPDATE_GAME_MODE
                     | PlayerInfoFlags::UPDATE_LISTED
                     | PlayerInfoFlags::UPDATE_LATENCY
-                    | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                    | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                    | PlayerInfoFlags::UPDATE_HAT)
                     .bits(),
                 &[pumpkin_protocol::java::client::play::Player {
                     uuid: gameprofile.id,
@@ -2370,6 +2389,7 @@ impl World {
                         PlayerAction::UpdateListed(true),
                         PlayerAction::UpdateLatency(VarInt(0)),
                         PlayerAction::UpdateListOrder(VarInt(0)),
+                        PlayerAction::UpdateHat(true),
                     ],
                 }],
             ),
@@ -2435,6 +2455,15 @@ impl World {
         {
             let meta = Metadata::new(
                 TrackedData::PLAYER_MODE_CUSTOMISATION,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            );
+            meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
+                .unwrap();
+        };
+        {
+            let meta = Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
                 MetaDataType::BYTE,
                 config.skin_parts,
             );
@@ -2528,8 +2557,8 @@ impl World {
         )
         .color_named(NamedColor::Yellow);
 
-        let event = PlayerJoinEvent::new(player.clone(), msg_comp);
-        let event = server.plugin_manager.fire(event).await;
+        let mut event = PlayerJoinEvent::new(player.clone(), msg_comp);
+        server.plugin_manager.fire(server, &mut event).await;
 
         if !event.cancelled {
             self.broadcast_system_message(&event.join_message, false)
@@ -2695,6 +2724,7 @@ impl World {
             PlayerAction::UpdateListed(true),
             PlayerAction::UpdateLatency(VarInt(0)),
             PlayerAction::UpdateListOrder(VarInt(0)),
+            PlayerAction::UpdateHat(true),
         ];
         let java_player = [pumpkin_protocol::java::client::play::Player {
             uuid: gameprofile.id,
@@ -2705,7 +2735,8 @@ impl World {
                 | PlayerInfoFlags::UPDATE_GAME_MODE
                 | PlayerInfoFlags::UPDATE_LISTED
                 | PlayerInfoFlags::UPDATE_LATENCY
-                | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                | PlayerInfoFlags::UPDATE_HAT)
                 .bits(),
             &java_player,
         );
@@ -2744,20 +2775,10 @@ impl World {
                 let chat_session = player.chat_session.lock().await;
                 let tab_list_name = player.get_tab_list_name().await;
 
-                let mut player_actions = vec![
-                    PlayerAction::AddPlayer {
-                        name: &player.gameprofile.name,
-                        properties,
-                    },
-                    PlayerAction::UpdateGameMode(VarInt(player.gamemode.load() as i32)),
-                    PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
-                    PlayerAction::UpdateLatency(VarInt(
-                        player.tab_list_latency.load(Ordering::Relaxed),
-                    )),
-                    PlayerAction::UpdateListOrder(VarInt(
-                        player.tab_list_order.load(Ordering::Relaxed),
-                    )),
-                ];
+                let mut player_actions = vec![PlayerAction::AddPlayer {
+                    name: &player.gameprofile.name,
+                    properties,
+                }];
 
                 if base_config.allow_chat_reports {
                     player_actions.push(PlayerAction::InitializeChat(Some(InitChat {
@@ -2767,6 +2788,18 @@ impl World {
                         signature: chat_session.signature.clone(),
                     })));
                 }
+
+                player_actions.extend([
+                    PlayerAction::UpdateGameMode(VarInt(player.gamemode.load() as i32)),
+                    PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
+                    PlayerAction::UpdateLatency(VarInt(
+                        player.tab_list_latency.load(Ordering::Relaxed),
+                    )),
+                    PlayerAction::UpdateListOrder(VarInt(
+                        player.tab_list_order.load(Ordering::Relaxed),
+                    )),
+                    PlayerAction::UpdateHat(true),
+                ]);
                 drop(chat_session);
 
                 current_player_data.push((&player.gameprofile.id, player_actions));
@@ -2781,7 +2814,8 @@ impl World {
                 | PlayerInfoFlags::UPDATE_LISTED
                 | PlayerInfoFlags::UPDATE_LATENCY
                 | PlayerInfoFlags::UPDATE_LIST_PRIORITY
-                | PlayerInfoFlags::UPDATE_GAME_MODE;
+                | PlayerInfoFlags::UPDATE_GAME_MODE
+                | PlayerInfoFlags::UPDATE_HAT;
             if base_config.allow_chat_reports {
                 action_flags |= PlayerInfoFlags::INITIALIZE_CHAT;
             }
@@ -2887,6 +2921,15 @@ impl World {
             meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
                 .unwrap();
         };
+        {
+            let meta = Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            );
+            meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
+                .unwrap();
+        };
         java_meta_buf.put_u8(255);
 
         self.broadcast_packet_except_editioned_sync(
@@ -2985,6 +3028,7 @@ impl World {
                 PlayerAction::UpdateListOrder(VarInt(
                     existing_player.tab_list_order.load(Ordering::Relaxed),
                 )),
+                PlayerAction::UpdateHat(true),
             ];
             let java_player = [pumpkin_protocol::java::client::play::Player {
                 uuid: gameprofile.id,
@@ -2998,7 +3042,8 @@ impl World {
                             | PlayerInfoFlags::UPDATE_LISTED
                             | PlayerInfoFlags::UPDATE_GAME_MODE
                             | PlayerInfoFlags::UPDATE_LATENCY
-                            | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                            | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                            | PlayerInfoFlags::UPDATE_HAT)
                             .bits(),
                         &java_player,
                     ),
@@ -3030,6 +3075,14 @@ impl World {
                 {
                     let meta = Metadata::new(
                         TrackedData::PLAYER_MODE_CUSTOMISATION,
+                        MetaDataType::BYTE,
+                        config.skin_parts,
+                    );
+                    meta.write(&mut buf, &client.version.load()).unwrap();
+                };
+                {
+                    let meta = Metadata::new(
+                        TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
                         MetaDataType::BYTE,
                         config.skin_parts,
                     );
@@ -3157,6 +3210,7 @@ impl World {
             .await;
 
         player.send_active_effects().await;
+        player.breath_manager.send_air_supply(player);
         self.send_player_equipment(player).await;
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
@@ -3177,9 +3231,9 @@ impl World {
             [TextComponent::text(player.gameprofile.name.clone())],
         )
         .color_named(NamedColor::Yellow);
-        let event = PlayerJoinEvent::new(player.clone(), msg_comp);
+        let mut event = PlayerJoinEvent::new(player.clone(), msg_comp);
 
-        let event = server.plugin_manager.fire(event).await;
+        server.plugin_manager.fire(server, &mut event).await;
 
         if !event.cancelled {
             self.broadcast_system_message(&event.join_message, false)
@@ -3371,18 +3425,16 @@ impl World {
         // the non-cancellable PlayerRespawnEvent, which observes the resolved world.
         let (resolved_world, position, yaw, pitch) = if let Some(new_world) = candidate_world {
             if let Some(server) = self.server.upgrade() {
-                let event = server
-                    .plugin_manager
-                    .fire(PlayerChangeWorldEvent {
-                        player: player.clone(),
-                        previous_world: self.clone(),
-                        new_world: new_world.clone(),
-                        position,
-                        yaw,
-                        pitch,
-                        cancelled: false,
-                    })
-                    .await;
+                let mut event = PlayerChangeWorldEvent {
+                    player: player.clone(),
+                    previous_world: self.clone(),
+                    new_world: new_world.clone(),
+                    position,
+                    yaw,
+                    pitch,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire(&server, &mut event).await;
 
                 if event.cancelled {
                     (None, position, yaw, pitch)
@@ -3454,17 +3506,20 @@ impl World {
 
         // Notify plugins that the player has respawned (non-cancellable).
         if let Some(server) = self.server.upgrade() {
-            let _ = server
+            server
                 .plugin_manager
-                .fire(PlayerRespawnEvent::new(
-                    player.clone(),
-                    self.clone(),
-                    target_world.clone(),
-                    position,
-                    yaw,
-                    pitch,
-                    alive,
-                ))
+                .fire(
+                    &server,
+                    &mut PlayerRespawnEvent::new(
+                        player.clone(),
+                        self.clone(),
+                        target_world.clone(),
+                        position,
+                        yaw,
+                        pitch,
+                        alive,
+                    ),
+                )
                 .await;
         }
 
@@ -4113,21 +4168,17 @@ impl World {
                     [TextComponent::text(player.gameprofile.name.clone())],
                 )
                 .color_named(NamedColor::Yellow);
-                let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
+                let mut event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
-                let event = self
-                    .server
-                    .upgrade()
-                    .unwrap()
-                    .plugin_manager
-                    .fire(event)
-                    .await;
+                if let Some(server) = self.server.upgrade() {
+                    server.plugin_manager.fire(&server, &mut event).await;
 
-                if !event.cancelled {
-                    for player in self.players.load().iter() {
-                        player.send_system_message(&event.leave_message).await;
+                    if !event.cancelled {
+                        for player in self.players.load().iter() {
+                            player.send_system_message(&event.leave_message).await;
+                        }
+                        info!("{}", event.leave_message.to_pretty_console());
                     }
-                    info!("{}", event.leave_message.to_pretty_console());
                 }
             }
         }
@@ -4213,8 +4264,14 @@ impl World {
         );
     }
 
-    pub async fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
-        let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
+    pub async fn remove_entities_in_chunks(
+        &self,
+        chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
+    ) {
+        let chunks_set: FxHashSet<_> = chunks.into_iter().map(|c| *c.borrow()).collect();
+        if chunks_set.is_empty() {
+            return;
+        }
         let mut entities_to_remove = Vec::new();
 
         self.entities.rcu(|current_entities| {
@@ -4431,6 +4488,13 @@ impl World {
             .get_sky_light_level(&self.level, position)
     }
 
+    #[must_use]
+    pub fn can_see_sky(&self, position: &BlockPos) -> bool {
+        position.0.y >= self.dimension.min_y
+            && position.0.y < self.dimension.min_y + self.dimension.height
+            && self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
+    }
+
     pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {
         let _ = self
             .level
@@ -4504,7 +4568,7 @@ impl World {
         if is_air(broken_block_state) {
             return None;
         }
-        let event = BlockBreakEvent::new(
+        let mut event = BlockBreakEvent::new(
             cause.clone(),
             broken_block,
             *position,
@@ -4512,13 +4576,12 @@ impl World {
             !flags.contains(BlockFlags::SKIP_DROPS),
         );
 
-        let event = self
-            .server
-            .upgrade()
-            .unwrap()
-            .plugin_manager
-            .fire::<BlockBreakEvent>(event)
-            .await;
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire::<BlockBreakEvent>(&server, &mut event)
+                .await;
+        }
 
         if !event.cancelled {
             let mut flags = flags;

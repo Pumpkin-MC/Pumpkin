@@ -155,7 +155,7 @@ impl CommandExecutor for PlaceTemplateExecutor {
                 None,
             );
 
-            placer.finalize().await;
+            placer.finalize();
             context
                 .world()
                 .queue_block_updates(&placer.changed_positions)
@@ -225,7 +225,7 @@ impl CommandExecutor for PlaceJigsawExecutor {
                     &MaxDistance::new(128),
                     &DimensionPadding::ZERO,
                     LiquidSettings::ApplyWaterlog,
-                    &PoolAliasLookup,
+                    &PoolAliasLookup::default(),
                 )
                 .ok_or_else(|| {
                     JIGSAW_FAILED.create_without_context(TextComponent::text(pool.clone()))
@@ -246,7 +246,7 @@ impl CommandExecutor for PlaceJigsawExecutor {
                 (piece_count, placer)
             };
 
-            placer.finalize().await;
+            placer.finalize();
             context
                 .world()
                 .queue_block_updates(&placer.changed_positions)
@@ -334,7 +334,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                         &MaxDistance::new(structure.max_distance_from_center.unwrap_or(128)),
                         &DimensionPadding::ZERO,
                         LiquidSettings::ApplyWaterlog,
-                        &PoolAliasLookup,
+                        &PoolAliasLookup::default(),
                     )
                     .ok_or_else(|| {
                         JIGSAW_FAILED
@@ -506,7 +506,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                 }
             };
 
-            placer.finalize().await;
+            placer.finalize();
             context
                 .world()
                 .queue_block_updates(&placer.changed_positions)
@@ -623,7 +623,7 @@ impl CommandExecutor for PlaceFeatureExecutor {
                 placer.block_entity_nbts.push(nbt);
             }
 
-            placer.finalize().await;
+            placer.finalize();
             context
                 .world()
                 .queue_block_updates(&placer.changed_positions)

@@ -8,7 +8,8 @@ use uuid::Uuid;
 use crate::entity::boss::ender_dragon::EnderDragonEntity;
 use crate::entity::boss::wither::WitherEntity;
 use crate::entity::decoration::{
-    armor_stand::ArmorStandEntity, end_crystal::EndCrystalEntity, painting::PaintingEntity,
+    armor_stand::ArmorStandEntity, end_crystal::EndCrystalEntity, item_frame::ItemFrameEntity,
+    painting::PaintingEntity,
 };
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::falling::FallingEntity;
@@ -220,6 +221,9 @@ pub fn from_type(
         }
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
+        id if id == EntityType::ITEM_FRAME.id || id == EntityType::GLOW_ITEM_FRAME.id => {
+            Arc::new(ItemFrameEntity::new(entity))
+        }
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
         id if id == EntityType::ENDER_PEARL.id => Arc::new(EnderPearlEntity::new(entity)),
         id if id == EntityType::SNOWBALL.id => Arc::new(SnowballEntity::new(entity)),

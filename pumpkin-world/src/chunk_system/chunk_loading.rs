@@ -1,41 +1,13 @@
 use super::{ChunkLevel, ChunkPos, HashMapType, LevelChannel};
 use crate::chunk_system::chunk_state::StagedChunkEnum; // Fixed path
 use itertools::Itertools;
-use std::cmp::{Ordering, PartialEq, min};
-use std::collections::BinaryHeap;
+use std::cmp::min;
+use std::collections::VecDeque;
 use std::collections::hash_map::Entry;
 use std::fmt::Write;
 use std::mem::swap;
 use std::sync::Arc;
 use tracing::debug;
-
-pub struct HeapNode(i8, ChunkPos);
-impl PartialEq for HeapNode {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-impl Eq for HeapNode {}
-impl PartialOrd for HeapNode {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for HeapNode {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0.cmp(&other.0).reverse()
-    }
-}
-impl From<(ChunkPos, i8)> for HeapNode {
-    fn from(value: (ChunkPos, i8)) -> Self {
-        Self(value.1, value.0)
-    }
-}
-impl From<HeapNode> for (ChunkPos, i8) {
-    fn from(val: HeapNode) -> Self {
-        (val.1, val.0)
-    }
-}
 
 struct LevelCache(i32, i32, usize, [(i8, i8); 256 * 256]);
 
@@ -123,8 +95,8 @@ pub struct ChunkLoading {
     pub ticket: HashMapType<ChunkPos, Vec<i8>>, // TODO lifetime & id
     pub high_priority: Vec<ChunkPos>,
     pub sender: Arc<LevelChannel>,
-    pub increase_update: BinaryHeap<HeapNode>,
-    pub decrease_update: BinaryHeap<HeapNode>,
+    pub increase_update: VecDeque<(ChunkPos, i8)>,
+    pub decrease_update: VecDeque<(ChunkPos, i8)>,
     cache: LevelCache,
 }
 
@@ -207,6 +179,12 @@ impl ChunkLoading {
         Self::FULL_CHUNK_LEVEL - (view_distance as i8)
     }
 
+    #[inline]
+    #[must_use]
+    pub const fn get_level_from_simulation_distance(simulation_distance: u8) -> i8 {
+        Self::FULL_CHUNK_LEVEL - (simulation_distance as i8)
+    }
+
     pub fn new(sender: Arc<LevelChannel>) -> Self {
         Self {
             is_priority_dirty: true,
@@ -215,8 +193,8 @@ impl ChunkLoading {
             ticket: HashMapType::default(),
             high_priority: Vec::new(),
             sender,
-            increase_update: BinaryHeap::default(),
-            decrease_update: BinaryHeap::default(),
+            increase_update: VecDeque::default(),
+            decrease_update: VecDeque::default(),
             cache: LevelCache::new(),
         }
     }
@@ -241,8 +219,7 @@ impl ChunkLoading {
     }
 
     fn run_increase_update(&mut self) {
-        while let Some(node) = self.increase_update.pop() {
-            let (pos, level) = node.into();
+        while let Some((pos, level)) = self.increase_update.pop_front() {
             debug_assert!(level < Self::MAX_LEVEL);
             if level > self.cache.get(&self.pos_level, pos) {
                 continue;
@@ -270,12 +247,11 @@ impl ChunkLoading {
             return;
         }
         self.cache.set(&self.pos_level, pos, level);
-        self.increase_update.push((pos, level).into());
+        self.increase_update.push_back((pos, level));
     }
 
     fn run_decrease_update(&mut self, pos: ChunkPos, range: i32) {
-        while let Some(node) = self.decrease_update.pop() {
-            let (pos, level) = node.into();
+        while let Some((pos, level)) = self.decrease_update.pop_front() {
             debug_assert!(level < Self::MAX_LEVEL);
             let spread_level = level + 1;
             for dx in -1..2 {
@@ -292,10 +268,10 @@ impl ChunkLoading {
                     if new_pos_level == spread_level {
                         self.cache.set(&self.pos_level, new_pos, Self::MAX_LEVEL);
                         if spread_level < Self::MAX_LEVEL {
-                            self.decrease_update.push((new_pos, spread_level).into());
+                            self.decrease_update.push_back((new_pos, spread_level));
                         }
                     } else {
-                        self.increase_update.push((new_pos, new_pos_level).into());
+                        self.increase_update.push_back((new_pos, new_pos_level));
                     }
                 }
             }
@@ -310,7 +286,7 @@ impl ChunkLoading {
                     continue;
                 }
                 self.cache.set(&self.pos_level, *ticket_pos, level);
-                self.increase_update.push((*ticket_pos, level).into());
+                self.increase_update.push_back((*ticket_pos, level));
             }
         }
         self.run_increase_update();
@@ -354,7 +330,7 @@ impl ChunkLoading {
         self.cache.set(&self.pos_level, pos, level);
 
         debug_assert!(self.increase_update.is_empty());
-        self.increase_update.push((pos, level).into());
+        self.increase_update.push_back((pos, level));
         self.run_increase_update();
         self.cache.write(&mut self.pos_level, &mut self.change);
         debug_assert!(self.debug_check_error());
@@ -382,7 +358,7 @@ impl ChunkLoading {
                     self.cache.clean(pos, old_level);
                     self.cache.set(&self.pos_level, pos, Self::MAX_LEVEL);
                     debug_assert!(self.decrease_update.is_empty());
-                    self.decrease_update.push((pos, level).into());
+                    self.decrease_update.push_back((pos, level));
                     self.run_decrease_update(pos, (Self::MAX_LEVEL - level - 1) as i32);
                     self.cache.write(&mut self.pos_level, &mut self.change);
                 }

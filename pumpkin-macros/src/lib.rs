@@ -1,12 +1,12 @@
 use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
-use proc_macro_error2::{abort, abort_call_site, proc_macro_error};
+use proc_macro_error2::{abort, abort_call_site};
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
 use pumpkin_data::{Block, BlockId};
 use quote::{format_ident, quote};
 use syn::spanned::Spanned;
 use syn::{self, Attribute, DeriveInput, LitStr, Type, parse_quote};
-use syn::{Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
+use syn::{Block as SynBlock, Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
 
 /// Derives the `Payload` trait for an event struct, enabling it to be used in the plugin system.
 ///
@@ -89,87 +89,97 @@ pub fn cancellable(_args: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Sends a cancellable event asynchronously.
+/// Sends a cancellable event through the plugin manager.
 ///
-/// # Arguments
-/// - `input` – The input `TokenStream` representing the labelled blocks and event expressions.
-#[proc_macro_error]
+/// # Syntax
+/// ```ignore
+/// send_cancellable! {{
+///     <server_expr>;
+///     <event_expr>;
+///     'after: { <after_stmts> }
+///     'cancelled: { <cancelled_stmts> }
+/// }}
+/// ```
 #[proc_macro]
 pub fn send_cancellable(input: TokenStream) -> TokenStream {
-    let block = parse_macro_input!(input as syn::Block);
+    let input = parse_macro_input!(input as SynBlock);
 
-    let mut server_expr = None;
-    let mut event_expr = None;
+    let mut stmts_iter = input.stmts.into_iter();
+
+    let Some(Stmt::Expr(server_stmt, _)) = stmts_iter.next() else {
+        abort_call_site!("expected server expression as first statement")
+    };
+
+    let Some(Stmt::Expr(event_stmt, _)) = stmts_iter.next() else {
+        abort_call_site!("expected event expression as second statement")
+    };
+
+    let event_expr = if let Expr::Reference(syn::ExprReference {
+        expr,
+        mutability: Some(_),
+        ..
+    }) = event_stmt
+    {
+        *expr
+    } else {
+        event_stmt
+    };
+
     let mut after_block = None;
     let mut cancelled_block = None;
 
-    for stmt in block.stmts {
-        match stmt {
-            Stmt::Expr(expr, _) => {
-                // Check if it is a labelled block first.
-                let mut is_special_block = false;
-                if let Expr::Block(ref b) = expr
-                    && let Some(ref label) = b.label
-                {
-                    let label_name = label.name.ident.to_string();
-                    if label_name == "after" {
-                        after_block = Some(b.clone()); // Clone strictly necessary here as we split AST.
-                        is_special_block = true;
-                    } else if label_name == "cancelled" {
-                        cancelled_block = Some(b.clone());
-                        is_special_block = true;
-                    }
-                }
-
-                // If it wasn't a special block, it must be the event expression.
-                if !is_special_block {
-                    if server_expr.is_none() {
-                        server_expr = Some(expr);
-                    } else if event_expr.is_none() {
-                        event_expr = Some(expr);
-                    } else {
-                        abort!(
-                            expr.span(),
-                            "Multiple event expressions found. Only one event expression allowed."
-                        );
-                    }
-                }
+    for stmt in stmts_iter {
+        if let Stmt::Expr(Expr::Block(b), _) = stmt
+            && let Some(ref label) = b.label
+        {
+            if label.name.ident == "after" {
+                after_block = Some(b.block);
+            } else if label.name.ident == "cancelled" {
+                cancelled_block = Some(b.block);
             }
-            // Abort on other statements (like `let x = ...`) if strictness is desired.
-            _ => abort!(
-                stmt.span(),
-                "Only event expressions and labeled blocks allowed in `send_cancellable!`"
-            ),
         }
     }
 
-    let Some(server) = server_expr else {
-        abort_call_site!("Server expression must be specified");
-    };
-
-    let Some(event) = event_expr else {
-        abort_call_site!("Event expression must be specified");
-    };
-
-    // Construct the if/else logic.
-    let logic = match (after_block, cancelled_block) {
+    let execution = match (after_block, cancelled_block) {
         (Some(after), Some(cancelled)) => quote! {
-            if !event.cancelled { #after } else { #cancelled }
+            if !is_cancelled {
+                #after
+            } else {
+                #cancelled
+            }
         },
         (Some(after), None) => quote! {
-            if !event.cancelled { #after }
+            if !is_cancelled {
+                #after
+            }
         },
         (None, Some(cancelled)) => quote! {
-            if event.cancelled { #cancelled }
+            if is_cancelled {
+                #cancelled
+            }
         },
         (None, None) => quote! {},
     };
 
-    quote! {
-        let event = #server.plugin_manager.fire(#event).await;
-        #logic
-    }
-    .into()
+    let expanded = quote! {
+        {
+            let mut event = #event_expr;
+            let server_ref: &std::sync::Arc<crate::server::Server> = {
+                use std::borrow::Borrow;
+                (#server_stmt).borrow()
+            };
+            server_ref.plugin_manager.fire(server_ref, &mut event).await;
+
+            let is_cancelled = {
+                use crate::plugin::Cancellable;
+                event.cancelled()
+            };
+
+            #execution
+        }
+    };
+
+    expanded.into()
 }
 
 /// Attaches a fixed packet ID to a struct implementing `Packet`.

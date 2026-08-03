@@ -93,6 +93,11 @@ impl<'a> PistonHandler<'a> {
         Self::is_block_sticky(state) || Self::is_block_sticky(adjacent_state)
     }
 
+    fn is_piston_head_or_base(&self, pos: BlockPos) -> bool {
+        pos == self.pos_from
+            || (!self.retracted && pos == self.pos_from.offset(self.piston_direction.to_offset()))
+    }
+
     async fn try_move(&mut self, pos: BlockPos, dir: BlockDirection) -> bool {
         let (mut block, block_state) = self.world.get_block_and_state(&pos);
         if block_state.is_air() {
@@ -101,7 +106,7 @@ impl<'a> PistonHandler<'a> {
         if !PistonBlock::is_movable(block, block_state, self.motion_direction, false, dir) {
             return true;
         }
-        if pos == self.pos_from {
+        if self.is_piston_head_or_base(pos) {
             return true;
         }
         if self.moved_blocks.contains(&pos) {
@@ -124,7 +129,7 @@ impl<'a> PistonHandler<'a> {
                     false,
                     self.motion_direction.opposite(),
                 )
-                || block_pos == self.pos_from
+                || self.is_piston_head_or_base(block_pos)
             {
                 break;
             }
@@ -157,7 +162,10 @@ impl<'a> PistonHandler<'a> {
                 return true;
             }
             let (block, block_state) = self.world.get_block_and_state(&block_pos2);
-            if block_state.is_air() {
+            if block_state.is_air()
+                || (!self.retracted
+                    && block_pos2 == self.pos_from.offset(self.piston_direction.to_offset()))
+            {
                 return true;
             }
             if !PistonBlock::is_movable(
@@ -166,7 +174,7 @@ impl<'a> PistonHandler<'a> {
                 self.motion_direction,
                 true,
                 self.motion_direction,
-            ) || block_pos2 == self.pos_from
+            ) || self.is_piston_head_or_base(block_pos2)
             {
                 return false;
             }

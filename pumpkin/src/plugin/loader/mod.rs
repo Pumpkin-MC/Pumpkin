@@ -1,5 +1,5 @@
 use crate::plugin::{PluginMetadata, api::Plugin, loader::wasm::wasm_host::PluginInitError};
-use std::{any::Any, path::Path, pin::Pin};
+use std::{any::Any, path::Path, pin::Pin, sync::Arc};
 use thiserror::Error;
 
 pub mod native;
@@ -9,7 +9,7 @@ pub type PluginLoadFuture<'a> = Pin<
     Box<
         dyn Future<
                 Output = Result<
-                    (Box<dyn Plugin>, PluginMetadata, Box<dyn Any + Send + Sync>),
+                    (Arc<dyn Plugin>, PluginMetadata, Box<dyn Any + Send + Sync>),
                     LoaderError,
                 >,
             > + Send

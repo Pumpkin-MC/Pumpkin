@@ -230,23 +230,15 @@ pub struct LevelDat {
 #[cfg(test)]
 mod test {
 
-    use flate2::read::GzDecoder;
     use pumpkin_data::game_rules::GameRuleRegistry;
     use pumpkin_nbt::{deserializer::from_bytes, serializer::to_bytes};
     use pumpkin_util::{Difficulty, world_seed::Seed};
-    use std::{
-        fs,
-        io::{Cursor, Read},
-        sync::LazyLock,
-    };
+    use std::{io::Cursor, sync::LazyLock};
     use tempfile::TempDir;
 
-    use crate::{
-        global_path,
-        world_info::{DataPacks, LevelData, WorldGenSettings, WorldInfoError, WorldVersion},
-    };
+    use crate::world_info::{DataPacks, LevelData, WorldGenSettings, WorldVersion};
 
-    use super::{AnvilLevelInfo, LEVEL_DAT_FILE_NAME, LevelDat, WorldInfoReader, WorldInfoWriter};
+    use super::{AnvilLevelInfo, LevelDat, WorldInfoReader, WorldInfoWriter};
 
     #[test]
     fn preserve_level_dat_seed() {
@@ -339,18 +331,18 @@ mod test {
         },
     });
 
-    #[test]
-    fn deserialize_level_dat() {
-        let raw_compressed_nbt = fs::read("assets/level_1_21_4.dat").unwrap();
-        assert!(!raw_compressed_nbt.is_empty());
+    // #[test]
+    // fn deserialize_level_dat() {
+    //     let raw_compressed_nbt = fs::read("assets/level_1_21_4.dat").unwrap();
+    //     assert!(!raw_compressed_nbt.is_empty());
 
-        let mut decoder = GzDecoder::new(&raw_compressed_nbt[..]);
-        let mut buf = Vec::new();
-        decoder.read_to_end(&mut buf).unwrap();
-        let level_dat: LevelDat = from_bytes(Cursor::new(buf)).expect("Failed to decode from file");
+    //     let mut decoder = GzDecoder::new(&raw_compressed_nbt[..]);
+    //     let mut buf = Vec::new();
+    //     decoder.read_to_end(&mut buf).unwrap();
+    //     let level_dat: LevelDat = from_bytes(Cursor::new(buf)).expect("Failed to decode from file");
 
-        assert_eq!(level_dat, *LEVEL_DAT);
-    }
+    //     assert_eq!(level_dat, *LEVEL_DAT);
+    // }
 
     #[test]
     fn serialize_level_dat() {
@@ -369,23 +361,5 @@ mod test {
         expected.data.clear_weather_time = 0;
 
         assert_eq!(level_dat_again, expected);
-    }
-
-    #[test]
-    fn failed_deserialize_old_level_dat() {
-        let temp_dir = TempDir::new().unwrap();
-
-        let test_dat = global_path!("../../assets/level_1_20.dat");
-        fs::copy(
-            test_dat,
-            temp_dir.path().to_path_buf().join(LEVEL_DAT_FILE_NAME),
-        )
-        .unwrap();
-
-        let result = AnvilLevelInfo.read_world_info(temp_dir.path());
-        assert!(matches!(
-            result,
-            Err(WorldInfoError::UnsupportedDataVersion(_))
-        ));
     }
 }

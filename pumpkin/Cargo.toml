@@ -67,6 +67,12 @@ rustyline.workspace = true
 # encryption
 rsa.workspace = true
 
+# verification & WASM parsing
+ed25519-dalek.workspace = true
+hex.workspace = true
+wasmparser = "0.255"
+wasm-encoder = "0.255"
+
 # authentication
 ureq = { workspace = true, features = ["json"] }
 

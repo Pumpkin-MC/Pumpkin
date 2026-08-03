@@ -51,6 +51,7 @@ impl PlacedFeature {
     pub fn generate_in_proto_chunk(
         &self,
         chunk: &mut crate::ProtoChunk,
+        block_registry: &dyn crate::world::WorldPortalExt,
         feature_name: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
@@ -64,8 +65,17 @@ impl PlacedFeature {
         if let ConfiguredFeature::SculkPatch(feature) = feature {
             feature.generate_in_proto_chunk(chunk, random, pos)
         } else {
-            tracing::warn!("Placed feature {feature_name:?} is not supported in a jigsaw pool");
-            false
+            let min_y = chunk.bottom_y();
+            let height = chunk.height();
+            self.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            )
         }
     }
 
