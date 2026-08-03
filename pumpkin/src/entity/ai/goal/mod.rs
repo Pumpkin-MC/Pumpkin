@@ -22,6 +22,7 @@ pub mod flee_sun;
 pub mod follow_flock_leader;
 pub mod follow_owner;
 pub mod follow_parent;
+pub mod frog_tongue_attack;
 pub mod goal_selector;
 pub mod goat_ram;
 pub mod interact_with_door;
