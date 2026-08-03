@@ -283,6 +283,7 @@ pub(crate) fn get_block_entity_id(block_name: &str) -> Option<&'static str> {
         "minecraft:smoker" => Some("minecraft:smoker"),
         "minecraft:shulker_box" => Some("minecraft:shulker_box"),
         "minecraft:bed" => Some("minecraft:bed"),
+        "minecraft:dragon_wall_head" => Some("minecraft:skull"),
         "minecraft:sign"
         | "minecraft:oak_sign"
         | "minecraft:spruce_sign"
