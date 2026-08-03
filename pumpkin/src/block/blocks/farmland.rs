@@ -115,8 +115,8 @@ impl BlockBehaviour for FarmlandBlock {
 }
 
 fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    let state = world.get_block_state(&block_pos.up());
-    !state.is_solid() // TODO: add fence gate block
+    let (block, state) = world.get_block_and_state(&block_pos.up());
+    !state.is_solid() || block.has_tag(&tag::Block::C_FENCE_GATES)
 }
 
 /// Mirrors vanilla `FarmBlock#isNearWater`, which tests the *fluid* state of every
