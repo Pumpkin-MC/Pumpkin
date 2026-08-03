@@ -1,7 +1,10 @@
 use super::{Controls, Goal, GoalFuture};
 use crate::entity::mob::Mob;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::Block;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
@@ -85,6 +88,7 @@ impl Goal for EatGrassGoal {
                         )
                         .await;
                     mob.on_eating_grass().await;
+                    emit_eat_game_event(&world, &block_pos).await;
                 } else {
                     let below_pos = block_pos.down();
                     let block_below = world.get_block(&below_pos);
@@ -97,6 +101,7 @@ impl Goal for EatGrassGoal {
                             )
                             .await;
                         mob.on_eating_grass().await;
+                        emit_eat_game_event(&world, &block_pos).await;
                     }
                 }
             }
@@ -116,4 +121,26 @@ impl Goal for EatGrassGoal {
     fn controls(&self) -> Controls {
         self.goal_control
     }
+}
+
+// EatBlockGoal.java lines 68/77 (decompiled 26.2): both branches call `this.mob.ate()`,
+// which is `Mob.ate()` -> `this.gameEvent(GameEvent.EAT)` (Mob.java:265). `GameEventContext`
+// has no entity handle available here (`mob: &dyn Mob` isn't behind an `Arc`), so this uses
+// `none()` like other position-only emission sites -- only the source-entity-based
+// suppression checks lose fidelity, not the emission itself.
+async fn emit_eat_game_event(
+    world: &std::sync::Arc<crate::world::World>,
+    block_pos: &pumpkin_util::math::position::BlockPos,
+) {
+    emit_game_event(
+        world,
+        GameEvent::Eat,
+        Vector3::new(
+            f64::from(block_pos.0.x) + 0.5,
+            f64::from(block_pos.0.y) + 0.5,
+            f64::from(block_pos.0.z) + 0.5,
+        ),
+        GameEventContext::none(),
+    )
+    .await;
 }
