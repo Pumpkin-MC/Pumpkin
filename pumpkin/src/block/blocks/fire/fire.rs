@@ -344,7 +344,7 @@ impl BlockBehaviour for FireBlock {
                 // Check if fire should extinguish due to lack of fuel
                 if !Self::are_blocks_around_flammable(world.as_ref(), pos) {
                     let block_below_state = world.get_block_state(&pos.down());
-                    if !block_below_state.is_side_solid(BlockDirection::Up) || new_age > 3 {
+                    if !block_below_state.is_side_solid(BlockDirection::Up) || age > 3 {
                         world
                             .set_block_state(
                                 pos,
@@ -357,7 +357,7 @@ impl BlockBehaviour for FireBlock {
                 }
 
                 // At max age, fire has a chance to extinguish if not on flammable block
-                if new_age == 15
+                if age == 15
                     && rand::rng().random_range(0..4) == 0
                     && !Self::is_flammable(world.get_block_state(&pos.down()))
                 {
@@ -383,42 +383,42 @@ impl BlockBehaviour for FireBlock {
                 world,
                 &pos.offset(BlockDirection::East.to_offset()),
                 300 + extra,
-                new_age,
+                age,
             )
             .await;
             self.try_spreading_fire(
                 world,
                 &pos.offset(BlockDirection::West.to_offset()),
                 300 + extra,
-                new_age,
+                age,
             )
             .await;
             self.try_spreading_fire(
                 world,
                 &pos.offset(BlockDirection::Down.to_offset()),
                 250 + extra,
-                new_age,
+                age,
             )
             .await;
             self.try_spreading_fire(
                 world,
                 &pos.offset(BlockDirection::Up.to_offset()),
                 250 + extra,
-                new_age,
+                age,
             )
             .await;
             self.try_spreading_fire(
                 world,
                 &pos.offset(BlockDirection::North.to_offset()),
                 300 + extra,
-                new_age,
+                age,
             )
             .await;
             self.try_spreading_fire(
                 world,
                 &pos.offset(BlockDirection::South.to_offset()),
                 300 + extra,
-                new_age,
+                age,
             )
             .await;
 
@@ -459,7 +459,7 @@ impl BlockBehaviour for FireBlock {
 
                                 // Calculate odds of spreading
                                 let mut odds =
-                                    (ignite_odds + 40 + difficulty * 7) / (new_age as i32 + 30);
+                                    (ignite_odds + 40 + difficulty * 7) / (age as i32 + 30);
 
                                 // Reduce spread odds in certain biomes
                                 if Self::is_increased_burnout_biome(world, &offset_pos) {
@@ -473,9 +473,8 @@ impl BlockBehaviour for FireBlock {
                                 if can_ignite
                                     && !Self::is_near_rain(world.as_ref(), &offset_pos).await
                                 {
-                                    let spread_age = (new_age + rand::rng().random_range(0..5) / 4)
-                                        .min(15)
-                                        as u8;
+                                    let spread_age =
+                                        (age + rand::rng().random_range(0..5) / 4).min(15) as u8;
                                     let fire_state_id = self.get_state_for_position(
                                         world.as_ref(),
                                         block,
