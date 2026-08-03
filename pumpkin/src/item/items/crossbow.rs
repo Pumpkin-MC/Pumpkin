@@ -132,10 +132,14 @@ impl ItemBehaviour for CrossbowItem {
                         )
                         .await;
 
-                    player.world().play_sound(
+                    // Vanilla `CrossbowItem#onUseTick`: volume 1.0, pitch
+                    // 1.0F / (random.nextFloat() * 0.5F + 1.0F) + 0.2F.
+                    player.world().play_sound_fine(
                         Sound::ItemCrossbowLoadingEnd,
                         SoundCategory::Players,
                         &player.position(),
+                        1.0,
+                        1.0 / rand::random::<f32>().mul_add(0.5, 1.0) + 0.2,
                     );
                 }
             }
@@ -150,6 +154,16 @@ impl ItemBehaviour for CrossbowItem {
     fn as_any(&self) -> &dyn Any {
         self
     }
+}
+
+/// Vanilla `CrossbowItem#getShotPitch` / `#getRandomShotPitch`: the first shot is always 1.0,
+/// later shots alternate between a high (0.63) and a low (0.43) offset.
+fn crossbow_shot_pitch(index: u32, random_value: f32) -> f32 {
+    if index == 0 {
+        return 1.0;
+    }
+    let range_decider = if index & 1 == 1 { 0.63 } else { 0.43 };
+    1.0 / random_value.mul_add(0.5, 1.8) + range_decider
 }
 
 impl CrossbowItem {
@@ -173,13 +187,8 @@ impl CrossbowItem {
 
         if let Some(charged) = projectiles {
             let world = player.world();
-            world.play_sound(
-                Sound::ItemCrossbowShoot,
-                SoundCategory::Players,
-                &player.position(),
-            );
-
             let (yaw, pitch) = player.rotation();
+            let mut shot_index = 0u32;
 
             for projectile_nbt in charged.projectiles {
                 let Some(projectile) = ItemStack::read_item_stack(&projectile_nbt) else {
@@ -212,6 +221,17 @@ impl CrossbowItem {
                     arrow.set_velocity_from_rotation(pitch, t_yaw, 0.0, 3.15, 1.0);
                     let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
                     world.spawn_entity(arrow_arc).await;
+
+                    // Vanilla `CrossbowItem#shootProjectile` plays CROSSBOW_SHOOT once per fired
+                    // projectile at volume 1.0 with `getShotPitch(random, index)`.
+                    world.play_sound_fine(
+                        Sound::ItemCrossbowShoot,
+                        SoundCategory::Players,
+                        &player.position(),
+                        1.0,
+                        crossbow_shot_pitch(shot_index, rand::random()),
+                    );
+                    shot_index += 1;
                 }
             }
 
@@ -221,5 +241,17 @@ impl CrossbowItem {
                 .retain(|(id, _)| *id != DataComponent::ChargedProjectiles);
             player.damage_held_item(1).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::crossbow_shot_pitch;
+
+    #[test]
+    fn crossbow_shot_pitch_matches_vanilla_shot_indices() {
+        assert!((crossbow_shot_pitch(0, 0.5) - 1.0).abs() < 1e-6);
+        assert!((crossbow_shot_pitch(1, 0.0) - (1.0 / 1.8 + 0.63)).abs() < 1e-6);
+        assert!((crossbow_shot_pitch(2, 0.0) - (1.0 / 1.8 + 0.43)).abs() < 1e-6);
     }
 }
