@@ -1,4 +1,3 @@
-bwrap: /home/zoliviragh/.local/share/flatpak/app/dev.zed.Zed/x86_64/stable/d723b1334a83e703a7fd9419ba74d4567e26200e5541ac018186b3bc61d69c44/files/lib/libselinux.so.1: no version information available (required by bwrap)
 use std::sync::{Arc, Mutex};
 
 use pumpkin_data::Block;
@@ -580,7 +579,9 @@ impl StructurePiecesCollector {
         let chunk_z = start_block_z(chunk.z);
         let chunk_box = BlockBox::new(
             chunk_x,
-            chunk.bottom_y() as i32,
+            // Vanilla's writable structure area deliberately excludes the
+            // dimension's bottommost block layer.
+            chunk.bottom_y() as i32 + 1,
             chunk_z,
             chunk_x + 15,
             chunk.bottom_y() as i32 + chunk.height() as i32 - 1,

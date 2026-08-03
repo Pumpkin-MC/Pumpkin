@@ -6,7 +6,7 @@ use pumpkin_data::structures::{
 use pumpkin_util::{
     math::floor_div,
     random::{
-        RandomGenerator, RandomImpl, get_carver_seed, get_region_seed, legacy_rand::LegacyRand,
+        RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand,
         xoroshiro128::Xoroshiro,
     },
 };
@@ -17,7 +17,7 @@ use crate::ProtoChunk;
 use dashmap::DashMap;
 use pumpkin_data::structures::StructureKeys;
 
-use super::structures::StructurePosition;
+use super::structures::{StructurePosition, create_chunk_random};
 /// A thread-safe global cache for structures that require world-wide placement calculations
 /// rather than localized chunk-based math (e.g., Strongholds using Concentric Rings).
 ///
@@ -267,8 +267,7 @@ fn should_generate_frequency(
             random.next_f32() < frequency
         }
         FrequencyReductionMethod::LegacyType3 => {
-            let carver_seed = get_carver_seed(seed as u64, chunk_x, chunk_z);
-            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed));
+            let mut random = create_chunk_random(seed, chunk_x, chunk_z);
             random.next_f64() < f64::from(frequency)
         }
     }
@@ -354,7 +353,10 @@ fn is_start_chunk_random_spread(
 mod tests {
     use pumpkin_data::{
         dimension::Dimension,
-        structures::{RandomSpreadStructurePlacement, StructurePlacementCalculator, StructureSet},
+        structures::{
+            FrequencyReductionMethod, RandomSpreadStructurePlacement, StructurePlacementCalculator,
+            StructureSet,
+        },
     };
     use pumpkin_util::random::{
         RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand,
@@ -367,7 +369,7 @@ mod tests {
             get_world_gen,
             structure::placement::{
                 GlobalStructureCache, apply_frequency_reduction, get_start_chunk_random_spread,
-                is_start_chunk, should_generate_structure,
+                is_start_chunk, should_generate_frequency, should_generate_structure,
             },
         },
     };
@@ -389,6 +391,26 @@ mod tests {
         let (x, z) = get_start_chunk_random_spread(&random, 123, 1, 1, 14357620);
         assert_eq!(x, 5);
         assert_eq!(z, 4);
+    }
+
+    #[test]
+    fn legacy_type_3_matches_vanilla_large_feature_random() {
+        assert!(!should_generate_frequency(
+            FrequencyReductionMethod::LegacyType3,
+            123_456_789,
+            -37,
+            84,
+            0,
+            0.507_83,
+        ));
+        assert!(should_generate_frequency(
+            FrequencyReductionMethod::LegacyType3,
+            123_456_789,
+            -37,
+            84,
+            99,
+            0.507_831,
+        ));
     }
 
     #[test]

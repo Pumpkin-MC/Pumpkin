@@ -211,6 +211,102 @@ impl RandomImpl for Xoroshiro {
     }
 }
 
+/// A Xoroshiro source exposed through Java's `WorldgenRandom`/`BitRandomSource`
+/// adapter.
+///
+/// World decoration deliberately uses this API, whose integer and bounded-number
+/// methods consume different bits than `XoroshiroRandomSource` itself.
+pub struct WorldgenXoroshiro {
+    source: Xoroshiro,
+    internal_next_gaussian: Option<f64>,
+}
+
+impl WorldgenXoroshiro {
+    population_seed_fn!();
+
+    #[must_use]
+    pub const fn from_seed(seed: u64) -> Self {
+        Self {
+            source: Xoroshiro::from_seed(seed),
+            internal_next_gaussian: None,
+        }
+    }
+
+    const fn next(&mut self, bits: u64) -> i32 {
+        (self.source.next_random() >> (64 - bits)) as i32
+    }
+}
+
+impl GaussianGenerator for WorldgenXoroshiro {
+    fn stored_next_gaussian(&self) -> Option<f64> {
+        self.internal_next_gaussian
+    }
+
+    fn set_stored_next_gaussian(&mut self, value: Option<f64>) {
+        self.internal_next_gaussian = value;
+    }
+}
+
+impl RandomImpl for WorldgenXoroshiro {
+    fn split(&mut self) -> Self {
+        Self {
+            source: Xoroshiro::new(self.source.next_random(), self.source.next_random()),
+            internal_next_gaussian: None,
+        }
+    }
+
+    fn next_splitter(&mut self) -> RandomDeriver {
+        RandomDeriver::Xoroshiro(self.source.next_splitter())
+    }
+
+    fn next_i32(&mut self) -> i32 {
+        self.next(32)
+    }
+
+    fn next_bounded_i32(&mut self, bound: i32) -> i32 {
+        if (bound & bound.wrapping_sub(1)) == 0 {
+            (i64::from(bound).wrapping_mul(i64::from(self.next(31))) >> 31) as i32
+        } else {
+            loop {
+                let value = self.next(31);
+                let result = value % bound;
+                if value
+                    .wrapping_sub(result)
+                    .wrapping_add(bound.wrapping_sub(1))
+                    >= 0
+                {
+                    return result;
+                }
+            }
+        }
+    }
+
+    fn next_i64(&mut self) -> i64 {
+        let high = self.next_i32();
+        let low = self.next_i32();
+        (i64::from(high) << 32).wrapping_add(i64::from(low))
+    }
+
+    fn next_bool(&mut self) -> bool {
+        self.next(1) != 0
+    }
+
+    fn next_f32(&mut self) -> f32 {
+        self.next(24) as f32 * 5.960_464_5E-8f32
+    }
+
+    fn next_f64(&mut self) -> f64 {
+        let high = self.next(26);
+        let low = self.next(27);
+        let bits = (i64::from(high) << 27).wrapping_add(i64::from(low));
+        bits as f64 * 1.110_223_024_625_156_5E-16
+    }
+
+    fn next_gaussian(&mut self) -> f64 {
+        self.calculate_gaussian()
+    }
+}
+
 /// A splitter for creating derived Xoroshiro random generators.
 ///
 /// This struct allows for deterministic creation of multiple independent
@@ -265,9 +361,22 @@ impl RandomDeriverImpl for XoroshiroSplitter {
 mod tests {
     use crate::random::{RandomDeriverImpl, RandomImpl};
 
-    use super::{Xoroshiro, mix_stafford_13};
+    use super::{WorldgenXoroshiro, Xoroshiro, mix_stafford_13};
 
     // Values checked against results from the equivalent Java source
+
+    #[test]
+    fn worldgen_adapter_matches_java_bit_random_source() {
+        assert_eq!(
+            WorldgenXoroshiro::get_population_seed(123_456_789, -37 * 16, 84 * 16),
+            8_245_768_125_123_811_941
+        );
+
+        let mut random = WorldgenXoroshiro::from_seed(8_245_768_125_123_841_941);
+        assert_eq!(random.next_i32(), -618_189_195);
+        assert!((random.next_f32() - 0.066_260_1).abs() < f32::EPSILON);
+        assert_eq!(random.next_i64(), -8_355_384_254_887_254_362);
+    }
 
     #[test]
     fn mix_stafford_13_test() {

@@ -10,12 +10,12 @@ use pumpkin_data::structures::{
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::{Block, BlockState, block_properties::blocks_movement, chunk::Biome};
 use pumpkin_data::{BlockId, BlockStateId, tag};
-use pumpkin_util::random::xoroshiro128::XoroshiroSplitter;
-use pumpkin_util::random::{RandomImpl, get_carver_seed};
+use pumpkin_util::random::RandomImpl;
+use pumpkin_util::random::xoroshiro128::{WorldgenXoroshiro, XoroshiroSplitter};
 use pumpkin_util::{
     HeightMap,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
-    random::{RandomGenerator, get_decorator_seed, xoroshiro128::Xoroshiro},
+    random::{RandomGenerator, get_decorator_seed},
 };
 use rustc_hash::FxHashMap;
 
@@ -64,6 +64,18 @@ enum ActiveSupplier {
     Overworld(MultiNoiseBiomeSupplier),
     Nether(MultiNoiseBiomeSupplier),
     End(TheEndBiomeSupplier),
+}
+
+fn structures_for_step(step: usize) -> Vec<StructureKeys> {
+    let mut structures = StructureKeys::all_names()
+        .iter()
+        .filter_map(|name| StructureKeys::from_name(name))
+        .filter(|key| Structure::get(key).step.ordinal() == step)
+        .collect::<Vec<_>>();
+    // The enum discriminants preserve the registry order emitted by the data
+    // extractor. Vanilla uses that per-step order as the feature-seed index.
+    structures.sort_unstable_by_key(|key| *key as usize);
+    structures
 }
 
 pub trait GenerationCache: HeightLimitView + BlockAccessor {
@@ -1065,8 +1077,11 @@ impl ProtoChunk {
         let start_block_z = chunk_pos::start_block_z(center_z);
         let origin_pos = BlockPos::new(start_block_x, min_y, start_block_z);
 
-        let population_seed =
-            Xoroshiro::get_population_seed(random_config.seed, start_block_x, start_block_z);
+        let population_seed = WorldgenXoroshiro::get_population_seed(
+            random_config.seed,
+            start_block_x,
+            start_block_z,
+        );
 
         for step in 0..11 {
             Self::generate_structure_step(
@@ -1094,8 +1109,9 @@ impl ProtoChunk {
             for (p, feature_enum) in features_to_run.into_iter().enumerate() {
                 if let Some(feature) = PLACED_FEATURES.get(&feature_enum) {
                     let decorator_seed = get_decorator_seed(population_seed, p as u64, step as u64);
-                    let mut random =
-                        RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
+                    let mut random = RandomGenerator::WorldgenXoroshiro(
+                        WorldgenXoroshiro::from_seed(decorator_seed),
+                    );
 
                     feature.generate(
                         cache,
@@ -1120,7 +1136,7 @@ impl ProtoChunk {
         population_seed: u64,
         world_seed: i64,
     ) {
-        let mut tasks = Vec::new();
+        let mut tasks = FxHashMap::<StructureKeys, Vec<_>>::default();
         {
             let center_chunk = cache.get_center_chunk();
             let center_x = center_chunk.x;
@@ -1132,14 +1148,16 @@ impl ProtoChunk {
                     continue;
                 }
 
-                match instance {
-                    StructureInstance::Start(pos) => tasks.push(pos.collector.clone()),
-                    StructureInstance::Reference(collector) => {
-                        let collector_arc = collector.clone();
-                        if !tasks.iter().any(|t| Arc::ptr_eq(t, &collector_arc)) {
-                            tasks.push(collector_arc);
-                        }
-                    }
+                let collector = match instance {
+                    StructureInstance::Start(pos) => pos.collector.clone(),
+                    StructureInstance::Reference(collector) => collector.clone(),
+                };
+                let structure_tasks = tasks.entry(*id).or_default();
+                if !structure_tasks
+                    .iter()
+                    .any(|task| Arc::ptr_eq(task, &collector))
+                {
+                    structure_tasks.push(collector);
                 }
             }
 
@@ -1160,28 +1178,26 @@ impl ProtoChunk {
                                 continue;
                             }
 
-                            match instance {
+                            let collector = match instance {
                                 StructureInstance::Start(pos) => {
                                     let start_x = chunk_pos::start_block_x(center_x);
                                     let start_z = chunk_pos::start_block_z(center_z);
                                     let end_x = start_x + 15;
                                     let end_z = start_z + 15;
 
-                                    if pos
-                                        .get_bounding_box()
+                                    pos.get_bounding_box()
                                         .intersects_raw_xz(start_x, start_z, end_x, end_z)
-                                    {
-                                        let collector_arc = pos.collector.clone();
-                                        if !tasks.iter().any(|t| Arc::ptr_eq(t, &collector_arc)) {
-                                            tasks.push(collector_arc);
-                                        }
-                                    }
+                                        .then(|| pos.collector.clone())
                                 }
-                                StructureInstance::Reference(collector) => {
-                                    let collector_arc = collector.clone();
-                                    if !tasks.iter().any(|t| Arc::ptr_eq(t, &collector_arc)) {
-                                        tasks.push(collector_arc);
-                                    }
+                                StructureInstance::Reference(collector) => Some(collector.clone()),
+                            };
+                            if let Some(collector) = collector {
+                                let structure_tasks = tasks.entry(*id).or_default();
+                                if !structure_tasks
+                                    .iter()
+                                    .any(|task| Arc::ptr_eq(task, &collector))
+                                {
+                                    structure_tasks.push(collector);
                                 }
                             }
                         }
@@ -1190,13 +1206,18 @@ impl ProtoChunk {
             }
         }
 
-        let decorator_seed = get_decorator_seed(population_seed, 0, step as u64);
-        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(decorator_seed));
-
         let chunk = cache.get_center_chunk_mut();
-        for collector_arc in tasks {
-            let mut collector = collector_arc.lock().unwrap();
-            collector.generate_in_chunk(chunk, block_registry, &mut random, world_seed);
+        for (index, key) in structures_for_step(step).into_iter().enumerate() {
+            let Some(structure_tasks) = tasks.remove(&key) else {
+                continue;
+            };
+            let decorator_seed = get_decorator_seed(population_seed, index as u64, step as u64);
+            let mut random =
+                RandomGenerator::WorldgenXoroshiro(WorldgenXoroshiro::from_seed(decorator_seed));
+            for collector_arc in structure_tasks {
+                let mut collector = collector_arc.lock().unwrap();
+                collector.generate_in_chunk(chunk, block_registry, &mut random, world_seed);
+            }
         }
     }
 
@@ -1262,9 +1283,7 @@ impl ProtoChunk {
             }
 
             let mut candidates = set.structures.to_vec();
-            let carver_seed = get_carver_seed(seed, self.x, self.z);
-            let mut random: RandomGenerator =
-                RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed));
+            let mut random = create_chunk_random(seed as i64, self.x, self.z);
 
             let mut total_weight: u32 = candidates.iter().map(|e| e.weight).sum();
 
@@ -1597,5 +1616,50 @@ impl GenerationCache for ProtoChunk {
         _cz: i32,
     ) -> Option<&crate::generation::blender::blending_data::BlendingData> {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::structures_for_step;
+    use pumpkin_data::structures::{GenerationStep, StructureKeys};
+    use pumpkin_util::random::{
+        RandomGenerator, RandomImpl, get_decorator_seed, xoroshiro128::WorldgenXoroshiro,
+    };
+
+    #[test]
+    fn structure_decoration_order_matches_the_vanilla_registry() {
+        assert_eq!(
+            structures_for_step(GenerationStep::UndergroundStructures.ordinal()),
+            [
+                StructureKeys::Mineshaft,
+                StructureKeys::MineshaftMesa,
+                StructureKeys::BuriedTreasure,
+                StructureKeys::TrailRuins,
+                StructureKeys::TrialChambers,
+            ]
+        );
+    }
+
+    #[test]
+    fn mineshaft_decoration_streams_match_vanilla_26_2() {
+        let population_seed =
+            WorldgenXoroshiro::get_population_seed(123_456_789, -37 * 16, 84 * 16);
+        assert_eq!(population_seed, 8_245_768_125_123_811_941);
+
+        for (index, expected_int, expected_float, expected_long) in [
+            (0, -618_189_195, 0.066_260_1, -8_355_384_254_887_254_362),
+            (1, 1_059_888_632, 0.664_247_5, 6_337_689_326_094_498_930),
+        ] {
+            let seed = get_decorator_seed(
+                population_seed,
+                index,
+                GenerationStep::UndergroundStructures.ordinal() as u64,
+            );
+            let mut random = RandomGenerator::WorldgenXoroshiro(WorldgenXoroshiro::from_seed(seed));
+            assert_eq!(random.next_i32(), expected_int);
+            assert!((random.next_f32() - expected_float).abs() < f32::EPSILON);
+            assert_eq!(random.next_i64(), expected_long);
+        }
     }
 }

@@ -122,6 +122,16 @@ impl BlockState {
         self.state_flags & IS_SOLID_BLOCK != 0
     }
 
+    /// Returns `isSolidRender()` from Java Edition.
+    ///
+    /// The cached opacity matches that predicate for every block state except
+    /// tinted glass, which deliberately blocks all light without being a solid
+    /// render block.
+    #[must_use]
+    pub const fn is_solid_render(&self) -> bool {
+        self.opacity == 15 && self.id.to_block().id.as_u16() != Block::TINTED_GLASS.id.as_u16()
+    }
+
     #[must_use]
     pub const fn has_random_ticks(&self) -> bool {
         self.state_flags & HAS_RANDOM_TICKS != 0
@@ -282,3 +292,18 @@ const WEST_SIDE_SOLID: u8 = 1 << 4;
 const EAST_SIDE_SOLID: u8 = 1 << 5;
 const DOWN_CENTER_SOLID: u8 = 1 << 6;
 const UP_CENTER_SOLID: u8 = 1 << 7;
+
+#[cfg(test)]
+mod tests {
+    use super::Block;
+
+    #[test]
+    fn solid_render_distinguishes_occlusion_from_collision_and_conduction() {
+        assert!(Block::STONE.default_state.is_solid_render());
+        assert!(Block::GLOWSTONE.default_state.is_solid_render());
+        assert!(Block::REDSTONE_BLOCK.default_state.is_solid_render());
+        assert!(!Block::GLASS.default_state.is_solid_render());
+        assert!(!Block::SLIME_BLOCK.default_state.is_solid_render());
+        assert!(!Block::TINTED_GLASS.default_state.is_solid_render());
+    }
+}
