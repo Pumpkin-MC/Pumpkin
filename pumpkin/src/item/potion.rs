@@ -17,9 +17,12 @@ pub enum PotionApplicationSource {
 }
 
 impl PotionApplicationSource {
+    // AreaEffectCloud.java: `effect.getEffect().value().applyInstantaneousEffect(...,
+    // effect.getAmplifier(), 0.5)` -- the potency factor is the literal constant 0.5,
+    // independent of the cloud's distance-based duration scale, not `scale * 0.5`.
     const fn instant_scale(self, scale: f32) -> f32 {
         match self {
-            Self::AreaEffectCloud => scale * 0.5,
+            Self::AreaEffectCloud => 0.5,
             Self::Arrow => 1.0,
             Self::Normal => scale,
         }
