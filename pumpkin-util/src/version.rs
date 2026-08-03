@@ -313,23 +313,14 @@ impl std::fmt::Display for BedrockMinecraftVersion {
     }
 }
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde::Serialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub enum MinecraftVersion {
     Java(JavaMinecraftVersion),
     Bedrock(BedrockMinecraftVersion),
 }
 
 impl MinecraftVersion {
+    #[must_use]
     pub const fn java(self) -> Option<JavaMinecraftVersion> {
         match self {
             Self::Java(version) => Some(version),
@@ -337,6 +328,7 @@ impl MinecraftVersion {
         }
     }
 
+    #[must_use]
     pub const fn bedrock(self) -> Option<BedrockMinecraftVersion> {
         match self {
             Self::Java(_) => None,
@@ -344,6 +336,7 @@ impl MinecraftVersion {
         }
     }
 
+    #[must_use]
     pub const fn edition(self) -> MinecraftEdition {
         match self {
             Self::Java(_) => MinecraftEdition::Java,
@@ -355,8 +348,8 @@ impl MinecraftVersion {
 impl std::fmt::Display for MinecraftVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MinecraftVersion::Java(v) => write!(f, "java ({})", v),
-            MinecraftVersion::Bedrock(v) => write!(f, "bedrock ({})", v),
+            Self::Java(v) => write!(f, "java ({v})"),
+            Self::Bedrock(v) => write!(f, "bedrock ({v})"),
         }
     }
 }

@@ -1,4 +1,9 @@
-use std::{any::{TypeId, type_name}, fmt::Display, marker::PhantomData, sync::Arc};
+use std::{
+    any::{TypeId, type_name},
+    fmt::Display,
+    marker::PhantomData,
+    sync::Arc,
+};
 
 use pumpkin_util::identifier::Identifier;
 
@@ -9,25 +14,26 @@ pub struct DataKey<T: ?Sized + Send + Sync + 'static> {
 }
 
 impl<T: ?Sized + Send + Sync + 'static> DataKey<T> {
-    pub fn new(identifier: Identifier) -> DataKeyBuilder<T> {
+    #[must_use]
+    pub fn builder(identifier: Identifier) -> DataKeyBuilder<T> {
         DataKeyBuilder {
             keys: vec![identifier],
             marker: PhantomData,
         }
     }
 
+    #[must_use]
     pub fn identifier(&self) -> &Identifier {
         &self.keys[0]
     }
 
+    #[must_use]
     pub fn path(&self) -> &[Identifier] {
         &self.keys
     }
 
-    pub fn child<U: Send + Sync + 'static>(
-        &self,
-        identifier: Identifier,
-    ) -> DataKey<U> {
+    #[must_use]
+    pub fn child<U: Send + Sync + 'static>(&self, identifier: Identifier) -> DataKey<U> {
         let mut keys = self.keys.to_vec();
         keys.push(identifier);
 
@@ -37,6 +43,7 @@ impl<T: ?Sized + Send + Sync + 'static> DataKey<T> {
         }
     }
 
+    #[must_use]
     pub fn erased(&self) -> ErasedDataKey {
         ErasedDataKey {
             keys: self.keys.clone(),
@@ -48,9 +55,9 @@ impl<T: ?Sized + Send + Sync + 'static> DataKey<T> {
 
 impl<T: ?Sized + Send + Sync + 'static> Clone for DataKey<T> {
     fn clone(&self) -> Self {
-        Self { 
-            keys: self.keys.clone(), 
-            marker: PhantomData 
+        Self {
+            keys: self.keys.clone(),
+            marker: PhantomData,
         }
     }
 }
@@ -71,7 +78,6 @@ impl<T: ?Sized + Send + Sync + 'static> Display for DataKey<T> {
     }
 }
 
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ErasedDataKey {
     keys: Arc<[Identifier]>,
@@ -80,15 +86,15 @@ pub struct ErasedDataKey {
 }
 
 impl ErasedDataKey {
-    pub fn type_id(&self) -> TypeId {
+    pub const fn type_id(&self) -> TypeId {
         self.type_id
     }
 
-    pub fn type_name(&self) -> &'static str {
+    pub const fn type_name(&self) -> &'static str {
         self.type_name
     }
 
-     pub fn identifier(&self) -> &Identifier {
+    pub fn identifier(&self) -> &Identifier {
         &self.keys[0]
     }
 

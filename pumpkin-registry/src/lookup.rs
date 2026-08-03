@@ -6,6 +6,7 @@ use crate::{Registry, RegistryAccess, error::RegistryGetError, key::DataKey};
 pub struct RegistryLookup(Arc<RootRegistry>);
 
 impl RegistryLookup {
+    #[must_use]
     pub fn new(root: Arc<RootRegistry>) -> Self {
         Self(root)
     }
@@ -24,9 +25,10 @@ impl RegistryLookup {
                 .get(identifier)
                 .ok_or_else(|| RegistryGetError::NotFound(identifier.clone()))?;
 
-            parent = erased.into_any().downcast::<RootRegistry>().map_err(|_| {
-                RegistryGetError::ExpectedRegistry(identifier.clone())
-            })?;
+            parent = erased
+                .into_any()
+                .downcast::<RootRegistry>()
+                .map_err(|_| RegistryGetError::ExpectedRegistry(identifier.clone()))?;
         }
 
         let erased = parent

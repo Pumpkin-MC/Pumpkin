@@ -2,11 +2,15 @@ use dashmap::{DashMap, Entry, mapref::multiple::RefMulti};
 use pumpkin_util::{identifier::Identifier, version::MinecraftVersion};
 use rustc_hash::FxHashMap;
 use std::{
-    any::{Any, type_name}, collections::HashMap, sync::{Arc, RwLock},
+    any::{Any, type_name},
+    collections::HashMap,
+    sync::{Arc, PoisonError, RwLock},
 };
 
 use crate::{
-    error::{RegistryInsertError, VersionMappingError}, RegistryAccess, mapping::{NetworkId, VersionMapping},
+    RegistryAccess,
+    error::{RegistryInsertError, VersionMappingError},
+    mapping::{NetworkId, VersionMapping},
 };
 
 pub struct Registry<T: ?Sized + Send + Sync + 'static> {
@@ -32,11 +36,9 @@ impl<T: Send + Sync + 'static> Registry<T> {
 }
 
 impl<T: ?Sized + Send + Sync + 'static> Registry<T> {
+    #[must_use]
     pub fn new() -> Self {
-        Self {
-            entries: DashMap::new(),
-            version_mappings: DashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn register_arc(
@@ -55,7 +57,11 @@ impl<T: ?Sized + Send + Sync + 'static> Registry<T> {
         }
     }
 
-    pub fn get_or_register_arc(&self, identifier: Identifier, create: impl FnOnce() -> Arc<T>) -> Arc<T> {
+    pub fn get_or_register_arc(
+        &self,
+        identifier: Identifier,
+        create: impl FnOnce() -> Arc<T>,
+    ) -> Arc<T> {
         match self.entries.entry(identifier) {
             Entry::Occupied(entry) => Arc::clone(entry.get()),
             Entry::Vacant(entry) => {
@@ -88,14 +94,11 @@ impl<T: ?Sized + Send + Sync + 'static> Registry<T> {
         };
 
         // The DashMap entry guard has been dropped before awaiting.
-        let mut mapping = mapping.write().unwrap_or_else(|e| e.into_inner());
+        let mut mapping = mapping.write().unwrap_or_else(PoisonError::into_inner);
 
-        if let Some(&existing_network_id) = mapping.by_identifier.get(&identifier) {
-            if existing_network_id == network_id {
-                // Registering the exact same pair is idempotent.
-                return Ok(());
-            }
-
+        if let Some(&existing_network_id) = mapping.by_identifier.get(&identifier)
+            && existing_network_id != network_id
+        {
             return Err(VersionMappingError::IdentifierAlreadyMapped {
                 version,
                 identifier,
@@ -139,7 +142,7 @@ impl<T: ?Sized + Send + Sync + 'static> Registry<T> {
             Arc::clone(entry.value())
         };
 
-        let mut version_mapping = mapping.write().unwrap_or_else(|e| e.into_inner());
+        let mut version_mapping = mapping.write().unwrap_or_else(PoisonError::into_inner);
 
         let mut batch_by_identifier: HashMap<Identifier, u32, _> = FxHashMap::default();
         let mut batch_by_network_id: HashMap<u32, Identifier, _> = FxHashMap::default();
@@ -149,48 +152,48 @@ impl<T: ?Sized + Send + Sync + 'static> Registry<T> {
                 return Err(VersionMappingError::UnknownEntry(identifier.clone()));
             }
 
-            if let Some(&existing_network_id) = version_mapping.by_identifier.get(identifier) {
-                if existing_network_id != *network_id {
-                    return Err(VersionMappingError::IdentifierAlreadyMapped {
-                        version,
-                        identifier: identifier.clone(),
-                        existing_network_id,
-                        requested_network_id: *network_id,
-                    });
-                }
+            if let Some(&existing_network_id) = version_mapping.by_identifier.get(identifier)
+                && existing_network_id != *network_id
+            {
+                return Err(VersionMappingError::IdentifierAlreadyMapped {
+                    version,
+                    identifier: identifier.clone(),
+                    existing_network_id,
+                    requested_network_id: *network_id,
+                });
             }
 
-            if let Some(existing_identifier) = version_mapping.by_network_id.get(network_id) {
-                if existing_identifier != identifier {
-                    return Err(VersionMappingError::NetworkIdAlreadyMapped {
-                        version,
-                        network_id: *network_id,
-                        existing_identifier: existing_identifier.clone(),
-                        requested_identifier: identifier.clone(),
-                    });
-                }
+            if let Some(existing_identifier) = version_mapping.by_network_id.get(network_id)
+                && existing_identifier != identifier
+            {
+                return Err(VersionMappingError::NetworkIdAlreadyMapped {
+                    version,
+                    network_id: *network_id,
+                    existing_identifier: existing_identifier.clone(),
+                    requested_identifier: identifier.clone(),
+                });
             }
 
-            if let Some(&existing_network_id) = batch_by_identifier.get(identifier) {
-                if existing_network_id != *network_id {
-                    return Err(VersionMappingError::IdentifierAlreadyMapped {
-                        version,
-                        identifier: identifier.clone(),
-                        existing_network_id,
-                        requested_network_id: *network_id,
-                    });
-                }
+            if let Some(&existing_network_id) = batch_by_identifier.get(identifier)
+                && existing_network_id != *network_id
+            {
+                return Err(VersionMappingError::IdentifierAlreadyMapped {
+                    version,
+                    identifier: identifier.clone(),
+                    existing_network_id,
+                    requested_network_id: *network_id,
+                });
             }
 
-            if let Some(existing_identifier) = batch_by_network_id.get(network_id) {
-                if existing_identifier != identifier {
-                    return Err(VersionMappingError::NetworkIdAlreadyMapped {
-                        version,
-                        network_id: *network_id,
-                        existing_identifier: existing_identifier.clone(),
-                        requested_identifier: identifier.clone(),
-                    });
-                }
+            if let Some(existing_identifier) = batch_by_network_id.get(network_id)
+                && existing_identifier != identifier
+            {
+                return Err(VersionMappingError::NetworkIdAlreadyMapped {
+                    version,
+                    network_id: *network_id,
+                    existing_identifier: existing_identifier.clone(),
+                    requested_identifier: identifier.clone(),
+                });
             }
 
             batch_by_identifier.insert(identifier.clone(), *network_id);
@@ -220,7 +223,7 @@ impl<T: ?Sized + Send + Sync + 'static> Registry<T> {
             Arc::clone(mapping.value())
         };
 
-        let mapping = mapping.read().unwrap_or_else(|e| e.into_inner());
+        let mapping = mapping.read().unwrap_or_else(PoisonError::into_inner);
 
         mapping.by_identifier.get(identifier).copied()
     }
@@ -237,7 +240,7 @@ impl<T: ?Sized + Send + Sync + 'static> Registry<T> {
             Arc::clone(mapping.value())
         };
 
-        let mapping = mapping.read().unwrap_or_else(|e| e.into_inner());
+        let mapping = mapping.read().unwrap_or_else(PoisonError::into_inner);
 
         mapping.by_network_id.get(&network_id).cloned()
     }
@@ -256,20 +259,24 @@ impl<T: ?Sized + Send + Sync + 'static> Registry<T> {
         self.version_mappings.contains_key(&version.into())
     }
 
+    #[must_use]
     pub fn get(&self, identifier: &Identifier) -> Option<Arc<T>> {
         self.entries
             .get(identifier)
             .map(|entry| (*entry.value()).clone())
     }
 
+    #[must_use]
     pub fn contains(&self, identifier: &Identifier) -> bool {
         self.entries.contains_key(identifier)
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -278,6 +285,7 @@ impl<T: ?Sized + Send + Sync + 'static> Registry<T> {
         self.entries.iter()
     }
 
+    #[must_use]
     pub fn remove(&self, identifier: &Identifier) -> Option<Arc<T>> {
         self.entries.remove(identifier).map(|(_, value)| value)
     }
@@ -287,8 +295,17 @@ impl<T: ?Sized + Send + Sync + 'static> RegistryAccess for Registry<T> {
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
         self
     }
-    
+
     fn type_name(&self) -> &'static str {
         type_name::<T>()
+    }
+}
+
+impl<T: ?Sized + Send + Sync + 'static> Default for Registry<T> {
+    fn default() -> Self {
+        Self {
+            entries: DashMap::new(),
+            version_mappings: DashMap::new(),
+        }
     }
 }

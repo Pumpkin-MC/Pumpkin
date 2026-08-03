@@ -50,9 +50,7 @@ pub enum RegistryGetError {
     #[error("registry entry `{0}` is not a nested registry")]
     ExpectedRegistry(Identifier),
 
-    #[error(
-        "registry `{identifier}` has the wrong entry type; expected `{expected}`"
-    )]
+    #[error("registry `{identifier}` has the wrong entry type; expected `{expected}`")]
     TypeMismatch {
         identifier: Identifier,
         expected: &'static str,
