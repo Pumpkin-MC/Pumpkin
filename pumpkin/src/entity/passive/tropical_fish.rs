@@ -5,9 +5,9 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        escape_danger::EscapeDangerGoal, follow_flock_leader::FollowFlockLeaderGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        avoid_entity::AvoidEntityGoal, escape_danger::EscapeDangerGoal,
+        follow_flock_leader::FollowFlockLeaderGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -31,8 +31,14 @@ impl TropicalFishEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(0, EscapeDangerGoal::new(1.25));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
-            goal_selector.add_goal(4, FollowFlockLeaderGoal::new());
+            // Vanilla `AbstractFish.registerGoals`: flee players within 8 blocks.
+            // The vanilla goal also skips spectators, which `AvoidEntityGoal` cannot do yet.
+            goal_selector.add_goal(
+                2,
+                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 8.0, 1.6, 1.4)),
+            );
+            goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(5, FollowFlockLeaderGoal::new());
             goal_selector.add_goal(
                 2,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
