@@ -234,27 +234,24 @@ impl LightVolume {
     pub fn propagate_cpu(&mut self) {
         let total = self.voxel_count();
         let mut pending: FxHashSet<usize> = FxHashSet::default();
-        let mut queue: VecDeque<(usize, u8)> = VecDeque::with_capacity(4096);
+        let mut queue: VecDeque<usize> = VecDeque::with_capacity(4096);
 
         for idx in 0..total {
             let emission = self.luminance_at(idx);
             if emission > 0 {
                 self.light[idx] = self.light[idx].max(emission);
                 pending.insert(idx);
-                queue.push_back((idx, 6));
+                queue.push_back(idx);
             }
         }
 
-        while let Some((idx, skip)) = queue.pop_front() {
+        while let Some(idx) = queue.pop_front() {
             pending.remove(&idx);
             let current_light = self.light[idx];
             if current_light <= 1 {
                 continue;
             }
             for dir in 0..6 {
-                if dir == skip as usize {
-                    continue;
-                }
                 let Some(nidx) = self.neighbor(idx, dir) else {
                     continue;
                 };
@@ -262,7 +259,7 @@ impl LightVolume {
                 if new_level > self.light[nidx] {
                     self.light[nidx] = new_level;
                     if new_level > 1 && pending.insert(nidx) {
-                        queue.push_back((nidx, (dir ^ 1) as u8));
+                        queue.push_back(nidx);
                     }
                 }
             }
@@ -321,7 +318,7 @@ mod test {
     }
 
     #[test]
-    fn mixed_luminance_under_lights_vs_reference() {
+    fn mixed_luminance_under_lights_matches_reference() {
         let (sx, sy, sz) = (24u32, 8u32, 8u32);
         let mut props = empty_props((sx * sy * sz) as usize);
         let idx = |x: usize, y: usize, z: usize| ((y * sz as usize) + z) * sx as usize + x;
@@ -334,15 +331,10 @@ mod test {
         let mut reference = LightVolume::new(sx, sy, sz, &props);
         reference.propagate_reference();
 
-        assert_ne!(
+        assert_eq!(
             cpu.light, reference.light,
-            "the engine BFS under-lights relative to the fixed point: skip_direction drops \
-             updates when a brighter source re-raises an already-queued voxel. If this ever \
-             starts passing, that engine bug was fixed and this test should flip to assert_eq"
-        );
-        assert!(
-            cpu.light.iter().zip(&reference.light).all(|(c, r)| c <= r),
-            "BFS should only ever under-light relative to the fixed point"
+            "the engine BFS must reach the same fixed point as the order-independent \
+             relaxation, which is what the GPU path computes"
         );
     }
 
