@@ -1,10 +1,10 @@
-#![cfg_attr(not(feature = "gpu-experimental"), allow(unused))]
+#![cfg_attr(not(feature = "gpu-experimental-lighting"), allow(unused))]
 #![allow(clippy::print_stdout)]
 
-#[cfg(not(feature = "gpu-experimental"))]
+#[cfg(not(feature = "gpu-experimental-lighting"))]
 fn main() {}
 
-#[cfg(feature = "gpu-experimental")]
+#[cfg(feature = "gpu-experimental-lighting")]
 mod bench {
     use std::time::{Duration, Instant};
 
@@ -453,7 +453,7 @@ mod bench {
     }
 }
 
-#[cfg(feature = "gpu-experimental")]
+#[cfg(feature = "gpu-experimental-lighting")]
 fn main() {
     bench::main();
 }

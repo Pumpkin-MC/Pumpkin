@@ -12,11 +12,15 @@ pub struct LevelConfig {
     #[serde(default)]
     pub lighting: LightingEngineConfig,
     /// EXPERIMENTAL: offload block-light propagation to a GPU compute shader.
-    /// Needs the `gpu-experimental` Cargo feature, and is not production ready.
+    /// Needs the `gpu-experimental-lighting` Cargo feature, and is not production
+    /// ready. Only pays off for bulk relighting of a large region held resident on a
+    /// discrete GPU; it lost to the CPU on integrated graphics at every size tested.
     #[serde(default)]
     pub gpu_experimental_lighting: bool,
     /// EXPERIMENTAL: offload terrain density noise to a GPU compute shader.
-    /// Needs the `gpu-experimental` Cargo feature, and is not production ready.
+    /// Needs the `gpu-experimental-noise` Cargo feature, and is not production ready.
+    /// Only pays off in bulk, roughly nine chunks or more per dispatch; generating a
+    /// single chunk is much slower on the GPU than on the CPU.
     #[serde(default)]
     pub gpu_experimental_terrain_noise: bool,
     /// Number of ticks between autosave checks. If 0, autosave is disabled.

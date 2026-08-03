@@ -1,3 +1,34 @@
+//! EXPERIMENTAL GPU terrain density noise.
+//!
+//! Off unless you enable both the `gpu-experimental-noise` Cargo feature and
+//! `gpu_experimental_terrain_noise` in the level config, and it is not wired into
+//! the live generator.
+//!
+//! What it is good for: generating a lot of terrain at once. Offline pregeneration,
+//! bulk worldgen, background generation of a large area. This workload uploads 32
+//! bytes of parameters and downloads one byte per voxel, so unlike block light there
+//! is no input transfer to lose to, and it is pure arithmetic per voxel.
+//!
+//! What it is bad for: generating a chunk. There is a fixed cost of roughly 1.5-3 ms
+//! per dispatch - buffer allocation, descriptor setup, submit, fence - that does not
+//! shrink with the problem, while the CPU finishes an entire chunk column in 0.7-3.0
+//! ms. A single 16x16x16 section is 13-20x SLOWER on the discrete GPU than just doing
+//! it on the CPU. The crossover is around 0.9M voxels, roughly nine chunks, so a
+//! server generating chunks one at a time gains nothing; work has to be batched.
+//!
+//! Measured against rayon across all CPU cores, not a single thread: 8-11x on an RTX
+//! 5070 and 2-3x on Arrow Lake-S integrated graphics at 9x9 chunks by 6-12 octaves.
+//! This is the only workload here where integrated graphics beat the CPU at all.
+//!
+//! Two caveats. This is representative fractal value noise, not Pumpkin's
+//! data-driven noise router, so it shows the shape of terrain generation suits a GPU,
+//! not that porting the real router is cheap. And buffers are allocated per call
+//! rather than kept resident the way `lighting::gpu` does it, which is a large part
+//! of that fixed per-dispatch cost.
+//!
+//! CPU and GPU floats round differently, so agreement is a near-threshold tolerance
+//! rather than bit equality; in practice zero voxels differed at every size tested.
+
 use std::ffi::CStr;
 use std::time::{Duration, Instant};
 

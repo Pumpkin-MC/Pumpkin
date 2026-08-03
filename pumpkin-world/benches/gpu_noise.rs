@@ -1,14 +1,14 @@
-#![cfg_attr(not(feature = "gpu-experimental"), allow(unused))]
+#![cfg_attr(not(feature = "gpu-experimental-noise"), allow(unused))]
 #![allow(clippy::print_stdout)]
 
-#[cfg(not(feature = "gpu-experimental"))]
+#[cfg(not(feature = "gpu-experimental-noise"))]
 fn main() {}
 
-#[cfg(feature = "gpu-experimental")]
+#[cfg(feature = "gpu-experimental-noise")]
 mod bench {
     use std::time::{Duration, Instant};
 
-    use pumpkin_world::gpu_compute::{
+    use pumpkin_world::gpu_noise::{
         GpuNoiseEngine, NoiseAdapter, NoiseParams, density_field_cpu, density_field_cpu_parallel,
     };
 
@@ -228,7 +228,7 @@ mod bench {
     }
 }
 
-#[cfg(feature = "gpu-experimental")]
+#[cfg(feature = "gpu-experimental-noise")]
 fn main() {
     bench::main();
 }

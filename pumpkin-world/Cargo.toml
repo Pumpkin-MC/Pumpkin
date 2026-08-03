@@ -58,15 +58,33 @@ rustc-hash.workspace = true
 slotmap.workspace = true
 crossfire.workspace = true
 
-# EXPERIMENTAL, feature-gated: raw Vulkan bindings for the GPU lighting path.
+# EXPERIMENTAL, feature-gated: raw Vulkan bindings for the GPU compute paths.
 ash = { version = "0.38", optional = true }
 
 [features]
 default = []
-# EXPERIMENTAL: compiles the GPU compute path for block-light propagation.
-# Not in the default feature set; the resulting code is additionally inert
-# unless `gpu_experimental_lighting` is enabled in the level config.
-gpu-experimental = ["dep:ash"]
+
+# EXPERIMENTAL, and independent of each other. Neither is in the default feature
+# set, so a normal build pulls in no Vulkan dependency at all, and each is
+# additionally inert unless its own flag is set in the level config. They are
+# separate features because they suit completely different situations and you
+# almost certainly do not want both. See the module docs for the measurements.
+#
+# Block light (`lighting::gpu`): only worth it for bulk relighting of a large
+# region that stays resident on the device across many updates, on a discrete
+# GPU. Beat an equivalent incremental CPU solve by 3.8-4.5x from ~0.9M voxels up
+# in the bundled benchmark, but lost on integrated graphics at every size, and
+# the benchmark's scattered updates flatter it - localised updates in a
+# realistically sized region are the case it handles worst.
+gpu-experimental-lighting = ["dep:ash"]
+# Terrain density noise (`gpu_noise`): only worth it in bulk, meaning roughly
+# nine chunks or more per dispatch. 8-11x over all CPU cores on a discrete GPU
+# and 2-3x on integrated at 9x9 chunks, but 13-20x SLOWER than the CPU for a
+# single chunk section, because of a fixed per-dispatch cost that does not shrink
+# with the problem. Suits offline pregeneration, not per-chunk generation.
+gpu-experimental-noise = ["dep:ash"]
+# Convenience umbrella that turns on both.
+gpu-experimental = ["gpu-experimental-lighting", "gpu-experimental-noise"]
 
 [dev-dependencies]
 tempfile.workspace = true

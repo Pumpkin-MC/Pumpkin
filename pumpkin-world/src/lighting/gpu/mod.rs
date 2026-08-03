@@ -1,3 +1,40 @@
+//! EXPERIMENTAL GPU block-light propagation.
+//!
+//! Off unless you enable both the `gpu-experimental-lighting` Cargo feature and
+//! `gpu_experimental_lighting` in the level config, and it is not wired into the
+//! live `LightEngine`.
+//!
+//! What it is good for: bulk relighting of one large region that stays resident on
+//! the device across many updates, on a discrete GPU. A GPU cannot cheaply maintain
+//! the engine's BFS frontier, so this runs the equivalent fixed-point relaxation
+//! over the whole affected volume instead.
+//!
+//! What it is bad for, which is most things:
+//!
+//! - Integrated graphics. The iGPU lost to the CPU at every size measured, because
+//!   reading the result back costs more than the CPU spends solving.
+//! - Small or one-shot work. Below ~0.9M voxels a single fence round trip costs more
+//!   than the entire solve.
+//! - Localised updates in a realistically sized region. Dispatch is restricted to
+//!   the Y slab containing the affected box, which is contiguous but spans the full
+//!   region in X and Z, so cost scales with region area rather than with what
+//!   actually changed. The bundled benchmark uses scattered updates that inflate the
+//!   box for the CPU too; one torch in a view-distance-sized region is the case this
+//!   handles worst, and fixing it needs a true 3D box dispatch.
+//!
+//! Measured against an equivalent incremental CPU solve, not against a full rebuild:
+//! 3.8-4.5x faster on an RTX 5070 from 0.9M voxels up, and 44-65x faster than the
+//! earlier full-reupload version of this same path. Residency costs VRAM, about 99 MB
+//! for a 9x9 chunk region, which is its own reason not to hold many regions at once.
+//!
+//! [`GpuLightEngine::propagate`] is the original one-shot form: allocate, upload the
+//! whole grid, relax, download, free. Transfer dominates it. [`ResidentVolume`] is
+//! the incremental form that keeps the grid on the device and uploads only changed
+//! voxels.
+//!
+//! Shaders are `propagate.comp`, `pack.comp`, `patch.comp` and `clear.comp`;
+//! `build_shaders.sh` regenerates the checked-in SPIR-V.
+
 use std::ffi::CStr;
 use std::time::{Duration, Instant};
 
