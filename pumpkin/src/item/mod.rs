@@ -60,6 +60,15 @@ pub trait ItemBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
+    fn on_use_tick<'a>(
+        &'a self,
+        _stack: &'a ItemStack,
+        _player: &'a Player,
+        _ticks_remaining: i32,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async {})
+    }
+
     /// Returns the maximum number of ticks this item can be used for.
     /// Return 0 if the item does not have a behaviour-driven use duration.
     fn get_use_duration(&self) -> i32 {
