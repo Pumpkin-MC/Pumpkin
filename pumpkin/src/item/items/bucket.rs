@@ -269,14 +269,55 @@ const fn mob_bucket_empty_sound(item: &Item) -> Option<Sound> {
     }
 }
 
-fn play_bucket_evaporation(world: &Arc<World>, player: &Player) {
-    world.play_sound_raw(
+/// Vanilla `BucketItem#emptyContents` evaporation branch:
+/// `level.playSound(user, pos, FIRE_EXTINGUISH, BLOCKS, 0.5F, 2.6F + (rnd - rnd) * 0.8F)`,
+/// i.e. at the target block, for everyone nearby except the acting player.
+fn play_bucket_evaporation(world: &Arc<World>, player: &Player, pos: BlockPos) {
+    world.play_sound_raw_expect(
+        player,
         Sound::BlockFireExtinguish as u16,
         SoundCategory::Blocks,
-        &player.position(),
+        &block_center(pos),
         0.5,
         (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.8, 2.6),
     );
+}
+
+fn block_center(pos: BlockPos) -> Vector3<f64> {
+    Vector3::new(
+        f64::from(pos.0.x) + 0.5,
+        f64::from(pos.0.y) + 0.5,
+        f64::from(pos.0.z) + 0.5,
+    )
+}
+
+/// Vanilla `BucketItem#playEmptySound`: `BUCKET_EMPTY_LAVA` for lava, `BUCKET_EMPTY` otherwise,
+/// `SoundSource.BLOCKS`, volume 1.0, pitch 1.0. Mob buckets override it with their own sound and
+/// `SolidBucketItem` uses its own place sound, so neither goes through here.
+const fn bucket_empty_sound(item: &Item) -> Option<Sound> {
+    if item.id == Item::LAVA_BUCKET.id {
+        Some(Sound::ItemBucketEmptyLava)
+    } else if item.id == Item::WATER_BUCKET.id {
+        Some(Sound::ItemBucketEmpty)
+    } else {
+        None
+    }
+}
+
+/// Vanilla `BucketItem#use` plays `BucketPickup#getPickupSound` through `Player#playSound`, i.e.
+/// `SoundSource.PLAYERS`, volume 1.0, pitch 1.0, at the player, for everyone except the player.
+/// Sounds come from `WaterFluid#getPickupSound`, `LavaFluid#getPickupSound` and
+/// `PowderSnowBlock#getPickupSound`.
+const fn bucket_fill_sound(filled: &Item) -> Option<Sound> {
+    if filled.id == Item::WATER_BUCKET.id {
+        Some(Sound::ItemBucketFill)
+    } else if filled.id == Item::LAVA_BUCKET.id {
+        Some(Sound::ItemBucketFillLava)
+    } else if filled.id == Item::POWDER_SNOW_BUCKET.id {
+        Some(Sound::ItemBucketFillPowderSnow)
+    } else {
+        None
+    }
 }
 
 async fn try_place_powder_snow(
@@ -364,6 +405,8 @@ async fn spawn_mob_bucket_entity(
     item: &Item,
     pos: BlockPos,
     player: Option<Arc<Player>>,
+    user: &Player,
+    evaporated: bool,
 ) {
     let Some(entity_type) = mob_bucket_entity_type(item) else {
         return;
@@ -379,8 +422,18 @@ async fn spawn_mob_bucket_entity(
     world
         .spawn_entity(from_type(entity_type, spawn_pos, world, Uuid::new_v4()))
         .await;
-    if let Some(sound) = mob_bucket_empty_sound(item) {
-        world.play_sound(sound, SoundCategory::Neutral, &spawn_pos);
+    // Vanilla `MobBucketItem#playEmptySound`: `level.playSound(user, pos, emptySound, NEUTRAL,
+    // 1.0F, 1.0F)`. `emptyContents` returns from the evaporation branch before reaching it, while
+    // `checkExtraContent` still spawns the mob, so an evaporated mob bucket is silent.
+    if !evaporated && let Some(sound) = mob_bucket_empty_sound(item) {
+        world.play_sound_raw_expect(
+            user,
+            sound as u16,
+            SoundCategory::Neutral,
+            &spawn_pos,
+            1.0,
+            1.0,
+        );
     }
 
     // MobBucketItem.checkExtraContent, line 37: level.gameEvent(user, GameEvent.ENTITY_PLACE, pos)
@@ -447,6 +500,17 @@ impl ItemBehaviour for EmptyBucketItem {
                     crate::world::game_event::GameEventContext::of_entity(player_arc),
                 )
                 .await;
+            }
+
+            if let Some(sound) = bucket_fill_sound(item) {
+                world.play_sound_raw_expect(
+                    player,
+                    sound as u16,
+                    SoundCategory::Players,
+                    &player.position(),
+                    1.0,
+                    1.0,
+                );
             }
 
             give_player_bucket_item(player, item).await;
@@ -519,7 +583,7 @@ impl ItemBehaviour for FilledBucketItem {
             // in the Nether.
             let evaporated = should_evaporate_in_nether(item, &world);
             let placed_pos = if evaporated {
-                play_bucket_evaporation(&world, player);
+                play_bucket_evaporation(&world, player, pos);
                 pos
             } else {
                 let Some(placed_pos) = try_place_filled_bucket(&world, item, pos, direction).await
@@ -553,7 +617,18 @@ impl ItemBehaviour for FilledBucketItem {
                 .await;
             }
 
-            spawn_mob_bucket_entity(&world, item, placed_pos, player_arc).await;
+            if !evaporated && let Some(sound) = bucket_empty_sound(item) {
+                world.play_sound_raw_expect(
+                    player,
+                    sound as u16,
+                    SoundCategory::Blocks,
+                    &block_center(placed_pos),
+                    1.0,
+                    1.0,
+                );
+            }
+
+            spawn_mob_bucket_entity(&world, item, placed_pos, player_arc, player, evaporated).await;
             if player.gamemode.load() != GameMode::Creative {
                 let item_stack = ItemStack::new(1, &Item::BUCKET);
                 player
