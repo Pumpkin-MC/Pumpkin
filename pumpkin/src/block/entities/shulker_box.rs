@@ -1,5 +1,6 @@
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
@@ -17,9 +18,7 @@ use crate::block::viewer::{
     ViewerCountListener, ViewerCountTracker, ViewerCountTrackerExt, ViewerFuture,
 };
 use crate::world::World;
-use crate::world::game_event::{GameEventContext, emit_game_event};
-use pumpkin_data::game_event::GameEvent;
-use pumpkin_util::math::vector3::Vector3;
+
 use pumpkin_world::inventory::InventoryFuture;
 use pumpkin_world::inventory::{
     split_stack, sync_write_items_to_nbt, {Clearable, Inventory},
@@ -120,17 +119,6 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
             Self::play_sound(world, position, Sound::BlockShulkerBoxOpen);
-            emit_game_event(
-                world,
-                GameEvent::ContainerOpen,
-                Vector3::new(
-                    f64::from(position.0.x) + 0.5,
-                    f64::from(position.0.y) + 0.5,
-                    f64::from(position.0.z) + 0.5,
-                ),
-                GameEventContext::none(),
-            )
-            .await;
         })
     }
 
@@ -141,17 +129,6 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
             Self::play_sound(world, position, Sound::BlockShulkerBoxClose);
-            emit_game_event(
-                world,
-                GameEvent::ContainerClose,
-                Vector3::new(
-                    f64::from(position.0.x) + 0.5,
-                    f64::from(position.0.y) + 0.5,
-                    f64::from(position.0.z) + 0.5,
-                ),
-                GameEventContext::none(),
-            )
-            .await;
         })
     }
 
@@ -256,6 +233,15 @@ impl Inventory for ShulkerBoxBlockEntity {
         })
     }
 
+    fn can_insert_through_face<'a>(
+        &'a self,
+        _slot: usize,
+        stack: &'a ItemStack,
+        _direction: pumpkin_data::BlockDirection,
+    ) -> InventoryFuture<'a, bool> {
+        Box::pin(async move { !is_shulker_box(stack) })
+    }
+
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
     }
@@ -263,6 +249,14 @@ impl Inventory for ShulkerBoxBlockEntity {
     fn as_any(&self) -> &dyn Any {
         self
     }
+}
+
+/// Vanilla `Block.byItem(stack.getItem()) instanceof ShulkerBoxBlock`. The
+/// `minecraft:shulker_boxes` item tag holds exactly those seventeen items.
+fn is_shulker_box(stack: &ItemStack) -> bool {
+    stack
+        .get_item()
+        .has_tag(&pumpkin_data::tag::Item::MINECRAFT_SHULKER_BOXES)
 }
 
 impl Clearable for ShulkerBoxBlockEntity {
