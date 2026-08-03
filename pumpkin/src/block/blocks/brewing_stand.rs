@@ -87,15 +87,7 @@ impl BlockBehaviour for BrewingStandBlock {
             if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(inventory) = block_entity.get_inventory()
             {
-                let mut bottles = 0u8;
-                // Bottle slots are 0, 1, 2 in brewing stands
-                for slot in 0..3 {
-                    let stack = inventory.get_stack(slot).await;
-                    if !stack.lock().await.is_empty() {
-                        bottles += 1;
-                    }
-                }
-                Some(bottles)
+                Some(crate::block::calculate_comparator_output(inventory.as_ref()).await)
             } else {
                 None
             }
