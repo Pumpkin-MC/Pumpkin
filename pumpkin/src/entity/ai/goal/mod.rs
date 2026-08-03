@@ -29,6 +29,7 @@ pub mod follow_parent;
 pub mod frog_tongue_attack;
 pub mod goal_selector;
 pub mod goat_ram;
+pub mod guardian_attack;
 pub mod horse_breed;
 pub mod interact_with_door;
 pub mod look_around;
