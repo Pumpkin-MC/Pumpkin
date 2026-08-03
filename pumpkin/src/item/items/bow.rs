@@ -11,8 +11,6 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_protocol::IdOr;
-use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_util::GameMode;
 use pumpkin_world::inventory::Inventory;
 
@@ -211,17 +209,16 @@ impl BowItem {
         let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
         world.spawn_entity(arrow_arc).await;
 
-        // Play bow shoot sound
+        // Vanilla `BowItem#releaseUsing`: level.playSound(null, player position, ARROW_SHOOT,
+        // SoundSource.PLAYERS, 1.0F, 1.0F / (random.nextFloat() * 0.4F + 1.2F) + pow * 0.5F),
+        // audible to every player in range rather than only those sharing the shooter's chunk.
         let sound_pitch = 1.0 / (rand::random::<f32>() * 0.4 + 1.2) + power * 0.5;
-        let sound_packet = CSoundEffect::new(
-            IdOr::Id(Sound::EntityArrowShoot as u16),
-            SoundCategory::Neutral,
+        world.play_sound_fine(
+            Sound::EntityArrowShoot,
+            SoundCategory::Players,
             &position,
             1.0,
             sound_pitch,
-            0.0,
         );
-        let chunk_pos = player.get_entity().chunk_pos.load();
-        world.broadcast_to_chunk(chunk_pos, &sound_packet);
     }
 }
