@@ -72,10 +72,8 @@ impl ItemFrameEntity {
         }
     }
 
-    /// Vanilla `ItemFrame.dropItem(level, causedBy, withFrame)`. Clears the
-    /// displayed item unconditionally; whether anything actually spawns in
-    /// the world depends on the `entity_drops` game rule and whether the
-    /// causer is a creative-mode player (vanilla: `hasInfiniteMaterials`).
+    /// Vanilla `ItemFrame.dropItem`; spawning depends on the `entity_drops`
+    /// game rule and whether the causer is a creative-mode player.
     async fn drop_item(&self, causer: Option<&dyn EntityBase>, with_frame: bool) {
         if self.fixed.load(Ordering::Relaxed) {
             return;
@@ -106,12 +104,7 @@ impl ItemFrameEntity {
         }
     }
 
-    /// Vanilla fires `GameEvent.BLOCK_CHANGE` from both the item-pop and the
-    /// full-break paths of `ItemFrame.hurtServer`/`dropItem`. No `Arc<dyn
-    /// EntityBase>` is available for the causer here (only `&dyn
-    /// EntityBase`), so this uses `GameEventContext::none()` like other
-    /// position-only emission sites this session -- only source-entity-based
-    /// listener suppression loses fidelity, not the emission itself.
+    /// Vanilla `ItemFrame.hurtServer`/`dropItem` fire `GameEvent.BLOCK_CHANGE`.
     async fn emit_block_change(&self) {
         emit_game_event(
             &self.entity.world.load(),

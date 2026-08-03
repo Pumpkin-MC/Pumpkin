@@ -123,11 +123,7 @@ impl Goal for EatGrassGoal {
     }
 }
 
-// EatBlockGoal.java lines 68/77 (decompiled 26.2): both branches call `this.mob.ate()`,
-// which is `Mob.ate()` -> `this.gameEvent(GameEvent.EAT)` (Mob.java:265). `GameEventContext`
-// has no entity handle available here (`mob: &dyn Mob` isn't behind an `Arc`), so this uses
-// `none()` like other position-only emission sites -- only the source-entity-based
-// suppression checks lose fidelity, not the emission itself.
+// Mob.ate() -> gameEvent(GameEvent.EAT); no Arc<dyn EntityBase> available here, so none().
 async fn emit_eat_game_event(
     world: &std::sync::Arc<crate::world::World>,
     block_pos: &pumpkin_util::math::position::BlockPos,

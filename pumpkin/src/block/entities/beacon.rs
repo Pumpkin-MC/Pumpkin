@@ -75,13 +75,7 @@ impl BeaconBlockEntity {
         self.mark_dirty();
     }
 
-    /// Port of vanilla's beacon beam obstruction check (simplified: a single
-    /// straight-line scan each time this runs, rather than vanilla's
-    /// incremental multi-tick scan with color-segment tracking -- the end
-    /// result of whether effects apply is the same). Walks straight up from
-    /// one block above the beacon to the world's top Y; a fully opaque
-    /// block (`opacity >= 15`, vanilla's `getLightDampening()`) blocks the
-    /// beam unless it's bedrock, which is explicitly exempted in vanilla.
+    /// Scans straight up from the beacon for an opaque, non-bedrock block.
     fn beam_clear(&self, world: &World) -> bool {
         let top_y = world.dimension.min_y + world.dimension.height;
         let mut pos = self.position.up();

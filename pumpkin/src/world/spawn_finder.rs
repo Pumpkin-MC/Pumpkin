@@ -57,10 +57,8 @@ pub async fn find_safe_world_spawn(world: &Arc<World>, suggestion: BlockPos) -> 
     let coprime = get_coprime(candidate_count);
     let offset = rand::rng().random_range(0..candidate_count.max(1));
 
-    // Vanilla schedules each candidate asynchronously via chunk-loading tickets,
-    // recursing through scheduleNext()/scheduleCandidate() as chunks load; this
-    // translates that into a plain sequential loop, awaiting the chunk fetch
-    // inline (matching how the previous, wrong code already did).
+    // Vanilla schedules candidates asynchronously via chunk-loading tickets; this
+    // uses a plain sequential loop, awaiting the chunk fetch inline instead.
     for candidate_index in 0..candidate_count {
         let value = (offset + coprime * candidate_index) % candidate_count;
         let delta_x = value % square_side;
@@ -96,11 +94,8 @@ const fn get_coprime(possible_origins: i64) -> i64 {
 fn get_level_respawn_pos(world: &World, x: i32, z: i32) -> Option<BlockPos> {
     let min_y = world.dimension.min_y;
 
-    // Vanilla reads a per-generator spawn height for ceilinged (Nether-like)
-    // dimensions instead of the motion-blocking heightmap; Pumpkin has no
-    // per-generator getSpawnHeight, so this approximates it with the
-    // dimension's own min_y + 32 (vanilla's default Nether spawn height),
-    // clamped to the dimension's top. This is a known simplification.
+    // No per-generator getSpawnHeight; approximated as min_y + 32 (vanilla's
+    // default Nether spawn height), clamped to the dimension's top.
     let top_y = if world.dimension.has_ceiling {
         (min_y + 32).min(min_y + world.dimension.height - 1)
     } else {
@@ -110,13 +105,8 @@ fn get_level_respawn_pos(world: &World, x: i32, z: i32) -> Option<BlockPos> {
         return None;
     }
 
-    // Vanilla additionally rejects columns where the WORLD_SURFACE height sits
-    // at or below the motion-blocking top but above the OCEAN_FLOOR height
-    // (a shallow-water/ice plateau over deeper water). Pumpkin has no
-    // OceanFloor heightmap variant, so this edge-case filter is skipped;
-    // the walk-down loop below still finds a real solid floor regardless,
-    // it just doesn't reject these columns the way vanilla does.
-
+    // Vanilla also rejects shallow-water/ice-plateau columns via the OCEAN_FLOOR
+    // heightmap; Pumpkin has no OceanFloor variant, so that filter is skipped.
     let mut y = top_y + 1;
     while y >= min_y {
         let pos = BlockPos(Vector3::new(x, y, z));

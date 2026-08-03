@@ -1945,17 +1945,8 @@ impl Entity {
         self.touching_lava.store(in_lava, Ordering::SeqCst);
     }
 
-    /// Port of vanilla's `Entity::doWaterSplashEffect`.
-    ///
-    /// Simplifications vs vanilla:
-    /// - No `getControllingPassenger()` volume modifier; always uses `self` (modifier 0.2).
-    /// - No `firstTick` guard; the `touching_water` transition gate is the only check --
-    ///   an entity spawned already submerged may play one extra splash vanilla wouldn't.
-    /// - Sound uses `Entity::play_sound`, which has no volume/pitch parameters; vanilla's
-    ///   speed-dependent volume/pitch and high-speed splash variant are dropped (both of
-    ///   vanilla's base-Entity sounds resolve to the same `GENERIC_SPLASH` anyway).
-    /// - Particles are batched via `World::spawn_particle` (one call per type) instead of
-    ///   vanilla's per-particle explicit position/velocity-from-movement loop.
+    /// Port of vanilla's `Entity::doWaterSplashEffect`. Simplified: no controlling-passenger
+    /// volume modifier, no firstTick guard, and `play_sound` has no volume/pitch parameters.
     async fn do_water_splash_effect(&self) {
         let pos = self.pos.load();
         let width = self.entity_dimension.load().width;
@@ -1982,8 +1973,7 @@ impl Entity {
             pumpkin_data::particle::Particle::Splash,
         );
 
-        // No `Arc<dyn EntityBase>` is available in this plain `&self` method, so this uses
-        // `GameEventContext::none()` like other position-only emission sites this session.
+        // No Arc<dyn EntityBase> available here, so GameEventContext::none().
         crate::world::game_event::emit_game_event(
             &world,
             pumpkin_data::game_event::GameEvent::Splash,

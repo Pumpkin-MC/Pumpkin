@@ -4906,15 +4906,9 @@ impl World {
         self.sections_to_village(pos).await <= section_distance
     }
 
-    /// Vanilla `PoiManager.take`/`AcquirePoi`: find the closest POI of
-    /// `poi_type` within `radius` blocks of `center` that currently has a
-    /// free ticket (`Occupancy.HAS_SPACE` - claiming, not the
-    /// `IS_OCCUPIED` filter village-density queries use, see
-    /// `village_poi` module docs) and atomically claim it (decrement its
-    /// `free_tickets`), so no other caller can claim the same POI. Mirrors
-    /// `AcquirePoi.SCAN_RANGE = 48` as the caller-supplied radius for bed
-    /// acquisition. Returns `None` if no unclaimed POI of that type exists
-    /// in range.
+    /// Vanilla `PoiManager.take`/`AcquirePoi`: finds the closest POI of `poi_type` with a
+    /// free ticket (`Occupancy.HAS_SPACE`, not `IS_OCCUPIED` - see `village_poi` module docs)
+    /// and atomically claims it. `None` if no unclaimed POI exists in range.
     pub async fn acquire_poi(
         &self,
         poi_type: &str,
@@ -4933,10 +4927,7 @@ impl World {
             .find(|candidate| storage.acquire_ticket(candidate))
     }
 
-    /// Vanilla `PoiManager.release`, called from `Villager.releasePoi`
-    /// (villager wakes up, changes job, etc) and `ValidateNearbyPoi`
-    /// (claimed bed destroyed or reassigned). Returns `false` if there was
-    /// no ticket to release at `pos`.
+    /// Vanilla `PoiManager.release`. Returns `false` if there was no ticket to release.
     pub async fn release_poi(&self, pos: BlockPos) -> bool {
         let mut storage = self.portal_poi.lock().await;
         storage.release_ticket(&pos)
