@@ -35,6 +35,11 @@ const fn distance_consumer() -> BoundedNumArgumentConsumer<f64> {
         .name("distance")
 }
 
+/// Vanilla `WorldBorderCommand.formatTicksToSeconds`.
+fn format_ticks_to_seconds(ticks: i32) -> String {
+    format!("{:.2}", f64::from(ticks) / 20.0)
+}
+
 /// Vanilla `WorldBorderCommand.setSize`'s `ERROR_TOO_SMALL` / `ERROR_TOO_BIG` checks.
 fn check_size(distance: f64) -> Result<(), CommandError> {
     if distance < 1.0 {
@@ -204,7 +209,7 @@ impl CommandExecutor for SetTimeExecutor {
                             "commands.worldborder.set.shrink",
                             [
                                 TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
+                                TextComponent::text(format_ticks_to_seconds(time)),
                             ],
                         ))
                         .await;
@@ -217,7 +222,7 @@ impl CommandExecutor for SetTimeExecutor {
                             "commands.worldborder.set.grow",
                             [
                                 TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
+                                TextComponent::text(format_ticks_to_seconds(time)),
                             ],
                         ))
                         .await;
@@ -322,7 +327,7 @@ impl CommandExecutor for AddTimeExecutor {
                             "commands.worldborder.set.shrink",
                             [
                                 TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
+                                TextComponent::text(format_ticks_to_seconds(time)),
                             ],
                         ))
                         .await;
@@ -335,7 +340,7 @@ impl CommandExecutor for AddTimeExecutor {
                             "commands.worldborder.set.grow",
                             [
                                 TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
+                                TextComponent::text(format_ticks_to_seconds(time)),
                             ],
                         ))
                         .await;
@@ -556,7 +561,7 @@ impl CommandExecutor for WarningTimeExecutor {
                 .send_message(TextComponent::translate_cross(
                     "commands.worldborder.warning.time.success",
                     "commands.worldborder.warning.time.success",
-                    [TextComponent::text(time.to_string())],
+                    [TextComponent::text(format_ticks_to_seconds(time))],
                 ))
                 .await;
             border.set_warning_delay(&world, time);
