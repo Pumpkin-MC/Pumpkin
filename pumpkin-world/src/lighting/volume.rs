@@ -334,7 +334,12 @@ mod test {
         let mut reference = LightVolume::new(sx, sy, sz, &props);
         reference.propagate_reference();
 
-        assert_ne!(cpu.light, reference.light);
+        assert_ne!(
+            cpu.light, reference.light,
+            "the engine BFS under-lights relative to the fixed point: skip_direction drops \
+             updates when a brighter source re-raises an already-queued voxel. If this ever \
+             starts passing, that engine bug was fixed and this test should flip to assert_eq"
+        );
         assert!(
             cpu.light.iter().zip(&reference.light).all(|(c, r)| c <= r),
             "BFS should only ever under-light relative to the fixed point"
