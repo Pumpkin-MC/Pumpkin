@@ -1,24 +1,13 @@
-//! Dense-grid block-light propagation, the shared workload for the experimental
-//! GPU compute path.
-//!
-//! [`LightVolume::propagate_cpu`] ports the block-light rule from
-//! [`crate::lighting::engine::LightPropagator::propagate`] onto a flat 3D array:
-//! same BFS, same falloff, same `visited`/`skip_direction` early exits. It is
-//! deliberately not the shipping call path, since the live engine works through
-//! `Cache`, whose per-chunk nibble arrays sit behind mutexes.
-
 use std::collections::VecDeque;
 
-/// Per-voxel input properties for a light volume.
+use rustc_hash::FxHashSet;
+
 #[derive(Clone, Copy, Default)]
 pub struct VoxelProps {
-    /// Levels absorbed when light enters this voxel (0..=15).
     pub opacity: u8,
-    /// Light emitted by this voxel (0..=15).
     pub luminance: u8,
 }
 
-/// The six block directions in `BlockDirection::all()` order. `i ^ 1` is the opposite.
 const NEIGHBORS: [(i32, i32, i32); 6] = [
     (0, -1, 0),
     (0, 1, 0),
@@ -28,19 +17,44 @@ const NEIGHBORS: [(i32, i32, i32); 6] = [
     (1, 0, 0),
 ];
 
-/// A dense cuboid of voxels carrying block-light state.
+pub const LIGHT_RADIUS: u32 = 15;
+
+pub type PropDelta = (u32, VoxelProps);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AffectedBox {
+    pub min: [u32; 3],
+    pub max: [u32; 3],
+}
+
+impl AffectedBox {
+    #[must_use]
+    pub const fn contains(&self, x: u32, y: u32, z: u32) -> bool {
+        x >= self.min[0]
+            && x <= self.max[0]
+            && y >= self.min[1]
+            && y <= self.max[1]
+            && z >= self.min[2]
+            && z <= self.max[2]
+    }
+
+    #[must_use]
+    pub const fn voxels(&self) -> usize {
+        ((self.max[0] - self.min[0] + 1) as usize)
+            * ((self.max[1] - self.min[1] + 1) as usize)
+            * ((self.max[2] - self.min[2] + 1) as usize)
+    }
+}
+
 pub struct LightVolume {
     pub size_x: u32,
     pub size_y: u32,
     pub size_z: u32,
-    /// One entry per voxel: bits 0..4 opacity, bits 4..8 luminance.
     pub props: Vec<u32>,
-    /// Resulting light levels, one per voxel.
     pub light: Vec<u8>,
 }
 
 impl LightVolume {
-    /// Creates an unlit volume of the given dimensions.
     #[must_use]
     pub fn new(size_x: u32, size_y: u32, size_z: u32, props: &[VoxelProps]) -> Self {
         let total = (size_x as usize) * (size_y as usize) * (size_z as usize);
@@ -64,22 +78,20 @@ impl LightVolume {
     }
 
     #[must_use]
-    const fn index(&self, x: u32, y: u32, z: u32) -> usize {
+    pub const fn index(&self, x: u32, y: u32, z: u32) -> usize {
         ((y as usize) * (self.size_z as usize) + (z as usize)) * (self.size_x as usize)
             + (x as usize)
     }
 
-    const fn coords(&self, idx: usize) -> (u32, u32, u32) {
+    #[must_use]
+    pub const fn coords(&self, idx: usize) -> (u32, u32, u32) {
         let sx = self.size_x as usize;
         let sz = self.size_z as usize;
-        #[expect(clippy::cast_possible_truncation)]
-        {
-            (
-                (idx % sx) as u32,
-                (idx / (sx * sz)) as u32,
-                (idx / sx % sz) as u32,
-            )
-        }
+        (
+            (idx % sx) as u32,
+            (idx / (sx * sz)) as u32,
+            (idx / sx % sz) as u32,
+        )
     }
 
     #[must_use]
@@ -107,32 +119,134 @@ impl LightVolume {
         {
             return None;
         }
-        #[expect(clippy::cast_sign_loss)]
         Some(self.index(nx as u32, ny as u32, nz as u32))
     }
 
-    /// Clears all computed light back to zero.
     pub fn reset_light(&mut self) {
         self.light.fill(0);
     }
 
-    /// CPU block-light propagation - a direct port of the engine's BFS.
+    pub fn set_props(&mut self, idx: usize, p: VoxelProps) {
+        self.props[idx] = u32::from(p.opacity.min(15)) | (u32::from(p.luminance.min(15)) << 4);
+    }
+
+    pub fn apply_prop_deltas(&mut self, deltas: &[PropDelta]) {
+        for &(idx, p) in deltas {
+            self.set_props(idx as usize, p);
+        }
+    }
+
+    #[must_use]
+    pub fn affected_box(&self, deltas: &[PropDelta]) -> Option<AffectedBox> {
+        let mut min = [u32::MAX; 3];
+        let mut max = [0u32; 3];
+        for &(idx, _) in deltas {
+            let (x, y, z) = self.coords(idx as usize);
+            min[0] = min[0].min(x);
+            max[0] = max[0].max(x);
+            min[1] = min[1].min(y);
+            max[1] = max[1].max(y);
+            min[2] = min[2].min(z);
+            max[2] = max[2].max(z);
+        }
+        if min[0] == u32::MAX {
+            return None;
+        }
+        let size = [self.size_x, self.size_y, self.size_z];
+        for i in 0..3 {
+            min[i] = min[i].saturating_sub(LIGHT_RADIUS);
+            max[i] = (max[i] + LIGHT_RADIUS).min(size[i] - 1);
+        }
+        Some(AffectedBox { min, max })
+    }
+
+    pub fn propagate_delta(&mut self, deltas: &[PropDelta]) {
+        self.apply_prop_deltas(deltas);
+        let Some(bounds) = self.affected_box(deltas) else {
+            return;
+        };
+
+        let mut queue: VecDeque<usize> = VecDeque::with_capacity(4096);
+        for y in bounds.min[1]..=bounds.max[1] {
+            for z in bounds.min[2]..=bounds.max[2] {
+                for x in bounds.min[0]..=bounds.max[0] {
+                    let idx = self.index(x, y, z);
+                    let lum = self.luminance_at(idx);
+                    self.light[idx] = lum;
+                    if lum > 1 {
+                        queue.push_back(idx);
+                    }
+                }
+            }
+        }
+
+        let size = [self.size_x, self.size_y, self.size_z];
+        for (axis, &lo) in bounds.min.iter().enumerate() {
+            let (u_axis, v_axis) = match axis {
+                0 => (1, 2),
+                1 => (0, 2),
+                _ => (0, 1),
+            };
+            for plane in [lo.checked_sub(1), Some(bounds.max[axis] + 1)]
+                .into_iter()
+                .flatten()
+            {
+                if plane >= size[axis] {
+                    continue;
+                }
+                for u in bounds.min[u_axis]..=bounds.max[u_axis] {
+                    for v in bounds.min[v_axis]..=bounds.max[v_axis] {
+                        let mut c = [0u32; 3];
+                        c[axis] = plane;
+                        c[u_axis] = u;
+                        c[v_axis] = v;
+                        let idx = self.index(c[0], c[1], c[2]);
+                        if self.light[idx] > 1 {
+                            queue.push_back(idx);
+                        }
+                    }
+                }
+            }
+        }
+
+        while let Some(idx) = queue.pop_front() {
+            let current = self.light[idx];
+            if current <= 1 {
+                continue;
+            }
+            for dir in 0..6 {
+                let Some(nidx) = self.neighbor(idx, dir) else {
+                    continue;
+                };
+                let (nx, ny, nz) = self.coords(nidx);
+                if !bounds.contains(nx, ny, nz) {
+                    continue;
+                }
+                let new_level = current.saturating_sub(self.opacity_at(nidx).max(1));
+                if new_level > self.light[nidx] {
+                    self.light[nidx] = new_level;
+                    queue.push_back(nidx);
+                }
+            }
+        }
+    }
+
     pub fn propagate_cpu(&mut self) {
         let total = self.voxel_count();
-        let mut visited = vec![false; total];
+        let mut pending: FxHashSet<usize> = FxHashSet::default();
         let mut queue: VecDeque<(usize, u8)> = VecDeque::with_capacity(4096);
 
-        for (idx, seen) in visited.iter_mut().enumerate() {
-            let emission = ((self.props[idx] >> 4) & 15) as u8;
+        for idx in 0..total {
+            let emission = self.luminance_at(idx);
             if emission > 0 {
                 self.light[idx] = self.light[idx].max(emission);
-                *seen = true;
-                // 6 means nothing to skip, mirroring `skip_direction: None`.
+                pending.insert(idx);
                 queue.push_back((idx, 6));
             }
         }
 
         while let Some((idx, skip)) = queue.pop_front() {
+            pending.remove(&idx);
             let current_light = self.light[idx];
             if current_light <= 1 {
                 continue;
@@ -144,15 +258,10 @@ impl LightVolume {
                 let Some(nidx) = self.neighbor(idx, dir) else {
                     continue;
                 };
-                if visited[nidx] {
-                    continue;
-                }
                 let new_level = current_light.saturating_sub(self.opacity_at(nidx).max(1));
                 if new_level > self.light[nidx] {
                     self.light[nidx] = new_level;
-                    if new_level > 1 {
-                        visited[nidx] = true;
-                        #[expect(clippy::cast_possible_truncation)]
+                    if new_level > 1 && pending.insert(nidx) {
                         queue.push_back((nidx, (dir ^ 1) as u8));
                     }
                 }
@@ -160,9 +269,6 @@ impl LightVolume {
         }
     }
 
-    /// Ground truth: relax to the fixed point
-    /// `light[v] = max(luminance[v], max_n(light[n]) - max(opacity[v], 1))`.
-    /// Slow, but order-independent, so it validates both the BFS and the shader.
     pub fn propagate_reference(&mut self) {
         let total = self.voxel_count();
         for idx in 0..total {
@@ -216,10 +322,6 @@ mod test {
 
     #[test]
     fn mixed_luminance_under_lights_vs_reference() {
-        // engine.rs skips an already-`visited` neighbour before it can be raised, so
-        // a dim source reaching a voxel first locks in a level below the fixed point.
-        // Uniform luminance hides this; mixed sources do not. Documented, not fixed:
-        // it is a live engine bug and belongs in its own change.
         let (sx, sy, sz) = (24u32, 8u32, 8u32);
         let mut props = empty_props((sx * sy * sz) as usize);
         let idx = |x: usize, y: usize, z: usize| ((y * sz as usize) + z) * sx as usize + x;
@@ -254,5 +356,80 @@ mod test {
         cpu.propagate_cpu();
         assert_eq!(cpu.light[idx(4, 1, 1)], 0);
         assert!(cpu.light[idx(2, 1, 1)] > 0);
+    }
+
+    #[test]
+    fn delta_sequence_matches_reference() {
+        let (sx, sy, sz) = (40u32, 24u32, 24u32);
+        let mut props = empty_props((sx * sy * sz) as usize);
+        let idx = |x: u32, y: u32, z: u32| (((y * sz) + z) * sx + x) as usize;
+        for y in 0..6 {
+            for z in 0..sz {
+                for x in 0..sx {
+                    props[idx(x, y, z)].opacity = 15;
+                }
+            }
+        }
+        props[idx(8, 12, 12)].luminance = 14;
+        props[idx(30, 12, 12)].luminance = 10;
+
+        let mut volume = LightVolume::new(sx, sy, sz, &props);
+        volume.propagate_reference();
+
+        let ticks: Vec<Vec<super::PropDelta>> = vec![
+            vec![(
+                idx(20, 12, 12) as u32,
+                VoxelProps {
+                    opacity: 0,
+                    luminance: 15,
+                },
+            )],
+            vec![(
+                idx(8, 12, 12) as u32,
+                VoxelProps {
+                    opacity: 0,
+                    luminance: 0,
+                },
+            )],
+            vec![(
+                idx(22, 12, 12) as u32,
+                VoxelProps {
+                    opacity: 15,
+                    luminance: 0,
+                },
+            )],
+            vec![
+                (
+                    idx(20, 12, 12) as u32,
+                    VoxelProps {
+                        opacity: 0,
+                        luminance: 0,
+                    },
+                ),
+                (
+                    idx(30, 12, 12) as u32,
+                    VoxelProps {
+                        opacity: 0,
+                        luminance: 15,
+                    },
+                ),
+            ],
+        ];
+
+        for tick in &ticks {
+            volume.propagate_delta(tick);
+            let mut expected = LightVolume {
+                size_x: sx,
+                size_y: sy,
+                size_z: sz,
+                props: volume.props.clone(),
+                light: vec![0; volume.voxel_count()],
+            };
+            expected.propagate_reference();
+            assert_eq!(
+                volume.light, expected.light,
+                "incremental CPU solve diverged from the fixed point"
+            );
+        }
     }
 }

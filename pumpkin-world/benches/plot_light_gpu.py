@@ -11,8 +11,31 @@ import matplotlib.pyplot as plt
 SURFACE = "#fcfcfb"
 INK = "#0b0b0b"
 MUTED = "#52514e"
-COLORS = {"cpu": "#2a78d6", "igpu": "#eb6834", "dgpu": "#1baf7a"}
-LABELS = {"cpu": "CPU (BFS)", "igpu": "Intel iGPU", "dgpu": "NVIDIA dGPU"}
+
+COLORS = {
+    "cpu-full": "#9fb8d4",
+    "cpu-delta": "#2a78d6",
+    "igpu-full": "#f3b295",
+    "igpu-resident": "#eb6834",
+    "dgpu-full": "#94d9be",
+    "dgpu-resident": "#1baf7a",
+}
+LABELS = {
+    "cpu-full": "CPU, full rebuild",
+    "cpu-delta": "CPU, incremental",
+    "igpu-full": "iGPU, full re-upload",
+    "igpu-resident": "iGPU, resident",
+    "dgpu-full": "dGPU, full re-upload",
+    "dgpu-resident": "dGPU, resident",
+}
+ORDER = [
+    "cpu-full",
+    "igpu-full",
+    "dgpu-full",
+    "cpu-delta",
+    "igpu-resident",
+    "dgpu-resident",
+]
 
 rows = json.load(open(sys.argv[1]))
 out = sys.argv[2]
@@ -24,9 +47,12 @@ for v in by_backend.values():
     v.sort(key=lambda r: r["voxels"])
 
 sizes = sorted({r["chunks"] for r in rows})
-xs_labels = [f"{c}x{c}\n{next(r['voxels'] for r in rows if r['chunks'] == c) / 1e6:.1f}M" for c in sizes]
+xs_labels = [
+    f"{c}x{c}\n{next(r['voxels'] for r in rows if r['chunks'] == c) / 1e6:.1f}M"
+    for c in sizes
+]
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12.5, 5.4), facecolor=SURFACE)
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.0, 5.6), facecolor=SURFACE)
 
 for ax in (ax1, ax2):
     ax.set_facecolor(SURFACE)
@@ -39,60 +65,99 @@ for ax in (ax1, ax2):
     ax.tick_params(colors=MUTED, labelsize=9)
     ax.set_xticks(range(len(sizes)))
     ax.set_xticklabels(xs_labels)
-    ax.set_yscale("log")
 
+ax1.set_yscale("log")
 
-def draw(ax, backend, ys, dashed=False):
-    x = range(len(ys))
-    ax.plot(
-        x, ys, color=COLORS[backend], linewidth=2, marker="o", markersize=8,
-        markeredgecolor=SURFACE, markeredgewidth=2,
-        linestyle="--" if dashed else "-",
-    )
-    return ys
-
-
-# Left: total wall clock, what a server would actually pay.
-for backend in ("cpu", "igpu", "dgpu"):
+for backend in ORDER:
+    if backend not in by_backend:
+        continue
     ys = [r["mean_ms"] for r in by_backend[backend]]
-    draw(ax1, backend, ys)
-    ax1.annotate(
-        LABELS[backend], (len(ys) - 1, ys[-1]), textcoords="offset points",
-        xytext=(9, 0), color=MUTED, fontsize=9.5, va="center",
+    dashed = backend.endswith(("-full",))
+    ax1.plot(
+        range(len(ys)),
+        ys,
+        color=COLORS[backend],
+        linewidth=2,
+        marker="o",
+        markersize=7,
+        markeredgecolor=SURFACE,
+        markeredgewidth=2,
+        linestyle="--" if dashed else "-",
+        label=LABELS[backend],
     )
 
-ax1.set_title("Total wall clock per region", color=INK, fontsize=12.5, pad=12, loc="left")
-ax1.set_ylabel("mean time (ms, log scale)", color=MUTED, fontsize=9.5)
-ax1.set_xlabel("region size (chunks square / voxels)", color=MUTED, fontsize=9.5)
-
-# Right: kernel time alone, no host transfer.
-cpu_ys = [r["mean_ms"] for r in by_backend["cpu"]]
-draw(ax2, "cpu", cpu_ys)
-ax2.annotate(
-    "CPU (whole BFS)", (len(cpu_ys) - 1, cpu_ys[-1]), textcoords="offset points",
-    xytext=(9, 0), color=MUTED, fontsize=9.5, va="center",
+ax1.set_title(
+    "Cost of one tick of light updates", color=INK, fontsize=12.5, pad=12, loc="left"
 )
-for backend in ("igpu", "dgpu"):
-    ys = [r["compute_ms"] for r in by_backend[backend]]
-    draw(ax2, backend, ys, dashed=True)
+ax1.set_ylabel("mean time per tick (ms, log scale)", color=MUTED, fontsize=9.5)
+ax1.set_xlabel("region size (chunks square / voxels)", color=MUTED, fontsize=9.5)
+leg = ax1.legend(frameon=False, fontsize=8.8, labelcolor=MUTED, loc="upper left", ncol=2)
+
+cpu = [r["mean_ms"] for r in by_backend["cpu-delta"]]
+for backend in ("igpu-resident", "dgpu-resident"):
+    if backend not in by_backend:
+        continue
+    gpu = [r["mean_ms"] for r in by_backend[backend]]
+    ys = [c / g for c, g in zip(cpu, gpu)]
+    ax2.plot(
+        range(len(ys)),
+        ys,
+        color=COLORS[backend],
+        linewidth=2,
+        marker="o",
+        markersize=7,
+        markeredgecolor=SURFACE,
+        markeredgewidth=2,
+        label=LABELS[backend],
+    )
     ax2.annotate(
-        LABELS[backend] + " kernel", (len(ys) - 1, ys[-1]), textcoords="offset points",
-        xytext=(9, 0), color=MUTED, fontsize=9.5, va="center",
+        LABELS[backend],
+        (len(ys) - 1, ys[-1]),
+        textcoords="offset points",
+        xytext=(9, 0),
+        color=MUTED,
+        fontsize=9.5,
+        va="center",
     )
 
-ax2.set_title("Compute only, transfer excluded", color=INK, fontsize=12.5, pad=12, loc="left")
+ax2.axhline(1.0, color="#b9b8b3", linewidth=1.2, linestyle=":")
+ax2.annotate(
+    "parity with the CPU",
+    (0, 1.0),
+    textcoords="offset points",
+    xytext=(4, 5),
+    color=MUTED,
+    fontsize=8.5,
+)
+ax2.set_title(
+    "Speedup over the incremental CPU solve",
+    color=INK,
+    fontsize=12.5,
+    pad=12,
+    loc="left",
+)
+ax2.set_ylabel("times faster than CPU (higher is better)", color=MUTED, fontsize=9.5)
 ax2.set_xlabel("region size (chunks square / voxels)", color=MUTED, fontsize=9.5)
 
 fig.suptitle(
-    "Block-light propagation: CPU vs Vulkan compute",
-    color=INK, fontsize=15, x=0.055, ha="left", y=0.975,
+    "Block light on the GPU: resident buffers and delta uploads",
+    color=INK,
+    fontsize=15,
+    x=0.05,
+    ha="left",
+    y=0.975,
 )
 fig.text(
-    0.055, 0.915,
-    "Mean of 5 runs. GPU output matched the CPU BFS exactly on these "
-    "uniform-luminance scenes. Intel Arrow Lake-S iGPU and RTX 5070 Laptop dGPU, Vulkan.",
-    color=MUTED, fontsize=9.5, ha="left",
+    0.05,
+    0.895,
+    "Mean over 24 ticks, each placing and removing a few torches. Every path was checked against the same fixed point.\n"
+    "Solid lines keep the grid on the device and upload only the changed voxels; dashed lines re-upload and\n"
+    "re-download the whole grid every tick. Intel Arrow Lake-S iGPU and RTX 5070 Laptop dGPU, Vulkan.",
+    color=MUTED,
+    fontsize=9.2,
+    ha="left",
+    va="top",
 )
-fig.subplots_adjust(left=0.075, right=0.86, top=0.79, bottom=0.13, wspace=0.42)
+fig.subplots_adjust(left=0.065, right=0.855, top=0.74, bottom=0.13, wspace=0.30)
 fig.savefig(out, dpi=170, facecolor=SURFACE)
 print("wrote", out)

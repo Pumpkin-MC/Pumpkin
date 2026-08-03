@@ -1,0 +1,50 @@
+#version 450
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Dims {
+    uint size_x;
+    uint size_y;
+    uint size_z;
+    uint total;
+    uint base;
+    uint count;
+    uint delta_count;
+    uint pad0;
+    uint bmin_x;
+    uint bmin_y;
+    uint bmin_z;
+    uint pad1;
+    uint bmax_x;
+    uint bmax_y;
+    uint bmax_z;
+    uint pad2;
+} dims;
+
+layout(std430, set = 0, binding = 2) buffer BufA { uint a[]; };
+layout(std430, set = 0, binding = 3) buffer BufB { uint b[]; };
+
+void main() {
+    uint lin = (gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x) * 64u
+             + gl_LocalInvocationID.x;
+    if (lin >= dims.count) {
+        return;
+    }
+    uint idx = dims.base + lin;
+    if (idx >= dims.total) {
+        return;
+    }
+
+    uint x = idx % dims.size_x;
+    uint z = (idx / dims.size_x) % dims.size_z;
+    uint y = idx / (dims.size_x * dims.size_z);
+
+    if (x < dims.bmin_x || x > dims.bmax_x
+     || y < dims.bmin_y || y > dims.bmax_y
+     || z < dims.bmin_z || z > dims.bmax_z) {
+        return;
+    }
+
+    a[idx] = 0u;
+    b[idx] = 0u;
+}

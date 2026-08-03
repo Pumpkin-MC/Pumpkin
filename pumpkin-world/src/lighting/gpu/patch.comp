@@ -21,23 +21,18 @@ layout(std430, set = 0, binding = 0) readonly buffer Dims {
     uint pad2;
 } dims;
 
-layout(std430, set = 0, binding = 1) readonly buffer Props { uint props[]; };
-layout(std430, set = 0, binding = 2) readonly buffer Src { uint src[]; };
-layout(std430, set = 0, binding = 3) writeonly buffer Dst { uint dst[]; };
+layout(std430, set = 0, binding = 1) buffer Props { uint props[]; };
+layout(std430, set = 0, binding = 4) readonly buffer Deltas { uint deltas[]; };
 
 void main() {
     uint lin = (gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x) * 64u
              + gl_LocalInvocationID.x;
-    if (lin * 4u >= dims.count) {
+    if (lin >= dims.delta_count) {
         return;
     }
-    uint w = dims.base / 4u + lin;
-    uint v = 0u;
-    for (uint k = 0u; k < 4u; ++k) {
-        uint s = w * 4u + k;
-        if (s < dims.total) {
-            v |= (src[s] & 15u) << (k * 8u);
-        }
+    uint idx = deltas[lin * 2u];
+    if (idx >= dims.total) {
+        return;
     }
-    dst[w] = v;
+    props[idx] = deltas[lin * 2u + 1u];
 }

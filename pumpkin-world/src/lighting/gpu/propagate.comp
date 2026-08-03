@@ -1,6 +1,4 @@
 #version 450
-// One relaxation wave of block-light propagation. The checked-in SPIR-V comes from:
-//   glslc --target-env=vulkan1.2 -O propagate.comp -o propagate.spv
 
 layout(local_size_x = 64) in;
 
@@ -9,9 +7,20 @@ layout(std430, set = 0, binding = 0) readonly buffer Dims {
     uint size_y;
     uint size_z;
     uint total;
+    uint base;
+    uint count;
+    uint delta_count;
+    uint pad0;
+    uint bmin_x;
+    uint bmin_y;
+    uint bmin_z;
+    uint pad1;
+    uint bmax_x;
+    uint bmax_y;
+    uint bmax_z;
+    uint pad2;
 } dims;
 
-// bits 0..4 opacity, bits 4..8 luminance
 layout(std430, set = 0, binding = 1) readonly buffer Props { uint props[]; };
 layout(std430, set = 0, binding = 2) readonly buffer Src { uint src[]; };
 layout(std430, set = 0, binding = 3) writeonly buffer Dst { uint dst[]; };
@@ -25,8 +34,12 @@ uint sat_sub(uint a, uint b) {
 }
 
 void main() {
-    uint idx = (gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x) * 64u
+    uint lin = (gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x) * 64u
              + gl_LocalInvocationID.x;
+    if (lin >= dims.count) {
+        return;
+    }
+    uint idx = dims.base + lin;
     if (idx >= dims.total) {
         return;
     }
