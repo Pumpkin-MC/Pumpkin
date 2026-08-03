@@ -1,6 +1,8 @@
 use crate::block::entities::BlockEntity;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::inventory::{
     Clearable, Inventory, InventoryFuture, split_stack, sync_write_items_to_nbt,
@@ -17,6 +19,7 @@ pub struct CrafterBlockEntity {
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub crafting_ticks_remaining: AtomicI32,
     pub triggered: AtomicBool,
+    pub disabled_slots: [AtomicBool; Self::INVENTORY_SIZE],
     pub dirty: AtomicBool,
 }
 
@@ -32,6 +35,17 @@ impl BlockEntity for CrafterBlockEntity {
                 self.crafting_ticks_remaining.load(Ordering::Relaxed),
             );
             nbt.put_bool("triggered", self.triggered.load(Ordering::Relaxed));
+
+            let disabled_indices: Vec<i32> = self
+                .disabled_slots
+                .iter()
+                .enumerate()
+                .filter(|(_, disabled)| disabled.load(Ordering::Relaxed))
+                .map(|(slot, _)| slot as i32)
+                .collect();
+            if !disabled_indices.is_empty() {
+                nbt.put("disabled_slots", NbtTag::IntArray(disabled_indices));
+            }
         })
     }
 
@@ -39,6 +53,18 @@ impl BlockEntity for CrafterBlockEntity {
     where
         Self: Sized,
     {
+        let disabled_slots: [AtomicBool; Self::INVENTORY_SIZE] =
+            from_fn(|_| AtomicBool::new(false));
+        if let Some(disabled_indices) = nbt.get_int_array("disabled_slots") {
+            for &index in disabled_indices {
+                if let Ok(slot) = usize::try_from(index)
+                    && slot < Self::INVENTORY_SIZE
+                {
+                    disabled_slots[slot].store(true, Ordering::Relaxed);
+                }
+            }
+        }
+
         let crafter = Self {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
@@ -46,10 +72,22 @@ impl BlockEntity for CrafterBlockEntity {
                 nbt.get_int("crafting_ticks_remaining").unwrap_or(0),
             ),
             triggered: AtomicBool::new(nbt.get_bool("triggered").unwrap_or(false)),
+            disabled_slots,
             dirty: AtomicBool::new(false),
         };
 
         crafter.read_data(nbt, &crafter.items);
+
+        // Vanilla loadAdditional only keeps a loaded disabled flag if the slot is
+        // still empty once items are loaded (slotCanBeDisabled gates both directions).
+        for slot in 0..Self::INVENTORY_SIZE {
+            if crafter.disabled_slots[slot].load(Ordering::Relaxed)
+                && let Ok(item) = crafter.items[slot].try_lock()
+                && !item.is_empty()
+            {
+                crafter.disabled_slots[slot].store(false, Ordering::Relaxed);
+            }
+        }
 
         crafter
     }
@@ -101,8 +139,29 @@ impl CrafterBlockEntity {
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             crafting_ticks_remaining: AtomicI32::new(0),
             triggered: AtomicBool::new(false),
+            disabled_slots: from_fn(|_| AtomicBool::new(false)),
             dirty: AtomicBool::new(false),
         }
+    }
+
+    /// Vanilla `CrafterBlockEntity.slotCanBeDisabled`: a slot can only be toggled
+    /// while it currently holds no item.
+    pub async fn slot_can_be_disabled(&self, slot: usize) -> bool {
+        slot < Self::INVENTORY_SIZE && self.items[slot].lock().await.is_empty()
+    }
+
+    /// Vanilla `CrafterBlockEntity.setSlotState`.
+    pub async fn set_slot_state(&self, slot: usize, enabled: bool) {
+        if self.slot_can_be_disabled(slot).await {
+            self.disabled_slots[slot].store(!enabled, Ordering::Relaxed);
+            self.mark_dirty();
+        }
+    }
+
+    /// Vanilla `CrafterBlockEntity.isSlotDisabled`.
+    #[must_use]
+    pub fn is_slot_disabled(&self, slot: usize) -> bool {
+        slot < Self::INVENTORY_SIZE && self.disabled_slots[slot].load(Ordering::Relaxed)
     }
 }
 
@@ -147,6 +206,10 @@ impl Inventory for CrafterBlockEntity {
 
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
+            // Vanilla `setItem`: placing an item into a disabled slot re-enables it.
+            if self.is_slot_disabled(slot) {
+                self.set_slot_state(slot, true).await;
+            }
             *self.items[slot].lock().await = stack;
             self.mark_dirty();
         })
@@ -158,6 +221,15 @@ impl Inventory for CrafterBlockEntity {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn can_insert_through_face<'a>(
+        &'a self,
+        slot: usize,
+        _stack: &'a ItemStack,
+        _direction: BlockDirection,
+    ) -> InventoryFuture<'a, bool> {
+        Box::pin(async move { !self.is_slot_disabled(slot) })
     }
 }
 

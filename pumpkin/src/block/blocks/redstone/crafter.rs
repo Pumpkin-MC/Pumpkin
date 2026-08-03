@@ -202,7 +202,7 @@ impl BlockBehaviour for CrafterBlock {
                 let mut occupied = 0u8;
                 for i in 0..9 {
                     let stack = crafter.get_stack(i).await;
-                    if !stack.lock().await.is_empty() {
+                    if !stack.lock().await.is_empty() || crafter.is_slot_disabled(i) {
                         occupied += 1;
                     }
                 }
