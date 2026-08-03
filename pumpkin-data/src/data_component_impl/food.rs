@@ -535,10 +535,58 @@ impl DataComponentImpl for PotionContentsImpl {
     default_impl!(PotionContents);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct PotionDurationScaleImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub struct PotionDurationScaleImpl {
+    pub scale: f32,
+}
+impl PotionDurationScaleImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_float().map(|scale| Self { scale })
+    }
+}
 impl DataComponentImpl for PotionDurationScaleImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Float(self.scale)
+    }
+    fn get_hash(&self) -> i32 {
+        get_f32_hash(self.scale) as i32
+    }
     default_impl!(PotionDurationScale);
+}
+impl Hash for PotionDurationScaleImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.scale.to_bits().hash(state);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DataComponentImpl, PotionDurationScaleImpl};
+    use crate::item::Item;
+
+    #[test]
+    fn potion_duration_scale_round_trips_as_a_float() {
+        let scale = PotionDurationScaleImpl { scale: 0.125 };
+        let encoded = scale.write_data();
+        let decoded = PotionDurationScaleImpl::read_data(&encoded).expect("scale should decode");
+
+        assert_eq!(decoded, scale);
+    }
+
+    #[test]
+    fn generated_arrow_duration_scale_is_data_driven() {
+        let scale = Item::TIPPED_ARROW
+            .components
+            .iter()
+            .find_map(|(id, component)| {
+                (*id == crate::data_component::DataComponent::PotionDurationScale)
+                    .then(|| component.as_any().downcast_ref::<PotionDurationScaleImpl>())
+                    .flatten()
+            })
+            .expect("tipped arrows should have a duration scale");
+
+        assert_eq!(scale.scale, 0.125);
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

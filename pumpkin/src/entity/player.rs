@@ -545,6 +545,14 @@ struct Textures {
 #[derive(Deserialize)]
 struct SkinTexture {
     url: String,
+    #[serde(default)]
+    metadata: Option<SkinMetadata>,
+}
+
+#[derive(Deserialize)]
+struct SkinMetadata {
+    #[serde(default)]
+    model: Option<String>,
 }
 
 impl Player {
@@ -555,7 +563,13 @@ impl Player {
             .decode(textures_prop.value.as_bytes())
             .ok()?;
         let textures: TexturesProperty = serde_json::from_slice(&decoded).ok()?;
-        let url = textures.textures.skin?.url;
+        let skin_texture = textures.textures.skin?;
+        let url = skin_texture.url;
+        let is_slim = skin_texture
+            .metadata
+            .as_ref()
+            .and_then(|m| m.model.as_deref())
+            .is_some_and(|model| model == "slim");
 
         let resp = ureq::get(&url).call().ok()?;
         let mut buf = Vec::new();
@@ -577,6 +591,9 @@ impl Player {
         }
 
         let mut skin = pumpkin_protocol::bedrock::client::Skin::steve();
+        if is_slim {
+            skin.arm_size = "slim".to_string();
+        }
         skin.image_width = width;
         skin.image_height = height;
         skin.skin_data = rgba;
@@ -945,7 +962,11 @@ impl Player {
 
         {
             let stack = item_stack.lock().await;
-            if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+            if stack.is_empty() {
+                // Vanilla fist: base_attack_damage = -1.0, base_attack_speed = -2.4
+                add_damage = -1.0;
+                add_speed = -2.4;
+            } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
                 for item_mod in modifiers.attribute_modifiers.iter() {
                     if item_mod.operation == Operation::AddValue {
                         if item_mod.id == "minecraft:base_attack_damage" {
@@ -1012,7 +1033,7 @@ impl Player {
         }
 
         // Modify the added damage based on the multiplier.
-        let mut damage = base_damage + add_damage * damage_multiplier;
+        let mut damage = (base_damage + add_damage) * damage_multiplier;
         damage += extra_ench_damage * attack_cooldown_progress;
 
         if let Some(strength) = self
@@ -2957,6 +2978,17 @@ impl Player {
                     }
                 }
 
+                /* Vanilla doesn't reset fallDistance in setGameMode(), instead relies on
+                 * Player.aiStep() resetting when abilities.flying=true and
+                 * Player.causeFallDamage() returning false when abilities.mayfly=true.
+                 * TODO: Reset fall_distance each tick when abilities.flying=true (mirrors Player.aiStep())
+                 * TODO: Add abilities.allow_flying check in LivingEntity::handle_fall_damage() (mirrors Player.causeFallDamage())
+                 * TODO: Once implemented, restrict this reset to Spectator only.
+                 */
+                if matches!(gamemode, GameMode::Creative | GameMode::Spectator) {
+                    self.living_entity.fall_distance.store(0.0);
+                }
+
                 if gamemode != GameMode::Spectator && self.camera_target_id.load().is_some() {
                     self.camera_target_id.store(None);
                     self.client.send_packet_now(&CSetCamera::new(
@@ -4104,7 +4136,13 @@ impl Player {
         // Check offhand first
         let stack = inventory.get_stack(PlayerInventory::OFF_HAND_SLOT).await;
         let item = stack.lock().await;
-        if item.item.id == Item::ARROW.id && item.item_count > 0 {
+        if matches!(
+            item.item.id,
+            id if id == Item::ARROW.id
+                || id == Item::TIPPED_ARROW.id
+                || id == Item::SPECTRAL_ARROW.id
+        ) && item.item_count > 0
+        {
             return Some(PlayerInventory::OFF_HAND_SLOT);
         }
         drop(item);
@@ -4113,7 +4151,13 @@ impl Player {
         for slot in 0..PlayerInventory::MAIN_SIZE {
             let stack = inventory.get_stack(slot).await;
             let item = stack.lock().await;
-            if item.item.id == Item::ARROW.id && item.item_count > 0 {
+            if matches!(
+                item.item.id,
+                id if id == Item::ARROW.id
+                    || id == Item::TIPPED_ARROW.id
+                    || id == Item::SPECTRAL_ARROW.id
+            ) && item.item_count > 0
+            {
                 return Some(slot);
             }
         }
@@ -4303,6 +4347,21 @@ impl NBTStorage for Player {
             // Store food level, saturation, exhaustion, and tick timer
             self.hunger_manager.write_nbt(nbt).await;
 
+            nbt.put_int(
+                "AirSupply",
+                self.breath_manager
+                    .air_supply
+                    .load(Ordering::Relaxed)
+                    .clamp(0, super::breath::MAX_AIR),
+            );
+            nbt.put_int(
+                "DrowningTick",
+                self.breath_manager
+                    .drowning_tick
+                    .load(Ordering::Relaxed)
+                    .clamp(0, super::breath::DROWNING_INTERVAL - 1),
+            );
+
             nbt.put_string(
                 "Dimension",
                 self.world().dimension.minecraft_name.to_string(),
@@ -4354,6 +4413,18 @@ impl NBTStorage for Player {
             );
 
             self.hunger_manager.read_nbt(nbt).await;
+
+            if let Some(air) = nbt.get_int("AirSupply") {
+                self.breath_manager
+                    .air_supply
+                    .store(air.clamp(0, super::breath::MAX_AIR), Ordering::Relaxed);
+            }
+            if let Some(tick) = nbt.get_int("DrowningTick") {
+                self.breath_manager.drowning_tick.store(
+                    tick.clamp(0, super::breath::DROWNING_INTERVAL - 1),
+                    Ordering::Relaxed,
+                );
+            }
 
             // Load any saved spawnpoint data (SpawnX/SpawnY/SpawnZ, SpawnDimension, SpawnForced)
             if let (Some(x), Some(y), Some(z)) = (
