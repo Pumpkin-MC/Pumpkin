@@ -78,6 +78,45 @@ trait CropBlockBase: PlantBlockBase {
     }
 
     //TODO add impl for light level
+
+    /// Age gained per bone meal application. Vanilla `CropBlock.getBonemealAgeIncrease`
+    /// returns a uniform `randInt(2..=5)`; beetroot overrides this to `1`.
+    fn bonemeal_age_increase(&self) -> i32 {
+        rand::rng().random_range(2..=5)
+    }
+
+    /// Whether bone meal may be applied. Mirrors vanilla `CropBlock::isValidBonemealTarget`:
+    /// valid until the crop is fully grown.
+    fn can_bonemeal(&self, state: BlockStateId, block: &Block) -> bool {
+        self.get_age(state, block) < self.max_age()
+    }
+
+    /// Advance the crop by `bonemeal_age_increase`, clamped to `max_age`. Fires `BlockGrowEvent`
+    /// for parity with `random_tick`, honouring cancellation and `new_state_id` rewrites.
+    async fn grow_from_bonemeal(&self, world: &Arc<World>, pos: &BlockPos) {
+        let (block, state) = world.get_block_and_state_id(pos);
+        let age = self.get_age(state, block);
+        let new_age = (age + self.bonemeal_age_increase()).min(self.max_age());
+        let mut new_state_id = self.state_with_age(block, state, new_age);
+        if let Some(server) = world.server.upgrade() {
+            let event = BlockGrowEvent::new(
+                world.clone(),
+                block,
+                state,
+                Block::from_state_id(new_state_id),
+                new_state_id,
+                *pos,
+            );
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                return;
+            }
+            new_state_id = event.new_state_id;
+        }
+        world
+            .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_ALL)
+            .await;
+    }
 }
 
 pub async fn get_available_moisture(world: &Arc<World>, pos: &BlockPos, block: &Block) -> f32 {
@@ -122,4 +161,32 @@ pub async fn get_available_moisture(world: &Arc<World>, pos: &BlockPos, block: &
     }
 
     moisture
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CropBlockBase;
+    use super::beetroot::BeetrootBlock;
+    use crate::block::blocks::plant::PlantBlockBase;
+
+    struct DefaultCrop;
+    impl PlantBlockBase for DefaultCrop {}
+    impl CropBlockBase for DefaultCrop {}
+
+    #[test]
+    fn default_crop_bonemeal_increase_is_2_to_5() {
+        let crop = DefaultCrop;
+        for _ in 0..1000 {
+            let inc = crop.bonemeal_age_increase();
+            assert!(
+                (2..=5).contains(&inc),
+                "increase out of vanilla range: {inc}"
+            );
+        }
+    }
+
+    #[test]
+    fn beetroot_bonemeal_increase_is_1() {
+        assert_eq!(BeetrootBlock.bonemeal_age_increase(), 1);
+    }
 }

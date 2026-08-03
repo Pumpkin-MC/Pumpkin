@@ -4,7 +4,8 @@ use pumpkin_macros::pumpkin_block;
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::crop::CropBlockBase;
 use crate::block::{
-    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
+    BlockBehaviour, BlockFuture, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    RandomTickArgs,
 };
 
 #[pumpkin_block("minecraft:carrots")]
@@ -33,6 +34,16 @@ impl BlockBehaviour for CarrotBlock {
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             <Self as CropBlockBase>::random_tick(self, args.world, args.position).await;
+        })
+    }
+
+    fn is_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
+        <Self as CropBlockBase>::can_bonemeal(self, args.state_id, args.block)
+    }
+
+    fn perform_bonemeal<'a>(&'a self, args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            <Self as CropBlockBase>::grow_from_bonemeal(self, args.world, args.position).await;
         })
     }
 }

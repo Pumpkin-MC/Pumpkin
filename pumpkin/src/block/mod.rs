@@ -113,6 +113,25 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
+    /// Whether this block reacts to bone meal at all. When `true`, bone meal is consumed and the
+    /// growth effect plays even if `is_bonemeal_success` later returns `false`. Mirrors vanilla
+    /// `BonemealableBlock::isValidBonemealTarget`.
+    fn is_bonemeal_target(&self, _args: BonemealArgs<'_>) -> bool {
+        false
+    }
+
+    /// Whether a bone meal application actually mutates the block. Per-block probability lives here
+    /// (mirrors vanilla `BonemealableBlock::isBonemealSuccess`); defaults to always succeeding.
+    fn is_bonemeal_success(&self, _args: BonemealArgs<'_>) -> bool {
+        true
+    }
+
+    /// Apply the bone meal growth. Only invoked when the target is valid and the success roll
+    /// passed (mirrors vanilla `BonemealableBlock::performBonemeal`).
+    fn perform_bonemeal<'a>(&'a self, _args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     fn can_place_at(&self, _args: CanPlaceAtArgs<'_>) -> bool {
         true
     }
@@ -303,6 +322,14 @@ pub struct RandomTickArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub position: &'a BlockPos,
+}
+
+#[derive(Clone, Copy)]
+pub struct BonemealArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub position: &'a BlockPos,
+    pub state_id: BlockStateId,
 }
 
 pub struct CanPlaceAtArgs<'a> {
