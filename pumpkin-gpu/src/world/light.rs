@@ -2,8 +2,58 @@
 //!
 //! The WGSL compute shader lives in `light.wgsl` alongside this file.
 //! Dispatch is handled by [`super::gpu::GpuNoiseContext`].
+//!
+//! # Global GPU context
+//!
+//! Call [`init_global_gpu`] once at server startup. After that,
+//! [`try_sky_light_gpu`] is safe to call from any thread and returns
+//! computed sky-light values when a GPU is available, or `None` to
+//! signal "fall back to the CPU path."
 
+use super::gpu::GpuNoiseContext;
 use bytemuck::{Pod, Zeroable};
+use std::sync::OnceLock;
+
+static GLOBAL_GPU: OnceLock<GpuNoiseContext> = OnceLock::new();
+
+/// Initialize the global GPU context. Safe to call multiple times; subsequent
+/// calls are no-ops. When no compatible GPU is available the global slot stays
+/// empty — every [`try_sky_light_gpu`] / [`sky_light_gpu_callback`] call will
+/// return `None` and the caller falls back to the CPU path.
+pub fn init_global_gpu() {
+    if GLOBAL_GPU.get().is_none() {
+        if let Some(ctx) = GpuNoiseContext::try_new() {
+            let _ = GLOBAL_GPU.set(ctx);
+        }
+    }
+}
+
+/// Returns `true` when a global GPU context has been initialised.
+#[must_use]
+pub fn has_global_gpu() -> bool {
+    GLOBAL_GPU.get().is_some()
+}
+
+/// GPU sky-light scan, using the global GPU context.
+///
+/// Returns `Some(Vec<u8>)` with one u8 per block position (flattened
+/// `[column][y]`) when the GPU path succeeds, or `None` when no GPU is
+/// available — the caller must fall back to the CPU scan.
+///
+/// # Panics
+///
+/// Panics if the global GPU context was never initialised. Call
+/// [`has_global_gpu`] first if the caller can work without one.
+#[must_use]
+pub fn try_sky_light_gpu(input: &SkyLightInput) -> Option<Vec<u8>> {
+    let ctx = GLOBAL_GPU
+        .get()
+        .expect("global GPU context not initialised");
+    if input.total_positions() == 0 {
+        return Some(Vec::new());
+    }
+    Some(ctx.scan_sky_light(input))
+}
 
 /// Uniform header for a light-scan dispatch.  Matches `LightDims` in
 /// `light.wgsl`; the `padding` field keeps the struct 16-byte aligned so an
@@ -71,4 +121,26 @@ impl BlockLightInput {
     pub fn total_positions(&self) -> usize {
         self.num_columns as usize * self.height as usize
     }
+}
+
+/// A `SkyLightGpuFn`-compatible callback that uses the global GPU context.
+///
+/// Pass this to `pumpkin_world::lighting::register_sky_light_gpu` at server
+/// startup to enable GPU-accelerated sky-light column scanning.
+///
+/// Returns `None` when no GPU is available (the caller falls back to CPU).
+#[must_use]
+pub fn sky_light_gpu_callback(
+    opacity: &[u8],
+    heightmap: &[i32],
+    num_columns: u32,
+    height: u32,
+    bottom_y: i32,
+) -> Option<Vec<u8>> {
+    let ctx = GLOBAL_GPU.get()?;
+    if num_columns == 0 || height == 0 {
+        return Some(Vec::new());
+    }
+    // Skip the SkyLightInput allocation — pass slices directly to GPU.
+    Some(ctx.scan_sky_light_raw(opacity, heightmap, num_columns, height, bottom_y))
 }

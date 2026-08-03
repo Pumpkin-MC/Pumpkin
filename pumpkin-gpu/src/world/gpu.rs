@@ -683,69 +683,13 @@ impl GpuNoiseContext {
     /// Returns one `u8` per block position, flattened row-major as `[column][y]`.
     #[must_use]
     pub fn scan_sky_light(&self, input: &super::light::SkyLightInput) -> Vec<u8> {
-        if input.total_positions() == 0 {
-            return Vec::new();
-        }
-
-        let dims = super::light::LightDims::new(input.num_columns, input.height, input.bottom_y);
-
-        let dims_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("sky_light_dims"),
-                contents: bytemuck::bytes_of(&dims),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-
-        let opacity_u32: Vec<u32> = input.opacity.iter().map(|&b| u32::from(b)).collect();
-        let opacity_buffer = self.storage_from("sky_opacity", &opacity_u32);
-        let heightmap_buffer = self.storage_from("sky_heightmap", &input.heightmap);
-
-        let output_size = input.total_positions() as u64 * std::mem::size_of::<u32>() as u64;
-        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("sky_light_out"),
-            size: output_size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-        let staging_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("sky_light_staging"),
-            size: output_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("sky_light bind group"),
-            layout: &self.light_bind_group_layout,
-            entries: &[
-                bind_entry(0, &dims_buffer),
-                bind_entry(1, &opacity_buffer),
-                bind_entry(2, &heightmap_buffer),
-                bind_entry(3, &output_buffer),
-            ],
-        });
-
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("sky_light encoder"),
-            });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("sky_light pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.light_pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            pass.dispatch_workgroups(input.num_columns.div_ceil(WORKGROUP_SIZE), 1, 1);
-        }
-        encoder.copy_buffer_to_buffer(&output_buffer, 0, &staging_buffer, 0, output_size);
-        self.queue.submit(Some(encoder.finish()));
-
-        let result = self.read_back_u8_range(&staging_buffer, output_size);
-        staging_buffer.unmap();
-        result
+        self.scan_sky_light_raw(
+            &input.opacity,
+            &input.heightmap,
+            input.num_columns,
+            input.height,
+            input.bottom_y,
+        )
     }
 
     /// Copies luminance values into the block-light buffer on the GPU.
@@ -757,68 +701,147 @@ impl GpuNoiseContext {
     /// Returns one `u8` per block position, flattened row-major as `[column][y]`.
     #[must_use]
     pub fn scan_block_light(&self, input: &super::light::BlockLightInput) -> Vec<u8> {
-        if input.total_positions() == 0 {
+        let total = input.total_positions();
+        if total == 0 {
             return Vec::new();
         }
 
         let dims = super::light::LightDims::new(input.num_columns, input.height, input.bottom_y);
-
-        let dims_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("block_light_dims"),
-                contents: bytemuck::bytes_of(&dims),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-
         let luminance_u32: Vec<u32> = input.luminance.iter().map(|&b| u32::from(b)).collect();
         let luminance_buffer = self.storage_from("block_luminance", &luminance_u32);
-
-        let output_size = input.total_positions() as u64 * std::mem::size_of::<u32>() as u64;
-        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("block_light_out"),
-            size: output_size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-        let staging_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("block_light_staging"),
-            size: output_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let (output_buffer, staging_buffer, output_size) =
+            self.alloc_output_pair("block_light", total);
 
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("block_light bind group"),
             layout: &self.block_light_bind_group_layout,
             entries: &[
-                bind_entry(0, &dims_buffer),
+                bind_entry(0, &self.uniform_from_dims("block_light_dims", &dims)),
                 bind_entry(1, &luminance_buffer),
                 bind_entry(2, &output_buffer),
             ],
         });
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("block_light encoder"),
-            });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("block_light pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.block_light_pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            let total = (input.total_positions() as u32).div_ceil(WORKGROUP_SIZE);
-            pass.dispatch_workgroups(total, 1, 1);
-        }
-        encoder.copy_buffer_to_buffer(&output_buffer, 0, &staging_buffer, 0, output_size);
-        self.queue.submit(Some(encoder.finish()));
+        let workgroups = (total as u32).div_ceil(WORKGROUP_SIZE);
+        self.dispatch_light(
+            &self.block_light_pipeline,
+            &bind_group,
+            &output_buffer,
+            &staging_buffer,
+            output_size,
+            workgroups,
+        );
 
         let result = self.read_back_u8_range(&staging_buffer, output_size);
         staging_buffer.unmap();
         result
+    }
+
+    /// Lower-level entry point: accepts raw slices instead of [`SkyLightInput`].
+    /// Avoids the Vec-to-Vec copy that [`scan_sky_light`] would incur.
+    #[must_use]
+    pub fn scan_sky_light_raw(
+        &self,
+        opacity: &[u8],
+        heightmap: &[i32],
+        num_columns: u32,
+        height: u32,
+        bottom_y: i32,
+    ) -> Vec<u8> {
+        let total = num_columns as usize * height as usize;
+        if total == 0 {
+            return Vec::new();
+        }
+
+        let dims = super::light::LightDims::new(num_columns, height, bottom_y);
+
+        let opacity_u32: Vec<u32> = opacity.iter().map(|&b| u32::from(b)).collect();
+        let opacity_buffer = self.storage_from("sky_opacity", &opacity_u32);
+        let heightmap_buffer = self.storage_from("sky_heightmap", heightmap);
+
+        let (output_buffer, staging_buffer, output_size) =
+            self.alloc_output_pair("sky_light", total);
+
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("sky_light bind group"),
+            layout: &self.light_bind_group_layout,
+            entries: &[
+                bind_entry(0, &self.uniform_from_dims("sky_light_dims", &dims)),
+                bind_entry(1, &opacity_buffer),
+                bind_entry(2, &heightmap_buffer),
+                bind_entry(3, &output_buffer),
+            ],
+        });
+
+        self.dispatch_light(
+            &self.light_pipeline,
+            &bind_group,
+            &output_buffer,
+            &staging_buffer,
+            output_size,
+            num_columns.div_ceil(WORKGROUP_SIZE),
+        );
+
+        let result = self.read_back_u8_range(&staging_buffer, output_size);
+        staging_buffer.unmap();
+        result
+    }
+
+    /// Creates a uniform buffer from a bytemuck-compatible struct.
+    fn uniform_from_dims<T: Pod>(&self, label: &str, data: &T) -> wgpu::Buffer {
+        self.device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(label),
+                contents: bytemuck::bytes_of(data),
+                usage: wgpu::BufferUsages::UNIFORM,
+            })
+    }
+
+    /// Allocates a STORAGE+COPY_SRC output buffer and a MAP_READ+COPY_DST
+    /// staging buffer, both `total` u32 elements wide.
+    fn alloc_output_pair(&self, label: &str, total: usize) -> (wgpu::Buffer, wgpu::Buffer, u64) {
+        let size = total as u64 * std::mem::size_of::<u32>() as u64;
+        let output = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(&format!("{label}_out")),
+            size,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(&format!("{label}_staging")),
+            size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        (output, staging, size)
+    }
+
+    /// Encodes a single dispatch → copy → submit cycle for a light-scan pass.
+    fn dispatch_light(
+        &self,
+        pipeline: &wgpu::ComputePipeline,
+        bind_group: &wgpu::BindGroup,
+        output: &wgpu::Buffer,
+        staging: &wgpu::Buffer,
+        size: u64,
+        workgroups: u32,
+    ) {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("light encoder"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("light pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(0, bind_group, &[]);
+            pass.dispatch_workgroups(workgroups, 1, 1);
+        }
+        encoder.copy_buffer_to_buffer(output, 0, staging, 0, size);
+        self.queue.submit(Some(encoder.finish()));
     }
 
     /// Like [`Self::read_back_range`] but for `u32`-per-element storage buffers
@@ -2033,5 +2056,200 @@ mod test {
         // y=1,0: air, stays 10
         assert_eq!(gpu_result[1], 10);
         assert_eq!(gpu_result[0], 10);
+    }
+
+    // ── CPU reference for sky-light column scan ──────────────────────────
+    //
+    // Mirrors the logic in `pumpkin_world::lighting::SkyLightPropagator::convert_light`:
+    // fill air above the heightmap with 15, then sweep downwards, subtracting opacity
+    // at each non-air block until light reaches 0.
+
+    /// CPU reference: computes sky-light values for an 18×18×N region using the
+    /// same algorithm as the production lighting engine.
+    fn cpu_reference_sky_light(
+        opacity: &[u8],
+        heightmap: &[i32],
+        num_columns: u32,
+        height: u32,
+        bottom_y: i32,
+    ) -> Vec<u8> {
+        let total = num_columns as usize * height as usize;
+        let mut result = vec![0u8; total];
+
+        for col in 0..num_columns as usize {
+            let top_y = heightmap[col];
+            let col_base = col * height as usize;
+
+            // Fill air above heightmap with 15.
+            let air_start = ((top_y + 1 - bottom_y).max(0)) as usize;
+            for y_idx in air_start..height as usize {
+                result[col_base + y_idx] = 15;
+            }
+
+            // Scan downwards from surface.
+            let mut light: i32 = 15;
+            let scan_start = ((top_y - bottom_y).min(height as i32 - 1).max(0)) as usize;
+            for step in 0..=scan_start {
+                let y_idx = scan_start - step;
+                let op = opacity[col_base + y_idx] as i32;
+                if op > 0 {
+                    light = light.saturating_sub(op);
+                }
+                result[col_base + y_idx] = if light <= 0 { 0 } else { light as u8 };
+                if light <= 0 {
+                    break;
+                }
+            }
+        }
+
+        result
+    }
+
+    /// GPU must match the CPU reference on a single-column smoke test.
+    #[test]
+    fn gpu_sky_light_matches_cpu_reference_single_column() {
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        // One column, y=0..9 (10 levels), solid(opacity=15) at y=3.
+        let height: u32 = 10;
+        let bottom_y: i32 = 0;
+        let num_columns: u32 = 1;
+        let total = (num_columns * height) as usize;
+        let mut opacity = vec![0u8; total];
+        opacity[3] = 15; // y=3 is solid
+        let heightmap = vec![3i32]; // top solid at y=3
+
+        let gpu_result =
+            ctx.scan_sky_light_raw(&opacity, &heightmap, num_columns, height, bottom_y);
+        let cpu_result =
+            cpu_reference_sky_light(&opacity, &heightmap, num_columns, height, bottom_y);
+
+        assert_eq!(gpu_result.len(), cpu_result.len());
+        for (i, (&g, &c)) in gpu_result.iter().zip(cpu_result.iter()).enumerate() {
+            assert_eq!(g, c, "mismatch at index {i}: GPU={g}, CPU={c}");
+        }
+    }
+
+    /// GPU must match CPU reference on varied multi-column data using a
+    /// deterministic pseudo-random sequence (no external crate needed).
+    #[test]
+    fn gpu_sky_light_matches_cpu_reference_varied() {
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        let num_columns: u32 = 18 * 18; // 324 — real chunk size
+        let height: u32 = 384;
+        let bottom_y: i32 = -64;
+        let total = (num_columns * height) as usize;
+
+        // Deterministic pseudo-random: multiply-with-carry, seed = 42.
+        let mut state: u64 = 42;
+        let mut next = || {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            state
+        };
+
+        let opacity: Vec<u8> = (0..total).map(|_| (next() % 16) as u8).collect();
+        let heightmap: Vec<i32> = (0..num_columns)
+            .map(|_| bottom_y + (next() % (height as u64)) as i32)
+            .collect();
+
+        let gpu_result =
+            ctx.scan_sky_light_raw(&opacity, &heightmap, num_columns, height, bottom_y);
+        let cpu_result =
+            cpu_reference_sky_light(&opacity, &heightmap, num_columns, height, bottom_y);
+
+        assert_eq!(gpu_result.len(), cpu_result.len());
+        let mismatches: Vec<_> = gpu_result
+            .iter()
+            .zip(cpu_result.iter())
+            .enumerate()
+            .filter(|&(_, (g, c))| g != c)
+            .collect();
+
+        assert!(
+            mismatches.is_empty(),
+            "{} mismatches out of {total} positions; first: index={}, GPU={}, CPU={}",
+            mismatches.len(),
+            mismatches.first().map_or(0, |(i, _)| *i),
+            mismatches.first().map_or(0, |(_, (g, _))| **g),
+            mismatches.first().map_or(0, |(_, (_, c))| **c),
+        );
+    }
+
+    /// GPU must match CPU reference when heightmap is at the very top (no air above).
+    #[test]
+    fn gpu_sky_light_heightmap_at_top() {
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        let height: u32 = 5;
+        let bottom_y: i32 = 0;
+        let num_columns: u32 = 4;
+        let total = (num_columns * height) as usize;
+
+        // All air, max height = top block (height-1)
+        let opacity = vec![0u8; total];
+        let heightmap = vec![(height - 1) as i32; num_columns as usize];
+
+        let gpu_result =
+            ctx.scan_sky_light_raw(&opacity, &heightmap, num_columns, height, bottom_y);
+        let cpu_result =
+            cpu_reference_sky_light(&opacity, &heightmap, num_columns, height, bottom_y);
+
+        assert_eq!(gpu_result, cpu_result);
+    }
+
+    /// GPU must match CPU reference when heightmap is below bottom (no blocks at all).
+    #[test]
+    fn gpu_sky_light_heightmap_below_bottom() {
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        let height: u32 = 5;
+        let bottom_y: i32 = 10;
+        let num_columns: u32 = 2;
+        let total = (num_columns * height) as usize;
+        let opacity = vec![0u8; total];
+        // Heightmap below the scanned region: everything is "above surface" → all 15.
+        let heightmap = vec![bottom_y - 1; num_columns as usize];
+
+        let gpu_result =
+            ctx.scan_sky_light_raw(&opacity, &heightmap, num_columns, height, bottom_y);
+        let cpu_result =
+            cpu_reference_sky_light(&opacity, &heightmap, num_columns, height, bottom_y);
+
+        assert_eq!(gpu_result, cpu_result);
+    }
+
+    /// GPU must match CPU with opacity=15 at every position (solid column).
+    #[test]
+    fn gpu_sky_light_fully_solid_column() {
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        let height: u32 = 20;
+        let bottom_y: i32 = 0;
+        let num_columns: u32 = 1;
+        let total = (num_columns * height) as usize;
+        let opacity = vec![15u8; total];
+        let heightmap = vec![(height - 1) as i32];
+
+        let gpu_result =
+            ctx.scan_sky_light_raw(&opacity, &heightmap, num_columns, height, bottom_y);
+        let cpu_result =
+            cpu_reference_sky_light(&opacity, &heightmap, num_columns, height, bottom_y);
+
+        assert_eq!(gpu_result, cpu_result);
+        // Only the very first block below surface should have light (15-15=0)
+        assert_eq!(gpu_result[(height - 1) as usize], 0);
     }
 }
