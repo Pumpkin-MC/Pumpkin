@@ -4,15 +4,18 @@ use crate::block::BlockBehaviour;
 use crate::block::BlockFuture;
 use crate::block::CanPlaceAtArgs;
 use crate::block::GetStateForNeighborUpdateArgs;
+use crate::block::OnLandedUponArgs;
 use crate::block::OnPlaceArgs;
 use crate::block::OnScheduledTickArgs;
 use crate::block::RandomTickArgs;
 use crate::world::World;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::FarmlandLikeProperties;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_macros::pumpkin_block;
@@ -22,8 +25,12 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
 use pumpkin_world::world::BlockFlags;
+use rand::RngExt;
 
 type FarmlandProperties = FarmlandLikeProperties;
+
+/// `FarmlandBlock.MAX_MOISTURE`.
+const MAX_MOISTURE: u8 = 7;
 
 #[pumpkin_block("minecraft:farmland")]
 pub struct FarmlandBlock;
@@ -31,14 +38,29 @@ pub struct FarmlandBlock;
 impl BlockBehaviour for FarmlandBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            push_up_entities(args.world, args.position);
-            args.world
-                .set_block_state(
-                    args.position,
-                    Block::DIRT.default_state.id,
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
+            if !can_place_at(args.world.as_ref(), args.position) {
+                turn_to_dirt(args.world, args.position).await;
+            }
+        })
+    }
+
+    fn on_landed_upon<'a>(&'a self, args: OnLandedUponArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let Some(living) = args.entity.get_living_entity() else {
+                return;
+            };
+            let can_grief = args.entity.get_player().is_some()
+                || args.world.level_info.load().game_rules.mob_griefing;
+            if !can_grief {
+                return;
+            }
+            let dimensions = living.entity.entity_dimension.load();
+            if dimensions.width * dimensions.width * dimensions.height <= 0.512 {
+                return;
+            }
+            if rand::rng().random::<f32>() < args.fall_distance - 0.5 {
+                turn_to_dirt(args.world, args.position).await;
+            }
         })
     }
 
@@ -70,49 +92,58 @@ impl BlockBehaviour for FarmlandBlock {
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
+            let state_id = args.world.get_block_state_id(args.position);
+            let mut props = FarmlandProperties::from_state_id(state_id, args.block);
             if is_water_nearby(args.world, args.position)
                 || args.world.is_raining_at(&args.position.up()).await
             {
-                let mut props = FarmlandProperties::default(args.block);
-                props.moisture = 7;
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    )
-                    .await;
-            } else {
-                let state_id = args.world.get_block_state_id(args.position);
-                let mut props = FarmlandProperties::from_state_id(state_id, args.block);
-                if props.moisture == 0 {
-                    if !args
-                        .world
-                        .get_block(&args.position.up())
-                        .has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
-                    {
-                        push_up_entities(args.world, args.position);
-                        args.world
-                            .set_block_state(
-                                args.position,
-                                Block::DIRT.default_state.id,
-                                BlockFlags::NOTIFY_NEIGHBORS,
-                            )
-                            .await;
-                    }
-                } else {
-                    props.moisture -= 1;
+                if props.moisture < MAX_MOISTURE {
+                    props.moisture = MAX_MOISTURE;
                     args.world
                         .set_block_state(
                             args.position,
                             props.to_state_id(args.block),
-                            BlockFlags::NOTIFY_NEIGHBORS,
+                            BlockFlags::NOTIFY_LISTENERS,
                         )
                         .await;
                 }
+            } else if props.moisture > 0 {
+                props.moisture -= 1;
+                args.world
+                    .set_block_state(
+                        args.position,
+                        props.to_state_id(args.block),
+                        BlockFlags::NOTIFY_LISTENERS,
+                    )
+                    .await;
+            } else if !args
+                .world
+                .get_block(&args.position.up())
+                .has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
+            {
+                turn_to_dirt(args.world, args.position).await;
             }
         })
     }
+}
+
+/// `FarmlandBlock#turnToDirt`.
+async fn turn_to_dirt(world: &Arc<World>, block_pos: &BlockPos) {
+    push_up_entities(world, block_pos);
+    world
+        .set_block_state(
+            block_pos,
+            Block::DIRT.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        )
+        .await;
+    emit_game_event(
+        world,
+        GameEvent::BlockChange,
+        block_pos.to_centered_f64(),
+        GameEventContext::none(),
+    )
+    .await;
 }
 
 fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
