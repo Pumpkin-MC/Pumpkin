@@ -96,6 +96,8 @@ impl DataComponentImpl for ChargedProjectilesImpl {
     default_impl!(ChargedProjectiles);
 }
 
+const BUNDLE_IN_BUNDLE_WEIGHT: u32 = 4;
+
 #[derive(Clone)]
 pub struct BundleContentsImpl {
     pub items: Vec<crate::item_stack::ItemStack>,
@@ -118,6 +120,15 @@ impl std::fmt::Debug for BundleContentsImpl {
     }
 }
 impl BundleContentsImpl {
+    fn get_item_weight(stack: &crate::item_stack::ItemStack) -> u32 {
+        stack
+            .get_data_component::<BundleContentsImpl>()
+            .map_or_else(
+                || (64 / stack.get_max_stack_size() as u32).max(1),
+                |contents| contents.get_weight() + BUNDLE_IN_BUNDLE_WEIGHT,
+            )
+    }
+
     pub fn read_data(tag: &NbtTag) -> Option<Self> {
         let mut items = Vec::new();
         if let NbtTag::List(l) = tag {
@@ -137,14 +148,14 @@ impl BundleContentsImpl {
     pub fn get_weight(&self) -> u32 {
         self.items
             .iter()
-            .map(|item| item.item_count as u32 * (64 / item.get_max_stack_size() as u32).max(1))
+            .map(|item| item.item_count as u32 * Self::get_item_weight(item))
             .sum()
     }
     pub fn try_insert(&mut self, stack: &mut crate::item_stack::ItemStack) -> bool {
-        if stack.is_empty() || stack.get_data_component::<BundleContentsImpl>().is_some() {
+        if stack.is_empty() {
             return false;
         }
-        let weight_per_item = (64 / stack.get_max_stack_size() as u32).max(1);
+        let weight_per_item = Self::get_item_weight(stack);
         let available = 64u32.saturating_sub(self.get_weight()) / weight_per_item;
         let amount_to_add = stack.item_count.min(available as u8);
         if amount_to_add == 0 {
@@ -203,7 +214,7 @@ impl DataComponentImpl for BundleContentsImpl {
 
 #[cfg(test)]
 mod bundle_tests {
-    use super::BundleContentsImpl;
+    use super::{BUNDLE_IN_BUNDLE_WEIGHT, BundleContentsImpl};
     use crate::{item::Item, item_stack::ItemStack};
 
     #[test]
@@ -274,6 +285,38 @@ mod bundle_tests {
         assert_eq!(contents.items[0].item.id, Item::APPLE.id);
         assert_eq!(contents.items[0].item_count, 7);
         assert_eq!(contents.items[1].item.id, Item::DIAMOND.id);
+    }
+
+    #[test]
+    fn inserts_empty_bundle_with_nesting_overhead() {
+        let mut contents = BundleContentsImpl {
+            items: Vec::new(),
+            selected_item_index: -1,
+        };
+        let mut bundle = ItemStack::new(1, &Item::BUNDLE);
+
+        assert!(contents.try_insert(&mut bundle));
+
+        assert!(bundle.is_empty());
+        assert_eq!(contents.get_weight(), BUNDLE_IN_BUNDLE_WEIGHT);
+    }
+
+    #[test]
+    fn nested_bundle_contents_contribute_to_weight() {
+        let mut contents = BundleContentsImpl {
+            items: Vec::new(),
+            selected_item_index: -1,
+        };
+        let mut bundle = ItemStack::new(1, &Item::BUNDLE);
+        bundle
+            .get_data_component_mut::<BundleContentsImpl>()
+            .expect("bundle should have contents")
+            .items
+            .push(ItemStack::new(8, &Item::APPLE));
+
+        assert!(contents.try_insert(&mut bundle));
+
+        assert_eq!(contents.get_weight(), 8 + BUNDLE_IN_BUNDLE_WEIGHT);
     }
 }
 
