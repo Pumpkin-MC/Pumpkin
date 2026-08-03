@@ -293,7 +293,6 @@ impl SignBlock {
     }
 }
 
-//TODO: add support for click commands
 impl BlockBehaviour for SignBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {

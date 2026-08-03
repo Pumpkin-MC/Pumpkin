@@ -20,6 +20,20 @@ use crate::{
 
 use super::tripwire_hook::TripwireHookBlock;
 
+/// Vanilla `Entity.isIgnoringBlockTriggers` overrides: `Marker`, `Interaction`, the
+/// `Display` family, and `OminousItemSpawner` never trigger pressure-sensitive blocks.
+const fn is_ignoring_block_triggers(
+    entity_type: &'static pumpkin_data::entity::EntityType,
+) -> bool {
+    use pumpkin_data::entity::EntityType;
+    entity_type.id == EntityType::MARKER.id
+        || entity_type.id == EntityType::INTERACTION.id
+        || entity_type.id == EntityType::TEXT_DISPLAY.id
+        || entity_type.id == EntityType::BLOCK_DISPLAY.id
+        || entity_type.id == EntityType::ITEM_DISPLAY.id
+        || entity_type.id == EntityType::OMINOUS_ITEM_SPAWNER.id
+}
+
 type TripwireProperties = pumpkin_data::block_properties::TripwireLikeProperties;
 type TripwireHookProperties = pumpkin_data::block_properties::TripwireHookLikeProperties;
 
@@ -138,10 +152,14 @@ impl BlockBehaviour for TripwireBlock {
             }
 
             let aabb = BoundingBox::from_block(args.position);
-            // TODO entity.canAvoidTraps()
-            if args.world.get_entities_at_box(&aabb).is_empty()
-                && args.world.get_players_at_box(&aabb).is_empty()
-            {
+            // Vanilla `Entity.isIgnoringBlockTriggers`: markers, interaction entities,
+            // display entities, and ominous item spawners never trip a tripwire.
+            let triggering_entities = args
+                .world
+                .get_entities_at_box(&aabb)
+                .into_iter()
+                .any(|entity| !is_ignoring_block_triggers(entity.get_entity().entity_type));
+            if !triggering_entities && args.world.get_players_at_box(&aabb).is_empty() {
                 props.powered = false;
                 let state_id = props.to_state_id(args.block);
                 args.world
