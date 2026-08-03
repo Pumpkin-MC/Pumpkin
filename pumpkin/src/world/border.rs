@@ -54,14 +54,26 @@ impl Worldborder {
         }
     }
 
+    /// Vanilla `WorldBorder.getSize()`: the current (interpolated) diameter.
+    #[must_use]
+    pub const fn size(&self) -> f64 {
+        self.current_diameter
+    }
+
+    /// Vanilla `WorldBorder.getLerpTime()`: ticks left in the active interpolation.
+    #[must_use]
+    pub const fn lerp_time(&self) -> i64 {
+        self.lerp_ticks_remaining
+    }
+
     pub async fn init_client(&self, client: &JavaClient) {
         client
             .enqueue_packet(&CInitializeWorldBorder::new(
                 self.center_x,
                 self.center_z,
-                self.old_diameter,
+                self.current_diameter,
                 self.new_diameter,
-                self.speed.into(),
+                self.lerp_ticks_remaining.into(),
                 self.portal_teleport_boundary.into(),
                 self.warning_blocks.into(),
                 self.warning_time.into(),
@@ -77,7 +89,9 @@ impl Worldborder {
     }
 
     pub fn set_diameter(&mut self, world: &World, diameter: f64, speed: Option<i64>) {
-        self.old_diameter = self.new_diameter;
+        // Vanilla `WorldBorderCommand.setSize` lerps from `border.getSize()`, the
+        // current interpolated size, not from the previous lerp target.
+        self.old_diameter = self.current_diameter;
         self.new_diameter = diameter;
 
         // A zero (or negative) tick duration has nothing to interpolate over --
@@ -109,7 +123,7 @@ impl Worldborder {
     }
 
     pub fn add_diameter(&mut self, world: &World, offset: f64, speed: Option<i64>) {
-        self.set_diameter(world, self.new_diameter + offset, speed);
+        self.set_diameter(world, self.current_diameter + offset, speed);
     }
 
     /// Per-tick lerp update, mirroring vanilla `WorldBorder.MovingBorderExtent::update`.

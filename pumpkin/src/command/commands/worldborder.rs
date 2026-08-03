@@ -72,7 +72,7 @@ impl CommandExecutor for GetExecutor {
             let world = world_for_sender(sender, server)?;
             let border = world.worldborder.lock().await;
 
-            let diameter = border.new_diameter.round() as i32;
+            let diameter = border.size().round() as i32;
             sender
                 .send_message(TextComponent::translate_cross(
                     "commands.worldborder.get",
@@ -106,7 +106,7 @@ impl CommandExecutor for SetExecutor {
                 ))));
             };
 
-            if (distance - border.new_diameter).abs() < f64::EPSILON {
+            if (distance - border.size()).abs() < f64::EPSILON {
                 return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                     NOTHING_CHANGED_EXCEPTION,
                     NOTHING_CHANGED_EXCEPTION,
@@ -122,7 +122,7 @@ impl CommandExecutor for SetExecutor {
                 ))
                 .await;
 
-            let d = border.new_diameter;
+            let d = border.size();
             border.set_diameter(&world, distance, None);
 
             Ok((distance - d) as i32)
@@ -156,7 +156,7 @@ impl CommandExecutor for SetTimeExecutor {
                 ))));
             };
 
-            match distance.total_cmp(&border.new_diameter) {
+            match distance.total_cmp(&border.size()) {
                 std::cmp::Ordering::Equal => {
                     return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                         NOTHING_CHANGED_EXCEPTION,
@@ -192,8 +192,8 @@ impl CommandExecutor for SetTimeExecutor {
                 }
             }
 
-            let d = border.new_diameter;
-            border.set_diameter(&world, distance, Some(i64::from(time) * 1000));
+            let d = border.size();
+            border.set_diameter(&world, distance, Some(i64::from(time)));
 
             Ok((distance - d) as i32)
         })
@@ -228,7 +228,7 @@ impl CommandExecutor for AddExecutor {
                 )));
             }
 
-            let distance = border.new_diameter + distance_add;
+            let distance = border.size() + distance_add;
 
             let dist = format!("{distance:.1}");
             sender
@@ -270,9 +270,9 @@ impl CommandExecutor for AddTimeExecutor {
                 ))));
             };
 
-            let distance = distance_add + border.new_diameter;
+            let distance = distance_add + border.size();
 
-            match distance.total_cmp(&border.new_diameter) {
+            match distance.total_cmp(&border.size()) {
                 std::cmp::Ordering::Equal => {
                     return Err(CommandError::CommandFailed(TextComponent::text(format!(
                         "{} is out of bounds.",
@@ -307,7 +307,8 @@ impl CommandExecutor for AddTimeExecutor {
                 }
             }
 
-            border.set_diameter(&world, distance, Some(i64::from(time) * 1000));
+            let ticks = border.lerp_time() + i64::from(time);
+            border.set_diameter(&world, distance, Some(ticks));
 
             Ok(distance_add as i32)
         })
