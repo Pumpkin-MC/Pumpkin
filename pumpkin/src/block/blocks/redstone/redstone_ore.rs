@@ -65,3 +65,23 @@ impl BlockBehaviour for RedstoneOreBlock {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::block_properties::has_random_ticks;
+
+    #[test]
+    fn lit_redstone_ore_is_randomly_ticking() {
+        for block in [&Block::REDSTONE_ORE, &Block::DEEPSLATE_REDSTONE_ORE] {
+            let mut props = RedstoneOreLikeProperties::default(block);
+            props.lit = true;
+            assert!(has_random_ticks(props.to_state_id(block)), "lit {block:?}");
+            props.lit = false;
+            assert!(
+                !has_random_ticks(props.to_state_id(block)),
+                "unlit {block:?}"
+            );
+        }
+    }
+}
