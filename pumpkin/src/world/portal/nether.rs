@@ -683,8 +683,18 @@ impl NetherPortal {
             return Some((pos, result_axis, false));
         }
 
+        // Vanilla: if maxStartY < minStartY, no valid fallback position exists
+        // (PortalForcer.java: `if (maxStartY < minStartY) return Optional.empty();`).
+        // Unreachable for the stock Nether/Overworld/End dimension table, but a custom
+        // dimension with too little logical_height would otherwise panic on the clamp below.
+        let min_fallback_y = min_y.max(70);
+        let max_fallback_y = top_y_limit - 9;
+        if max_fallback_y < min_fallback_y {
+            return None;
+        }
+
         // Vanilla: clamp between max(bottomY, 70) and topYLimit - 9
-        let fallback_y = target_pos.0.y.clamp(min_y.max(70), top_y_limit - 9);
+        let fallback_y = target_pos.0.y.clamp(min_fallback_y, max_fallback_y);
         let fallback_pos = BlockPos(Vector3::new(
             target_pos.0.x - direction.to_offset().x,
             fallback_y,
