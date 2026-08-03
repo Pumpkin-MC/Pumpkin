@@ -698,8 +698,11 @@ impl NetherPortal {
         ))
     }
 
-    const fn is_valid_portal_air(state: &BlockState) -> bool {
-        state.replaceable() && !state.is_liquid()
+    // PortalForcer.java:160: `blockState.canBeReplaced() && blockState.getFluidState().isEmpty()`.
+    // A waterlogged replaceable block (tall seagrass, kelp, ...) is not itself a liquid block
+    // but has a non-empty fluid state in vanilla, so it must be excluded here too.
+    fn is_valid_portal_air(state: &BlockState) -> bool {
+        state.replaceable() && !state.is_liquid() && !state.is_waterlogged()
     }
 
     async fn is_valid_portal_pos_async(
