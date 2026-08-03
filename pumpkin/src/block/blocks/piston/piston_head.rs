@@ -25,9 +25,8 @@ impl BlockBehaviour for PistonHeadBlock {
             if &Block::PISTON == new_block || &Block::STICKY_PISTON == new_block {
                 let props = PistonProps::from_state_id(new_state, new_block);
                 if props.extended {
-                    // TODO: use player
                     args.world
-                        .break_block(&pos, None, BlockFlags::SKIP_DROPS)
+                        .break_block(&pos, None, BlockFlags::empty())
                         .await;
                 }
             }
