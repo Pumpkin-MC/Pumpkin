@@ -2172,11 +2172,54 @@ impl Player {
     }
 
     pub async fn progress_motion(&self, delta_pos: Vector3<f64>) {
-        // TODO: Swimming, gliding...
-        if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
+        // Vanilla: passenger entities don't cause exhaustion from movement.
+        if self.living_entity.entity.has_vehicle().await {
+            return;
+        }
+
+        let entity = &self.living_entity.entity;
+        let flying = self.abilities.lock().await.flying;
+
+        // Priority 1: swimming (full 3D distance).
+        if self.is_swimming(flying).await {
+            let distance = (delta_pos.length() * 100.0).round() as f32;
+            if distance > 0.0 {
+                self.add_exhaustion(0.01 * distance * 0.01).await;
+            }
+            return;
+        }
+
+        // Priority 2: eye submerged in water (full 3D distance).
+        {
+            let bounds = entity.bounding_box.load();
+            let eye_height = entity.get_eye_y() - bounds.min.y;
+            let submerged = entity.touching_water.load(Ordering::Relaxed)
+                && entity.water_height.load() >= eye_height;
+            if submerged {
+                let distance = (delta_pos.length() * 100.0).round() as f32;
+                if distance > 0.0 {
+                    self.add_exhaustion(0.01 * distance * 0.01).await;
+                }
+                return;
+            }
+        }
+
+        // Priority 3: touching water surface (horizontal distance only).
+        if entity.touching_water.load(Ordering::Relaxed) {
             let delta = (delta_pos.horizontal_length() * 100.0).round() as f32;
             if delta > 0.0 {
-                if self.living_entity.entity.is_sprinting() {
+                self.add_exhaustion(0.01 * delta * 0.01).await;
+            }
+            return;
+        }
+
+        // Priority 4: on-ground movement (horizontal distance only). Climbing, elytra
+        // flight, and generic/creative flying all cause zero exhaustion in vanilla too,
+        // so they're left as a no-op here rather than invented.
+        if entity.on_ground.load(Ordering::Relaxed) {
+            let delta = (delta_pos.horizontal_length() * 100.0).round() as f32;
+            if delta > 0.0 {
+                if entity.is_sprinting() {
                     self.add_exhaustion(0.1 * delta * 0.01).await;
                 } else {
                     self.add_exhaustion(0.0 * delta * 0.01).await;
