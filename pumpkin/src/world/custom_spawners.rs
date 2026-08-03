@@ -125,12 +125,16 @@ pub async fn tick_phantom_spawner(world: &Arc<World>) {
 /// player and a random offset in `[-32, 32]` on each axis (`8 +
 /// random.nextInt(24)`, sign-randomized).
 ///
-/// Scope reduction: vanilla gates spawning on `level.isCloseToVillage`
-/// (`PoiManager` count of occupied `HOME` POIs `> 4` within 48 blocks) or on
-/// being inside a swamp-hut structure (`CATS_SPAWN_IN` structure tag).
-/// Pumpkin has neither a POI manager nor a structure-piece lookup, so this
-/// approximates "close to village" with a nearby-`VILLAGER`-entity count
-/// (same `> 4` threshold) and drops the swamp-hut spawn path entirely.
+/// Village gate: vanilla checks `level.isCloseToVillage(spawnPos, 2)`, then
+/// requires `getCountInRange(HOME, spawnPos, 48, IS_OCCUPIED) > 4` (more
+/// than 4 claimed beds within a 48-block sphere) before spawning in a
+/// village. See `crate::world::village_poi` for the POI registry backing
+/// both checks and the `Occupancy.ANY` (not `IS_OCCUPIED`) deviation it
+/// documents.
+///
+/// Scope reduction: vanilla's other spawn path, inside a swamp-hut structure
+/// (`CATS_SPAWN_IN` structure tag), is dropped entirely - Pumpkin has no
+/// structure-piece lookup by tag.
 pub async fn tick_cat_spawner(world: &Arc<World>) {
     if world.cat_spawn_tick.fetch_sub(1, Relaxed) - 1 > 0 {
         return;
@@ -157,9 +161,14 @@ pub async fn tick_cat_spawner(world: &Arc<World>) {
         return;
     }
 
-    let villagers_nearby =
-        entities_of_type_near(world, &spawn_pos, 48.0, 8.0, &EntityType::VILLAGER);
-    if villagers_nearby <= 4 {
+    if !world.is_close_to_village(spawn_pos, 2).await {
+        return;
+    }
+
+    let homes_nearby = world
+        .poi_count_in_range(crate::world::village_poi::POI_TYPE_HOME, spawn_pos, 48)
+        .await;
+    if homes_nearby <= 4 {
         return;
     }
 

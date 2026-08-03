@@ -161,6 +161,7 @@ pub mod end_podium;
 pub mod natural_spawner;
 pub mod raid;
 pub mod scoreboard;
+pub mod village_poi;
 pub mod weather;
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
@@ -4742,6 +4743,22 @@ impl World {
 
         let is_new_block = old_block != new_block;
 
+        // PoiManager reacting to onBlockStateChange: keep the village POI
+        // registry (village_poi.rs) in sync with bed/job-site/bell blocks.
+        if is_new_block {
+            let old_poi_type = village_poi::classify_block(old_block);
+            let new_poi_type = village_poi::classify_block(new_block);
+            if old_poi_type.is_some() || new_poi_type.is_some() {
+                let mut poi_storage = self.portal_poi.lock().await;
+                if old_poi_type.is_some() {
+                    poi_storage.remove(position);
+                }
+                if let Some(poi_type) = new_poi_type {
+                    poi_storage.add(*position, poi_type);
+                }
+            }
+        }
+
         // WorldChunk.java line 305-314
         if is_new_block
             && old_block.default_state.block_entity_type != u16::MAX
@@ -4840,6 +4857,49 @@ impl World {
             .update_lighting_at(&self.level, *position);
 
         replaced_block_state_id
+    }
+
+    /// Count of POIs of `poi_type` within a `radius`-block sphere of
+    /// `center`. Vanilla `PoiManager.getCountInRange`
+    /// (see `pumpkin::world::village_poi` module docs for the
+    /// `Occupancy.ANY` vs `IS_OCCUPIED` deviation).
+    pub async fn poi_count_in_range(&self, poi_type: &str, center: BlockPos, radius: i32) -> usize {
+        let mut storage = self.portal_poi.lock().await;
+        storage
+            .get_in_square(center, radius, Some(poi_type))
+            .into_iter()
+            .filter(|candidate| village_poi::in_sphere(center, *candidate, radius))
+            .count()
+    }
+
+    /// Chebyshev distance, in chunk sections, from `pos` to the nearest
+    /// village-tag POI (`home`/`meeting`/job-site) - vanilla
+    /// `PoiManager.sectionsToVillage`. Capped at
+    /// `village_poi::MAX_VILLAGE_DISTANCE`, matching vanilla's
+    /// `DistanceTracker` "no source in range" sentinel.
+    pub async fn sections_to_village(&self, pos: BlockPos) -> i32 {
+        let block_radius = (village_poi::MAX_VILLAGE_DISTANCE + 1) * 16;
+        let mut best = village_poi::MAX_VILLAGE_DISTANCE + 1;
+        let mut storage = self.portal_poi.lock().await;
+        for poi_type in village_poi::VILLAGE_TAG_POI_TYPES {
+            for candidate in storage.get_in_square(pos, block_radius, Some(poi_type)) {
+                let distance = village_poi::section_chebyshev_distance(pos, candidate);
+                if distance < best {
+                    best = distance;
+                }
+            }
+        }
+        best.min(village_poi::MAX_VILLAGE_DISTANCE + 1)
+    }
+
+    /// Vanilla `ServerLevel.isCloseToVillage`. `section_distance` above
+    /// `village_poi::MAX_VILLAGE_DISTANCE` always reports `false`, matching
+    /// vanilla's early return.
+    pub async fn is_close_to_village(&self, pos: BlockPos, section_distance: i32) -> bool {
+        if section_distance > village_poi::MAX_VILLAGE_DISTANCE {
+            return false;
+        }
+        self.sections_to_village(pos).await <= section_distance
     }
 
     /// The greater of the block light and the sky light reduced by

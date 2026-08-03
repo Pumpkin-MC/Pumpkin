@@ -4,6 +4,7 @@ use super::poi;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
+    dimension::Dimension,
     tag,
     tag::Taggable,
 };
@@ -12,8 +13,16 @@ use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
 
 use crate::world::World;
 
-const SEARCH_RADIUS_NETHER: i32 = 128;
+// Matches vanilla `PortalForcer.NETHER_PORTAL_RADIUS` / `OVERWORLD_PORTAL_RADIUS`:
+// searching for an existing portal to link to uses a small radius when the
+// destination is the Nether (coordinates are already divided by 8) and a
+// large radius when the destination is the Overworld.
+const SEARCH_RADIUS_NETHER: i32 = 16;
 const SEARCH_RADIUS_OVERWORLD: i32 = 128;
+// Matches vanilla `PortalForcer.createPortal`'s `BlockPos.spiralAround(origin, 16, ...)`:
+// the search area for placing a *new* portal is always radius 16, regardless
+// of which dimension is the destination.
+const CREATE_PORTAL_SEARCH_RADIUS: i32 = 16;
 
 #[derive(Debug, Clone)]
 pub struct PortalSearchResult {
@@ -476,11 +485,12 @@ impl NetherPortal {
         let max_y = min_y + world.dimension.height - 1;
         let worldborder = world.worldborder.lock().await;
 
-        let search_radius = if world.dimension.has_ceiling {
-            SEARCH_RADIUS_NETHER
-        } else {
-            SEARCH_RADIUS_OVERWORLD
-        };
+        let search_radius =
+            if world.dimension.minecraft_name == Dimension::THE_NETHER.minecraft_name {
+                SEARCH_RADIUS_NETHER
+            } else {
+                SEARCH_RADIUS_OVERWORLD
+            };
 
         let search_max_y = if world.dimension.has_ceiling {
             (min_y + world.dimension.logical_height - 1).min(max_y)
@@ -574,8 +584,8 @@ impl NetherPortal {
         let mut ideal_pos: Option<(BlockPos, HorizontalAxis, f64)> = None;
         let mut acceptable_pos: Option<(BlockPos, HorizontalAxis, f64)> = None;
 
-        for offset_x in -32..=32 {
-            for offset_z in -32..=32 {
+        for offset_x in -CREATE_PORTAL_SEARCH_RADIUS..=CREATE_PORTAL_SEARCH_RADIUS {
+            for offset_z in -CREATE_PORTAL_SEARCH_RADIUS..=CREATE_PORTAL_SEARCH_RADIUS {
                 let check_x = target_pos.0.x + offset_x;
                 let check_z = target_pos.0.z + offset_z;
 
@@ -614,8 +624,14 @@ impl NetherPortal {
                             bottom_y -= 1;
                         }
 
+                        // Vanilla (PortalForcer.java createPortal): `if (deltaY <= 0 || deltaY >= 3)`.
+                        // A single-block-thick air pocket (deltaY == 0, i.e. bottom_y == y) is
+                        // accepted just like a deep (>=3) cave; only shallow 1-2 block dips are
+                        // rejected. The `<= 0` branch was previously missing here, which meant
+                        // ordinary single-block pockets were always rejected and the search fell
+                        // through to the floating-obsidian-box fallback far more often than vanilla.
                         let air_height = y - bottom_y;
-                        if air_height >= 3 && bottom_y + 4 <= top_y_limit {
+                        if (air_height <= 0 || air_height >= 3) && bottom_y + 4 <= top_y_limit {
                             let floor_pos = BlockPos(Vector3::new(check_x, bottom_y, check_z));
 
                             for check_axis in [HorizontalAxis::X, HorizontalAxis::Z] {
