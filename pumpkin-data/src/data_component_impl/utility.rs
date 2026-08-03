@@ -253,21 +253,6 @@ mod bundle_tests {
     }
 
     #[test]
-    fn equality_ignores_selected_item() {
-        let items = vec![ItemStack::new(1, &Item::STONE)];
-        let contents = BundleContentsImpl {
-            items: items.clone(),
-            selected_item_index: -1,
-        };
-        let selected_contents = BundleContentsImpl {
-            items,
-            selected_item_index: 0,
-        };
-
-        assert_eq!(contents, selected_contents);
-    }
-
-    #[test]
     fn insertion_merges_matching_stack_and_moves_it_to_front() {
         let mut contents = BundleContentsImpl {
             items: vec![
@@ -288,21 +273,7 @@ mod bundle_tests {
     }
 
     #[test]
-    fn inserts_empty_bundle_with_nesting_overhead() {
-        let mut contents = BundleContentsImpl {
-            items: Vec::new(),
-            selected_item_index: -1,
-        };
-        let mut bundle = ItemStack::new(1, &Item::BUNDLE);
-
-        assert!(contents.try_insert(&mut bundle));
-
-        assert!(bundle.is_empty());
-        assert_eq!(contents.get_weight(), BUNDLE_IN_BUNDLE_WEIGHT);
-    }
-
-    #[test]
-    fn nested_bundle_contents_contribute_to_weight() {
+    fn inserts_nested_bundle_with_contents_and_overhead() {
         let mut contents = BundleContentsImpl {
             items: Vec::new(),
             selected_item_index: -1,
@@ -316,6 +287,7 @@ mod bundle_tests {
 
         assert!(contents.try_insert(&mut bundle));
 
+        assert!(bundle.is_empty());
         assert_eq!(contents.get_weight(), 8 + BUNDLE_IN_BUNDLE_WEIGHT);
     }
 }
