@@ -99,6 +99,7 @@ impl<P: LightProvider> LightPropagator<P> {
 
         while let Some(entry) = self.queue.pop_front() {
             let pos = entry.pos;
+            self.visited.remove(&pos);
 
             let current_light = P::get_light(cache, pos);
             if current_light <= 1 {
@@ -114,11 +115,6 @@ impl<P: LightProvider> LightPropagator<P> {
                 }
 
                 let neighbor_pos = pos.offset(dir.to_offset());
-
-                // Skip if already visited (critical early-exit optimization)
-                if self.visited.contains(&neighbor_pos) {
-                    continue;
-                }
 
                 // Skip neighbor if it's outside world bounds
                 if neighbor_pos.0.y < min_y || neighbor_pos.0.y >= max_y {
