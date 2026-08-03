@@ -86,7 +86,19 @@ impl ItemBehaviour for SpawnEggItem {
                     item.decrement_unless_creative(player.gamemode.load(), 1);
                     return;
                 }
-                let pos = BlockPos(location.0 + face.to_offset());
+                // Vanilla `SpawnEggItem#useOn`: the mob is placed inside the clicked block when
+                // that block has no collision shape (grass, torches, ...), and only otherwise on
+                // the block adjacent to the clicked face.
+                let pos = if world
+                    .get_block_state(&location)
+                    .get_block_collision_shapes()
+                    .next()
+                    .is_none()
+                {
+                    location
+                } else {
+                    BlockPos(location.0 + face.to_offset())
+                };
                 let pos = Vector3::new(
                     f64::from(pos.0.x) + 0.5,
                     f64::from(pos.0.y),
