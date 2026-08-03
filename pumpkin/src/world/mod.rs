@@ -4750,8 +4750,8 @@ impl World {
         // PoiManager reacting to onBlockStateChange: keep the village POI
         // registry (village_poi.rs) in sync with bed/job-site/bell blocks.
         if is_new_block {
-            let old_poi_type = village_poi::classify_block(old_block);
-            let new_poi_type = village_poi::classify_block(new_block);
+            let old_poi_type = village_poi::classify_block(old_block, replaced_block_state_id);
+            let new_poi_type = village_poi::classify_block(new_block, block_state_id);
             if old_poi_type.is_some() || new_poi_type.is_some() {
                 let mut poi_storage = self.portal_poi.lock().await;
                 if old_poi_type.is_some() {
@@ -4864,29 +4864,43 @@ impl World {
     }
 
     /// Count of POIs of `poi_type` within a `radius`-block sphere of
-    /// `center`. Vanilla `PoiManager.getCountInRange`
-    /// (see `pumpkin::world::village_poi` module docs for the
-    /// `Occupancy.ANY` vs `IS_OCCUPIED` deviation).
-    pub async fn poi_count_in_range(&self, poi_type: &str, center: BlockPos, radius: i32) -> usize {
+    /// `center` matching `occupancy` - vanilla `PoiManager.getCountInRange`.
+    /// See `pumpkin::world::village_poi` module docs for why `HasSpace` and
+    /// `IsOccupied` are different filters that must not be conflated.
+    pub async fn poi_count_in_range(
+        &self,
+        poi_type: &str,
+        center: BlockPos,
+        radius: i32,
+        occupancy: village_poi::Occupancy,
+    ) -> usize {
         let mut storage = self.portal_poi.lock().await;
         storage
-            .get_in_square(center, radius, Some(poi_type))
+            .get_in_square_with_tickets(center, radius, Some(poi_type))
             .into_iter()
-            .filter(|candidate| village_poi::in_sphere(center, *candidate, radius))
+            .filter(|(candidate, free, max)| {
+                village_poi::in_sphere(center, *candidate, radius) && occupancy.matches(*free, *max)
+            })
             .count()
     }
 
     /// Chebyshev distance, in chunk sections, from `pos` to the nearest
-    /// village-tag POI (`home`/`meeting`/job-site) - vanilla
-    /// `PoiManager.sectionsToVillage`. Capped at
-    /// `village_poi::MAX_VILLAGE_DISTANCE`, matching vanilla's
-    /// `DistanceTracker` "no source in range" sentinel.
+    /// *occupied* village-tag POI (`home`/`meeting`/job-site) - vanilla
+    /// `PoiManager.sectionsToVillage`/`isVillageCenter`, which filters on
+    /// `Occupancy.IS_OCCUPIED` (only claimed POIs count as a village
+    /// center). Capped at `village_poi::MAX_VILLAGE_DISTANCE`, matching
+    /// vanilla's `DistanceTracker` "no source in range" sentinel.
     pub async fn sections_to_village(&self, pos: BlockPos) -> i32 {
         let block_radius = (village_poi::MAX_VILLAGE_DISTANCE + 1) * 16;
         let mut best = village_poi::MAX_VILLAGE_DISTANCE + 1;
         let mut storage = self.portal_poi.lock().await;
         for poi_type in village_poi::VILLAGE_TAG_POI_TYPES {
-            for candidate in storage.get_in_square(pos, block_radius, Some(poi_type)) {
+            for (candidate, free, max) in
+                storage.get_in_square_with_tickets(pos, block_radius, Some(poi_type))
+            {
+                if !village_poi::Occupancy::IsOccupied.matches(free, max) {
+                    continue;
+                }
                 let distance = village_poi::section_chebyshev_distance(pos, candidate);
                 if distance < best {
                     best = distance;
@@ -4904,6 +4918,42 @@ impl World {
             return false;
         }
         self.sections_to_village(pos).await <= section_distance
+    }
+
+    /// Vanilla `PoiManager.take`/`AcquirePoi`: find the closest POI of
+    /// `poi_type` within `radius` blocks of `center` that currently has a
+    /// free ticket (`Occupancy.HAS_SPACE` - claiming, not the
+    /// `IS_OCCUPIED` filter village-density queries use, see
+    /// `village_poi` module docs) and atomically claim it (decrement its
+    /// `free_tickets`), so no other caller can claim the same POI. Mirrors
+    /// `AcquirePoi.SCAN_RANGE = 48` as the caller-supplied radius for bed
+    /// acquisition. Returns `None` if no unclaimed POI of that type exists
+    /// in range.
+    pub async fn acquire_poi(
+        &self,
+        poi_type: &str,
+        center: BlockPos,
+        radius: i32,
+    ) -> Option<BlockPos> {
+        let mut storage = self.portal_poi.lock().await;
+        let mut candidates: Vec<BlockPos> = storage
+            .get_in_square(center, radius, Some(poi_type))
+            .into_iter()
+            .filter(|candidate| village_poi::in_sphere(center, *candidate, radius))
+            .collect();
+        candidates.sort_by_key(|candidate| village_poi::distance_sq(center, *candidate));
+        candidates
+            .into_iter()
+            .find(|candidate| storage.acquire_ticket(candidate))
+    }
+
+    /// Vanilla `PoiManager.release`, called from `Villager.releasePoi`
+    /// (villager wakes up, changes job, etc) and `ValidateNearbyPoi`
+    /// (claimed bed destroyed or reassigned). Returns `false` if there was
+    /// no ticket to release at `pos`.
+    pub async fn release_poi(&self, pos: BlockPos) -> bool {
+        let mut storage = self.portal_poi.lock().await;
+        storage.release_ticket(&pos)
     }
 
     /// The greater of the block light and the sky light reduced by

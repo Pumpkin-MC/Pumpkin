@@ -888,6 +888,10 @@ impl Mob for VillagerEntity {
                 };
 
                 if !valid {
+                    // Vanilla `ValidateNearbyPoi`/`Villager.releasePoi`:
+                    // release the claimed bed's ticket once it's no longer a
+                    // valid (head-part) bed, e.g. it was broken.
+                    world.release_poi(current_home).await;
                     *self.home_pos.lock().unwrap() = None;
                     if is_sleeping {
                         // Wake up if bed was broken
@@ -904,65 +908,19 @@ impl Mob for VillagerEntity {
                 }
             }
 
-            // If no bed, search for one
+            // If no bed, atomically claim the closest unclaimed one -
+            // vanilla `AcquirePoi` (`SCAN_RANGE = 48`), via
+            // `World::acquire_poi` (`PoiManager.take`,
+            // `Occupancy.HAS_SPACE`). Because acquisition decrements the
+            // POI's `free_tickets`, no other villager can claim the same
+            // bed - unlike the old ad-hoc scan, this doesn't need to ask
+            // every nearby villager what it has already claimed.
             if self.get_home_pos().is_none() {
                 let pos = self.get_entity().block_pos.load();
-                let start = BlockPos::new(pos.0.x - 16, pos.0.y - 4, pos.0.z - 16);
-                let end = BlockPos::new(pos.0.x + 16, pos.0.y + 4, pos.0.z + 16);
-
-                let aabb = BoundingBox::new(
-                    Vector3::new(
-                        pos.0.x as f64 - 32.0,
-                        pos.0.y as f64 - 16.0,
-                        pos.0.z as f64 - 32.0,
-                    ),
-                    Vector3::new(
-                        pos.0.x as f64 + 32.0,
-                        pos.0.y as f64 + 16.0,
-                        pos.0.z as f64 + 32.0,
-                    ),
-                );
-                let nearby_entities = world.get_all_at_box(&aabb);
-
-                let mut claimed_homes = Vec::new();
-                for entity in nearby_entities {
-                    if entity.get_entity().entity_id != self.get_entity().entity_id
-                        && entity.get_entity().entity_type
-                            == &pumpkin_data::entity::EntityType::VILLAGER
-                        && let Some(home) = entity.get_home_pos()
-                    {
-                        claimed_homes.push(home);
-                    }
-                }
-
-                let mut best_home = None;
-                let mut best_dist = f64::MAX;
-
-                for p in BlockPos::iterate(start, end) {
-                    let (block, state) = world.get_block_and_state(&p);
-                    if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                        let bed_props = BedProperties::from_state_id(state.id, block);
-                        let bed_head_pos = if bed_props.part == BedPart::Head {
-                            p
-                        } else {
-                            p.offset(bed_props.facing.to_offset())
-                        };
-
-                        if claimed_homes.contains(&bed_head_pos) {
-                            continue;
-                        }
-
-                        let dist = bed_head_pos
-                            .to_f64()
-                            .squared_distance_to_vec(&self.get_entity().pos.load());
-                        if dist < best_dist {
-                            best_dist = dist;
-                            best_home = Some(bed_head_pos);
-                        }
-                    }
-                }
-
-                if let Some(home) = best_home {
+                if let Some(home) = world
+                    .acquire_poi(crate::world::village_poi::POI_TYPE_HOME, pos, 48)
+                    .await
+                {
                     *self.home_pos.lock().unwrap() = Some(home);
                 }
             }

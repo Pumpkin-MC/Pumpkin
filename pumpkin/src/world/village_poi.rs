@@ -26,14 +26,44 @@
 //!   `getInSquare`, then applies `distSqr(center) <= radius*radius`, which
 //!   includes the Y axis).
 //!
-//! Pumpkin has no villager bed-claiming (vanilla's `AcquirePoi` behavior), so
-//! every POI this registry tracks always reports "unoccupied" in vanilla's
-//! terms (`PoiRecord.freeTickets` never decremented from `maxTickets`).
-//! Faithfully filtering on `Occupancy.IS_OCCUPIED` would therefore make every
-//! village-density query permanently return zero, a regression versus the
-//! villager-count approximation this module replaces. We deliberately count
-//! *any* POI of the matching type (vanilla's `Occupancy.ANY`) and defer
-//! occupancy tracking until bed-claiming exists.
+//! Villagers now claim POIs with a ticket system (`PoiRecord.freeTickets`/
+//! `maxTickets`, `pumpkin_world::poi::{PoiEntry, PoiStorage}`) instead of
+//! just existing at density-queryable positions - see `World::acquire_poi`/
+//! `release_poi` (vanilla `PoiManager.take`/`release`, driven by
+//! `AcquirePoi`/`Villager.releasePoi`). This module's own density queries
+//! (`sectionsToVillage`, `getCountInRange`) therefore use the real
+//! `Occupancy` filter below rather than a stand-in.
+//!
+//! `Occupancy::HasSpace` vs `Occupancy::IsOccupied` are **two different
+//! filters for two different purposes** and must not be conflated
+//! (`PoiManager.Occupancy` in vanilla): claiming a POI (e.g. a villager
+//! grabbing a bed) needs `HasSpace` (`freeTickets > 0` - there's a ticket
+//! left to give out); village-density checks (is this area an actual,
+//! lived-in village) need `IsOccupied` (`freeTickets != maxTickets` - the POI
+//! is *actually in use*, not merely present). A meeting point
+//! (`maxTickets = 32`) can be both simultaneously.
+//!
+//! Residual gap: only bed (`HOME`) acquisition is wired up
+//! (`VillagerEntity`'s rest logic calls `World::acquire_poi`/`release_poi`).
+//! Job-site and meeting-point POIs are never claimed by anything in Pumpkin
+//! (no profession job-site claiming, no bell-ringing meeting-point
+//! claiming), so their `free_tickets` never moves off `max_tickets` and they
+//! never satisfy `IS_OCCUPIED`. `sections_to_village`'s job-site/meeting
+//! contribution is therefore inert until that claiming exists - only the
+//! `HOME` contribution is currently meaningful. A village with claimed beds
+//! still registers correctly; a freshly-generated, never-slept-in village
+//! (no villager has claimed a bed yet) will not, which matches vanilla's own
+//! `isVillageCenter` requiring an *occupied* POI, not merely an existing one.
+//!
+//! Existing worlds with POI entries persisted before this ticket system
+//! landed have `free_tickets == 0` on disk (the prior code always wrote
+//! `0`, regardless of type). Since there is no version marker to tell a
+//! legitimately-claimed `0` apart from that legacy default, those entries
+//! load as permanently unclaimable (`has_space() == false`) and permanently
+//! "occupied" (`is_occupied() == true`) until the block is broken and
+//! replaced (which re-adds the POI via `World::set_block_state`, resetting
+//! `free_tickets` to `max_tickets`). This is a one-time migration quirk on
+//! pre-existing saves, not a bug in new POI registrations.
 //!
 //! Registry population: entries are added/removed incrementally at
 //! `World::set_block_state`, the single block-mutation chokepoint, mirroring
@@ -56,13 +86,15 @@
 //!
 //! Bed head/foot: vanilla only registers the `BedPart.HEAD` half of a bed as
 //! a `HOME` POI (`PoiTypes.java` ~113, `register(..., HOME, BEDS, 1, 1)`
-//! filtered to `BedPart.HEAD` states). This module classifies by `Block`
-//! alone (no `BlockState` half tracking at the chokepoint), so both bed
-//! halves are registered - a documented 2x overcount on `HOME` density that
-//! does not change which side of the `> 4` threshold a real village falls
-//! on, since real villages have far more beds than the threshold margin.
+//! filtered to `BedPart.HEAD` states). `classify_block` now takes the
+//! block's state id and applies the same filter, so each bed resolves to
+//! exactly one POI record - required for ticket claiming to make sense (a
+//! villager must never be able to claim the foot half as if it were its own
+//! separate bed).
 
 use pumpkin_data::Block;
+use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::{BedPart, BlockProperties, WhiteBedLikeProperties};
 use pumpkin_data::tag::{Block as BlockTag, Taggable};
 use pumpkin_util::math::position::BlockPos;
 
@@ -85,13 +117,44 @@ pub const VILLAGE_TAG_POI_TYPES: [&str; 3] = [POI_TYPE_HOME, POI_TYPE_MEETING, P
 /// `PoiManager.MAX_VILLAGE_DISTANCE`.
 pub const MAX_VILLAGE_DISTANCE: i32 = 6;
 
-/// Classifies a block for POI registration, or `None` if it isn't a
-/// POI-bearing block. See module docs for the vanilla mapping this
-/// approximates (`PoiTypes.forState`, `PoiTypes.java` ~91).
+/// Vanilla `PoiManager.Occupancy` - see module docs for why `HasSpace` and
+/// `IsOccupied` are different filters for different purposes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Occupancy {
+    /// Vanilla `Occupancy.HAS_SPACE` - `freeTickets > 0`. Used to *acquire*
+    /// a POI.
+    HasSpace,
+    /// Vanilla `Occupancy.IS_OCCUPIED` - `freeTickets != maxTickets`. Used
+    /// for village-density checks.
+    IsOccupied,
+    /// Vanilla `Occupancy.ANY` - no filter.
+    Any,
+}
+
+impl Occupancy {
+    /// Vanilla `Occupancy.getTest()` applied to a `(freeTickets, maxTickets)`
+    /// pair (in place of a `PoiRecord` reference).
+    #[must_use]
+    pub const fn matches(self, free_tickets: i32, max_tickets: i32) -> bool {
+        match self {
+            Self::HasSpace => free_tickets > 0,
+            Self::IsOccupied => free_tickets != max_tickets,
+            Self::Any => true,
+        }
+    }
+}
+
+/// Classifies a block (at a specific state) for POI registration.
+///
+/// Returns `None` if it isn't a POI-bearing block. See module docs for the
+/// vanilla mapping this approximates (`PoiTypes.forState`, `PoiTypes.java`
+/// ~91).
 #[must_use]
-pub fn classify_block(block: &Block) -> Option<&'static str> {
+pub fn classify_block(block: &Block, state_id: BlockStateId) -> Option<&'static str> {
     if block.has_tag(&BlockTag::MINECRAFT_BEDS) {
-        Some(POI_TYPE_HOME)
+        // Vanilla only registers the HEAD half as a POI - see module docs.
+        let props = WhiteBedLikeProperties::from_state_id(state_id, block);
+        (props.part == BedPart::Head).then_some(POI_TYPE_HOME)
     } else if *block == Block::BELL {
         Some(POI_TYPE_MEETING)
     } else if block.has_tag(&BlockTag::C_VILLAGER_JOB_SITES) {
@@ -99,6 +162,17 @@ pub fn classify_block(block: &Block) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+/// Squared 3D distance between two block positions - vanilla
+/// `BlockPos.distSqr`, used by `PoiManager.findClosest`/`getInRange`'s
+/// closest-first sort.
+#[must_use]
+pub fn distance_sq(a: BlockPos, b: BlockPos) -> i64 {
+    let dx = i64::from(a.0.x - b.0.x);
+    let dy = i64::from(a.0.y - b.0.y);
+    let dz = i64::from(a.0.z - b.0.z);
+    dx * dx + dy * dy + dz * dz
 }
 
 /// Chebyshev distance, in chunk sections (16-block cubes), between two
@@ -126,11 +200,8 @@ pub const fn section_chebyshev_distance(a: BlockPos, b: BlockPos) -> i32 {
 /// `PoiStorage::get_in_square` already performs.
 #[must_use]
 pub fn in_sphere(center: BlockPos, candidate: BlockPos, radius: i32) -> bool {
-    let dx = i64::from(center.0.x - candidate.0.x);
-    let dy = i64::from(center.0.y - candidate.0.y);
-    let dz = i64::from(center.0.z - candidate.0.z);
     let radius = i64::from(radius);
-    dx * dx + dy * dy + dz * dz <= radius * radius
+    distance_sq(center, candidate) <= radius * radius
 }
 
 #[cfg(test)]
@@ -140,6 +211,29 @@ mod tests {
 
     fn pos(x: i32, y: i32, z: i32) -> BlockPos {
         BlockPos(Vector3::new(x, y, z))
+    }
+
+    #[test]
+    fn occupancy_has_space_and_is_occupied_are_not_the_same_filter() {
+        // A meeting point (max_tickets = 32) with one claimant: there is
+        // still space for more claimants (HasSpace), but it's also already
+        // in use (IsOccupied) - conflating the two filters here would be
+        // wrong in either direction.
+        let free = 31;
+        let max = 32;
+        assert!(Occupancy::HasSpace.matches(free, max));
+        assert!(Occupancy::IsOccupied.matches(free, max));
+
+        // A bed (max_tickets = 1), unclaimed: has space, not occupied.
+        assert!(Occupancy::HasSpace.matches(1, 1));
+        assert!(!Occupancy::IsOccupied.matches(1, 1));
+
+        // A bed, claimed: no space, occupied.
+        assert!(!Occupancy::HasSpace.matches(0, 1));
+        assert!(Occupancy::IsOccupied.matches(0, 1));
+
+        assert!(Occupancy::Any.matches(0, 1));
+        assert!(Occupancy::Any.matches(1, 1));
     }
 
     #[test]
@@ -189,9 +283,30 @@ mod tests {
 
     #[test]
     fn classify_block_maps_bed_bell_and_job_site() {
-        assert_eq!(classify_block(&Block::RED_BED), Some(POI_TYPE_HOME));
-        assert_eq!(classify_block(&Block::BELL), Some(POI_TYPE_MEETING));
-        assert_eq!(classify_block(&Block::BARREL), Some(POI_TYPE_JOB_SITE));
-        assert_eq!(classify_block(&Block::STONE), None);
+        let mut head_props = WhiteBedLikeProperties::default(&Block::RED_BED);
+        head_props.part = BedPart::Head;
+        let head_state = head_props.to_state_id(&Block::RED_BED);
+        assert_eq!(
+            classify_block(&Block::RED_BED, head_state),
+            Some(POI_TYPE_HOME)
+        );
+
+        let mut foot_props = WhiteBedLikeProperties::default(&Block::RED_BED);
+        foot_props.part = BedPart::Foot;
+        let foot_state = foot_props.to_state_id(&Block::RED_BED);
+        assert_eq!(classify_block(&Block::RED_BED, foot_state), None);
+
+        assert_eq!(
+            classify_block(&Block::BELL, Block::BELL.default_state.id),
+            Some(POI_TYPE_MEETING)
+        );
+        assert_eq!(
+            classify_block(&Block::BARREL, Block::BARREL.default_state.id),
+            Some(POI_TYPE_JOB_SITE)
+        );
+        assert_eq!(
+            classify_block(&Block::STONE, Block::STONE.default_state.id),
+            None
+        );
     }
 }

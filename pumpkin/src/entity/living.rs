@@ -1442,6 +1442,21 @@ impl LivingEntity {
         }
     }
 
+    /// Vanilla `Villager.releaseAllPois` (called from `Villager.die`):
+    /// release any claimed POI ticket (bed, job site) on death so it isn't
+    /// held forever by an entity that no longer exists. Uses the generic
+    /// `EntityBase::get_home_pos`/`get_job_site_pos` hooks (default `None`)
+    /// rather than downcasting to `VillagerEntity`, so any future
+    /// POI-claiming mob gets this for free.
+    async fn release_claimed_pois(world: &crate::world::World, dyn_self: &dyn EntityBase) {
+        if let Some(home) = dyn_self.get_home_pos() {
+            world.release_poi(home).await;
+        }
+        if let Some(job_site) = dyn_self.get_job_site_pos() {
+            world.release_poi(job_site).await;
+        }
+    }
+
     pub async fn on_death(
         &self,
         damage_type: DamageType,
@@ -1459,6 +1474,8 @@ impl LivingEntity {
         {
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
+
+            Self::release_claimed_pois(&world, &*dyn_self).await;
 
             // Statistics updates
             self.update_death_stats(&*dyn_self, cause).await;

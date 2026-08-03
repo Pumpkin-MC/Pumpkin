@@ -166,7 +166,12 @@ pub async fn tick_cat_spawner(world: &Arc<World>) {
     }
 
     let homes_nearby = world
-        .poi_count_in_range(crate::world::village_poi::POI_TYPE_HOME, spawn_pos, 48)
+        .poi_count_in_range(
+            crate::world::village_poi::POI_TYPE_HOME,
+            spawn_pos,
+            48,
+            crate::world::village_poi::Occupancy::IsOccupied,
+        )
         .await;
     if homes_nearby <= 4 {
         return;

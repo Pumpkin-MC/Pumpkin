@@ -13,6 +13,28 @@ use serde::{Deserialize, Serialize};
 /// POI type identifier for nether portals
 pub const POI_TYPE_NETHER_PORTAL: &str = "minecraft:nether_portal";
 
+/// Vanilla `PoiType.maxTickets()` per POI type.
+///
+/// Set at registration in `PoiTypes.bootstrap`
+/// (`net/minecraft/world/entity/ai/village/poi/PoiTypes.java`):
+/// `register(..., HOME, BEDS, 1, 1)`, `register(..., MEETING, BELL, 32, 6)`,
+/// job sites `register(..., <PROFESSION>, <BLOCK>, 1, 1)`, `NETHER_PORTAL`
+/// (and every other non-claimable POI type) `0`.
+///
+/// This crate has no `PoiType` registry (unlike vanilla's `Holder<PoiType>`),
+/// so `max_tickets` is derived from the type string on demand instead of
+/// being looked up. The string literals below must stay in sync with
+/// `pumpkin::world::village_poi`'s `POI_TYPE_*` constants - this crate does
+/// not depend on `pumpkin`, so they can't be shared directly.
+#[must_use]
+pub fn max_tickets_for_poi_type(poi_type: &str) -> i32 {
+    match poi_type {
+        "minecraft:home" | "minecraft:job_site" => 1,
+        "minecraft:meeting" => 32,
+        _ => 0,
+    }
+}
+
 /// MCA format constants
 const SECTOR_SIZE: usize = 4096;
 const REGION_SIZE: usize = 32;
@@ -51,6 +73,51 @@ impl PoiEntry {
     #[must_use]
     pub const fn pos(&self) -> BlockPos {
         BlockPos(Vector3::new(self.x, self.y, self.z))
+    }
+
+    /// Vanilla `PoiType.maxTickets()` for this entry's type - see
+    /// `max_tickets_for_poi_type`.
+    #[must_use]
+    pub fn max_tickets(&self) -> i32 {
+        max_tickets_for_poi_type(self.poi_type.as_str())
+    }
+
+    /// Vanilla `PoiRecord.hasSpace` - `freeTickets > 0`. Used to *acquire* a
+    /// POI (e.g. claim a bed): `PoiManager.Occupancy.HAS_SPACE`.
+    #[must_use]
+    pub const fn has_space(&self) -> bool {
+        self.free_tickets > 0
+    }
+
+    /// Vanilla `PoiRecord.isOccupied` - `freeTickets != maxTickets`. Used for
+    /// village-density checks (is this POI actually claimed by someone, not
+    /// merely present): `PoiManager.Occupancy.IS_OCCUPIED`. This is a
+    /// *different* filter than `has_space` and must not be conflated with it:
+    /// a meeting-point POI (`maxTickets = 32`) can simultaneously have space
+    /// (`freeTickets > 0`) and be occupied (`freeTickets != 32`).
+    #[must_use]
+    pub fn is_occupied(&self) -> bool {
+        self.free_tickets != self.max_tickets()
+    }
+
+    /// Vanilla `PoiRecord.acquireTicket`. Returns `false` (and leaves
+    /// `free_tickets` unchanged) if the POI has no free ticket to give.
+    pub const fn acquire_ticket(&mut self) -> bool {
+        if self.free_tickets <= 0 {
+            return false;
+        }
+        self.free_tickets -= 1;
+        true
+    }
+
+    /// Vanilla `PoiRecord.releaseTicket`. Returns `false` (and leaves
+    /// `free_tickets` unchanged) if the POI is already at full capacity.
+    pub fn release_ticket(&mut self) -> bool {
+        if self.free_tickets >= self.max_tickets() {
+            return false;
+        }
+        self.free_tickets += 1;
+        true
     }
 }
 
@@ -416,12 +483,14 @@ impl PoiStorage {
     pub fn add(&mut self, pos: BlockPos, poi_type: &str) {
         let (rx, rz) = Self::region_coords(&pos);
         let region = self.get_or_load_region(rx, rz);
+        // Vanilla `new PoiRecord(pos, type, setDirty)`: a freshly-registered
+        // POI starts fully unclaimed, i.e. `free_tickets == max_tickets`.
         region.add(PoiEntry {
             x: pos.0.x,
             y: pos.0.y,
             z: pos.0.z,
             poi_type: poi_type.to_string(),
-            free_tickets: 0,
+            free_tickets: max_tickets_for_poi_type(poi_type),
         });
     }
 
@@ -436,13 +505,30 @@ impl PoiStorage {
     }
 
     /// Get all POI positions within a square radius (for portal search)
-    #[expect(clippy::similar_names)]
     pub fn get_in_square(
         &mut self,
         center: BlockPos,
         radius: i32,
         poi_type: Option<&str>,
     ) -> Vec<BlockPos> {
+        self.get_in_square_with_tickets(center, radius, poi_type)
+            .into_iter()
+            .map(|(pos, _free, _max)| pos)
+            .collect()
+    }
+
+    /// Like `get_in_square`, but also returns each candidate's
+    /// `(free_tickets, max_tickets)` so callers can apply vanilla's
+    /// `PoiManager.Occupancy` filter (`HAS_SPACE` vs `IS_OCCUPIED` - see
+    /// `PoiEntry::has_space`/`is_occupied`) without this crate needing to
+    /// know about that enum.
+    #[expect(clippy::similar_names)]
+    pub fn get_in_square_with_tickets(
+        &mut self,
+        center: BlockPos,
+        radius: i32,
+        poi_type: Option<&str>,
+    ) -> Vec<(BlockPos, i32, i32)> {
         let min_x = center.0.x - radius;
         let max_x = center.0.x + radius;
         let min_z = center.0.z - radius;
@@ -469,13 +555,51 @@ impl PoiStorage {
                     let dx = (entry.x - center.0.x).abs();
                     let dz = (entry.z - center.0.z).abs();
                     if dx <= radius && dz <= radius {
-                        results.push(entry.pos());
+                        results.push((entry.pos(), entry.free_tickets, entry.max_tickets()));
                     }
                 }
             }
         }
 
         results
+    }
+
+    /// Vanilla `PoiRecord.acquireTicket`, driven by `PoiManager.take`
+    /// (the primitive behind `AcquirePoi`'s `findAllClosestFirstWithType` +
+    /// take): atomically claims one free ticket at `pos`. Returns `false`
+    /// if there is no POI at `pos` or it has no free ticket
+    /// (`Occupancy.HAS_SPACE` already false).
+    pub fn acquire_ticket(&mut self, pos: &BlockPos) -> bool {
+        let (rx, rz) = Self::region_coords(pos);
+        let region = self.get_or_load_region(rx, rz);
+        let Some(entry) = region.entries.get_mut(&PoiRegion::pos_key(pos)) else {
+            return false;
+        };
+        if !entry.acquire_ticket() {
+            return false;
+        }
+        region.dirty = true;
+        region.dirty_chunks.insert((pos.0.x >> 4, pos.0.z >> 4));
+        true
+    }
+
+    /// Vanilla `PoiRecord.releaseTicket`, driven by `PoiManager.release`
+    /// (called from `Villager.releasePoi`/`ValidateNearbyPoi` when a
+    /// villager wakes up, its claimed bed is destroyed, etc). Returns
+    /// `false` if there is no POI at `pos` or it is already at full
+    /// capacity (nothing was claimed).
+    pub fn release_ticket(&mut self, pos: &BlockPos) -> bool {
+        let (rx, rz) = Self::region_coords(pos);
+        let region = self.get_or_load_region(rx, rz);
+        let Some(entry) = region.entries.get_mut(&PoiRegion::pos_key(pos)) else {
+            return false;
+        };
+        if !entry.release_ticket() {
+            return false;
+        }
+        region.dirty = true;
+        region.dirty_chunks.insert((pos.0.x >> 4, pos.0.z >> 4));
+        true
     }
 
     pub fn save_all(&mut self) -> std::io::Result<()> {
@@ -523,6 +647,46 @@ mod tests {
     }
 
     #[test]
+    fn max_tickets_matches_vanilla_poi_types_bootstrap() {
+        assert_eq!(max_tickets_for_poi_type("minecraft:home"), 1);
+        assert_eq!(max_tickets_for_poi_type("minecraft:job_site"), 1);
+        assert_eq!(max_tickets_for_poi_type("minecraft:meeting"), 32);
+        assert_eq!(max_tickets_for_poi_type(POI_TYPE_NETHER_PORTAL), 0);
+        assert_eq!(max_tickets_for_poi_type("minecraft:unknown"), 0);
+    }
+
+    #[test]
+    fn poi_entry_ticket_lifecycle() {
+        let mut entry = PoiEntry {
+            x: 0,
+            y: 64,
+            z: 0,
+            poi_type: "minecraft:home".to_string(),
+            free_tickets: max_tickets_for_poi_type("minecraft:home"),
+        };
+
+        // Fresh, unclaimed bed: space to claim, not occupied.
+        assert!(entry.has_space());
+        assert!(!entry.is_occupied());
+
+        // A villager claims it.
+        assert!(entry.acquire_ticket());
+        assert!(!entry.has_space());
+        assert!(entry.is_occupied());
+
+        // No free ticket left for a second claimant.
+        assert!(!entry.acquire_ticket());
+
+        // The villager wakes/dies/bed is destroyed: release it.
+        assert!(entry.release_ticket());
+        assert!(entry.has_space());
+        assert!(!entry.is_occupied());
+
+        // Already back at full capacity: nothing more to release.
+        assert!(!entry.release_ticket());
+    }
+
+    #[test]
     fn poi_region() {
         let mut region = PoiRegion::new();
         region.add(PoiEntry::new_portal(BlockPos(Vector3::new(100, 64, 200))));
@@ -567,6 +731,42 @@ mod tests {
             Some(POI_TYPE_NETHER_PORTAL),
         );
         assert_eq!(results2.len(), 2);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn poi_storage_acquire_and_release_ticket() {
+        let mut storage =
+            PoiStorage::new(std::env::temp_dir().join("pumpkin_poi_ticket_test_unused"));
+        let bed = BlockPos(Vector3::new(50, 70, 50));
+        storage.add(bed, "minecraft:home");
+
+        // No POI at an empty position: nothing to acquire/release.
+        let empty = BlockPos(Vector3::new(0, 0, 0));
+        assert!(!storage.acquire_ticket(&empty));
+        assert!(!storage.release_ticket(&empty));
+
+        assert!(storage.acquire_ticket(&bed));
+        assert!(!storage.acquire_ticket(&bed)); // already claimed
+        assert!(storage.release_ticket(&bed));
+        assert!(!storage.release_ticket(&bed)); // already back to full
+    }
+
+    #[test]
+    fn poi_claim_persists_across_reload() {
+        let dir = std::env::temp_dir().join("pumpkin_poi_claim_persist_test");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let mut storage = PoiStorage::new(dir.join("poi"));
+        let bed = BlockPos(Vector3::new(20, 70, 20));
+        storage.add(bed, "minecraft:home");
+        assert!(storage.acquire_ticket(&bed));
+        storage.save_all().unwrap();
+
+        let mut reloaded = PoiStorage::new(dir.join("poi"));
+        let entries = reloaded.get_in_square_with_tickets(bed, 0, Some("minecraft:home"));
+        assert_eq!(entries, vec![(bed, 0, 1)]);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
