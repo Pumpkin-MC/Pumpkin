@@ -153,30 +153,38 @@ impl Worldborder {
         world.broadcast_packet_all(&CSetBorderWarningDistance::new(self.warning_blocks.into()));
     }
 
-    #[must_use]
-    pub fn contains(&self, x: f64, z: f64) -> bool {
+    /// `(min_x, max_x, min_z, max_z)`, matching vanilla's `BorderExtent` getters:
+    /// the half-diameter offsets from the center, each clamped to
+    /// `±absoluteMaxSize` (`WorldBorder.StaticBorderExtent.updateBox`).
+    fn bounds(&self) -> (f64, f64, f64, f64) {
         let half = self.current_diameter / 2.0;
-        let min_x = self.center_x - half;
-        let max_x = self.center_x + half;
-        let min_z = self.center_z - half;
-        let max_z = self.center_z + half;
-        x >= min_x && x < max_x && z >= min_z && z < max_z
+        let limit = f64::from(self.portal_teleport_boundary);
+        (
+            clamp(self.center_x - half, -limit, limit),
+            clamp(self.center_x + half, -limit, limit),
+            clamp(self.center_z - half, -limit, limit),
+            clamp(self.center_z + half, -limit, limit),
+        )
     }
 
     #[must_use]
+    pub fn contains(&self, x: f64, z: f64) -> bool {
+        let (min_x, max_x, min_z, max_z) = self.bounds();
+        x >= min_x && x < max_x && z >= min_z && z < max_z
+    }
+
+    /// Vanilla `WorldBorder.isWithinBounds(BlockPos)`, which tests the single
+    /// `(getX(), getZ())` pair. The two-corner form belongs to the `ChunkPos`
+    /// overload.
+    #[must_use]
     pub fn contains_block(&self, x: i32, z: i32) -> bool {
         self.contains(f64::from(x), f64::from(z))
-            && self.contains(f64::from(x + 1), f64::from(z + 1))
     }
 
     /// Signed distance from `(x, z)` to the nearest border edge; negative when outside.
     #[must_use]
     pub fn distance_to_border(&self, x: f64, z: f64) -> f64 {
-        let half = self.current_diameter / 2.0;
-        let min_x = self.center_x - half;
-        let max_x = self.center_x + half;
-        let min_z = self.center_z - half;
-        let max_z = self.center_z + half;
+        let (min_x, max_x, min_z, max_z) = self.bounds();
 
         let from_west = x - min_x;
         let from_east = max_x - x;
@@ -186,13 +194,61 @@ impl Worldborder {
         from_west.min(from_east).min(from_north).min(from_south)
     }
 
+    /// Vanilla `WorldBorder.clampToBounds`: clamp into
+    /// `[min, max - 1.0E-5]` on each axis, then `BlockPos.containing` (floor).
     #[must_use]
     pub fn clamp_block(&self, x: i32, z: i32) -> (i32, i32) {
-        let half = self.current_diameter / 2.0;
-        let min_x = (self.center_x - half).floor() as i32 - 1;
-        let max_x = (self.center_x + half).floor() as i32 - 1;
-        let min_z = (self.center_z - half).floor() as i32;
-        let max_z = (self.center_z + half).floor() as i32 - 1;
-        (x.clamp(min_x, max_x), z.clamp(min_z, max_z))
+        let (min_x, max_x, min_z, max_z) = self.bounds();
+        (
+            clamp(f64::from(x), min_x, max_x - 1.0e-5).floor() as i32,
+            clamp(f64::from(z), min_z, max_z - 1.0e-5).floor() as i32,
+        )
+    }
+}
+
+/// `Mth.clamp`: the lower bound wins when the range is inverted, unlike
+/// `f64::clamp`, which panics.
+fn clamp(value: f64, min: f64, max: f64) -> f64 {
+    if value < min {
+        min
+    } else if value > max {
+        max
+    } else {
+        value
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Worldborder;
+
+    fn border(center: f64, diameter: f64) -> Worldborder {
+        Worldborder::new(center, center, diameter, 0, 5, 300)
+    }
+
+    #[test]
+    fn contains_block_tests_a_single_point() {
+        let border = border(0.0, 16.0);
+        // The border spans [-8, 8); block 7 is the last one inside.
+        assert!(border.contains_block(7, 7));
+        assert!(!border.contains_block(8, 8));
+        assert!(border.contains_block(-8, -8));
+    }
+
+    #[test]
+    fn clamp_block_matches_clamp_to_bounds() {
+        let border = border(0.0, 16.0);
+        assert_eq!(border.clamp_block(3, -3), (3, -3));
+        // floor(clamp(100, -8, 8 - 1e-5)) == 7
+        assert_eq!(border.clamp_block(100, 100), (7, 7));
+        assert_eq!(border.clamp_block(-100, -100), (-8, -8));
+    }
+
+    #[test]
+    fn bounds_are_clamped_to_the_absolute_max_size() {
+        let border = border(2.0e7, 3.0e7);
+        // max = 2e7 + 1.5e7 = 3.5e7, clamped down to 29_999_984.
+        assert!(!border.contains(3.0e7, 2.0e7));
+        assert!(border.contains(2.999_998_3E7, 2.0e7));
     }
 }
