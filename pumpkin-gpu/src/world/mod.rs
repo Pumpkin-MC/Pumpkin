@@ -7,6 +7,7 @@
 //! It also provides a CPU-side reference interpreter used by tests to verify
 //! GPU output within f32 tolerance.
 
+pub mod chunk;
 pub mod gpu;
 pub mod graph;
 pub mod light;
