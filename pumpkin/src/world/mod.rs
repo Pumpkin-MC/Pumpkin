@@ -161,6 +161,7 @@ pub mod end_podium;
 pub mod natural_spawner;
 pub mod raid;
 pub mod scoreboard;
+pub mod spawn_finder;
 pub mod village_poi;
 pub mod weather;
 
@@ -3705,23 +3706,13 @@ impl World {
                     .send_packet_now(&CGameEvent::new(GameEvent::NoRespawnBlockAvailable, 0.0))
                     .await;
 
-                // FIXME: This spawn position calculation is incorrect. Should use vanilla's
-                // proper spawn position calculation (see #1381). The y-level calculation
-                // needs to account for spawn radius and find a safe spawn position.
-                let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
-                self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-                let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
-
-                (
-                    Vector3::new(
-                        f64::from(spawn_x) + 0.5,
-                        (top + 1).into(),
-                        f64::from(spawn_z) + 0.5,
-                    ),
-                    spawn_yaw,
-                    spawn_pitch,
-                    self.dimension.clone(),
+                let spawn_pos = spawn_finder::find_safe_world_spawn(
+                    self,
+                    BlockPos(Vector3::new(spawn_x, self.dimension.min_y, spawn_z)),
                 )
+                .await;
+
+                (spawn_pos, spawn_yaw, spawn_pitch, self.dimension.clone())
             };
 
         // Candidate destination world for a cross-dimension respawn.
@@ -3813,16 +3804,11 @@ impl World {
         let (target_world, position, yaw, pitch) = if let Some(ref new_world) = resolved_world {
             (new_world.clone(), position, yaw, pitch)
         } else if respawn_dimension != self.dimension {
-            // FIXME: This spawn position calculation is incorrect. Should use vanilla's
-            // proper spawn position calculation (see #1381).
-            let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
-            let fallback_pos = Vector3::new(
-                f64::from(spawn_x) + 0.5,
-                (top + 1).into(),
-                f64::from(spawn_z) + 0.5,
-            );
+            let fallback_pos = spawn_finder::find_safe_world_spawn(
+                self,
+                BlockPos(Vector3::new(spawn_x, self.dimension.min_y, spawn_z)),
+            )
+            .await;
             (self.clone(), fallback_pos, spawn_yaw, spawn_pitch)
         } else {
             (self.clone(), position, yaw, pitch)
