@@ -216,17 +216,26 @@ impl<'a> ContextChain<'a> {
     #[must_use]
     pub fn try_flatten(root: &CommandContext<'a>) -> Option<Self> {
         let mut modifiers = Vec::new();
-        let mut current = root;
+        let mut current = Arc::new(root.clone());
 
         loop {
-            if let Some(child) = current.get_child() {
-                modifiers.push(child.clone());
-                current = child;
-            } else {
-                return current
-                    .command
-                    .is_some()
-                    .then(|| Self::new(modifiers, Arc::new(current.clone())));
+            // A context holds the modifier of the node that redirected away from it,
+            // so it is the *parent* of each link that carries the modifier to run,
+            // never the child. Pushing the child here would skip the first modifier
+            // (dropping conditions such as `execute if block`) and would instead run
+            // the trailing executable context's own modifier.
+            let child = current.get_child().cloned();
+            match child {
+                Some(child) => {
+                    modifiers.push(current);
+                    current = child;
+                }
+                None => {
+                    return current
+                        .command
+                        .is_some()
+                        .then(|| Self::new(modifiers, current));
+                }
             }
         }
     }
@@ -245,18 +254,22 @@ impl<'a> ContextChain<'a> {
         }
 
         let context_to_use = modifier.with_source(source.clone());
-        let mut result = source_modifier.sources(&context_to_use).await;
-
-        if result.is_err() {
-            result_consumer
-                .on_command_completion(&context_to_use, ReturnValue::Failure)
-                .await;
-            if forked_mode {
-                result = Ok(vec![]);
+        match source_modifier.sources(&context_to_use).await {
+            Ok(sources) => {
+                if sources.is_empty() {
+                    result_consumer
+                        .on_command_completion(&context_to_use, ReturnValue::Failure)
+                        .await;
+                }
+                Ok(sources)
+            }
+            Err(error) => {
+                result_consumer
+                    .on_command_completion(&context_to_use, ReturnValue::Failure)
+                    .await;
+                if forked_mode { Ok(vec![]) } else { Err(error) }
             }
         }
-
-        result
     }
 
     /// Runs the given executable, returning an [`i32`] on success.
@@ -547,23 +560,38 @@ impl<'a> CommandContextBuilder<'a> {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
+    use std::pin::Pin;
+    use std::sync::{Arc, Mutex};
 
     use crate::command::argument_builder::{ArgumentBuilder, CommandArgumentBuilder};
     use crate::command::context::command_context::{
         CommandContext, CommandContextBuilder, ContextChain, ParsedArgument, Stage,
     };
-    use crate::command::context::command_source::CommandSource;
+    use crate::command::context::command_source::{
+        CommandSource, ResultValueTaker, ReturnValue, ReturnValueCallable,
+    };
     use crate::command::context::string_range::StringRange;
     use crate::command::errors::command_syntax_error::CommandSyntaxError;
     use crate::command::node::dispatcher::{CommandDispatcher, EmptyResultConsumer};
     use crate::command::node::tree::ROOT_NODE_ID;
-    use crate::command::node::{CommandExecutor, CommandExecutorResult, Redirection};
+    use crate::command::node::{
+        CommandExecutor, CommandExecutorResult, RedirectModifier, Redirection,
+    };
 
     struct TenExecutor;
     impl CommandExecutor for TenExecutor {
         fn execute<'a>(&'a self, _context: &'a CommandContext) -> CommandExecutorResult<'a> {
             Box::pin(async move { Ok(10) })
+        }
+    }
+
+    struct RecordingCallback(Arc<Mutex<Vec<ReturnValue>>>);
+
+    impl ReturnValueCallable for RecordingCallback {
+        fn call(&self, value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+            Box::pin(async move {
+                self.0.lock().unwrap().push(value);
+            })
         }
     }
 
@@ -649,6 +677,31 @@ mod test {
             chain.execute_all(&source, &EmptyResultConsumer).await,
             Ok(10)
         );
+    }
+
+    #[tokio::test]
+    async fn empty_modifier_reports_command_failure() {
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher.register(
+            CommandArgumentBuilder::new("condition", "A failed condition").redirect_with_modifier(
+                Redirection::Root,
+                RedirectModifier::Custom(Arc::new(|_| Box::pin(async { Ok(vec![]) }))),
+            ),
+        );
+        dispatcher
+            .register(CommandArgumentBuilder::new("foo", "A test command").executes(TenExecutor));
+
+        let recorded = Arc::new(Mutex::new(Vec::new()));
+        let source =
+            CommandSource::dummy().with_command_result_taker(ResultValueTaker(vec![Arc::new(
+                RecordingCallback(recorded.clone()),
+            )]));
+
+        assert_eq!(
+            dispatcher.execute_input("condition foo", &source).await,
+            Ok(0)
+        );
+        assert_eq!(*recorded.lock().unwrap(), vec![ReturnValue::Failure]);
     }
 
     #[tokio::test]
