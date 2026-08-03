@@ -110,13 +110,13 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
         Chunk::Level(c) => {
             let light_engine = c.light_engine.lock().unwrap();
             if section_y >= light_engine.sky_light.len() {
-                return 0;
+                return 15;
             }
             light_engine.sky_light[section_y].get(x, y, z)
         }
         Chunk::Proto(c) => {
             if section_y >= c.light.sky_light.len() {
-                return 0;
+                return 15;
             }
             c.light.sky_light[section_y].get(x, y, z)
         }
