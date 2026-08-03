@@ -13,7 +13,7 @@ use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player
 
 pub struct ExperienceOrbEntity {
     entity: Entity,
-    amount: u32,
+    amount: AtomicU32,
     orb_age: AtomicU32,
     count: AtomicU32,
 }
@@ -23,7 +23,7 @@ impl ExperienceOrbEntity {
         entity.yaw.store(rand::random::<f32>() * 360.0);
         Self {
             entity,
-            amount,
+            amount: AtomicU32::new(amount),
             orb_age: AtomicU32::new(0),
             count: AtomicU32::new(1),
         }
@@ -79,7 +79,7 @@ impl ExperienceOrbEntity {
             if std::ptr::eq(self, other_orb) || other_orb.entity.is_removed() {
                 continue;
             }
-            if other_orb.amount != self.amount
+            if other_orb.amount.load(Ordering::Relaxed) != self.amount.load(Ordering::Relaxed)
                 || other_orb
                     .entity
                     .entity_id
@@ -99,7 +99,39 @@ impl ExperienceOrbEntity {
     }
 }
 
-impl NBTStorage for ExperienceOrbEntity {}
+impl NBTStorage for ExperienceOrbEntity {
+    fn write_nbt<'a>(
+        &'a self,
+        nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
+    ) -> super::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            // Vanilla `ExperienceOrb.addAdditionalSaveData`. `Health` is not tracked here.
+            nbt.put_short("Age", self.orb_age.load(Ordering::Relaxed) as i16);
+            nbt.put_short("Value", self.amount.load(Ordering::Relaxed) as i16);
+            nbt.put_int("Count", self.count.load(Ordering::Relaxed) as i32);
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(
+        &'a self,
+        nbt: &'a pumpkin_nbt::compound::NbtCompound,
+    ) -> super::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.orb_age.store(
+                nbt.get_short("Age").unwrap_or(0).max(0) as u32,
+                Ordering::Relaxed,
+            );
+            self.amount.store(
+                nbt.get_short("Value").unwrap_or(0).max(0) as u32,
+                Ordering::Relaxed,
+            );
+            self.count.store(
+                nbt.get_int("Count").unwrap_or(1).max(1) as u32,
+                Ordering::Relaxed,
+            );
+        })
+    }
+}
 
 impl EntityBase for ExperienceOrbEntity {
     fn tick<'a>(
@@ -170,7 +202,9 @@ impl EntityBase for ExperienceOrbEntity {
                 if *delay == 0 {
                     *delay = 2;
                     player.living_entity.pickup(&self.entity, 1);
-                    let remaining = player.apply_mending_from_xp(self.amount as i32).await;
+                    let remaining = player
+                        .apply_mending_from_xp(self.amount.load(Ordering::Relaxed) as i32)
+                        .await;
                     if remaining > 0 {
                         player.add_experience_points(remaining).await;
                     }
