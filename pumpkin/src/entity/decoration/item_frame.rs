@@ -3,12 +3,18 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
 };
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::game_event::GameEvent;
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 use tokio::sync::Mutex;
 
 /// An item frame or glow item frame.
@@ -64,6 +70,56 @@ impl ItemFrameEntity {
         } else {
             self.rotation.load(Ordering::Relaxed) % 8 + 1
         }
+    }
+
+    /// Vanilla `ItemFrame.dropItem(level, causedBy, withFrame)`. Clears the
+    /// displayed item unconditionally; whether anything actually spawns in
+    /// the world depends on the `entity_drops` game rule and whether the
+    /// causer is a creative-mode player (vanilla: `hasInfiniteMaterials`).
+    async fn drop_item(&self, causer: Option<&dyn EntityBase>, with_frame: bool) {
+        if self.fixed.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let item_stack =
+            std::mem::replace(&mut *self.item_stack.lock().await, ItemStack::EMPTY.clone());
+
+        let world = self.entity.world.load();
+        if !world.level_info.load().game_rules.entity_drops {
+            return;
+        }
+        let creative_causer = causer
+            .and_then(EntityBase::get_player)
+            .is_some_and(|player| player.gamemode.load() == GameMode::Creative);
+        if creative_causer {
+            return;
+        }
+
+        let pos = self.entity.block_pos.load();
+        if with_frame {
+            world
+                .drop_stack(&pos, ItemStack::new(1, &Item::ITEM_FRAME))
+                .await;
+        }
+        if !item_stack.is_empty() && rand::rng().random::<f32>() < self.item_drop_chance.load() {
+            world.drop_stack(&pos, item_stack).await;
+        }
+    }
+
+    /// Vanilla fires `GameEvent.BLOCK_CHANGE` from both the item-pop and the
+    /// full-break paths of `ItemFrame.hurtServer`/`dropItem`. No `Arc<dyn
+    /// EntityBase>` is available for the causer here (only `&dyn
+    /// EntityBase`), so this uses `GameEventContext::none()` like other
+    /// position-only emission sites this session -- only source-entity-based
+    /// listener suppression loses fidelity, not the emission itself.
+    async fn emit_block_change(&self) {
+        emit_game_event(
+            &self.entity.world.load(),
+            GameEvent::BlockChange,
+            self.entity.pos.load(),
+            GameEventContext::none(),
+        )
+        .await;
     }
 }
 
@@ -128,14 +184,56 @@ impl EntityBase for ItemFrameEntity {
         &'a self,
         _caller: &'a dyn EntityBase,
         _amount: f32,
-        _damage_type: DamageType,
+        damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
+        source: Option<&'a dyn EntityBase>,
+        cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async {
-            // TODO: vanilla pops the displayed item first and only removes the
-            // frame itself when hit while empty; both should drop their items.
+        Box::pin(async move {
+            let causer = cause.or(source);
+
+            // ItemFrame.canHurtWhenFixed: a fixed frame can only be hit by
+            // damage that bypasses invulnerability, or a creative player.
+            let can_hurt_when_fixed = damage_type
+                .has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
+                || causer
+                    .and_then(EntityBase::get_player)
+                    .is_some_and(|player| player.gamemode.load() == GameMode::Creative);
+            if self.fixed.load(Ordering::Relaxed) && !can_hurt_when_fixed {
+                return false;
+            }
+
+            if !self.fixed.load(Ordering::Relaxed)
+                && self.entity.is_invulnerable_to(&damage_type).await
+            {
+                return false;
+            }
+
+            // ItemFrame.shouldDamageDropItem: non-explosion damage against a
+            // frame currently holding an item only pops the item -- the frame
+            // itself survives.
+            let holds_item = !self.item_stack.lock().await.is_empty();
+            let is_explosion = damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION);
+            if !self.fixed.load(Ordering::Relaxed) && !is_explosion && holds_item {
+                self.drop_item(causer, false).await;
+                self.emit_block_change().await;
+                self.entity.world.load().play_sound(
+                    pumpkin_data::sound::Sound::EntityItemFrameRemoveItem,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    &self.entity.pos.load(),
+                );
+                return true;
+            }
+
+            // Otherwise the frame itself breaks: drop the frame item (and the
+            // displayed item, if any), matching ItemFrame.dropItem.
+            self.drop_item(causer, true).await;
+            self.emit_block_change().await;
+            self.entity.world.load().play_sound(
+                pumpkin_data::sound::Sound::EntityItemFrameBreak,
+                pumpkin_data::sound::SoundCategory::Blocks,
+                &self.entity.pos.load(),
+            );
             self.entity.remove().await;
             true
         })
