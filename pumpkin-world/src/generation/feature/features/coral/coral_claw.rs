@@ -5,18 +5,7 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
-use super::CoralFeature;
-
-/// `Util.shuffle`: Fisher-Yates from the end, `random.nextInt(i)` per swap. Must match this
-/// exact call order (not e.g. shuffling from the front) to stay seed-reproducible with vanilla.
-fn shuffle<T>(slice: &mut [T], random: &mut RandomGenerator) {
-    let mut i = slice.len();
-    while i > 1 {
-        let swap_to = random.next_bounded_i32(i as i32) as usize;
-        slice.swap(i - 1, swap_to);
-        i -= 1;
-    }
-}
+use super::{CoralFeature, shuffle};
 
 pub struct CoralClawFeature;
 

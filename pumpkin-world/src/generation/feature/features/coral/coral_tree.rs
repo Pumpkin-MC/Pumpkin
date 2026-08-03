@@ -5,7 +5,7 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
-use super::CoralFeature;
+use super::{CoralFeature, shuffle};
 
 pub struct CoralTreeFeature;
 
@@ -23,18 +23,22 @@ impl CoralTreeFeature {
         // First lets get a random coral
         let block = CoralFeature::get_random_tag_entry(tag::Block::MINECRAFT_CORAL_BLOCKS, random);
         let mut pos = pos;
-        let i = random.next_bounded_i32(3) + 1;
-        for _ in 0..i {
+        let trunk_height = random.next_bounded_i32(3) + 1;
+        for _ in 0..trunk_height {
             if !CoralFeature::generate_coral_piece(chunk, block_registry, random, block, pos) {
                 return true;
             }
             pos = pos.up();
         }
-        let i = random.next_bounded_i32(3) + 2;
+        // CoralTreeFeature.placeFeature: every branch starts over from the top of the trunk --
+        // branches radiate from one shared point, they don't chain off each other.
+        let trunk_top_pos = pos;
+        let branch_count = random.next_bounded_i32(3) + 2;
 
-        // TODO: Shuffle
-        let directions = BlockDirection::horizontal().into_iter().take(i as usize);
-        for dir in directions {
+        let mut directions = BlockDirection::horizontal();
+        shuffle(&mut directions, random);
+        for dir in &directions[..branch_count as usize] {
+            pos = trunk_top_pos;
             pos = pos.offset(dir.to_offset());
             let times = random.next_bounded_i32(5) + 2;
             let mut m = 0;
