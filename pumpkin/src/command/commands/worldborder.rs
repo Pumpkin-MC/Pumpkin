@@ -21,8 +21,37 @@ const DESCRIPTION: &str = "Worldborder command.";
 
 const NOTHING_CHANGED_EXCEPTION: &str = "commands.worldborder.set.failed.nochange";
 
+/// Vanilla `WorldBorder.MAX_SIZE` (`5.999997E7F`, i.e. the float rounds to this).
+const MAX_SIZE: f64 = 5.999_996_8E7;
+/// Vanilla `WorldBorder.MAX_CENTER_COORDINATE`.
+const MAX_CENTER_COORDINATE: f64 = 2.999_998_4E7;
+
+// `WorldBorderCommand` registers `distance` as `doubleArg(-MAX_SIZE, MAX_SIZE)` for
+// both `set` and `add`; the resulting size is range-checked in `setSize` instead.
 const fn distance_consumer() -> BoundedNumArgumentConsumer<f64> {
-    BoundedNumArgumentConsumer::new().min(0.0).name("distance")
+    BoundedNumArgumentConsumer::new()
+        .min(-MAX_SIZE)
+        .max(MAX_SIZE)
+        .name("distance")
+}
+
+/// Vanilla `WorldBorderCommand.setSize`'s `ERROR_TOO_SMALL` / `ERROR_TOO_BIG` checks.
+fn check_size(distance: f64) -> Result<(), CommandError> {
+    if distance < 1.0 {
+        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+            "commands.worldborder.set.failed.small",
+            "commands.worldborder.set.failed.small",
+            [],
+        )));
+    }
+    if distance > MAX_SIZE {
+        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+            "commands.worldborder.set.failed.big",
+            "commands.worldborder.set.failed.big",
+            [TextComponent::text(format!("{MAX_SIZE:.1}"))],
+        )));
+    }
+    Ok(())
 }
 
 const fn time_consumer() -> BoundedNumArgumentConsumer<i32> {
@@ -113,6 +142,7 @@ impl CommandExecutor for SetExecutor {
                     [],
                 )));
             }
+            check_size(distance)?;
 
             sender
                 .send_message(TextComponent::translate_cross(
@@ -155,6 +185,8 @@ impl CommandExecutor for SetTimeExecutor {
                     distance_consumer().default_name()
                 ))));
             };
+
+            check_size(distance)?;
 
             match distance.total_cmp(&border.size()) {
                 std::cmp::Ordering::Equal => {
@@ -229,6 +261,7 @@ impl CommandExecutor for AddExecutor {
             }
 
             let distance = border.size() + distance_add;
+            check_size(distance)?;
 
             let dist = format!("{distance:.1}");
             sender
@@ -271,6 +304,8 @@ impl CommandExecutor for AddTimeExecutor {
             };
 
             let distance = distance_add + border.size();
+
+            check_size(distance)?;
 
             match distance.total_cmp(&border.size()) {
                 std::cmp::Ordering::Equal => {
@@ -329,6 +364,23 @@ impl CommandExecutor for CenterExecutor {
             let mut border = world.worldborder.lock().await;
 
             let Vector2 { x, y } = Position2DArgumentConsumer.find_arg_default_name(args)?;
+
+            if (x - border.center_x).abs() < f64::EPSILON
+                && (y - border.center_z).abs() < f64::EPSILON
+            {
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.worldborder.center.failed",
+                    "commands.worldborder.center.failed",
+                    [],
+                )));
+            }
+            if x.abs() > MAX_CENTER_COORDINATE || y.abs() > MAX_CENTER_COORDINATE {
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.worldborder.set.failed.far",
+                    "commands.worldborder.set.failed.far",
+                    [TextComponent::text(format!("{MAX_CENTER_COORDINATE:.1}"))],
+                )));
+            }
 
             sender
                 .send_message(TextComponent::translate_cross(
