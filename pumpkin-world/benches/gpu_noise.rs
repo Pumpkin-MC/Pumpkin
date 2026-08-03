@@ -12,8 +12,16 @@ mod bench {
         GpuNoiseEngine, NoiseAdapter, NoiseParams, density_field_cpu, density_field_cpu_parallel,
     };
 
-    const HEIGHT: u32 = 384;
-    const CHUNK_COUNTS: [u32; 5] = [1, 3, 5, 7, 9];
+    const REGIONS: [(&str, u32, u32); 8] = [
+        ("section", 1, 16),
+        ("chunk/64", 1, 64),
+        ("chunk/128", 1, 128),
+        ("chunk", 1, 384),
+        ("3x3", 3, 384),
+        ("5x5", 5, 384),
+        ("7x7", 7, 384),
+        ("9x9", 9, 384),
+    ];
     const OCTAVES: [u32; 3] = [2, 6, 12];
     const REPS: usize = 5;
 
@@ -29,10 +37,10 @@ mod bench {
         times.iter().copied().min().map_or(0.0, ms)
     }
 
-    const fn params(chunks: u32, octaves: u32) -> NoiseParams {
+    const fn params(chunks: u32, height: u32, octaves: u32) -> NoiseParams {
         NoiseParams {
             size_x: chunks * 16,
-            size_y: HEIGHT,
+            size_y: height,
             size_z: chunks * 16,
             octaves,
             seed: 0x5EED,
@@ -42,6 +50,7 @@ mod bench {
     }
 
     struct Row {
+        region: String,
         chunks: u32,
         voxels: usize,
         octaves: u32,
@@ -55,7 +64,8 @@ mod bench {
     impl Row {
         fn to_json(&self) -> String {
             format!(
-                r#"{{"chunks":{},"voxels":{},"octaves":{},"backend":"{}","device":"{}","mean_ms":{:.4},"min_ms":{:.4}{}}}"#,
+                r#"{{"region":"{}","chunks":{},"voxels":{},"octaves":{},"backend":"{}","device":"{}","mean_ms":{:.4},"min_ms":{:.4}{}}}"#,
+                self.region,
                 self.chunks,
                 self.voxels,
                 self.octaves,
@@ -88,11 +98,12 @@ mod bench {
         let mut rows: Vec<Row> = Vec::new();
 
         for &octaves in &OCTAVES {
-            for &chunks in &CHUNK_COUNTS {
-                let p = params(chunks, octaves);
+            for &(region, chunks, height) in &REGIONS {
+                let p = params(chunks, height, octaves);
                 let voxels = p.total();
                 println!(
-                    "\n=== {chunks}x{chunks} chunks | {voxels} voxels | {octaves} octaves ==="
+                    "\n=== {region} | {} x {height} x {} = {voxels} voxels | {octaves} octaves ===",
+                    p.size_x, p.size_z
                 );
 
                 let reference = density_field_cpu(&p);
@@ -109,6 +120,7 @@ mod bench {
                     min_ms(&serial)
                 );
                 rows.push(Row {
+                    region: region.to_owned(),
                     chunks,
                     voxels,
                     octaves,
@@ -132,6 +144,7 @@ mod bench {
                     min_ms(&parallel)
                 );
                 rows.push(Row {
+                    region: region.to_owned(),
                     chunks,
                     voxels,
                     octaves,
@@ -183,6 +196,7 @@ mod bench {
                         frac * 100.0
                     );
                     rows.push(Row {
+                        region: region.to_owned(),
                         chunks,
                         voxels,
                         octaves,

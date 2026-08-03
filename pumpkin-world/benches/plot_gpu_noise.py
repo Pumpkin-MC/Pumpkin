@@ -25,27 +25,40 @@ LABELS = {
     "dgpu": "NVIDIA dGPU",
 }
 ORDER = ["cpu-serial", "cpu-rayon", "igpu", "dgpu"]
+STYLES = {2: ":", 6: "-", 12: "--"}
+PANEL_OCTAVES = 6
 
 rows = json.load(open(sys.argv[1]))
 out = sys.argv[2]
 
-PANEL_OCTAVES = 6
+
+def voxels_of(region):
+    return next(r["voxels"] for r in rows if r["region"] == region)
+
+
+regions = []
+for r in rows:
+    if r["region"] not in regions:
+        regions.append(r["region"])
+regions.sort(key=voxels_of)
 octaves_all = sorted({r["octaves"] for r in rows})
-sizes = sorted({r["chunks"] for r in rows})
 
 
-def series(backend, octaves):
-    got = [r for r in rows if r["backend"] == backend and r["octaves"] == octaves]
-    got.sort(key=lambda r: r["voxels"])
-    return got
+def pick(backend, octaves, region):
+    for r in rows:
+        if r["backend"] == backend and r["octaves"] == octaves and r["region"] == region:
+            return r
+    return None
 
 
 xs_labels = [
-    f"{c}x{c}\n{next(r['voxels'] for r in rows if r['chunks'] == c) / 1e6:.1f}M"
-    for c in sizes
+    f"{name}\n{voxels_of(name):,}"
+    if voxels_of(name) < 1_000_000
+    else f"{name}\n{voxels_of(name) / 1e6:.1f}M"
+    for name in regions
 ]
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.0, 5.6), facecolor=SURFACE)
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.6, 5.8), facecolor=SURFACE)
 
 for ax in (ax1, ax2):
     ax.set_facecolor(SURFACE)
@@ -55,78 +68,60 @@ for ax in (ax1, ax2):
         ax.spines[s].set_visible(False)
     for s in ("bottom", "left"):
         ax.spines[s].set_color("#d8d7d2")
-    ax.tick_params(colors=MUTED, labelsize=9)
-
-ax1.set_yscale("log")
-ax1.set_xticks(range(len(sizes)))
-ax1.set_xticklabels(xs_labels)
+    ax.tick_params(colors=MUTED, labelsize=8)
+    ax.set_xticks(range(len(regions)))
+    ax.set_xticklabels(xs_labels, fontsize=7.5)
+    ax.set_yscale("log")
 
 for backend in ORDER:
-    got = series(backend, PANEL_OCTAVES)
-    if not got:
-        continue
-    ys = [r["mean_ms"] for r in got]
+    ys = [
+        got["mean_ms"] if (got := pick(backend, PANEL_OCTAVES, name)) else None
+        for name in regions
+    ]
     ax1.plot(
         range(len(ys)),
         ys,
         color=COLORS[backend],
         linewidth=2,
         marker="o",
-        markersize=7,
+        markersize=6,
         markeredgecolor=SURFACE,
-        markeredgewidth=2,
+        markeredgewidth=1.5,
         label=LABELS[backend],
     )
 
 ax1.set_title(
-    f"Density field, {PANEL_OCTAVES} octaves", color=INK, fontsize=12.5, pad=12, loc="left"
+    f"Density field, {PANEL_OCTAVES} octaves",
+    color=INK,
+    fontsize=12.5,
+    pad=12,
+    loc="left",
 )
 ax1.set_ylabel("mean time (ms, log scale)", color=MUTED, fontsize=9.5)
-ax1.set_xlabel("region size (chunks square / voxels)", color=MUTED, fontsize=9.5)
-ax1.legend(frameon=False, fontsize=8.8, labelcolor=MUTED, loc="upper left")
+ax1.set_xlabel("region (voxels)", color=MUTED, fontsize=9.5)
+ax1.legend(frameon=False, fontsize=8.5, labelcolor=MUTED, loc="upper left")
 
-biggest = max(sizes)
-ax2.set_xticks(range(len(octaves_all)))
-ax2.set_xticklabels([str(o) for o in octaves_all])
-
-base = {
-    o: next(
-        r["mean_ms"]
-        for r in rows
-        if r["backend"] == "cpu-rayon" and r["octaves"] == o and r["chunks"] == biggest
-    )
-    for o in octaves_all
-}
 for backend in ("igpu", "dgpu"):
-    ys = []
-    for o in octaves_all:
-        got = [
-            r
-            for r in rows
-            if r["backend"] == backend and r["octaves"] == o and r["chunks"] == biggest
-        ]
-        ys.append(base[o] / got[0]["mean_ms"] if got else 0.0)
-    ax2.plot(
-        range(len(ys)),
-        ys,
-        color=COLORS[backend],
-        linewidth=2,
-        marker="o",
-        markersize=7,
-        markeredgecolor=SURFACE,
-        markeredgewidth=2,
-    )
-    ax2.annotate(
-        LABELS[backend],
-        (len(ys) - 1, ys[-1]),
-        textcoords="offset points",
-        xytext=(9, 0),
-        color=MUTED,
-        fontsize=9.5,
-        va="center",
-    )
+    for octaves in octaves_all:
+        ys = []
+        for name in regions:
+            base = pick("cpu-rayon", octaves, name)
+            got = pick(backend, octaves, name)
+            ys.append(base["mean_ms"] / got["mean_ms"] if base and got else None)
+        ax2.plot(
+            range(len(ys)),
+            ys,
+            color=COLORS[backend],
+            linewidth=1.9,
+            linestyle=STYLES[octaves],
+            marker="o",
+            markersize=5,
+            markeredgecolor=SURFACE,
+            markeredgewidth=1.2,
+            label=f"{LABELS[backend]}, {octaves} oct",
+        )
 
-ax2.axhline(1.0, color="#b9b8b3", linewidth=1.2, linestyle=":")
+ax2.axhline(1.0, color="#7a7975", linewidth=1.3)
 ax2.annotate(
     "parity with all CPU cores",
     (0, 1.0),
@@ -136,17 +131,18 @@ ax2.annotate(
     fontsize=8.5,
 )
 ax2.set_title(
-    f"Speedup vs rayon at {biggest}x{biggest} chunks, by arithmetic intensity",
+    "Speedup vs rayon: the GPU only wins in bulk",
     color=INK,
     fontsize=12.5,
     pad=12,
     loc="left",
 )
 ax2.set_ylabel("times faster than all CPU cores", color=MUTED, fontsize=9.5)
-ax2.set_xlabel("noise octaves per voxel (more work per byte moved)", color=MUTED, fontsize=9.5)
+ax2.set_xlabel("region (voxels)", color=MUTED, fontsize=9.5)
+ax2.legend(frameon=False, fontsize=7.6, labelcolor=MUTED, loc="upper left", ncol=2)
 
 fig.suptitle(
-    "Terrain density noise on the GPU: the compute-bound case",
+    "Terrain density noise on the GPU: compute-bound, but only worth it in bulk",
     color=INK,
     fontsize=15,
     x=0.05,
@@ -156,14 +152,14 @@ fig.suptitle(
 fig.text(
     0.05,
     0.895,
-    "Mean of 5 runs. This workload uploads 32 bytes of parameters and downloads one byte per voxel, so\n"
-    "unlike block light there is nothing to transfer in. Classification matched the CPU on every voxel at\n"
-    "every size. Intel Arrow Lake-S iGPU and RTX 5070 Laptop dGPU, Vulkan.",
+    "Mean of 5 runs. Uploads 32 bytes of parameters and downloads one byte per voxel, so unlike block light there is\n"
+    "nothing to transfer in. Classification matched the CPU on every voxel. A fixed 1.5-3 ms of submit and allocation\n"
+    "cost per dispatch is what sinks the small regions: a single chunk sits below the crossover on both devices.",
     color=MUTED,
-    fontsize=9.2,
+    fontsize=9.0,
     ha="left",
     va="top",
 )
-fig.subplots_adjust(left=0.065, right=0.855, top=0.74, bottom=0.13, wspace=0.30)
+fig.subplots_adjust(left=0.062, right=0.975, top=0.73, bottom=0.16, wspace=0.22)
 fig.savefig(out, dpi=170, facecolor=SURFACE)
 print("wrote", out)
