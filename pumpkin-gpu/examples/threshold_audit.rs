@@ -12,16 +12,16 @@
 //! exactly, which is why the Y gradient is lowered to `ClampedYIdentity`. Use this to
 //! find selectors that a future change might make inexact.
 //!
-//! Run with: `cargo run -p pumpkin-world-gpu --release --example threshold_audit`
+//! Run with: `cargo run -p pumpkin-gpu --release --example threshold_audit`
 
 // Reporting the audit to the console is the entire point of this example.
 #![expect(clippy::print_stdout)]
 
 use pumpkin_data::noise_router::{NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER};
-use pumpkin_world::generation::GlobalRandomConfig;
-use pumpkin_world_gpu::graph::{
+use pumpkin_gpu::world::graph::{
     BeardifierData, CompiledGraph, OpCode, compile_router, evaluate_cpu_node,
 };
+use pumpkin_world::generation::GlobalRandomConfig;
 
 /// How close a selector has to sit to a threshold before rounding could flip it.
 /// f32 has ~7 significant digits, so this is generous for values of order 1-100.

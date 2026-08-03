@@ -3085,6 +3085,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-gpu"
+version = "0.1.0-dev+26.2"
+dependencies = [
+ "bytemuck",
+ "criterion",
+ "pollster",
+ "pumpkin-data",
+ "pumpkin-util",
+ "pumpkin-world",
+ "wgpu",
+]
+
+[[package]]
 name = "pumpkin-inventory"
 version = "0.1.0-dev+26.2"
 dependencies = [
@@ -3225,19 +3238,6 @@ dependencies = [
  "tracing",
  "uuid",
  "xxhash-rust",
-]
-
-[[package]]
-name = "pumpkin-world-gpu"
-version = "0.1.0-dev+26.2"
-dependencies = [
- "bytemuck",
- "criterion",
- "pollster",
- "pumpkin-data",
- "pumpkin-util",
- "pumpkin-world",
- "wgpu",
 ]
 
 [[package]]

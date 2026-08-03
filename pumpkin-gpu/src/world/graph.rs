@@ -9,7 +9,7 @@
 //! Not every node type is supported yet — [`compile`] reports the first one it cannot
 //! lower rather than silently emitting something wrong.
 
-use crate::OctaveParams;
+use super::gpu::OctaveParams;
 use bytemuck::{Pod, Zeroable};
 use pumpkin_data::{
     chunk::DoublePerlinNoiseParameters,
@@ -524,7 +524,7 @@ pub struct CompiledGraph {
 }
 
 impl CompiledGraph {
-    /// How many values [`crate::PreparedGraph::evaluate`] returns per point.
+    /// How many values [`super::gpu::PreparedGraph::evaluate`] returns per point.
     #[must_use]
     pub fn outputs_per_point(&self) -> usize {
         self.outputs.len().max(1)

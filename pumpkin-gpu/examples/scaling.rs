@@ -9,15 +9,15 @@
 //! example reports worse GPU times than the second or third. Run it a few times and
 //! read the last one: that is the steady state a running server would see.
 //!
-//! Run with: cargo run -p pumpkin-world-gpu --release --example scaling
+//! Run with: cargo run -p pumpkin-gpu --release --example scaling
 
 // Reporting the measurements to the console is the entire point of this example.
 #![expect(clippy::print_stdout)]
 
 use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
+use pumpkin_gpu::GpuNoiseContext;
+use pumpkin_gpu::world::graph::{BeardifierData, compile, evaluate_cpu};
 use pumpkin_world::generation::GlobalRandomConfig;
-use pumpkin_world_gpu::GpuNoiseContext;
-use pumpkin_world_gpu::graph::{BeardifierData, compile, evaluate_cpu};
 use std::time::Instant;
 
 fn main() {

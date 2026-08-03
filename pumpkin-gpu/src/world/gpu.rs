@@ -53,8 +53,6 @@ use bytemuck::{Pod, Zeroable};
 use pumpkin_util::noise::perlin::OctavePerlinNoiseSampler;
 use wgpu::util::DeviceExt;
 
-pub mod graph;
-
 const WORKGROUP_SIZE: u32 = 64;
 
 /// GPU-side mirror of one octave's parameters (see `SamplerData` in
@@ -123,7 +121,7 @@ impl GraphDims {
         num_points: usize,
         num_instructions: usize,
         num_outputs: usize,
-        beardifier: &graph::BeardifierData,
+        beardifier: &super::graph::BeardifierData,
     ) -> Self {
         let (affected_min, affected_max, has_affected_box) = beardifier
             .affected_box
@@ -227,7 +225,7 @@ impl GpuNoiseContext {
         // too limited for the pipeline fails here and the caller falls back to the CPU.
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
-                label: Some("pumpkin-world-gpu noise device"),
+                label: Some("pumpkin-gpu noise device"),
                 required_limits: adapter.limits(),
                 ..Default::default()
             })
@@ -325,8 +323,12 @@ impl GpuNoiseContext {
     /// Evaluates `compiled` with no structures nearby — the common case for terrain
     /// away from generated structures.
     #[must_use]
-    pub fn evaluate_graph(&self, compiled: &graph::CompiledGraph, points: &[[f32; 3]]) -> Vec<f32> {
-        self.evaluate_graph_with(compiled, points, &graph::BeardifierData::default())
+    pub fn evaluate_graph(
+        &self,
+        compiled: &super::graph::CompiledGraph,
+        points: &[[f32; 3]],
+    ) -> Vec<f32> {
+        self.evaluate_graph_with(compiled, points, &super::graph::BeardifierData::default())
     }
 
     /// Evaluates `compiled` against per-chunk structure data.
@@ -336,9 +338,9 @@ impl GpuNoiseContext {
     #[must_use]
     pub fn evaluate_graph_with(
         &self,
-        compiled: &graph::CompiledGraph,
+        compiled: &super::graph::CompiledGraph,
         points: &[[f32; 3]],
-        beardifier: &graph::BeardifierData,
+        beardifier: &super::graph::BeardifierData,
     ) -> Vec<f32> {
         self.prepare(compiled).evaluate(points, beardifier)
     }
@@ -346,7 +348,7 @@ impl GpuNoiseContext {
     /// Uploads a compiled graph's tables to the GPU once, so repeated dispatches only
     /// pay for the point batch.
     #[must_use]
-    pub fn prepare<'a>(&'a self, compiled: &graph::CompiledGraph) -> PreparedGraph<'a> {
+    pub fn prepare<'a>(&'a self, compiled: &super::graph::CompiledGraph) -> PreparedGraph<'a> {
         PreparedGraph::new(self, compiled)
     }
 
@@ -640,7 +642,7 @@ pub struct PreparedGraph<'a> {
 }
 
 impl<'a> PreparedGraph<'a> {
-    fn new(context: &'a GpuNoiseContext, compiled: &graph::CompiledGraph) -> Self {
+    fn new(context: &'a GpuNoiseContext, compiled: &super::graph::CompiledGraph) -> Self {
         let device = &context.device;
         let num_instructions = compiled.instructions.len() as u32;
 
@@ -674,8 +676,10 @@ impl<'a> PreparedGraph<'a> {
             num_instructions as usize,
             compiled.outputs_per_point(),
         );
-        let structures = context.empty_storage::<graph::GpuBeardStructure>("beard structures", 1);
-        let junctions = context.empty_storage::<graph::GpuBeardJunction>("beard junctions", 1);
+        let structures =
+            context.empty_storage::<super::graph::GpuBeardStructure>("beard structures", 1);
+        let junctions =
+            context.empty_storage::<super::graph::GpuBeardJunction>("beard junctions", 1);
 
         let mut prepared = Self {
             context,
@@ -748,7 +752,7 @@ impl<'a> PreparedGraph<'a> {
     pub fn evaluate(
         &mut self,
         points: &[[f32; 3]],
-        beardifier: &graph::BeardifierData,
+        beardifier: &super::graph::BeardifierData,
     ) -> Vec<f32> {
         if points.is_empty() || self.num_instructions == 0 {
             return vec![0.0; points.len() * self.outputs_per_point()];
@@ -769,18 +773,22 @@ impl<'a> PreparedGraph<'a> {
             self.point_capacity = points.len();
         }
         if beardifier.structures.len() > self.structure_capacity {
-            self.structures = self.context.empty_storage::<graph::GpuBeardStructure>(
-                "beard structures",
-                beardifier.structures.len(),
-            );
+            self.structures = self
+                .context
+                .empty_storage::<super::graph::GpuBeardStructure>(
+                    "beard structures",
+                    beardifier.structures.len(),
+                );
             self.structure_capacity = beardifier.structures.len();
             bind_group_stale = true;
         }
         if beardifier.junctions.len() > self.junction_capacity {
-            self.junctions = self.context.empty_storage::<graph::GpuBeardJunction>(
-                "beard junctions",
-                beardifier.junctions.len(),
-            );
+            self.junctions = self
+                .context
+                .empty_storage::<super::graph::GpuBeardJunction>(
+                    "beard junctions",
+                    beardifier.junctions.len(),
+                );
             self.junction_capacity = beardifier.junctions.len();
             bind_group_stale = true;
         }
@@ -915,8 +923,8 @@ mod test {
             return;
         };
 
-        let compiled = crate::graph::CompiledGraph {
-            instructions: crate::graph::test::sample_graph(),
+        let compiled = crate::world::graph::CompiledGraph {
+            instructions: crate::world::graph::test::sample_graph(),
             ..Default::default()
         };
 
@@ -932,9 +940,9 @@ mod test {
         assert_eq!(gpu_results.len(), points.len());
 
         for (point, &gpu_value) in points.iter().zip(&gpu_results) {
-            let cpu_value = crate::graph::evaluate_cpu(
+            let cpu_value = crate::world::graph::evaluate_cpu(
                 &compiled,
-                &crate::graph::BeardifierData::default(),
+                &crate::world::graph::BeardifierData::default(),
                 point[0],
                 point[1],
                 point[2],
@@ -969,16 +977,16 @@ mod test {
             0x91E4_C2D0,
             DoublePerlinNoiseSampler::get_amplitude(AMPLITUDES),
         );
-        let deriver = crate::graph::test::test_deriver();
+        let deriver = crate::world::graph::test::test_deriver();
         let cpu_sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(&deriver, &params);
 
-        let mut samplers = crate::graph::SamplerPool::default();
+        let mut samplers = crate::world::graph::SamplerPool::default();
         let (first, second) = cpu_sampler.samplers();
         let sampler_index = samplers.push_double_perlin(first, second, cpu_sampler.amplitude());
 
-        let mut noise = crate::graph::Instruction::noise(0, sampler_index, 1.0, 1.0);
+        let mut noise = crate::world::graph::Instruction::noise(0, sampler_index, 1.0, 1.0);
         noise.input1 = 0;
-        let compiled = crate::graph::CompiledGraph {
+        let compiled = crate::world::graph::CompiledGraph {
             instructions: vec![noise],
             samplers,
             ..Default::default()
@@ -1013,7 +1021,7 @@ mod test {
     /// argument order. `ShiftedNoise` then offsets the point by three input nodes.
     #[test]
     fn gpu_shift_opcodes_match_cpu_semantics() {
-        use crate::graph::{Instruction, OpCode};
+        use crate::world::graph::{Instruction, OpCode};
         use pumpkin_data::chunk::DoublePerlinNoiseParameters;
         use pumpkin_world::generation::noise::perlin::DoublePerlinNoiseSampler;
         use pumpkin_world::generation::noise::router::proto_noise_router::DoublePerlinNoiseBuilder;
@@ -1032,10 +1040,10 @@ mod test {
             0x77A0_5E31,
             DoublePerlinNoiseSampler::get_amplitude(AMPLITUDES),
         );
-        let deriver = crate::graph::test::test_deriver();
+        let deriver = crate::world::graph::test::test_deriver();
         let cpu_sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(&deriver, &params);
 
-        let mut samplers = crate::graph::SamplerPool::default();
+        let mut samplers = crate::world::graph::SamplerPool::default();
         let (first, second) = cpu_sampler.samplers();
         let sampler_index = samplers.push_double_perlin(first, second, cpu_sampler.amplitude());
 
@@ -1052,7 +1060,7 @@ mod test {
         shifted.param0 = 0.25;
         shifted.param1 = 0.125;
 
-        let compiled = crate::graph::CompiledGraph {
+        let compiled = crate::world::graph::CompiledGraph {
             instructions: vec![shift_a, shift_b, shifted],
             samplers,
             ..Default::default()
@@ -1124,7 +1132,7 @@ mod test {
                 + lerp(x_scale, lower.2, upper.2)
         }
 
-        use crate::graph::{CompiledGraph, GpuSplinePoint, Instruction, OpCode};
+        use crate::world::graph::{CompiledGraph, GpuSplinePoint, Instruction, OpCode};
 
         let Some(ctx) = GpuNoiseContext::try_new() else {
             return;
@@ -1200,7 +1208,7 @@ mod test {
     /// CPU sampler rather than this crate's interpreter.
     #[test]
     fn gpu_interpolated_noise_matches_cpu_sampler() {
-        use crate::graph::{CompiledGraph, Instruction, OpCode, SamplerPool};
+        use crate::world::graph::{CompiledGraph, Instruction, OpCode, SamplerPool};
         use pumpkin_data::noise_router::InterpolatedNoiseSamplerData;
         use pumpkin_util::random::xoroshiro128::Xoroshiro;
         use pumpkin_world::generation::noise::router::density_function::{
@@ -1269,7 +1277,7 @@ mod test {
     /// junctions in range — an empty-input test would pass on a no-op shader.
     #[test]
     fn gpu_beardifier_matches_cpu_with_real_structures() {
-        use crate::graph::{BeardifierData, CompiledGraph, Instruction, OpCode};
+        use crate::world::graph::{BeardifierData, CompiledGraph, Instruction, OpCode};
         use pumpkin_util::math::{block_box::BlockBox, vector3::Vector3};
         use pumpkin_world::generation::noise::router::density_function::{
             StaticIndependentChunkNoiseFunctionComponentImpl,
@@ -1375,8 +1383,8 @@ mod test {
 
         let config = GlobalRandomConfig::new(1234, false);
         let stack = OVERWORLD_BASE_NOISE_ROUTER.noise.full_component_stack;
-        let compiled = crate::graph::compile(stack, &config).expect("overworld lowers");
-        let beardifier = crate::graph::BeardifierData::default();
+        let compiled = crate::world::graph::compile(stack, &config).expect("overworld lowers");
+        let beardifier = crate::world::graph::BeardifierData::default();
 
         // Realistic block coordinates spread over a few chunks and the full height range.
         let points: Vec<[f32; 3]> = (0..500)
@@ -1391,8 +1399,13 @@ mod test {
         let mut max_diff = 0.0f32;
         let mut nonzero = 0usize;
         for (point, &gpu_value) in points.iter().zip(&gpu_results) {
-            let cpu_value =
-                crate::graph::evaluate_cpu(&compiled, &beardifier, point[0], point[1], point[2]);
+            let cpu_value = crate::world::graph::evaluate_cpu(
+                &compiled,
+                &beardifier,
+                point[0],
+                point[1],
+                point[2],
+            );
             if cpu_value != 0.0 {
                 nonzero += 1;
             }
@@ -1423,12 +1436,13 @@ mod test {
         };
 
         let config = GlobalRandomConfig::new(4321, false);
-        let compiled = crate::graph::compile_router(&OVERWORLD_BASE_NOISE_ROUTER.noise, &config)
-            .expect("overworld lowers");
-        let beardifier = crate::graph::BeardifierData::default();
+        let compiled =
+            crate::world::graph::compile_router(&OVERWORLD_BASE_NOISE_ROUTER.noise, &config)
+                .expect("overworld lowers");
+        let beardifier = crate::world::graph::BeardifierData::default();
 
         let slots = compiled.outputs_per_point();
-        assert_eq!(slots, crate::graph::output_slot::COUNT);
+        assert_eq!(slots, crate::world::graph::output_slot::COUNT);
 
         let points: Vec<[f32; 3]> = (0..200)
             .map(|i| {
@@ -1454,7 +1468,7 @@ mod test {
             let mut slot_has_signal = false;
             let mut slot_diff = 0.0f32;
             for (i, point) in points.iter().enumerate() {
-                let expected = crate::graph::evaluate_cpu_node(
+                let expected = crate::world::graph::evaluate_cpu_node(
                     &compiled,
                     &beardifier,
                     node,
@@ -1490,7 +1504,7 @@ mod test {
     /// implementation, including coordinates far enough out to hit the island ring.
     #[test]
     fn gpu_end_islands_matches_cpu() {
-        use crate::graph::{CompiledGraph, Instruction, OpCode, SamplerPool};
+        use crate::world::graph::{CompiledGraph, Instruction, OpCode, SamplerPool};
         use pumpkin_util::random::{RandomImpl, legacy_rand::LegacyRand};
         use pumpkin_world::generation::noise::router::density_function::{
             StaticIndependentChunkNoiseFunctionComponentImpl, misc::EndIsland,
@@ -1537,9 +1551,9 @@ mod test {
         let mut varied = 0usize;
         let mut first: Option<f32> = None;
         for (point, &gpu_value) in points.iter().zip(&gpu_results) {
-            let reference = crate::graph::evaluate_cpu(
+            let reference = crate::world::graph::evaluate_cpu(
                 &compiled,
-                &crate::graph::BeardifierData::default(),
+                &crate::world::graph::BeardifierData::default(),
                 point[0],
                 point[1],
                 point[2],

@@ -3,11 +3,11 @@
 #![expect(clippy::print_stderr)]
 
 use criterion::{Criterion, criterion_group, criterion_main};
+use pumpkin_gpu::{GpuNoiseContext, OctaveBatch};
 use pumpkin_util::{
     noise::perlin::OctavePerlinNoiseSampler,
     random::{RandomDeriverImpl, RandomGenerator, RandomImpl, xoroshiro128::Xoroshiro},
 };
-use pumpkin_world_gpu::{GpuNoiseContext, OctaveBatch};
 
 fn make_reference_sampler() -> OctavePerlinNoiseSampler {
     let mut rand = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(1234));
@@ -67,8 +67,8 @@ fn bench_noise(c: &mut Criterion) {
 /// measurement of a real router rather than an isolated sampler.
 fn bench_nether_router(c: &mut Criterion) {
     use pumpkin_data::noise_router::NETHER_BASE_NOISE_ROUTER;
+    use pumpkin_gpu::world::graph::{BeardifierData, compile, evaluate_cpu};
     use pumpkin_world::generation::GlobalRandomConfig;
-    use pumpkin_world_gpu::graph::{BeardifierData, compile, evaluate_cpu};
 
     let config = GlobalRandomConfig::new(42, false);
     let stack = NETHER_BASE_NOISE_ROUTER.noise.full_component_stack;

@@ -12,10 +12,10 @@ members = [
     "pumpkin-data",
     "pumpkin-plugin-api",
     "pumpkin-codecs",
-    "pumpkin-world-gpu"
+    "pumpkin-gpu"
 ]
-# pumpkin-world-gpu is opt-in only (pulls in wgpu, a heavy dependency) — build/test it
-# explicitly with `-p pumpkin-world-gpu`. It's excluded here so a plain `cargo build`/
+# pumpkin-gpu is opt-in only (pulls in wgpu, a heavy dependency) — build/test it
+# explicitly with `-p pumpkin-gpu`. It's excluded here so a plain `cargo build`/
 # `cargo test` at the workspace root keeps today's build times for everyone else.
 default-members = [
     "pumpkin-api-macros",
@@ -218,7 +218,7 @@ wit-bindgen = { version = "0.60", default-features = false, features = ["macros"
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
 
-# GPU compute prototype (pumpkin-world-gpu only)
+# GPU compute prototype (pumpkin-gpu only)
 # wgpu keeps its own default features (native Vulkan/Metal/DX12 backends) rather than
 # default-features = false like the rest of this list — its feature flags gate backend
 # support, not optional extras, so disabling them needs to be deliberate per-platform.
