@@ -228,6 +228,7 @@ impl DataComponentImpl for BundleContentsImpl {
 mod bundle_tests {
     use super::{BUNDLE_IN_BUNDLE_WEIGHT, BundleContentsImpl};
     use crate::{item::Item, item_stack::ItemStack};
+    use pumpkin_nbt::compound::NbtCompound;
 
     #[test]
     fn extracts_selected_item_and_clears_selection() {
@@ -301,6 +302,27 @@ mod bundle_tests {
 
         assert!(bundle.is_empty());
         assert_eq!(contents.get_weight(), 8 + BUNDLE_IN_BUNDLE_WEIGHT);
+    }
+
+    #[test]
+    fn bundle_contents_survive_item_stack_nbt_roundtrip() {
+        let mut bundle = ItemStack::new(1, &Item::BUNDLE);
+        bundle
+            .get_data_component_mut::<BundleContentsImpl>()
+            .expect("bundle should have contents")
+            .items
+            .push(ItemStack::new(3, &Item::APPLE));
+
+        let mut nbt = NbtCompound::new();
+        bundle.write_item_stack(&mut nbt);
+        let restored = ItemStack::read_item_stack(&nbt).expect("bundle should deserialize");
+        let contents = restored
+            .get_data_component::<BundleContentsImpl>()
+            .expect("restored bundle should have contents");
+
+        assert_eq!(contents.items.len(), 1);
+        assert_eq!(contents.items[0].item.id, Item::APPLE.id);
+        assert_eq!(contents.items[0].item_count, 3);
     }
 }
 
