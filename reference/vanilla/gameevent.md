@@ -47,6 +47,39 @@ each against where the corresponding action already happens in Pumpkin (e.g. con
 almost certainly has an existing hook point in the screen-handler open path — find it rather than
 inventing a new one).
 
+## Related architectural gap found this session: no inventory-to-player callback hook
+
+Two known bugs turned out to be the same underlying structural gap, not independent fixes:
+
+- `ArmorSlot::set_stack_prev` (`pumpkin-inventory/src/slot.rs`) has a `// TODO:
+  this.entity.onEquipStack(...)` stub — vanilla's `LivingEntity.onEquipItem`
+  (`LivingEntity.java:689-711`) plays an equip sound (from the stack's `Equippable` data
+  component) and emits `GameEvent.EQUIP`/`GameEvent.UNEQUIP`, gated on the item actually
+  changing (`!isSameItemSameComponents`) and not firing on the entity's first tick.
+- `ResultSlot` (`pumpkin-inventory/src/crafting/crafting_screen_handler.rs`) never triggers
+  recipe-book unlock tracking on craft.
+
+Both need to call back into per-player/per-entity state (unlocked recipes, or `world.play_sound`
++ `emit_game_event`) that only exists on `Player`/`LivingEntity` in the `pumpkin` crate — but
+`ArmorSlot`/`ResultSlot` live in the lower-level `pumpkin-inventory` crate, which `pumpkin`
+depends on, not the reverse. `ArmorSlot`'s only fields are `inventory: Arc<dyn Inventory>` (the
+`PlayerInventory`, which itself has no back-reference to the owning `Player`) plus bookkeeping —
+there is no path from slot code up to the entity that owns it. Compounding this, `ArmorSlot` is
+constructed inside `Player::new` (`pumpkin/src/entity/player.rs:649`, via
+`PlayerScreenHandler::new`) *before* the `Arc<Player>` itself exists, so even a naive
+"pass an `Arc<Player>` at construction time" fix doesn't work without restructuring `Player`
+construction (e.g. `Arc::new_cyclic`, or a two-phase init that sets a back-reference after the
+`Arc` exists).
+
+**Correct fix shape** (not attempted this session — this is its own scoped task): add a generic
+trait in `pumpkin-inventory` (something like `EquipListener`/`SlotOwnerCallback`) that
+`ArmorSlot`/`ResultSlot` hold an `Option<Arc<dyn ...>>` of, with methods like
+`on_equip(slot, old, new)` / `on_crafted(recipe, output)`. `Player` (and any other `InventoryPlayer`
+impl) implements it in the `pumpkin` crate and gets wired in after construction, not at
+`ArmorSlot::new` call time. This is the same shape of problem `Mob`'s existing `ContainerUser`-less
+gap already documented for Copper Golem — a recurring pattern of "inventory-adjacent code needs
+to call back into entity/world state it structurally can't see."
+
 ## Known architectural limitations (don't try to "fix" these without a bigger redesign)
 
 - **Flat `Vec` listener registry, not per-chunk-section sharded.** Vanilla shards listeners by
