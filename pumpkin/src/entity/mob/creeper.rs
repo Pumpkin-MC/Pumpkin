@@ -85,7 +85,11 @@ impl CreeperEntity {
     }
 
     pub fn set_fuse_speed(&self, speed: i32) {
-        self.fuse_speed.store(speed, Ordering::Relaxed);
+        // Vanilla keeps this in synched entity data, which only marks the entry dirty (and so
+        // only broadcasts) when the value actually changes.
+        if self.fuse_speed.swap(speed, Ordering::Relaxed) == speed {
+            return;
+        }
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
                 TrackedData::FUSE_ID,

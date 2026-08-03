@@ -8,7 +8,6 @@ use pumpkin_data::entity::EntityType;
 use rand::RngExt;
 use std::sync::{Arc, Weak};
 
-#[expect(dead_code)]
 pub struct LookAtEntityGoal {
     goal_control: Controls,
     target: Option<Arc<dyn EntityBase>>,
@@ -96,13 +95,25 @@ impl Goal for LookAtEntityGoal {
             let mut mob_pos = mob_entity.living_entity.entity.pos.load();
             mob_pos.y += mob_entity.living_entity.entity.get_eye_height();
 
-            if *self.target_type == EntityType::PLAYER {
-                self.target = world
+            let candidate = if *self.target_type == EntityType::PLAYER {
+                world
                     .get_closest_player(mob_pos, self.range.into())
-                    .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+                    .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
             } else {
-                self.target =
-                    world.get_closest_entity(mob_pos, self.range.into(), Some(&[self.target_type]));
+                world.get_closest_entity(mob_pos, self.range.into(), Some(&[self.target_type]))
+            };
+
+            // Vanilla runs candidates through the goal's `TargetingConditions`, which rejects
+            // entities that are not part of the game (spectators) or out of range
+            self.target = None;
+            if let Some(candidate) = candidate
+                && let Some(living) = candidate.get_living_entity()
+                && self
+                    .target_predicate
+                    .test(&world, Some(&mob_entity.living_entity), living)
+                    .await
+            {
+                self.target = Some(candidate);
             }
 
             self.target.is_some()

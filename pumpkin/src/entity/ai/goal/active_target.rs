@@ -4,10 +4,11 @@ use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
-use crate::entity::{EntityBase, mob::MobEntity, player::Player};
+use crate::entity::{EntityBase, mob::MobEntity};
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
+use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 use std::future::Future;
 use std::sync::Arc;
@@ -93,37 +94,56 @@ impl ActiveTargetGoal {
         let mut search_pos = mob.living_entity.entity.pos.load();
         search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
 
-        if self.target_type == &EntityType::PLAYER {
-            let potential_player = world
-                .get_closest_player(search_pos, follow_range)
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+        // Vanilla evaluates the target conditions per candidate inside the search, so the result is
+        // the nearest *valid* target. Testing only the nearest candidate would make a single
+        // invalid entity (for example an invulnerable creative player) hide every target behind it.
+        // The predicate is async, so candidates are gathered first and tested in order.
+        let sort_by_distance = |a: &Vector3<f64>, b: &Vector3<f64>| {
+            a.squared_distance_to_vec(&search_pos)
+                .partial_cmp(&b.squared_distance_to_vec(&search_pos))
+                .unwrap()
+        };
 
-            if let Some(potential_entity) = potential_player
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
+        self.target = if self.target_type == &EntityType::PLAYER {
+            let mut candidates = world.get_nearby_players(search_pos, follow_range);
+            candidates.sort_by(|a, b| {
+                sort_by_distance(&a.get_entity().pos.load(), &b.get_entity().pos.load())
+            });
+            let mut result = None;
+            for player in candidates {
+                if self
                     .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
+                    .test(&world, Some(&mob.living_entity), &player.living_entity)
                     .await
-            {
-                self.target = Some(potential_entity);
-                return;
+                {
+                    result = Some(player as Arc<dyn EntityBase>);
+                    break;
+                }
             }
+            result
         } else {
-            let potential_entity =
-                world.get_closest_entity(search_pos, follow_range, Some(&[self.target_type]));
-
-            if let Some(potential_entity) = potential_entity
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
-                    .await
-            {
-                self.target = Some(potential_entity);
-                return;
+            let mut candidates: Vec<Arc<dyn EntityBase>> = world
+                .get_nearby_entities(search_pos, follow_range)
+                .into_values()
+                .filter(|entity| entity.get_entity().entity_type == self.target_type)
+                .collect();
+            candidates.sort_by(|a, b| {
+                sort_by_distance(&a.get_entity().pos.load(), &b.get_entity().pos.load())
+            });
+            let mut result = None;
+            for entity in candidates {
+                if let Some(living) = entity.get_living_entity()
+                    && self
+                        .target_predicate
+                        .test(&world, Some(&mob.living_entity), living)
+                        .await
+                {
+                    result = Some(entity);
+                    break;
+                }
             }
-        }
-        self.target = None;
+            result
+        };
     }
 }
 

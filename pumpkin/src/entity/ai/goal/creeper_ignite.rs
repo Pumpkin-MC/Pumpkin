@@ -37,29 +37,36 @@ impl CreeperIgniteGoal {
             .await
             .is_none()
     }
+
+    /// Vanilla `SwellGoal.canUse`: an already lit fuse keeps the goal alive regardless of
+    /// distance, otherwise the swell only begins with a target inside 3 blocks.
+    async fn can_swell(&self, mob: &dyn Mob) -> bool {
+        if self.creeper.fuse_speed.load(Ordering::Relaxed) > 0 {
+            return true;
+        }
+
+        let target_lock = mob.get_mob_entity().target.lock().await;
+        if let Some(target) = target_lock.as_ref() {
+            let dist_sq = mob
+                .get_entity()
+                .pos
+                .load()
+                .squared_distance_to_vec(&target.get_entity().pos.load());
+            return dist_sq < 9.0;
+        }
+
+        false
+    }
 }
 
 impl Goal for CreeperIgniteGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let creeper = mob.get_mob_entity();
-            let target_lock = creeper.target.lock().await;
+        Box::pin(async move { self.can_swell(mob).await })
+    }
 
-            if self.creeper.fuse_speed.load(Ordering::Relaxed) > 0 {
-                return true;
-            }
-
-            if let Some(target) = target_lock.as_ref() {
-                let dist_sq = mob
-                    .get_entity()
-                    .pos
-                    .load()
-                    .squared_distance_to_vec(&target.get_entity().pos.load());
-                return dist_sq < 9.0;
-            }
-
-            false
-        })
+    /// Vanilla `SwellGoal` inherits `canContinueToUse` from `Goal`, which returns `canUse()`.
+    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async move { self.can_swell(mob).await })
     }
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
@@ -69,11 +76,9 @@ impl Goal for CreeperIgniteGoal {
         })
     }
 
-    fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.creeper.set_fuse_speed(-1);
-        })
-    }
+    // Vanilla `SwellGoal.stop` only clears the cached target, it never resets the fuse.
+    // We track the target through the mob itself, so there is nothing to clear here and
+    // `tick` stays the single owner of the fuse speed.
 
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {

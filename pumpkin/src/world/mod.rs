@@ -4131,9 +4131,33 @@ impl World {
     }
 
     pub fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
-        let players = self.get_nearby_players(pos, radius);
-        players
-            .iter()
+        self.get_closest_player_where(pos, radius, |_| true)
+    }
+
+    /// Gets the closest player to a position that satisfies a predicate.
+    ///
+    /// The predicate is evaluated for every candidate inside the search, so the returned player is
+    /// the nearest one that *passes* it, not merely the nearest one overall. This mirrors vanilla,
+    /// where the targeting conditions are part of the search instead of a check applied afterwards.
+    ///
+    /// # Arguments
+    ///
+    /// * `pos` - The position to search around.
+    /// * `radius` - The radius to search within.
+    /// * `predicate` - A predicate function, which has to be `true` for a player to be considered.
+    ///
+    /// # Returns
+    ///
+    /// The closest player that passes the predicate, or None if no player does.
+    pub fn get_closest_player_where(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        predicate: impl Fn(&Player) -> bool,
+    ) -> Option<Arc<Player>> {
+        self.get_nearby_players(pos, radius)
+            .into_iter()
+            .filter(|player| predicate(player))
             .min_by(|a, b| {
                 a.get_entity()
                     .pos
@@ -4142,7 +4166,6 @@ impl World {
                     .partial_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
                     .unwrap()
             })
-            .cloned()
     }
 
     /// Gets the closest entity to a position, with optional filtering by entity type.
@@ -4162,34 +4185,48 @@ impl World {
         radius: f64,
         entity_types: Option<&[&'static EntityType]>,
     ) -> Option<Arc<dyn EntityBase>> {
-        // Get regular entities
-        let entities = self.get_nearby_entities(pos, radius);
+        self.get_closest_entity_where(pos, radius, entity_types, |_| true)
+    }
 
-        // Filter by entity type if specified
-        let filtered_entities = if let Some(types) = entity_types {
-            entities
-                .into_iter()
-                .filter(|(_, entity)| {
-                    let entity_type = entity.get_entity().entity_type;
-                    types.contains(&entity_type)
-                })
-                .collect::<HashMap<_, _>>()
-        } else {
-            entities
-        };
-
-        // Find the closest entity
-        filtered_entities
-            .iter()
+    /// Gets the closest entity to a position that satisfies a predicate, with optional filtering
+    /// by entity type.
+    ///
+    /// The predicate is evaluated for every candidate inside the search, so the returned entity is
+    /// the nearest one that *passes* it, not merely the nearest one overall. This mirrors vanilla,
+    /// where the targeting conditions are part of the search instead of a check applied afterwards.
+    ///
+    /// # Arguments
+    ///
+    /// * `pos` - The position to search around.
+    /// * `radius` - The radius to search within.
+    /// * `entity_types` - Optional array of entity types to filter by. If None, all entity types are included.
+    /// * `predicate` - A predicate function, which has to be `true` for an entity to be considered.
+    ///
+    /// # Returns
+    ///
+    /// The closest entity that matches the filter criteria and passes the predicate, or None if no
+    /// entity does.
+    pub fn get_closest_entity_where(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        entity_types: Option<&[&'static EntityType]>,
+        predicate: impl Fn(&dyn EntityBase) -> bool,
+    ) -> Option<Arc<dyn EntityBase>> {
+        self.get_nearby_entities(pos, radius)
+            .into_values()
+            .filter(|entity| {
+                entity_types.is_none_or(|types| types.contains(&entity.get_entity().entity_type))
+                    && predicate(entity.as_ref())
+            })
             .min_by(|a, b| {
-                a.1.get_entity()
+                a.get_entity()
                     .pos
                     .load()
                     .squared_distance_to_vec(&pos)
-                    .partial_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(&pos))
+                    .partial_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
                     .unwrap()
             })
-            .map(|p| p.1.clone())
     }
 
     /// Adds entities to the provided [`Vec`] that satisfy a particular condition and are

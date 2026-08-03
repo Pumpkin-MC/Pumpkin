@@ -70,7 +70,12 @@ impl Goal for BegGoal {
             let pos = entity.pos.load();
             let radius = self.beg_distance_sq.sqrt();
 
-            let Some(player) = world.get_closest_player(pos, radius) else {
+            // The validity check runs per candidate inside the search, so a nearer spectator does
+            // not hide a valid player behind it. Vanilla also tests the held item after the
+            // search, and that check needs to lock the inventory, so it stays below.
+            let Some(player) = world.get_closest_player_where(pos, radius, |player| {
+                player.living_entity.is_part_of_game()
+            }) else {
                 return false;
             };
 

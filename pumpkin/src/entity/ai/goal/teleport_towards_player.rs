@@ -51,27 +51,35 @@ impl TeleportTowardsPlayerGoal {
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
 
-        let player = world.get_closest_player(pos, follow_range)?;
+        // The target conditions are evaluated per candidate so that a nearer but invalid player
+        // (a spectator or an invulnerable creative player) does not hide a valid one behind it.
+        // The predicate is async, so candidates are gathered first and tested in distance order.
+        let mut candidates = world.get_nearby_players(pos, follow_range);
+        candidates.sort_by(|a, b| {
+            a.get_entity()
+                .pos
+                .load()
+                .squared_distance_to_vec(&pos)
+                .partial_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
+                .unwrap()
+        });
 
-        if !player.get_entity().is_alive() {
-            return None;
-        }
+        for player in candidates {
+            if !self
+                .target_predicate
+                .test(
+                    &world,
+                    Some(&self.enderman.mob_entity.living_entity),
+                    &player.living_entity,
+                )
+                .await
+            {
+                continue;
+            }
 
-        let living = player.get_living_entity()?;
-        if !self
-            .target_predicate
-            .test(
-                &world,
-                Some(&self.enderman.mob_entity.living_entity),
-                living,
-            )
-            .await
-        {
-            return None;
-        }
-
-        if self.enderman.is_player_staring(&player).await || self.enderman.is_angry() {
-            return Some(player);
+            if self.enderman.is_player_staring(&player).await || self.enderman.is_angry() {
+                return Some(player);
+            }
         }
 
         None
