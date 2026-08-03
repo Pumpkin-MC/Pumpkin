@@ -51,16 +51,19 @@ impl BlockBehaviour for FarmlandBlock {
             };
             let can_grief = args.entity.get_player().is_some()
                 || args.world.level_info.load().game_rules.mob_griefing;
-            if !can_grief {
-                return;
-            }
             let dimensions = living.entity.entity_dimension.load();
-            if dimensions.width * dimensions.width * dimensions.height <= 0.512 {
-                return;
-            }
-            if rand::rng().random::<f32>() < args.fall_distance - 0.5 {
+            if can_grief
+                && dimensions.width * dimensions.width * dimensions.height > 0.512
+                && rand::rng().random::<f32>() < args.fall_distance - 0.5
+            {
                 turn_to_dirt(args.world, args.position).await;
             }
+
+            // `FarmlandBlock#fallOn` ends with `super.fallOn`, so normal fall damage still
+            // applies whether or not the trample roll succeeded.
+            living
+                .handle_fall_damage(args.entity, args.fall_distance, 1.0)
+                .await;
         })
     }
 

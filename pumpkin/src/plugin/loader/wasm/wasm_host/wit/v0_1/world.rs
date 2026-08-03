@@ -956,7 +956,7 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
 
     async fn get_diameter(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<f64> {
         let border_res = self.get_world_border_res(&border)?;
-        Ok(border_res.provider.worldborder.lock().await.new_diameter)
+        Ok(border_res.provider.worldborder.lock().await.size())
     }
 
     async fn set_diameter(

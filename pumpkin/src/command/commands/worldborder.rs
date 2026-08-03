@@ -21,8 +21,42 @@ const DESCRIPTION: &str = "Worldborder command.";
 
 const NOTHING_CHANGED_EXCEPTION: &str = "commands.worldborder.set.failed.nochange";
 
+/// Vanilla `WorldBorder.MAX_SIZE` (`5.999997E7F`, i.e. the float rounds to this).
+const MAX_SIZE: f64 = 5.999_996_8E7;
+/// Vanilla `WorldBorder.MAX_CENTER_COORDINATE`.
+const MAX_CENTER_COORDINATE: f64 = 2.999_998_4E7;
+
+// `WorldBorderCommand` registers `distance` as `doubleArg(-MAX_SIZE, MAX_SIZE)` for
+// both `set` and `add`; the resulting size is range-checked in `setSize` instead.
 const fn distance_consumer() -> BoundedNumArgumentConsumer<f64> {
-    BoundedNumArgumentConsumer::new().min(0.0).name("distance")
+    BoundedNumArgumentConsumer::new()
+        .min(-MAX_SIZE)
+        .max(MAX_SIZE)
+        .name("distance")
+}
+
+/// Vanilla `WorldBorderCommand.formatTicksToSeconds`.
+fn format_ticks_to_seconds(ticks: i32) -> String {
+    format!("{:.2}", f64::from(ticks) / 20.0)
+}
+
+/// Vanilla `WorldBorderCommand.setSize`'s `ERROR_TOO_SMALL` / `ERROR_TOO_BIG` checks.
+fn check_size(distance: f64) -> Result<(), CommandError> {
+    if distance < 1.0 {
+        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+            "commands.worldborder.set.failed.small",
+            "commands.worldborder.set.failed.small",
+            [],
+        )));
+    }
+    if distance > MAX_SIZE {
+        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+            "commands.worldborder.set.failed.big",
+            "commands.worldborder.set.failed.big",
+            [TextComponent::text(format!("{MAX_SIZE:.1}"))],
+        )));
+    }
+    Ok(())
 }
 
 const fn time_consumer() -> BoundedNumArgumentConsumer<i32> {
@@ -72,7 +106,7 @@ impl CommandExecutor for GetExecutor {
             let world = world_for_sender(sender, server)?;
             let border = world.worldborder.lock().await;
 
-            let diameter = border.new_diameter.round() as i32;
+            let diameter = border.size().round() as i32;
             sender
                 .send_message(TextComponent::translate_cross(
                     "commands.worldborder.get",
@@ -106,13 +140,14 @@ impl CommandExecutor for SetExecutor {
                 ))));
             };
 
-            if (distance - border.new_diameter).abs() < f64::EPSILON {
+            if (distance - border.size()).abs() < f64::EPSILON {
                 return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                     NOTHING_CHANGED_EXCEPTION,
                     NOTHING_CHANGED_EXCEPTION,
                     [],
                 )));
             }
+            check_size(distance)?;
 
             sender
                 .send_message(TextComponent::translate_cross(
@@ -122,7 +157,7 @@ impl CommandExecutor for SetExecutor {
                 ))
                 .await;
 
-            let d = border.new_diameter;
+            let d = border.size();
             border.set_diameter(&world, distance, None);
 
             Ok((distance - d) as i32)
@@ -156,7 +191,9 @@ impl CommandExecutor for SetTimeExecutor {
                 ))));
             };
 
-            match distance.total_cmp(&border.new_diameter) {
+            check_size(distance)?;
+
+            match distance.total_cmp(&border.size()) {
                 std::cmp::Ordering::Equal => {
                     return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                         NOTHING_CHANGED_EXCEPTION,
@@ -172,7 +209,7 @@ impl CommandExecutor for SetTimeExecutor {
                             "commands.worldborder.set.shrink",
                             [
                                 TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
+                                TextComponent::text(format_ticks_to_seconds(time)),
                             ],
                         ))
                         .await;
@@ -185,15 +222,15 @@ impl CommandExecutor for SetTimeExecutor {
                             "commands.worldborder.set.grow",
                             [
                                 TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
+                                TextComponent::text(format_ticks_to_seconds(time)),
                             ],
                         ))
                         .await;
                 }
             }
 
-            let d = border.new_diameter;
-            border.set_diameter(&world, distance, Some(i64::from(time) * 1000));
+            let d = border.size();
+            border.set_diameter(&world, distance, Some(i64::from(time)));
 
             Ok((distance - d) as i32)
         })
@@ -228,7 +265,8 @@ impl CommandExecutor for AddExecutor {
                 )));
             }
 
-            let distance = border.new_diameter + distance_add;
+            let distance = border.size() + distance_add;
+            check_size(distance)?;
 
             let dist = format!("{distance:.1}");
             sender
@@ -270,9 +308,11 @@ impl CommandExecutor for AddTimeExecutor {
                 ))));
             };
 
-            let distance = distance_add + border.new_diameter;
+            let distance = distance_add + border.size();
 
-            match distance.total_cmp(&border.new_diameter) {
+            check_size(distance)?;
+
+            match distance.total_cmp(&border.size()) {
                 std::cmp::Ordering::Equal => {
                     return Err(CommandError::CommandFailed(TextComponent::text(format!(
                         "{} is out of bounds.",
@@ -287,7 +327,7 @@ impl CommandExecutor for AddTimeExecutor {
                             "commands.worldborder.set.shrink",
                             [
                                 TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
+                                TextComponent::text(format_ticks_to_seconds(time)),
                             ],
                         ))
                         .await;
@@ -300,14 +340,15 @@ impl CommandExecutor for AddTimeExecutor {
                             "commands.worldborder.set.grow",
                             [
                                 TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
+                                TextComponent::text(format_ticks_to_seconds(time)),
                             ],
                         ))
                         .await;
                 }
             }
 
-            border.set_diameter(&world, distance, Some(i64::from(time) * 1000));
+            let ticks = border.lerp_time() + i64::from(time);
+            border.set_diameter(&world, distance, Some(ticks));
 
             Ok(distance_add as i32)
         })
@@ -328,6 +369,23 @@ impl CommandExecutor for CenterExecutor {
             let mut border = world.worldborder.lock().await;
 
             let Vector2 { x, y } = Position2DArgumentConsumer.find_arg_default_name(args)?;
+
+            if (x - border.center_x).abs() < f64::EPSILON
+                && (y - border.center_z).abs() < f64::EPSILON
+            {
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.worldborder.center.failed",
+                    "commands.worldborder.center.failed",
+                    [],
+                )));
+            }
+            if x.abs() > MAX_CENTER_COORDINATE || y.abs() > MAX_CENTER_COORDINATE {
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.worldborder.set.failed.far",
+                    "commands.worldborder.set.failed.far",
+                    [TextComponent::text(format!("{MAX_CENTER_COORDINATE:.1}"))],
+                )));
+            }
 
             sender
                 .send_message(TextComponent::translate_cross(
@@ -410,8 +468,8 @@ impl CommandExecutor for DamageBufferExecutor {
 
             if (buffer - border.buffer).abs() < f32::EPSILON {
                 return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.worldborder.damage.amount.failed",
-                    "commands.worldborder.damage.amount.failed",
+                    "commands.worldborder.damage.buffer.failed",
+                    "commands.worldborder.damage.buffer.failed",
                     [],
                 )));
             }
@@ -503,7 +561,7 @@ impl CommandExecutor for WarningTimeExecutor {
                 .send_message(TextComponent::translate_cross(
                     "commands.worldborder.warning.time.success",
                     "commands.worldborder.warning.time.success",
-                    [TextComponent::text(time.to_string())],
+                    [TextComponent::text(format_ticks_to_seconds(time))],
                 ))
                 .await;
             border.set_warning_delay(&world, time);

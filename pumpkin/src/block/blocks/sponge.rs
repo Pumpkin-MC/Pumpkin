@@ -11,6 +11,13 @@ use pumpkin_data::{Block, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
+/// `SpongeBlock.MAX_DEPTH`: the breadth-first traversal stops expanding past this depth,
+/// which for orthogonal steps is the taxicab distance from the sponge.
+const MAX_DEPTH: i32 = 6;
+/// `SpongeBlock.MAX_COUNT`: the traversal aborts once this many nodes have been accepted,
+/// and the sponge itself is the first of them.
+const MAX_COUNT: usize = 65;
+
 #[pumpkin_block("minecraft:sponge")]
 pub struct SpongeBlock;
 
@@ -47,8 +54,7 @@ impl SpongeBlock {
                     + (next_pos.0.y - position.0.y).abs()
                     + (next_pos.0.z - position.0.z).abs();
 
-                // Wiki standard: distance 7, max 118 blocks
-                if taxicab_dist > 7 || water_blocks.len() >= 118 {
+                if taxicab_dist > MAX_DEPTH || water_blocks.len() >= MAX_COUNT - 1 {
                     continue;
                 }
 
