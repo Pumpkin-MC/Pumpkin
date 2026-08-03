@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering;
 
 use crate::block::entities::hanging_sign::HangingSignBlockEntity;
 use crate::block::entities::sign::SignBlockEntity;
+use crate::command::CommandSender;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
@@ -439,6 +440,37 @@ impl BlockBehaviour for SignBlock {
             let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
                 return BlockActionResult::Pass;
             };
+
+            // Vanilla executeClickCommandsIfPresent: run any RunCommand click event on the sign.
+            let mut executed_command = false;
+            if let Some(server) = args.world.server.upgrade() {
+                for text in [&sign_entity.front_text, &sign_entity.back_text] {
+                    let lines = text.messages.lock().unwrap().clone();
+                    for line in &lines {
+                        let Ok(component) =
+                            serde_json::from_str::<pumpkin_util::text::TextComponent>(line)
+                        else {
+                            continue;
+                        };
+                        let Some(pumpkin_util::text::click::ClickEvent::RunCommand { command }) =
+                            &component.0.style.click_event
+                        else {
+                            continue;
+                        };
+                        let source = CommandSender::Dummy.into_source(&server).await;
+                        server
+                            .command_dispatcher
+                            .read()
+                            .await
+                            .handle_command(&source, command)
+                            .await;
+                        executed_command = true;
+                    }
+                }
+            }
+            if executed_command {
+                return BlockActionResult::SuccessServer;
+            }
 
             if sign_entity.is_waxed.load(Ordering::Relaxed) {
                 args.world.play_block_sound(
