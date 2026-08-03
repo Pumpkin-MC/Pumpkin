@@ -15,6 +15,10 @@ pub struct LevelConfig {
     /// Needs the `gpu-experimental` Cargo feature, and is not production ready.
     #[serde(default)]
     pub gpu_experimental_lighting: bool,
+    /// EXPERIMENTAL: offload terrain density noise to a GPU compute shader.
+    /// Needs the `gpu-experimental` Cargo feature, and is not production ready.
+    #[serde(default)]
+    pub gpu_experimental_terrain_noise: bool,
     /// Number of ticks between autosave checks. If 0, autosave is disabled.
     #[serde(default = "default_autosave_ticks")]
     pub autosave_ticks: u64,
