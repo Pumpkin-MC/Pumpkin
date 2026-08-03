@@ -5,9 +5,9 @@ use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    AxolotlVariantImpl, BundleContentsImpl, CatCollarImpl, CatSoundVariantImpl, CatVariantImpl,
-    ChickenSoundVariantImpl, ChickenVariantImpl, ConsumableImpl, ConsumeAnimation, ConsumeEffect,
-    CowSoundVariantImpl, CowVariantImpl, CustomDataImpl, CustomNameImpl, DamageImpl,
+    AxolotlVariantImpl, BlockStateImpl, BundleContentsImpl, CatCollarImpl, CatSoundVariantImpl,
+    CatVariantImpl, ChickenSoundVariantImpl, ChickenVariantImpl, ConsumableImpl, ConsumeAnimation,
+    ConsumeEffect, CowSoundVariantImpl, CowVariantImpl, CustomDataImpl, CustomNameImpl, DamageImpl,
     DataComponentImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl,
     FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl, HorseVariantImpl,
     IDSet, IDSetContent, IdOr, ItemModelImpl, LlamaVariantImpl, MapIdImpl, MaxStackSizeImpl,
@@ -777,6 +777,7 @@ pub fn deserialize(
         DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::BlockState => Ok(BlockStateImpl::deserialize(seq)?.to_dyn()),
         _ => Err(ReadingError::Message(format!("{id:?} (TODO)"))),
     }
 }
@@ -802,6 +803,7 @@ pub fn serialize(
         DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
         DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
+        DataComponent::BlockState => get::<BlockStateImpl>(value).serialize(seq),
         _ => Err(WritingError::Message(format!(
             "{} not yet implemented",
             id.to_name()
@@ -817,6 +819,30 @@ impl DataComponentCodec<Self> for MapIdImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let id = seq.get_var_int()?.0;
         Ok(Self { id })
+    }
+}
+
+impl DataComponentCodec<Self> for BlockStateImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_var_int(&VarInt(self.properties.len() as i32))?;
+        for (key, value) in self.properties.iter() {
+            seq.write_string(key)?;
+            seq.write_string(value)?;
+        }
+        Ok(())
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let count = seq.get_var_int()?.0;
+        let mut properties = Vec::with_capacity(count.max(0) as usize);
+        for _ in 0..count {
+            let key = seq.get_str()?;
+            let value = seq.get_str()?;
+            properties.push((Cow::Owned(key.to_string()), Cow::Owned(value.to_string())));
+        }
+        Ok(Self {
+            properties: Cow::Owned(properties),
+        })
     }
 }
 
