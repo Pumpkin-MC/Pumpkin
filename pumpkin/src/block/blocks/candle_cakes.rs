@@ -63,7 +63,7 @@ pub struct CandleCakeBlock;
 impl CandleCakeBlock {
     async fn consume_and_drop_candle(
         block: &Block,
-        player: &Player,
+        player: &Arc<Player>,
         location: &BlockPos,
         world: &Arc<World>,
     ) -> BlockActionResult {

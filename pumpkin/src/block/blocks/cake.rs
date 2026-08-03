@@ -6,7 +6,7 @@ use crate::{
         GetStateForNeighborUpdateArgs, NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs,
         UseWithItemArgs, blocks::candle_cakes::cake_from_candle, registry::BlockActionResult,
     },
-    entity::player::Player,
+    entity::{EntityBase, player::Player},
     world::World,
 };
 use pumpkin_data::item::Item;
@@ -29,7 +29,7 @@ pub struct CakeBlock;
 impl CakeBlock {
     pub async fn consume_if_hungry(
         world: &Arc<World>,
-        player: &Player,
+        player: &Arc<Player>,
         block: &Block,
         location: &BlockPos,
         state_id: BlockStateId,
@@ -68,6 +68,7 @@ impl CakeBlock {
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
+                emit_eat_game_event(world, player).await;
                 BlockActionResult::Consume
             }
             6 => {
@@ -85,6 +86,7 @@ impl CakeBlock {
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
+                emit_eat_game_event(world, player).await;
                 BlockActionResult::Consume
             }
             _ => {
@@ -215,6 +217,19 @@ impl BlockBehaviour for CakeBlock {
             }
         })
     }
+}
+
+// CakeBlock.java:102 -- `player.gameEvent(GameEvent.EAT)` on every bite, including the one
+// that clears the block. `Entity::gameEvent` (Entity.java:1431) defaults the position to the
+// entity's own position.
+async fn emit_eat_game_event(world: &Arc<World>, player: &Arc<Player>) {
+    crate::world::game_event::emit_game_event(
+        world,
+        pumpkin_data::game_event::GameEvent::Eat,
+        player.get_entity().pos.load(),
+        crate::world::game_event::GameEventContext::of_entity(player.clone()),
+    )
+    .await;
 }
 
 fn can_place_at(world: &dyn BlockAccessor, position: &BlockPos) -> bool {
