@@ -546,6 +546,25 @@ mod tests {
     }
 
     #[test]
+    fn prefers_open_node_cost_over_closed_node_cost() {
+        let open_node = Node {
+            g: 2.0,
+            ..Default::default()
+        };
+        let closed_node = Node {
+            g: 4.0,
+            ..Default::default()
+        };
+
+        let mut open_set = BinaryHeap::new();
+        open_set.insert(open_node);
+        let mut closed_set = HashMap::new();
+        closed_set.insert(closed_node.pos.0, closed_node);
+
+        assert_eq!(known_node_g(&open_set, &closed_set, &open_node), Some(2.0));
+    }
+
+    #[test]
     fn skips_a_waypoint_behind_the_mob() {
         let path = Path::new(
             vec![
