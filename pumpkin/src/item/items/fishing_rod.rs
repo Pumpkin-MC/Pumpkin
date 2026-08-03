@@ -14,6 +14,12 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 
 pub struct FishingRodItem;
 
+/// Vanilla `FishingRodItem#use`: both bobber sounds use pitch
+/// `0.4F / (random.nextFloat() * 0.4F + 0.8F)`.
+fn bobber_sound_pitch(random_value: f32) -> f32 {
+    0.4 / (random_value * 0.4 + 0.8)
+}
+
 impl ItemMetadata for FishingRodItem {
     fn ids() -> Box<[u16]> {
         Box::new([Item::FISHING_ROD.id])
@@ -32,10 +38,12 @@ impl ItemBehaviour for FishingRodItem {
 
             if bobber_id == -1 {
                 // Cast
-                world.play_sound(
+                world.play_sound_fine(
                     Sound::EntityFishingBobberThrow,
                     SoundCategory::Neutral,
                     &player.position(),
+                    0.5,
+                    bobber_sound_pitch(rand::random()),
                 );
 
                 let bobber_entity = Entity::new(
@@ -72,10 +80,12 @@ impl ItemBehaviour for FishingRodItem {
                 }
                 player.fishing_bobber.store(-1, Ordering::Relaxed);
 
-                world.play_sound(
+                world.play_sound_fine(
                     Sound::EntityFishingBobberRetrieve,
                     SoundCategory::Neutral,
                     &player.position(),
+                    1.0,
+                    bobber_sound_pitch(rand::random()),
                 );
             }
         })
@@ -83,5 +93,16 @@ impl ItemBehaviour for FishingRodItem {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bobber_sound_pitch;
+
+    #[test]
+    fn bobber_pitch_spans_the_vanilla_range() {
+        assert!((bobber_sound_pitch(0.0) - 0.5).abs() < 1e-6);
+        assert!((bobber_sound_pitch(1.0) - 0.4 / 1.2).abs() < 1e-6);
     }
 }
