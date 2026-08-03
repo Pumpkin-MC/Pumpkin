@@ -1920,8 +1920,7 @@ impl Entity {
             }
 
             if !self.touching_water.load(Ordering::SeqCst) {
-
-                // TODO: Spawn splash particles
+                self.do_water_splash_effect().await;
             }
         }
 
@@ -1944,6 +1943,54 @@ impl Entity {
         self.lava_height.store(lava_height);
 
         self.touching_lava.store(in_lava, Ordering::SeqCst);
+    }
+
+    /// Port of vanilla's `Entity::doWaterSplashEffect`.
+    ///
+    /// Simplifications vs vanilla:
+    /// - No `getControllingPassenger()` volume modifier; always uses `self` (modifier 0.2).
+    /// - No `firstTick` guard; the `touching_water` transition gate is the only check --
+    ///   an entity spawned already submerged may play one extra splash vanilla wouldn't.
+    /// - Sound uses `Entity::play_sound`, which has no volume/pitch parameters; vanilla's
+    ///   speed-dependent volume/pitch and high-speed splash variant are dropped (both of
+    ///   vanilla's base-Entity sounds resolve to the same `GENERIC_SPLASH` anyway).
+    /// - Particles are batched via `World::spawn_particle` (one call per type) instead of
+    ///   vanilla's per-particle explicit position/velocity-from-movement loop.
+    async fn do_water_splash_effect(&self) {
+        let pos = self.pos.load();
+        let width = self.entity_dimension.load().width;
+
+        self.play_sound(Sound::EntityGenericSplash);
+
+        let particle_count = (1.0f32 + width * 20.0) as i32;
+        let splash_origin = Vector3::new(pos.x, pos.y.floor() + 1.0, pos.z);
+        let scatter_offset = Vector3::new(width, 0.0, width);
+
+        let world = self.world.load();
+        world.spawn_particle(
+            splash_origin,
+            scatter_offset,
+            0.2,
+            particle_count,
+            pumpkin_data::particle::Particle::Bubble,
+        );
+        world.spawn_particle(
+            splash_origin,
+            scatter_offset,
+            0.2,
+            particle_count,
+            pumpkin_data::particle::Particle::Splash,
+        );
+
+        // No `Arc<dyn EntityBase>` is available in this plain `&self` method, so this uses
+        // `GameEventContext::none()` like other position-only emission sites this session.
+        crate::world::game_event::emit_game_event(
+            &world,
+            pumpkin_data::game_event::GameEvent::Splash,
+            splash_origin,
+            crate::world::game_event::GameEventContext::none(),
+        )
+        .await;
     }
 
     fn push_by_fluid(&self, speed: f64, mut push: Vector3<f64>, n: usize) {
