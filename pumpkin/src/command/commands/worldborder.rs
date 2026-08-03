@@ -468,8 +468,8 @@ impl CommandExecutor for DamageBufferExecutor {
 
             if (buffer - border.buffer).abs() < f32::EPSILON {
                 return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.worldborder.damage.amount.failed",
-                    "commands.worldborder.damage.amount.failed",
+                    "commands.worldborder.damage.buffer.failed",
+                    "commands.worldborder.damage.buffer.failed",
                     [],
                 )));
             }
