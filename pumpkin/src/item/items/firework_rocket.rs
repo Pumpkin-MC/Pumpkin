@@ -32,19 +32,27 @@ impl ItemBehaviour for FireworkRocketItem {
         item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
-        _face: BlockDirection,
+        face: BlockDirection,
         cursor_pos: Vector3<f32>,
         _block: &'a Block,
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
+            // Vanilla `FireworkRocketItem#useOn` returns PASS while the player is elytra flying,
+            // so the block interaction happens instead of placing a rocket.
+            if player.get_entity().is_fall_flying() {
+                return;
+            }
+
             let world = player.world();
+            // Vanilla offsets the spawn by ROCKET_PLACEMENT_OFFSET (0.15) along the clicked face.
+            let offset = face.to_offset();
             let entity = Entity::new(
                 world.clone(),
                 Vector3::new(
-                    f64::from(location.0.x) + f64::from(cursor_pos.x),
-                    f64::from(location.0.y) + f64::from(cursor_pos.y),
-                    f64::from(location.0.z) + f64::from(cursor_pos.z),
+                    f64::from(location.0.x) + f64::from(cursor_pos.x) + f64::from(offset.x) * 0.15,
+                    f64::from(location.0.y) + f64::from(cursor_pos.y) + f64::from(offset.y) * 0.15,
+                    f64::from(location.0.z) + f64::from(cursor_pos.z) + f64::from(offset.z) * 0.15,
                 ),
                 &EntityType::FIREWORK_ROCKET,
             );
