@@ -46,6 +46,12 @@ pub const SONIC_BOOM_KNOCKBACK_VERTICAL: f64 = 0.5;
 /// `Warden` `doHurtTarget` damage constant (`ATTACK_DAMAGE` is the melee attribute; sonic
 /// boom's own damage is hardcoded in `SonicBoom.tick`: `hurtServer(..., 10.0F)`).
 pub const SONIC_BOOM_DAMAGE: f32 = 10.0;
+/// `WardenAi.ROAR_DURATION` (`Mth.ceil(84.0F)`).
+pub const ROAR_DURATION_TICKS: i32 = 84;
+/// `Roar.TICKS_BEFORE_PLAYING_ROAR_SOUND`.
+pub const ROAR_SOUND_DELAY_TICKS: i32 = 25;
+/// `Roar.ROAR_ANGER_INCREASE`.
+pub const ROAR_ANGER_INCREASE: i32 = 20;
 
 /// `AngerManagement.MAX_ANGER`
 const MAX_ANGER: i32 = 150;

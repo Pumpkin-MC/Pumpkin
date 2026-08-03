@@ -81,6 +81,41 @@ pub async fn on_target_block_hit(
     }
 }
 
+/// The impact location vanilla passes to `GameEvent.PROJECTILE_LAND`.
+///
+/// `Projectile.java:300` uses the exact hit location for entity hits, `:305` uses the
+/// hit block's position for block hits.
+#[must_use]
+pub fn projectile_land_pos(hit: &ProjectileHit) -> Vector3<f64> {
+    match hit {
+        ProjectileHit::Block { pos, .. } => Vector3::new(
+            f64::from(pos.0.x) + 0.5,
+            f64::from(pos.0.y) + 0.5,
+            f64::from(pos.0.z) + 0.5,
+        ),
+        ProjectileHit::Entity { hit_pos, .. } => *hit_pos,
+    }
+}
+
+/// Emits `GameEvent.PROJECTILE_LAND`; call after `on_hit` runs.
+///
+/// `Projectile.onHit`, lines 299-300/304-305: `onHitEntity`/`onHitBlock` runs first,
+/// then `gameEvent(GameEvent.PROJECTILE_LAND, <impact location>, GameEvent.Context.of(this,
+/// ...))` fires for both the entity-hit and block-hit branches.
+pub async fn emit_projectile_land(
+    world: &Arc<World>,
+    caller: &Arc<dyn EntityBase>,
+    land_pos: Vector3<f64>,
+) {
+    crate::world::game_event::emit_game_event(
+        world,
+        pumpkin_data::game_event::GameEvent::ProjectileLand,
+        land_pos,
+        crate::world::game_event::GameEventContext::of_entity(caller.clone()),
+    )
+    .await;
+}
+
 pub struct ThrownItemEntity {
     pub entity: Entity,
     pub owner_id: Option<i32>,
@@ -261,7 +296,10 @@ impl ThrownItemEntity {
             }
 
             // Just trigger hit effects and remove
+            let land_pos = projectile_land_pos(&h);
             caller.on_hit(h).await;
+            emit_projectile_land(&world, caller, land_pos).await;
+
             entity.remove().await;
         }
     }

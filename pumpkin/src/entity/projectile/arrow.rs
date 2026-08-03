@@ -452,7 +452,13 @@ impl EntityBase for ArrowEntity {
                 if !is_piercing_entity && self.has_hit.swap(true, Ordering::SeqCst) {
                     return;
                 }
+
+                // Arrow has its own hit path (doesn't go through
+                // ThrownItemEntity::process_tick), so PROJECTILE_LAND needs its own
+                // emission mirroring the one in projectile::mod.
+                let land_pos = crate::entity::projectile::projectile_land_pos(&h);
                 caller.on_hit(h).await;
+                crate::entity::projectile::emit_projectile_land(&world, caller, land_pos).await;
             }
         })
     }

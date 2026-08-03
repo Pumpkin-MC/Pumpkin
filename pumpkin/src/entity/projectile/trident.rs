@@ -290,7 +290,12 @@ impl EntityBase for TridentEntity {
             if let Some(h) = hit
                 && !self.has_hit.swap(true, Ordering::SeqCst)
             {
+                // Trident has its own hit path (doesn't go through
+                // ThrownItemEntity::process_tick), so PROJECTILE_LAND needs its own
+                // emission mirroring the one in projectile::mod.
+                let land_pos = crate::entity::projectile::projectile_land_pos(&h);
                 caller.on_hit(h).await;
+                crate::entity::projectile::emit_projectile_land(&world, caller, land_pos).await;
             }
         })
     }

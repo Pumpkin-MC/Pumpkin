@@ -1,6 +1,7 @@
 use std::{pin::Pin, sync::Arc};
 
 use crate::{
+    entity::EntityBase,
     entity::player::Player,
     entity::r#type::from_type,
     item::{ItemBehaviour, ItemMetadata},
@@ -132,11 +133,15 @@ async fn give_player_bucket_item(player: &Player, item: &'static Item) {
     }
 }
 
+/// Returns the bucket item obtained and the position of the block actually acted on
+/// (needed for `GameEvent::FluidPickup`, which vanilla emits at that exact position --
+/// `BucketItem.java:77` -- not always `block_pos` itself, since the waterlogged-neighbor
+/// branch below acts on `target_pos` instead).
 async fn try_pickup_bucket_item(
     world: &Arc<World>,
     block_pos: BlockPos,
     direction: BlockDirection,
-) -> Option<&'static Item> {
+) -> Option<(&'static Item, BlockPos)> {
     let (block, state) = world.get_block_and_state_id(&block_pos);
 
     if block == &Block::POWDER_SNOW {
@@ -147,7 +152,7 @@ async fn try_pickup_bucket_item(
                 BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
             )
             .await;
-        return Some(&Item::POWDER_SNOW_BUCKET);
+        return Some((&Item::POWDER_SNOW_BUCKET, block_pos));
     }
 
     if is_waterlogged(block, state) {
@@ -156,7 +161,7 @@ async fn try_pickup_bucket_item(
             .set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
         world.schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal);
-        return Some(&Item::WATER_BUCKET);
+        return Some((&Item::WATER_BUCKET, block_pos));
     }
 
     if state == Block::LAVA.default_state.id || state == Block::WATER.default_state.id {
@@ -170,11 +175,14 @@ async fn try_pickup_bucket_item(
                 BlockFlags::NOTIFY_NEIGHBORS,
             )
             .await;
-        return Some(if state == Block::LAVA.default_state.id {
-            &Item::LAVA_BUCKET
-        } else {
-            &Item::WATER_BUCKET
-        });
+        return Some((
+            if state == Block::LAVA.default_state.id {
+                &Item::LAVA_BUCKET
+            } else {
+                &Item::WATER_BUCKET
+            },
+            block_pos,
+        ));
     }
 
     let target_pos = block_pos.offset(direction.to_offset());
@@ -185,7 +193,7 @@ async fn try_pickup_bucket_item(
             .set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
         world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
-        return Some(&Item::WATER_BUCKET);
+        return Some((&Item::WATER_BUCKET, target_pos));
     }
 
     None
@@ -320,7 +328,12 @@ async fn try_place_filled_bucket(
     None
 }
 
-async fn spawn_mob_bucket_entity(world: &Arc<World>, item: &Item, pos: BlockPos) {
+async fn spawn_mob_bucket_entity(
+    world: &Arc<World>,
+    item: &Item,
+    pos: BlockPos,
+    player: Option<Arc<Player>>,
+) {
     let Some(entity_type) = mob_bucket_entity_type(item) else {
         return;
     };
@@ -337,6 +350,21 @@ async fn spawn_mob_bucket_entity(world: &Arc<World>, item: &Item, pos: BlockPos)
         .await;
     if let Some(sound) = mob_bucket_empty_sound(item) {
         world.play_sound(sound, SoundCategory::Neutral, &spawn_pos);
+    }
+
+    // MobBucketItem.checkExtraContent, line 37: level.gameEvent(user, GameEvent.ENTITY_PLACE, pos)
+    if let Some(player) = player {
+        crate::world::game_event::emit_game_event(
+            world,
+            pumpkin_data::game_event::GameEvent::EntityPlace,
+            Vector3::new(
+                f64::from(pos.0.x) + 0.5,
+                f64::from(pos.0.y) + 0.5,
+                f64::from(pos.0.z) + 0.5,
+            ),
+            crate::world::game_event::GameEventContext::of_entity(player),
+        )
+        .await;
     }
 }
 
@@ -369,9 +397,26 @@ impl ItemBehaviour for EmptyBucketItem {
                 return;
             };
 
-            let Some(item) = try_pickup_bucket_item(&world, block_pos, direction).await else {
+            let Some((item, acted_pos)) =
+                try_pickup_bucket_item(&world, block_pos, direction).await
+            else {
                 return;
             };
+
+            // BucketItem.java:77: level.gameEvent(player, GameEvent.FLUID_PICKUP, pos)
+            if let Some(player_arc) = world.get_player_by_id(player.get_entity().entity_id) {
+                crate::world::game_event::emit_game_event(
+                    &world,
+                    pumpkin_data::game_event::GameEvent::FluidPickup,
+                    Vector3::new(
+                        f64::from(acted_pos.0.x) + 0.5,
+                        f64::from(acted_pos.0.y) + 0.5,
+                        f64::from(acted_pos.0.z) + 0.5,
+                    ),
+                    crate::world::game_event::GameEventContext::of_entity(player_arc),
+                )
+                .await;
+            }
 
             give_player_bucket_item(player, item).await;
         })
@@ -412,7 +457,30 @@ impl ItemBehaviour for FilledBucketItem {
                 return;
             };
 
-            spawn_mob_bucket_entity(&world, item, placed_pos).await;
+            let player_arc = world.get_player_by_id(player.get_entity().entity_id);
+
+            // BucketItem.playEmptySound / SolidBucketItem.emptyContents: both call
+            // level.gameEvent(user, GameEvent.FLUID_PLACE, pos) (BucketItem.java:157,
+            // SolidBucketItem.java, emptyContents). MobBucketItem overrides
+            // playEmptySound (MobBucketItem.java:42-44) without that call, so mob
+            // buckets (axolotl/fish/tadpole/etc.) must not emit FLUID_PLACE here.
+            if mob_bucket_entity_type(item).is_none()
+                && let Some(player_arc) = player_arc.clone()
+            {
+                crate::world::game_event::emit_game_event(
+                    &world,
+                    pumpkin_data::game_event::GameEvent::FluidPlace,
+                    Vector3::new(
+                        f64::from(placed_pos.0.x) + 0.5,
+                        f64::from(placed_pos.0.y) + 0.5,
+                        f64::from(placed_pos.0.z) + 0.5,
+                    ),
+                    crate::world::game_event::GameEventContext::of_entity(player_arc),
+                )
+                .await;
+            }
+
+            spawn_mob_bucket_entity(&world, item, placed_pos, player_arc).await;
             if player.gamemode.load() != GameMode::Creative {
                 let item_stack = ItemStack::new(1, &Item::BUCKET);
                 player

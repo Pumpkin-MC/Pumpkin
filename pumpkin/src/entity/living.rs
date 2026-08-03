@@ -1532,6 +1532,17 @@ impl LivingEntity {
                 mob.on_mob_death(cause).await;
             }
 
+            // LivingEntity.die, line 1472: this.gameEvent(GameEvent.ENTITY_DIE), fired
+            // right before dropAllDeathLoot. Entity::gameEvent(event) (Entity.java:1431)
+            // defaults the source entity to `this`.
+            crate::world::game_event::emit_game_event(
+                &world,
+                pumpkin_data::game_event::GameEvent::EntityDie,
+                self.entity.pos.load(),
+                crate::world::game_event::GameEventContext::of_entity(dyn_self.clone()),
+            )
+            .await;
+
             // Drop loot
             self.drop_loot(params.clone()).await;
 

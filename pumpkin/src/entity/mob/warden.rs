@@ -11,14 +11,39 @@
 // (via `mob_entity.target`), and the sonic boom ranged attack. Explicitly NOT ported,
 // with reasons:
 //
-// - Pose-driven emerge/dig/roar animation states (Warden.java lines 275-282, 346-365,
-//   517-521, `AnimationState` fields) and the corresponding `Pose::EMERGING`/`DIGGING`/
-//   `ROARING` client sync: Pumpkin's `Entity` has no `Pose` enum or per-pose client
-//   animation-state channel at all (unlike vanilla's `SynchedEntityData` `DATA_POSE`).
-//   Digging in/out of the ground on first spawn (`EntitySpawnReason::TRIGGERED` only,
-//   i.e. sculk shrieker-summoned Wardens) and its temporary invulnerability
-//   (`isInvulnerableTo`, `ignoreExplosion`) are therefore not implemented; a Warden here
-//   spawns immediately usable, with no digging/emerging grace period.
+// - Pose-driven emerge/dig/roar/sniff animation states (Warden.java lines 275-282,
+//   346-365, 517-521, `AnimationState` fields): Pumpkin's `Entity` DOES have a `Pose`
+//   concept (`pumpkin_data::entity::EntityPose`, `Entity::pose` + `Entity::set_pose`,
+//   already used by Breeze/Frog/Villager/EnderPearl) generated with `Roaring`,
+//   `Sniffing`, `Emerging`, `Digging` variants matching vanilla's `Pose` enum 1:1 — an
+//   earlier version of this comment claiming otherwise was wrong. What's actually
+//   missing is vanilla's Brain/Memory/Activity ladder that decides *when* to enter each
+//   pose (`WardenAi.getActivities`/`updateActivity`, `SetRoarTarget`, `TryToSniff`,
+//   `DIG_COOLDOWN`/`ROAR_TARGET`/`IS_SNIFFING` memories) — see the top-of-file note above
+//   on why that framework isn't portable as-is. Of the four poses:
+//   - ROARING is ported below (`start_roar`/`cancel_roar`, ticked in `mob_tick`): fully
+//     timer-driven (`WardenAi.ROAR_DURATION` = 84 ticks, sound at tick 25 per
+//     `Roar.TICKS_BEFORE_PLAYING_ROAR_SOUND`), so it needs no memory/sensor equivalent.
+//     It replaces the previous immediate `set_attack_target` call on becoming angry at a
+//     player with vanilla's actual behavior (`Warden.increaseAngerAt` only *erases* the
+//     attack target on that transition; it's `Roar.stop()` that assigns the roar target as
+//     the new attack target once the roar finishes, Roar.java:58-65).
+//   - EMERGING (`Warden.finalizeSpawn`, Warden.java:480-492) is gated on
+//     `EntitySpawnReason::TRIGGERED` (sculk shrieker summons only) in vanilla. Pumpkin has
+//     no spawn-reason plumbing at all (`grep EntitySpawnReason pumpkin/src/` turns up only
+//     TODOs, e.g. `mob/mod.rs:978`), so there's no way to tell a triggered summon from a
+//     natural/`/summon` spawn here — NOT implemented, left for when spawn-reason exists,
+//     to avoid a visible regression (emerging on every spawn).
+//   - DIGGING and SNIFFING are NOT implemented: both are gated on Brain sensors Pumpkin
+//     has no equivalent for (`NEAREST_ATTACKABLE`, `DISTURBANCE_LOCATION` absence for
+//     Sniffing's `TryToSniff`; `DIG_COOLDOWN`/`ROAR_TARGET` absence for Digging), and
+//     Digging in particular ends in `body.remove(Entity.RemovalReason.DISCARDED)`
+//     (`Digging.java:36-40`) — an under-specified port here would despawn Wardens
+//     unexpectedly, which is a worse regression than the missing animation. Left as a
+//     separate, reviewed follow-up.
+//   Temporary invulnerability while emerging/digging (`isInvulnerableTo`,
+//   `ignoreExplosion`) is likewise not implemented, since it's keyed off the same
+//   never-entered EMERGING/DIGGING poses.
 // - `doPush`-triggered touch anger (Warden.java lines 528-537): Pumpkin's `EntityBase`
 //   has no entity-entity collision/push hook to attach this to at all (grepped
 //   `pumpkin/src/entity/{mod,living}.rs` and `mob/mod.rs` — no `on_push`/`do_push`).
@@ -45,9 +70,13 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::game_event::GameEvent;
+use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::vector3::Vector3;
 use tokio::sync::Mutex as AsyncMutex;
@@ -68,6 +97,34 @@ use crate::world::game_event::{
     GameEventContext, GameEventFuture, GameEventListener, PositionSource,
 };
 
+/// In-progress `Pose::ROARING` state (`Roar` behavior). See the module doc comment for why
+/// this is the one pose fully portable without the Brain/Memory framework.
+struct RoarState {
+    target: Arc<dyn EntityBase>,
+    ticks_remaining: i32,
+    sound_played: bool,
+}
+
+/// Syncs the tracked-data `POSE` without going through `Entity::set_pose`'s per-pose
+/// bounding-box resize, for the same reason `frog_tongue_attack.rs::sync_tongue_pose` does:
+/// `Entity::get_entity_dimensions` has no arm for `Roaring` (falls back to the generic
+/// 0.6x1.8 player-sized default), so `set_pose` would distort the Warden's actual hitbox for
+/// the roar's duration and could silently no-op via its `is_space_empty` guard in tight
+/// spots. Vanilla's `Warden` only overrides dimensions for `DIGGING`/`EMERGING`
+/// (Warden.java:517-521), not `ROARING`, so skipping the resize here matches vanilla's own
+/// (lack of) hitbox change for this pose.
+fn sync_warden_pose(entity: &Entity, pose: EntityPose) {
+    entity.pose.store(pose);
+    entity.send_meta_data(
+        &[Metadata::new(
+            TrackedData::POSE,
+            MetaDataType::ENTITY_POSE,
+            VarInt(pose as i32),
+        )],
+        None,
+    );
+}
+
 pub struct WardenEntity {
     pub mob_entity: MobEntity,
     anger: AsyncMutex<AngerManagement>,
@@ -77,6 +134,8 @@ pub struct WardenEntity {
     sonic_boom_cooldown: AtomicI32,
     listener_registered: AtomicBool,
     listener: std::sync::Mutex<Option<Arc<WardenVibrationListener>>>,
+    /// `Roar` behavior state; `None` when not roaring. See `RoarState`.
+    roar_state: std::sync::Mutex<Option<RoarState>>,
 }
 
 impl WardenEntity {
@@ -90,6 +149,7 @@ impl WardenEntity {
             sonic_boom_cooldown: AtomicI32::new(0),
             listener_registered: AtomicBool::new(false),
             listener: std::sync::Mutex::new(None),
+            roar_state: std::sync::Mutex::new(None),
         };
         let mob_arc = Arc::new(warden);
         let mob_weak: Weak<dyn Mob> = {
@@ -166,7 +226,11 @@ impl WardenEntity {
             !matches!(&*target, Some(t) if t.get_player().is_some())
         };
         if is_player && maybe_switch_target && AngerLevel::by_anger(new_anger).is_angry() {
-            self.set_attack_target(entity.clone()).await;
+            // `Warden.increaseAngerAt` (Warden.java:451-464) only erases the attack-target
+            // memory here; it's `Roar.stop()` (Roar.java:58-65) that assigns the roar
+            // target as the new attack target once the roar finishes. `start_roar` mirrors
+            // that two-step handoff instead of switching target immediately.
+            self.start_roar(entity.clone()).await;
         }
 
         if play_sound {
@@ -174,7 +238,100 @@ impl WardenEntity {
         }
     }
 
+    /// `Roar.start` (Roar.java:37-45): enters `Pose::ROARING` for `ROAR_DURATION_TICKS`
+    /// and bumps anger at the roar target by `ROAR_ANGER_INCREASE`. No-ops if already
+    /// roaring (matches the Brain framework only ever having one `ROAR_TARGET` at a time).
+    async fn start_roar(&self, target: Arc<dyn EntityBase>) {
+        let started = {
+            let mut state = self.roar_state.lock().unwrap();
+            if state.is_some() {
+                false
+            } else {
+                *state = Some(RoarState {
+                    target: target.clone(),
+                    ticks_remaining: warden_anger::ROAR_DURATION_TICKS,
+                    sound_played: false,
+                });
+                true
+            }
+        };
+        if !started {
+            return;
+        }
+        sync_warden_pose(&self.mob_entity.living_entity.entity, EntityPose::Roaring);
+        Box::pin(self.increase_anger_at(&target, warden_anger::ROAR_ANGER_INCREASE, false)).await;
+    }
+
+    /// `Warden.setAttackTarget` also erases `ROAR_TARGET` (Warden.java:510-515); mirrored
+    /// here by clearing any in-progress roar and reverting its pose before assigning the
+    /// new attack target, so a direct/close hit (see `on_damage`) can pre-empt a roar in
+    /// progress instead of the roar later overwriting the target on completion.
+    fn cancel_roar(&self) {
+        let mut state = self.roar_state.lock().unwrap();
+        if state.take().is_some() {
+            sync_warden_pose(&self.mob_entity.living_entity.entity, EntityPose::Standing);
+        }
+    }
+
+    /// Ticks the in-progress roar, if any: plays `WARDEN_ROAR` once
+    /// `ROAR_SOUND_DELAY_TICKS` have elapsed (`Roar.tick`, Roar.java:51-56), and on
+    /// expiry reverts the pose and hands the target off via `set_attack_target`
+    /// (`Roar.stop`, Roar.java:58-65).
+    async fn tick_roar(&self) {
+        enum Outcome {
+            None,
+            PlaySound,
+            Complete(Arc<dyn EntityBase>),
+        }
+        let outcome = {
+            let mut state = self.roar_state.lock().unwrap();
+            let Some(roar) = state.as_mut() else {
+                return;
+            };
+            roar.ticks_remaining -= 1;
+            if roar.ticks_remaining <= 0 {
+                let target = roar.target.clone();
+                *state = None;
+                Outcome::Complete(target)
+            } else if !roar.sound_played
+                && roar.ticks_remaining
+                    <= warden_anger::ROAR_DURATION_TICKS - warden_anger::ROAR_SOUND_DELAY_TICKS
+            {
+                roar.sound_played = true;
+                Outcome::PlaySound
+            } else {
+                Outcome::None
+            }
+        };
+        match outcome {
+            Outcome::None => {}
+            Outcome::PlaySound => {
+                let pos = self.mob_entity.living_entity.entity.pos.load();
+                self.mob_entity
+                    .living_entity
+                    .entity
+                    .world
+                    .load()
+                    .play_sound_fine(
+                        Sound::EntityWardenRoar,
+                        SoundCategory::Hostile,
+                        &pos,
+                        3.0,
+                        1.0,
+                    );
+            }
+            Outcome::Complete(target) => {
+                sync_warden_pose(&self.mob_entity.living_entity.entity, EntityPose::Standing);
+                self.set_attack_target(target).await;
+            }
+        }
+    }
+
+    /// `Warden.playListeningSound` (Warden.java:428-432): suppressed while roaring.
     async fn play_listening_sound(&self) {
+        if self.roar_state.lock().unwrap().is_some() {
+            return;
+        }
         let anger = self.active_anger().await;
         let sound = match AngerLevel::by_anger(anger) {
             AngerLevel::Angry | AngerLevel::Agitated => Sound::EntityWardenListeningAngry,
@@ -209,6 +366,7 @@ impl WardenEntity {
     /// `Warden.setAttackTarget`; also resets the sonic-boom cooldown like vanilla does
     /// (`SonicBoom.setCooldown(this, 200)` — vanilla's `TIME_TO_USE_MELEE_UNTIL_SONIC_BOOM`).
     async fn set_attack_target(&self, target: Arc<dyn EntityBase>) {
+        self.cancel_roar();
         *self.mob_entity.target.lock().await = Some(target);
         self.sonic_boom_cooldown
             .store(warden_anger::SONIC_BOOM_COOLDOWN_TICKS, Ordering::Relaxed);
@@ -362,6 +520,8 @@ impl Mob for WardenEntity {
             if self.sonic_boom_cooldown.load(Ordering::Relaxed) > 0 {
                 self.sonic_boom_cooldown.fetch_sub(1, Ordering::Relaxed);
             }
+
+            self.tick_roar().await;
 
             let age = self
                 .mob_entity
