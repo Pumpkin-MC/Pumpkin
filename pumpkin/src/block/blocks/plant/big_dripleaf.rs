@@ -201,6 +201,7 @@ async fn reset_tilt(state_id: BlockStateId, world: &Arc<World>, pos: &BlockPos) 
 }
 async fn set_tilt(state_id: BlockStateId, world: &Arc<World>, pos: &BlockPos, new_tilt: Tilt) {
     let mut props = BigDripleafLikeProperties::from_state_id(state_id, &Block::BIG_DRIPLEAF);
+    let previous_tilt = props.tilt;
     props.tilt = new_tilt;
     world
         .set_block_state(
@@ -209,7 +210,20 @@ async fn set_tilt(state_id: BlockStateId, world: &Arc<World>, pos: &BlockPos, ne
             BlockFlags::NOTIFY_ALL,
         )
         .await;
-    //todo GameEvents?
+    if tilt_causes_vibration(new_tilt) && new_tilt != previous_tilt {
+        crate::world::game_event::emit_game_event(
+            world,
+            pumpkin_data::game_event::GameEvent::BlockChange,
+            pos.to_centered_f64(),
+            crate::world::game_event::GameEventContext::none(),
+        )
+        .await;
+    }
+}
+
+/// Vanilla `Tilt.causesVibration`: true for all states except `UNSTABLE`.
+const fn tilt_causes_vibration(tilt: Tilt) -> bool {
+    !matches!(tilt, Tilt::Unstable)
 }
 fn can_entity_tilt<T: EntityBase + ?Sized>(pos: &BlockPos, entity: &T) -> bool {
     entity.get_entity().on_ground.load(Ordering::Relaxed)
