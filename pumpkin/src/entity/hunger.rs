@@ -113,15 +113,12 @@ impl HungerManager {
         }
     }
 
-    pub async fn eat(&self, player: &Player, food: u8, saturation_modifier: f32) {
-        let added_saturation = f32::from(food) * saturation_modifier * 2.0;
-
-        let current_level = self.level.load();
-        let current_sat = self.saturation.load();
-
-        let new_level = (current_level + food).min(MAX_FOOD);
-
-        let new_sat = (current_sat + added_saturation).min(f32::from(new_level));
+    /// Vanilla `FoodData.eat(FoodProperties)`, which forwards the component's
+    /// `saturation()` straight to `FoodData.add` -- the value is already absolute,
+    /// not a modifier, so no `FoodConstants.saturationByModifier` scaling applies.
+    pub async fn eat(&self, player: &Player, food: u8, saturation: f32) {
+        let new_level = self.level.load().saturating_add(food).min(MAX_FOOD);
+        let new_sat = (self.saturation.load() + saturation).clamp(0.0, f32::from(new_level));
 
         self.level.store(new_level);
         self.saturation.store(new_sat);
