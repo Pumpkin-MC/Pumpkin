@@ -315,11 +315,25 @@ impl LivingEntity {
         self.livings_flags.store(b, Ordering::Relaxed);
 
         let bedrock_meta = (flag == Self::USING_ITEM_FLAG).then(|| {
-            let mut meta = pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
+            use pumpkin_protocol::bedrock::client::set_actor_data::{
+                EntityMetadata, MetadataValue, entity_data_flag, entity_data_key,
+            };
+            let mut meta = EntityMetadata::new();
+            // The Bedrock FLAGS field is a full bitfield: a SetActorData that
+            // carries it replaces the client's entire flag set. Building this
+            // from an empty metadata sent FLAGS with only USING_ITEM, which
+            // cleared HAS_GRAVITY (and HAS_COLLISION, CLIMB, BREATHING) that were
+            // set on spawn, so the moment a player used an item the client
+            // stopped applying gravity and floated. Seed the field with the
+            // entity's accumulated flags before toggling USING_ITEM so gravity
+            // is preserved.
+            meta.set(
+                entity_data_key::FLAGS,
+                MetadataValue::Long(self.entity.bedrock_flags.load(Ordering::Relaxed)),
+            );
             meta.set_flag(
-                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS,
-                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM
-                    as u8,
+                entity_data_key::FLAGS,
+                entity_data_flag::USING_ITEM as u8,
                 value,
             );
             meta

@@ -431,3 +431,40 @@ pub mod entity_data_flag {
     pub const ROTATION_LOCKED_TO_VEHICLE: u32 = 126;
     pub const COUNT: u32 = 127;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{EntityMetadata, MetadataValue, entity_data_flag, entity_data_key};
+
+    /// Toggling one flag on top of a seeded `FLAGS` field must keep the other bits.
+    ///
+    /// This guards the Bedrock anti-gravity bug: `FLAGS` is a full bitfield sent
+    /// whole to the client, so a partial update that dropped `HAS_GRAVITY` left
+    /// the player floating. Seeding the field first and then toggling
+    /// `USING_ITEM` must preserve `HAS_GRAVITY`.
+    #[test]
+    fn setting_a_flag_preserves_seeded_bits() {
+        let base = 1i64 << entity_data_flag::HAS_GRAVITY;
+        let mut meta = EntityMetadata::new();
+        meta.set(entity_data_key::FLAGS, MetadataValue::Long(base));
+        meta.set_flag(
+            entity_data_key::FLAGS,
+            entity_data_flag::USING_ITEM as u8,
+            true,
+        );
+
+        let Some(MetadataValue::Long(flags)) = meta.0.get(&entity_data_key::FLAGS) else {
+            panic!("FLAGS field missing after set_flag");
+        };
+        assert_ne!(
+            flags & (1i64 << entity_data_flag::HAS_GRAVITY),
+            0,
+            "HAS_GRAVITY was cleared by a partial flag update"
+        );
+        assert_ne!(
+            flags & (1i64 << entity_data_flag::USING_ITEM),
+            0,
+            "USING_ITEM was not set"
+        );
+    }
+}
