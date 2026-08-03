@@ -200,7 +200,22 @@ impl BlockBehaviour for JukeboxBlock {
                 )
                 .await;
 
-            // TODO: world.emitGameEvent(GameEvent.BLOCK_CHANGE, pos, ...)
+            // Vanilla JukeboxBlockEntity.java:44 -- emits BLOCK_CHANGE when a record is
+            // inserted. Vanilla's context carries the block's new state; Pumpkin's
+            // GameEventContext has no block-state variant, so this uses none() as a
+            // documented simplification, matching other emission sites this session.
+            let block_center = Vector3::new(
+                f64::from(args.position.0.x) + 0.5,
+                f64::from(args.position.0.y) + 0.5,
+                f64::from(args.position.0.z) + 0.5,
+            );
+            emit_game_event(
+                world,
+                GameEvent::BlockChange,
+                block_center,
+                GameEventContext::none(),
+            )
+            .await;
 
             BlockActionResult::Success
         })
