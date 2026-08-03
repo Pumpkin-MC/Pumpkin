@@ -225,6 +225,24 @@ const fn get_deoxidized_equivalent(id: BlockId) -> Option<BlockId> {
         BlockId::OXIDIZED_COPPER_TRAPDOOR => Some(BlockId::WEATHERED_COPPER_TRAPDOOR),
         BlockId::WEATHERED_COPPER_TRAPDOOR => Some(BlockId::EXPOSED_COPPER_TRAPDOOR),
         BlockId::EXPOSED_COPPER_TRAPDOOR => Some(BlockId::COPPER_TRAPDOOR),
+        BlockId::OXIDIZED_COPPER_BARS => Some(BlockId::WEATHERED_COPPER_BARS),
+        BlockId::WEATHERED_COPPER_BARS => Some(BlockId::EXPOSED_COPPER_BARS),
+        BlockId::EXPOSED_COPPER_BARS => Some(BlockId::COPPER_BARS),
+        BlockId::OXIDIZED_COPPER_CHAIN => Some(BlockId::WEATHERED_COPPER_CHAIN),
+        BlockId::WEATHERED_COPPER_CHAIN => Some(BlockId::EXPOSED_COPPER_CHAIN),
+        BlockId::EXPOSED_COPPER_CHAIN => Some(BlockId::COPPER_CHAIN),
+        BlockId::OXIDIZED_COPPER_LANTERN => Some(BlockId::WEATHERED_COPPER_LANTERN),
+        BlockId::WEATHERED_COPPER_LANTERN => Some(BlockId::EXPOSED_COPPER_LANTERN),
+        BlockId::EXPOSED_COPPER_LANTERN => Some(BlockId::COPPER_LANTERN),
+        BlockId::OXIDIZED_COPPER_CHEST => Some(BlockId::WEATHERED_COPPER_CHEST),
+        BlockId::WEATHERED_COPPER_CHEST => Some(BlockId::EXPOSED_COPPER_CHEST),
+        BlockId::EXPOSED_COPPER_CHEST => Some(BlockId::COPPER_CHEST),
+        BlockId::OXIDIZED_COPPER_GOLEM_STATUE => Some(BlockId::WEATHERED_COPPER_GOLEM_STATUE),
+        BlockId::WEATHERED_COPPER_GOLEM_STATUE => Some(BlockId::EXPOSED_COPPER_GOLEM_STATUE),
+        BlockId::EXPOSED_COPPER_GOLEM_STATUE => Some(BlockId::COPPER_GOLEM_STATUE),
+        BlockId::OXIDIZED_LIGHTNING_ROD => Some(BlockId::WEATHERED_LIGHTNING_ROD),
+        BlockId::WEATHERED_LIGHTNING_ROD => Some(BlockId::EXPOSED_LIGHTNING_ROD),
+        BlockId::EXPOSED_LIGHTNING_ROD => Some(BlockId::LIGHTNING_ROD),
         _ => None,
     }
 }
@@ -267,13 +285,39 @@ const fn get_unwaxed_equivalent(id: BlockId) -> Option<BlockId> {
         BlockId::WAXED_WEATHERED_COPPER_TRAPDOOR => Some(BlockId::WEATHERED_COPPER_TRAPDOOR),
         BlockId::WAXED_EXPOSED_COPPER_TRAPDOOR => Some(BlockId::EXPOSED_COPPER_TRAPDOOR),
         BlockId::WAXED_COPPER_TRAPDOOR => Some(BlockId::COPPER_TRAPDOOR),
+        BlockId::WAXED_OXIDIZED_COPPER_BARS => Some(BlockId::OXIDIZED_COPPER_BARS),
+        BlockId::WAXED_WEATHERED_COPPER_BARS => Some(BlockId::WEATHERED_COPPER_BARS),
+        BlockId::WAXED_EXPOSED_COPPER_BARS => Some(BlockId::EXPOSED_COPPER_BARS),
+        BlockId::WAXED_COPPER_BARS => Some(BlockId::COPPER_BARS),
+        BlockId::WAXED_OXIDIZED_COPPER_CHAIN => Some(BlockId::OXIDIZED_COPPER_CHAIN),
+        BlockId::WAXED_WEATHERED_COPPER_CHAIN => Some(BlockId::WEATHERED_COPPER_CHAIN),
+        BlockId::WAXED_EXPOSED_COPPER_CHAIN => Some(BlockId::EXPOSED_COPPER_CHAIN),
+        BlockId::WAXED_COPPER_CHAIN => Some(BlockId::COPPER_CHAIN),
+        BlockId::WAXED_OXIDIZED_COPPER_LANTERN => Some(BlockId::OXIDIZED_COPPER_LANTERN),
+        BlockId::WAXED_WEATHERED_COPPER_LANTERN => Some(BlockId::WEATHERED_COPPER_LANTERN),
+        BlockId::WAXED_EXPOSED_COPPER_LANTERN => Some(BlockId::EXPOSED_COPPER_LANTERN),
+        BlockId::WAXED_COPPER_LANTERN => Some(BlockId::COPPER_LANTERN),
+        BlockId::WAXED_OXIDIZED_COPPER_CHEST => Some(BlockId::OXIDIZED_COPPER_CHEST),
+        BlockId::WAXED_WEATHERED_COPPER_CHEST => Some(BlockId::WEATHERED_COPPER_CHEST),
+        BlockId::WAXED_EXPOSED_COPPER_CHEST => Some(BlockId::EXPOSED_COPPER_CHEST),
+        BlockId::WAXED_COPPER_CHEST => Some(BlockId::COPPER_CHEST),
+        BlockId::WAXED_OXIDIZED_COPPER_GOLEM_STATUE => Some(BlockId::OXIDIZED_COPPER_GOLEM_STATUE),
+        BlockId::WAXED_WEATHERED_COPPER_GOLEM_STATUE => {
+            Some(BlockId::WEATHERED_COPPER_GOLEM_STATUE)
+        }
+        BlockId::WAXED_EXPOSED_COPPER_GOLEM_STATUE => Some(BlockId::EXPOSED_COPPER_GOLEM_STATUE),
+        BlockId::WAXED_COPPER_GOLEM_STATUE => Some(BlockId::COPPER_GOLEM_STATUE),
+        BlockId::WAXED_OXIDIZED_LIGHTNING_ROD => Some(BlockId::OXIDIZED_LIGHTNING_ROD),
+        BlockId::WAXED_WEATHERED_LIGHTNING_ROD => Some(BlockId::WEATHERED_LIGHTNING_ROD),
+        BlockId::WAXED_EXPOSED_LIGHTNING_ROD => Some(BlockId::EXPOSED_LIGHTNING_ROD),
+        BlockId::WAXED_LIGHTNING_ROD => Some(BlockId::LIGHTNING_ROD),
         _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{axe_trapdoor_state, get_unwaxed_equivalent};
+    use super::{axe_trapdoor_state, get_deoxidized_equivalent, get_unwaxed_equivalent};
     use pumpkin_data::Block;
     use pumpkin_data::BlockState;
     use pumpkin_data::block_properties::{BlockProperties, OakTrapdoorLikeProperties};
@@ -305,5 +349,50 @@ mod tests {
         assert_eq!(source_properties.open, target_properties.open);
         assert_eq!(source_properties.powered, target_properties.powered);
         assert_eq!(source_properties.waterlogged, target_properties.waterlogged);
+    }
+
+    /// Vanilla `WeatheringCopper.NEXT_BY_BLOCK` also weathers copper bars, chains, lanterns,
+    /// chests, golem statues and lightning rods, and `HoneycombItem.WAXABLES` waxes all of them,
+    /// so an axe has to be able to scrape and de-wax them too.
+    #[test]
+    fn axe_scrapes_and_dewaxes_every_waxable_copper_family() {
+        for family in [
+            "copper_bars",
+            "copper_chain",
+            "copper_lantern",
+            "copper_chest",
+            "copper_golem_statue",
+            "lightning_rod",
+        ] {
+            let stages = [
+                format!("oxidized_{family}"),
+                format!("weathered_{family}"),
+                format!("exposed_{family}"),
+                family.to_string(),
+            ];
+
+            for pair in stages.windows(2) {
+                let from = Block::from_registry_key(&pair[0]).expect("block should exist");
+                let to = Block::from_registry_key(&pair[1]).expect("block should exist");
+                assert_eq!(
+                    get_deoxidized_equivalent(from.id),
+                    Some(to.id),
+                    "{} should scrape to {}",
+                    pair[0],
+                    pair[1]
+                );
+            }
+
+            for stage in &stages {
+                let waxed = Block::from_registry_key(&format!("waxed_{stage}"))
+                    .expect("block should exist");
+                let unwaxed = Block::from_registry_key(stage).expect("block should exist");
+                assert_eq!(
+                    get_unwaxed_equivalent(waxed.id),
+                    Some(unwaxed.id),
+                    "waxed_{stage} should de-wax to {stage}"
+                );
+            }
+        }
     }
 }
