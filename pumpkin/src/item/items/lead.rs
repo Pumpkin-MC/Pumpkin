@@ -27,7 +27,7 @@ impl ItemMetadata for LeadItem {
 impl ItemBehaviour for LeadItem {
     fn use_on_block<'a>(
         &'a self,
-        item: &'a mut ItemStack,
+        _item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -86,10 +86,16 @@ impl ItemBehaviour for LeadItem {
             }
 
             if any_leashed {
-                if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                    item.decrement(1);
-                }
                 world.play_sound(Sound::ItemLeadTied, SoundCategory::Neutral, &center);
+                if let Some(player_arc) = world.get_player_by_id(player.get_entity().entity_id) {
+                    crate::world::game_event::emit_game_event(
+                        &world,
+                        pumpkin_data::game_event::GameEvent::BlockAttach,
+                        center,
+                        crate::world::game_event::GameEventContext::of_entity(player_arc),
+                    )
+                    .await;
+                }
             }
         })
     }
