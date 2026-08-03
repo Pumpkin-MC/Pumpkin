@@ -15,6 +15,7 @@ pub struct ExperienceOrbEntity {
     entity: Entity,
     amount: u32,
     orb_age: AtomicU32,
+    count: AtomicU32,
 }
 
 impl ExperienceOrbEntity {
@@ -24,6 +25,7 @@ impl ExperienceOrbEntity {
             entity,
             amount,
             orb_age: AtomicU32::new(0),
+            count: AtomicU32::new(1),
         }
     }
 
@@ -63,6 +65,38 @@ impl ExperienceOrbEntity {
             1
         }
     }
+
+    /// Port of vanilla's `scanForMerges`. Merges compatible orbs (same `amount`, entity ID
+    /// difference divisible by 40) within `bounding_box.expand_all(0.5)` into `self`.
+    async fn scan_for_merges(&self) {
+        let bounding_box = self.entity.bounding_box.load().expand_all(0.5);
+        let world = self.entity.world.load();
+
+        for other in world.get_entities_at_box(&bounding_box) {
+            let Some(other_orb) = other.cast_any().downcast_ref::<Self>() else {
+                continue;
+            };
+            if std::ptr::eq(self, other_orb) || other_orb.entity.is_removed() {
+                continue;
+            }
+            if other_orb.amount != self.amount
+                || other_orb
+                    .entity
+                    .entity_id
+                    .wrapping_sub(self.entity.entity_id)
+                    % 40
+                    != 0
+            {
+                continue;
+            }
+
+            let other_count = other_orb.count.load(Ordering::Relaxed);
+            self.count.fetch_add(other_count, Ordering::Relaxed);
+            let other_age = other_orb.orb_age.load(Ordering::Relaxed);
+            self.orb_age.fetch_min(other_age, Ordering::Relaxed);
+            other_orb.entity.remove().await;
+        }
+    }
 }
 
 impl NBTStorage for ExperienceOrbEntity {}
@@ -76,6 +110,12 @@ impl EntityBase for ExperienceOrbEntity {
         Box::pin(async move {
             let entity = &self.entity;
             entity.tick(caller, server).await;
+
+            let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
+            if age > 0 && age.is_multiple_of(20) {
+                self.scan_for_merges().await;
+            }
+
             let bounding_box = entity.bounding_box.load();
 
             let original_velo = entity.velocity.load();
@@ -113,7 +153,6 @@ impl EntityBase for ExperienceOrbEntity {
 
             entity.tick_block_collisions(caller, server).await;
 
-            let age = self.orb_age.fetch_add(1, Ordering::Relaxed);
             if age >= 6000 {
                 self.entity.remove().await;
             }
@@ -135,8 +174,9 @@ impl EntityBase for ExperienceOrbEntity {
                     if remaining > 0 {
                         player.add_experience_points(remaining).await;
                     }
-                    // TODO: pickingCount for merging
-                    self.entity.remove().await;
+                    if self.count.fetch_sub(1, Ordering::Relaxed) <= 1 {
+                        self.entity.remove().await;
+                    }
                 }
             }
         })
