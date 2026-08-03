@@ -58,6 +58,16 @@ rustc-hash.workspace = true
 slotmap.workspace = true
 crossfire.workspace = true
 
+# EXPERIMENTAL, feature-gated: raw Vulkan bindings for the GPU lighting path.
+ash = { version = "0.38", optional = true }
+
+[features]
+default = []
+# EXPERIMENTAL: compiles the GPU compute path for block-light propagation.
+# Not in the default feature set; the resulting code is additionally inert
+# unless `gpu_experimental_lighting` is enabled in the level config.
+gpu-experimental = ["dep:ash"]
+
 [dev-dependencies]
 tempfile.workspace = true
 criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
@@ -82,6 +92,10 @@ harness = false
 
 [[bench]]
 name = "noise_router"
+harness = false
+
+[[bench]]
+name = "light_gpu"
 harness = false
 
 

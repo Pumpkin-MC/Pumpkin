@@ -1,0 +1,51 @@
+#version 450
+// One relaxation wave of block-light propagation. The checked-in SPIR-V comes from:
+//   glslc --target-env=vulkan1.2 -O propagate.comp -o propagate.spv
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Dims {
+    uint size_x;
+    uint size_y;
+    uint size_z;
+    uint total;
+} dims;
+
+// bits 0..4 opacity, bits 4..8 luminance
+layout(std430, set = 0, binding = 1) readonly buffer Props { uint props[]; };
+layout(std430, set = 0, binding = 2) readonly buffer Src { uint src[]; };
+layout(std430, set = 0, binding = 3) writeonly buffer Dst { uint dst[]; };
+
+uint light_at(uint x, uint y, uint z) {
+    return src[(y * dims.size_z + z) * dims.size_x + x];
+}
+
+uint sat_sub(uint a, uint b) {
+    return a > b ? a - b : 0u;
+}
+
+void main() {
+    uint idx = (gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x) * 64u
+             + gl_LocalInvocationID.x;
+    if (idx >= dims.total) {
+        return;
+    }
+
+    uint x = idx % dims.size_x;
+    uint z = (idx / dims.size_x) % dims.size_z;
+    uint y = idx / (dims.size_x * dims.size_z);
+
+    uint p = props[idx];
+    uint falloff = max(p & 15u, 1u);
+
+    uint best = max((p >> 4u) & 15u, src[idx]);
+
+    if (y > 0u)               best = max(best, sat_sub(light_at(x, y - 1u, z), falloff));
+    if (y + 1u < dims.size_y) best = max(best, sat_sub(light_at(x, y + 1u, z), falloff));
+    if (z > 0u)               best = max(best, sat_sub(light_at(x, y, z - 1u), falloff));
+    if (z + 1u < dims.size_z) best = max(best, sat_sub(light_at(x, y, z + 1u), falloff));
+    if (x > 0u)               best = max(best, sat_sub(light_at(x - 1u, y, z), falloff));
+    if (x + 1u < dims.size_x) best = max(best, sat_sub(light_at(x + 1u, y, z), falloff));
+
+    dst[idx] = best;
+}

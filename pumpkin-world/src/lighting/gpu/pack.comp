@@ -1,0 +1,33 @@
+#version 450
+// Packs four light levels per output word, so readback carries one byte per voxel.
+// The checked-in SPIR-V comes from:
+//   glslc --target-env=vulkan1.2 -O pack.comp -o pack.spv
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Dims {
+    uint size_x;
+    uint size_y;
+    uint size_z;
+    uint total;
+} dims;
+
+layout(std430, set = 0, binding = 1) readonly buffer Props { uint props[]; };
+layout(std430, set = 0, binding = 2) readonly buffer Src { uint src[]; };
+layout(std430, set = 0, binding = 3) writeonly buffer Dst { uint dst[]; };
+
+void main() {
+    uint i = (gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x) * 64u
+           + gl_LocalInvocationID.x;
+    if (i * 4u >= dims.total) {
+        return;
+    }
+    uint v = 0u;
+    for (uint k = 0u; k < 4u; ++k) {
+        uint s = i * 4u + k;
+        if (s < dims.total) {
+            v |= (src[s] & 15u) << (k * 8u);
+        }
+    }
+    dst[i] = v;
+}

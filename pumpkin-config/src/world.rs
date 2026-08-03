@@ -11,6 +11,10 @@ pub struct LevelConfig {
     pub chunk: ChunkConfig,
     #[serde(default)]
     pub lighting: LightingEngineConfig,
+    /// EXPERIMENTAL: offload block-light propagation to a GPU compute shader.
+    /// Needs the `gpu-experimental` Cargo feature, and is not production ready.
+    #[serde(default)]
+    pub gpu_experimental_lighting: bool,
     /// Number of ticks between autosave checks. If 0, autosave is disabled.
     #[serde(default = "default_autosave_ticks")]
     pub autosave_ticks: u64,

@@ -1,0 +1,17 @@
+[
+  {"chunks":1,"voxels":98304,"emitters":4,"backend":"cpu","device":"cpu-bfs","min_ms":0.0611,"mean_ms":0.0651},
+  {"chunks":1,"voxels":98304,"emitters":4,"backend":"igpu","device":"Intel(R) Graphics (ARL)","min_ms":3.0146,"mean_ms":4.3074,"upload_ms":2.1290,"compute_ms":1.4589,"readback_ms":0.7126},
+  {"chunks":1,"voxels":98304,"emitters":4,"backend":"dgpu","device":"NVIDIA GeForce RTX 5070 Laptop GPU","min_ms":3.1126,"mean_ms":3.7580,"upload_ms":1.8590,"compute_ms":0.6264,"readback_ms":0.4957},
+  {"chunks":3,"voxels":884736,"emitters":36,"backend":"cpu","device":"cpu-bfs","min_ms":0.7252,"mean_ms":0.7727},
+  {"chunks":3,"voxels":884736,"emitters":36,"backend":"igpu","device":"Intel(R) Graphics (ARL)","min_ms":20.5599,"mean_ms":21.4857,"upload_ms":5.2838,"compute_ms":12.1402,"readback_ms":4.0488},
+  {"chunks":3,"voxels":884736,"emitters":36,"backend":"dgpu","device":"NVIDIA GeForce RTX 5070 Laptop GPU","min_ms":6.6138,"mean_ms":7.1895,"upload_ms":4.5230,"compute_ms":0.7880,"readback_ms":0.7050},
+  {"chunks":5,"voxels":2457600,"emitters":100,"backend":"cpu","device":"cpu-bfs","min_ms":2.6430,"mean_ms":2.8936},
+  {"chunks":5,"voxels":2457600,"emitters":100,"backend":"igpu","device":"Intel(R) Graphics (ARL)","min_ms":49.9240,"mean_ms":54.5575,"upload_ms":14.7722,"compute_ms":24.2406,"readback_ms":15.5218},
+  {"chunks":5,"voxels":2457600,"emitters":100,"backend":"dgpu","device":"NVIDIA GeForce RTX 5070 Laptop GPU","min_ms":13.6524,"mean_ms":18.5242,"upload_ms":12.5451,"compute_ms":1.5425,"readback_ms":0.9873},
+  {"chunks":7,"voxels":4816896,"emitters":196,"backend":"cpu","device":"cpu-bfs","min_ms":5.8479,"mean_ms":6.1564},
+  {"chunks":7,"voxels":4816896,"emitters":196,"backend":"igpu","device":"Intel(R) Graphics (ARL)","min_ms":61.2357,"mean_ms":67.2809,"upload_ms":23.0153,"compute_ms":26.8291,"readback_ms":17.4145},
+  {"chunks":7,"voxels":4816896,"emitters":196,"backend":"dgpu","device":"NVIDIA GeForce RTX 5070 Laptop GPU","min_ms":24.6592,"mean_ms":28.0168,"upload_ms":17.9115,"compute_ms":3.7587,"readback_ms":1.3953},
+  {"chunks":9,"voxels":7962624,"emitters":324,"backend":"cpu","device":"cpu-bfs","min_ms":10.9390,"mean_ms":11.5920},
+  {"chunks":9,"voxels":7962624,"emitters":324,"backend":"igpu","device":"Intel(R) Graphics (ARL)","min_ms":99.3759,"mean_ms":105.1972,"upload_ms":37.4016,"compute_ms":39.5235,"readback_ms":28.2491},
+  {"chunks":9,"voxels":7962624,"emitters":324,"backend":"dgpu","device":"NVIDIA GeForce RTX 5070 Laptop GPU","min_ms":41.9685,"mean_ms":43.1249,"upload_ms":27.6105,"compute_ms":5.3886,"readback_ms":1.8063}
+]
