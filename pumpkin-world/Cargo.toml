@@ -98,6 +98,10 @@ harness = false
 name = "light_gpu"
 harness = false
 
+[[bench]]
+name = "gpu_noise"
+harness = false
+
 
 [lints]
 workspace = true

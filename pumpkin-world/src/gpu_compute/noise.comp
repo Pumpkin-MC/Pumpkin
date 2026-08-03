@@ -1,0 +1,91 @@
+#version 450
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Params {
+    uint size_x;
+    uint size_y;
+    uint size_z;
+    uint total;
+    uint octaves;
+    uint seed;
+    float frequency;
+    float threshold;
+} p;
+
+layout(std430, set = 0, binding = 1) writeonly buffer Out { uint packed[]; };
+
+uint hash3(uint x, uint y, uint z) {
+    uint h = x * 374761393u + y * 668265263u + z * 2246822519u + p.seed * 3266489917u;
+    h = (h ^ (h >> 13)) * 1274126177u;
+    return h ^ (h >> 16);
+}
+
+float value_at(ivec3 c) {
+    return float(hash3(uint(c.x), uint(c.y), uint(c.z)) & 0xFFFFu) * (2.0 / 65535.0) - 1.0;
+}
+
+float fade(float t) {
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+float value_noise(vec3 pos) {
+    vec3 f = floor(pos);
+    ivec3 c = ivec3(int(f.x), int(f.y), int(f.z));
+    vec3 t = pos - f;
+    vec3 u = vec3(fade(t.x), fade(t.y), fade(t.z));
+
+    float c000 = value_at(c + ivec3(0, 0, 0));
+    float c100 = value_at(c + ivec3(1, 0, 0));
+    float c010 = value_at(c + ivec3(0, 1, 0));
+    float c110 = value_at(c + ivec3(1, 1, 0));
+    float c001 = value_at(c + ivec3(0, 0, 1));
+    float c101 = value_at(c + ivec3(1, 0, 1));
+    float c011 = value_at(c + ivec3(0, 1, 1));
+    float c111 = value_at(c + ivec3(1, 1, 1));
+
+    float x00 = mix(c000, c100, u.x);
+    float x10 = mix(c010, c110, u.x);
+    float x01 = mix(c001, c101, u.x);
+    float x11 = mix(c011, c111, u.x);
+    float y0 = mix(x00, x10, u.y);
+    float y1 = mix(x01, x11, u.y);
+    return mix(y0, y1, u.z);
+}
+
+float density(uint x, uint y, uint z) {
+    vec3 pos = vec3(float(x), float(y), float(z)) * p.frequency;
+    float sum = 0.0;
+    float amp = 1.0;
+    float norm = 0.0;
+    for (uint o = 0u; o < p.octaves; ++o) {
+        sum += value_noise(pos) * amp;
+        norm += amp;
+        pos *= 2.0;
+        amp *= 0.5;
+    }
+    float n = sum / norm;
+    float gradient = 1.0 - float(y) * (2.0 / float(p.size_y));
+    return n + gradient;
+}
+
+void main() {
+    uint w = (gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x) * 64u
+           + gl_LocalInvocationID.x;
+    if (w * 4u >= p.total) {
+        return;
+    }
+    uint v = 0u;
+    for (uint k = 0u; k < 4u; ++k) {
+        uint idx = w * 4u + k;
+        if (idx >= p.total) {
+            break;
+        }
+        uint x = idx % p.size_x;
+        uint z = (idx / p.size_x) % p.size_z;
+        uint y = idx / (p.size_x * p.size_z);
+        uint solid = density(x, y, z) > p.threshold ? 1u : 0u;
+        v |= solid << (k * 8u);
+    }
+    packed[w] = v;
+}

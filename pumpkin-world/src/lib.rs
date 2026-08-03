@@ -13,6 +13,8 @@ pub mod cylindrical_chunk_iterator;
 pub mod data;
 pub mod dimension;
 pub mod generation;
+#[cfg(feature = "gpu-experimental")]
+pub mod gpu_compute;
 pub mod inventory;
 pub mod level;
 pub mod lighting;
