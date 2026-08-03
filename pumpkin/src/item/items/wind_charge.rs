@@ -32,12 +32,6 @@ impl ItemBehaviour for WindChargeItem {
             let world = player.world();
             let position = player.position();
 
-            world.play_sound(
-                Sound::EntityWindChargeThrow,
-                pumpkin_data::sound::SoundCategory::Neutral,
-                &position,
-            );
-
             let entity = Entity::new(world.clone(), position, &EntityType::WIND_CHARGE);
 
             let wind_charge =
@@ -48,6 +42,16 @@ impl ItemBehaviour for WindChargeItem {
             world
                 .spawn_entity(Arc::new(WindChargeEntity::new_normal(wind_charge)))
                 .await;
+
+            // Vanilla `WindChargeItem#use` plays WIND_CHARGE_THROW after spawning the projectile,
+            // at SoundSource.NEUTRAL, volume 0.5, pitch 0.4F / (random.nextFloat() * 0.4F + 0.8F).
+            world.play_sound_fine(
+                Sound::EntityWindChargeThrow,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &position,
+                0.5,
+                super::throw_sound_pitch(rand::random()),
+            );
 
             let held_item = player.inventory.held_item();
             let consumed = {
