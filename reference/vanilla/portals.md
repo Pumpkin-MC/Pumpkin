@@ -45,25 +45,26 @@ Source: `net.minecraft.world.level.portal.{PortalForcer,PortalShape}`,
   real portal destinations) — this is a shortcut that happens to be safe today, not a bug, but
   it would break for a custom dimension with `has_ceiling = false` and `logical_height < height`.
 
+## Fixed this session — for context, don't re-fix
+
+- **`seenCredits` tracking** (`pumpkin/src/entity/player.rs`, `pumpkin/src/world/portal/mod.rs`):
+  added `Player.seen_credits` (NBT-persisted, key `"seenCredits"` matching
+  `ServerPlayer.java:396,417`) and gated the End-exit-portal crossing per
+  `EndPortalBlock.java:64-71` / `ServerPlayer.showEndCredits`
+  (`ServerPlayer.java:1083-1090`): first crossing sends `WinGame` with param `0.0` (was `1.0`)
+  and returns `None` (no teleport this crossing); later crossings run the normal teleport and
+  never send `WinGame` again. Vanilla's two gating fields (`wonGame`, `seenCredits`) are
+  collapsed into the one `seen_credits` field since both are set together in the same
+  first-crossing branch — documented in the code comment. Full credits-to-respawn client
+  choreography is still out of scope (only the `WinGame` value/gating and teleport-skip are
+  fixed) — if the client-side flow around this ever needs more fidelity, that's still open.
+- **Waterlogged blocks as portal air** (`is_valid_portal_air` in `nether.rs`): now also checks
+  `!state.is_waterlogged()`, matching `PortalForcer.java:160`'s `getFluidState().isEmpty()`
+  (was only checking `!state.is_liquid()`, which doesn't catch waterlogged replaceable blocks
+  like tall seagrass/kelp).
+
 ## Real, confirmed divergences NOT yet fixed — pick one of these next
 
-- **No `seenCredits` tracking (real, user-visible gap).** `EndPortalBlock.java:64-71`: entering
-  the end-exit-portal while `!player.seenCredits` triggers `showEndCredits()` and does **not**
-  teleport that time — `setAsInsidePortal` is skipped entirely on the first crossing. Only on
-  subsequent crossings does normal teleport happen, and even then vanilla never sends `WinGame`
-  again (that packet is only for the credits path, sent once). Pumpkin's
-  `pumpkin/src/world/portal/mod.rs:137-158` unconditionally sends `WinGame` and teleports on
-  every single crossing. Confirmed via `grep`: no `seen_credits` field exists anywhere in
-  Pumpkin. This needs new persistent per-player state (survives death/relog, matches vanilla's
-  player-data NBT field) plus a client-flow change (skip teleport once, but still trigger the
-  credits screen) — not a one-line fix, but well-scoped as its own unit of work.
-- **Fluid-state check for portal-air validity.** `PortalForcer.java:160`:
-  `blockState.canBeReplaced() && blockState.getFluidState().isEmpty()`. Pumpkin's
-  `is_valid_portal_air` uses `state.replaceable() && !state.is_liquid()`. These are NOT
-  necessarily equivalent for a waterlogged replaceable block (non-empty fluid state in vanilla,
-  but Pumpkin's `is_liquid()` may or may not report true depending on how waterlogging is
-  represented — not confirmed as an active bug, needs checking Pumpkin's actual waterlogging
-  model before deciding this is broken).
 - **Missing empty-result handling for the create-portal fallback (latent panic, not currently
   reachable).** `PortalForcer.java:107-112`: if `maxStartY < minStartY` (only possible for a
   custom dimension with a very short `logical_height`), vanilla returns `Optional.empty()` and
