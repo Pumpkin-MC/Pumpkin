@@ -23,7 +23,9 @@
 //! ```
 
 use super::gpu::GpuNoiseContext;
-use super::graph::{BeardifierData, CompiledGraph, compile_router, output_slot::FINAL_DENSITY};
+#[cfg(test)]
+use super::graph::output_slot::FINAL_DENSITY;
+use super::graph::{BeardifierData, CompiledGraph, compile_router};
 use pumpkin_data::noise_router::OVERWORLD_BASE_NOISE_ROUTER;
 use pumpkin_world::generation::GlobalRandomConfig;
 
