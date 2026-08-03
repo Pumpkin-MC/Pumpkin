@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::HorizontalAxis;
@@ -130,20 +131,45 @@ impl PortalType {
                             pitch: None,
                         })
                     } else {
-                        // Leaving the End through the exit portal: return to overworld spawn
-                        if let Some(player) =
-                            current_level.get_player_by_id(caller.get_entity().entity_id)
+                        // Leaving the End through the exit portal.
+                        //
+                        // EndPortalBlock.java:64-71: the FIRST crossing ever
+                        // (!player.seenCredits) shows the end credits instead of teleporting --
+                        // ServerPlayer.showEndCredits (ServerPlayer.java:1083-1090) sends
+                        // WIN_GAME with param 0.0F (gated by the separate `wonGame` field, which
+                        // this port collapses into `seen_credits` since both are set together
+                        // in the same first-crossing branch) and does NOT call
+                        // setAsInsidePortal, i.e. no teleport happens this crossing. Only once
+                        // seenCredits is already true does the normal portal teleport run, and
+                        // WIN_GAME is never sent again. What happens to the player during/after
+                        // the client-side credits sequence on that first crossing is not
+                        // modeled here (out of scope) -- we simply skip the teleport by
+                        // returning None.
+                        let player = current_level.get_player_by_id(caller.get_entity().entity_id);
+                        let already_seen_credits = player
+                            .as_ref()
+                            .is_some_and(|player| player.seen_credits.load(Ordering::Relaxed));
+
+                        if let Some(player) = &player
+                            && !already_seen_credits
                         {
+                            player.seen_credits.store(true, Ordering::Relaxed);
                             match player.client.as_ref() {
                                 crate::net::ClientPlatform::Java(client) => {
                                     client
                                         .enqueue_packet(&pumpkin_protocol::java::client::play::CGameEvent::new(
                                             pumpkin_protocol::java::client::play::GameEvent::WinGame,
-                                            1.0,
+                                            0.0,
                                         ))
                                         .await;
                                 }
                                 crate::net::ClientPlatform::Bedrock(client) => {
+                                    // Vanilla's seenCredits mechanic is Java-only; there's no
+                                    // decompiled Bedrock reference for this. Assumption: gate it
+                                    // the same one-time way as Java rather than sending the
+                                    // credits packet on every single exit-portal crossing, since
+                                    // repeating it every time is clearly not the intended
+                                    // behavior even without an exact source to confirm against.
                                     client
                                         .send_game_packet(
                                             &pumpkin_protocol::bedrock::client::CShowCredits::new(
@@ -156,6 +182,7 @@ impl PortalType {
                                         .await;
                                 }
                             }
+                            return None;
                         }
 
                         let info = dest_world.level_info.load();
