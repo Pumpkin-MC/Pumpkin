@@ -17,7 +17,10 @@ use crate::{
     server::Server,
 };
 
+// WindCharge.java RADIUS = 1.2F.
 const EXPLOSION_POWER: f32 = 1.2;
+// BreezeWindCharge.java RADIUS = 3.0F.
+const BREEZE_EXPLOSION_POWER: f32 = 3.0;
 const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
 pub const WIND_CHARGE_GRAVITY: f64 = 0.0;
 
@@ -66,11 +69,22 @@ impl WindChargeEntity {
     }
 
     pub async fn create_explosion(&self, position: Vector3<f64>) {
+        let power = match self.kind {
+            WindChargeKind::Normal { .. } => EXPLOSION_POWER,
+            WindChargeKind::Breeze => BREEZE_EXPLOSION_POWER,
+        };
         self.get_entity()
             .world
             .load()
-            .explode_without_blocks(position, EXPLOSION_POWER)
+            .explode_without_blocks(position, power)
             .await;
+    }
+
+    /// Sets this projectile's velocity from a direction vector, power, and spread.
+    /// Mirrors `Projectile.spawnProjectileUsingShoot`.
+    pub fn set_velocity(&self, x: f64, y: f64, z: f64, power: f64, uncertainty: f64) {
+        self.thrown_item_entity
+            .set_velocity(x, y, z, power, uncertainty);
     }
 
     pub fn deflect(
