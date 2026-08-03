@@ -280,6 +280,78 @@ const fn crafting_category(cat: &RecipeCategoryTypes) -> i32 {
     }
 }
 
+/// Writes the polymorphic `RecipeDisplay` for a vanilla crafting recipe.
+///
+/// This is shared by the recipe-book entry and ghost-recipe packets. Special
+/// recipes have no useful display and are skipped.
+pub(super) fn write_crafting_recipe_display(
+    write: &mut impl Write,
+    recipe: &CraftingRecipeTypes,
+    crafting_table: &Item,
+    version: JavaMinecraftVersion,
+) -> Result<bool, WritingError> {
+    match recipe {
+        CraftingRecipeTypes::CraftingShaped {
+            pattern,
+            key,
+            result,
+            ..
+        } => {
+            let height = pattern.len() as i32;
+            let width = pattern.first().map_or(0, |row| row.chars().count()) as i32;
+
+            write.write_var_int(&VarInt(RECIPE_DISPLAY_SHAPED))?;
+            write.write_var_int(&VarInt(width))?;
+            write.write_var_int(&VarInt(height))?;
+            write.write_var_int(&VarInt(width * height))?;
+            for row in *pattern {
+                for ch in row.chars() {
+                    if ch == ' ' {
+                        write_empty_slot_display(write)?;
+                    } else if let Some((_, ingredient)) = key.iter().find(|(k, _)| *k == ch) {
+                        write_ingredient_slot_display(write, ingredient, version)?;
+                    } else {
+                        write_empty_slot_display(write)?;
+                    }
+                }
+            }
+            write_result_slot_display(write, result, version)?;
+            write_item_slot_display(write, crafting_table, version)?;
+        }
+        CraftingRecipeTypes::CraftingShapeless {
+            ingredients,
+            result,
+            ..
+        } => {
+            write.write_var_int(&VarInt(RECIPE_DISPLAY_SHAPELESS))?;
+            write.write_var_int(&VarInt(ingredients.len() as i32))?;
+            for ingredient in *ingredients {
+                write_ingredient_slot_display(write, ingredient, version)?;
+            }
+            write_result_slot_display(write, result, version)?;
+            write_item_slot_display(write, crafting_table, version)?;
+        }
+        CraftingRecipeTypes::CraftingTransmute {
+            input,
+            material,
+            result,
+            ..
+        } => {
+            // Transmute recipes are displayed as shapeless recipes with two ingredients.
+            write.write_var_int(&VarInt(RECIPE_DISPLAY_SHAPELESS))?;
+            write.write_var_int(&VarInt(2))?;
+            write_ingredient_slot_display(write, input, version)?;
+            write_ingredient_slot_display(write, material, version)?;
+            write_result_slot_display(write, result, version)?;
+            write_item_slot_display(write, crafting_table, version)?;
+        }
+        CraftingRecipeTypes::CraftingDecoratedPot { .. } | CraftingRecipeTypes::CraftingSpecial => {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// Write a single `RecipeDisplayEntry` + flags byte.
 /// Returns `Ok(true)` if written, `Ok(false)` if skipped (special recipe).
 #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
@@ -298,42 +370,25 @@ fn write_entry(
     cooking_recipe: Option<(&CookingRecipeType, i32)>,
 ) -> Result<bool, WritingError> {
     if let Some(recipe) = crafting_recipe {
+        if matches!(
+            recipe,
+            CraftingRecipeTypes::CraftingDecoratedPot { .. } | CraftingRecipeTypes::CraftingSpecial
+        ) {
+            return Ok(false);
+        }
+
+        write.write_var_int(&VarInt(display_id))?;
+        if !write_crafting_recipe_display(write, recipe, crafting_table, version)? {
+            return Ok(false);
+        }
+
         match recipe {
             CraftingRecipeTypes::CraftingShaped {
                 category,
                 pattern,
                 key,
-                result,
                 ..
             } => {
-                // Compute width and height from pattern
-                let height = pattern.len() as i32;
-                let width = pattern.first().map_or(0, |r| r.len()) as i32;
-
-                // RecipeDisplayId
-                write.write_var_int(&VarInt(display_id))?;
-                // RecipeDisplay type = shaped (1)
-                write.write_var_int(&VarInt(RECIPE_DISPLAY_SHAPED))?;
-                // width, height
-                write.write_var_int(&VarInt(width))?;
-                write.write_var_int(&VarInt(height))?;
-                // ingredients: flat list, row by row
-                write.write_var_int(&VarInt(width * height))?;
-                for row in *pattern {
-                    for ch in row.chars() {
-                        if ch == ' ' {
-                            write_empty_slot_display(write)?;
-                        } else if let Some((_, ingredient)) = key.iter().find(|(k, _)| *k == ch) {
-                            write_ingredient_slot_display(write, ingredient, version)?;
-                        } else {
-                            write_empty_slot_display(write)?;
-                        }
-                    }
-                }
-                // result
-                write_result_slot_display(write, result, version)?;
-                // craftingStation
-                write_item_slot_display(write, crafting_table, version)?;
                 // group: OptionalVarInt
                 write_optional_var_int(write, group_id)?;
                 // category
@@ -358,22 +413,8 @@ fn write_entry(
             CraftingRecipeTypes::CraftingShapeless {
                 category,
                 ingredients,
-                result,
                 ..
             } => {
-                // RecipeDisplayId
-                write.write_var_int(&VarInt(display_id))?;
-                // RecipeDisplay type = shapeless (0)
-                write.write_var_int(&VarInt(RECIPE_DISPLAY_SHAPELESS))?;
-                // ingredients list
-                write.write_var_int(&VarInt(ingredients.len() as i32))?;
-                for ing in *ingredients {
-                    write_ingredient_slot_display(write, ing, version)?;
-                }
-                // result
-                write_result_slot_display(write, result, version)?;
-                // craftingStation
-                write_item_slot_display(write, crafting_table, version)?;
                 // group: OptionalVarInt
                 write_optional_var_int(write, group_id)?;
                 // category
@@ -390,18 +431,8 @@ fn write_entry(
                 category,
                 input,
                 material,
-                result,
                 ..
             } => {
-                // Transmute shown as shapeless with 2 ingredients
-                write.write_var_int(&VarInt(display_id))?;
-                write.write_var_int(&VarInt(RECIPE_DISPLAY_SHAPELESS))?;
-                // 2 ingredients
-                write.write_var_int(&VarInt(2))?;
-                write_ingredient_slot_display(write, input, version)?;
-                write_ingredient_slot_display(write, material, version)?;
-                write_result_slot_display(write, result, version)?;
-                write_item_slot_display(write, crafting_table, version)?;
                 write_optional_var_int(write, group_id)?;
                 write.write_var_int(&VarInt(crafting_category(category)))?;
                 // craftingRequirements: input + material
@@ -777,18 +808,15 @@ fn write_dynamic_result_slot_display(
     Ok(())
 }
 
-fn write_dynamic_crafting_entry(
+/// Writes the polymorphic `RecipeDisplay` for a datapack crafting recipe.
+pub(super) fn write_dynamic_crafting_recipe_display(
     write: &mut impl Write,
-    display_id: i32,
-    version: JavaMinecraftVersion,
-    group_id: Option<i32>,
-    flags: u8,
-    crafting_table: &Item,
     recipe: &crate::codec::recipe::OwnedCraftingRecipe,
+    crafting_table: &Item,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     match recipe {
         crate::codec::recipe::OwnedCraftingRecipe::Shaped {
-            category,
             pattern,
             key,
             result,
@@ -797,7 +825,6 @@ fn write_dynamic_crafting_entry(
             let height = pattern.len() as i32;
             let width = pattern.first().map_or(0, String::len) as i32;
 
-            write.write_var_int(&VarInt(display_id))?;
             write.write_var_int(&VarInt(RECIPE_DISPLAY_SHAPED))?;
             write.write_var_int(&VarInt(width))?;
             write.write_var_int(&VarInt(height))?;
@@ -815,6 +842,43 @@ fn write_dynamic_crafting_entry(
             }
             write_dynamic_result_slot_display(write, result, version)?;
             write_item_slot_display(write, crafting_table, version)?;
+        }
+        crate::codec::recipe::OwnedCraftingRecipe::Shapeless {
+            ingredients,
+            result,
+            ..
+        } => {
+            write.write_var_int(&VarInt(RECIPE_DISPLAY_SHAPELESS))?;
+            write.write_var_int(&VarInt(ingredients.len() as i32))?;
+            for ingredient in ingredients {
+                write_dynamic_ingredient_slot_display(write, ingredient, version)?;
+            }
+            write_dynamic_result_slot_display(write, result, version)?;
+            write_item_slot_display(write, crafting_table, version)?;
+        }
+    }
+    Ok(())
+}
+
+fn write_dynamic_crafting_entry(
+    write: &mut impl Write,
+    display_id: i32,
+    version: JavaMinecraftVersion,
+    group_id: Option<i32>,
+    flags: u8,
+    crafting_table: &Item,
+    recipe: &crate::codec::recipe::OwnedCraftingRecipe,
+) -> Result<(), WritingError> {
+    write.write_var_int(&VarInt(display_id))?;
+    write_dynamic_crafting_recipe_display(write, recipe, crafting_table, version)?;
+
+    match recipe {
+        crate::codec::recipe::OwnedCraftingRecipe::Shaped {
+            category,
+            pattern,
+            key,
+            ..
+        } => {
             write_optional_var_int(write, group_id)?;
             write.write_var_int(&VarInt(crafting_category(category)))?;
 
@@ -841,17 +905,8 @@ fn write_dynamic_crafting_entry(
         crate::codec::recipe::OwnedCraftingRecipe::Shapeless {
             category,
             ingredients,
-            result,
             ..
         } => {
-            write.write_var_int(&VarInt(display_id))?;
-            write.write_var_int(&VarInt(RECIPE_DISPLAY_SHAPELESS))?;
-            write.write_var_int(&VarInt(ingredients.len() as i32))?;
-            for ing in ingredients {
-                write_dynamic_ingredient_slot_display(write, ing, version)?;
-            }
-            write_dynamic_result_slot_display(write, result, version)?;
-            write_item_slot_display(write, crafting_table, version)?;
             write_optional_var_int(write, group_id)?;
             write.write_var_int(&VarInt(crafting_category(category)))?;
 

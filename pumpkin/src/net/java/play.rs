@@ -56,9 +56,9 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
-    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot,
-    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
-    PlayerAction,
+    CPingResponse, CPlaceGhostRecipe, CPlayerInfoUpdate, CPlayerPosition, CSetCamera,
+    CSetSelectedSlot, CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot,
+    GhostRecipe, InitChat, PlayerAction,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SBundleItemSelected,
@@ -1178,6 +1178,7 @@ impl JavaClient {
 
         let grid_size = grid_width * grid_width;
         let mut ingredient_slots: Vec<Option<GenericIngredient<'_>>> = vec![None; grid_size];
+        let ghost_recipe;
 
         if target_id < crafting_display_count {
             // Crafting recipe
@@ -1195,6 +1196,7 @@ impl JavaClient {
                 found
             });
             let Some(recipe) = recipe else { return };
+            ghost_recipe = GhostRecipe::Vanilla(recipe);
 
             match recipe {
                 CraftingRecipeTypes::CraftingShaped { pattern, key, .. } => {
@@ -1234,6 +1236,7 @@ impl JavaClient {
             let Some(DynamicRecipe::Crafting(crafting)) = dynamic_recipes.get(dynamic_id) else {
                 return;
             };
+            ghost_recipe = GhostRecipe::Dynamic(crafting);
 
             match crafting {
                 pumpkin_protocol::codec::recipe::OwnedCraftingRecipe::Shaped {
@@ -1317,19 +1320,27 @@ impl JavaClient {
         // Determine how many of each ingredient to place per slot.
         let active_ingredients: Vec<GenericIngredient<'_>> =
             ingredient_slots.iter().flatten().copied().collect();
+        let biggest_craftable =
+            compute_biggest_craftable(&active_ingredients, &player.inventory).await;
+
+        if biggest_craftable == 0 {
+            let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+            screen_handler_arc.lock().await.send_content_updates().await;
+            self.send_packet_now(&CPlaceGhostRecipe::new(
+                i32::from(packet.container_id),
+                ghost_recipe,
+            ))
+            .await;
+            return;
+        }
+
         let amount_to_craft = if use_max {
-            compute_biggest_craftable(&active_ingredients, &player.inventory).await
+            biggest_craftable
         } else if recipe_matches {
-            current_min.saturating_add(1)
+            current_min.saturating_add(1).min(biggest_craftable)
         } else {
             1
         };
-
-        if amount_to_craft == 0 {
-            let screen_handler_arc = player.current_screen_handler.lock().await.clone();
-            screen_handler_arc.lock().await.send_content_updates().await;
-            return;
-        }
 
         // Fill each grid slot with exactly `amount_to_craft` matching items.
         for (idx, ing) in ingredient_slots.iter().enumerate() {
