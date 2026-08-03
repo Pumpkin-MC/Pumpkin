@@ -42,9 +42,6 @@ impl BlockBehaviour for SeaPickleBlock {
                 return BlockActionResult::Pass;
             }
 
-            //1:1 vanilla algorithm
-            //TODO use pumpkin random
-
             //let mut j = 1;
             let mut count = 0;
             let base_x = args.position.0.x - 2;
