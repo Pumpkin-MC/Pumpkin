@@ -258,6 +258,30 @@ impl BlockEntity for BeaconBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        nbt.put_int(
+            "primary_effect",
+            self.primary_effect.load(Ordering::Relaxed),
+        );
+        nbt.put_int(
+            "secondary_effect",
+            self.secondary_effect.load(Ordering::Relaxed),
+        );
+        nbt.put_int("Levels", self.levels.load(Ordering::Relaxed));
+        if let Ok(name) = self.custom_name.try_lock()
+            && let Some(ref name) = *name
+        {
+            nbt.put_string("CustomName", name.clone());
+        }
+        if let Ok(lock) = self.lock_key.try_lock()
+            && let Some(ref lock) = *lock
+        {
+            nbt.put_string("Lock", lock.clone());
+        }
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

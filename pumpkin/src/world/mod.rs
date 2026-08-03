@@ -143,6 +143,7 @@ use scoreboard::Scoreboard;
 use time::LevelTime;
 use tokio::sync::Mutex;
 
+pub mod block_placer;
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
@@ -160,6 +161,8 @@ use uuid::Uuid;
 use weather::Weather;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
+
+const MAX_LIGHT_LEVEL: u8 = 15;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -318,11 +321,13 @@ impl World {
 
     pub fn update_active_chunks(self: &Arc<Self>) {
         let mut active_chunks = FxHashSet::default();
+        let sim_dist = self.server.upgrade().map_or(10, |s| {
+            s.advanced_config.networking.java.simulation_distance.get()
+        }) as i32;
         for player in self.players.load().iter() {
             let center = player.get_entity().chunk_pos.load();
-            // TODO: gamerule for view distance/ticking distance
-            for dx in -8..=8 {
-                for dy in -8..=8 {
+            for dx in -sim_dist..=sim_dist {
+                for dy in -sim_dist..=sim_dist {
                     active_chunks.insert(center.add_raw(dx, dy));
                 }
             }
@@ -335,6 +340,7 @@ impl World {
         for pos in &active_chunks {
             if self.level.is_chunk_loaded(pos) {
                 spawnable_chunks += 1;
+                self.migrate_pending_block_entities(*pos);
             }
         }
 
@@ -1037,6 +1043,16 @@ impl World {
             .insert(position, block_state_id);
     }
 
+    /// Queues block state changes for broadcast to nearby players.
+    ///
+    /// Call [`flush_block_updates`](Self::flush_block_updates) afterward to send the packets.
+    pub async fn queue_block_updates(&self, changes: &[(BlockPos, BlockStateId)]) {
+        let mut guard = self.unsent_block_changes.lock().await;
+        for (pos, state_id) in changes {
+            guard.insert(*pos, *state_id);
+        }
+    }
+
     pub async fn flush_block_updates(&self) {
         let mut block_state_updates_by_chunk_section: HashMap<
             Vector3<i32>,
@@ -1716,6 +1732,20 @@ impl World {
         self.weather.lock().await.raining
     }
 
+    pub async fn is_raining_at(&self, pos: &BlockPos) -> bool {
+        if !self.is_raining().await {
+            return false;
+        }
+        if self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1 > pos.0.y {
+            return false;
+        }
+        self.can_see_sky(pos)
+            && self
+                .get_biome(pos)
+                .weather
+                .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
+    }
+
     pub async fn set_raining(&self, raining: bool) {
         let mut weather = self.weather.lock().await;
         if weather.raining != raining {
@@ -2345,7 +2375,8 @@ impl World {
                     | PlayerInfoFlags::UPDATE_GAME_MODE
                     | PlayerInfoFlags::UPDATE_LISTED
                     | PlayerInfoFlags::UPDATE_LATENCY
-                    | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                    | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                    | PlayerInfoFlags::UPDATE_HAT)
                     .bits(),
                 &[pumpkin_protocol::java::client::play::Player {
                     uuid: gameprofile.id,
@@ -2358,6 +2389,7 @@ impl World {
                         PlayerAction::UpdateListed(true),
                         PlayerAction::UpdateLatency(VarInt(0)),
                         PlayerAction::UpdateListOrder(VarInt(0)),
+                        PlayerAction::UpdateHat(true),
                     ],
                 }],
             ),
@@ -2423,6 +2455,15 @@ impl World {
         {
             let meta = Metadata::new(
                 TrackedData::PLAYER_MODE_CUSTOMISATION,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            );
+            meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
+                .unwrap();
+        };
+        {
+            let meta = Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
                 MetaDataType::BYTE,
                 config.skin_parts,
             );
@@ -2683,6 +2724,7 @@ impl World {
             PlayerAction::UpdateListed(true),
             PlayerAction::UpdateLatency(VarInt(0)),
             PlayerAction::UpdateListOrder(VarInt(0)),
+            PlayerAction::UpdateHat(true),
         ];
         let java_player = [pumpkin_protocol::java::client::play::Player {
             uuid: gameprofile.id,
@@ -2693,7 +2735,8 @@ impl World {
                 | PlayerInfoFlags::UPDATE_GAME_MODE
                 | PlayerInfoFlags::UPDATE_LISTED
                 | PlayerInfoFlags::UPDATE_LATENCY
-                | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                | PlayerInfoFlags::UPDATE_HAT)
                 .bits(),
             &java_player,
         );
@@ -2732,20 +2775,10 @@ impl World {
                 let chat_session = player.chat_session.lock().await;
                 let tab_list_name = player.get_tab_list_name().await;
 
-                let mut player_actions = vec![
-                    PlayerAction::AddPlayer {
-                        name: &player.gameprofile.name,
-                        properties,
-                    },
-                    PlayerAction::UpdateGameMode(VarInt(player.gamemode.load() as i32)),
-                    PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
-                    PlayerAction::UpdateLatency(VarInt(
-                        player.tab_list_latency.load(Ordering::Relaxed),
-                    )),
-                    PlayerAction::UpdateListOrder(VarInt(
-                        player.tab_list_order.load(Ordering::Relaxed),
-                    )),
-                ];
+                let mut player_actions = vec![PlayerAction::AddPlayer {
+                    name: &player.gameprofile.name,
+                    properties,
+                }];
 
                 if base_config.allow_chat_reports {
                     player_actions.push(PlayerAction::InitializeChat(Some(InitChat {
@@ -2755,6 +2788,18 @@ impl World {
                         signature: chat_session.signature.clone(),
                     })));
                 }
+
+                player_actions.extend([
+                    PlayerAction::UpdateGameMode(VarInt(player.gamemode.load() as i32)),
+                    PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
+                    PlayerAction::UpdateLatency(VarInt(
+                        player.tab_list_latency.load(Ordering::Relaxed),
+                    )),
+                    PlayerAction::UpdateListOrder(VarInt(
+                        player.tab_list_order.load(Ordering::Relaxed),
+                    )),
+                    PlayerAction::UpdateHat(true),
+                ]);
                 drop(chat_session);
 
                 current_player_data.push((&player.gameprofile.id, player_actions));
@@ -2769,7 +2814,8 @@ impl World {
                 | PlayerInfoFlags::UPDATE_LISTED
                 | PlayerInfoFlags::UPDATE_LATENCY
                 | PlayerInfoFlags::UPDATE_LIST_PRIORITY
-                | PlayerInfoFlags::UPDATE_GAME_MODE;
+                | PlayerInfoFlags::UPDATE_GAME_MODE
+                | PlayerInfoFlags::UPDATE_HAT;
             if base_config.allow_chat_reports {
                 action_flags |= PlayerInfoFlags::INITIALIZE_CHAT;
             }
@@ -2875,6 +2921,15 @@ impl World {
             meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
                 .unwrap();
         };
+        {
+            let meta = Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            );
+            meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
+                .unwrap();
+        };
         java_meta_buf.put_u8(255);
 
         self.broadcast_packet_except_editioned_sync(
@@ -2973,6 +3028,7 @@ impl World {
                 PlayerAction::UpdateListOrder(VarInt(
                     existing_player.tab_list_order.load(Ordering::Relaxed),
                 )),
+                PlayerAction::UpdateHat(true),
             ];
             let java_player = [pumpkin_protocol::java::client::play::Player {
                 uuid: gameprofile.id,
@@ -2986,7 +3042,8 @@ impl World {
                             | PlayerInfoFlags::UPDATE_LISTED
                             | PlayerInfoFlags::UPDATE_GAME_MODE
                             | PlayerInfoFlags::UPDATE_LATENCY
-                            | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                            | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                            | PlayerInfoFlags::UPDATE_HAT)
                             .bits(),
                         &java_player,
                     ),
@@ -3018,6 +3075,14 @@ impl World {
                 {
                     let meta = Metadata::new(
                         TrackedData::PLAYER_MODE_CUSTOMISATION,
+                        MetaDataType::BYTE,
+                        config.skin_parts,
+                    );
+                    meta.write(&mut buf, &client.version.load()).unwrap();
+                };
+                {
+                    let meta = Metadata::new(
+                        TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
                         MetaDataType::BYTE,
                         config.skin_parts,
                     );
@@ -3145,6 +3210,7 @@ impl World {
             .await;
 
         player.send_active_effects().await;
+        player.breath_manager.send_air_supply(player);
         self.send_player_equipment(player).await;
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
@@ -4201,8 +4267,14 @@ impl World {
         );
     }
 
-    pub async fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
-        let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
+    pub async fn remove_entities_in_chunks(
+        &self,
+        chunks: impl IntoIterator<Item = impl std::borrow::Borrow<Vector2<i32>>>,
+    ) {
+        let chunks_set: FxHashSet<_> = chunks.into_iter().map(|c| *c.borrow()).collect();
+        if chunks_set.is_empty() {
+            return;
+        }
         let mut entities_to_remove = Vec::new();
 
         self.entities.rcu(|current_entities| {
@@ -4417,6 +4489,13 @@ impl World {
         self.level
             .light_engine
             .get_sky_light_level(&self.level, position)
+    }
+
+    #[must_use]
+    pub fn can_see_sky(&self, position: &BlockPos) -> bool {
+        position.0.y >= self.dimension.min_y
+            && position.0.y < self.dimension.min_y + self.dimension.height
+            && self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
     }
 
     pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {
@@ -5019,6 +5098,7 @@ impl World {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
         let block_entity_nbt = block_entity.chunk_data_nbt();
+        let entity_id = block_entity.resource_location().to_string();
 
         if let Some(nbt) = &block_entity_nbt {
             let mut bytes = Vec::new();
@@ -5037,12 +5117,22 @@ impl World {
             .entry(chunk_pos)
             .or_default()
             .insert(block_pos, block_entity);
+
+        if let Some(nbt) = block_entity_nbt {
+            let mut full_nbt = nbt;
+            full_nbt.put_string("id", entity_id);
+            full_nbt.put_int("x", block_pos.0.x);
+            full_nbt.put_int("y", block_pos.0.y);
+            full_nbt.put_int("z", block_pos.0.z);
+            self.add_block_entity_nbt(block_pos, &full_nbt);
+        }
+
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
             chunk.mark_dirty(true);
         });
     }
 
-    pub fn add_block_entity_nbt(&self, block_pos: BlockPos, nbt: &NbtCompound) {
+    pub(crate) fn add_block_entity_nbt(&self, block_pos: BlockPos, nbt: &NbtCompound) {
         self.level
             .read_chunk_sync(&block_pos.chunk_position(), |chunk| {
                 chunk
@@ -5072,6 +5162,30 @@ impl World {
         }
     }
 
+    fn migrate_pending_block_entities(&self, chunk_pos: Vector2<i32>) {
+        let positions: Vec<BlockPos> = self
+            .level
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap()
+                    .keys()
+                    .copied()
+                    .collect()
+            })
+            .unwrap_or_default();
+        for pos in positions {
+            let already_loaded = self
+                .block_entities
+                .get(&chunk_pos)
+                .is_some_and(|m| m.contains_key(&pos));
+            if !already_loaded && let Some(entity) = self.get_block_entity(&pos) {
+                self.update_block_entity(&entity);
+            }
+        }
+    }
+
     pub fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
@@ -5088,6 +5202,13 @@ impl World {
                     bytes.into_boxed_slice(),
                 ),
             );
+            let mut full_nbt = nbt.clone();
+            full_nbt.put_string("id", block_entity.resource_location().to_string());
+            let pos = block_entity.get_position();
+            full_nbt.put_int("x", pos.0.x);
+            full_nbt.put_int("y", pos.0.y);
+            full_nbt.put_int("z", pos.0.z);
+            self.add_block_entity_nbt(block_pos, &full_nbt);
         }
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
             chunk.mark_dirty(true);

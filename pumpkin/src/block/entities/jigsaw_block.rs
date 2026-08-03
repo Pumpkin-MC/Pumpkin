@@ -95,7 +95,7 @@ impl JigsawBlockEntity {
                 &MaxDistance::new(80),
                 &DimensionPadding::ZERO,
                 LiquidSettings::ApplyWaterlog,
-                &PoolAliasLookup,
+                &PoolAliasLookup::default(),
             )
         };
 

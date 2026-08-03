@@ -221,10 +221,10 @@ mod tests {
             block_registry.as_ref(),
             35,
             103,
-            StagedChunkEnum::Features,
+            StagedChunkEnum::Spawn,
         );
         let super::Chunk::Proto(chunk) = chunk else {
-            panic!("features stage should return a proto chunk");
+            panic!("spawn stage should return a proto chunk");
         };
         let mut outpost_blocks = 0;
         let mut jigsaw_blocks = 0;

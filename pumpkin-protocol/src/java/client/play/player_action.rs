@@ -13,6 +13,8 @@ pub enum PlayerAction<'a> {
     UpdateLatency(VarInt),
     UpdateDisplayName(Option<&'a TextComponent>),
     UpdateListOrder(VarInt),
+    /// Toggles the visibility of the player's hat layer (second skin layer).
+    UpdateHat(bool),
 }
 
 pub struct InitChat {

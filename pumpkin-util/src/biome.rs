@@ -67,7 +67,6 @@ impl TemperatureModifier {
 /// Represents weather information for a biome, including temperature and precipitation.
 #[derive(Clone, Debug)]
 pub struct Weather {
-    #[expect(dead_code)]
     has_precipitation: bool,
     /// Base temperature of the biome.
     temperature: f32,
@@ -135,5 +134,38 @@ impl Weather {
         } else {
             modified_temperature
         }
+    }
+
+    #[must_use]
+    pub fn warm_enough_to_rain(&self, x: i32, y: i32, z: i32, sea_level: i32) -> bool {
+        self.compute_temperature(f64::from(x), y, f64::from(z), sea_level) >= 0.15
+    }
+
+    #[must_use]
+    pub fn is_rain_at(&self, x: i32, y: i32, z: i32, sea_level: i32) -> bool {
+        self.has_precipitation && self.warm_enough_to_rain(x, y, z, sea_level)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TemperatureModifier, Weather};
+
+    #[test]
+    fn precipitation_controls_rain() {
+        let weather = Weather::new(false, 1.0, TemperatureModifier::None, 0.0);
+        assert!(!weather.is_rain_at(0, 64, 0, 63));
+    }
+
+    #[test]
+    fn warm_precipitation_is_rain() {
+        let weather = Weather::new(true, 1.0, TemperatureModifier::None, 0.0);
+        assert!(weather.is_rain_at(0, 64, 0, 63));
+    }
+
+    #[test]
+    fn cold_precipitation_is_snow() {
+        let weather = Weather::new(true, 0.0, TemperatureModifier::None, 0.0);
+        assert!(!weather.is_rain_at(0, 64, 0, 63));
     }
 }

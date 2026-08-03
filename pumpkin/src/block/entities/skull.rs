@@ -46,6 +46,21 @@ impl BlockEntity for SkullBlockEntity {
         })
     }
 
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        if let Ok(sound) = self.note_block_sound.try_lock()
+            && let Some(ref sound) = *sound
+        {
+            nbt.put_string("note_block_sound", sound.clone());
+        }
+        if let Ok(profile) = self.profile.try_lock()
+            && let Some(ref prof) = *profile
+        {
+            nbt.put_compound("profile", prof.clone());
+        }
+        Some(nbt)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

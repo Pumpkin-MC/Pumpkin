@@ -529,6 +529,10 @@ impl ChunkData {
         root_compound.put_list("block_entities", block_entities_list);
 
         root_compound.put_bool("isLightOn", is_light_correct);
+        root_compound.put_long(
+            "InhabitedTime",
+            self.inhabited_time.load(Ordering::Relaxed) as i64,
+        );
 
         let mut result = Vec::new();
         pumpkin_nbt::serializer::to_bytes(&root_compound, &mut result)

@@ -57,6 +57,7 @@ use crate::{
 use pumpkin_data::tag::get_tag_ids;
 use pumpkin_nbt::compound::NbtCompound;
 
+use crate::generation::structure::template::BlockPlacer;
 use crate::tick::{ScheduledTick, TickPriority};
 
 enum ActiveSupplier {
@@ -132,7 +133,7 @@ pub struct ProtoChunk {
     pub(crate) flat_block_map: Box<[BlockStateId]>,
     pub flat_biome_map: Box<[u8]>,
     pub flat_surface_height_map: [i16; CHUNK_AREA],
-    flat_ocean_floor_height_map: [i16; CHUNK_AREA],
+    pub flat_ocean_floor_height_map: [i16; CHUNK_AREA],
     pub flat_motion_blocking_height_map: [i16; CHUNK_AREA],
     pub flat_motion_blocking_no_leaves_height_map: [i16; CHUNK_AREA],
     structure_starts: FxHashMap<StructureKeys, StructureInstance>,
@@ -294,7 +295,7 @@ impl ProtoChunk {
 
         for z in 0..16 {
             for x in 0..16 {
-                let index = ((z << 4) + x) as usize;
+                let index = Self::local_position_to_height_map_index(x, z);
 
                 proto_chunk.flat_motion_blocking_height_map[index] = heightmap_data.get(
                     ChunkHeightmapType::MotionBlocking,
@@ -1512,5 +1513,89 @@ impl BlockAccessor for ProtoChunk {
     fn get_block_and_state(&self, position: &BlockPos) -> (&'static Block, &'static BlockState) {
         let id = self.get_block_state(&position.0);
         BlockState::from_id_with_block(id)
+    }
+}
+
+impl BlockPlacer for ProtoChunk {
+    fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId {
+        self.get_block_state(pos)
+    }
+
+    fn set_block_state(&mut self, pos: &Vector3<i32>, state: &BlockState) {
+        Self::set_block_state(self, pos.x, pos.y, pos.z, state);
+    }
+
+    fn add_block_entity(&mut self, nbt: NbtCompound) {
+        self.add_block_entity(nbt);
+    }
+}
+
+impl GenerationCache for ProtoChunk {
+    fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk {
+        self
+    }
+    fn get_center_chunk(&self) -> &ProtoChunk {
+        self
+    }
+    fn get_chunk_mut(&mut self, cx: i32, cz: i32) -> Option<&mut ProtoChunk> {
+        (cx == self.x && cz == self.z).then_some(self)
+    }
+    fn get_chunk(&self, cx: i32, cz: i32) -> Option<&ProtoChunk> {
+        (cx == self.x && cz == self.z).then_some(self)
+    }
+    fn try_get_proto_chunk(&self, cx: i32, cz: i32) -> Option<&ProtoChunk> {
+        self.get_chunk(cx, cz)
+    }
+    fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId {
+        Self::get_block_state(self, pos)
+    }
+    fn get_fluid_and_fluid_state(&self, _pos: &Vector3<i32>) -> (Fluid, FluidState) {
+        (
+            Fluid::EMPTY,
+            FluidState {
+                height: 0.0,
+                level: 0,
+                is_empty: true,
+                blast_resistance: 0.0,
+                block_state_id: BlockStateId::AIR,
+                is_still: false,
+                is_source: false,
+                falling: false,
+            },
+        )
+    }
+    fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {
+        Self::set_block_state(self, pos.x, pos.y, pos.z, block_state);
+    }
+    fn add_block_entity(&mut self, _pos: &Vector3<i32>, nbt: NbtCompound) {
+        self.add_block_entity(nbt);
+    }
+    fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        Self::top_motion_blocking_block_height_exclusive(self, x, z)
+    }
+    fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        Self::top_motion_blocking_block_no_leaves_height_exclusive(self, x, z)
+    }
+    fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
+        Self::get_top_y(self, heightmap, x, z)
+    }
+    fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        Self::top_block_height_exclusive(self, x, z)
+    }
+    fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        Self::ocean_floor_height_exclusive(self, x, z)
+    }
+    fn is_air(&self, local_pos: &Vector3<i32>) -> bool {
+        self.is_air(local_pos)
+    }
+    fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome {
+        Self::get_biome(self, x, y, z)
+    }
+    fn get_blending_data(
+        &self,
+        _cx: i32,
+        _cz: i32,
+    ) -> Option<&crate::generation::blender::blending_data::BlendingData> {
+        None
     }
 }

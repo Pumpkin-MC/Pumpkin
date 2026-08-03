@@ -51,6 +51,7 @@ impl PlacedFeature {
     pub fn generate_in_proto_chunk(
         &self,
         chunk: &mut crate::ProtoChunk,
+        block_registry: &dyn crate::world::WorldPortalExt,
         feature_name: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
@@ -64,8 +65,17 @@ impl PlacedFeature {
         if let ConfiguredFeature::SculkPatch(feature) = feature {
             feature.generate_in_proto_chunk(chunk, random, pos)
         } else {
-            tracing::warn!("Placed feature {feature_name:?} is not supported in a jigsaw pool");
-            false
+            let min_y = chunk.bottom_y();
+            let height = chunk.height();
+            self.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            )
         }
     }
 
@@ -550,6 +560,12 @@ pub trait ConditionalPlacementModifier {
 }
 
 // generated code is now placed alongside other codegen outputs
-// in `src/generated` so it’s easier to find when upgrading MC versions.
+// in `src/generated` so it's easier to find when upgrading MC versions.
 // the path is relative to this file (up two levels to reach `src`).
+
+/// Returns all placed feature names for tab-completion in `/place feature`.
+#[must_use]
+pub const fn all_placed_feature_names() -> &'static [&'static str] {
+    pumpkin_data::placed_feature::PlacedFeature::all_names()
+}
 include!("../../../../pumpkin-data/src/generated/placed_features_generated.rs");
