@@ -6,8 +6,8 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, spear_use::SpearUseGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, spear_use::SpearUseGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -39,11 +39,12 @@ impl ZombifiedPiglinEntity {
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let _target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
-            // Zombified piglins are neutral by default (only attack if hit),
-            // but for now we give it ActiveTargetGoal for players to make them hostile
-            // (or we can leave it empty for neutral behavior).
-            // Let's make them neutral for now (no ActiveTargetGoal).
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            // Zombified piglins are neutral: vanilla `ZombifiedPiglin.registerGoals`
+            // registers no unconditional player target, only
+            // `HurtByTargetGoal(this).setAlertOthers()` plus the `NeutralMob` anger
+            // goals, which need per player anger state Pumpkin does not track yet.
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
         };
 
         mob_arc

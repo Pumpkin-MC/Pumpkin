@@ -7,7 +7,8 @@ use crate::entity::{
     ai::goal::{
         active_target::ActiveTargetGoal, climb_on_top_of_powder_snow::ClimbOnTopOfPowderSnowGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -29,6 +30,7 @@ impl SilverfishEntity {
         {
             let mut goal_selector = mob_arc.entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.entity.target_selector.lock().unwrap();
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, ClimbOnTopOfPowderSnowGoal::new());
