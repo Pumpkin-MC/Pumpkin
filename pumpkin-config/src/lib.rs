@@ -185,6 +185,12 @@ pub struct BasicConfiguration {
     pub white_list: bool,
     /// Whether to enforce the whitelist.
     pub enforce_whitelist: bool,
+    /// Whether players can manually take cooked food off campfires by right-clicking.
+    /// Vanilla Minecraft does not allow manual pickup; cooked food pops off automatically.
+    pub allow_campfire_manual_pickup: bool,
+    /// Whether cooked food automatically pops off the campfire as an item entity.
+    /// When false, cooked items stay in the campfire slot (useful with manual pickup).
+    pub campfire_auto_pop_off: bool,
 }
 
 impl Default for BasicConfiguration {
@@ -206,6 +212,8 @@ impl Default for BasicConfiguration {
             allow_chat_reports: false,
             white_list: false,
             enforce_whitelist: false,
+            allow_campfire_manual_pickup: false,
+            campfire_auto_pop_off: true,
         }
     }
 }
