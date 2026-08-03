@@ -1,16 +1,7 @@
-use pumpkin_protocol::bedrock::server::text::SText;
-use pumpkin_util::{Hand, PermissionLvl};
-use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
-use rsa::signature::Verifier;
-use sha1::Sha1;
-use std::num::NonZeroU8;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
-use thiserror::Error;
-use tracing::{Level, debug, error, info, trace, warn};
-
 use crate::block::BlockHitResult;
+use crate::block::entities::command_block::CommandBlockEntity;
+use crate::block::entities::jigsaw_block::JigsawBlockEntity;
+use crate::block::entities::sign::SignBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self};
 use crate::entity::EntityBase;
@@ -32,10 +23,6 @@ use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractU
 use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
 use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
-
-use crate::block::entities::command_block::CommandBlockEntity;
-use crate::block::entities::jigsaw_block::JigsawBlockEntity;
-use crate::block::entities::sign::SignBlockEntity;
 use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
@@ -53,6 +40,7 @@ use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::bedrock::client::CMovePlayer;
+use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
@@ -76,9 +64,18 @@ use pumpkin_protocol::java::server::play::{
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
 use pumpkin_util::{GameMode, text::TextComponent};
+use pumpkin_util::{Hand, PermissionLvl, unix_timestamp_millis};
 use pumpkin_world::generation::structure::structures::jigsaw::JigsawJointType;
 use pumpkin_world::world::BlockFlags;
+use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
+use rsa::signature::Verifier;
+use sha1::Sha1;
+use std::num::NonZeroU8;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use thiserror::Error;
 use tokio::sync::Mutex;
+use tracing::{Level, debug, error, info, trace, warn};
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
@@ -1489,10 +1486,7 @@ impl JavaClient {
                 return Err(ChatError::UnsignedChat); // There is no signature
             }
 
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as i64;
+            let now = unix_timestamp_millis() as i64;
 
             // Verify message timestamp
             if chat_message.timestamp > now || chat_message.timestamp < (now - CHAT_MESSAGE_MAX_AGE)
@@ -1575,10 +1569,7 @@ impl JavaClient {
         session: &SPlayerSession,
     ) -> Result<(), ChatError> {
         // Verify session expiry
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as i64;
+        let now = unix_timestamp_millis() as i64;
         if session.expires_at < now {
             return Err(ChatError::InvalidPublicKey);
         }
