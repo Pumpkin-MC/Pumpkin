@@ -80,12 +80,16 @@ impl BlockDirection {
         }
     }
 
+    // Direction.getRandom / Direction.Plane.getRandomDirection both delegate to
+    // Util.getRandom(array, random), i.e. `array[random.nextInt(array.length)]` -- the bound
+    // must be the full length, not length - 1. The off-by-one here previously made the last
+    // element unreachable and desynced the RNG stream from vanilla for every caller.
     pub fn random(random: &mut RandomGenerator) -> Self {
-        Self::all()[random.next_bounded_i32(Self::all().len() as i32 - 1) as usize]
+        Self::all()[random.next_bounded_i32(Self::all().len() as i32) as usize]
     }
 
     pub fn random_horizontal(random: &mut RandomGenerator) -> HorizontalFacing {
-        Self::horizontal()[random.next_bounded_i32(Self::horizontal().len() as i32 - 1) as usize]
+        Self::horizontal()[random.next_bounded_i32(Self::horizontal().len() as i32) as usize]
     }
 
     #[must_use]
