@@ -41,7 +41,9 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
-use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect, UseRemainderImpl};
+use pumpkin_data::data_component_impl::food::{
+    ConsumableImpl, ConsumeAnimation, ConsumeEffect, UseRemainderImpl,
+};
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DamageResistantImpl, DamageResistantType,
     DeathProtectionImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl, FoodImpl,
@@ -2774,6 +2776,60 @@ impl EntityBase for LivingEntity {
                     self.last_attacked_time
                         .store(self.entity.age.load(Relaxed), Relaxed);
                 }
+
+                // Thorns (`thorns.json`, `minecraft:post_attack`): each worn armor piece
+                // with Thorns rolls independently, chance = 0.15 * level. On success it
+                // damages the attacker (DamageType::THORNS, uniform 1.0-5.0) and wears
+                // 2 durability off that armor piece.
+                if let Some(attacker) = cause {
+                    let equipment_lock = self.entity_equipment.lock().await;
+                    for slot in [
+                        EquipmentSlot::HEAD,
+                        EquipmentSlot::CHEST,
+                        EquipmentSlot::LEGS,
+                        EquipmentSlot::FEET,
+                    ] {
+                        let stack_arc = equipment_lock.get(&slot);
+                        let mut stack = stack_arc.lock().await;
+                        if stack.is_empty() {
+                            continue;
+                        }
+                        let level = stack.get_enchantment_level(&Enchantment::THORNS);
+                        if level <= 0 {
+                            continue;
+                        }
+                        if rand::random::<f32>() >= 0.15 * level as f32 {
+                            continue;
+                        }
+                        let thorns_damage = 1.0 + rand::random::<f32>() * 4.0;
+                        if stack.damage_item(2) == DamageResult::Broken {
+                            if let Some(player) = self.get_player() {
+                                player
+                                    .increment_stat(
+                                        StatisticCategory::Broken,
+                                        stack.item.id as i32,
+                                        1,
+                                    )
+                                    .await;
+                            }
+                            world.send_entity_status(
+                                &self.entity,
+                                crate::entity::equipment_break_status(&slot),
+                            );
+                            *stack = ItemStack::EMPTY.clone();
+                            let broken_stack = stack.clone();
+                            drop(stack);
+                            drop(stack_arc);
+                            self.send_equipment_changes(&[(slot, broken_stack)]);
+                        } else {
+                            drop(stack);
+                            drop(stack_arc);
+                        }
+                        attacker
+                            .damage(attacker, thorns_damage, DamageType::THORNS)
+                            .await;
+                    }
+                }
             }
 
             // Check if the entity died and isn't protected by a death protection mechanic (ex. totem of undying)
@@ -2906,6 +2962,23 @@ impl EntityBase for LivingEntity {
                             SoundCategory::Players,
                             &self.entity.pos.load(),
                         );
+
+                        // Consumable.onConsume, line 90: `user.gameEvent(this.animation ==
+                        // ItemUseAnimation.DRINK ? GameEvent.DRINK : GameEvent.EAT)`. Fired
+                        // unconditionally for any item with a Consumable component, regardless
+                        // of animation, via Item.finishUsingItem (line 216).
+                        let game_event = if consumable.animation == ConsumeAnimation::Drink {
+                            pumpkin_data::game_event::GameEvent::Drink
+                        } else {
+                            pumpkin_data::game_event::GameEvent::Eat
+                        };
+                        crate::world::game_event::emit_game_event(
+                            &world,
+                            game_event,
+                            self.entity.pos.load(),
+                            crate::world::game_event::GameEventContext::of_entity(caller.clone()),
+                        )
+                        .await;
                     }
 
                     // Handle potion consumption

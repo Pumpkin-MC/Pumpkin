@@ -37,11 +37,30 @@ packet enum existed — a different thing entirely, don't confuse the two).
 - `GameEvent::NoteBlockPlay` — from `note.rs`'s `play_note`, both call sites.
 - `GameEvent::JukeboxPlay` (every 20 ticks while playing) / `JukeboxStopPlay` (natural end and
   manual stop) — from `block/entities/jukebox.rs` + `block/blocks/jukebox.rs`.
+- `GameEvent::Eat` / `GameEvent::Drink` for the **item-consumable path only** — from
+  `LivingEntity::tick`'s item-in-use completion block (`pumpkin/src/entity/living.rs`), right
+  after the consumable's sound plays. This is the same shared completion point that already
+  applies `FoodImpl` hunger, potion effects, and `consumable_clears_all_effects` — it was NOT a
+  missing infrastructure gap, just a missing call (Pumpkin has no instant-consume branch
+  separate from this tick-driven path, so this is the only completion site that needs it).
+  Matches `Consumable.onConsume` (`Consumable.java:90`): `user.gameEvent(this.animation ==
+  ItemUseAnimation.DRINK ? GameEvent.DRINK : GameEvent.EAT)`, fired unconditionally for any item
+  with a `Consumable` data component via `Item.finishUsingItem` (`Item.java:216`) — gated on
+  `ConsumableImpl::animation == ConsumeAnimation::Drink` vs. anything else (not on whether the
+  item happens to carry `FoodImpl`/`PotionContentsImpl`).
+  **Still missing**: several other vanilla EAT/DRINK sites unrelated to the item-consumable
+  flow — `CakeBlock.java:102` (`level.gameEvent(player, GameEvent.EAT, pos)`, block-based, not
+  through `Consumable` at all), mob eating (`Mob.java:265`, `Panda.java:409`,
+  `AbstractHorse.java:489`, `Camel.java:466`), and `Witch.java:130`'s `GameEvent.DRINK`. These
+  are separate, out-of-scope units of work — file them individually rather than assuming
+  this entry covers them.
 
 ## Still missing (most of vanilla's emission call sites) — good units of work, pick any
 
-Footsteps, container open/close, entity place/kill/damage, projectile shoot/land, drink/eat,
-splash, sculk-related events beyond the sensor itself, and many more. Grep vanilla's
+Footsteps, container open/close, entity place/kill/damage, projectile shoot/land,
+cake/mob eating and witch drinking (see note above — distinct from the item-consumable EAT/DRINK
+path, which is now wired), splash, sculk-related events beyond the sensor itself, and many more.
+Grep vanilla's
 `GameEvent.java` bootstrap for the full enumerated list (dozens of named events); cross-reference
 each against where the corresponding action already happens in Pumpkin (e.g. container-open
 almost certainly has an existing hook point in the screen-handler open path — find it rather than
