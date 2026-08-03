@@ -195,6 +195,8 @@ impl BlockBehaviour for DropperBlock {
                         )
                         .await
                         {
+                            drop(item);
+                            dropper.mark_dirty();
                             return;
                         }
 
@@ -222,7 +224,7 @@ impl BlockBehaviour for DropperBlock {
                     );
 
                     let item_entity = Arc::new(ItemEntity::new_with_velocity(
-                        entity, drop_item, velocity, 40,
+                        entity, drop_item, velocity, 0,
                     ));
                     args.world.spawn_entity(item_entity).await;
 
@@ -237,12 +239,12 @@ impl BlockBehaviour for DropperBlock {
                         *args.position,
                         to_data3d(props.facing),
                     );
+
+                    drop(item);
+                    dropper.mark_dirty();
                 } else {
-                    args.world.sync_world_event(
-                        WorldEvent::SoundDispenserDispense,
-                        *args.position,
-                        0,
-                    );
+                    args.world
+                        .sync_world_event(WorldEvent::SoundDispenserFail, *args.position, 0);
                 }
             }
         })

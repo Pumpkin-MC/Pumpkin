@@ -230,6 +230,9 @@ impl BlockBehaviour for DispenserBlock {
                         // Default / Drop
                         Self::drop_item(&ctx, &mut item).await;
                     }
+
+                    drop(item);
+                    dispenser.mark_dirty();
                 } else {
                     args.world
                         .sync_world_event(WorldEvent::SoundDispenserFail, *args.position, 0);
@@ -437,7 +440,7 @@ impl DispenserBlock {
         );
 
         let item_entity = Arc::new(ItemEntity::new_with_velocity(
-            entity, drop_item, velocity, 40,
+            entity, drop_item, velocity, 0,
         ));
         ctx.world.spawn_entity(item_entity).await;
 
