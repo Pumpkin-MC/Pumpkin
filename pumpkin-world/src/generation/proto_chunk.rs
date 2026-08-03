@@ -140,6 +140,7 @@ pub struct ProtoChunk {
 
     height: u16,
     bottom_y: i8,
+    sea_level: i32,
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
     pub carving_mask: crate::generation::carver::mask::CarvingMask,
@@ -193,6 +194,13 @@ impl ProtoChunk {
                 crate::biome::hash_seed(flat_gen.seed)
             }
         };
+        let sea_level = match generator {
+            super::generator::WorldGenerator::Noise(noise_gen) => noise_gen.settings.sea_level,
+            // Flat world generator has no configured sea level; 63 is the standard overworld
+            // value and these features (blue ice, icebergs, freeze-top-layer, basalt columns)
+            // are overworld/nether-specific, so a fixed fallback here is safe.
+            super::generator::WorldGenerator::Flat(_) => 63,
+        };
 
         let default_heightmap = [i16::MIN; CHUNK_AREA];
         Self {
@@ -216,6 +224,7 @@ impl ProtoChunk {
             structure_starts: FxHashMap::default(),
             height,
             bottom_y: dimension.min_y as i8,
+            sea_level,
             stage: StagedChunkEnum::Empty,
             light: ChunkLight {
                 sky_light: (0..section_count)
@@ -336,6 +345,11 @@ impl ProtoChunk {
     #[must_use]
     pub const fn bottom_y(&self) -> i8 {
         self.bottom_y
+    }
+
+    #[must_use]
+    pub const fn sea_level(&self) -> i32 {
+        self.sea_level
     }
 
     pub fn add_block_entity(&mut self, nbt: NbtCompound) {

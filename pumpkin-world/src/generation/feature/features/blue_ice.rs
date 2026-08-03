@@ -6,8 +6,6 @@ use pumpkin_util::{
 
 use crate::generation::proto_chunk::GenerationCache;
 
-const SEA_LEVEL: i32 = 63; // TODO: use getSeaLevel() instead of hardcoding
-
 pub struct BlueIceFeature;
 
 impl BlueIceFeature {
@@ -16,7 +14,7 @@ impl BlueIceFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        if pos.0.y >= SEA_LEVEL - 1 {
+        if pos.0.y >= chunk.sea_level() - 1 {
             return false;
         }
 

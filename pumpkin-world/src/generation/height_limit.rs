@@ -7,6 +7,8 @@ pub trait HeightLimitView {
 
     fn bottom_y(&self) -> i8;
 
+    fn sea_level(&self) -> i32;
+
     fn top_y(&self) -> u16 {
         if self.bottom_y() >= 0 {
             self.height() + self.bottom_y() as u16
@@ -56,5 +58,9 @@ impl HeightLimitView for ProtoChunk {
 
     fn bottom_y(&self) -> i8 {
         self.bottom_y()
+    }
+
+    fn sea_level(&self) -> i32 {
+        self.sea_level()
     }
 }

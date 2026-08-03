@@ -39,6 +39,14 @@ impl HeightLimitView for Cache {
             Chunk::Level(_) => panic!(),
         }
     }
+
+    fn sea_level(&self) -> i32 {
+        let mid = ((self.size * self.size) >> 1) as usize;
+        match &self.chunks[mid] {
+            Chunk::Proto(chunk) => chunk.sea_level(),
+            Chunk::Level(_) => panic!(),
+        }
+    }
 }
 
 impl BlockAccessor for Cache {
