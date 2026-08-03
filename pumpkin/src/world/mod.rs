@@ -1321,6 +1321,10 @@ impl World {
         let mut weather = self.weather.lock().await;
         weather.tick_weather(self);
 
+        let mut worldborder = self.worldborder.lock().await;
+        worldborder.tick(self);
+        drop(worldborder);
+
         if self.should_skip_night() && is_night {
             let mut level_time = self.level_time.lock().await;
             let time = time_of_day + 24000;

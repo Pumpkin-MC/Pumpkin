@@ -12,6 +12,13 @@ pub struct Worldborder {
     pub center_z: f64,
     pub old_diameter: f64,
     pub new_diameter: f64,
+    /// The actual size used for containment/damage/clamping checks, interpolated
+    /// each tick from `old_diameter` toward `new_diameter` (vanilla
+    /// `WorldBorder.MovingBorderExtent`). `old_diameter`/`new_diameter` stay pure
+    /// lerp endpoints for the client packets, matching vanilla's `from`/`to`.
+    current_diameter: f64,
+    lerp_ticks_total: i64,
+    lerp_ticks_remaining: i64,
     pub speed: i64,
     pub portal_teleport_boundary: i32,
     pub warning_blocks: i32,
@@ -35,6 +42,9 @@ impl Worldborder {
             center_z: z,
             old_diameter: diameter,
             new_diameter: diameter,
+            current_diameter: diameter,
+            lerp_ticks_total: 0,
+            lerp_ticks_remaining: 0,
             speed,
             portal_teleport_boundary: 29_999_984,
             warning_blocks,
@@ -70,15 +80,29 @@ impl Worldborder {
         self.old_diameter = self.new_diameter;
         self.new_diameter = diameter;
 
-        match speed {
-            Some(speed) => {
+        // A zero (or negative) tick duration has nothing to interpolate over --
+        // vanilla's own `calculateSize` degenerates to `to` immediately in that case
+        // (`(duration - progress) / duration` is NaN, which fails the `< 1.0` check).
+        if let Some(ticks) = speed.filter(|ticks| *ticks > 0) {
+            self.lerp_ticks_total = ticks;
+            self.lerp_ticks_remaining = ticks;
+            self.current_diameter = self.old_diameter;
+            world.broadcast_packet_all(&CSetBorderLerpSize::new(
+                self.old_diameter,
+                self.new_diameter,
+                ticks.into(),
+            ));
+        } else {
+            self.lerp_ticks_total = 0;
+            self.lerp_ticks_remaining = 0;
+            self.current_diameter = self.new_diameter;
+            if speed.is_some() {
                 world.broadcast_packet_all(&CSetBorderLerpSize::new(
                     self.old_diameter,
                     self.new_diameter,
-                    speed.into(),
+                    0i64.into(),
                 ));
-            }
-            None => {
+            } else {
                 world.broadcast_packet_all(&CSetBorderSize::new(self.new_diameter));
             }
         }
@@ -86,6 +110,21 @@ impl Worldborder {
 
     pub fn add_diameter(&mut self, world: &World, offset: f64, speed: Option<i64>) {
         self.set_diameter(world, self.new_diameter + offset, speed);
+    }
+
+    /// Per-tick lerp update, mirroring vanilla `WorldBorder.MovingBorderExtent::update`.
+    /// A no-op once the lerp has completed (`lerp_ticks_remaining == 0`).
+    pub fn tick(&mut self, _world: &World) {
+        if self.lerp_ticks_remaining > 0 {
+            self.lerp_ticks_remaining -= 1;
+            self.current_diameter = if self.lerp_ticks_remaining > 0 {
+                let progress = (self.lerp_ticks_total - self.lerp_ticks_remaining) as f64
+                    / self.lerp_ticks_total as f64;
+                self.old_diameter + (self.new_diameter - self.old_diameter) * progress
+            } else {
+                self.new_diameter
+            };
+        }
     }
 
     pub fn set_warning_delay(&mut self, world: &World, delay: i32) {
@@ -102,7 +141,7 @@ impl Worldborder {
 
     #[must_use]
     pub fn contains(&self, x: f64, z: f64) -> bool {
-        let half = self.new_diameter / 2.0;
+        let half = self.current_diameter / 2.0;
         let min_x = self.center_x - half;
         let max_x = self.center_x + half;
         let min_z = self.center_z - half;
@@ -119,7 +158,7 @@ impl Worldborder {
     /// Signed distance from `(x, z)` to the nearest border edge; negative when outside.
     #[must_use]
     pub fn distance_to_border(&self, x: f64, z: f64) -> f64 {
-        let half = self.new_diameter / 2.0;
+        let half = self.current_diameter / 2.0;
         let min_x = self.center_x - half;
         let max_x = self.center_x + half;
         let min_z = self.center_z - half;
@@ -135,8 +174,8 @@ impl Worldborder {
 
     #[must_use]
     pub fn clamp_block(&self, x: i32, z: i32) -> (i32, i32) {
-        let half = self.new_diameter / 2.0;
-        let min_x = (self.center_x - half).floor() as i32;
+        let half = self.current_diameter / 2.0;
+        let min_x = (self.center_x - half).floor() as i32 - 1;
         let max_x = (self.center_x + half).floor() as i32 - 1;
         let min_z = (self.center_z - half).floor() as i32;
         let max_z = (self.center_z + half).floor() as i32 - 1;
