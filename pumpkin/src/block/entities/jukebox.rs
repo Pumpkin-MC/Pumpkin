@@ -4,6 +4,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+use pumpkin_data::Block;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
@@ -92,8 +93,13 @@ impl BlockEntity for JukeboxBlockEntity {
                 // Check if song has finished
                 if ticks >= song_length {
                     self.stop_playing();
-                    // TODO: Update block state to has_record = false? Or just stop redstone?
-                    // In vanilla, the disc stays but music stops and redstone turns off
+                    // The disc stays in the jukebox, but redstone output drops now that
+                    // is_playing() reads false -- neither comparators nor adjacent dust get
+                    // a block-state-change notification since no state actually changed here.
+                    world.update_neighbors(&self.position, None).await;
+                    world
+                        .update_comparators(&self.position, &Block::JUKEBOX)
+                        .await;
                     self.emit_jukebox_event(world, GameEvent::JukeboxStopPlay)
                         .await;
                 } else if ticks.is_multiple_of(20) {
