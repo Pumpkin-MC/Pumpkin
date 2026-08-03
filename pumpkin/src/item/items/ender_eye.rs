@@ -65,6 +65,12 @@ impl ItemBehaviour for EnderEyeItem {
             world
                 .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_LISTENERS)
                 .await;
+            // Vanilla `EnderEyeItem#useOn` calls
+            // `level.updateNeighbourForOutputSignal(pos, Blocks.END_PORTAL_FRAME)` so comparators
+            // reading the frame see its new eye state.
+            world
+                .update_comparators(&location, &Block::END_PORTAL_FRAME)
+                .await;
             item.decrement_unless_creative(player.gamemode.load(), 1);
             world.sync_world_event(WorldEvent::EndPortalFrameFill, location, 0);
 
