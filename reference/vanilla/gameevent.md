@@ -1,0 +1,83 @@
+# GameEvent / vibration engine
+
+Source: `net.minecraft.world.level.gameevent.{GameEvent,GameEventDispatcher,GameEventListener,
+PositionSource,BlockPositionSource,EntityPositionSource}`,
+`net.minecraft.world.level.gameevent.vibrations.VibrationSystem`, decompiled 26.2 mappings.
+
+## What exists (`pumpkin/src/world/game_event/{mod.rs,vibration.rs}`)
+
+Was **zero** at the start of this session (only the unrelated client-protocol `CGameEvent`
+packet enum existed — a different thing entirely, don't confuse the two).
+
+- `GameEventContext` (mirrors `GameEvent.Context` — but note it currently has only one field,
+  `source_entity: Option<Arc<dyn EntityBase>>`; vanilla's `Context` can also carry an affected
+  `BlockState`, which Pumpkin's version can't represent yet — see "known limitation" below).
+- `PositionSource` enum (`Block`/`Entity` variants, mirrors `PositionSource`/
+  `BlockPositionSource`/`EntityPositionSource`).
+- `GameEventListener` trait: `listener_source`, `listener_radius`, async `handle_game_event`.
+- Notification-radius / vibration-frequency lookup tables, cited against `GameEvent.java`'s
+  bootstrap and `VibrationSystem.VIBRATION_FREQUENCY_FOR_EVENT`.
+- `redstone_strength_for_distance`, ported from `VibrationSystem.getRedstoneStrengthForDistance`
+  (used by sculk sensors).
+- `VibrationSelector` — faithful port of `VibrationSelector.java`'s closest/highest-frequency-wins
+  logic (7 unit tests).
+- `emit_game_event` — ported from `GameEventDispatcher.post`: radius-filter, closest-first sort,
+  occlusion gate, dispatch to registered listeners.
+- `World::register_game_event_listener` / `unregister_game_event_listener_at` /
+  `unregister_game_event_listener_for_entity` (the last one added when Warden/Allay landed, since
+  entity-backed listeners had no removal path — a despawned mob's listener would otherwise leak
+  in the registry forever).
+
+## Emission call sites wired so far (small list — most of vanilla's are still missing)
+
+- `GameEvent::BlockDestroy` — from `break_block()`, right after `set_block_state`
+  (`Level.destroyBlock`, line 298).
+- `GameEvent::BlockPlace` — from `block::registry::place_block`, right after `set_block_state`
+  succeeds (`BlockItem.place`, line 88).
+- `GameEvent::NoteBlockPlay` — from `note.rs`'s `play_note`, both call sites.
+- `GameEvent::JukeboxPlay` (every 20 ticks while playing) / `JukeboxStopPlay` (natural end and
+  manual stop) — from `block/entities/jukebox.rs` + `block/blocks/jukebox.rs`.
+
+## Still missing (most of vanilla's emission call sites) — good units of work, pick any
+
+Footsteps, container open/close, entity place/kill/damage, projectile shoot/land, drink/eat,
+splash, sculk-related events beyond the sensor itself, and many more. Grep vanilla's
+`GameEvent.java` bootstrap for the full enumerated list (dozens of named events); cross-reference
+each against where the corresponding action already happens in Pumpkin (e.g. container-open
+almost certainly has an existing hook point in the screen-handler open path — find it rather than
+inventing a new one).
+
+## Known architectural limitations (don't try to "fix" these without a bigger redesign)
+
+- **Flat `Vec` listener registry, not per-chunk-section sharded.** Vanilla shards listeners by
+  chunk section for lookup performance at scale. Pumpkin's registry is a flat list scanned
+  linearly. Fine for correctness, not for performance at high listener counts — only worth fixing
+  if profiling shows it matters.
+- **Straight-line block-sampling for occlusion, not a full 6-direction raycast.** Vanilla's real
+  occlusion check is more geometrically precise. Pumpkin's approximation will have false
+  positives/negatives at the margins of complex block shapes.
+- **`VibrationSelector` is tested but not tick-driven yet.** Vanilla's `VibrationSystem.Ticker`
+  simulates travel time and spawns travel particles over several ticks before the vibration
+  actually resolves at its destination. Pumpkin currently resolves synchronously — a vibration is
+  processed instantly rather than "traveling." This is a real, user-visible gap (no vibration
+  particle trail) but is its own scoped feature, not a quick fix.
+- **`GameEventContext` has no block-state field.** Some vanilla listeners key behavior off the
+  block state involved in the event (e.g. `BlockPlace`'s context carries `placedState`).
+  Pumpkin's context can't carry this yet — if you need it for a new listener, you'll need to
+  extend `GameEventContext`, not work around its absence with a hack.
+
+## Warden and Allay (landed on top of this engine)
+
+- **Warden** (`pumpkin/src/entity/mob/{warden.rs,warden_anger.rs}`): full `AngerManagement`/
+  `AngerLevel` port (thresholds 0/40/80, `MAX_ANGER`=150, `DEFAULT_ANGER`=35,
+  `ON_HURT_ANGER_BOOST`=20 — all vanilla constants, 13 unit tests). A `GameEventListener` impl
+  gated by the real `GameEvent::MINECRAFT_WARDEN_CAN_LISTEN` tag. Deferred: Pose-driven
+  emerge/dig/roar animations (Pumpkin's `Entity` has no `Pose` enum at all — this needs a new
+  concept, not just wiring), `doPush` touch-anger (no entity-collision hook exists), anger
+  persistence across unload (needs entity-NBT custom-data, a `Codec`-equivalent Pumpkin doesn't
+  have yet).
+- **Allay** (`pumpkin/src/entity/passive/allay.rs`): jukebox/note-block "liked position" memory
+  and item duplication, matching `Allay.mobInteract` exactly. Deferred: client-synced
+  dancing/animation state (no tracked-data/animation channel exists), the item-carrying/delivery
+  goal AI (`GoToWantedItem`/`GoAndGiveItemsToTarget`/`StayCloseToTarget` — no item-seeking or
+  deliver-to-position goal exists in Pumpkin's Goal system at all yet).
