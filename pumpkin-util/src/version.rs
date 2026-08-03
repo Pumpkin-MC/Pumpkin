@@ -5,7 +5,7 @@
 /// allowing version comparisons using standard comparison operators.
 ///
 /// `Unknown` is used when a protocol number is not recognized.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[allow(non_camel_case_types)]
 pub enum JavaMinecraftVersion {
     /// 1.7.2: The Update That Changed The World.
@@ -266,7 +266,7 @@ impl std::fmt::Display for JavaMinecraftVersion {
 }
 
 /// Represents a specific version of the Minecraft Bedrock Edition protocol.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[allow(non_camel_case_types)]
 pub enum BedrockMinecraftVersion {
     /// 1.21: Tricky Trials.
@@ -311,4 +311,63 @@ impl std::fmt::Display for BedrockMinecraftVersion {
             Self::Unknown => write!(f, "unknown"),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+pub enum MinecraftVersion {
+    Java(JavaMinecraftVersion),
+    Bedrock(BedrockMinecraftVersion),
+}
+
+impl MinecraftVersion {
+    #[must_use]
+    pub const fn java(self) -> Option<JavaMinecraftVersion> {
+        match self {
+            Self::Java(version) => Some(version),
+            Self::Bedrock(_) => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn bedrock(self) -> Option<BedrockMinecraftVersion> {
+        match self {
+            Self::Java(_) => None,
+            Self::Bedrock(version) => Some(version),
+        }
+    }
+
+    #[must_use]
+    pub const fn edition(self) -> MinecraftEdition {
+        match self {
+            Self::Java(_) => MinecraftEdition::Java,
+            Self::Bedrock(_) => MinecraftEdition::Bedrock,
+        }
+    }
+}
+
+impl std::fmt::Display for MinecraftVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Java(v) => write!(f, "java ({v})"),
+            Self::Bedrock(v) => write!(f, "bedrock ({v})"),
+        }
+    }
+}
+
+impl From<JavaMinecraftVersion> for MinecraftVersion {
+    fn from(version: JavaMinecraftVersion) -> Self {
+        Self::Java(version)
+    }
+}
+
+impl From<BedrockMinecraftVersion> for MinecraftVersion {
+    fn from(version: BedrockMinecraftVersion) -> Self {
+        Self::Bedrock(version)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MinecraftEdition {
+    Java,
+    Bedrock,
 }
