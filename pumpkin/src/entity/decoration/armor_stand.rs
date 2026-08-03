@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering};
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
 };
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
@@ -337,7 +338,17 @@ impl EntityBase for ArmorStandEntity {
     fn kill<'a>(&'a self, _caller: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             self.get_entity().remove().await;
-            // TODO: emit GameEvent::ENTITY_DIE
+
+            // ArmorStand.java:464 -- `this.gameEvent(GameEvent.ENTITY_DIE);`. No
+            // `Arc<dyn EntityBase>` is available in this method, so this uses
+            // `GameEventContext::none()`, matching other emission sites this session.
+            emit_game_event(
+                &self.get_entity().world.load(),
+                pumpkin_data::game_event::GameEvent::EntityDie,
+                self.get_entity().pos.load(),
+                GameEventContext::none(),
+            )
+            .await;
         })
     }
 
