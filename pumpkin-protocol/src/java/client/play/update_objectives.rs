@@ -47,21 +47,7 @@ impl ClientPacket for CUpdateObjectives {
         if self.mode == 0 || self.mode == 2 {
             write.write_slice(&self.display_name.encode())?;
             write.write_var_int(&self.render_type)?;
-            write.write_option(&self.number_format, |p, v| {
-                match v {
-                    NumberFormat::Blank => p.write_var_int(&VarInt(0)),
-                    NumberFormat::Styled(style) => {
-                        p.write_var_int(&VarInt(1))?;
-                        // TODO
-                        pumpkin_nbt::serializer::to_bytes_unnamed(style, p)
-                            .map_err(|err| WritingError::Serde(err.to_string()))
-                    }
-                    NumberFormat::Fixed(text_component) => {
-                        p.write_var_int(&VarInt(2))?;
-                        p.write_slice(&text_component.encode())
-                    }
-                }
-            })
+            write.write_option(&self.number_format, |w, n| n.write(w))
         } else {
             Ok(())
         }

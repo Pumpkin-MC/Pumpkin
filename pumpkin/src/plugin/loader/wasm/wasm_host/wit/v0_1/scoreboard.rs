@@ -1,15 +1,19 @@
 use wasmtime::component::Resource;
 
+use std::sync::Arc;
+
 use crate::plugin::loader::wasm::wasm_host::{
     state::{PluginHostState, ScoreboardResource},
     wit::v0_1::pumpkin::{
         self,
         plugin::scoreboard::{
-            self, CollisionRule, DisplaySlot, NametagVisibility, RenderType, TeamSettings,
+            self, CollisionRule, DisplaySlot, NametagVisibility, RenderType as WitRenderType,
+            TeamSettings,
         },
     },
 };
 use crate::world::scoreboard::{ScoreboardObjective, ScoreboardScore, Team};
+use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::codec::var_int::VarInt;
 
 impl PluginHostState {
@@ -21,39 +25,72 @@ impl PluginHostState {
             .get::<ScoreboardResource>(&Resource::new_own(res.rep()))
             .map_err(wasmtime::Error::from)
     }
+
+    const fn to_internal_render_type(
+        rt: WitRenderType,
+    ) -> pumpkin_protocol::java::client::play::RenderType {
+        match rt {
+            WitRenderType::Integer => pumpkin_protocol::java::client::play::RenderType::Integer,
+            WitRenderType::Hearts => pumpkin_protocol::java::client::play::RenderType::Hearts,
+        }
+    }
+
+    const fn to_internal_display_slot(slot: DisplaySlot) -> ScoreboardDisplaySlot {
+        match slot {
+            DisplaySlot::PlayerList => ScoreboardDisplaySlot::List,
+            DisplaySlot::Sidebar => ScoreboardDisplaySlot::Sidebar,
+            DisplaySlot::BelowName => ScoreboardDisplaySlot::BelowName,
+            DisplaySlot::SidebarTeamBlack => ScoreboardDisplaySlot::TeamBlack,
+            DisplaySlot::SidebarTeamDarkBlue => ScoreboardDisplaySlot::TeamDarkBlue,
+            DisplaySlot::SidebarTeamDarkGreen => ScoreboardDisplaySlot::TeamDarkGreen,
+            DisplaySlot::SidebarTeamDarkAqua => ScoreboardDisplaySlot::TeamDarkAqua,
+            DisplaySlot::SidebarTeamDarkRed => ScoreboardDisplaySlot::TeamDarkRed,
+            DisplaySlot::SidebarTeamDarkPurple => ScoreboardDisplaySlot::TeamDarkPurple,
+            DisplaySlot::SidebarTeamGold => ScoreboardDisplaySlot::TeamGold,
+            DisplaySlot::SidebarTeamGray => ScoreboardDisplaySlot::TeamGray,
+            DisplaySlot::SidebarTeamDarkGray => ScoreboardDisplaySlot::TeamDarkGray,
+            DisplaySlot::SidebarTeamBlue => ScoreboardDisplaySlot::TeamBlue,
+            DisplaySlot::SidebarTeamGreen => ScoreboardDisplaySlot::TeamGreen,
+            DisplaySlot::SidebarTeamAqua => ScoreboardDisplaySlot::TeamAqua,
+            DisplaySlot::SidebarTeamRed => ScoreboardDisplaySlot::TeamRed,
+            DisplaySlot::SidebarTeamLightPurple => ScoreboardDisplaySlot::TeamLightPurple,
+            DisplaySlot::SidebarTeamYellow => ScoreboardDisplaySlot::TeamYellow,
+            DisplaySlot::SidebarTeamWhite => ScoreboardDisplaySlot::TeamWhite,
+        }
+    }
 }
 
 impl scoreboard::Host for PluginHostState {}
 
 impl scoreboard::HostScoreboard for PluginHostState {
+    // NOTE: the `pumpkin-plugin-wit` submodule pinned in this worktree does not yet
+    // carry a `criteria` parameter for `add-objective` (see upstream
+    // Pumpkin-MC/pumpkin-plugin-wit PR #25, unmerged as of this port). Objectives
+    // created through the plugin API therefore always use the vanilla "dummy"
+    // criterion until that submodule PR lands and this binding is regenerated.
     async fn add_objective(
         &mut self,
         res: Resource<scoreboard::Scoreboard>,
         name: String,
         display_name: Resource<pumpkin::plugin::text::TextComponent>,
-        render_type: RenderType,
+        render_type: WitRenderType,
     ) -> wasmtime::Result<()> {
         let world = self.get_scoreboard_res(&res)?.provider.clone();
         let display_name = self.get_text_provider(&display_name)?;
-
-        let rt = match render_type {
-            RenderType::Integer => pumpkin_protocol::java::client::play::RenderType::Integer,
-            RenderType::Hearts => pumpkin_protocol::java::client::play::RenderType::Hearts,
-        };
+        let rt = Self::to_internal_render_type(render_type);
 
         let objective = ScoreboardObjective::new(
-            Box::leak(name.into_boxed_str()),
+            Arc::from(name.as_str()),
             display_name,
             rt,
             None,
-            "dummy",
+            Arc::from("dummy"),
         );
         world
             .scoreboard
             .lock()
             .await
-            .add_objective(&world, objective)
-            .await;
+            .add_objective(&world, objective);
         Ok(())
     }
 
@@ -67,8 +104,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
             .scoreboard
             .lock()
             .await
-            .remove_objective(&world, &name)
-            .await;
+            .remove_objective(&world, &name);
         Ok(())
     }
 
@@ -79,60 +115,11 @@ impl scoreboard::HostScoreboard for PluginHostState {
         objective_name: String,
     ) -> wasmtime::Result<()> {
         let world = self.get_scoreboard_res(&res)?.provider.clone();
-        let slot = match slot {
-            DisplaySlot::PlayerList => pumpkin_data::scoreboard::ScoreboardDisplaySlot::List,
-            DisplaySlot::Sidebar => pumpkin_data::scoreboard::ScoreboardDisplaySlot::Sidebar,
-            DisplaySlot::BelowName => pumpkin_data::scoreboard::ScoreboardDisplaySlot::BelowName,
-            DisplaySlot::SidebarTeamBlack => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamBlack
-            }
-            DisplaySlot::SidebarTeamDarkBlue => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkBlue
-            }
-            DisplaySlot::SidebarTeamDarkGreen => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkGreen
-            }
-            DisplaySlot::SidebarTeamDarkAqua => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkAqua
-            }
-            DisplaySlot::SidebarTeamDarkRed => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkRed
-            }
-            DisplaySlot::SidebarTeamDarkPurple => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkPurple
-            }
-            DisplaySlot::SidebarTeamGold => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamGold
-            }
-            DisplaySlot::SidebarTeamGray => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamGray
-            }
-            DisplaySlot::SidebarTeamDarkGray => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamDarkGray
-            }
-            DisplaySlot::SidebarTeamBlue => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamBlue
-            }
-            DisplaySlot::SidebarTeamGreen => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamGreen
-            }
-            DisplaySlot::SidebarTeamAqua => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamAqua
-            }
-            DisplaySlot::SidebarTeamRed => pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamRed,
-            DisplaySlot::SidebarTeamLightPurple => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamLightPurple
-            }
-            DisplaySlot::SidebarTeamYellow => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamYellow
-            }
-            DisplaySlot::SidebarTeamWhite => {
-                pumpkin_data::scoreboard::ScoreboardDisplaySlot::TeamWhite
-            }
-        };
-
-        world.broadcast_packet_all(
-            &pumpkin_protocol::java::client::play::CDisplayObjective::new(slot, objective_name),
+        let internal_slot = Self::to_internal_display_slot(slot);
+        world.scoreboard.lock().await.set_display_objective(
+            &world,
+            internal_slot,
+            Some(&objective_name),
         );
         Ok(())
     }
@@ -146,8 +133,8 @@ impl scoreboard::HostScoreboard for PluginHostState {
     ) -> wasmtime::Result<()> {
         let world = self.get_scoreboard_res(&res)?.provider.clone();
         let score = ScoreboardScore::new(
-            Box::leak(entity_name.into_boxed_str()),
-            Box::leak(objective_name.into_boxed_str()),
+            Arc::from(entity_name.as_str()),
+            Arc::from(objective_name.as_str()),
             VarInt(value),
             None,
             None,
@@ -271,6 +258,18 @@ fn map_team_settings(
         display_name,
         options,
         nametag_visibility: match settings.nametag_visibility {
+            NametagVisibility::Always => crate::world::scoreboard::NameTagVisibility::Always,
+            NametagVisibility::Never => crate::world::scoreboard::NameTagVisibility::Never,
+            NametagVisibility::HideForOtherTeams => {
+                crate::world::scoreboard::NameTagVisibility::HideForOtherTeams
+            }
+            NametagVisibility::HideForOwnTeam => {
+                crate::world::scoreboard::NameTagVisibility::HideForOwnTeam
+            }
+        },
+        // The WIT `team-settings` record does not yet expose a separate
+        // death-message-visibility setting; mirror nametag_visibility until it does.
+        death_message_visibility: match settings.nametag_visibility {
             NametagVisibility::Always => crate::world::scoreboard::NameTagVisibility::Always,
             NametagVisibility::Never => crate::world::scoreboard::NameTagVisibility::Never,
             NametagVisibility::HideForOtherTeams => {

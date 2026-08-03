@@ -243,7 +243,8 @@ pub struct World {
     /// This does not include players.
     pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
-    pub scoreboard: Mutex<Scoreboard>,
+    /// Shared scoreboard across all dimensions.
+    pub scoreboard: Arc<tokio::sync::Mutex<Scoreboard>>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
     pub worldborder: Mutex<Worldborder>,
     /// The world's time, including counting ticks for weather, time cycles, and statistics.
@@ -359,6 +360,7 @@ impl World {
     pub fn load(
         level: Arc<Level>,
         level_info: Arc<ArcSwap<LevelData>>,
+        scoreboard: Arc<tokio::sync::Mutex<Scoreboard>>,
         dimension: Dimension,
         block_registry: Arc<BlockRegistry>,
         server: Weak<Server>,
@@ -379,13 +381,14 @@ impl World {
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
         let dragon_fight = (dimension.minecraft_name == Dimension::THE_END.minecraft_name)
             .then(|| Mutex::new(dragon_fight::DragonFight::new()));
+
         Self {
             uuid: Uuid::new_v4(),
             level,
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
             entities: ArcSwap::new(Arc::new(Vec::new())),
-            scoreboard: Mutex::new(Scoreboard::default()),
+            scoreboard,
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 5.999_996_8E7, 0, 5, 300)),
             level_time: Mutex::new(level_time),
             sky_darken: AtomicU8::new(0),
@@ -427,6 +430,18 @@ impl World {
     pub async fn unregister_game_event_listener_at(&self, pos: &BlockPos) {
         self.game_event_listeners.lock().await.retain(|listener| {
             !matches!(listener.listener_source(), game_event::PositionSource::Block(listener_pos) if listener_pos == *pos)
+        });
+    }
+
+    /// Removes any registered listener whose `PositionSource` is the given entity. Entity-backed
+    /// listeners (e.g. Warden/Allay vibration listeners) have no other removal hook, unlike
+    /// block-backed ones which are unregistered when their block entity is torn down; without
+    /// this, a despawned mob's listener would sit dead but never removed from the flat registry
+    /// (see `game_event/mod.rs` module doc comment on the vanilla per-chunk-section registry this
+    /// replaces). Called from `remove_entity` below.
+    pub async fn unregister_game_event_listener_for_entity(&self, uuid: uuid::Uuid) {
+        self.game_event_listeners.lock().await.retain(|listener| {
+            !matches!(listener.listener_source(), game_event::PositionSource::Entity(listener_uuid) if listener_uuid == uuid)
         });
     }
 
@@ -503,6 +518,8 @@ impl World {
         if let Err(e) = save_result {
             error!("Failed to save portal POI: {e}");
         }
+
+        // Scoreboard is global and saved by Server::shutdown() (vanilla: single global scoreboard)
 
         self.level.shutdown().await;
     }
@@ -3489,6 +3506,12 @@ impl World {
         .color_named(NamedColor::Yellow);
         let event = PlayerJoinEvent::new(player.clone(), msg_comp);
 
+        // Send scoreboard state (tracked objectives + display slots + scores) to joining player
+        self.scoreboard
+            .lock()
+            .await
+            .send_state_to_player(player.as_ref());
+
         let event = server.plugin_manager.fire(event).await;
 
         if !event.cancelled {
@@ -4596,6 +4619,8 @@ impl World {
     #[allow(clippy::unused_async)]
     pub async fn remove_entity(&self, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
+        self.unregister_game_event_listener_for_entity(base_entity.entity_uuid)
+            .await;
         self.spawn_state.load().remove_entity(self, entity);
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();

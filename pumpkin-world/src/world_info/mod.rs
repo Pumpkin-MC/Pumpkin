@@ -108,6 +108,10 @@ pub struct LevelData {
 
     #[serde(skip_serializing, default)]
     pub thunder_time: i32,
+
+    /// Scoreboard data persisted to `data/minecraft/scoreboard.dat`.
+    #[serde(skip_serializing, default)]
+    pub scoreboard_data: data_files::ScoreboardData,
 }
 
 const DEFAULT_BORDER_DAMAGE_PER_BLOCK: f64 = 0.2;
@@ -369,6 +373,7 @@ impl LevelData {
             raining: false,
             thundering: false,
             thunder_time: 0,
+            scoreboard_data: data_files::ScoreboardData::default(),
         }
     }
 

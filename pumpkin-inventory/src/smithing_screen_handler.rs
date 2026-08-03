@@ -507,7 +507,7 @@ mod tests {
             .await;
         handler
             .input_inventory
-            .set_stack(BASE_SLOT, ItemStack::new(1, &Item::DIAMOND_SWORD))
+            .set_stack(BASE_SLOT, ItemStack::new(2, &Item::DIAMOND_SWORD))
             .await;
         handler
             .input_inventory
@@ -518,7 +518,8 @@ mod tests {
         let output = handler.output_inventory.get_stack(0).await;
         assert!(output.lock().await.item == &Item::NETHERITE_SWORD);
 
-        // Simulate SmithingOutputSlot::on_take_item shrinking each input by 1.
+        // Simulate SmithingOutputSlot::on_take_item shrinking each input by 1 (all three
+        // slots start stacked at 2, so one remains in each after the take).
         for index in [TEMPLATE_SLOT, BASE_SLOT, ADDITION_SLOT] {
             let stack = handler.input_inventory.get_stack(index).await;
             let mut stack = stack.lock().await;

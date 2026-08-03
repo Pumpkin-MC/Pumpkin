@@ -9,8 +9,10 @@ use crate::block::{
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::jukebox_song::JukeboxSong;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{
@@ -73,8 +75,30 @@ impl JukeboxBlock {
         }
     }
 
-    /// Stops the music and updates block state
+    /// Stops the music and updates block state.
+    ///
+    /// Also stops the block entity's own playback tracking (`JukeboxBlockEntity::stop_playing`)
+    /// so `tick()` does not keep emitting `GameEvent::JukeboxPlay` after the record was taken
+    /// out mid-song. Vanilla: `JukeboxSongPlayer.stop` fires `GameEvent.JUKEBOX_STOP_PLAY`
+    /// (see `JukeboxSongPlayer.java` line 57).
     async fn stop_playing(block: &Block, position: &BlockPos, world: &Arc<World>) {
+        if let Some(block_entity) = world.get_block_entity(position)
+            && let Some(jukebox_entity) = block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
+            && jukebox_entity.is_playing()
+        {
+            jukebox_entity.stop_playing();
+            emit_game_event(
+                world,
+                GameEvent::JukeboxStopPlay,
+                Vector3::new(
+                    f64::from(position.0.x) + 0.5,
+                    f64::from(position.0.y) + 0.5,
+                    f64::from(position.0.z) + 0.5,
+                ),
+                GameEventContext::none(),
+            )
+            .await;
+        }
         Self::set_record_state(false, block, position, world).await;
         world.sync_world_event(WorldEvent::SoundStopJukeboxSong, *position, 0);
     }

@@ -2426,38 +2426,40 @@ impl EntityBase for LivingEntity {
                                 stack.get_data_component::<EnchantmentsImpl>()
                         {
                             for (enchantment, level) in enchantments.enchantment.iter() {
-                                let mut factor = 0;
-                                let enc = *enchantment;
-                                if enc == &Enchantment::PROTECTION {
-                                    if damage_type != DamageType::DROWN
-                                        && damage_type != DamageType::STARVE
-                                        && damage_type != DamageType::GENERIC_KILL
-                                    {
-                                        factor = *level;
+                                for effect in crate::enchantment::effects_for(enchantment) {
+                                    let crate::enchantment::EnchantmentEffect::DamageProtection(
+                                        condition,
+                                        value,
+                                    ) = effect
+                                    else {
+                                        continue;
+                                    };
+                                    let applies = match condition {
+                                        crate::enchantment::ProtectionCondition::Always => {
+                                            damage_type != DamageType::DROWN
+                                                && damage_type != DamageType::STARVE
+                                                && damage_type != DamageType::GENERIC_KILL
+                                        }
+                                        crate::enchantment::ProtectionCondition::IsFire => {
+                                            is_fire_damage
+                                        }
+                                        crate::enchantment::ProtectionCondition::IsExplosion => {
+                                            damage_type == DamageType::EXPLOSION
+                                                || damage_type == DamageType::PLAYER_EXPLOSION
+                                        }
+                                        crate::enchantment::ProtectionCondition::IsProjectile => {
+                                            damage_type == DamageType::ARROW
+                                                || damage_type == DamageType::MOB_PROJECTILE
+                                                || damage_type == DamageType::THROWN
+                                        }
+                                        crate::enchantment::ProtectionCondition::IsFall => {
+                                            damage_type == DamageType::FALL
+                                        }
+                                    };
+                                    if applies {
+                                        epf += value.calculate(*level) as i32;
                                     }
-                                } else if enc == &Enchantment::FIRE_PROTECTION {
-                                    if is_fire_damage {
-                                        factor = *level * 2;
-                                    }
-                                } else if enc == &Enchantment::BLAST_PROTECTION {
-                                    if damage_type == DamageType::EXPLOSION
-                                        || damage_type == DamageType::PLAYER_EXPLOSION
-                                    {
-                                        factor = *level * 2;
-                                    }
-                                } else if enc == &Enchantment::PROJECTILE_PROTECTION {
-                                    if damage_type == DamageType::ARROW
-                                        || damage_type == DamageType::MOB_PROJECTILE
-                                        || damage_type == DamageType::THROWN
-                                    {
-                                        factor = (*level) * 2;
-                                    }
-                                } else if enc == &Enchantment::FEATHER_FALLING
-                                    && damage_type == DamageType::FALL
-                                {
-                                    factor = (*level) * 4;
                                 }
-                                epf += factor;
                             }
                         }
                     }

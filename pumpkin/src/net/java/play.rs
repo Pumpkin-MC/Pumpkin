@@ -2088,8 +2088,15 @@ impl JavaClient {
                             pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
                                 state.id, block,
                             );
-                        crate::block::blocks::note::NoteBlock::play_note(&props, &world, &position)
-                            .await;
+                        crate::block::blocks::note::NoteBlock::play_note(
+                            &props,
+                            &world,
+                            &position,
+                            crate::world::game_event::GameEventContext::of_entity(
+                                player.clone() as Arc<dyn EntityBase>
+                            ),
+                        )
+                        .await;
                         player
                             .increment_stat(
                                 StatisticCategory::Custom,

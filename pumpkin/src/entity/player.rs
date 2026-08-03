@@ -484,6 +484,13 @@ pub struct Player {
     pub last_sent_health: AtomicI32,
     pub last_sent_food: AtomicU8,
     pub last_food_saturation: AtomicBool,
+    // Cached values for scoreboard auto-scoring.
+    last_recorded_health_absorption: AtomicCell<f32>,
+    last_recorded_food_level: AtomicI32,
+    last_recorded_air_level: AtomicI32,
+    last_recorded_armor: AtomicI32,
+    last_recorded_experience: AtomicI32,
+    last_recorded_level: AtomicI32,
     /// The player's permission level.
     pub permission_lvl: AtomicCell<PermissionLvl>,
     pub subscribed_debug_sample: AtomicBool,
@@ -738,6 +745,12 @@ impl Player {
             last_sent_food: AtomicU8::new(0),
             last_food_saturation: AtomicBool::new(true),
             subscribed_debug_sample: AtomicBool::new(false),
+            last_recorded_health_absorption: AtomicCell::new(f32::MIN),
+            last_recorded_food_level: AtomicI32::new(i32::MIN),
+            last_recorded_air_level: AtomicI32::new(i32::MIN),
+            last_recorded_armor: AtomicI32::new(i32::MIN),
+            last_recorded_experience: AtomicI32::new(i32::MIN),
+            last_recorded_level: AtomicI32::new(i32::MIN),
             has_played_before: AtomicBool::new(false),
             chat_session: Arc::new(Mutex::new(ChatSession::default())), // Placeholder value until the player actually sets their session id
             signature_cache: Mutex::new(MessageCache::default()),
@@ -978,40 +991,26 @@ impl Player {
                 }
             }
             if let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>() {
+                // Dispatched through the crate::enchantment framework instead of a per-name
+                // chain; SMITE/BANE_OF_ARTHROPODS now gate on the vanilla
+                // sensitive_to_smite/sensitive_to_bane_of_arthropods entity-type tags (matching
+                // mob/mod.rs's already-tag-based `try_attack`) rather than a hardcoded id list.
+                let target_type = victim_entity.entity_type;
                 for (enchantment, level) in enchantments.enchantment.iter() {
-                    if **enchantment == Enchantment::SHARPNESS {
-                        extra_ench_damage += 0.5 * f64::from(*level) + 0.5;
-                    } else if **enchantment == Enchantment::SMITE {
-                        let target_type = victim_entity.entity_type.id;
-                        let is_undead = target_type == EntityType::ZOMBIE.id
-                            || target_type == EntityType::DROWNED.id
-                            || target_type == EntityType::HUSK.id
-                            || target_type == EntityType::ZOMBIE_VILLAGER.id
-                            || target_type == EntityType::ZOMBIFIED_PIGLIN.id
-                            || target_type == EntityType::SKELETON.id
-                            || target_type == EntityType::BOGGED.id
-                            || target_type == EntityType::PARCHED.id
-                            || target_type == EntityType::WITHER_SKELETON.id
-                            || target_type == EntityType::STRAY.id
-                            || target_type == EntityType::PHANTOM.id
-                            || target_type == EntityType::WITHER.id
-                            || target_type == EntityType::ZOMBIE_HORSE.id
-                            || target_type == EntityType::SKELETON_HORSE.id;
-                        if is_undead {
-                            extra_ench_damage += 2.5 * f64::from(*level);
+                    for effect in crate::enchantment::effects_for(enchantment) {
+                        match effect {
+                            crate::enchantment::EnchantmentEffect::Damage(condition, value)
+                                if condition.applies(target_type) =>
+                            {
+                                extra_ench_damage += f64::from(value.calculate(*level));
+                            }
+                            crate::enchantment::EnchantmentEffect::Knockback(condition, value)
+                                if *condition == crate::enchantment::KnockbackCondition::Always =>
+                            {
+                                knockback_level = value.calculate(*level).max(0.0) as u32;
+                            }
+                            _ => {}
                         }
-                    } else if **enchantment == Enchantment::BANE_OF_ARTHROPODS {
-                        let target_type = victim_entity.entity_type.id;
-                        let is_arthropod = target_type == EntityType::SPIDER.id
-                            || target_type == EntityType::CAVE_SPIDER.id
-                            || target_type == EntityType::SILVERFISH.id
-                            || target_type == EntityType::ENDERMITE.id
-                            || target_type == EntityType::BEE.id;
-                        if is_arthropod {
-                            extra_ench_damage += 2.5 * f64::from(*level);
-                        }
-                    } else if **enchantment == Enchantment::KNOCKBACK {
-                        knockback_level = *level as u32;
                     }
                 }
             }
@@ -1107,8 +1106,11 @@ impl Player {
             .get_data_component::<EnchantmentsImpl>()
         {
             for (enchantment, level) in enchantments.enchantment.iter() {
-                if **enchantment == Enchantment::FIRE_ASPECT {
-                    victim_entity.set_on_fire_for_ticks(*level as u32 * 80);
+                for effect in crate::enchantment::effects_for(enchantment) {
+                    if let crate::enchantment::EnchantmentEffect::IgniteOnHit(value) = effect {
+                        let ticks = (value.calculate(*level) * 20.0) as u32;
+                        victim_entity.set_on_fire_for_ticks(ticks);
+                    }
                 }
             }
         }
@@ -2107,6 +2109,8 @@ impl Player {
         // experience handling
         self.tick_experience().await;
         self.tick_health().await;
+        // Update auto-computed scoreboard criteria (health, food, air, armor, xp, level)
+        self.tick_scoreboard_criteria().await;
         self.tick_maps(server).await;
 
         // Timeout/keep alive handling
@@ -2811,6 +2815,75 @@ impl Player {
             self.last_food_saturation
                 .store(saturation == 0.0, Ordering::Relaxed);
             self.send_health().await;
+        }
+    }
+
+    /// Updates all objectives tracking the given criterion with the specified value.
+    async fn update_score_for_criteria(&self, criterion: &str, value: i32) {
+        let world = self.world();
+        let mut scoreboard = world.scoreboard.lock().await;
+        scoreboard
+            .for_all_objectives(&world, criterion, &self.gameprofile.name, value)
+            .await;
+    }
+
+    /// Checks each auto-computed criterion (health, food, air, armor, xp, level)
+    /// and updates the scoreboard when values change.
+    async fn tick_scoreboard_criteria(&self) {
+        if !self.has_client_loaded() {
+            return;
+        }
+
+        let living = &self.living_entity;
+
+        // HEALTH: health + absorption amount, ceiled to int
+        let health_absorption = living.health.load() + living.absorption.load();
+        let last_health_absorption = self.last_recorded_health_absorption.load();
+        if (health_absorption - last_health_absorption).abs() > f32::EPSILON {
+            self.last_recorded_health_absorption
+                .store(health_absorption);
+            self.update_score_for_criteria("health", health_absorption.ceil() as i32)
+                .await;
+        }
+
+        // FOOD: food level
+        let food = self.hunger_manager.level.load() as i32;
+        let last_food = self.last_recorded_food_level.load(Ordering::Relaxed);
+        if food != last_food {
+            self.last_recorded_food_level.store(food, Ordering::Relaxed);
+            self.update_score_for_criteria("food", food).await;
+        }
+
+        // AIR: air supply
+        let air = self.breath_manager.air_supply.load(Ordering::Relaxed);
+        let last_air = self.last_recorded_air_level.load(Ordering::Relaxed);
+        if air != last_air {
+            self.last_recorded_air_level.store(air, Ordering::Relaxed);
+            self.update_score_for_criteria("air", air).await;
+        }
+
+        // ARMOR: armor attribute value
+        let armor = living.get_attribute_value(&Attributes::ARMOR) as i32;
+        let last_armor = self.last_recorded_armor.load(Ordering::Relaxed);
+        if armor != last_armor {
+            self.last_recorded_armor.store(armor, Ordering::Relaxed);
+            self.update_score_for_criteria("armor", armor).await;
+        }
+
+        // XP: total experience points
+        let xp = self.experience_points.load(Ordering::Relaxed);
+        let last_xp = self.last_recorded_experience.load(Ordering::Relaxed);
+        if xp != last_xp {
+            self.last_recorded_experience.store(xp, Ordering::Relaxed);
+            self.update_score_for_criteria("xp", xp).await;
+        }
+
+        // LEVEL: experience level
+        let level = self.experience_level.load(Ordering::Relaxed);
+        let last_level = self.last_recorded_level.load(Ordering::Relaxed);
+        if level != last_level {
+            self.last_recorded_level.store(level, Ordering::Relaxed);
+            self.update_score_for_criteria("level", level).await;
         }
     }
 

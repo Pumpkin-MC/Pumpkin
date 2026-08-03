@@ -71,8 +71,14 @@ impl ItemBehaviour for CrossbowItem {
 
             if let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
-                    if **enchantment == pumpkin_data::Enchantment::QUICK_CHARGE {
-                        charge_time -= 5 * level;
+                    for effect in crate::enchantment::effects_for(enchantment) {
+                        if let crate::enchantment::EnchantmentEffect::CrossbowChargeTime(value) =
+                            effect
+                        {
+                            // quick_charge.json's crossbow_charge_time is in seconds; the base
+                            // 25-tick (1.25s) charge time here is already in ticks.
+                            charge_time += (value.calculate(*level) * 20.0) as i32;
+                        }
                     }
                 }
             }

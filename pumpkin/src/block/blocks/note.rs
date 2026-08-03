@@ -1,10 +1,15 @@
+use std::sync::Arc;
+
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
     UseWithItemArgs,
 };
+use crate::entity::EntityBase;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{Axis, NoteblockInstrument};
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{
     Block,
@@ -12,6 +17,7 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
@@ -25,9 +31,29 @@ use super::redstone::block_receives_redstone_power;
 pub struct NoteBlock;
 
 impl NoteBlock {
-    pub async fn play_note(props: &NoteBlockLikeProperties, world: &World, pos: &BlockPos) {
+    /// NoteBlock.java `playNote`: triggers the client-visible block event (sound) and,
+    /// separately, `level.gameEvent(source, GameEvent.NOTE_BLOCK_PLAY, pos)` — this is
+    /// the emission Allay's `AllayAi.hearNoteblock` / `VibrationSystem.User` listens
+    /// for (Allay.java `VibrationUser.onReceiveVibration`).
+    pub async fn play_note(
+        props: &NoteBlockLikeProperties,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        context: GameEventContext,
+    ) {
         if !is_base_block(props.instrument) || world.get_block_state(&pos.up()).is_air() {
             world.add_synced_block_event(*pos, 0, 0).await;
+            emit_game_event(
+                world,
+                GameEvent::NoteBlockPlay,
+                Vector3::new(
+                    f64::from(pos.0.x) + 0.5,
+                    f64::from(pos.0.y) + 0.5,
+                    f64::from(pos.0.z) + 0.5,
+                ),
+                context,
+            )
+            .await;
         }
     }
     fn get_note_pitch(note: u16) -> f32 {
@@ -67,7 +93,13 @@ impl BlockBehaviour for NoteBlock {
             // check if powered state changed
             if note_props.powered != powered {
                 if powered {
-                    Self::play_note(&note_props, args.world, args.position).await;
+                    Self::play_note(
+                        &note_props,
+                        args.world,
+                        args.position,
+                        GameEventContext::none(),
+                    )
+                    .await;
                 }
                 note_props.powered = powered;
                 args.world
@@ -93,7 +125,13 @@ impl BlockBehaviour for NoteBlock {
                     BlockFlags::NOTIFY_ALL,
                 )
                 .await;
-            Self::play_note(&note_props, args.world, args.position).await;
+            Self::play_note(
+                &note_props,
+                args.world,
+                args.position,
+                GameEventContext::of_entity(args.player.clone() as Arc<dyn EntityBase>),
+            )
+            .await;
 
             args.player
                 .increment_stat(

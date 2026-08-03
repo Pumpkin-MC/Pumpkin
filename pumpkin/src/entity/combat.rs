@@ -161,27 +161,56 @@ pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f6
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
 }
 
-/// Density (enchantment/density.json): `smash_damage_per_fallen_block` linear
-/// base 0.5, `per_level_above_first` 0.5, multiplied by mace fall distance.
+/// Density (enchantment/density.json): `smash_damage_per_fallen_block`, via the
+/// [`crate::enchantment`] framework's [`EnchantmentEffect::SmashDamagePerFallenBlock`],
+/// multiplied by mace fall distance.
 pub fn density_extra_damage(level: u32, fall_distance: f32) -> f64 {
-    0.5 * f64::from(level) * f64::from(fall_distance)
+    use crate::enchantment::{EnchantmentEffect, effects_for};
+
+    let value = effects_for(&pumpkin_data::Enchantment::DENSITY)
+        .iter()
+        .find_map(|effect| match effect {
+            EnchantmentEffect::SmashDamagePerFallenBlock(value) => Some(*value),
+            _ => None,
+        })
+        .expect("density.json always defines smash_damage_per_fallen_block");
+    f64::from(value.calculate(level as i32)) * f64::from(fall_distance)
 }
 
-/// Wind Burst (`enchantment/wind_burst.json`): `knockback_multiplier` lookup
-/// [1.2, 1.75, 2.2] for levels 1-3 (`max_level` is 3, so no fallback formula needed).
-pub const fn wind_burst_knockback_multiplier(level: u32) -> f32 {
-    match level {
-        1 => 1.2,
-        2 => 1.75,
-        _ => 2.2,
-    }
+/// Wind Burst (`enchantment/wind_burst.json`): `knockback_multiplier`, via the
+/// [`crate::enchantment`] framework's [`EnchantmentEffect::PostAttackKnockbackMultiplier`]
+/// (a `lookup` table [1.2, 1.75, 2.2] for levels 1-3, falling back to `linear(1.5, 0.35)` for
+/// levels above `max_level` reachable via NBT/commands).
+pub fn wind_burst_knockback_multiplier(level: u32) -> f32 {
+    use crate::enchantment::{EnchantmentEffect, effects_for};
+
+    let value = effects_for(&pumpkin_data::Enchantment::WIND_BURST)
+        .iter()
+        .find_map(|effect| match effect {
+            EnchantmentEffect::PostAttackKnockbackMultiplier(value) => Some(*value),
+            _ => None,
+        })
+        .expect("wind_burst.json always defines the post_attack knockback_multiplier");
+    value.calculate(level as i32)
 }
 
-/// Breach (enchantment/breach.json): `armor_effectiveness` linear base -0.15,
-/// `per_level_above_first` -0.15, subtracted from the victim's armor damage-reduction
-/// fraction and clamped back to a valid [0, 1] fraction.
+/// Breach (enchantment/breach.json): `armor_effectiveness`, via the
+/// [`crate::enchantment`] framework's [`EnchantmentEffect::ArmorEffectiveness`], subtracted from
+/// the victim's armor damage-reduction fraction and clamped back to a valid [0, 1] fraction
+/// (the clamp is applied here, at the call boundary, mirroring vanilla's
+/// `CombatRules.getDamageAfterAbsorb` clamping the result of `modifyArmorEffectiveness`, not the
+/// value effect itself).
 pub fn breach_armor_fraction(base_fraction: f32, level: i32) -> f32 {
-    (base_fraction - 0.15 * level as f32).clamp(0.0, 1.0)
+    use crate::enchantment::{EnchantmentEffect, effects_for};
+
+    let value = effects_for(&pumpkin_data::Enchantment::BREACH)
+        .iter()
+        .find_map(|effect| match effect {
+            EnchantmentEffect::ArmorEffectiveness(value) => Some(*value),
+            _ => None,
+        })
+        .expect("breach.json always defines armor_effectiveness");
+    (base_fraction + value.calculate(level)).clamp(0.0, 1.0)
 }
 
 pub fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {
@@ -294,6 +323,13 @@ mod tests {
         assert_eq!(wind_burst_knockback_multiplier(1), 1.2);
         assert_eq!(wind_burst_knockback_multiplier(2), 1.75);
         assert_eq!(wind_burst_knockback_multiplier(3), 2.2);
+    }
+
+    #[test]
+    fn wind_burst_multiplier_falls_back_above_max_level() {
+        // wind_burst.json ships a `linear(1.5, 0.35)` fallback beyond the 3-entry lookup
+        // table; levels above max_level=3 are reachable via NBT/`/enchant`-adjacent paths.
+        assert_eq!(wind_burst_knockback_multiplier(4), 1.5 + 0.35 * 3.0);
     }
 
     #[test]

@@ -13,8 +13,6 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag;
-use pumpkin_data::tag::Taggable;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::{CEntityVelocity, CSoundEffect};
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -369,16 +367,20 @@ impl EntityBase for TridentEntity {
                         .get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>(
                     ) {
                         for (enchantment, level) in enchantments.enchantment.iter() {
-                            // Vanilla Enchantments.java IMPALING: +2.5 damage/level, gated on the
-                            // target's entity type being tagged sensitive_to_impaling (aquatic
-                            // mobs), not on whether the target happens to be touching water.
-                            if **enchantment == pumpkin_data::Enchantment::IMPALING
-                                && target
-                                    .get_entity()
-                                    .entity_type
-                                    .has_tag(&tag::EntityType::MINECRAFT_SENSITIVE_TO_IMPALING)
-                            {
-                                damage += 2.5 * f64::from(*level);
+                            // Dispatched through the crate::enchantment framework: IMPALING's
+                            // `damage` component gates on the target entity type being tagged
+                            // sensitive_to_impaling (aquatic mobs), not on whether the target
+                            // happens to be touching water.
+                            let target_type = target.get_entity().entity_type;
+                            for effect in crate::enchantment::effects_for(enchantment) {
+                                if let crate::enchantment::EnchantmentEffect::Damage(
+                                    condition,
+                                    value,
+                                ) = effect
+                                    && condition.applies(target_type)
+                                {
+                                    damage += f64::from(value.calculate(*level));
+                                }
                             }
                         }
                     }

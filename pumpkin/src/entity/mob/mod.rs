@@ -60,6 +60,7 @@ pub mod sulfur_cube;
 pub mod vex;
 pub mod vindicator;
 pub mod warden;
+pub mod warden_anger;
 pub mod witch;
 pub mod zoglin;
 pub mod zombie;
@@ -327,25 +328,25 @@ impl MobEntity {
         if let Some(enchantments) =
             held_item.get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
         {
+            let target_type = target.get_entity().entity_type;
             for (enchantment, level) in enchantments.enchantment.iter() {
-                if **enchantment == pumpkin_data::Enchantment::SHARPNESS {
-                    attack_damage += 0.5 * f64::from(*level) + 0.5;
-                } else if (**enchantment == pumpkin_data::Enchantment::SMITE
-                    && target
-                        .get_entity()
-                        .entity_type
-                        .has_tag(&tag::EntityType::MINECRAFT_SENSITIVE_TO_SMITE))
-                    || (**enchantment == pumpkin_data::Enchantment::BANE_OF_ARTHROPODS
-                        && target
-                            .get_entity()
-                            .entity_type
-                            .has_tag(&tag::EntityType::MINECRAFT_SENSITIVE_TO_BANE_OF_ARTHROPODS))
-                {
-                    attack_damage += 2.5 * f64::from(*level);
-                } else if **enchantment == pumpkin_data::Enchantment::FIRE_ASPECT {
-                    fire_aspect_level = fire_aspect_ticks(*level) / 80;
-                } else if **enchantment == pumpkin_data::Enchantment::KNOCKBACK {
-                    knockback_level = (*level).max(0) as u32;
+                for effect in crate::enchantment::effects_for(enchantment) {
+                    match effect {
+                        crate::enchantment::EnchantmentEffect::Damage(condition, value)
+                            if condition.applies(target_type) =>
+                        {
+                            attack_damage += f64::from(value.calculate(*level));
+                        }
+                        crate::enchantment::EnchantmentEffect::IgniteOnHit(value) => {
+                            fire_aspect_level = (value.calculate(*level) * 20.0) as u32 / 80;
+                        }
+                        crate::enchantment::EnchantmentEffect::Knockback(condition, value)
+                            if *condition == crate::enchantment::KnockbackCondition::Always =>
+                        {
+                            knockback_level = value.calculate(*level).max(0.0) as u32;
+                        }
+                        _ => {}
+                    }
                 }
             }
         }

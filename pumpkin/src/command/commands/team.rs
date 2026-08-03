@@ -115,6 +115,7 @@ impl CommandExecutor for TeamAddExecutor {
                 display_name: display_name.clone(),
                 options: 0,
                 nametag_visibility: NameTagVisibility::Always,
+                death_message_visibility: NameTagVisibility::Always,
                 collision_rule: CollisionRule::Always,
                 color: NamedColor::White,
                 player_prefix: TextComponent::empty(),

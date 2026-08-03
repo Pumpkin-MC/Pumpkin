@@ -12,6 +12,9 @@ use tokio::sync::Mutex;
 
 use crate::block::entities::BlockEntity;
 use crate::world::World;
+use crate::world::game_event::{GameEventContext, emit_game_event};
+use pumpkin_data::game_event::GameEvent;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
 
 /// Matches vanilla's `JukeboxBlockEntity`
@@ -78,7 +81,7 @@ impl BlockEntity for JukeboxBlockEntity {
         })
     }
 
-    fn tick<'a>(&'a self, _world: &'a Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    fn tick<'a>(&'a self, world: &'a Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             // Increment ticks if we're playing
             let song_length = self.song_length_ticks.load(Ordering::Relaxed);
@@ -91,6 +94,15 @@ impl BlockEntity for JukeboxBlockEntity {
                     self.stop_playing();
                     // TODO: Update block state to has_record = false? Or just stop redstone?
                     // In vanilla, the disc stays but music stops and redstone turns off
+                    self.emit_jukebox_event(world, GameEvent::JukeboxStopPlay)
+                        .await;
+                } else if ticks.is_multiple_of(20) {
+                    // JukeboxSongPlayer.PLAY_EVENT_INTERVAL_TICKS = 20 /
+                    // shouldEmitJukeboxPlayingEvent: ticksSinceSongStarted % 20 == 0,
+                    // checked against the pre-increment tick count (matches `ticks` here).
+                    // This is what keeps a dancing Allay in range considering the jukebox
+                    // "still playing" (Allay.java shouldStopDancing / setJukeboxPlaying).
+                    self.emit_jukebox_event(world, GameEvent::JukeboxPlay).await;
                 }
             }
         })
@@ -188,6 +200,20 @@ impl JukeboxBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    async fn emit_jukebox_event(&self, world: &Arc<World>, event: GameEvent) {
+        emit_game_event(
+            world,
+            event,
+            Vector3::new(
+                f64::from(self.position.0.x) + 0.5,
+                f64::from(self.position.0.y) + 0.5,
+                f64::from(self.position.0.z) + 0.5,
+            ),
+            GameEventContext::none(),
+        )
+        .await;
     }
 }
 

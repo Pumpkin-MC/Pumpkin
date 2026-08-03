@@ -13,10 +13,10 @@ use crate::world_info::{
     MAXIMUM_SUPPORTED_LEVEL_VERSION, MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
     MINIMUM_SUPPORTED_LEVEL_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION,
     data_files::{
-        minecraft_data_dir, read_game_rules, read_wandering_trader, read_weather,
+        minecraft_data_dir, read_game_rules, read_scoreboard, read_wandering_trader, read_weather,
         read_world_clocks, read_world_gen_settings, write_custom_boss_events_stub,
-        write_game_rules, write_scheduled_events_stub, write_wandering_trader, write_weather,
-        write_world_clocks, write_world_gen_settings,
+        write_game_rules, write_scheduled_events_stub, write_scoreboard, write_wandering_trader,
+        write_weather, write_world_clocks, write_world_gen_settings,
     },
 };
 
@@ -135,6 +135,9 @@ impl WorldInfoReader for AnvilLevelInfo {
             info.data.thunder_time = weather.thunder_time;
         }
 
+        // scoreboard.dat
+        info.data.scoreboard_data = read_scoreboard(level_folder);
+
         // (wandering_trader.dat is not part of LevelData; stored separately when needed)
 
         Ok(info.data)
@@ -208,6 +211,11 @@ impl WorldInfoWriter for AnvilLevelInfo {
             error!("Failed to write weather.dat: {e}");
         }
 
+        // scoreboard.dat
+        if let Err(e) = write_scoreboard(level_folder, &info.scoreboard_data) {
+            error!("Failed to write scoreboard.dat: {e}");
+        }
+
         // wandering_trader.dat (stub / load-save)
         let mut wandering_trader = read_wandering_trader(level_folder);
         wandering_trader.data_version = data_version;
@@ -248,6 +256,7 @@ mod test {
     use crate::world_info::{DataPacks, LevelData, WorldGenSettings, WorldVersion};
 
     use super::{AnvilLevelInfo, LevelDat, WorldInfoReader, WorldInfoWriter};
+    use crate::world_info::data_files::ScoreboardData;
 
     #[test]
     fn preserve_level_dat_seed() {
@@ -328,6 +337,7 @@ mod test {
             world_gen_settings: WorldGenSettings::new(Seed(1)),
             last_played: 1733847709327,
             level_name: "New World".to_string(),
+            scoreboard_data: ScoreboardData::default(),
             spawn_x: 160,
             spawn_y: 70,
             spawn_z: 160,
