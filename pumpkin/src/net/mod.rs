@@ -101,7 +101,7 @@ impl Default for PlayerConfig {
             view_distance: NonZeroU8::new(8).unwrap(),
             chat_mode: ChatMode::Enabled,
             chat_colors: true,
-            skin_parts: 0,
+            skin_parts: 0x7F,
             main_hand: Hand::Right,
             text_filtering: false,
             server_listing: false,
