@@ -17,7 +17,6 @@ use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
-use rand::{RngExt, rng};
 
 pub struct AxeItem;
 
@@ -99,17 +98,9 @@ impl ItemBehaviour for AxeItem {
                     }
                     AxeAction::Unwax => (Sound::ItemAxeWaxOff, Some(WorldEvent::ParticlesWaxOff)),
                 };
-                let seed = rng().random::<f64>();
-                player
-                    .play_sound(
-                        sound as u16,
-                        SoundCategory::Blocks,
-                        &location.to_f64(),
-                        1.0,
-                        1.0,
-                        seed,
-                    )
-                    .await;
+                // Vanilla `AxeItem#useOn` uses `level.playSound(player, pos, ...)`, which plays
+                // the sound at the block centre for every nearby player except the one acting.
+                world.play_block_sound_expect(player, sound, SoundCategory::Blocks, location);
                 if let Some(event) = level_event {
                     world.sync_world_event(event, location, 0);
                 }

@@ -13,7 +13,6 @@ use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
-use rand::{RngExt, rng};
 
 pub struct ShovelItem;
 
@@ -59,17 +58,14 @@ impl ItemBehaviour for ShovelItem {
                         BlockFlags::NOTIFY_ALL,
                     )
                     .await;
-                let seed = rng().random::<f64>();
-                player
-                    .play_sound(
-                        Sound::ItemShovelFlatten as u16,
-                        SoundCategory::Blocks,
-                        &location.to_f64(),
-                        1.0,
-                        1.0,
-                        seed,
-                    )
-                    .await;
+                // Vanilla `ShovelItem#useOn` uses `level.playSound(player, pos, ...)`, which plays
+                // the sound at the block centre for every nearby player except the one acting.
+                world.play_block_sound_expect(
+                    player,
+                    Sound::ItemShovelFlatten,
+                    SoundCategory::Blocks,
+                    location,
+                );
                 true
             } else {
                 false
@@ -88,17 +84,6 @@ impl ItemBehaviour for ShovelItem {
                             &location,
                             campfire_props.to_state_id(block),
                             BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                    let seed = rng().random::<f64>();
-                    player
-                        .play_sound(
-                            Sound::BlockFireExtinguish as u16,
-                            SoundCategory::Ambient,
-                            &location.to_f64(),
-                            0.5,
-                            2.0,
-                            seed,
                         )
                         .await;
                     changed = true;
