@@ -15,6 +15,7 @@ use pumpkin_data::{
     entity::EntityType,
     item::Item,
     item_stack::ItemStack,
+    sound::{Sound, SoundCategory},
     world::WorldEvent,
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
@@ -72,17 +73,25 @@ impl BlockBehaviour for ComposterBlock {
             }
 
             // Determine if the composter level should increase
-            if level < 7 && (level == 0 || rand::rng().random_bool(f64::from(chance))) {
-                self.update_level_composter(
-                    args.world,
-                    args.position,
-                    state_id,
-                    args.block,
-                    level + 1,
-                )
-                .await;
-                args.world
-                    .sync_world_event(WorldEvent::ComposterFill, *args.position, 1);
+            if level < 7 {
+                let rose = level == 0 || rand::rng().random_bool(f64::from(chance));
+                if rose {
+                    self.update_level_composter(
+                        args.world,
+                        args.position,
+                        state_id,
+                        args.block,
+                        level + 1,
+                    )
+                    .await;
+                }
+                // levelEvent(1500, pos, state != newState ? 1 : 0): vanilla fires this
+                // for every accepted item, using data 0 for the "did not rise" variant.
+                args.world.sync_world_event(
+                    WorldEvent::ComposterFill,
+                    *args.position,
+                    i32::from(rose),
+                );
             }
 
             // Consume the item
@@ -104,6 +113,11 @@ impl BlockBehaviour for ComposterBlock {
                     level + 1,
                 )
                 .await;
+                args.world.play_sound(
+                    Sound::BlockComposterReady,
+                    SoundCategory::Blocks,
+                    &args.position.to_centered_f64(),
+                );
             }
         })
     }
@@ -148,11 +162,13 @@ impl ComposterBlock {
         self.update_level_composter(world, location, state_id, block, 0)
             .await;
 
+        // Vec3.atLowerCornerWithOffset(pos, 0.5, 1.01, 0.5).offsetRandomXZ(random, 0.7F)
+        // jitters X and Z only; Y is exactly pos.y + 1.01.
         let item_position = {
             let mut rng = rand::rng();
             location.to_centered_f64().add_raw(
                 rng.random_range(-0.35..=0.35),
-                rng.random_range(-0.35..=0.35) + 0.51,
+                0.51,
                 rng.random_range(-0.35..=0.35),
             )
         };
@@ -163,5 +179,11 @@ impl ComposterBlock {
         );
 
         world.spawn_entity(Arc::new(item_entity)).await;
+
+        world.play_sound(
+            Sound::BlockComposterEmpty,
+            SoundCategory::Blocks,
+            &location.to_centered_f64(),
+        );
     }
 }
