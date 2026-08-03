@@ -11,7 +11,6 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
 
 pub struct PotionItem;
 pub struct SplashPotionItem;
@@ -65,11 +64,6 @@ impl ItemBehaviour for SplashPotionItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world.play_sound(
-                Sound::EntityWitchThrow,
-                pumpkin_data::sound::SoundCategory::Neutral,
-                &position,
-            );
             let entity = Entity::new(world.clone(), position, &EntityType::SPLASH_POTION);
             let splash = SplashPotionEntity::new_shot(entity, player.get_entity());
 
@@ -133,11 +127,6 @@ impl ItemBehaviour for LingeringPotionItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world.play_sound(
-                Sound::EntityWitchThrow,
-                pumpkin_data::sound::SoundCategory::Neutral,
-                &position,
-            );
             let entity = Entity::new(world.clone(), position, &EntityType::LINGERING_POTION);
             let ling = LingeringPotionEntity::new_shot(entity, player.get_entity());
 
