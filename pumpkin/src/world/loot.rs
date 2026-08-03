@@ -115,40 +115,51 @@ fn apply_bonus(
         pumpkin_data::Enchantment::from_name(enchantment_name)
             .map_or(0, |enchantment| tool.get_enchantment_level(enchantment))
     });
-    if enchantment_level > 0 {
-        for stack in stacks {
-            match formula {
-                "minecraft:binomial_with_bonus_count" => {
-                    if let Some(LootFunctionBonusParameter::Probability { extra, probability }) =
-                        parameters
-                    {
-                        let n = enchantment_level + *extra;
-                        let mut extra_items = 0;
-                        for _ in 0..n {
-                            if rand::rng().random::<f32>() < *probability {
-                                extra_items += 1;
-                            }
+    // These formulas must run even without the enchantment. `binomial_with_bonus_count` rolls
+    // `enchantment_level + extra` trials, so at level 0 it still rolls `extra` trials — this is what
+    // gives e.g. wheat/beetroot seeds their base 1 + binomial(3, p) = 1-4 by hand. Gating the whole
+    // block on `enchantment_level > 0` dropped that base roll (crops always yielded 1 seed).
+    // `uniform_bonus_count` computes `0..=(level * mult)`, which is a no-op at level 0, and
+    // `ore_drops` self-gates on its own match arm, so neither regresses.
+    let mut rng = rand::rng();
+    for stack in stacks {
+        match formula {
+            "minecraft:binomial_with_bonus_count" => {
+                if let Some(LootFunctionBonusParameter::Probability { extra, probability }) =
+                    parameters
+                {
+                    // Clamp to a non-negative count: a negative `n` would make `0..n` empty and
+                    // silently skip every trial (reintroducing the "always base count" bug), and
+                    // `saturating_add` avoids overflow at implausibly high enchantment levels.
+                    let n = enchantment_level.saturating_add(*extra).max(0);
+                    let mut extra_items = 0;
+                    for _ in 0..n {
+                        if rng.random::<f32>() < *probability {
+                            extra_items += 1;
                         }
-                        stack.item_count = stack.item_count.saturating_add(extra_items as u8);
                     }
+                    // Saturate rather than truncate: with very high enchantment levels `extra_items`
+                    // could exceed `u8::MAX`, and a bare `as u8` would wrap instead of clamping.
+                    stack.item_count = stack
+                        .item_count
+                        .saturating_add(u8::try_from(extra_items).unwrap_or(u8::MAX));
                 }
-                "minecraft:uniform_bonus_count" => {
-                    if let Some(LootFunctionBonusParameter::Multiplier { bonus_multiplier }) =
-                        parameters
-                    {
-                        let extra =
-                            rand::rng().random_range(0..=(enchantment_level * *bonus_multiplier));
-                        stack.item_count = stack.item_count.saturating_add(extra as u8);
-                    }
-                }
-                "minecraft:ore_drops" if enchantment_level > 0 => {
-                    let multiplier = rand::rng().random_range(0..=(enchantment_level + 1));
-                    if multiplier > 0 {
-                        stack.item_count = stack.item_count.saturating_mul(multiplier as u8);
-                    }
-                }
-                _ => {}
             }
+            "minecraft:uniform_bonus_count" => {
+                if let Some(LootFunctionBonusParameter::Multiplier { bonus_multiplier }) =
+                    parameters
+                {
+                    let extra = rng.random_range(0..=(enchantment_level * *bonus_multiplier));
+                    stack.item_count = stack.item_count.saturating_add(extra as u8);
+                }
+            }
+            "minecraft:ore_drops" if enchantment_level > 0 => {
+                let multiplier = rng.random_range(0..=(enchantment_level + 1));
+                if multiplier > 0 {
+                    stack.item_count = stack.item_count.saturating_mul(multiplier as u8);
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -1164,5 +1175,39 @@ mod tests {
             },
         ]);
         assert!(!cond.is_fulfilled(&params));
+    }
+
+    #[test]
+    fn binomial_bonus_rolls_without_the_enchantment() {
+        // Regression guard: at enchantment level 0 (no tool), `binomial_with_bonus_count` must
+        // still roll its `extra` base trials, so a crop's seed count can exceed the base of 1.
+        // Before the fix it was gated on `enchantment_level > 0` and always returned 1.
+        let params = LootContextParameters::default();
+        let param = LootFunctionBonusParameter::Probability {
+            extra: 3,
+            probability: 0.5714,
+        };
+
+        let mut saw_more_than_one = false;
+        for _ in 0..1000 {
+            let mut stacks = [ItemStack::new(1, &Item::WHEAT_SEEDS)];
+            apply_bonus(
+                &mut stacks,
+                "minecraft:fortune",
+                "minecraft:binomial_with_bonus_count",
+                Some(&param),
+                &params,
+            );
+            let count = stacks[0].item_count;
+            assert!(
+                (1..=4).contains(&count),
+                "count {count} outside 1..=4 at level 0"
+            );
+            saw_more_than_one |= count > 1;
+        }
+        assert!(
+            saw_more_than_one,
+            "binomial never rolled above the base count at level 0 (the bug)"
+        );
     }
 }
