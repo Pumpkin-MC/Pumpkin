@@ -5,8 +5,10 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -31,18 +33,27 @@ impl PolarBearEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
+            // Priorities follow vanilla `PolarBear.registerGoals`.
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.25, true)));
+            goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
+            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.25)));
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                2,
+                6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
-            // Polar bears are neutral but aggressive towards foxes
+            // Vanilla priority 1: `PolarBearHurtByTargetGoal`. The baby-alerts-adults
+            // variant needs `isBaby` state the polar bear does not track yet.
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // Vanilla priority 4. `PolarBearAttackPlayersGoal` (priority 2, adults with a
+            // cub nearby) and the `isAngryAt` player goal (priority 3) both need the
+            // `NeutralMob` persistent anger state, which is not implemented.
             target_selector.add_goal(
-                1,
+                4,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, true),
             );
         };
