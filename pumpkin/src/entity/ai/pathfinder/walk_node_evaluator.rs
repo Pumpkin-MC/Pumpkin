@@ -340,6 +340,11 @@ impl NodeEvaluator for WalkNodeEvaluator {
 
         self.base.context = Some(context);
         self.base.mob_data = Some(mob_data);
+        // Vanilla `NodeEvaluator.prepare` clears the node map at the start of every
+        // search. Without this, `get_node` hands back nodes carrying mutated state
+        // from previous searches (`closed`, and `cost_malus` through its monotonic
+        // `max`), and the map grows without bound for the lifetime of the mob.
+        self.base.nodes.clear();
         self.path_types_cache.clear();
     }
 
