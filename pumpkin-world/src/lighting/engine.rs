@@ -57,7 +57,6 @@ impl LightProvider for SkyLightProvider {
 #[derive(Clone, Copy)]
 pub struct PropagationEntry {
     pos: BlockPos,
-    skip_direction: Option<BlockDirection>, // direction from which the light came, used to prevent back-propagation
 }
 
 pub struct LightPropagator<P: LightProvider> {
@@ -107,13 +106,6 @@ impl<P: LightProvider> LightPropagator<P> {
             }
 
             for dir in BlockDirection::all() {
-                // Skip the direction we came from (if specified)
-                if let Some(skip_dir) = entry.skip_direction
-                    && dir == skip_dir
-                {
-                    continue;
-                }
-
                 let neighbor_pos = pos.offset(dir.to_offset());
 
                 // Skip neighbor if it's outside world bounds
@@ -140,10 +132,7 @@ impl<P: LightProvider> LightPropagator<P> {
 
                     // Add to propagation queue if bright enough
                     if new_level > 1 && self.visited.insert(neighbor_pos) {
-                        self.queue.push_back(PropagationEntry {
-                            pos: neighbor_pos,
-                            skip_direction: Some(dir.opposite()),
-                        });
+                        self.queue.push_back(PropagationEntry { pos: neighbor_pos });
                     }
                 }
             }
@@ -188,10 +177,7 @@ impl<P: LightProvider> LightPropagator<P> {
                             .push_back((neighbor_pos, neighbor_light));
                     } else if neighbor_light >= old_val {
                         // Re-illuminate from this bright neighbor
-                        self.queue.push_back(PropagationEntry {
-                            pos: neighbor_pos,
-                            skip_direction: None,
-                        });
+                        self.queue.push_back(PropagationEntry { pos: neighbor_pos });
                         self.visited.insert(neighbor_pos);
                     }
                 }
@@ -238,10 +224,7 @@ impl BlockLightPropagator {
                         set_block_light(cache, pos, emission);
                         if self.visited.insert(pos) {
                             // Block light propagates in all directions
-                            self.queue.push_back(PropagationEntry {
-                                pos,
-                                skip_direction: None,
-                            });
+                            self.queue.push_back(PropagationEntry { pos });
                         }
                     }
                 }
@@ -408,12 +391,7 @@ impl SkyLightPropagator {
                         y < north_top || y < south_top || y < west_top || y < east_top;
 
                     if (is_at_surface || below_neighbor) && self.visited.insert(pos) {
-                        let skip_dir = (y >= top_y).then_some(BlockDirection::Up);
-
-                        self.queue.push_back(PropagationEntry {
-                            pos,
-                            skip_direction: skip_dir,
-                        });
+                        self.queue.push_back(PropagationEntry { pos });
                     }
                 }
             }
@@ -485,10 +463,7 @@ impl LightEngine {
         if new_luminance > 0 {
             set_block_light(cache, pos, new_luminance);
             if self.block_light.visited.insert(pos) {
-                self.block_light.queue.push_back(PropagationEntry {
-                    pos,
-                    skip_direction: None,
-                });
+                self.block_light.queue.push_back(PropagationEntry { pos });
             }
         }
     }
