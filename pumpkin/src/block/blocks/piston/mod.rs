@@ -57,6 +57,8 @@ impl<'a> PistonHandler<'a> {
             self.motion_direction,
             false,
             self.piston_direction,
+            &self.pos_to,
+            self.world,
         ) {
             if self.retracted && block_state.piston_behavior == PistonBehavior::Destroy {
                 self.broken_blocks.push(self.pos_to);
@@ -98,12 +100,21 @@ impl<'a> PistonHandler<'a> {
             || (!self.retracted && pos == self.pos_from.offset(self.piston_direction.to_offset()))
     }
 
+    #[expect(clippy::too_many_lines)]
     async fn try_move(&mut self, pos: BlockPos, dir: BlockDirection) -> bool {
         let (mut block, block_state) = self.world.get_block_and_state(&pos);
         if block_state.is_air() {
             return true;
         }
-        if !PistonBlock::is_movable(block, block_state, self.motion_direction, false, dir) {
+        if !PistonBlock::is_movable(
+            block,
+            block_state,
+            self.motion_direction,
+            false,
+            dir,
+            &pos,
+            self.world,
+        ) {
             return true;
         }
         if self.is_piston_head_or_base(pos) {
@@ -128,6 +139,8 @@ impl<'a> PistonHandler<'a> {
                     self.motion_direction,
                     false,
                     self.motion_direction.opposite(),
+                    &block_pos,
+                    self.world,
                 )
                 || self.is_piston_head_or_base(block_pos)
             {
@@ -174,6 +187,8 @@ impl<'a> PistonHandler<'a> {
                 self.motion_direction,
                 true,
                 self.motion_direction,
+                &block_pos2,
+                self.world,
             ) || self.is_piston_head_or_base(block_pos2)
             {
                 return false;

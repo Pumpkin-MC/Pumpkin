@@ -45,8 +45,9 @@ impl PistonBlock {
         dir: BlockDirection,
         can_break: bool,
         piston_dir: BlockDirection,
+        position: &BlockPos,
+        world: &World,
     ) -> bool {
-        // TODO: more checks
         if state.is_air() {
             return true;
         }
@@ -55,6 +56,15 @@ impl PistonBlock {
             || block == &Block::CRYING_OBSIDIAN
             || block == &Block::RESPAWN_ANCHOR
             || block == &Block::REINFORCED_DEEPSLATE
+        {
+            return false;
+        }
+        // PistonBaseBlock.isPushable: can't push a block further out of the world vertically.
+        if dir == BlockDirection::Down && position.0.y <= world.dimension.min_y {
+            return false;
+        }
+        if dir == BlockDirection::Up
+            && position.0.y >= world.dimension.min_y + world.dimension.height - 1
         {
             return false;
         }
@@ -249,7 +259,7 @@ impl BlockBehaviour for PistonBlock {
                 if !piston_piece {
                     if r#type == 1
                         && !state.is_air()
-                        && Self::is_movable(block, state, dir, false, dir)
+                        && Self::is_movable(block, state, dir, false, dir, &pull_pos, world)
                         && (state.piston_behavior == PistonBehavior::Normal
                             || block == &Block::PISTON
                             || block == &Block::STICKY_PISTON)
