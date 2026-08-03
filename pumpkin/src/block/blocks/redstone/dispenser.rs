@@ -259,21 +259,19 @@ impl DispenserBlock {
     const ARROW_DISPENSE_UNCERTAINTY: f64 = 6.0;
 
     async fn fire_arrow(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        // TODO: Add tipped arrows
-        let entity_type = if item.item.id == Item::SPECTRAL_ARROW.id {
-            &EntityType::SPECTRAL_ARROW
-        } else {
-            &EntityType::ARROW
-        };
-        let _ = item.split(1);
+        let projectile = item.split(1);
 
         let facing = to_normal(ctx.facing);
         let position = ctx.position.to_centered_f64().add(&(facing * 0.7));
         let world = ctx.world;
 
-        let arrow_entity = Entity::new(world.clone(), position, entity_type);
-        let mut arrow = ArrowEntity::new(arrow_entity, None);
-        arrow.pickup = ArrowPickup::Allowed;
+        let arrow_entity = Entity::new(
+            world.clone(),
+            position,
+            ArrowEntity::entity_type_for_item(projectile.item),
+        );
+        let arrow =
+            ArrowEntity::new_with_item(arrow_entity, None, &projectile, ArrowPickup::Allowed);
 
         arrow.set_velocity(
             facing.x,

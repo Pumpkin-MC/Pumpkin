@@ -427,8 +427,12 @@ impl Mob for EndermanEntity {
                 return;
             }
 
-            // TODO: also check rain
-            if entity.touching_water.load(Ordering::SeqCst) {
+            let world = entity.world.load();
+            let raining_at_feet = world.is_raining_at(&entity.block_pos.load()).await;
+            let raining_at_head = world
+                .is_raining_at(&entity.bounding_box.load().max_block_pos())
+                .await;
+            if entity.touching_water.load(Ordering::SeqCst) || raining_at_feet || raining_at_head {
                 self.mob_entity
                     .living_entity
                     .damage_with_context(self, 1.0, DamageType::DROWN, None, None, None)

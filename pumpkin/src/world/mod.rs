@@ -162,6 +162,8 @@ use weather::Weather;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;
 
+const MAX_LIGHT_LEVEL: u8 = 15;
+
 use rustc_hash::{FxHashMap, FxHashSet};
 
 impl PumpkinError for GetBlockError {
@@ -1730,6 +1732,20 @@ impl World {
         self.weather.lock().await.raining
     }
 
+    pub async fn is_raining_at(&self, pos: &BlockPos) -> bool {
+        if !self.is_raining().await {
+            return false;
+        }
+        if self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1 > pos.0.y {
+            return false;
+        }
+        self.can_see_sky(pos)
+            && self
+                .get_biome(pos)
+                .weather
+                .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
+    }
+
     pub async fn set_raining(&self, raining: bool) {
         let mut weather = self.weather.lock().await;
         if weather.raining != raining {
@@ -2359,7 +2375,8 @@ impl World {
                     | PlayerInfoFlags::UPDATE_GAME_MODE
                     | PlayerInfoFlags::UPDATE_LISTED
                     | PlayerInfoFlags::UPDATE_LATENCY
-                    | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                    | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                    | PlayerInfoFlags::UPDATE_HAT)
                     .bits(),
                 &[pumpkin_protocol::java::client::play::Player {
                     uuid: gameprofile.id,
@@ -2372,6 +2389,7 @@ impl World {
                         PlayerAction::UpdateListed(true),
                         PlayerAction::UpdateLatency(VarInt(0)),
                         PlayerAction::UpdateListOrder(VarInt(0)),
+                        PlayerAction::UpdateHat(true),
                     ],
                 }],
             ),
@@ -2437,6 +2455,15 @@ impl World {
         {
             let meta = Metadata::new(
                 TrackedData::PLAYER_MODE_CUSTOMISATION,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            );
+            meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
+                .unwrap();
+        };
+        {
+            let meta = Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
                 MetaDataType::BYTE,
                 config.skin_parts,
             );
@@ -2697,6 +2724,7 @@ impl World {
             PlayerAction::UpdateListed(true),
             PlayerAction::UpdateLatency(VarInt(0)),
             PlayerAction::UpdateListOrder(VarInt(0)),
+            PlayerAction::UpdateHat(true),
         ];
         let java_player = [pumpkin_protocol::java::client::play::Player {
             uuid: gameprofile.id,
@@ -2707,7 +2735,8 @@ impl World {
                 | PlayerInfoFlags::UPDATE_GAME_MODE
                 | PlayerInfoFlags::UPDATE_LISTED
                 | PlayerInfoFlags::UPDATE_LATENCY
-                | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                | PlayerInfoFlags::UPDATE_HAT)
                 .bits(),
             &java_player,
         );
@@ -2746,20 +2775,10 @@ impl World {
                 let chat_session = player.chat_session.lock().await;
                 let tab_list_name = player.get_tab_list_name().await;
 
-                let mut player_actions = vec![
-                    PlayerAction::AddPlayer {
-                        name: &player.gameprofile.name,
-                        properties,
-                    },
-                    PlayerAction::UpdateGameMode(VarInt(player.gamemode.load() as i32)),
-                    PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
-                    PlayerAction::UpdateLatency(VarInt(
-                        player.tab_list_latency.load(Ordering::Relaxed),
-                    )),
-                    PlayerAction::UpdateListOrder(VarInt(
-                        player.tab_list_order.load(Ordering::Relaxed),
-                    )),
-                ];
+                let mut player_actions = vec![PlayerAction::AddPlayer {
+                    name: &player.gameprofile.name,
+                    properties,
+                }];
 
                 if base_config.allow_chat_reports {
                     player_actions.push(PlayerAction::InitializeChat(Some(InitChat {
@@ -2769,6 +2788,18 @@ impl World {
                         signature: chat_session.signature.clone(),
                     })));
                 }
+
+                player_actions.extend([
+                    PlayerAction::UpdateGameMode(VarInt(player.gamemode.load() as i32)),
+                    PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
+                    PlayerAction::UpdateLatency(VarInt(
+                        player.tab_list_latency.load(Ordering::Relaxed),
+                    )),
+                    PlayerAction::UpdateListOrder(VarInt(
+                        player.tab_list_order.load(Ordering::Relaxed),
+                    )),
+                    PlayerAction::UpdateHat(true),
+                ]);
                 drop(chat_session);
 
                 current_player_data.push((&player.gameprofile.id, player_actions));
@@ -2783,7 +2814,8 @@ impl World {
                 | PlayerInfoFlags::UPDATE_LISTED
                 | PlayerInfoFlags::UPDATE_LATENCY
                 | PlayerInfoFlags::UPDATE_LIST_PRIORITY
-                | PlayerInfoFlags::UPDATE_GAME_MODE;
+                | PlayerInfoFlags::UPDATE_GAME_MODE
+                | PlayerInfoFlags::UPDATE_HAT;
             if base_config.allow_chat_reports {
                 action_flags |= PlayerInfoFlags::INITIALIZE_CHAT;
             }
@@ -2889,6 +2921,15 @@ impl World {
             meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
                 .unwrap();
         };
+        {
+            let meta = Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            );
+            meta.write(&mut java_meta_buf, &JavaMinecraftVersion::V_1_21_4)
+                .unwrap();
+        };
         java_meta_buf.put_u8(255);
 
         self.broadcast_packet_except_editioned_sync(
@@ -2987,6 +3028,7 @@ impl World {
                 PlayerAction::UpdateListOrder(VarInt(
                     existing_player.tab_list_order.load(Ordering::Relaxed),
                 )),
+                PlayerAction::UpdateHat(true),
             ];
             let java_player = [pumpkin_protocol::java::client::play::Player {
                 uuid: gameprofile.id,
@@ -3000,7 +3042,8 @@ impl World {
                             | PlayerInfoFlags::UPDATE_LISTED
                             | PlayerInfoFlags::UPDATE_GAME_MODE
                             | PlayerInfoFlags::UPDATE_LATENCY
-                            | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
+                            | PlayerInfoFlags::UPDATE_LIST_PRIORITY
+                            | PlayerInfoFlags::UPDATE_HAT)
                             .bits(),
                         &java_player,
                     ),
@@ -3032,6 +3075,14 @@ impl World {
                 {
                     let meta = Metadata::new(
                         TrackedData::PLAYER_MODE_CUSTOMISATION,
+                        MetaDataType::BYTE,
+                        config.skin_parts,
+                    );
+                    meta.write(&mut buf, &client.version.load()).unwrap();
+                };
+                {
+                    let meta = Metadata::new(
+                        TrackedData::PLAYER_MODE_CUSTOMIZATION_ID,
                         MetaDataType::BYTE,
                         config.skin_parts,
                     );
@@ -3159,6 +3210,7 @@ impl World {
             .await;
 
         player.send_active_effects().await;
+        player.breath_manager.send_air_supply(player);
         self.send_player_equipment(player).await;
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
@@ -4437,6 +4489,13 @@ impl World {
         self.level
             .light_engine
             .get_sky_light_level(&self.level, position)
+    }
+
+    #[must_use]
+    pub fn can_see_sky(&self, position: &BlockPos) -> bool {
+        position.0.y >= self.dimension.min_y
+            && position.0.y < self.dimension.min_y + self.dimension.height
+            && self.get_sky_light_level(position) >= MAX_LIGHT_LEVEL
     }
 
     pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {

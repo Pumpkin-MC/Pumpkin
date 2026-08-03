@@ -133,7 +133,7 @@ pub struct ItemComponents {
     #[serde(rename = "minecraft:potion_contents")]
     pub potion_contents: Option<serde_json::Value>,
     #[serde(rename = "minecraft:potion_duration_scale")]
-    pub potion_duration_scale: Option<serde_json::Value>,
+    pub potion_duration_scale: Option<f32>,
     #[serde(rename = "minecraft:provides_banner_patterns")]
     pub provides_banner_patterns: Option<serde_json::Value>,
     #[serde(rename = "minecraft:provides_trim_material")]
@@ -833,8 +833,9 @@ impl ToTokens for ItemComponents {
                 }),
             });
         }
-        if self.potion_duration_scale.is_some() {
-            tokens.extend(quote! { (PotionDurationScale, &PotionDurationScaleImpl), });
+        if let Some(scale) = self.potion_duration_scale {
+            let scale_lit = LitFloat::new(&format!("{scale:?}f32"), Span::call_site());
+            tokens.extend(quote! { (PotionDurationScale, &PotionDurationScaleImpl { scale: #scale_lit }), });
         }
         if self.provides_banner_patterns.is_some() {
             tokens.extend(quote! { (ProvidesBannerPatterns, &ProvidesBannerPatternsImpl), });

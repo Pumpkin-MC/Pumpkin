@@ -32610,7 +32610,10 @@ impl Item {
                     custom_name: None,
                 },
             ),
-            (PotionDurationScale, &PotionDurationScaleImpl),
+            (
+                PotionDurationScale,
+                &PotionDurationScaleImpl { scale: 0.25f32 },
+            ),
             (Rarity, &RarityImpl),
             (RepairCost, &RepairCostImpl),
             (SwingAnimation, &SwingAnimationImpl),
@@ -56145,7 +56148,10 @@ impl Item {
                     custom_name: None,
                 },
             ),
-            (PotionDurationScale, &PotionDurationScaleImpl),
+            (
+                PotionDurationScale,
+                &PotionDurationScaleImpl { scale: 0.125f32 },
+            ),
             (Rarity, &RarityImpl),
             (RepairCost, &RepairCostImpl),
             (SwingAnimation, &SwingAnimationImpl),
