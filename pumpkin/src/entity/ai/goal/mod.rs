@@ -36,6 +36,7 @@ pub mod look_at_entity;
 pub mod melee_attack;
 pub mod move_to_target_pos;
 pub mod move_towards_restriction;
+pub mod nearest_hostile_target;
 pub mod non_tame_random_target;
 pub mod ocelot_attack;
 pub mod offer_flower;

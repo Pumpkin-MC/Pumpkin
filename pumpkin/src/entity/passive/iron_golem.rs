@@ -5,8 +5,8 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage, NbtFuture,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, nearest_hostile_target::NearestHostileTargetGoal,
         offer_flower::OfferFlowerGoal, revenge::RevengeGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -48,10 +48,12 @@ impl IronGolemEntity {
             // so a golem only goes after a player it already holds a grudge against. We have no
             // per player anger state yet, so we leave players to `RevengeGoal` instead of
             // attacking every player on sight.
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::ZOMBIE, true),
-            );
+            //
+            // Vanilla priority 3: `NearestAttackableTargetGoal<Mob>(this, Mob.class, 5, false,
+            // false, (target, level) -> target instanceof Enemy && !(target instanceof Creeper))`
+            // -- attacks the nearest hostile mob (excluding creepers) within follow range. This
+            // has no village-proximity condition in vanilla; see `nearest_hostile_target.rs`.
+            target_selector.add_goal(3, NearestHostileTargetGoal::new(&mob_arc.mob_entity));
         };
 
         mob_arc
