@@ -193,6 +193,10 @@ pub struct GpuNoiseContext {
     bind_group_layout: wgpu::BindGroupLayout,
     graph_pipeline: wgpu::ComputePipeline,
     graph_bind_group_layout: wgpu::BindGroupLayout,
+    light_pipeline: wgpu::ComputePipeline,
+    light_bind_group_layout: wgpu::BindGroupLayout,
+    block_light_pipeline: wgpu::ComputePipeline,
+    block_light_bind_group_layout: wgpu::BindGroupLayout,
     pub adapter_name: String,
     pub adapter_is_discrete: bool,
 }
@@ -306,6 +310,69 @@ impl GpuNoiseContext {
             cache: None,
         });
 
+        // ── Light-scan pipeline ─────────────────────────────────────────
+
+        let light_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("light_scan"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("light.wgsl").into()),
+        });
+
+        // Sky-light bind group: uniform + opacity (ro) + heightmap (ro) + output (rw)
+        let light_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("light_scan bind group layout"),
+                entries: &[
+                    storage_entry(0, wgpu::BufferBindingType::Uniform),
+                    storage_entry(1, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(2, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(3, wgpu::BufferBindingType::Storage { read_only: false }),
+                ],
+            });
+
+        let light_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("light_scan pipeline layout"),
+                bind_group_layouts: &[Some(&light_bind_group_layout)],
+                immediate_size: 0,
+            });
+
+        let light_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("light_scan pipeline"),
+            layout: Some(&light_pipeline_layout),
+            module: &light_shader,
+            entry_point: Some("scan_sky_light"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+
+        // Block-light bind group: uniform + luminance (ro) + output (rw)
+        let block_light_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("block_light_scan bind group layout"),
+                entries: &[
+                    storage_entry(0, wgpu::BufferBindingType::Uniform),
+                    storage_entry(1, wgpu::BufferBindingType::Storage { read_only: true }),
+                    storage_entry(2, wgpu::BufferBindingType::Storage { read_only: false }),
+                ],
+            });
+
+        let block_light_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("block_light_scan pipeline layout"),
+                bind_group_layouts: &[Some(&block_light_bind_group_layout)],
+                immediate_size: 0,
+            });
+
+        let block_light_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("block_light_scan pipeline"),
+                layout: Some(&block_light_pipeline_layout),
+                module: &light_shader,
+                entry_point: Some("scan_block_light"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                cache: None,
+            });
+
         Some(Self {
             device,
             queue,
@@ -313,6 +380,10 @@ impl GpuNoiseContext {
             bind_group_layout,
             graph_pipeline,
             graph_bind_group_layout,
+            light_pipeline,
+            light_bind_group_layout,
+            block_light_pipeline,
+            block_light_bind_group_layout,
             adapter_name,
             adapter_is_discrete,
         })
@@ -597,6 +668,182 @@ fn bind_entry(binding: u32, buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry<'_> {
     wgpu::BindGroupEntry {
         binding,
         resource: buffer.as_entire_binding(),
+    }
+}
+
+impl GpuNoiseContext {
+    // ── Light scanning ──────────────────────────────────────────────────
+
+    /// Computes sky-light values on the GPU for a 18×18×N block region.
+    ///
+    /// Each (x, z) column is independent: the shader fills air above the heightmap
+    /// with 15, then sweeps downward, subtracting opacity at each non-air block
+    /// until the light reaches 0.
+    ///
+    /// Returns one `u8` per block position, flattened row-major as `[column][y]`.
+    #[must_use]
+    pub fn scan_sky_light(&self, input: &super::light::SkyLightInput) -> Vec<u8> {
+        if input.total_positions() == 0 {
+            return Vec::new();
+        }
+
+        let dims = super::light::LightDims::new(input.num_columns, input.height, input.bottom_y);
+
+        let dims_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("sky_light_dims"),
+                contents: bytemuck::bytes_of(&dims),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+
+        let opacity_u32: Vec<u32> = input.opacity.iter().map(|&b| u32::from(b)).collect();
+        let opacity_buffer = self.storage_from("sky_opacity", &opacity_u32);
+        let heightmap_buffer = self.storage_from("sky_heightmap", &input.heightmap);
+
+        let output_size = input.total_positions() as u64 * std::mem::size_of::<u32>() as u64;
+        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("sky_light_out"),
+            size: output_size,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let staging_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("sky_light_staging"),
+            size: output_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("sky_light bind group"),
+            layout: &self.light_bind_group_layout,
+            entries: &[
+                bind_entry(0, &dims_buffer),
+                bind_entry(1, &opacity_buffer),
+                bind_entry(2, &heightmap_buffer),
+                bind_entry(3, &output_buffer),
+            ],
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("sky_light encoder"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("sky_light pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&self.light_pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.dispatch_workgroups(input.num_columns.div_ceil(WORKGROUP_SIZE), 1, 1);
+        }
+        encoder.copy_buffer_to_buffer(&output_buffer, 0, &staging_buffer, 0, output_size);
+        self.queue.submit(Some(encoder.finish()));
+
+        let result = self.read_back_u8_range(&staging_buffer, output_size);
+        staging_buffer.unmap();
+        result
+    }
+
+    /// Copies luminance values into the block-light buffer on the GPU.
+    ///
+    /// This is a simple scatter kernel; the CPU-side benefit comes from batching
+    /// block-state reads rather than interleaving them with light writes inside a
+    /// nested loop.
+    ///
+    /// Returns one `u8` per block position, flattened row-major as `[column][y]`.
+    #[must_use]
+    pub fn scan_block_light(&self, input: &super::light::BlockLightInput) -> Vec<u8> {
+        if input.total_positions() == 0 {
+            return Vec::new();
+        }
+
+        let dims = super::light::LightDims::new(input.num_columns, input.height, input.bottom_y);
+
+        let dims_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("block_light_dims"),
+                contents: bytemuck::bytes_of(&dims),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+
+        let luminance_u32: Vec<u32> = input.luminance.iter().map(|&b| u32::from(b)).collect();
+        let luminance_buffer = self.storage_from("block_luminance", &luminance_u32);
+
+        let output_size = input.total_positions() as u64 * std::mem::size_of::<u32>() as u64;
+        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("block_light_out"),
+            size: output_size,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let staging_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("block_light_staging"),
+            size: output_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("block_light bind group"),
+            layout: &self.block_light_bind_group_layout,
+            entries: &[
+                bind_entry(0, &dims_buffer),
+                bind_entry(1, &luminance_buffer),
+                bind_entry(2, &output_buffer),
+            ],
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("block_light encoder"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("block_light pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&self.block_light_pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            let total = (input.total_positions() as u32).div_ceil(WORKGROUP_SIZE);
+            pass.dispatch_workgroups(total, 1, 1);
+        }
+        encoder.copy_buffer_to_buffer(&output_buffer, 0, &staging_buffer, 0, output_size);
+        self.queue.submit(Some(encoder.finish()));
+
+        let result = self.read_back_u8_range(&staging_buffer, output_size);
+        staging_buffer.unmap();
+        result
+    }
+
+    /// Like [`Self::read_back_range`] but for `u32`-per-element storage buffers
+    /// where each `u32` holds one `u8` value in its least-significant byte.
+    fn read_back_u8_range(&self, staging: &wgpu::Buffer, size: u64) -> Vec<u8> {
+        let slice = staging.slice(..size);
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = tx.send(result);
+        });
+        self.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("device poll failed while waiting for GPU u8 readback");
+        rx.recv()
+            .expect("map_async callback dropped without sending a result")
+            .expect("failed to map GPU u8 output buffer for readback");
+
+        let data = slice
+            .get_mapped_range()
+            .expect("buffer was mapped but get_mapped_range failed");
+        // Each u8 is stored as one u32 in the storage buffer; extract the LSB.
+        let u32s: &[u32] = bytemuck::cast_slice(&data);
+        let result: Vec<u8> = u32s.iter().map(|&v| v as u8).collect();
+        drop(data);
+        result
     }
 }
 
@@ -1599,5 +1846,192 @@ mod test {
              boundary flips explain",
             points.len()
         );
+    }
+
+    /// Tests that the GPU sky-light scan matches the CPU reference on a trivial
+    /// column: one solid block at y=0 surrounded by air, in a 1-column region.
+    #[test]
+    fn gpu_sky_light_matches_cpu_column_scan() {
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        use crate::world::light::SkyLightInput;
+
+        // One column, heights y=-4..=8 (13 levels)
+        let height: u32 = 13;
+        let bottom_y: i32 = -4;
+        let num_columns: u32 = 1;
+        let total = (num_columns * height) as usize;
+
+        // air(opacity=0) everywhere except a stone block(opacity=15) at y=0
+        let mut opacity = vec![0u8; total];
+        // solid at y=0 → index = (0 - (-4)) = 4
+        opacity[4] = 15;
+
+        // heightmap says the top solid block is at y=0
+        let heightmap = vec![0i32];
+
+        let input = SkyLightInput {
+            opacity,
+            heightmap,
+            num_columns,
+            height,
+            bottom_y,
+        };
+
+        let gpu_result = ctx.scan_sky_light(&input);
+        assert_eq!(gpu_result.len(), total);
+
+        // Above surface (y=1..8 → indices 5..12): full sky light = 15
+        for y_idx in 5..13 {
+            assert_eq!(
+                gpu_result[y_idx], 15,
+                "above surface at y_idx={y_idx}: expected 15"
+            );
+        }
+
+        // At surface (y=0, index 4): light = 15 - opacity(15) = 0
+        assert_eq!(gpu_result[4], 0, "at solid block: expected 0");
+
+        // Below surface (y=-4..-1, indices 0..3): did light reach? No, it stopped at 0
+        for y_idx in 0..4 {
+            assert_eq!(
+                gpu_result[y_idx], 0,
+                "below surface at y_idx={y_idx}: expected 0"
+            );
+        }
+    }
+
+    /// Two solid blocks (opacity 15 each) should reduce light to 0 at the second.
+    #[test]
+    fn gpu_sky_light_two_solid_blocks() {
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        use crate::world::light::SkyLightInput;
+
+        let height: u32 = 10;
+        let bottom_y: i32 = 0;
+        let num_columns: u32 = 1;
+        let total = (num_columns * height) as usize;
+
+        // Blocks at y=7 and y=5 with opacity 15
+        let mut opacity = vec![0u8; total];
+        opacity[7] = 15; // y=7, top solid
+        opacity[5] = 15; // y=5
+
+        let heightmap = vec![7i32];
+
+        let input = SkyLightInput {
+            opacity,
+            heightmap,
+            num_columns,
+            height,
+            bottom_y,
+        };
+
+        let gpu_result = ctx.scan_sky_light(&input);
+
+        // Above y=7: 15
+        assert_eq!(gpu_result[8], 15);
+        assert_eq!(gpu_result[9], 15);
+        // At y=7: light goes to 0
+        assert_eq!(gpu_result[7], 0);
+        // y=6: air, but light is already 0
+        assert_eq!(gpu_result[6], 0);
+        // y=5 and below: 0
+        assert_eq!(gpu_result[5], 0);
+        assert_eq!(gpu_result[4], 0);
+    }
+
+    /// Partial-opacity block (e.g. leaves, opacity 1) should reduce light by 1.
+    #[test]
+    fn gpu_sky_light_partial_opacity() {
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        use crate::world::light::SkyLightInput;
+
+        let height: u32 = 17;
+        let bottom_y: i32 = 0;
+        let num_columns: u32 = 1;
+        let total = (num_columns * height) as usize;
+
+        // Three leaves blocks (opacity 1 each) at y=10, 9, 8, air above and below
+        let mut opacity = vec![0u8; total];
+        opacity[10] = 1;
+        opacity[9] = 1;
+        opacity[8] = 1;
+        let heightmap = vec![10i32];
+
+        let input = SkyLightInput {
+            opacity,
+            heightmap,
+            num_columns,
+            height,
+            bottom_y,
+        };
+
+        let gpu_result = ctx.scan_sky_light(&input);
+
+        // Above: 15
+        assert_eq!(gpu_result[11], 15);
+        // At y=10: 15 - 1 = 14
+        assert_eq!(gpu_result[10], 14);
+        // At y=9: 14 - 1 = 13
+        assert_eq!(gpu_result[9], 13);
+        // At y=8: 13 - 1 = 12
+        assert_eq!(gpu_result[8], 12);
+        // Air below: stays 12
+        assert_eq!(gpu_result[7], 12);
+        assert_eq!(gpu_result[0], 12);
+    }
+
+    /// Air (opacity 0) between solid blocks does not decrease light.
+    #[test]
+    fn gpu_sky_light_air_does_not_attenuate() {
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        use crate::world::light::SkyLightInput;
+
+        let height: u32 = 8;
+        let bottom_y: i32 = 0;
+        let num_columns: u32 = 1;
+        let total = (num_columns * height) as usize;
+
+        // Solid(2) at y=6, air at y=5..3, solid(3) at y=2
+        let mut opacity = vec![0u8; total];
+        opacity[6] = 2;
+        opacity[2] = 3;
+        let heightmap = vec![6i32];
+
+        let input = SkyLightInput {
+            opacity,
+            heightmap,
+            num_columns,
+            height,
+            bottom_y,
+        };
+
+        let gpu_result = ctx.scan_sky_light(&input);
+
+        // y=7: 15 (above surface)
+        assert_eq!(gpu_result[7], 15);
+        // y=6: 15 - 2 = 13
+        assert_eq!(gpu_result[6], 13);
+        // y=5..3: air, stays 13
+        for y in 3..=5 {
+            assert_eq!(gpu_result[y], 13, "air at y={y}: light should stay 13");
+        }
+        // y=2: 13 - 3 = 10
+        assert_eq!(gpu_result[2], 10);
+        // y=1,0: air, stays 10
+        assert_eq!(gpu_result[1], 10);
+        assert_eq!(gpu_result[0], 10);
     }
 }

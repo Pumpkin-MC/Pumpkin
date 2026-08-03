@@ -9,3 +9,4 @@
 
 pub mod gpu;
 pub mod graph;
+pub mod light;
