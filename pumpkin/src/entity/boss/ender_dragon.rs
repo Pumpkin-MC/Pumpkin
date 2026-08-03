@@ -164,6 +164,12 @@ impl EntityBase for EnderDragonPart {
         &self.entity
     }
 
+    /// Vanilla `EnderDragonPart.shouldBeSaved()` returns false; the parts are
+    /// recreated by the dragon when it is loaded.
+    fn should_be_saved(&self) -> bool {
+        false
+    }
+
     fn damage<'a>(
         &'a self,
         source: &'a dyn EntityBase,

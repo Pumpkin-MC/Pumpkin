@@ -169,6 +169,14 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         self.get_entity().get_eye_pos()
     }
 
+    /// Whether this entity is written to its chunk's entity data on unload.
+    ///
+    /// Vanilla gates serialization on `EntityType.canSerialize()`
+    /// (`Entity.getEncodeId`) plus `Entity.shouldBeSaved()`.
+    fn should_be_saved(&self) -> bool {
+        self.get_entity().entity_type.saveable
+    }
+
     fn get_looking_vector(&self) -> Vector3<f64> {
         let entity = self.get_entity();
         Vector3::from_yaw_pitch(entity.yaw.load(), entity.pitch.load())

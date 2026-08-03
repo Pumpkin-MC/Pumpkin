@@ -532,8 +532,23 @@ impl World {
     /// currently in; the chunk is rewritten from scratch every unload cycle, so
     /// there is nothing stale to deduplicate.
     async fn save_entity(&self, entity: &Arc<dyn EntityBase>) {
+        // Vanilla `Entity.saveAsPassenger` refuses to serialize a type whose
+        // `EntityType.canSerialize()` is false, and `EnderDragonPart` additionally
+        // overrides `shouldBeSaved()` to false.
+        if !entity.should_be_saved() {
+            return;
+        }
         let current_chunk = entity.get_entity().block_pos.load().chunk_position();
         let mut nbt = NbtCompound::new();
+        // Vanilla always writes the base `Entity`/`LivingEntity` data (`saveWithoutId`)
+        // before the type specific `addAdditionalSaveData`. Most Pumpkin entity types
+        // have an empty `NBTStorage` impl, which would otherwise persist an empty
+        // compound with no `id` and drop the entity on the next load.
+        if let Some(living) = entity.get_living_entity() {
+            living.write_nbt(&mut nbt).await;
+        } else {
+            entity.get_entity().write_nbt(&mut nbt).await;
+        }
         entity.write_nbt(&mut nbt).await;
         let chunk = self.level.get_entity_chunk(current_chunk).await;
         chunk.data.lock().await.push(nbt);
@@ -4061,6 +4076,14 @@ impl World {
                         // Pos is zero since it will be read from nbt.
                         let entity =
                             from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, uuid);
+                        // Mirrors the write side: the base data is restored first so
+                        // types with an empty `NBTStorage` impl still get their
+                        // position, health and effects back.
+                        if let Some(living) = entity.get_living_entity() {
+                            living.read_nbt_non_mut(entity_nbt).await;
+                        } else {
+                            entity.get_entity().read_nbt_non_mut(entity_nbt).await;
+                        }
                         entity.read_nbt_non_mut(entity_nbt).await;
                         entity.init_data_tracker().await;
 
