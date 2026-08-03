@@ -211,6 +211,20 @@ impl ZombieVillagerEntity {
             self.get_entity().block_pos.load(),
             0,
         );
+
+        // ZombieVillager.java:259-262: the advancement fires here, when conversion actually
+        // completes, for whichever player started it (looked up by uuid, may no longer be
+        // online) -- not immediately on the golden-apple click.
+        if let Some(starter) = *self.conversion_starter.lock().await
+            && let Some(player) = world.get_player_by_uuid(starter)
+        {
+            player
+                .trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::CuredZombieVillager,
+                )
+                .await;
+        }
+
         old_entity.remove().await;
     }
 }

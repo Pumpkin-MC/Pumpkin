@@ -2016,13 +2016,10 @@ impl JavaClient {
                         ActionType::Interact | ActionType::InteractAt => {
                             let held = player.inventory.held_item();
                             let mut stack = held.lock().await.clone();
-                            let target_entity = event.target.get_entity();
-                            if target_entity.entity_type.resource_name == "zombie_villager"
-                                && stack.item.registry_key == "golden_apple"
-                            {
-                                player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::CuredZombieVillager).await;
-                            }
-
+                            // CuredZombieVillager fires when conversion actually completes
+                            // (ZombieVillagerEntity::finish_conversion), gated on the zombie
+                            // villager having Weakness -- not immediately on this click,
+                            // regardless of whether curing even started.
                             let interacted = event.target.interact(player, &mut stack).await;
                             if !interacted {
                                 server
