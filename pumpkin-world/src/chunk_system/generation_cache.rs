@@ -66,6 +66,10 @@ impl BlockAccessor for Cache {
         let id = GenerationCache::get_block_state(self, &position.0);
         BlockState::from_id_with_block(id)
     }
+
+    fn get_fluid(&self, position: &BlockPos) -> Fluid {
+        GenerationCache::get_fluid_and_fluid_state(self, &position.0).0
+    }
 }
 
 impl GenerationCache for Cache {

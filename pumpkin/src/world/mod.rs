@@ -6177,6 +6177,10 @@ impl BlockAccessor for World {
             .unwrap_or(Block::AIR.default_state.id);
         BlockState::from_id_with_block(id)
     }
+
+    fn get_fluid(&self, position: &BlockPos) -> pumpkin_data::fluid::Fluid {
+        Self::get_fluid(self, position).clone()
+    }
 }
 
 pub struct WorldPortal(pub Arc<World>);

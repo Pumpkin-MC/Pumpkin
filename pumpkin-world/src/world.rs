@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use crate::generation::proto_chunk::GenerationCache;
 use bitflags::bitflags;
-use pumpkin_data::{Block, BlockState, BlockStateId, Mirror, Rotation, chunk::Biome};
+use pumpkin_data::{Block, BlockState, BlockStateId, Mirror, Rotation, chunk::Biome, fluid::Fluid};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
@@ -93,4 +93,6 @@ pub trait BlockAccessor: Send + Sync {
     fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId;
 
     fn get_block_and_state(&self, position: &BlockPos) -> (&'static Block, &'static BlockState);
+
+    fn get_fluid(&self, position: &BlockPos) -> Fluid;
 }

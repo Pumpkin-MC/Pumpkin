@@ -1528,6 +1528,10 @@ impl BlockAccessor for ProtoChunk {
         let id = self.get_block_state(&position.0);
         BlockState::from_id_with_block(id)
     }
+
+    fn get_fluid(&self, position: &BlockPos) -> Fluid {
+        GenerationCache::get_fluid_and_fluid_state(self, &position.0).0
+    }
 }
 
 impl BlockPlacer for ProtoChunk {
