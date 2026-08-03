@@ -384,10 +384,15 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
                         generate_chest_loot(chest_table, seed)
                     })
             }
-            Self::Item(item_entry) => {
-                let key = &item_entry.name.strip_prefix("minecraft:").unwrap();
-                vec![ItemStack::new(1, Item::from_registry_key(key).unwrap())]
-            }
+            // `from_registry_key` strips the `minecraft:` prefix itself, so
+            // prefixed and unprefixed names both resolve here.
+            Self::Item(item_entry) => Item::from_registry_key(item_entry.name).map_or_else(
+                || {
+                    tracing::warn!("Unknown item {:?} in loot table entry", item_entry.name);
+                    Vec::new()
+                },
+                |item| vec![ItemStack::new(1, item)],
+            ),
             Self::Tag(tag) => {
                 let key = tag.name.strip_prefix("minecraft:").unwrap_or(tag.name);
 
