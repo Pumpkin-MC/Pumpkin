@@ -181,6 +181,16 @@ impl ItemBehaviour for BoatItem {
             let boat_entity = Arc::new(BoatEntity::new(entity));
             world.spawn_entity(boat_entity).await;
 
+            if let Some(player_arc) = world.get_player_by_id(player.get_entity().entity_id) {
+                crate::world::game_event::emit_game_event(
+                    &world,
+                    pumpkin_data::game_event::GameEvent::EntityPlace,
+                    hit_vec,
+                    crate::world::game_event::GameEventContext::of_entity(player_arc),
+                )
+                .await;
+            }
+
             // Decrement item unless in creative mode
             let held_item = player.inventory.held_item();
             let mut stack = held_item.lock().await;
