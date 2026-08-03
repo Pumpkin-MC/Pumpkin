@@ -161,6 +161,29 @@ pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f6
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
 }
 
+/// Density (enchantment/density.json): `smash_damage_per_fallen_block` linear
+/// base 0.5, `per_level_above_first` 0.5, multiplied by mace fall distance.
+pub fn density_extra_damage(level: u32, fall_distance: f32) -> f64 {
+    0.5 * f64::from(level) * f64::from(fall_distance)
+}
+
+/// Wind Burst (`enchantment/wind_burst.json`): `knockback_multiplier` lookup
+/// [1.2, 1.75, 2.2] for levels 1-3 (`max_level` is 3, so no fallback formula needed).
+pub const fn wind_burst_knockback_multiplier(level: u32) -> f32 {
+    match level {
+        1 => 1.2,
+        2 => 1.75,
+        _ => 2.2,
+    }
+}
+
+/// Breach (enchantment/breach.json): `armor_effectiveness` linear base -0.15,
+/// `per_level_above_first` -0.15, subtracted from the victim's armor damage-reduction
+/// fraction and clamped back to a valid [0, 1] fraction.
+pub fn breach_armor_fraction(base_fraction: f32, level: i32) -> f32 {
+    (base_fraction - 0.15 * level as f32).clamp(0.0, 1.0)
+}
+
 pub fn spawn_sweep_particle(attacker_entity: &Entity, world: &World, pos: &Vector3<f64>) {
     let yaw = attacker_entity.yaw.load();
     let d = -f64::from((yaw.to_radians()).sin());
@@ -207,7 +230,10 @@ pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type:
 
 #[cfg(test)]
 mod tests {
-    use super::{can_critical_attack, can_sweep_attack, knockback_after_resistance};
+    use super::{
+        breach_armor_fraction, can_critical_attack, can_sweep_attack, density_extra_damage,
+        knockback_after_resistance, wind_burst_knockback_multiplier,
+    };
 
     #[test]
     fn critical_attacks_require_vanilla_movement_conditions() {
@@ -254,5 +280,30 @@ mod tests {
         // Stacked armour modifiers can push resistance above 1.0; the result is
         // negative and callers guard on `strength > 0.0`.
         assert!(knockback_after_resistance(0.4, 1.2) < 0.0);
+    }
+
+    #[test]
+    fn density_scales_with_level_and_fall_distance() {
+        assert_eq!(density_extra_damage(1, 4.0), 2.0);
+        assert_eq!(density_extra_damage(5, 4.0), 10.0);
+        assert_eq!(density_extra_damage(2, 0.0), 0.0);
+    }
+
+    #[test]
+    fn wind_burst_multiplier_matches_lookup_table() {
+        assert_eq!(wind_burst_knockback_multiplier(1), 1.2);
+        assert_eq!(wind_burst_knockback_multiplier(2), 1.75);
+        assert_eq!(wind_burst_knockback_multiplier(3), 2.2);
+    }
+
+    #[test]
+    fn breach_reduces_armor_fraction_per_level() {
+        assert!((breach_armor_fraction(0.8, 1) - 0.65).abs() < 1e-6);
+        assert!((breach_armor_fraction(0.8, 4) - 0.2).abs() < 1e-6);
+    }
+
+    #[test]
+    fn breach_clamps_armor_fraction_to_zero() {
+        assert_eq!(breach_armor_fraction(0.1, 4), 0.0);
     }
 }

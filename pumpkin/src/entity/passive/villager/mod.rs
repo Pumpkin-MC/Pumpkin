@@ -31,7 +31,8 @@ use crate::entity::{
     Entity, EntityBase, NBTStorage,
     ai::goal::{
         avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, villager_schedule::VillagerScheduleGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -145,6 +146,12 @@ impl VillagerEntity {
                 1,
                 Box::new(AvoidEntityGoal::new(&EntityType::VEX, 12.0, 0.5, 0.5)),
             );
+
+            // `VillagerGoalPackages.getWorkPackage`/`getRestPackage`, simplified: walk to
+            // the claimed job site/bed on schedule. Priority 1 (below AvoidEntityGoal at
+            // 1, above WanderAroundGoal at 2) so it preempts wandering during work/rest
+            // hours and yields MOVE back to wandering during meet/idle hours.
+            goal_selector.add_goal(1, Box::new(VillagerScheduleGoal::new(0.5)));
 
             // Basic movement and looking (Vanilla uses 0.5 speed)
             goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(0.5)));

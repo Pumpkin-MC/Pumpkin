@@ -16,6 +16,9 @@ pub mod item;
 #[cfg(feature = "item")]
 pub mod item_stack;
 
+#[cfg(feature = "item")]
+pub mod trim;
+
 #[cfg(feature = "packet")]
 #[rustfmt::skip]
 #[path = "generated/packet.rs"]
@@ -82,6 +85,9 @@ pub use advancement::*;
 #[rustfmt::skip]
 #[path = "generated/recipes.rs"]
 pub mod recipes;
+
+#[cfg(all(feature = "recipes", feature = "item"))]
+pub mod smithing;
 
 #[cfg(feature = "data_component")]
 #[rustfmt::skip]

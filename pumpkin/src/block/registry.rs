@@ -140,6 +140,8 @@ use crate::block::blocks::stairs::StairBlock;
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::blocks::torches::TorchBlock;
 use crate::block::blocks::trapdoor::TrapDoorBlock;
+use crate::block::blocks::trial_spawner::TrialSpawnerBlock;
+use crate::block::blocks::vault::VaultBlock;
 use crate::block::blocks::vine::VineBlock;
 use crate::block::blocks::walls::WallBlock;
 use crate::block::blocks::wither_skull::WitherSkeletonSkullBlock;
@@ -196,6 +198,7 @@ use crate::block::blocks::leaves::LeavesBlock;
 use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
+use crate::block::blocks::smithing_table::SmithingTableBlock;
 use crate::block::blocks::smoker::SmokerBlock;
 use crate::block::blocks::stonecutter::StonecutterBlock;
 
@@ -254,6 +257,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SlimeBlock);
     manager.register(StairBlock);
     manager.register(StonecutterBlock);
+    manager.register(SmithingTableBlock);
     manager.register(ShortPlantBlock);
     manager.register(DryVegetationBlock);
     manager.register(LilyPadBlock);
@@ -297,6 +301,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(WeightedPressurePlateBlock);
     manager.register(EndPortalBlock);
     manager.register(SpawnerBlock);
+    manager.register(TrialSpawnerBlock);
+    manager.register(VaultBlock);
     manager.register(EndPortalFrameBlock);
     manager.register(CandleBlock);
     manager.register(SeaPickleBlock);

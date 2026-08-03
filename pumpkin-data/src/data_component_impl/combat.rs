@@ -689,28 +689,40 @@ impl DataComponentImpl for OminousBottleAmplifierImpl {
     default_impl!(OminousBottleAmplifier);
 }
 
-/// An armor trim's material and pattern, kept as their raw NBT (each a registry
-/// id or an inline definition) since Pumpkin does not yet model trim registries.
-// TODO: replace `material`/`pattern` with typed trim material/pattern once those registries are modelled.
-#[derive(Clone, Debug, PartialEq)]
+// Only direct registry references ("minecraft:quartz", "minecraft:sentry") are modelled;
+// vanilla also allows an inline custom TrimMaterial/TrimPattern definition in the compound,
+// which Pumpkin does not support since it has no generic data-driven registry mechanism yet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TrimImpl {
-    pub material: NbtTag,
-    pub pattern: NbtTag,
+    pub material: crate::trim::TrimMaterial,
+    pub pattern: crate::trim::TrimPattern,
 }
 impl TrimImpl {
     pub fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
+        let material = compound.get("material")?.extract_string()?;
+        let pattern = compound.get("pattern")?.extract_string()?;
         Some(Self {
-            material: compound.get("material")?.clone(),
-            pattern: compound.get("pattern")?.clone(),
+            material: crate::trim::TrimMaterial::from_registry_key(
+                material.strip_prefix("minecraft:").unwrap_or(material),
+            )?,
+            pattern: crate::trim::TrimPattern::from_registry_key(
+                pattern.strip_prefix("minecraft:").unwrap_or(pattern),
+            )?,
         })
     }
 }
 impl DataComponentImpl for TrimImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
-        compound.put("material", self.material.clone());
-        compound.put("pattern", self.pattern.clone());
+        compound.put_string(
+            "material",
+            format!("minecraft:{}", self.material.registry_key()),
+        );
+        compound.put_string(
+            "pattern",
+            format!("minecraft:{}", self.pattern.registry_key()),
+        );
         NbtTag::Compound(compound)
     }
     default_impl!(Trim);

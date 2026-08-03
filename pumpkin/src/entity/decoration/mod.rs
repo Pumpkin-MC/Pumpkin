@@ -1,5 +1,9 @@
 pub mod armor_stand;
+pub mod block_display;
+pub mod display;
 pub mod end_crystal;
+pub mod item_display;
 pub mod item_frame;
 pub mod leash_knot;
 pub mod painting;
+pub mod text_display;

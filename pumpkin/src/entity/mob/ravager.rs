@@ -63,4 +63,8 @@ impl Mob for RavagerEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
+
+    fn can_be_raid_leader(&self) -> bool {
+        false
+    }
 }

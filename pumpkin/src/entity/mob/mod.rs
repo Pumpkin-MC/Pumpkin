@@ -56,6 +56,7 @@ pub mod silverfish;
 pub mod skeleton;
 pub mod slime;
 pub mod spider;
+pub mod sulfur_cube;
 pub mod vex;
 pub mod vindicator;
 pub mod warden;
@@ -548,6 +549,11 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn get_mob_entity(&self) -> &MobEntity;
+
+    /// `Raider.canBeLeader` default (all raiders except `Ravager`, which overrides to `false`).
+    fn can_be_raid_leader(&self) -> bool {
+        true
+    }
 
     fn try_attack<'a>(&'a self, target: &'a dyn EntityBase) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {

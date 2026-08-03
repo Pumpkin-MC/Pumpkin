@@ -15,12 +15,13 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
 use std::{
     collections::{BTreeMap, HashMap},
-    sync::atomic::{AtomicU8, Ordering},
+    sync::atomic::{AtomicI32, AtomicU8, Ordering},
 };
 use tracing::{debug, error, info, trace, warn};
 
 pub mod chunker;
 pub mod explosion;
+pub mod game_event;
 pub mod loot;
 pub mod map;
 pub mod portal;
@@ -67,7 +68,7 @@ use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{
-    Block, BlockStateId,
+    Block, BlockId, BlockStateId,
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     item_stack::ItemStack,
@@ -138,7 +139,10 @@ use pumpkin_world::{
     CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
-use pumpkin_world::{level::Level, tick::TickPriority};
+use pumpkin_world::{
+    level::Level,
+    tick::{OrderedTick, TickPriority},
+};
 pub use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{RngExt, rng};
@@ -151,9 +155,11 @@ pub mod block_placer;
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
+pub mod custom_spawners;
 pub mod dragon_fight;
 pub mod end_podium;
 pub mod natural_spawner;
+pub mod raid;
 pub mod scoreboard;
 pub mod weather;
 
@@ -261,12 +267,32 @@ pub struct World {
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<Mutex<dragon_fight::DragonFight>>,
+    /// Active raids for this world (`Raids` `SavedData` in vanilla).
+    pub raids: Mutex<raid::RaidManager>,
     pub spawn_state: ArcSwap<SpawnState>,
     pub active_chunks: ArcSwap<FxHashSet<Vector2<i32>>>,
     pub forced_chunks: std::sync::Mutex<FxHashSet<Vector2<i32>>>,
     /// Block entities indexed by chunk, so ticking only visits the currently
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
+    /// Registered game event listeners (sculk sensors, and future consumers such as
+    /// the Warden or Allays). See `world::game_event` module docs for the deliberate
+    /// flat-registry simplification vs. vanilla's per-chunk-section sharding.
+    pub game_event_listeners: Mutex<Vec<Arc<dyn game_event::GameEventListener>>>,
+    /// Positions with a block scheduled tick collected into the current game tick's batch but
+    /// not yet dispatched. Mirrors vanilla `LevelTicks.toRunThisTickSet` (`willTickThisTick`):
+    /// entries are removed the moment they're picked to run, unlike `hasScheduledTick`, which
+    /// only reflects ticks still pending in the scheduler.
+    block_ticks_this_tick: std::sync::Mutex<FxHashSet<(BlockPos, BlockId)>>,
+    /// Vanilla's per-level `RECENT_TOGGLES` map for `RedstoneTorchBlock` burnout tracking.
+    redstone_torch_toggles: Mutex<crate::block::blocks::redstone::redstone_torch::RecentToggles>,
+    /// Countdown state for the custom per-tick spawners (`PhantomSpawner`,
+    /// `CatSpawner`, `WanderingTraderSpawner`). See `world::custom_spawners`.
+    pub phantom_spawn_tick: AtomicI32,
+    pub cat_spawn_tick: AtomicI32,
+    pub trader_tick_delay: AtomicI32,
+    pub trader_spawn_delay: AtomicI32,
+    pub trader_spawn_chance: AtomicI32,
 }
 
 impl PartialEq for World {
@@ -372,12 +398,36 @@ impl World {
             unsent_block_changes: Mutex::new(HashMap::new()),
             portal_poi: Mutex::new(portal_poi),
             dragon_fight,
+            raids: Mutex::new(raid::RaidManager::new()),
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
             active_chunks: ArcSwap::new(Arc::new(FxHashSet::default())),
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             server,
             block_entities: DashMap::new(),
+            game_event_listeners: Mutex::new(Vec::new()),
+            block_ticks_this_tick: std::sync::Mutex::new(FxHashSet::default()),
+            redstone_torch_toggles: Mutex::new(
+                crate::block::blocks::redstone::redstone_torch::RecentToggles::default(),
+            ),
+            phantom_spawn_tick: AtomicI32::new(0),
+            cat_spawn_tick: AtomicI32::new(0),
+            trader_tick_delay: AtomicI32::new(1200),
+            trader_spawn_delay: AtomicI32::new(24000),
+            trader_spawn_chance: AtomicI32::new(25),
         }
+    }
+
+    pub async fn register_game_event_listener(
+        &self,
+        listener: Arc<dyn game_event::GameEventListener>,
+    ) {
+        self.game_event_listeners.lock().await.push(listener);
+    }
+
+    pub async fn unregister_game_event_listener_at(&self, pos: &BlockPos) {
+        self.game_event_listeners.lock().await.retain(|listener| {
+            !matches!(listener.listener_source(), game_event::PositionSource::Block(listener_pos) if listener_pos == *pos)
+        });
     }
 
     pub fn update_active_chunks(self: &Arc<Self>) {
@@ -1099,6 +1149,8 @@ impl World {
             dragon_fight::DragonFight::tick(fight_mutex, self).await;
         }
 
+        raid::RaidManager::tick(&self.raids, self).await;
+
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
             debug!(
@@ -1322,10 +1374,12 @@ impl World {
         let mut chunk_tasks = tokio::task::JoinSet::new();
 
         // 1. Scheduled block ticks (`ServerLevel::tickBlock`).
+        self.begin_block_tick_batch(&tick_data.block_ticks);
         run_chunk_tick_phase(tick_data.block_ticks, |scheduled_tick| {
             let world = self.clone();
             async move {
                 let pos = scheduled_tick.position;
+                world.consume_will_tick_this_tick(&pos, scheduled_tick.value);
                 let block = world.get_block(&pos);
                 if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(block.id) {
                     pumpkin_block
@@ -1339,6 +1393,7 @@ impl World {
             }
         })
         .await;
+        self.end_block_tick_batch();
 
         // 2. Scheduled fluid ticks (`ServerLevel::tickFluid`).
         run_chunk_tick_phase(tick_data.fluid_ticks, |scheduled_tick| {
@@ -1411,6 +1466,16 @@ impl World {
             spawn_enemies,
             spawn_passives,
         ));
+
+        // Custom per-tick spawners (`PhantomSpawner`, `CatSpawner`,
+        // `WanderingTraderSpawner`), independent of the biome-based spawn list above.
+        if spawn_mobs {
+            if spawn_enemies {
+                custom_spawners::tick_phantom_spawner(self).await;
+            }
+            custom_spawners::tick_cat_spawner(self).await;
+            custom_spawners::tick_wandering_trader_spawner(self).await;
+        }
 
         // 5. Spawn independent chunk-spawner work after all tick phases.
         if !spawn_list.is_empty() {
@@ -3516,6 +3581,19 @@ impl World {
         self.explode_with_blocks(position, power, true, true).await;
     }
 
+    /// Damage-less, block-preserving knockback used by enchantment effect components
+    /// such as Wind Burst (`minecraft:explode` with no `damage_type`).
+    pub async fn explode_knockback_only(
+        self: &Arc<Self>,
+        position: Vector3<f64>,
+        radius: f64,
+        knockback_multiplier: f32,
+    ) {
+        Explosion::new_knockback_only(position, radius, knockback_multiplier)
+            .explode(self)
+            .await;
+    }
+
     async fn explode_with_blocks(
         self: &Arc<Self>,
         position: Vector3<f64>,
@@ -4866,6 +4944,54 @@ impl World {
         self.level.is_fluid_tick_scheduled(block_pos, fluid)
     }
 
+    /// Vanilla `LevelTicks::willTickThisTick`: true only while this block's tick is part of the
+    /// current game tick's collected batch and hasn't been dispatched yet. Narrower than
+    /// `is_block_tick_scheduled`, which also matches ticks scheduled for a future tick.
+    pub fn will_tick_this_tick(&self, block_pos: &BlockPos, block: &Block) -> bool {
+        self.block_ticks_this_tick
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&(*block_pos, block.id))
+    }
+
+    fn begin_block_tick_batch(&self, ticks: &[OrderedTick<&'static Block>]) {
+        let batch = ticks.iter().map(|tick| (tick.position, tick.value.id));
+        *self
+            .block_ticks_this_tick
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = batch.collect();
+    }
+
+    fn consume_will_tick_this_tick(&self, block_pos: &BlockPos, block: &Block) {
+        self.block_ticks_this_tick
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&(*block_pos, block.id));
+    }
+
+    fn end_block_tick_batch(&self) {
+        self.block_ticks_this_tick
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+    }
+
+    pub async fn is_redstone_torch_toggled_too_frequently(
+        &self,
+        pos: BlockPos,
+        now: i64,
+        add: bool,
+    ) -> bool {
+        self.redstone_torch_toggles
+            .lock()
+            .await
+            .is_toggled_too_frequently(pos, now, add)
+    }
+
+    pub async fn prune_redstone_torch_toggles(&self, now: i64) {
+        self.redstone_torch_toggles.lock().await.prune(now);
+    }
+
     // Return new state
     #[allow(clippy::too_many_lines)]
     pub async fn break_block(
@@ -4921,6 +5047,27 @@ impl World {
             };
 
             let broken_state_id = self.set_block_state(position, new_state_id, flags).await;
+
+            // Level.java destroyBlock, line 298: emitted once the block is actually gone.
+            let context =
+                cause
+                    .as_ref()
+                    .map_or_else(game_event::GameEventContext::none, |player| {
+                        game_event::GameEventContext::of_entity(
+                            player.clone() as Arc<dyn EntityBase>
+                        )
+                    });
+            game_event::emit_game_event(
+                self,
+                pumpkin_data::game_event::GameEvent::BlockDestroy,
+                Vector3::new(
+                    f64::from(position.0.x) + 0.5,
+                    f64::from(position.0.y) + 0.5,
+                    f64::from(position.0.z) + 0.5,
+                ),
+                context,
+            )
+            .await;
 
             // Close container screens for any players viewing this block
             self.close_container_screens_at(position).await;

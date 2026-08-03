@@ -1064,6 +1064,14 @@ impl Player {
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
             damage += 1.5 * f64::from(fall_distance);
+
+            let density_level = item_stack
+                .lock()
+                .await
+                .get_enchantment_level(&Enchantment::DENSITY);
+            if density_level > 0 {
+                damage += combat::density_extra_damage(density_level as u32, fall_distance);
+            }
         }
 
         if !victim
@@ -1117,6 +1125,26 @@ impl Player {
                 SoundCategory::Players,
                 &pos,
             );
+
+            let wind_burst_level = item_stack
+                .lock()
+                .await
+                .get_enchantment_level(&Enchantment::WIND_BURST);
+            if wind_burst_level > 0 {
+                // Wind Burst (enchantment/wind_burst.json): post_attack minecraft:explode
+                // centered on the attacker, radius 3.5, no damage_type (no entity damage).
+                let knockback_multiplier =
+                    combat::wind_burst_knockback_multiplier(wind_burst_level as u32);
+                let attacker_pos = self.living_entity.entity.pos.load();
+                world
+                    .explode_knockback_only(attacker_pos, 3.5, knockback_multiplier)
+                    .await;
+                world.play_sound(
+                    Sound::EntityWindChargeWindBurst,
+                    SoundCategory::Players,
+                    &attacker_pos,
+                );
+            }
         }
 
         player_attack_sound(&pos, &world, attack_type).await;
@@ -1399,35 +1427,38 @@ impl Player {
         let world = self.world();
         let pos = &respawn_point.position;
         let (block, state_id) = world.get_block_and_state_id(pos);
+        let forced = respawn_point.force;
 
-        // If force is set (from /spawnpoint command), validate position is safe
-        if respawn_point.force {
-            // For forced spawn, check if both the block and block above allow mob spawn
-            let block_state = world.get_block_state(pos);
-            let above_state = world.get_block_state(&pos.up());
-
-            // Check if blocks are passable (non-solid or air)
-            let block_safe = block_state.is_air() || !block_state.is_solid();
-            let above_safe = above_state.is_air() || !above_state.is_solid();
-
-            if block_safe && above_safe {
-                let position = Vector3::new(
-                    f64::from(pos.0.x) + 0.5,
-                    f64::from(pos.0.y) + 0.1,
-                    f64::from(pos.0.z) + 0.5,
-                );
-                debug!(
-                    "Returning forced spawn point at {:?}, dimension: {:?}",
-                    position, respawn_point.dimension
-                );
-                return Some(CalculatedRespawnPoint {
-                    position,
-                    yaw: respawn_point.yaw,
-                    pitch: 0.0,
-                    dimension: respawn_point.dimension.clone(),
-                });
+        // Respawn anchor (Nether only): vanilla's `findRespawnAndUseSpawnBlock` checks the
+        // anchor branch *before* the generic forced fallback, and a forced (`/spawnpoint`)
+        // anchor works even at 0 charges without consuming one. Only a natural (non-forced)
+        // respawn spends a charge.
+        if block == &Block::RESPAWN_ANCHOR {
+            let anchor_props = AnchorProperties::from_state_id(state_id, block);
+            if respawn_anchor_route_applies(forced, anchor_props.charges)
+                && world.dimension == Dimension::THE_NETHER
+            {
+                if let Some(spawn_pos) = Self::find_anchor_spawn_position(&world, pos) {
+                    if respawn_anchor_should_consume_charge(forced, anchor_props.charges) {
+                        let mut new_props = anchor_props;
+                        new_props.charges -= 1;
+                        world
+                            .set_block_state(
+                                pos,
+                                new_props.to_state_id(block),
+                                pumpkin_world::world::BlockFlags::NOTIFY_ALL,
+                            )
+                            .await;
+                    }
+                    return Some(CalculatedRespawnPoint {
+                        position: spawn_pos,
+                        yaw: respawn_point.yaw,
+                        pitch: 0.0,
+                        dimension: respawn_point.dimension.clone(),
+                    });
+                }
+                return None;
             }
-            return None;
         }
 
         // Handle bed respawn
@@ -1450,40 +1481,36 @@ impl Player {
             return None;
         }
 
-        // Handle respawn anchor (Nether)
-        if block == &Block::RESPAWN_ANCHOR {
-            let anchor_props = AnchorProperties::from_state_id(state_id, block);
-            let charges = anchor_props.charges;
-
-            // Anchor needs at least 1 charge to work
-            if charges == 0 {
-                return None;
-            }
-
-            // Try positions around the anchor
-            if let Some(spawn_pos) = Self::find_anchor_spawn_position(&world, pos) {
-                // Decrement charges after successful respawn position found
-                let new_charges = charges - 1;
-                let mut new_props = anchor_props;
-                new_props.charges = new_charges;
-                world
-                    .set_block_state(
-                        pos,
-                        new_props.to_state_id(block),
-                        pumpkin_world::world::BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-
-                return Some(CalculatedRespawnPoint {
-                    position: spawn_pos,
-                    yaw: respawn_point.yaw,
-                    pitch: 0.0,
-                    dimension: respawn_point.dimension.clone(),
-                });
-            }
+        // Neither a usable anchor nor a bed: only a forced (`/spawnpoint`) point falls back
+        // to the generic "is the block and the block above passable" check.
+        if !forced {
             return None;
         }
 
+        let block_state = world.get_block_state(pos);
+        let above_state = world.get_block_state(&pos.up());
+
+        // Check if blocks are passable (non-solid or air)
+        let block_safe = block_state.is_air() || !block_state.is_solid();
+        let above_safe = above_state.is_air() || !above_state.is_solid();
+
+        if block_safe && above_safe {
+            let position = Vector3::new(
+                f64::from(pos.0.x) + 0.5,
+                f64::from(pos.0.y) + 0.1,
+                f64::from(pos.0.z) + 0.5,
+            );
+            debug!(
+                "Returning forced spawn point at {:?}, dimension: {:?}",
+                position, respawn_point.dimension
+            );
+            return Some(CalculatedRespawnPoint {
+                position,
+                yaw: respawn_point.yaw,
+                pitch: 0.0,
+                dimension: respawn_point.dimension.clone(),
+            });
+        }
         None
     }
 
@@ -4661,6 +4688,19 @@ impl NBTStorageInit for EnderChestInventory {}
 
 fn ability_invulnerability_blocks(damage_type: &DamageType) -> bool {
     !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
+}
+
+/// Mirrors vanilla's `RespawnAnchorBlock` gate in `ServerPlayer.findRespawnAndUseSpawnBlock`:
+/// `forced || blockState.getValue(CHARGE) > 0`. A forced (`/spawnpoint`) respawn point works
+/// even at 0 charges; a natural respawn requires at least one.
+const fn respawn_anchor_route_applies(forced: bool, charges: u8) -> bool {
+    forced || charges > 0
+}
+
+/// Mirrors `!forced && consumeSpawnBlock && standUpPosition.isPresent()`: only a natural
+/// (non-forced) respawn that actually finds a stand-up position spends a charge.
+const fn respawn_anchor_should_consume_charge(forced: bool, charges: u8) -> bool {
+    !forced && charges > 0
 }
 
 impl EntityBase for Player {

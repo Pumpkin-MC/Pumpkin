@@ -171,7 +171,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
         block: &'a Block,
     ) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if world.is_block_tick_scheduled(&pos, block) {
+            if world.will_tick_this_tick(&pos, block) {
                 return;
             }
             let i = self.calculate_output_signal(world, pos, state, block).await;

@@ -18,6 +18,7 @@ pub mod crafting_table;
 pub mod enchanting_table;
 pub mod furnace;
 pub mod grindstone;
+pub mod smithing_table;
 pub mod smoker;
 pub mod stonecutter;
 
@@ -105,6 +106,8 @@ pub mod ladder;
 pub mod slime;
 pub mod spawner;
 pub mod tnt;
+pub mod trial_spawner;
+pub mod vault;
 
 pub mod coral;
 
@@ -114,6 +117,7 @@ pub mod abstract_wall_mounting;
 pub mod beacon;
 pub mod heavy_core;
 pub mod huge_mushroom;
+pub mod respawn_anchor;
 
 // Copper oxidation/weathering (shared utility)
 pub mod copper_weathering;

@@ -29,9 +29,10 @@ use crate::block::OnLandedUponArgs;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
-use crate::entity::combat::knockback_after_resistance;
+use crate::entity::combat::{breach_armor_fraction, knockback_after_resistance};
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::slime::SlimeEntity;
+use crate::entity::mob::sulfur_cube::SulfurCubeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
@@ -106,6 +107,17 @@ fn armor_resists_damage(stack: &ItemStack, damage_type: &DamageType) -> bool {
     }
 }
 
+/// A raider's membership in an active `Raid`.
+///
+/// Mirrors `Raider.wave`/`raid`/`isPatrolLeader` (`Raider.java`). Kept on `LivingEntity` rather
+/// than `MobEntity` so the wave-clear/death hook in `on_death` below can read it directly.
+#[derive(Clone, Copy)]
+pub struct RaidMembership {
+    pub raid_id: i32,
+    pub wave: i32,
+    pub is_patrol_leader: bool,
+}
+
 /// Represents a living entity within the game world.
 ///
 /// This struct encapsulates the core properties and behaviors of living entities, including players, mobs, and other creatures.
@@ -164,6 +176,13 @@ pub struct LivingEntity {
 
     /// The attributes of the entity
     pub attributes: RwLock<HashMap<u8, AttributeInstance>>,
+
+    /// `Raider.raid`/`Raider.wave`/`Raider.isPatrolLeader` (`Raider.java`).
+    pub raid_membership: AtomicCell<Option<RaidMembership>>,
+    /// `Raider.canJoinRaid` (`Raider.java`).
+    pub can_join_raid: AtomicBool,
+    /// `Raider.ticksOutsideRaid` (`Raider.java`).
+    pub ticks_outside_raid: AtomicI32,
 }
 
 impl LivingEntity {
@@ -256,6 +275,9 @@ impl LivingEntity {
             not_targetable_as_enemy: AtomicBool::new(false),
             movement_input: AtomicCell::new(Vector3::default()),
             water_movement_speed_multiplier,
+            raid_membership: AtomicCell::new(None),
+            can_join_raid: AtomicBool::new(false),
+            ticks_outside_raid: AtomicI32::new(0),
         }
     }
 
@@ -1439,6 +1461,24 @@ impl LivingEntity {
             // Statistics updates
             self.update_death_stats(&*dyn_self, cause).await;
 
+            // Raider.die (Raider.java): report the removal to the owning raid, hand out
+            // Hero of the Village credit, and clear the wave-leader slot if this was the banner
+            // carrier.
+            if let Some(membership) = self.raid_membership.swap(None) {
+                let mut raids = world.raids.lock().await;
+                if let Some(raid) = raids.raid_mut(membership.raid_id) {
+                    if membership.is_patrol_leader {
+                        raid.remove_leader(membership.wave);
+                    }
+                    if let Some(killer) = cause
+                        && killer.get_entity().entity_type.id == EntityType::PLAYER.id
+                    {
+                        raid.add_hero_of_the_village(killer.get_entity().entity_uuid);
+                    }
+                    raid.remove_from_raid(membership.wave, self.entity.entity_uuid, 0.0, false);
+                }
+            }
+
             // Plays the death sound
             world.send_entity_status(&self.entity, EntityStatus::Death);
             let looting_level;
@@ -2098,6 +2138,8 @@ impl LivingEntity {
     fn hurt_sound(&self) -> Sound {
         if self.entity.entity_type == &EntityType::SLIME {
             SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
+        } else if self.entity.entity_type == &EntityType::SULFUR_CUBE {
+            SulfurCubeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
         } else {
             Self::hurt_sound_for_entity(self.entity.entity_type)
         }
@@ -2346,7 +2388,24 @@ impl EntityBase for LivingEntity {
                 let clamped_armor = (armor - damage_after_armor / value)
                     .max(armor / 5.0)
                     .min(20.0);
-                damage_after_armor *= 1.0 - clamped_armor / 25.0;
+                let mut armor_fraction = clamped_armor / 25.0;
+
+                if let Some(attacker) = source
+                    && let Some(player) = attacker
+                        .cast_any()
+                        .downcast_ref::<crate::entity::player::Player>()
+                {
+                    let held = player.inventory().held_item();
+                    let breach_level = held
+                        .lock()
+                        .await
+                        .get_enchantment_level(&Enchantment::BREACH);
+                    if breach_level > 0 {
+                        armor_fraction = breach_armor_fraction(armor_fraction, breach_level);
+                    }
+                }
+
+                damage_after_armor *= 1.0 - armor_fraction;
             }
 
             let mut damage_after_enchantments = damage_after_armor;

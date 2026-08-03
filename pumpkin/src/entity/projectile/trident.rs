@@ -398,6 +398,26 @@ impl EntityBase for TridentEntity {
                     );
                     world.broadcast_packet_all(&sound_packet);
 
+                    // Channeling (enchantment/channeling.json): post_attack summons a
+                    // lightning bolt on the victim, gated on thundering weather and the
+                    // victim's position being able to see the sky.
+                    let channeling_level = self
+                        .item_stack
+                        .lock()
+                        .await
+                        .get_enchantment_level(&pumpkin_data::Enchantment::CHANNELING);
+                    if channeling_level > 0
+                        && world.is_thundering().await
+                        && world.can_see_sky(&BlockPos::floored(hit_pos.x, hit_pos.y, hit_pos.z))
+                    {
+                        let lightning = crate::entity::Entity::new(
+                            entity.world.load_full(),
+                            hit_pos,
+                            &pumpkin_data::entity::EntityType::LIGHTNING_BOLT,
+                        );
+                        world.spawn_entity(Arc::new(lightning)).await;
+                    }
+
                     // Standard bounce/fall-back behavior
                     entity.velocity.store(Vector3::new(0.0, -0.1, 0.0));
                     self.has_hit.store(false, Ordering::Relaxed); // Let it hit the ground

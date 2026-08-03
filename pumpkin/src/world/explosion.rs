@@ -23,6 +23,9 @@ pub struct Explosion {
     pos: Vector3<f64>,
     destroys_blocks: bool,
     creates_fire: bool,
+    fixed_radius: Option<f64>,
+    knockback_multiplier: f32,
+    deals_damage: bool,
 }
 
 impl Explosion {
@@ -33,6 +36,9 @@ impl Explosion {
             pos,
             destroys_blocks: true,
             creates_fire: false,
+            fixed_radius: None,
+            knockback_multiplier: 1.0,
+            deals_damage: true,
         }
     }
 
@@ -43,6 +49,9 @@ impl Explosion {
             pos,
             destroys_blocks: false,
             creates_fire: false,
+            fixed_radius: None,
+            knockback_multiplier: 1.0,
+            deals_damage: true,
         }
     }
 
@@ -53,6 +62,31 @@ impl Explosion {
             pos,
             destroys_blocks: true,
             creates_fire: true,
+            fixed_radius: None,
+            knockback_multiplier: 1.0,
+            deals_damage: true,
+        }
+    }
+
+    /// A damage-less, block-preserving explosion with a fixed radius and a custom
+    /// knockback scale. Mirrors vanilla `ExplodeEffect` (used by enchantment effect
+    /// components such as Wind Burst's `minecraft:explode`), which drives
+    /// `Level.explode` with an absent `damageType` (no entity damage) and an
+    /// explicit `knockback_multiplier` instead of the power-derived TNT radius/damage.
+    #[must_use]
+    pub const fn new_knockback_only(
+        pos: Vector3<f64>,
+        radius: f64,
+        knockback_multiplier: f32,
+    ) -> Self {
+        Self {
+            power: 0.0,
+            pos,
+            destroys_blocks: false,
+            creates_fire: false,
+            fixed_radius: Some(radius),
+            knockback_multiplier,
+            deals_damage: false,
         }
     }
 
@@ -166,11 +200,11 @@ impl Explosion {
 
     async fn damage_entities(&self, world: &Arc<World>) {
         // Explosion is too small
-        if self.power < 1.0e-5 {
+        if self.power < 1.0e-5 && self.fixed_radius.is_none() {
             return;
         }
 
-        let radius = self.power as f64 * 2.0;
+        let radius = self.fixed_radius.unwrap_or(self.power as f64 * 2.0);
         let min_x = (self.pos.x - radius - 1.0).floor() as i32;
         let max_x = (self.pos.x + radius + 1.0).floor() as i32;
         let min_y = (self.pos.y - radius - 1.0).floor() as i32;
@@ -207,15 +241,18 @@ impl Explosion {
                 continue;
             }
 
-            let damage_multiplier = (1.0 - distance) * exposure;
-            let damage = (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier)
-                * 7.0
-                * self.power as f64
-                + 1.0) as f32;
+            if self.deals_damage {
+                let damage_multiplier = (1.0 - distance) * exposure;
+                let damage =
+                    (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier)
+                        * 7.0
+                        * self.power as f64
+                        + 1.0) as f32;
 
-            entity
-                .damage(entity_base.as_ref(), damage, DamageType::EXPLOSION)
-                .await;
+                entity
+                    .damage(entity_base.as_ref(), damage, DamageType::EXPLOSION)
+                    .await;
+            }
 
             // Calculate and apply knockback
             let dir_pos = if entity.entity_type == &EntityType::TNT {
@@ -228,7 +265,10 @@ impl Explosion {
                 living.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE)
             });
 
-            let knockback_multiplier = (1.0 - distance) * exposure * (1.0 - knockback_resistance);
+            let knockback_multiplier = (1.0 - distance)
+                * exposure
+                * (1.0 - knockback_resistance)
+                * f64::from(self.knockback_multiplier);
             let knockback = direction * knockback_multiplier;
             entity.add_velocity(knockback);
         }

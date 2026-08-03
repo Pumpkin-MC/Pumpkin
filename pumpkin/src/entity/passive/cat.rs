@@ -29,6 +29,63 @@ use crate::entity::{
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
 
+const NATURAL_CAT_VARIANTS: [&str; 10] = [
+    "tabby",
+    "black",
+    "red",
+    "siamese",
+    "british_shorthair",
+    "calico",
+    "persian",
+    "ragdoll",
+    "white",
+    "jellie",
+];
+
+/// Moon brightness per lunar phase index (0 = full moon), from vanilla
+/// `DimensionType.MOON_BRIGHTNESS_PER_PHASE`.
+const MOON_BRIGHTNESS_PER_PHASE: [f32; 8] = [1.0, 0.75, 0.5, 0.25, 0.0, 0.25, 0.5, 0.75];
+
+/// `MoonBrightnessCheck` gate used by the `all_black` cat variant's spawn selector.
+///
+/// `CatVariants.java` pairs `all_black` with `MinMaxBounds.Doubles.atLeast(0.9)`
+/// against the current moon phase's brightness, which only the full moon
+/// (phase 0, brightness 1.0) satisfies.
+#[must_use]
+pub fn moon_brightness_allows_all_black(time_of_day: i64) -> bool {
+    let phase = time_of_day.div_euclid(24000).rem_euclid(8) as usize;
+    MOON_BRIGHTNESS_PER_PHASE[phase] >= 0.9
+}
+
+/// Picks a natural-spawn cat variant.
+///
+/// Replicates `CatVariants.bootstrap`'s `PriorityProvider.pick` outcome with
+/// the `StructureCheck` selector for `all_black` (swamp-hut detection)
+/// dropped: Pumpkin has no structure-manager lookup by structure tag. On a
+/// full moon, `all_black` joins the uniform pool of the 10 base variants;
+/// otherwise only the base variants are eligible.
+#[must_use]
+pub fn select_natural_cat_variant(time_of_day: i64) -> &'static str {
+    if moon_brightness_allows_all_black(time_of_day) {
+        const POOL: [&str; 11] = [
+            "tabby",
+            "black",
+            "red",
+            "siamese",
+            "british_shorthair",
+            "calico",
+            "persian",
+            "ragdoll",
+            "white",
+            "jellie",
+            "all_black",
+        ];
+        POOL[rand::random_range(0..POOL.len())]
+    } else {
+        NATURAL_CAT_VARIANTS[rand::random_range(0..NATURAL_CAT_VARIANTS.len())]
+    }
+}
+
 pub struct CatEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
@@ -208,5 +265,45 @@ impl Mob for CatEntity {
                 None,
             );
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{moon_brightness_allows_all_black, select_natural_cat_variant};
+
+    #[test]
+    fn only_full_moon_allows_all_black() {
+        for phase in 0..8 {
+            let time_of_day = phase * 24000;
+            let allowed = moon_brightness_allows_all_black(time_of_day);
+            assert_eq!(
+                allowed,
+                phase == 0,
+                "phase {phase} should only allow all_black on full moon"
+            );
+        }
+    }
+
+    #[test]
+    fn phase_wraps_across_multiple_lunar_cycles() {
+        assert!(moon_brightness_allows_all_black(8 * 24000));
+        assert!(!moon_brightness_allows_all_black(9 * 24000));
+    }
+
+    #[test]
+    fn all_black_only_selectable_on_full_moon() {
+        // Day 4 (new moon, brightness 0.0) is never a full moon.
+        for _ in 0..200 {
+            assert_ne!(select_natural_cat_variant(4 * 24000), "all_black");
+        }
+        let mut saw_all_black = false;
+        for _ in 0..500 {
+            if select_natural_cat_variant(0) == "all_black" {
+                saw_all_black = true;
+                break;
+            }
+        }
+        assert!(saw_all_black);
     }
 }

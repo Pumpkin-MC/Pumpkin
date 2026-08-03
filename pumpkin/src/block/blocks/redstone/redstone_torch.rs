@@ -20,6 +20,7 @@ use pumpkin_data::FacingExt;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::Facing;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockAccessor;
@@ -137,10 +138,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
         Box::pin(async move {
             let state = args.world.get_block_state(args.position);
 
-            if args
-                .world
-                .is_block_tick_scheduled(args.position, args.block)
-            {
+            if args.world.will_tick_this_tick(args.position, args.block) {
                 return;
             }
 
@@ -228,16 +226,27 @@ impl BlockBehaviour for RedstoneTorchBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let state = args.world.get_block_state(args.position);
+            let now = args.world.get_world_age().await;
+            args.world.prune_redstone_torch_toggles(now).await;
+
             if args.block == &Block::REDSTONE_WALL_TORCH {
                 let mut props = RWallTorchProps::from_state_id(state.id, args.block);
-                let should_be_lit_now = should_be_lit(
+                let neighbor_signal = !should_be_lit(
                     args.world,
                     args.position,
                     props.facing.to_block_direction().opposite(),
                 )
                 .await;
-                if props.lit != should_be_lit_now {
-                    props.lit = should_be_lit_now;
+                if handle_torch_tick(
+                    args.world,
+                    args.position,
+                    args.block,
+                    &mut props.lit,
+                    neighbor_signal,
+                    now,
+                )
+                .await
+                {
                     args.world
                         .set_block_state(
                             args.position,
@@ -249,10 +258,18 @@ impl BlockBehaviour for RedstoneTorchBlock {
                 }
             } else if args.block == &Block::REDSTONE_TORCH {
                 let mut props = RTorchProps::from_state_id(state.id, args.block);
-                let should_be_lit_now =
-                    should_be_lit(args.world, args.position, BlockDirection::Down).await;
-                if props.lit != should_be_lit_now {
-                    props.lit = should_be_lit_now;
+                let neighbor_signal =
+                    !should_be_lit(args.world, args.position, BlockDirection::Down).await;
+                if handle_torch_tick(
+                    args.world,
+                    args.position,
+                    args.block,
+                    &mut props.lit,
+                    neighbor_signal,
+                    now,
+                )
+                .await
+                {
                     args.world
                         .set_block_state(
                             args.position,
@@ -296,4 +313,116 @@ fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos, facing: BlockDi
     world
         .get_block_state(&block_pos.offset(facing.to_offset()))
         .is_side_solid(facing.opposite())
+}
+
+async fn handle_torch_tick(
+    world: &Arc<World>,
+    pos: &BlockPos,
+    block: &Block,
+    lit: &mut bool,
+    neighbor_signal: bool,
+    now: i64,
+) -> bool {
+    if *lit {
+        if neighbor_signal {
+            *lit = false;
+            if world
+                .is_redstone_torch_toggled_too_frequently(*pos, now, true)
+                .await
+            {
+                world.sync_world_event(WorldEvent::RedstoneTorchBurnout, *pos, 0);
+                world.schedule_block_tick(block, *pos, 160, TickPriority::Normal);
+            }
+            return true;
+        }
+        false
+    } else if !neighbor_signal
+        && !world
+            .is_redstone_torch_toggled_too_frequently(*pos, now, false)
+            .await
+    {
+        *lit = true;
+        true
+    } else {
+        false
+    }
+}
+
+/// Vanilla `RedstoneTorchBlock.RECENT_TOGGLES`: a per-level FIFO of recent (pos, tick) toggles,
+/// used to detect a torch flipping state 8+ times within 60 ticks and force a burnout lockout.
+#[derive(Default)]
+pub struct RecentToggles {
+    toggles: Vec<(BlockPos, i64)>,
+}
+
+impl RecentToggles {
+    const RECENT_TOGGLE_TIMER: i64 = 60;
+    const MAX_RECENT_TOGGLES: usize = 8;
+
+    pub fn prune(&mut self, now: i64) {
+        while let Some(&(_, when)) = self.toggles.first() {
+            if now - when > Self::RECENT_TOGGLE_TIMER {
+                self.toggles.remove(0);
+            } else {
+                break;
+            }
+        }
+    }
+
+    pub fn is_toggled_too_frequently(&mut self, pos: BlockPos, now: i64, add: bool) -> bool {
+        if add {
+            self.toggles.push((pos, now));
+        }
+
+        let mut count = 0;
+        for &(toggle_pos, _) in &self.toggles {
+            if toggle_pos == pos {
+                count += 1;
+                if count >= Self::MAX_RECENT_TOGGLES {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::math::position::BlockPos;
+
+    use super::RecentToggles;
+
+    #[test]
+    fn eighth_toggle_within_window_triggers_burnout() {
+        let mut toggles = RecentToggles::default();
+        let pos = BlockPos::new(0, 0, 0);
+        for tick in 0..7 {
+            assert!(!toggles.is_toggled_too_frequently(pos, tick, true));
+        }
+        assert!(toggles.is_toggled_too_frequently(pos, 7, true));
+    }
+
+    #[test]
+    fn toggles_older_than_60_ticks_are_pruned() {
+        let mut toggles = RecentToggles::default();
+        let pos = BlockPos::new(0, 0, 0);
+        for tick in 0..7 {
+            assert!(!toggles.is_toggled_too_frequently(pos, tick, true));
+        }
+        toggles.prune(1000);
+        assert!(!toggles.is_toggled_too_frequently(pos, 1000, true));
+        assert_eq!(toggles.toggles.len(), 1);
+    }
+
+    #[test]
+    fn different_positions_are_tracked_independently() {
+        let mut toggles = RecentToggles::default();
+        let a = BlockPos::new(0, 0, 0);
+        let b = BlockPos::new(1, 0, 0);
+        for tick in 0..7 {
+            assert!(!toggles.is_toggled_too_frequently(a, tick, true));
+        }
+        assert!(!toggles.is_toggled_too_frequently(b, 7, true));
+    }
 }
