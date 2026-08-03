@@ -295,8 +295,10 @@ impl HopperBlockEntity {
                         && hopper.cooldown_time.load(Ordering::Relaxed) <= 8
                     {
                         if let Some(from_hopper) = from.as_any().downcast_ref::<Self>() {
-                            if from_hopper.cooldown_time.load(Ordering::Relaxed)
-                                >= hopper.cooldown_time.load(Ordering::Relaxed)
+                            // The destination gets a shorter cooldown when it has
+                            // already ticked at least as recently as the source.
+                            if hopper.ticked_game_time.load(Ordering::Relaxed)
+                                >= from_hopper.ticked_game_time.load(Ordering::Relaxed)
                             {
                                 hopper.cooldown_time.store(7, Ordering::Relaxed);
                             } else {
