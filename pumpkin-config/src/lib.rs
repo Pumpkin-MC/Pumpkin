@@ -38,6 +38,7 @@ pub mod op;
 mod advancement;
 mod player_data;
 mod pvp;
+mod secret;
 mod server_links;
 pub mod whitelist;
 pub mod world;
@@ -106,6 +107,24 @@ impl LoadConfiguration for PumpkinConfig {
                 self.advanced.networking.java.online_mode,
                 "When allow_chat_reports is enabled, java.online_mode must be enabled"
             );
+        }
+
+        // Resolve the forwarding secret up front. Reading the file here keeps the
+        // blocking read off the async login path, since `handle_plugin_response`
+        // reaches the secret whenever velocity is enabled, regardless of the proxy
+        // master switch. It also surfaces a broken `@file` reference at startup
+        // instead of on a player's first connection.
+        if self.advanced.networking.proxy.velocity.enabled {
+            let secret = self.advanced.networking.proxy.velocity.secret();
+
+            // Only required when the proxy is actually switched on, so that
+            // configs which boot today keep booting.
+            if self.advanced.networking.proxy.enabled {
+                assert!(
+                    !secret.is_empty(),
+                    "When velocity is enabled, a forwarding secret must be set"
+                );
+            }
         }
     }
 }
