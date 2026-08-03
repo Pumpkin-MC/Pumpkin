@@ -40,7 +40,11 @@ impl BlockBehaviour for SugarCaneBlock {
                 let age = CactusLikeProperties::from_state_id(state_id, args.block).age;
                 if age == 15 {
                     args.world
-                        .set_block_state(&args.position.up(), state_id, BlockFlags::empty())
+                        .set_block_state(
+                            &args.position.up(),
+                            args.block.default_state.id,
+                            BlockFlags::NOTIFY_ALL,
+                        )
                         .await;
                     let props = CactusLikeProperties { age: 0 };
                     args.world
