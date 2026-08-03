@@ -129,14 +129,14 @@ impl EntityBase for EggEntity {
                 && let Some(player) = world.get_player_by_id(owner_id)
                 && let Some(server) = world.server.upgrade()
             {
-                let event = PlayerEggThrowEvent::new(
+                let mut event = PlayerEggThrowEvent::new(
                     player,
                     self.get_entity().entity_uuid,
                     hatching,
                     to_spawn as u8,
                     hatching_type,
                 );
-                let event = server.plugin_manager.fire(event).await;
+                server.plugin_manager.fire(&server, &mut event).await;
                 if event.cancelled {
                     hatching = false;
                 } else {

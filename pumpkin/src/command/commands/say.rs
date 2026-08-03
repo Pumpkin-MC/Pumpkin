@@ -28,7 +28,16 @@ impl CommandExecutor for Executor {
                 return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
             };
 
-            server
+            let Some(server_arc) = sender
+                .world_or_first(server)
+                .and_then(|w| w.server.upgrade())
+            else {
+                return Err(CommandError::CommandFailed(TextComponent::text(
+                    "Failed to get server instance",
+                )));
+            };
+
+            server_arc
                 .broadcast_message(
                     &TextComponent::text(msg.clone()),
                     &TextComponent::text(format!("{sender}")),

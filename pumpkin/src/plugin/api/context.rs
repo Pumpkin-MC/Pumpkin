@@ -319,7 +319,7 @@ impl Context {
         loader: Arc<dyn crate::plugin::loader::PluginLoader>,
     ) -> bool {
         let before_count = self.plugin_manager.loaded_plugins().await.len();
-        self.plugin_manager.add_loader(loader).await;
+        self.plugin_manager.add_loader(&self.server, loader).await;
         let after_count = self.plugin_manager.loaded_plugins().await.len();
 
         // Return true if any new plugins were loaded

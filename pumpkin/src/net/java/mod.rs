@@ -354,8 +354,8 @@ impl JavaClient {
 
         self.send_packet_now(&CChunkBatchStart).await;
         for chunk in chunks {
-            let event = ChunkSend::new(player.world(), chunk.clone());
-            let event = server.plugin_manager.fire(event).await;
+            let mut event = ChunkSend::new(player.world(), chunk.clone());
+            server.plugin_manager.fire(&server, &mut event).await;
             if event.cancelled {
                 continue;
             }
@@ -393,7 +393,6 @@ impl JavaClient {
         } else {
             false
         };
-
         if !cancelled {
             self.enqueue_packet_data(payload).await;
         }
@@ -907,7 +906,7 @@ impl JavaClient {
             packet.id,
             packet.payload.clone(),
         );
-        event = server.plugin_manager.fire(event).await;
+        server.plugin_manager.fire(server, &mut event).await;
         if event.cancelled {
             return Ok(());
         }
@@ -945,6 +944,7 @@ impl JavaClient {
             }
             id if id == SClientInformationPlay::to_id(version) => {
                 self.handle_client_information(
+                    server,
                     player,
                     SClientInformationPlay::read(&mut payload, &version)?,
                 )
@@ -1126,8 +1126,12 @@ impl JavaClient {
                     .await;
             }
             id if id == SSetHeldItem::to_id(version) => {
-                self.handle_set_held_item(player, SSetHeldItem::read(&mut payload, &version)?)
-                    .await;
+                self.handle_set_held_item(
+                    server,
+                    player,
+                    SSetHeldItem::read(&mut payload, &version)?,
+                )
+                .await;
             }
             id if id == SSetCreativeSlot::to_id(version) => {
                 self.handle_set_creative_slot(
@@ -1137,7 +1141,7 @@ impl JavaClient {
                 .await?;
             }
             id if id == SSwingArm::to_id(version) => {
-                self.handle_swing_arm(player, SSwingArm::read(&mut payload, &version)?)
+                self.handle_swing_arm(server, player, SSwingArm::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SUpdateSign::to_id(version) => {
@@ -1185,12 +1189,12 @@ impl JavaClient {
             }
             id if id == SCustomPayload::to_id(version) => {
                 let payload = SCustomPayload::read(&mut payload, &version)?;
-                let event = PlayerCustomPayloadEvent::new(
+                let mut event = PlayerCustomPayloadEvent::new(
                     player.clone(),
                     payload.channel.to_string(),
                     Bytes::copy_from_slice(payload.data),
                 );
-                server.plugin_manager.fire(event).await;
+                server.plugin_manager.fire(server, &mut event).await;
             }
             id if id == SRecipeBookChangeSettings::to_id(version) => {
                 self.handle_recipe_book_change_settings(
@@ -1222,12 +1226,12 @@ impl JavaClient {
                     &mut payload,
                     &version,
                 )?;
-                let event = crate::plugin::api::events::player::custom_click_action::CustomClickActionEvent::new(
+                let mut event = crate::plugin::api::events::player::custom_click_action::CustomClickActionEvent::new(
                     player.clone(),
                     packet.action_id.to_string(),
                     packet.payload.map(Bytes::copy_from_slice),
                 );
-                server.plugin_manager.fire(event).await;
+                server.plugin_manager.fire(server, &mut event).await;
             }
             id if id == SSelectTrade::to_id(version) => {
                 self.handle_select_trade(player, SSelectTrade::read(&mut payload, &version)?)
