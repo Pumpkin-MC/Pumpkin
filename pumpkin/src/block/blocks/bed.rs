@@ -6,11 +6,12 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::translation;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
 
@@ -260,7 +261,37 @@ impl BlockBehaviour for BedBlock {
 
             // Make sure the bed is not occupied
             if bed_props.occupied {
-                // TODO: Wake up villager
+                // Vanilla BedBlock.kickVillagerOutOfBed: a sleeping villager in this
+                // bed is woken up instead of showing the "occupied" message.
+                let aabb = pumpkin_util::math::boundingbox::BoundingBox::new(
+                    bed_head_pos.to_f64(),
+                    Vector3::new(
+                        f64::from(bed_head_pos.0.x) + 1.0,
+                        f64::from(bed_head_pos.0.y) + 1.0,
+                        f64::from(bed_head_pos.0.z) + 1.0,
+                    ),
+                );
+                let sleeping_villager =
+                    args.world
+                        .get_entities_at_box(&aabb)
+                        .into_iter()
+                        .find_map(|entity| {
+                            let villager = entity
+                                .cast_any()
+                                .downcast_ref::<crate::entity::passive::villager::VillagerEntity>(
+                            )?;
+                            (villager.get_entity().pose.load() == EntityPose::Sleeping)
+                                .then(|| entity.clone())
+                        });
+
+                if let Some(entity) = sleeping_villager {
+                    let villager = entity
+                        .cast_any()
+                        .downcast_ref::<crate::entity::passive::villager::VillagerEntity>()
+                        .unwrap();
+                    villager.stop_sleeping(args.world).await;
+                    return BlockActionResult::SuccessServer;
+                }
 
                 args.player
                     .send_system_message_raw(

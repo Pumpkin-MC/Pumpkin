@@ -36,6 +36,7 @@ use crate::entity::{
     },
     mob::{Mob, MobEntity},
 };
+use crate::world::World;
 
 pub mod data;
 pub mod gossip;
@@ -325,6 +326,31 @@ impl VillagerEntity {
                 ))
                 .await;
         }
+    }
+
+    /// Vanilla `LivingEntity::stopSleeping`, invoked by `BedBlock::kickVillagerOutOfBed`
+    /// when a player uses an occupied bed: un-occupies the bed and stands the villager up.
+    pub async fn stop_sleeping(&self, world: &Arc<World>) {
+        let home_pos = *self.home_pos.lock().unwrap();
+        if let Some(home_pos) = home_pos {
+            let (block, state) = world.get_block_and_state(&home_pos);
+            if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
+                let bed_props = BedProperties::from_state_id(state.id, block);
+                if bed_props.occupied {
+                    BedBlock::set_occupied(false, world, block, &home_pos, state.id).await;
+                }
+            }
+        }
+
+        self.get_entity().set_pose(EntityPose::Standing);
+        self.get_entity().send_meta_data(
+            &[Metadata::new(
+                TrackedData::SLEEPING_POS_ID,
+                MetaDataType::OPTIONAL_BLOCK_POS,
+                None::<BlockPos>,
+            )],
+            None,
+        );
     }
 }
 
