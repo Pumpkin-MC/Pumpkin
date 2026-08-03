@@ -3230,7 +3230,16 @@ impl Entity {
 
             // Vanilla: ridingCooldown = 60 (prevents immediate re-mount)
             passenger_entity.riding_cooldown.store(60, Relaxed);
-            // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
+
+            // Entity.java:2490 -- `this.level().gameEvent(this, GameEvent.ENTITY_DISMOUNT,
+            // oldVehicle.position)`, fired on the passenger with the vehicle's own position.
+            crate::world::game_event::emit_game_event(
+                &self.world.load(),
+                pumpkin_data::game_event::GameEvent::EntityDismount,
+                self.pos.load(),
+                crate::world::game_event::GameEventContext::of_entity(passenger.clone()),
+            )
+            .await;
 
             // Now send CSetPassengers — client movement is already blocked.
             // Vanilla sends this directly to the dismounting player's connection,
