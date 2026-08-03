@@ -1,8 +1,10 @@
 use std::pin::Pin;
+use std::sync::Arc;
 
-use crate::entity::player::Player;
+use crate::entity::{Entity, item::ItemEntity, player::Player};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::data_component_impl::BundleContentsImpl;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -60,6 +62,32 @@ impl ItemBehaviour for BundleItem {
         Box::pin(async move {
             if Self::should_drop_content(ticks_remaining) {
                 Self::drop_content(player).await;
+            }
+        })
+    }
+
+    fn on_destroyed<'a>(
+        &'a self,
+        entity: &'a ItemEntity,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let contents = {
+                let mut bundle = entity.get_item_stack().lock().await;
+                let Some(contents) = bundle.get_data_component_mut::<BundleContentsImpl>() else {
+                    return;
+                };
+                contents.selected_item_index = -1;
+                std::mem::take(&mut contents.items)
+            };
+
+            let base_entity = entity.get_entity();
+            let world = base_entity.world.load_full();
+            let position = base_entity.pos.load();
+            for stack in contents {
+                let entity = Entity::new(world.clone(), position, &EntityType::ITEM);
+                world
+                    .spawn_entity(Arc::new(ItemEntity::new(entity, stack)))
+                    .await;
             }
         })
     }

@@ -7,6 +7,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::EntityBase;
+use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_data::Block;
@@ -65,6 +66,13 @@ pub trait ItemBehaviour: Send + Sync {
         _stack: &'a ItemStack,
         _player: &'a Player,
         _ticks_remaining: i32,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async {})
+    }
+
+    fn on_destroyed<'a>(
+        &'a self,
+        _entity: &'a ItemEntity,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async {})
     }

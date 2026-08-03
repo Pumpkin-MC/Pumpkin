@@ -508,6 +508,12 @@ impl EntityBase for ItemEntity {
                     .is_ok()
                 {
                     if new <= 0.0 {
+                        let item_id = self.item_stack.lock().await.item.id;
+                        if let Some(server) = self.entity.world.load().server.upgrade()
+                            && let Some(behaviour) = server.item_registry.get_pumpkin_item(item_id)
+                        {
+                            behaviour.on_destroyed(self).await;
+                        }
                         self.entity.remove().await;
                     }
                     return true;
