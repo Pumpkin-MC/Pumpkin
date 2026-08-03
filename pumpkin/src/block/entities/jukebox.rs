@@ -93,9 +93,6 @@ impl BlockEntity for JukeboxBlockEntity {
                 // Check if song has finished
                 if ticks >= song_length {
                     self.stop_playing();
-                    // The disc stays in the jukebox, but redstone output drops now that
-                    // is_playing() reads false -- neither comparators nor adjacent dust get
-                    // a block-state-change notification since no state actually changed here.
                     world.update_neighbors(&self.position, None).await;
                     world
                         .update_comparators(&self.position, &Block::JUKEBOX)
