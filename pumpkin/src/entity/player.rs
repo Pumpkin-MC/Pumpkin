@@ -2961,6 +2961,17 @@ impl Player {
                     }
                 }
 
+                /* Vanilla doesn't reset fallDistance in setGameMode(), instead relies on
+                 * Player.aiStep() resetting when abilities.flying=true and
+                 * Player.causeFallDamage() returning false when abilities.mayfly=true.
+                 * TODO: Reset fall_distance each tick when abilities.flying=true (mirrors Player.aiStep())
+                 * TODO: Add abilities.allow_flying check in LivingEntity::handle_fall_damage() (mirrors Player.causeFallDamage())
+                 * TODO: Once implemented, restrict this reset to Spectator only.
+                 */
+                if matches!(gamemode, GameMode::Creative | GameMode::Spectator) {
+                    self.living_entity.fall_distance.store(0.0);
+                }
+
                 if gamemode != GameMode::Spectator && self.camera_target_id.load().is_some() {
                     self.camera_target_id.store(None);
                     self.client.send_packet_now(&CSetCamera::new(
