@@ -189,8 +189,9 @@ pub struct WorldAquiferSampler {
     packed_positions: Box<[i64]>,
 }
 
-// Vanilla Aquifer.java: `FLOWING_UPDATE_SIMULARITY = similarity(square(10), square(12))`, where
-// `similarity(a, b) = 1.0 - (b - a) / 25.0`, i.e. `1.0 - (144 - 100) / 25.0 = -0.76`.
+// Vanilla Aquifer.java's flowing-update similarity constant (vanilla misspells the field name):
+// `similarity(square(10), square(12))`, where `similarity(a, b) = 1.0 - (b - a) / 25.0`,
+// i.e. `1.0 - (144 - 100) / 25.0 = -0.76`.
 const FLOWING_UPDATE_SIMILARITY: f64 = 1.0 - (144.0 - 100.0) / 25.0;
 
 impl WorldAquiferSampler {

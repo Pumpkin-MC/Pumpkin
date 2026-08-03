@@ -124,7 +124,7 @@ impl HappyGhastEntity {
 
         let entity = &self.mob_entity.living_entity.entity;
         let passengers_len = entity.passengers.lock().await.len();
-        // HappyGhast.java:339, `MAX_PASSANGERS`.
+        // HappyGhast.java:339, MAX_PASSENGERS (vanilla misspells the constant name).
         if passengers_len >= 4 {
             return false;
         }

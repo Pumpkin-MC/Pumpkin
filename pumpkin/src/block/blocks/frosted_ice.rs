@@ -149,8 +149,8 @@ async fn slightly_melt(
     }
 }
 
-/// `FrostedIceBlock#fewerNeigboursThan`: counts orthogonal frosted-ice neighbors, short
-/// circuiting as soon as `limit` is reached.
+/// `FrostedIceBlock`'s neighbor-counting method (vanilla misspells the method name): counts
+/// orthogonal frosted-ice neighbors, short circuiting as soon as `limit` is reached.
 fn fewer_neighbors_than(world: &World, position: &BlockPos, limit: usize) -> bool {
     let mut count = 0;
     for direction in BlockDirection::all() {
