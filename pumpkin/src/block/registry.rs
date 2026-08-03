@@ -137,6 +137,7 @@ use crate::block::blocks::snow::LayeredSnowBlock;
 use crate::block::blocks::spawner::SpawnerBlock;
 use crate::block::blocks::sponge::{SpongeBlock, WetSpongeBlock};
 use crate::block::blocks::stairs::StairBlock;
+use crate::block::blocks::test_block::TestBlock;
 use crate::block::blocks::tnt::TNTBlock;
 use crate::block::blocks::torches::TorchBlock;
 use crate::block::blocks::trapdoor::TrapDoorBlock;
@@ -364,6 +365,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(LeverBlock);
     manager.register(LightningRodBlock);
     manager.register(SculkSensorBlock);
+    manager.register(TestBlock);
     manager.register(ObserverBlock);
     manager.register(TripwireBlock);
     manager.register(TripwireHookBlock);
