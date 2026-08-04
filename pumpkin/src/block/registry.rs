@@ -21,6 +21,7 @@ use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
 use crate::block::blocks::conduit::ConduitBlock;
 use crate::block::blocks::copper_full::CopperFullBlock;
+use crate::block::blocks::copper_golem_statue::CopperGolemStatueBlock;
 use crate::block::blocks::copper_grate::CopperGrateBlock;
 use crate::block::blocks::coral::coral_block::CoralBlock;
 use crate::block::blocks::coral::coral_fan::CoralFanBlock;
@@ -331,6 +332,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SporeBlossomBlock);
     manager.register(ConduitBlock);
     manager.register(CopperFullBlock);
+    manager.register(CopperGolemStatueBlock);
     manager.register(CopperGrateBlock);
     manager.register(DripstoneBlock);
     manager.register(TwistingVinesBlock);

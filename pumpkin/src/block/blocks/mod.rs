@@ -123,4 +123,5 @@ pub mod huge_mushroom;
 pub mod copper_weathering;
 
 pub mod copper_full;
+pub mod copper_golem_statue;
 pub mod copper_grate;
