@@ -19,7 +19,7 @@ use crate::entity::{
     ai::goal::{
         dolphin_jump::DolphinJumpGoal, dolphin_swim_to_treasure::DolphinSwimToTreasureGoal,
         dolphin_swim_with_player::DolphinSwimWithPlayerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     player::Player,
@@ -56,7 +56,7 @@ impl DolphinEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Vanilla `Dolphin.registerGoals` has no float/swim goal.
             goal_selector.add_goal(1, DolphinSwimToTreasureGoal::new(1.3));
             goal_selector.add_goal(2, DolphinSwimWithPlayerGoal::new(4.0));
             // Vanilla: `Dolphin.registerGoals` uses `RandomSwimmingGoal(this, 1.0, 10)`.

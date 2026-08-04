@@ -16,7 +16,7 @@ use rand::RngExt;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -49,7 +49,7 @@ impl GlowSquidEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Vanilla `Squid.registerGoals` (inherited by `GlowSquid`) has no float/swim goal.
             // See the identical note in squid.rs: vanilla GlowSquid inherits Squid's
             // jet-propulsion `aiStep`/neutered `travel`, which isn't portable without a
             // travel-override hook this codebase doesn't have yet.

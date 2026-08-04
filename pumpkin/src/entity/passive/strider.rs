@@ -9,7 +9,7 @@ use crate::entity::{
     ageable::AgeableMob,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -45,7 +45,7 @@ impl StriderEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Vanilla `Strider.registerGoals` has no float/swim goal.
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.65));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.4, STRIDER_TEMPT_ITEMS, false)));

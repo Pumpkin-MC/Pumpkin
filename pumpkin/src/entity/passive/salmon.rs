@@ -14,7 +14,7 @@ use crate::entity::{
     ai::goal::{
         avoid_entity::AvoidEntityGoal, escape_danger::EscapeDangerGoal,
         follow_flock_leader::FollowFlockLeaderGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     passive::fish_variant::pick_weighted,
@@ -102,7 +102,7 @@ impl SalmonEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Vanilla `AbstractFish.registerGoals` has no float/swim goal.
             goal_selector.add_goal(0, EscapeDangerGoal::new(1.25));
             goal_selector.add_goal(
                 2,

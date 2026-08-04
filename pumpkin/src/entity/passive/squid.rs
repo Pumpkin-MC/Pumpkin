@@ -9,7 +9,7 @@ use pumpkin_util::math::vector3::Vector3;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -32,7 +32,8 @@ impl SquidEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Vanilla `Squid.registerGoals` has no float/swim goal at all: squids are always
+            // in water and don't need to surface.
             // NOTE: vanilla Squid has no WanderAroundGoal at all - locomotion instead comes
             // entirely from Squid.aiStep's jet-propulsion physics (a `movementVector` applied
             // directly to velocity, with `travel()` neutered to skip the generic AI-movement

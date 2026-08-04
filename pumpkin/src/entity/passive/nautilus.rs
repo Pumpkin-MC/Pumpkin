@@ -6,7 +6,7 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -44,7 +44,8 @@ impl NautilusEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // `NautilusAi`/`AbstractNautilus` has no float/swim behaviour: nautiluses are
+            // always in water.
             // `NautilusAi.initCoreActivity`: `new AnimalPanic(1.6F)`.
             goal_selector.add_goal(0, EscapeDangerGoal::new(1.6));
             // `NautilusAi.initIdleActivity`: `RandomStroll.swim(1.0F)`.
