@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::BlockDirection;
+use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
     Axis, BlockProperties, LightWeightedPressurePlateLikeProperties,
 };
@@ -11,7 +12,8 @@ use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, EmitsRedstonePowerArgs, GetRedstonePowerArgs, OnScheduledTickArgs,
+    BlockBehaviour, BlockFuture, BlockIsReplacing, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+    OnPlaceArgs, OnScheduledTickArgs,
 };
 use crate::world::World;
 
@@ -76,6 +78,20 @@ impl TargetBlock {
 }
 
 impl BlockBehaviour for TargetBlock {
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            // Vanilla resets a carried-over nonzero OUTPUT_POWER when the block
+            // identity at this position changes (TargetBlock.onPlace).
+            let mut props = if let BlockIsReplacing::Itself(old_state_id) = args.replacing {
+                TargetProperties::from_state_id(old_state_id, args.block)
+            } else {
+                TargetProperties::default(args.block)
+            };
+            props.power = 0;
+            props.to_state_id(args.block)
+        })
+    }
+
     fn emits_redstone_power<'a>(
         &'a self,
         _args: EmitsRedstonePowerArgs<'a>,
