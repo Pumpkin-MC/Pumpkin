@@ -33,6 +33,7 @@ use crate::{
     scheduler::TASK_HANDLERS, text::TextComponent,
 };
 
+pub mod chunk;
 pub mod commands;
 pub mod events;
 mod ext;

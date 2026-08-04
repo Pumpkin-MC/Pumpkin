@@ -1,9 +1,12 @@
 use pumpkin_data::block_properties::NoteblockInstrument as InternalNoteblockInstrument;
 use pumpkin_data::block_state::PistonBehavior;
 use pumpkin_data::{BlockDirection as InternalBlockDirection, BlockStateId};
+use pumpkin_nbt::from_bytes_unnamed;
+use pumpkin_nbt::to_bytes_unnamed;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::chunk::ChunkHeightmapType;
 use pumpkin_world::chunk::io::Dirtiable;
+use pumpkin_world::tick::scheduler::ChunkTickScheduler;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 use wasmtime::component::Resource;
@@ -17,7 +20,8 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
     BlockPos as WitBlockPos, BlockState as WitBlockState, BoundingBox as WitBoundingBox,
     Chunk as WitChunk, NoteblockInstrument as WitNoteblockInstrument,
-    PistonBehavior as WitPistonBehavior, WorldBorder as WitWorldBorder,
+    PistonBehavior as WitPistonBehavior, SerializedBlockEntity as WitSerializedBlockEntity,
+    SerializedChunk as WitSerializedChunk, WorldBorder as WitWorldBorder,
 };
 use crate::plugin::loader::wasm::wasm_host::{
     state::{
@@ -26,6 +30,13 @@ use crate::plugin::loader::wasm::wasm_host::{
     wit::v0_1::pumpkin::{self, plugin::world::World},
 };
 use crate::world::explosion::Explosion;
+use pumpkin_data::chunk::ChunkStatus;
+use pumpkin_world::chunk::format::LightContainer;
+use pumpkin_world::chunk::palette::{BiomePalette, BlockPalette};
+use pumpkin_world::chunk::{ChunkData, ChunkHeightmaps, ChunkLight, ChunkSections};
+use rustc_hash::FxHashMap;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 
 pub(crate) const fn to_wasm_block_direction(dir: InternalBlockDirection) -> WitBlockDirection {
     match dir {
@@ -675,6 +686,207 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         }
 
         Ok(entities)
+    }
+
+    async fn get_serialized_chunk(
+        &mut self,
+        world: Resource<World>,
+        x: i32,
+        z: i32,
+    ) -> wasmtime::Result<Option<WitSerializedChunk>> {
+        let world_res = self.get_world_res(&world)?;
+        let world_provider = world_res.provider.clone();
+        let pos = pumpkin_util::math::vector2::Vector2::new(x, z);
+
+        let chunk = world_provider
+            .level
+            .loaded_chunks
+            .get(&pos)
+            .map(|c| c.value().clone());
+
+        let Some(chunk) = chunk else {
+            return Ok(None);
+        };
+
+        let min_y = chunk.section.min_y;
+        let height = (chunk.section.count * 16) as i32;
+        let section_count = chunk.section.count;
+
+        let block_guard = chunk.section.block_sections.read().unwrap();
+        let biome_guard = chunk.section.biome_sections.read().unwrap();
+
+        // Blocks: 16 × height × 16
+        let mut blocks = Vec::with_capacity(16 * height as usize * 16);
+        for section_idx in 0..section_count {
+            let section = &block_guard[section_idx];
+            for bx in 0..16usize {
+                for by in 0..16usize {
+                    for bz in 0..16usize {
+                        blocks.push(section.get(bx, by, bz).as_u16());
+                    }
+                }
+            }
+        }
+        drop(block_guard);
+
+        // Biomes: 4 × (height/4) × 4
+        let biome_height = (height as usize) / 4;
+        let mut biomes = Vec::with_capacity(4 * biome_height * 4);
+        for section_idx in 0..section_count {
+            let section = &biome_guard[section_idx];
+            for bx in 0..4usize {
+                for by in 0..4usize {
+                    for bz in 0..4usize {
+                        biomes.push(section.get(bx, by, bz));
+                    }
+                }
+            }
+        }
+        drop(biome_guard);
+
+        // Block entities
+        let entities_guard = chunk.pending_block_entities.lock().unwrap();
+        let mut block_entities: Vec<WitSerializedBlockEntity> =
+            Vec::with_capacity(entities_guard.len());
+        for (block_pos, nbt) in entities_guard.iter() {
+            let mut nbt_bytes = Vec::new();
+            to_bytes_unnamed(nbt, &mut nbt_bytes).map_err(|e| {
+                wasmtime::Error::msg(format!("Failed to serialize block entity: {e}"))
+            })?;
+            block_entities.push(WitSerializedBlockEntity {
+                x: block_pos.0.x,
+                y: block_pos.0.y,
+                z: block_pos.0.z,
+                nbt_data: nbt_bytes,
+            });
+        }
+        drop(entities_guard);
+
+        Ok(Some(WitSerializedChunk {
+            x,
+            z,
+            min_y,
+            height,
+            blocks,
+            biomes,
+            block_entities,
+        }))
+    }
+
+    async fn set_serialized_chunk(
+        &mut self,
+        world: Resource<World>,
+        chunk_data: WitSerializedChunk,
+    ) -> wasmtime::Result<()> {
+        let world_res = self.get_world_res(&world)?;
+        let world_provider = world_res.provider.clone();
+
+        let min_y = chunk_data.min_y;
+        let height = chunk_data.height as usize;
+        let section_count = height / 16;
+        let biome_height = height / 4;
+
+        // Validate sizes
+        let expected_blocks = 16 * height * 16;
+        if chunk_data.blocks.len() != expected_blocks {
+            return Err(wasmtime::Error::msg(format!(
+                "Invalid block count: expected {expected_blocks}, got {}",
+                chunk_data.blocks.len()
+            )));
+        }
+        let expected_biomes = 4 * biome_height * 4;
+        if chunk_data.biomes.len() != expected_biomes {
+            return Err(wasmtime::Error::msg(format!(
+                "Invalid biome count: expected {expected_biomes}, got {}",
+                chunk_data.biomes.len()
+            )));
+        }
+
+        // Build block sections from flat arrays
+        let mut block_sections = Vec::with_capacity(section_count);
+        for section_idx in 0..section_count {
+            let mut cube = Box::new([[[BlockStateId::AIR; 16]; 16]; 16]);
+            let section_base_y = section_idx * 16;
+            for bx in 0..16usize {
+                for by in 0..16usize {
+                    for bz in 0..16usize {
+                        let flat_y = section_base_y + by;
+                        let idx = bx * (height * 16) + flat_y * 16 + bz;
+                        cube[bx][by][bz] = BlockStateId::new_or_air(chunk_data.blocks[idx]);
+                    }
+                }
+            }
+            block_sections.push(BlockPalette::from_cube(cube));
+        }
+
+        // Build biome sections from flat arrays
+        let mut biome_sections = Vec::with_capacity(section_count);
+        for section_idx in 0..section_count {
+            let mut cube = Box::new([[[0u8; 4]; 4]; 4]);
+            let section_biome_base_y = section_idx * 4;
+            for bx in 0..4usize {
+                for by in 0..4usize {
+                    for bz in 0..4usize {
+                        let flat_biome_y = section_biome_base_y + by;
+                        let idx = bx * (biome_height * 4) + flat_biome_y * 4 + bz;
+                        cube[bx][by][bz] = chunk_data.biomes[idx];
+                    }
+                }
+            }
+            biome_sections.push(BiomePalette::from_cube(cube));
+        }
+
+        let (random_tick_sections, randomly_ticking_mask) =
+            ChunkSections::build_random_tick_sections_cache(&block_sections);
+
+        let sections = ChunkSections {
+            count: section_count,
+            block_sections: std::sync::RwLock::new(block_sections.into_boxed_slice()),
+            random_tick_sections: std::sync::RwLock::new(random_tick_sections),
+            randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
+            biome_sections: std::sync::RwLock::new(biome_sections.into_boxed_slice()),
+            min_y,
+        };
+
+        // Deserialize block entities
+        let mut pending_block_entities = FxHashMap::default();
+        for be in &chunk_data.block_entities {
+            let pos = BlockPos::new(be.x, be.y, be.z);
+            let nbt: pumpkin_nbt::compound::NbtCompound =
+                from_bytes_unnamed(std::io::Cursor::new(&be.nbt_data)).map_err(|e| {
+                    wasmtime::Error::msg(format!("Failed to deserialize block entity: {e}"))
+                })?;
+            pending_block_entities.insert(pos, nbt);
+        }
+
+        // Construct the heightmap from the block data
+        let chunk = Arc::new(ChunkData {
+            section: sections,
+            heightmap: Mutex::new(ChunkHeightmaps::default()),
+            x: chunk_data.x,
+            z: chunk_data.z,
+            block_ticks: ChunkTickScheduler::default(),
+            fluid_ticks: ChunkTickScheduler::default(),
+            pending_block_entities: Mutex::new(pending_block_entities),
+            light_engine: Mutex::new(ChunkLight {
+                sky_light: vec![LightContainer::Empty(15); section_count].into_boxed_slice(),
+                block_light: vec![LightContainer::Empty(0); section_count].into_boxed_slice(),
+            }),
+            light_populated: AtomicBool::new(false),
+            status: ChunkStatus::Full,
+            blending_data: None,
+            dirty: AtomicBool::new(true),
+        });
+
+        // Calculate heightmaps
+        {
+            let heightmaps = chunk.calculate_heightmap();
+            *chunk.heightmap.lock().unwrap() = heightmaps;
+        };
+
+        world_provider.replace_chunk(&chunk);
+
+        Ok(())
     }
 
     async fn get_block_entity(

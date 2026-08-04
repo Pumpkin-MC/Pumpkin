@@ -135,7 +135,7 @@ use pumpkin_world::{
     CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
-use pumpkin_world::{level::Level, tick::TickPriority};
+use pumpkin_world::{level::Level, level::SyncChunk, tick::TickPriority};
 pub use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{RngExt, rng};
@@ -5239,6 +5239,15 @@ impl World {
         self.level.read_chunk_sync(&chunk_pos, |chunk| {
             chunk.mark_dirty(true);
         });
+    }
+
+    /// Replaces a chunk in `loaded_chunks` and broadcasts the new data to
+    /// every player currently watching the chunk.
+    pub fn replace_chunk(&self, chunk: &SyncChunk) {
+        let pos = Vector2::new(chunk.x, chunk.z);
+        self.level.loaded_chunks.insert(pos, chunk.clone());
+        let chunk_data = CChunkData(chunk);
+        self.broadcast_to_chunk(pos, &chunk_data);
     }
 
     fn intersects_aabb_with_direction(
