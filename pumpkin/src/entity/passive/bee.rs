@@ -4,23 +4,30 @@ use std::sync::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::block_properties::{
+    BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
+};
+use pumpkin_data::block_state::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{effect::StatusEffect, potion::Effect};
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::{Block, effect::StatusEffect, potion::Effect};
 use pumpkin_data::{entity::EntityType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        Controls, Goal, GoalFuture, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
+    ai::pathfinder::NavigatorGoal,
     mob::{Mob, MobEntity},
 };
 
@@ -33,6 +40,11 @@ const FLAG_HAS_NECTAR: u8 = 8;
 const STING_DEATH_COUNTDOWN: i32 = 1200;
 /// `Bee.TICKS_WITHOUT_NECTAR_BEFORE_GOING_HOME`.
 const TICKS_WITHOUT_NECTAR_BEFORE_GOING_HOME: i32 = 3600;
+/// `Bee.COOLDOWN_BEFORE_LOCATING_NEW_FLOWER`.
+const COOLDOWN_BEFORE_LOCATING_NEW_FLOWER: i32 = 200;
+/// `Bee.MIN_FIND_FLOWER_RETRY_COOLDOWN` / `Bee.MAX_FIND_FLOWER_RETRY_COOLDOWN`.
+const MIN_FIND_FLOWER_RETRY_COOLDOWN: i32 = 20;
+const MAX_FIND_FLOWER_RETRY_COOLDOWN: i32 = 60;
 
 /// `Bee.doHurtTarget`: `POISON_SECONDS_NORMAL` / `POISON_SECONDS_HARD`.
 const fn poison_duration(difficulty: Difficulty) -> Option<i32> {
@@ -81,6 +93,8 @@ pub struct BeeEntity {
     time_since_sting: AtomicI32,
     /// `Bee.underWaterTicks`.
     under_water_ticks: AtomicI32,
+    /// `Bee.remainingCooldownBeforeLocatingNewFlower`.
+    flower_cooldown: AtomicI32,
 }
 
 impl BeeEntity {
@@ -96,8 +110,13 @@ impl BeeEntity {
             crops_grown_since_pollination: AtomicI32::new(0),
             time_since_sting: AtomicI32::new(0),
             under_water_ticks: AtomicI32::new(0),
+            flower_cooldown: AtomicI32::new(
+                rand::rng()
+                    .random_range(MIN_FIND_FLOWER_RETRY_COOLDOWN..=MAX_FIND_FLOWER_RETRY_COOLDOWN),
+            ),
         };
         let mob_arc = Arc::new(bee);
+        let bee_weak = Arc::downgrade(&mob_arc);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
@@ -107,12 +126,13 @@ impl BeeEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(1, Box::new(BeePollinateGoal::new(bee_weak)));
+            goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                2,
+                3,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(4, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
@@ -190,6 +210,268 @@ impl BeeEntity {
     /// `Bee.setStayOutOfHiveCountdown`.
     pub fn set_stay_out_of_hive_countdown(&self, ticks: i32) {
         self.stay_out_of_hive_countdown.store(ticks, Relaxed);
+    }
+
+    /// `Bee.dropFlower`.
+    fn drop_flower(&self) {
+        self.flower_pos.store(None);
+        self.flower_cooldown.store(
+            rand::rng()
+                .random_range(MIN_FIND_FLOWER_RETRY_COOLDOWN..=MAX_FIND_FLOWER_RETRY_COOLDOWN),
+            Relaxed,
+        );
+    }
+
+    /// `Bee.resetTicksWithoutNectarSinceExitingHive`.
+    fn reset_ticks_without_nectar(&self) {
+        self.ticks_without_nectar.store(0, Relaxed);
+    }
+}
+
+/// `Bee.attractsBees`.
+fn attracts_bees(block: &Block, state: &BlockState) -> bool {
+    if !block.has_tag(&tag::Block::MINECRAFT_BEE_ATTRACTIVE) {
+        return false;
+    }
+    if state.is_waterlogged() {
+        return false;
+    }
+    if block.id == Block::SUNFLOWER.id {
+        return TallSeagrassLikeProperties::from_state_id(state.id, block).half
+            == DoubleBlockHalf::Upper;
+    }
+    true
+}
+
+/// `Bee.BeePollinateGoal`.
+///
+/// Ported with two documented reductions, both forced by engine gaps rather than choice:
+///
+/// - Vanilla filters candidate flowers through `navigation.createPath(pos, 1).canReach()` and
+///   remembers unreachable ones in `unreachableFlowerCache` for 600 ticks. Pumpkin's `Navigator`
+///   exposes no path-reachability query, so the reachability filter and its cache are dropped;
+///   the retry cooldowns (`MIN`/`MAX_FIND_FLOWER_RETRY_COOLDOWN` on failure,
+///   `COOLDOWN_BEFORE_LOCATING_NEW_FLOWER` on stop) are kept and are what bound the scan cost.
+/// - Vanilla hovers inside the flower with `MoveControl.setWantedPosition` at
+///   `HOVER_HEIGHT_WITHIN_FLOWER`, re-jittering by `HOVER_POS_OFFSET` on a 1-in-25 roll.
+///   Pumpkin's `MoveControl` only produces yaw plus forward input and cannot hold a Y target,
+///   so the hover jitter is dropped; the bee stops navigating on arrival and pollinates in
+///   place. The pollination timings (`MIN_POLLINATION_TICKS`, `MAX_POLLINATING_TICKS`, the
+///   1-in-20 continue roll and the pollinate sound throttle) are unchanged.
+pub struct BeePollinateGoal {
+    bee: Weak<BeeEntity>,
+    goal_control: Controls,
+    successful_pollinating_ticks: i32,
+    last_sound_played_tick: i32,
+    pollinating: bool,
+    pollinating_ticks: i32,
+}
+
+/// `BeePollinateGoal.MIN_POLLINATION_TICKS`.
+const MIN_POLLINATION_TICKS: i32 = 400;
+/// `BeePollinateGoal.MAX_POLLINATING_TICKS`.
+const MAX_POLLINATING_TICKS: i32 = 600;
+/// `BeePollinateGoal.FLOWER_SEARCH_RADIUS`.
+const FLOWER_SEARCH_RADIUS: i32 = 5;
+/// `BeePollinateGoal.HOVER_HEIGHT_WITHIN_FLOWER`.
+const HOVER_HEIGHT_WITHIN_FLOWER: f64 = 0.6;
+
+impl BeePollinateGoal {
+    #[must_use]
+    pub const fn new(bee: Weak<BeeEntity>) -> Self {
+        Self {
+            bee,
+            goal_control: Controls::MOVE,
+            successful_pollinating_ticks: 0,
+            last_sound_played_tick: 0,
+            pollinating: false,
+            pollinating_ticks: 0,
+        }
+    }
+
+    const fn has_pollinated_long_enough(&self) -> bool {
+        self.successful_pollinating_ticks > MIN_POLLINATION_TICKS
+    }
+
+    /// `BeePollinateGoal.findNearbyFlower`, iterating `BlockPos.withinManhattan(pos, 5, 5, 5)`
+    /// in vanilla's increasing-Manhattan-distance order so the closest flower wins.
+    fn find_nearby_flower(mob: &dyn Mob) -> Option<BlockPos> {
+        let origin = mob.get_entity().block_pos.load();
+        let world = mob.get_entity().world.load();
+        let max_depth = FLOWER_SEARCH_RADIUS * 3;
+
+        for depth in 0..=max_depth {
+            let max_x = FLOWER_SEARCH_RADIUS.min(depth);
+            for x in -max_x..=max_x {
+                let max_y = FLOWER_SEARCH_RADIUS.min(depth - x.abs());
+                for y in -max_y..=max_y {
+                    let z = depth - x.abs() - y.abs();
+                    if z > FLOWER_SEARCH_RADIUS {
+                        continue;
+                    }
+                    for z in if z == 0 { vec![z] } else { vec![z, -z] } {
+                        let pos = BlockPos::new(origin.0.x + x, origin.0.y + y, origin.0.z + z);
+                        let (block, state) = world.get_block_and_state(&pos);
+                        if attracts_bees(block, state) {
+                            return Some(pos);
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// `Vec3.atBottomCenterOf(savedFlowerPos).add(0.0, HOVER_HEIGHT_WITHIN_FLOWER, 0.0)`.
+    fn flower_target(flower_pos: BlockPos) -> Vector3<f64> {
+        Vector3::new(
+            f64::from(flower_pos.0.x) + 0.5,
+            f64::from(flower_pos.0.y) + HOVER_HEIGHT_WITHIN_FLOWER,
+            f64::from(flower_pos.0.z) + 0.5,
+        )
+    }
+
+    async fn is_raining(mob: &dyn Mob) -> bool {
+        mob.get_entity().world.load().weather.lock().await.raining
+    }
+}
+
+impl Goal for BeePollinateGoal {
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async move {
+            let Some(bee) = self.bee.upgrade() else {
+                return false;
+            };
+            if bee.flower_cooldown.load(Relaxed) > 0 || bee.has_nectar() {
+                return false;
+            }
+            if Self::is_raining(mob).await {
+                return false;
+            }
+
+            let Some(flower_pos) = Self::find_nearby_flower(mob) else {
+                bee.flower_cooldown.store(
+                    mob.get_random().random_range(
+                        MIN_FIND_FLOWER_RETRY_COOLDOWN..=MAX_FIND_FLOWER_RETRY_COOLDOWN,
+                    ),
+                    Relaxed,
+                );
+                return false;
+            };
+
+            bee.flower_pos.store(Some(flower_pos));
+            let pos = mob.get_entity().pos.load();
+            let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+            navigator.set_progress(NavigatorGoal::new(
+                pos,
+                Self::flower_target(flower_pos),
+                1.2,
+            ));
+            true
+        })
+    }
+
+    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async move {
+            let Some(bee) = self.bee.upgrade() else {
+                return false;
+            };
+            if !self.pollinating || bee.flower_pos.load().is_none() {
+                return false;
+            }
+            if Self::is_raining(mob).await {
+                return false;
+            }
+            if self.has_pollinated_long_enough() {
+                return mob.get_random().random::<f32>() < 0.2;
+            }
+            true
+        })
+    }
+
+    fn start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async move {
+            self.successful_pollinating_ticks = 0;
+            self.pollinating_ticks = 0;
+            self.last_sound_played_tick = 0;
+            self.pollinating = true;
+            if let Some(bee) = self.bee.upgrade() {
+                bee.reset_ticks_without_nectar();
+            }
+        })
+    }
+
+    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(bee) = self.bee.upgrade() {
+                if self.has_pollinated_long_enough() {
+                    bee.set_has_nectar(true);
+                }
+                bee.flower_cooldown
+                    .store(COOLDOWN_BEFORE_LOCATING_NEW_FLOWER, Relaxed);
+            }
+            self.pollinating = false;
+            mob.get_mob_entity().navigator.lock().unwrap().stop();
+        })
+    }
+
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async move {
+            let Some(bee) = self.bee.upgrade() else {
+                return;
+            };
+            let Some(flower_pos) = bee.flower_pos.load() else {
+                return;
+            };
+
+            self.pollinating_ticks += 1;
+            if self.pollinating_ticks > MAX_POLLINATING_TICKS {
+                bee.drop_flower();
+                self.pollinating = false;
+                bee.flower_cooldown
+                    .store(COOLDOWN_BEFORE_LOCATING_NEW_FLOWER, Relaxed);
+                return;
+            }
+
+            let target = Self::flower_target(flower_pos);
+            let pos = mob.get_entity().pos.load();
+            if (target - pos).length() > 1.0 {
+                let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+                if navigator.is_idle() {
+                    navigator.set_progress(NavigatorGoal::new(pos, target, 1.2));
+                }
+                return;
+            }
+
+            mob.get_mob_entity().navigator.lock().unwrap().stop();
+            mob.get_mob_entity()
+                .look_control
+                .lock()
+                .unwrap()
+                .look_at(mob, target.x, target.y, target.z);
+
+            self.successful_pollinating_ticks += 1;
+            if mob.get_random().random::<f32>() < 0.05
+                && self.successful_pollinating_ticks > self.last_sound_played_tick + 60
+            {
+                self.last_sound_played_tick = self.successful_pollinating_ticks;
+                let entity = mob.get_entity();
+                entity.world.load().play_sound(
+                    Sound::EntityBeePollinate,
+                    SoundCategory::Neutral,
+                    &entity.pos.load(),
+                );
+            }
+        })
+    }
+
+    fn should_run_every_tick(&self) -> bool {
+        true
+    }
+
+    fn controls(&self) -> Controls {
+        self.goal_control
     }
 }
 
@@ -299,6 +581,10 @@ impl Mob for BeeEntity {
                 self.stay_out_of_hive_countdown.fetch_sub(1, Relaxed);
             }
 
+            if self.flower_cooldown.load(Relaxed) > 0 {
+                self.flower_cooldown.fetch_sub(1, Relaxed);
+            }
+
             if living.is_in_water() {
                 self.under_water_ticks.fetch_add(1, Relaxed);
             } else {
@@ -348,6 +634,33 @@ mod tests {
         assert_eq!(sting_death_roll_bound(1199), 1);
         assert_eq!(sting_death_roll_bound(1200), 1);
         assert_eq!(sting_death_roll_bound(5000), 1);
+    }
+
+    #[test]
+    fn bee_attracts_bees_matches_vanilla_predicate() {
+        use pumpkin_data::Block;
+        use pumpkin_data::block_properties::{
+            BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
+        };
+        use pumpkin_data::block_state::BlockState;
+
+        assert!(super::attracts_bees(
+            &Block::DANDELION,
+            Block::DANDELION.default_state
+        ));
+        assert!(!super::attracts_bees(
+            &Block::STONE,
+            Block::STONE.default_state
+        ));
+
+        // `Bee.attractsBees` only accepts the upper half of a sunflower.
+        let mut props = TallSeagrassLikeProperties::default(&Block::SUNFLOWER);
+        props.half = DoubleBlockHalf::Lower;
+        let lower = BlockState::from_id(props.to_state_id(&Block::SUNFLOWER));
+        props.half = DoubleBlockHalf::Upper;
+        let upper = BlockState::from_id(props.to_state_id(&Block::SUNFLOWER));
+        assert!(!super::attracts_bees(&Block::SUNFLOWER, lower));
+        assert!(super::attracts_bees(&Block::SUNFLOWER, upper));
     }
 
     #[test]
