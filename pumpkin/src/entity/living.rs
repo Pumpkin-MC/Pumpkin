@@ -575,11 +575,25 @@ impl LivingEntity {
         self.entity.entity_id
     }
 
+    /// `LivingEntity#canBeAffected`. Only `Parched#canBeAffected` (Parched.java), which makes
+    /// Parched immune to the Weakness its own arrows apply, is modelled here. The base
+    /// class's `IMMUNE_TO_INFESTED` / `IMMUNE_TO_OOZING` / `IGNORES_POISON_AND_REGEN`
+    /// entity-type-tag checks and the `Spider`, `WitherSkeleton`, `WitherBoss` and
+    /// `AbstractNautilus` overrides are still unported.
+    #[must_use]
+    pub fn can_be_affected(&self, effect_type: &StatusEffect) -> bool {
+        !(self.entity.entity_type == &EntityType::PARCHED
+            && effect_type.id == StatusEffect::WEAKNESS.id)
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "effect application also synchronizes attributes"
     )]
     pub async fn add_effect(&self, effect: Effect) {
+        if !self.can_be_affected(effect.effect_type) {
+            return;
+        }
         let inverted = self.is_undead();
         let is_instant = effect.effect_type.id == StatusEffect::INSTANT_HEALTH.id
             || effect.effect_type.id == StatusEffect::INSTANT_DAMAGE.id;

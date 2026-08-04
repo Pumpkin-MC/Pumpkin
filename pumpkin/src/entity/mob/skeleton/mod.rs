@@ -1,7 +1,10 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::{
-    data_component_impl::EquipmentSlot, entity::EntityType, item::Item, item_stack::ItemStack,
+    data_component_impl::{EquipmentSlot, StatusEffectInstance},
+    entity::EntityType,
+    item::Item,
+    item_stack::ItemStack,
 };
 
 use crate::entity::{
@@ -23,6 +26,25 @@ pub mod skeleton;
 pub mod stray;
 pub mod wither;
 
+/// `AbstractSkeleton#getHardAttackInterval` (AbstractSkeleton.java). Pumpkin picks the goal
+/// once at construction and does not re-run `reassessWeaponGoal`, so the hard-difficulty
+/// value is used unconditionally, as it already was before Parched existed.
+const SKELETON_ATTACK_INTERVAL: i32 = 20;
+/// `Parched#getHardAttackInterval` (Parched.java).
+const PARCHED_ATTACK_INTERVAL: i32 = 50;
+
+/// `Parched#getArrow` (Parched.java) attaches `new MobEffectInstance(MobEffects.WEAKNESS, 600)`
+/// to every arrow it fires; that constructor defaults to amplifier 0, non-ambient, with
+/// particles and icon shown.
+const PARCHED_ARROW_EFFECTS: &[StatusEffectInstance] = &[StatusEffectInstance {
+    effect_id: std::borrow::Cow::Borrowed("minecraft:weakness"),
+    amplifier: 0,
+    duration: 600,
+    ambient: false,
+    show_particles: true,
+    show_icon: true,
+}];
+
 pub struct SkeletonEntityBase {
     pub mob_entity: MobEntity,
 }
@@ -30,6 +52,7 @@ pub struct SkeletonEntityBase {
 impl SkeletonEntityBase {
     pub fn new(entity: Entity) -> Arc<Self> {
         let uses_bow = entity.entity_type != &EntityType::WITHER_SKELETON;
+        let is_parched = entity.entity_type == &EntityType::PARCHED;
         let mob_entity = MobEntity::new(entity);
         let mob = Self { mob_entity };
         let mob_arc = Arc::new(mob);
@@ -64,7 +87,19 @@ impl SkeletonEntityBase {
             goal_selector.add_goal(3, FleeSunGoal::new(1.0));
             if uses_bow {
                 // Vanilla `AbstractSkeleton#reassessWeaponGoal` selects this at priority 4.
-                goal_selector.add_goal(4, Box::new(RangedBowAttackGoal::new(20, 15.0)));
+                let (interval, arrow_effects) = if is_parched {
+                    (PARCHED_ATTACK_INTERVAL, PARCHED_ARROW_EFFECTS)
+                } else {
+                    (SKELETON_ATTACK_INTERVAL, &[][..])
+                };
+                goal_selector.add_goal(
+                    4,
+                    Box::new(RangedBowAttackGoal::with_arrow_effects(
+                        interval,
+                        15.0,
+                        arrow_effects,
+                    )),
+                );
             } else {
                 goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.2, false)));
             }
@@ -99,5 +134,49 @@ impl NBTStorage for SkeletonEntityBase {
 impl Mob for SkeletonEntityBase {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PARCHED_ARROW_EFFECTS, PARCHED_ATTACK_INTERVAL, SKELETON_ATTACK_INTERVAL};
+    use crate::item::potion::PotionContents;
+    use pumpkin_data::data_component::DataComponent;
+    use pumpkin_data::data_component_impl::{DataComponentImpl, PotionContentsImpl};
+    use pumpkin_data::effect::StatusEffect;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+
+    #[test]
+    fn parched_shoots_slower_than_a_plain_skeleton() {
+        assert_eq!(SKELETON_ATTACK_INTERVAL, 20);
+        assert_eq!(PARCHED_ATTACK_INTERVAL, 50);
+    }
+
+    #[test]
+    fn parched_arrows_carry_ten_second_weakness() {
+        let mut arrow = ItemStack::new(1, &Item::ARROW);
+        arrow.patch.push((
+            DataComponent::PotionContents,
+            Some(
+                PotionContentsImpl {
+                    potion_id: None,
+                    custom_color: None,
+                    custom_effects: PARCHED_ARROW_EFFECTS.to_vec(),
+                    custom_name: None,
+                }
+                .to_dyn(),
+            ),
+        ));
+
+        let effects = PotionContents::read_potion_effects(&arrow);
+        assert_eq!(effects.len(), 1);
+        let (effect_type, duration, amplifier, ambient, particles, icon) = effects[0];
+        assert_eq!(effect_type.id, StatusEffect::WEAKNESS.id);
+        assert_eq!(duration, 600);
+        assert_eq!(amplifier, 0);
+        assert!(!ambient);
+        assert!(particles);
+        assert!(icon);
     }
 }

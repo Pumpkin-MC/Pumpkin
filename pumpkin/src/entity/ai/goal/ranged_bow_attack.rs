@@ -1,5 +1,9 @@
 use std::sync::Arc;
 
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{
+    DataComponentImpl, PotionContentsImpl, StatusEffectInstance,
+};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
@@ -23,15 +27,28 @@ pub struct RangedBowAttackGoal {
     attack_interval: i32,
     attack_cooldown: i32,
     range: f64,
+    /// Effects an `AbstractSkeleton#getArrow` override attaches to every arrow it fires
+    /// (`Parched#getArrow`).
+    arrow_effects: &'static [StatusEffectInstance],
 }
 
 impl RangedBowAttackGoal {
     #[must_use]
     pub const fn new(attack_interval: i32, range: f64) -> Self {
+        Self::with_arrow_effects(attack_interval, range, &[])
+    }
+
+    #[must_use]
+    pub const fn with_arrow_effects(
+        attack_interval: i32,
+        range: f64,
+        arrow_effects: &'static [StatusEffectInstance],
+    ) -> Self {
         Self {
             attack_interval,
             attack_cooldown: 0,
             range,
+            arrow_effects,
         }
     }
 
@@ -84,8 +101,22 @@ impl RangedBowAttackGoal {
         let shooter = mob.get_entity();
         let world = shooter.world.load_full();
         let arrow_entity = Entity::new(world.clone(), shooter.pos.load(), &EntityType::ARROW);
-        let arrow_item =
+        let mut arrow_item =
             pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::ARROW);
+        if !self.arrow_effects.is_empty() {
+            arrow_item.patch.push((
+                DataComponent::PotionContents,
+                Some(
+                    PotionContentsImpl {
+                        potion_id: None,
+                        custom_color: None,
+                        custom_effects: self.arrow_effects.to_vec(),
+                        custom_name: None,
+                    }
+                    .to_dyn(),
+                ),
+            ));
+        }
         let arrow =
             ArrowEntity::new_shot(arrow_entity, shooter, &arrow_item, ArrowPickup::Disallowed);
         let direction = Self::target_vector(shooter, target);
