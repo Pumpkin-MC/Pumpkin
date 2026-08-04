@@ -1,8 +1,15 @@
 use super::BlockEntity;
+use pumpkin_data::Rotation;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::generation::structure::template::{get_template, place_template};
 use std::pin::Pin;
+use std::sync::Arc;
 use tokio::sync::Mutex;
+
+use crate::world::World;
+use crate::world::block_placer::WorldBlockPlacer;
 
 pub struct StructureBlockBlockEntity {
     pub position: BlockPos,
@@ -136,5 +143,62 @@ impl StructureBlockBlockEntity {
             integrity: Mutex::new(1.0),
             seed: Mutex::new(0),
         }
+    }
+
+    /// Mirrors `StructureBlockEntity.placeStructure` (`StructureBlockEntity.java:402-430`) for
+    /// the LOAD half only: looks up the named template in the embedded/worldgen
+    /// `TemplateCache` and places it via the same `WorldBlockPlacer` machinery the `/place
+    /// template` command uses. Returns `false` if no template by that name is known.
+    ///
+    /// Known divergences from vanilla, left as documented follow-ups rather than expanded
+    /// scope (see `designs/unimplemented-blocks.md`):
+    /// - `mirror` is read from NBT but not applied: `place_template`'s signature has no mirror
+    ///   parameter (it hardcodes `Mirror::default()` internally), and threading mirror support
+    ///   through it touches shared worldgen infrastructure used by `/place` and jigsaw pieces.
+    /// - `integrity < 1.0` block-dropout (`BlockRotProcessor`) is not applied.
+    /// - Entities embedded in the template are not placed (`place_template` does not place
+    ///   entities at all currently).
+    /// - This only covers the `TemplateCache`'s embedded/worldgen template set, since there is
+    ///   no filesystem-backed structure manager for player-saved templates (that's the SAVE-side
+    ///   gap, out of scope here).
+    pub async fn place_structure(&self, world: &Arc<World>) -> bool {
+        let name = self.name.lock().await.clone();
+        if name.is_empty() {
+            return false;
+        }
+        let lookup_name = name.strip_prefix("minecraft:").unwrap_or(&name);
+        let Some(template) = get_template(lookup_name) else {
+            return false;
+        };
+
+        let rotation = match self.rotation.lock().await.as_str() {
+            "CLOCKWISE_90" => Rotation::Clockwise90,
+            "CLOCKWISE_180" => Rotation::Rotate180,
+            "COUNTERCLOCKWISE_90" => Rotation::CounterClockwise90,
+            _ => Rotation::None,
+        };
+
+        let origin = Vector3::new(
+            self.position.0.x + *self.pos_x.lock().await,
+            self.position.0.y + *self.pos_y.lock().await,
+            self.position.0.z + *self.pos_z.lock().await,
+        );
+
+        let mut placer = WorldBlockPlacer::new(world);
+        place_template(
+            &mut placer,
+            &template,
+            origin,
+            (0, 0),
+            rotation,
+            false,
+            false,
+            &[],
+            None,
+        );
+        placer.finalize();
+        world.queue_block_updates(&placer.changed_positions).await;
+        world.flush_block_updates().await;
+        true
     }
 }
