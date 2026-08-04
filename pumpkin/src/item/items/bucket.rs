@@ -314,6 +314,21 @@ impl ItemBehaviour for EmptyBucketItem {
                 return;
             };
 
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+            {
+                let mut event =
+                    crate::plugin::api::events::player::player_bucket::PlayerBucketFillEvent::new(
+                        player_arc,
+                        block_pos,
+                        item.registry_key.to_string(),
+                    );
+                server.plugin_manager.fire(&server, &mut event).await;
+                if event.cancelled {
+                    return;
+                }
+            }
+
             give_player_bucket_item(player, item).await;
         })
     }
@@ -350,6 +365,18 @@ impl ItemBehaviour for FilledBucketItem {
             }
             if !try_place_filled_bucket(&world, item, pos, direction).await {
                 return;
+            }
+
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+            {
+                let mut event =
+                    crate::plugin::api::events::player::player_bucket::PlayerBucketEmptyEvent::new(
+                        player_arc,
+                        pos,
+                        item.registry_key.to_string(),
+                    );
+                server.plugin_manager.fire(&server, &mut event).await;
             }
 
             //TODO: Spawn entity if applicable

@@ -226,6 +226,10 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         0.0
     }
 
+    fn get_mob(&self) -> Option<&dyn mob::Mob> {
+        None
+    }
+
     fn tick_in_void<'a>(&'a self, _dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move { self.get_entity().remove().await })
     }
@@ -805,6 +809,8 @@ pub struct Entity {
     pub custom_name: ArcSwap<Option<TextComponent>>,
     /// Indicates whether the entity's custom name is visible
     pub custom_name_visible: AtomicBool,
+    pub silent: AtomicBool,
+    pub has_no_gravity: AtomicBool,
     /// Scoreboard tags attached to this entity, managed with `/tag`.
     /// Vanilla allows at most [`MAX_SCOREBOARD_TAGS`] tags per entity.
     pub scoreboard_tags: Mutex<HashSet<String>>,
@@ -943,6 +949,8 @@ impl Entity {
             portal_manager: Mutex::new(None),
             custom_name: ArcSwap::new(Arc::new(None)),
             custom_name_visible: AtomicBool::new(false),
+            silent: AtomicBool::new(false),
+            has_no_gravity: AtomicBool::new(false),
             scoreboard_tags: Mutex::new(HashSet::new()),
             no_clip: AtomicBool::new(false),
             movement_multiplier: AtomicCell::new(Vector3::default()),
@@ -1099,6 +1107,38 @@ impl Entity {
                 visible,
             )],
             Some(&bedrock_meta),
+        );
+    }
+
+    pub fn is_silent(&self) -> bool {
+        self.silent.load(Ordering::Relaxed)
+    }
+
+    pub fn set_silent(&self, silent: bool) {
+        self.silent.store(silent, Ordering::Relaxed);
+        self.send_meta_data(
+            &[Metadata::new(
+                TrackedData::SILENT,
+                MetaDataType::BOOLEAN,
+                silent,
+            )],
+            None,
+        );
+    }
+
+    pub fn has_no_gravity(&self) -> bool {
+        self.has_no_gravity.load(Ordering::Relaxed)
+    }
+
+    pub fn set_has_no_gravity(&self, no_gravity: bool) {
+        self.has_no_gravity.store(no_gravity, Ordering::Relaxed);
+        self.send_meta_data(
+            &[Metadata::new(
+                TrackedData::NO_GRAVITY,
+                MetaDataType::BOOLEAN,
+                no_gravity,
+            )],
+            None,
         );
     }
 

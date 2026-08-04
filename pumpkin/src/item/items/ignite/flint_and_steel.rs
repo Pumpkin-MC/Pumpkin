@@ -35,6 +35,23 @@ impl ItemBehaviour for FlintAndSteelItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
+            if let Some(server_ref) = player.world().server.upgrade() {
+                let player_arc = player.world().get_player_by_uuid(player.gameprofile.id);
+                let mut event =
+                    crate::plugin::api::events::block::block_ignite::BlockIgniteEvent::new(
+                        location,
+                        &pumpkin_data::Block::FIRE,
+                        player_arc,
+                    );
+                server_ref
+                    .plugin_manager
+                    .fire(&server_ref, &mut event)
+                    .await;
+                if event.cancelled {
+                    return;
+                }
+            }
+
             let ignited = Ignition::ignite_block(
                 |world: Arc<World>, pos: BlockPos, new_state_id: BlockStateId| async move {
                     world

@@ -448,6 +448,12 @@ impl Server {
                 new_worlds.push(world.clone());
                 new_worlds
             });
+            let mut event =
+                crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current()
+                    .block_on(server.plugin_manager.fire(&server, &mut event));
+            });
             world
         })
         .await

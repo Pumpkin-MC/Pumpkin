@@ -112,11 +112,28 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for ShiftB {
 }
 
 pub struct ShiftedNoise {
-    input_x_index: usize,
-    input_y_index: usize,
-    input_z_index: usize,
+    pub(crate) input_x_index: usize,
+    pub(crate) input_y_index: usize,
+    pub(crate) input_z_index: usize,
     sampler: DoublePerlinNoiseSampler,
     data: &'static ShiftedNoiseData,
+}
+
+impl ShiftedNoise {
+    #[inline]
+    pub fn sample_with_shifts(
+        &self,
+        pos: &Vector3<i32>,
+        x_shift: f64,
+        y_shift: f64,
+        z_shift: f64,
+    ) -> f64 {
+        let translated_x = pos.x as f64 * self.data.xz_scale + x_shift;
+        let translated_y = pos.y as f64 * self.data.y_scale + y_shift;
+        let translated_z = pos.z as f64 * self.data.xz_scale + z_shift;
+        self.sampler
+            .sample(translated_x, translated_y, translated_z)
+    }
 }
 
 impl NoiseFunctionComponentRange for ShiftedNoise {
@@ -138,27 +155,23 @@ impl StaticChunkNoiseFunctionComponentImpl for ShiftedNoise {
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
-        let translated_x = pos.x as f64 * self.data.xz_scale
-            + ChunkNoiseFunctionComponent::sample_from_stack(
-                &mut component_stack[..=self.input_x_index],
-                pos,
-                sample_options,
-            );
-        let translated_y = pos.y as f64 * self.data.y_scale
-            + ChunkNoiseFunctionComponent::sample_from_stack(
-                &mut component_stack[..=self.input_y_index],
-                pos,
-                sample_options,
-            );
-        let translated_z = pos.z as f64 * self.data.xz_scale
-            + ChunkNoiseFunctionComponent::sample_from_stack(
-                &mut component_stack[..=self.input_z_index],
-                pos,
-                sample_options,
-            );
+        let x_shift = ChunkNoiseFunctionComponent::sample_from_stack(
+            &mut component_stack[..=self.input_x_index],
+            pos,
+            sample_options,
+        );
+        let y_shift = ChunkNoiseFunctionComponent::sample_from_stack(
+            &mut component_stack[..=self.input_y_index],
+            pos,
+            sample_options,
+        );
+        let z_shift = ChunkNoiseFunctionComponent::sample_from_stack(
+            &mut component_stack[..=self.input_z_index],
+            pos,
+            sample_options,
+        );
 
-        self.sampler
-            .sample(translated_x, translated_y, translated_z)
+        self.sample_with_shifts(pos, x_shift, y_shift, z_shift)
     }
 }
 

@@ -1,4 +1,3 @@
-use enum_dispatch::enum_dispatch;
 use pumpkin_data::{
     chunk::DoublePerlinNoiseParameters,
     noise_router::{
@@ -30,10 +29,6 @@ use super::{
 };
 use pumpkin_util::math::vector3::Vector3;
 
-#[enum_dispatch(
-    StaticIndependentChunkNoiseFunctionComponentImpl,
-    NoiseFunctionComponentRange
-)]
 pub enum IndependentProtoNoiseFunctionComponent {
     Constant(Constant),
     EndIsland(EndIsland),
@@ -44,7 +39,62 @@ pub enum IndependentProtoNoiseFunctionComponent {
     ClampedYGradient(ClampedYGradient),
 }
 
-#[enum_dispatch(StaticChunkNoiseFunctionComponentImpl, NoiseFunctionComponentRange)]
+impl NoiseFunctionComponentRange for IndependentProtoNoiseFunctionComponent {
+    #[inline]
+    fn min(&self) -> f64 {
+        match self {
+            Self::Constant(c) => c.min(),
+            Self::EndIsland(e) => e.min(),
+            Self::Noise(n) => n.min(),
+            Self::ShiftA(s) => s.min(),
+            Self::ShiftB(s) => s.min(),
+            Self::InterpolatedNoise(i) => i.min(),
+            Self::ClampedYGradient(c) => c.min(),
+        }
+    }
+
+    #[inline]
+    fn max(&self) -> f64 {
+        match self {
+            Self::Constant(c) => c.max(),
+            Self::EndIsland(e) => e.max(),
+            Self::Noise(n) => n.max(),
+            Self::ShiftA(s) => s.max(),
+            Self::ShiftB(s) => s.max(),
+            Self::InterpolatedNoise(i) => i.max(),
+            Self::ClampedYGradient(c) => c.max(),
+        }
+    }
+}
+
+impl StaticIndependentChunkNoiseFunctionComponentImpl for IndependentProtoNoiseFunctionComponent {
+    #[inline]
+    fn sample(&self, pos: &Vector3<i32>) -> f64 {
+        match self {
+            Self::Constant(c) => c.sample(pos),
+            Self::EndIsland(e) => e.sample(pos),
+            Self::Noise(n) => n.sample(pos),
+            Self::ShiftA(s) => s.sample(pos),
+            Self::ShiftB(s) => s.sample(pos),
+            Self::InterpolatedNoise(i) => i.sample(pos),
+            Self::ClampedYGradient(c) => c.sample(pos),
+        }
+    }
+
+    #[inline]
+    fn fill(&self, array: &mut [f64], mapper: &impl IndexToNoisePos) {
+        match self {
+            Self::Constant(c) => c.fill(array, mapper),
+            Self::EndIsland(e) => e.fill(array, mapper),
+            Self::Noise(n) => n.fill(array, mapper),
+            Self::ShiftA(s) => s.fill(array, mapper),
+            Self::ShiftB(s) => s.fill(array, mapper),
+            Self::InterpolatedNoise(i) => i.fill(array, mapper),
+            Self::ClampedYGradient(c) => c.fill(array, mapper),
+        }
+    }
+}
+
 pub enum DependentProtoNoiseFunctionComponent {
     Linear(Linear),
     Unary(Unary),
@@ -57,13 +107,111 @@ pub enum DependentProtoNoiseFunctionComponent {
     Spline(SplineFunction),
 }
 
-#[enum_dispatch(NoiseFunctionComponentRange)]
+impl NoiseFunctionComponentRange for DependentProtoNoiseFunctionComponent {
+    #[inline]
+    fn min(&self) -> f64 {
+        match self {
+            Self::Linear(l) => l.min(),
+            Self::Unary(u) => u.min(),
+            Self::Binary(b) => b.min(),
+            Self::ShiftedNoise(s) => s.min(),
+            Self::IntervalSelect(i) => i.min(),
+            Self::FindTopSurface(f) => f.min(),
+            Self::Clamp(c) => c.min(),
+            Self::RangeChoice(r) => r.min(),
+            Self::Spline(s) => s.min(),
+        }
+    }
+
+    #[inline]
+    fn max(&self) -> f64 {
+        match self {
+            Self::Linear(l) => l.max(),
+            Self::Unary(u) => u.max(),
+            Self::Binary(b) => b.max(),
+            Self::ShiftedNoise(s) => s.max(),
+            Self::IntervalSelect(i) => i.max(),
+            Self::FindTopSurface(f) => f.max(),
+            Self::Clamp(c) => c.max(),
+            Self::RangeChoice(r) => r.max(),
+            Self::Spline(s) => s.max(),
+        }
+    }
+}
+
+impl StaticChunkNoiseFunctionComponentImpl for DependentProtoNoiseFunctionComponent {
+    #[inline]
+    fn sample(
+        &self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) -> f64 {
+        match self {
+            Self::Linear(l) => l.sample(component_stack, pos, sample_options),
+            Self::Unary(u) => u.sample(component_stack, pos, sample_options),
+            Self::Binary(b) => b.sample(component_stack, pos, sample_options),
+            Self::ShiftedNoise(s) => s.sample(component_stack, pos, sample_options),
+            Self::IntervalSelect(i) => i.sample(component_stack, pos, sample_options),
+            Self::FindTopSurface(f) => f.sample(component_stack, pos, sample_options),
+            Self::Clamp(c) => c.sample(component_stack, pos, sample_options),
+            Self::RangeChoice(r) => r.sample(component_stack, pos, sample_options),
+            Self::Spline(s) => s.sample(component_stack, pos, sample_options),
+        }
+    }
+
+    #[inline]
+    fn fill(
+        &self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        array: &mut [f64],
+        mapper: &impl IndexToNoisePos,
+        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+    ) {
+        match self {
+            Self::Linear(l) => l.fill(component_stack, array, mapper, sample_options),
+            Self::Unary(u) => u.fill(component_stack, array, mapper, sample_options),
+            Self::Binary(b) => b.fill(component_stack, array, mapper, sample_options),
+            Self::ShiftedNoise(s) => s.fill(component_stack, array, mapper, sample_options),
+            Self::IntervalSelect(i) => i.fill(component_stack, array, mapper, sample_options),
+            Self::FindTopSurface(f) => f.fill(component_stack, array, mapper, sample_options),
+            Self::Clamp(c) => c.fill(component_stack, array, mapper, sample_options),
+            Self::RangeChoice(r) => r.fill(component_stack, array, mapper, sample_options),
+            Self::Spline(s) => s.fill(component_stack, array, mapper, sample_options),
+        }
+    }
+}
+
 pub enum ProtoNoiseFunctionComponent {
     Independent(IndependentProtoNoiseFunctionComponent),
     Dependent(DependentProtoNoiseFunctionComponent),
     Wrapper(Wrapper),
     PassThrough(PassThrough),
     Beardifier(Beardifier),
+}
+
+impl NoiseFunctionComponentRange for ProtoNoiseFunctionComponent {
+    #[inline]
+    fn min(&self) -> f64 {
+        match self {
+            Self::Independent(i) => i.min(),
+            Self::Dependent(d) => d.min(),
+            Self::Wrapper(w) => w.min(),
+            Self::PassThrough(p) => p.min(),
+            Self::Beardifier(b) => b.min(),
+        }
+    }
+
+    #[inline]
+    fn max(&self) -> f64 {
+        match self {
+            Self::Independent(i) => i.max(),
+            Self::Dependent(d) => d.max(),
+            Self::Wrapper(w) => w.max(),
+            Self::PassThrough(p) => p.max(),
+            Self::Beardifier(b) => b.max(),
+        }
+    }
 }
 
 pub struct DoublePerlinNoiseBuilder;
