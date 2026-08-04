@@ -150,7 +150,7 @@ impl Goal for FrogFindFoodGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         // One-shot: hands off to `FrogTongueAttackGoal` immediately once a target is set.
         Box::pin(async { false })
     }
@@ -217,7 +217,7 @@ impl Goal for FrogTongueAttackGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             if self.state == TongueState::Done {
                 return false;

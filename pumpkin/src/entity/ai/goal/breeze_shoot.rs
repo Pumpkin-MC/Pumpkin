@@ -122,7 +122,7 @@ impl Goal for BreezeShootGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let Some(breeze) = self.breeze.upgrade() else {
                 return false;

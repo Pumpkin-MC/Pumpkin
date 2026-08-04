@@ -81,8 +81,9 @@ pub trait Goal: Send + Sync {
     }
 
     /// When it's started, how should it continue to run?
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async { false })
+    /// Defaults to whether the goal could still start fresh (vanilla: `Goal.canContinueToUse` defaults to `this.canUse()`).
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        self.can_start(mob)
     }
 
     /// Call when goal start
@@ -200,8 +201,8 @@ impl Goal for PrioritizedGoal {
         Box::pin(async { self.goal.can_start(mob).await })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async { self.goal.should_continue(mob).await })
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        self.goal.should_continue(mob)
     }
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {

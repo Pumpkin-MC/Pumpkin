@@ -438,7 +438,7 @@ impl Goal for ShulkerAttackGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
             let target = mob.get_mob_entity().target.lock().await;
             target
@@ -554,7 +554,7 @@ impl Goal for ShulkerPeekGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
             let has_target = mob.get_mob_entity().target.lock().await.is_some();
             !has_target && self.peek_time.load(Ordering::Relaxed) > 0

@@ -145,7 +145,7 @@ impl Goal for NonTameRandomTargetGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async { self.track_target_goal.should_continue(mob).await })
     }
 

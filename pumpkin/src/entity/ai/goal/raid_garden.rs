@@ -85,7 +85,7 @@ impl Goal for RaidGardenGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
             self.can_raid.load(Ordering::Relaxed)
                 && self.move_to_target_pos_goal.should_continue(mob).await

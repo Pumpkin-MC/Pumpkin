@@ -32,7 +32,7 @@ impl Goal for SpiderAttackGoal {
         self.melee.can_start(mob)
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let entity = mob.get_entity();
             let world = entity.world.load();
@@ -92,7 +92,7 @@ impl Goal for SpiderTargetGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move { Self::is_dark(mob) && self.inner.should_continue(mob).await })
     }
 
@@ -131,7 +131,7 @@ impl Goal for SpiderLeapGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             !mob.get_mob_entity()
                 .living_entity

@@ -121,7 +121,7 @@ impl Goal for FollowFlockLeaderGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let Some(leader) = self.leader.lock().await.as_ref().and_then(Weak::upgrade) else {
                 return false;

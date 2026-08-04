@@ -276,7 +276,7 @@ impl Goal for PiglinAdmireGoal {
         Box::pin(async move { self.admiring_ticks.load(Ordering::Relaxed) > 0 })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move { self.admiring_ticks.load(Ordering::Relaxed) > 0 })
     }
 

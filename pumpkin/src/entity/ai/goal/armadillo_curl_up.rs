@@ -123,7 +123,7 @@ impl Goal for ArmadilloCurlUpGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             // Stay curled for at least MIN_CURL_TICKS even if the threat leaves immediately,
             // mirroring vanilla's ROLLING/SCARED animation-duration gating.

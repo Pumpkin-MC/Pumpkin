@@ -43,7 +43,7 @@ impl Goal for DestroyEggGoal {
         Box::pin(async { self.step_and_destroy_block_goal.can_start(mob).await })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async { self.step_and_destroy_block_goal.should_continue(mob).await })
     }
 

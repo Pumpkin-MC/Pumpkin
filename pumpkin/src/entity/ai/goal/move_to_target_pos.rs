@@ -143,7 +143,7 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
             let world = mob.get_entity().world.load_full();
             let can_target = if let Some(x) = self.move_to_target_pos.get() {
