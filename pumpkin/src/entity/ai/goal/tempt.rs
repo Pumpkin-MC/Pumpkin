@@ -7,7 +7,8 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::vector3::Vector3;
 
-const STOP_DISTANCE: f64 = 2.5;
+/// `TemptGoal.java`: `DEFAULT_STOP_DISTANCE`.
+const DEFAULT_STOP_DISTANCE: f64 = 2.5;
 const SCARE_RANGE_SQUARED: f64 = 36.0;
 const SCARE_MOVE_THRESHOLD_SQUARED: f64 = 0.01;
 const SCARE_ROT_THRESHOLD: f32 = 5.0;
@@ -22,6 +23,7 @@ pub struct TemptGoal {
     prev_pos: Vector3<f64>,
     prev_yaw: f32,
     prev_pitch: f32,
+    stop_distance: f64,
 }
 
 /// Vanilla `TemptGoal#canContinueToUse`'s scare check, factored out as a pure
@@ -55,6 +57,18 @@ fn passes_scare_check(
 impl TemptGoal {
     #[must_use]
     pub fn new(speed: f64, tempt_items: &'static [&'static Item], can_scare: bool) -> Self {
+        Self::with_stop_distance(speed, tempt_items, can_scare, DEFAULT_STOP_DISTANCE)
+    }
+
+    /// `TemptGoal.java`'s 5-arg constructor, for species that pass a non-default
+    /// `stopDistance` (e.g. Happy Ghast: 7.0, Sulfur Cube: 1.0).
+    #[must_use]
+    pub fn with_stop_distance(
+        speed: f64,
+        tempt_items: &'static [&'static Item],
+        can_scare: bool,
+        stop_distance: f64,
+    ) -> Self {
         Self {
             goal_control: Controls::MOVE | Controls::LOOK,
             speed,
@@ -65,6 +79,7 @@ impl TemptGoal {
             prev_pos: Vector3::new(0.0, 0.0, 0.0),
             prev_yaw: 0.0,
             prev_pitch: 0.0,
+            stop_distance,
         }
     }
 
@@ -190,7 +205,9 @@ impl Goal for TemptGoal {
                 );
 
                 let mob_pos = mob_entity.living_entity.entity.pos.load();
-                if mob_pos.squared_distance_to_vec(&player_pos) > STOP_DISTANCE * STOP_DISTANCE {
+                if mob_pos.squared_distance_to_vec(&player_pos)
+                    > self.stop_distance * self.stop_distance
+                {
                     let mut navigator = mob_entity.navigator.lock().unwrap();
                     navigator.set_progress(NavigatorGoal::new(mob_pos, player_pos, self.speed));
                 }

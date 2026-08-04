@@ -12,9 +12,13 @@ use crate::entity::mob::{Mob, MobEntity};
 
 /// Vanilla `IronGolem.registerGoals`: `targetSelector.addGoal(3, new
 /// NearestAttackableTargetGoal<>(this, Mob.class, 5, ...))` -- `reducedTickDelay(5)`.
-const RECIPROCAL_CHANCE: i32 = 5;
+const IRON_GOLEM_RECIPROCAL_CHANCE: i32 = 5;
 
-/// Vanilla predicate: `target instanceof Enemy && !(target instanceof Creeper)`.
+/// Vanilla `SnowGolem.registerGoals`: `targetSelector.addGoal(1, new
+/// NearestAttackableTargetGoal<>(this, Mob.class, 10, true, false, ...))`.
+const SNOW_GOLEM_RECIPROCAL_CHANCE: i32 = 10;
+
+/// Vanilla predicate base: `target instanceof Enemy`.
 ///
 /// Pumpkin has no `Enemy` marker trait (see `armadillo_curl_up.rs`, which sets the same
 /// precedent), so `MobCategory::MONSTER` stands in for it. This is broader than vanilla's
@@ -23,18 +27,26 @@ const RECIPROCAL_CHANCE: i32 = 5;
 /// Pumpkin's data does implement `Enemy` in vanilla, so the sets coincide today.
 #[must_use]
 pub fn is_hostile_target(entity_type: &EntityType) -> bool {
-    entity_type.category == &MobCategory::MONSTER && entity_type != &EntityType::CREEPER
+    entity_type.category == &MobCategory::MONSTER
 }
 
-/// Makes a mob (currently only the iron golem) attack the nearest hostile mob.
+/// Iron Golem's predicate additionally excludes creepers: `target instanceof Enemy &&
+/// !(target instanceof Creeper)` (`IronGolem.java`).
+#[must_use]
+pub fn is_hostile_target_excluding_creeper(entity_type: &EntityType) -> bool {
+    is_hostile_target(entity_type) && entity_type != &EntityType::CREEPER
+}
+
+/// Makes a mob attack the nearest hostile mob (an "any `Enemy`" target, as opposed to
+/// `ActiveTargetGoal`'s single fixed `EntityType`).
 ///
-/// Mirrors vanilla's `NearestAttackableTargetGoal<Mob>(golem, Mob.class, 5, false, false,
-/// (target, level) -> target instanceof Enemy && !(target instanceof Creeper))`.
+/// Mirrors vanilla's `NearestAttackableTargetGoal<Mob>` with a `target instanceof Enemy`
+/// predicate. Iron Golem additionally excludes creepers; Snow Golem does not.
 ///
-/// Notably this has **no village-proximity condition** in vanilla -- an iron golem attacks
-/// any nearby hostile mob within follow range regardless of whether it is near a village.
-/// The "defends the village" framing comes from where golems are usually found (villages),
-/// not from a check in this goal.
+/// Iron Golem's usage notably has **no village-proximity condition** in vanilla -- it
+/// attacks any nearby hostile mob within follow range regardless of whether it is near a
+/// village. The "defends the village" framing comes from where golems are usually found
+/// (villages), not from a check in this goal.
 ///
 /// This is a thin category-based sibling of `ActiveTargetGoal`, following the same
 /// precedent as `non_tame_random_target.rs`: `ActiveTargetGoal` itself is left untouched
@@ -44,14 +56,32 @@ pub struct NearestHostileTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
     reciprocal_chance: i32,
+    exclude_creeper: bool,
     target_predicate: TargetPredicate,
 }
 
 impl NearestHostileTargetGoal {
+    /// Iron Golem: `reciprocalChance = 5`, `checkSight = false`, excludes creepers.
     #[must_use]
     pub fn new(mob: &MobEntity) -> Box<Self> {
-        // Vanilla: `checkSight = false, checkCanNavigate = false`.
-        let track_target_goal = TrackTargetGoal::new(false, false);
+        Self::with_params(mob, IRON_GOLEM_RECIPROCAL_CHANCE, false, true)
+    }
+
+    /// Snow Golem: `reciprocalChance = 10`, `checkSight = true`, includes creepers.
+    #[must_use]
+    pub fn new_for_snow_golem(mob: &MobEntity) -> Box<Self> {
+        Self::with_params(mob, SNOW_GOLEM_RECIPROCAL_CHANCE, true, false)
+    }
+
+    #[must_use]
+    pub fn with_params(
+        mob: &MobEntity,
+        reciprocal_chance: i32,
+        check_visibility: bool,
+        exclude_creeper: bool,
+    ) -> Box<Self> {
+        // Vanilla: `checkCanNavigate = false` for both current callers.
+        let track_target_goal = TrackTargetGoal::new(check_visibility, false);
         let mut target_predicate = TargetPredicate::create_attackable();
         target_predicate.base_max_distance = mob
             .living_entity
@@ -60,7 +90,8 @@ impl NearestHostileTargetGoal {
         Box::new(Self {
             track_target_goal,
             target: None,
-            reciprocal_chance: to_goal_ticks(RECIPROCAL_CHANCE),
+            reciprocal_chance: to_goal_ticks(reciprocal_chance),
+            exclude_creeper,
             target_predicate,
         })
     }
@@ -80,10 +111,18 @@ impl NearestHostileTargetGoal {
         // target conditions are evaluated per candidate in distance order so a single
         // invalid nearby entity (e.g. an invulnerable creative player, though not relevant
         // for `Mob` targets specifically) can't hide a valid target behind it.
+        let exclude_creeper = self.exclude_creeper;
         let mut candidates: Vec<Arc<dyn EntityBase>> = world
             .get_nearby_entities(search_pos, follow_range)
             .into_values()
-            .filter(|entity| is_hostile_target(entity.get_entity().entity_type))
+            .filter(|entity| {
+                let entity_type = entity.get_entity().entity_type;
+                if exclude_creeper {
+                    is_hostile_target_excluding_creeper(entity_type)
+                } else {
+                    is_hostile_target(entity_type)
+                }
+            })
             .collect();
         candidates.sort_by(|a, b| {
             let sq_dist = |e: &Arc<dyn EntityBase>| {
@@ -157,8 +196,9 @@ mod tests {
     }
 
     #[test]
-    fn creeper_is_excluded() {
-        assert!(!is_hostile_target(&EntityType::CREEPER));
+    fn creeper_is_hostile_but_excluded_for_iron_golem() {
+        assert!(is_hostile_target(&EntityType::CREEPER));
+        assert!(!is_hostile_target_excluding_creeper(&EntityType::CREEPER));
     }
 
     #[test]
@@ -166,5 +206,6 @@ mod tests {
         assert!(!is_hostile_target(&EntityType::VILLAGER));
         assert!(!is_hostile_target(&EntityType::IRON_GOLEM));
         assert!(!is_hostile_target(&EntityType::COW));
+        assert!(!is_hostile_target_excluding_creeper(&EntityType::VILLAGER));
     }
 }

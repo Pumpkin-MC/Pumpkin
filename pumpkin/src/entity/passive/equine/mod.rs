@@ -46,6 +46,19 @@ use crate::entity::{
     EntityBase, EntityBaseFuture, mob::Mob, passive::animal::Animal, player::Player,
 };
 
+/// `ItemTags.HORSE_TEMPT_ITEMS` (`AbstractHorse.java:151`): golden carrot, golden apple,
+/// enchanted golden apple.
+///
+/// `TemptGoal` only supports a static item list (not a tag predicate), so the tag is
+/// inlined here. Shared by Horse, Donkey and Mule (all three inherit `AbstractHorse`'s
+/// base tempt goal; SkeletonHorse/ZombieHorse override `addBehaviourGoals` with their own
+/// food).
+pub const HORSE_TEMPT_ITEMS: &[&Item] = &[
+    &Item::GOLDEN_CARROT,
+    &Item::GOLDEN_APPLE,
+    &Item::ENCHANTED_GOLDEN_APPLE,
+];
+
 /// `AbstractHorse.java` `DATA_ID_FLAGS` bits.
 ///
 /// `FLAG_TAME` (2) is intentionally not here -- `MobEntity::is_tamed`/`set_owner` is the single
@@ -211,6 +224,15 @@ pub trait AbstractHorse: Animal {
 
     fn can_perform_rearing(&self) -> bool {
         true
+    }
+
+    /// `AbstractHorse.isImmobile`: `super.isImmobile() && isVehicle() && isSaddled() ||
+    /// isEating() || isStanding()`. The `super.isImmobile()` (dead-or-dying) clause combined
+    /// with the ridden-and-saddled check is omitted here as a rare edge case; eating/standing
+    /// are the two states `RandomStandGoal` actually cares about.
+    fn is_immobile(&self) -> bool {
+        let data = self.horse_data();
+        data.get_flag(FLAG_EATING) || data.get_flag(FLAG_STANDING)
     }
 
     fn can_fall_in_love(&self) -> bool {

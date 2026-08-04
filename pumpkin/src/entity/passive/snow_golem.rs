@@ -5,9 +5,9 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, ranged_snowball_attack::RangedSnowballAttackGoal,
-        wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        nearest_hostile_target::NearestHostileTargetGoal,
+        ranged_snowball_attack::RangedSnowballAttackGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -30,17 +30,22 @@ impl SnowGolemEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // `SnowGolem.java`'s `registerGoals`: priorities 1 (attack), 2 (wander), 3 (look at
+            // player), 4 (random look around).
             goal_selector.add_goal(1, Box::new(RangedSnowballAttackGoal::new(20, 10.0)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(2, Box::new(WanderAroundGoal::new_water_avoiding(1.0)));
             goal_selector.add_goal(
-                6,
+                3,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(4, Box::new(RandomLookAroundGoal::default()));
 
+            // `SnowGolem.java`'s `targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(
+            // this, Mob.class, 10, true, false, (target, level) -> target instanceof Enemy))`
+            // -- any hostile mob (including creepers), not just zombies.
             target_selector.add_goal(
                 1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::ZOMBIE, true),
+                NearestHostileTargetGoal::new_for_snow_golem(&mob_arc.mob_entity),
             );
         };
 

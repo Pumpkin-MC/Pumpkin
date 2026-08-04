@@ -12,6 +12,7 @@ use rand::RngExt;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
+        ambient_stand::AmbientStandGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         skeleton_trap::SkeletonTrapGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
@@ -57,6 +58,8 @@ impl SkeletonHorseEntity {
             Arc::downgrade(&mob_arc)
         };
 
+        let horse_weak: Weak<Self> = Arc::downgrade(&mob_arc);
+
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
@@ -64,12 +67,17 @@ impl SkeletonHorseEntity {
             // Vanilla priority 1 (dynamically added/removed via `setTrap`); see
             // `SkeletonTrapGoal`'s doc comment for why Pumpkin registers it unconditionally.
             goal_selector.add_goal(1, SkeletonTrapGoal::new(Arc::downgrade(&mob_arc)));
-            goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(0.7)));
+            // `SkeletonHorse.java:65-66`: `addBehaviourGoals` is overridden to empty, so no
+            // tempt/float/panic goal here (unlike Horse/Donkey/Mule) -- only the base
+            // `AbstractHorse.registerGoals` priorities 4/6/7/8/9 apply.
+            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.0)));
+            goal_selector.add_goal(6, Box::new(WanderAroundGoal::new_water_avoiding(0.7)));
             goal_selector.add_goal(
-                3,
+                7,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(4, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(9, AmbientStandGoal::new(horse_weak));
         };
 
         mob_arc
