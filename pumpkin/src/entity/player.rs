@@ -1067,7 +1067,7 @@ impl Player {
         let is_mace_smash = matches!(attack_type, AttackType::MaceSmash);
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
-            damage += 1.5 * f64::from(fall_distance);
+            damage += combat::mace_smash_damage_bonus(f64::from(fall_distance));
 
             let density_level = item_stack
                 .lock()

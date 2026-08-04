@@ -161,6 +161,18 @@ pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f6
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
 }
 
+/// vanilla `MaceItem.getAttackDamageBonus`: a tiered formula, not a flat multiplier.
+/// 4 per block up to 3 blocks, 2 per block from 3 to 8, then 1 per block beyond that.
+pub fn mace_smash_damage_bonus(fall_distance: f64) -> f64 {
+    if fall_distance <= 3.0 {
+        4.0 * fall_distance
+    } else if fall_distance <= 8.0 {
+        12.0 + 2.0 * (fall_distance - 3.0)
+    } else {
+        22.0 + fall_distance - 8.0
+    }
+}
+
 /// Density (enchantment/density.json): `smash_damage_per_fallen_block`, via the
 /// [`crate::enchantment`] framework's [`EnchantmentEffect::SmashDamagePerFallenBlock`],
 /// multiplied by mace fall distance.
@@ -261,7 +273,7 @@ pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type:
 mod tests {
     use super::{
         breach_armor_fraction, can_critical_attack, can_sweep_attack, density_extra_damage,
-        knockback_after_resistance, wind_burst_knockback_multiplier,
+        knockback_after_resistance, mace_smash_damage_bonus, wind_burst_knockback_multiplier,
     };
 
     #[test]
@@ -341,5 +353,24 @@ mod tests {
     #[test]
     fn breach_clamps_armor_fraction_to_zero() {
         assert_eq!(breach_armor_fraction(0.1, 4), 0.0);
+    }
+
+    #[test]
+    fn mace_smash_damage_first_tier() {
+        assert_eq!(mace_smash_damage_bonus(0.0), 0.0);
+        assert_eq!(mace_smash_damage_bonus(2.0), 8.0);
+        assert_eq!(mace_smash_damage_bonus(3.0), 12.0);
+    }
+
+    #[test]
+    fn mace_smash_damage_second_tier() {
+        assert_eq!(mace_smash_damage_bonus(5.0), 16.0);
+        assert_eq!(mace_smash_damage_bonus(8.0), 22.0);
+    }
+
+    #[test]
+    fn mace_smash_damage_third_tier() {
+        assert_eq!(mace_smash_damage_bonus(10.0), 24.0);
+        assert_eq!(mace_smash_damage_bonus(20.0), 34.0);
     }
 }
