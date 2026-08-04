@@ -709,6 +709,28 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
+    /// Vanilla `Mob.wantsToPickUp` default: delegates to `canHoldItem`, which defaults to
+    /// `true`. Whether picking up is ever attempted at all is gated separately by
+    /// `can_pick_up_loot`.
+    fn wants_to_pick_up_item(&self, _stack: &ItemStack) -> bool {
+        true
+    }
+
+    /// Vanilla `Mob.canPickUpLoot`: whether this mob is allowed to pick up dropped items at
+    /// all. Backed by the mob's `CanPickUpLoot` tracked-data flag, which defaults to `false`
+    /// and is set at spawn time for a few mob types (see `equipment.rs`).
+    fn can_pick_up_loot(&self) -> bool {
+        self.get_mob_entity().can_pick_up_loot()
+    }
+
+    /// Vanilla `Mob.onItemPickup`/`equipItemIfPossible`: called once a candidate item stack
+    /// has passed `wants_to_pick_up_item`, to actually take it. Returns the number of items
+    /// taken from the stack; the caller only shrinks/removes the `ItemEntity` by that count.
+    /// Default takes nothing, so no `ItemEntity` is ever touched unless a mob overrides this.
+    fn on_item_pickup(&self, _stack: &ItemStack) -> u8 {
+        0
+    }
+
     fn get_owner_uuid(&self) -> Option<Uuid> {
         self.get_mob_entity().owner.load()
     }
