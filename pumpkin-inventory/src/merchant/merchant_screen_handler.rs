@@ -307,10 +307,14 @@ impl ScreenHandler for MerchantScreenHandler {
 
             self.internal_on_slot_click(slot_index, button, action_type, player)
                 .await;
-            if slot_index == 0 || slot_index == 1 || slot_index == 2 {
-                self.update_result_slot().await;
-                self.send_content_updates().await;
-            }
+            // Vanilla triggers `updateSellItem` on any mutation of the payment slots
+            // (`MerchantContainer.setItem`/`removeItem` both check `isPaymentSlot`), not
+            // just clicks directly on slots 0/1/2 -- a shift-click (`QuickMove`) from a
+            // player-inventory slot into slot 0/1 has `slot_index` pointing at the player
+            // slot, so gating this on `slot_index` missed that case and left the result
+            // slot stale until another click touched slots 0-2 directly.
+            self.update_result_slot().await;
+            self.send_content_updates().await;
         })
     }
 }
