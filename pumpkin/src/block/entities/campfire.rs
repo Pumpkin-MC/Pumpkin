@@ -75,6 +75,14 @@ impl BlockEntity for CampfireBlockEntity {
         Box::pin(async move {
             let (block, state) = world.get_block_and_state(&self.position);
             if !CampfireLikeProperties::from_state_id(state.id, block).lit {
+                for slot in 0..self.items.len() {
+                    let total_time = *self.cooking_total_times[slot].lock().await;
+                    let mut cooking_time = self.cooking_times[slot].lock().await;
+                    if *cooking_time > 0 {
+                        *cooking_time = (*cooking_time - 2).clamp(0, total_time.max(0));
+                        self.dirty.store(true, Ordering::Relaxed);
+                    }
+                }
                 return;
             }
 
