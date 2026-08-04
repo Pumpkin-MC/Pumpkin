@@ -1133,6 +1133,14 @@ impl Player {
                 &pos,
             );
 
+            combat::mace_smash_knockback(
+                &world,
+                self.living_entity.entity.entity_uuid,
+                &victim,
+                fall_distance,
+            )
+            .await;
+
             let wind_burst_level = item_stack
                 .lock()
                 .await
