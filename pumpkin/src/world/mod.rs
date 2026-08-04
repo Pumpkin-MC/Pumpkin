@@ -1818,7 +1818,7 @@ impl World {
         &self,
         base_config: &BasicConfiguration,
         player: Arc<Player>,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         static CREATIVE_CONTENT: std::sync::OnceLock<(Vec<Group>, Vec<Entry>)> =
             std::sync::OnceLock::new();
@@ -2557,8 +2557,8 @@ impl World {
         )
         .color_named(NamedColor::Yellow);
 
-        let event = PlayerJoinEvent::new(player.clone(), msg_comp);
-        let event = server.plugin_manager.fire(event).await;
+        let mut event = PlayerJoinEvent::new(player.clone(), msg_comp);
+        server.plugin_manager.fire(server, &mut event).await;
 
         if !event.cancelled {
             self.broadcast_system_message(&event.join_message, false)
@@ -3231,9 +3231,9 @@ impl World {
             [TextComponent::text(player.gameprofile.name.clone())],
         )
         .color_named(NamedColor::Yellow);
-        let event = PlayerJoinEvent::new(player.clone(), msg_comp);
+        let mut event = PlayerJoinEvent::new(player.clone(), msg_comp);
 
-        let event = server.plugin_manager.fire(event).await;
+        server.plugin_manager.fire(server, &mut event).await;
 
         if !event.cancelled {
             self.broadcast_system_message(&event.join_message, false)
@@ -3425,18 +3425,16 @@ impl World {
         // the non-cancellable PlayerRespawnEvent, which observes the resolved world.
         let (resolved_world, position, yaw, pitch) = if let Some(new_world) = candidate_world {
             if let Some(server) = self.server.upgrade() {
-                let event = server
-                    .plugin_manager
-                    .fire(PlayerChangeWorldEvent {
-                        player: player.clone(),
-                        previous_world: self.clone(),
-                        new_world: new_world.clone(),
-                        position,
-                        yaw,
-                        pitch,
-                        cancelled: false,
-                    })
-                    .await;
+                let mut event = PlayerChangeWorldEvent {
+                    player: player.clone(),
+                    previous_world: self.clone(),
+                    new_world: new_world.clone(),
+                    position,
+                    yaw,
+                    pitch,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire(&server, &mut event).await;
 
                 if event.cancelled {
                     (None, position, yaw, pitch)
@@ -3508,17 +3506,20 @@ impl World {
 
         // Notify plugins that the player has respawned (non-cancellable).
         if let Some(server) = self.server.upgrade() {
-            let _ = server
+            server
                 .plugin_manager
-                .fire(PlayerRespawnEvent::new(
-                    player.clone(),
-                    self.clone(),
-                    target_world.clone(),
-                    position,
-                    yaw,
-                    pitch,
-                    alive,
-                ))
+                .fire(
+                    &server,
+                    &mut PlayerRespawnEvent::new(
+                        player.clone(),
+                        self.clone(),
+                        target_world.clone(),
+                        position,
+                        yaw,
+                        pitch,
+                        alive,
+                    ),
+                )
                 .await;
         }
 
@@ -4167,21 +4168,17 @@ impl World {
                     [TextComponent::text(player.gameprofile.name.clone())],
                 )
                 .color_named(NamedColor::Yellow);
-                let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
+                let mut event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
-                let event = self
-                    .server
-                    .upgrade()
-                    .unwrap()
-                    .plugin_manager
-                    .fire(event)
-                    .await;
+                if let Some(server) = self.server.upgrade() {
+                    server.plugin_manager.fire(&server, &mut event).await;
 
-                if !event.cancelled {
-                    for player in self.players.load().iter() {
-                        player.send_system_message(&event.leave_message).await;
+                    if !event.cancelled {
+                        for player in self.players.load().iter() {
+                            player.send_system_message(&event.leave_message).await;
+                        }
+                        info!("{}", event.leave_message.to_pretty_console());
                     }
-                    info!("{}", event.leave_message.to_pretty_console());
                 }
             }
         }
@@ -4571,7 +4568,7 @@ impl World {
         if is_air(broken_block_state) {
             return None;
         }
-        let event = BlockBreakEvent::new(
+        let mut event = BlockBreakEvent::new(
             cause.clone(),
             broken_block,
             *position,
@@ -4579,13 +4576,12 @@ impl World {
             !flags.contains(BlockFlags::SKIP_DROPS),
         );
 
-        let event = self
-            .server
-            .upgrade()
-            .unwrap()
-            .plugin_manager
-            .fire::<BlockBreakEvent>(event)
-            .await;
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire::<BlockBreakEvent>(&server, &mut event)
+                .await;
+        }
 
         if !event.cancelled {
             let mut flags = flags;
