@@ -1,4 +1,7 @@
-use std::sync::{Arc, Weak, atomic::Ordering::Relaxed};
+use std::sync::{
+    Arc, Weak,
+    atomic::{AtomicI32, Ordering::Relaxed},
+};
 
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -27,12 +30,19 @@ const EFFECT_DISPLAY_LIMIT: i32 = 1200;
 
 pub struct ElderGuardianEntity {
     pub mob_entity: MobEntity,
+    /// Stands in for vanilla's `Entity.tickCount`. `Entity::age` cannot be used here:
+    /// in Pumpkin it is the breeding age (negative means baby) and is never advanced
+    /// per tick.
+    tick_count: AtomicI32,
 }
 
 impl ElderGuardianEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let guardian = Self { mob_entity };
+        let guardian = Self {
+            mob_entity,
+            tick_count: AtomicI32::new(0),
+        };
         let mob_arc = Arc::new(guardian);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -143,7 +153,12 @@ impl Mob for ElderGuardianEntity {
 
             // Vanilla staggers the aura per entity so guardians in one monument do not
             // all fire on the same tick.
-            if (entity.age.load(Relaxed) + entity.entity_id) % EFFECT_INTERVAL == 0 {
+            let ticks = self.tick_count.fetch_add(1, Relaxed);
+            if ticks
+                .wrapping_add(entity.entity_id)
+                .rem_euclid(EFFECT_INTERVAL)
+                == 0
+            {
                 self.apply_mining_fatigue().await;
             }
         })
