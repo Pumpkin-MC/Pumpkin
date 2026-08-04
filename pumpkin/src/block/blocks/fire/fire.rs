@@ -165,6 +165,17 @@ impl FireBlock {
                     .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
                     .await;
             } else {
+                let mut burn_event = crate::plugin::block::block_burn::BlockBurnEvent {
+                    igniting_block: &Block::FIRE,
+                    block: old_block,
+                    cancelled: false,
+                };
+                if let Some(server) = world.server.upgrade() {
+                    server.plugin_manager.fire(&server, &mut burn_event).await;
+                }
+                if burn_event.cancelled {
+                    return;
+                }
                 world
                     .set_block_state(
                         pos,

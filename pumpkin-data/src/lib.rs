@@ -294,6 +294,11 @@ pub mod fuels;
 #[path = "generated/effect.rs"]
 pub mod effect;
 
+#[cfg(feature = "effect")]
+#[rustfmt::skip]
+#[path = "generated/status_effect.rs"]
+pub mod status_effect;
+
 #[cfg(feature = "structures")]
 #[rustfmt::skip]
 #[path = "generated/structures.rs"]

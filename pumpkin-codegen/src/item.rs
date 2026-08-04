@@ -835,7 +835,9 @@ impl ToTokens for ItemComponents {
         }
         if let Some(scale) = self.potion_duration_scale {
             let scale_lit = LitFloat::new(&format!("{scale:?}f32"), Span::call_site());
-            tokens.extend(quote! { (PotionDurationScale, &PotionDurationScaleImpl { scale: #scale_lit }), });
+            tokens.extend(
+                quote! { (PotionDurationScale, &PotionDurationScaleImpl { scale: #scale_lit }), },
+            );
         }
         if self.provides_banner_patterns.is_some() {
             tokens.extend(quote! { (ProvidesBannerPatterns, &ProvidesBannerPatternsImpl), });

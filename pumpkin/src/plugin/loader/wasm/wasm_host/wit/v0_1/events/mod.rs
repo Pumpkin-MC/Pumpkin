@@ -24,6 +24,8 @@ use crate::{
 };
 
 pub mod block;
+pub mod entity;
+pub mod inventory;
 pub mod player;
 pub mod server;
 pub mod world;
