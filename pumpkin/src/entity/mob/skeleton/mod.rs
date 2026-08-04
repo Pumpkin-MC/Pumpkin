@@ -33,6 +33,13 @@ const SKELETON_ATTACK_INTERVAL: i32 = 20;
 /// `Parched#getHardAttackInterval` (Parched.java).
 const PARCHED_ATTACK_INTERVAL: i32 = 50;
 
+/// `Bogged#getHardAttackInterval` (Bogged.java).
+///
+/// Same "hard value used unconditionally" simplification as `SKELETON_ATTACK_INTERVAL`/
+/// `PARCHED_ATTACK_INTERVAL` above -- `Bogged#getAttackInterval` (70, the non-hard-difficulty
+/// value) is not modeled since `reassessWeaponGoal` is never re-run here.
+pub const BOGGED_ATTACK_INTERVAL: i32 = 50;
+
 /// `Parched#getArrow` (Parched.java) attaches `new MobEffectInstance(MobEffects.WEAKNESS, 600)`
 /// to every arrow it fires; that constructor defaults to amplifier 0, non-ambient, with
 /// particles and icon shown.
@@ -40,6 +47,17 @@ const PARCHED_ARROW_EFFECTS: &[StatusEffectInstance] = &[StatusEffectInstance {
     effect_id: std::borrow::Cow::Borrowed("minecraft:weakness"),
     amplifier: 0,
     duration: 600,
+    ambient: false,
+    show_particles: true,
+    show_icon: true,
+}];
+
+/// `Bogged#getArrow` (Bogged.java) attaches `new MobEffectInstance(MobEffects.POISON, 100)` to
+/// every arrow it fires.
+pub const BOGGED_ARROW_EFFECTS: &[StatusEffectInstance] = &[StatusEffectInstance {
+    effect_id: std::borrow::Cow::Borrowed("minecraft:poison"),
+    amplifier: 0,
+    duration: 100,
     ambient: false,
     show_particles: true,
     show_icon: true,
@@ -53,6 +71,7 @@ impl SkeletonEntityBase {
     pub fn new(entity: Entity) -> Arc<Self> {
         let uses_bow = entity.entity_type != &EntityType::WITHER_SKELETON;
         let is_parched = entity.entity_type == &EntityType::PARCHED;
+        let is_bogged = entity.entity_type == &EntityType::BOGGED;
         let mob_entity = MobEntity::new(entity);
         let mob = Self { mob_entity };
         let mob_arc = Arc::new(mob);
@@ -89,6 +108,8 @@ impl SkeletonEntityBase {
                 // Vanilla `AbstractSkeleton#reassessWeaponGoal` selects this at priority 4.
                 let (interval, arrow_effects) = if is_parched {
                     (PARCHED_ATTACK_INTERVAL, PARCHED_ARROW_EFFECTS)
+                } else if is_bogged {
+                    (BOGGED_ATTACK_INTERVAL, BOGGED_ARROW_EFFECTS)
                 } else {
                     (SKELETON_ATTACK_INTERVAL, &[][..])
                 };
