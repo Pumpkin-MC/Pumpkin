@@ -21,7 +21,7 @@ pub static GENERATION_SETTINGS: LazyLock<Arc<Registry<GenerationSettings>>> = La
             registry.clone(),
         )
         .unwrap();
-    return registry;
+    registry
 });
 pub struct GenerationSettings {
     pub aquifers_enabled: bool,

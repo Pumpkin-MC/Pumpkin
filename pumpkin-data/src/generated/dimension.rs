@@ -18,7 +18,7 @@ pub static DIMENSIONS: LazyLock<Arc<Registry<Dimension>>> = LazyLock::new(|| {
             registry.clone(),
         )
         .unwrap();
-    return registry;
+    registry
 });
 #[derive(Debug, Clone)]
 pub struct Dimension {

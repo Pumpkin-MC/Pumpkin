@@ -189,7 +189,7 @@ pub fn build() -> TokenStream {
                 initialize(&registry).unwrap();
                 // This should never fail unless dimension_type got registered in another piece of code
                 pumpkin_registry::ROOT.register_arc(Identifier::vanilla_static("dimension_type"),registry.clone()).unwrap();
-                return registry;
+                registry
             });
 
 

@@ -492,7 +492,7 @@ pub fn build() -> TokenStream {
         use crate::chunk::DoublePerlinNoiseParameters;
         use crate::dimension::Dimension;
         use crate::worldgen;
-        use pumpkin_registry::{Registry, error::RegistryInsertError}; 
+        use pumpkin_registry::{Registry, error::RegistryInsertError};
         use pumpkin_util::identifier::Identifier;
         use pumpkin_util::random::RandomDeriver;
         use pumpkin_util::y_offset::Absolute;
@@ -510,7 +510,7 @@ pub fn build() -> TokenStream {
                     registry.clone(),
                 )
                 .unwrap();
-            return registry;
+            registry
         });
 
         pub struct GenerationSettings {
