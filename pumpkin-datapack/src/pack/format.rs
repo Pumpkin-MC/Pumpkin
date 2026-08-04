@@ -1,4 +1,4 @@
-/// Pack format versioning (major.minor, e.g. 81.1).
+/// Pack format versioning (major.minor, e.g. 107.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PackFormat {
     pub major: u32,
@@ -6,9 +6,9 @@ pub struct PackFormat {
 }
 
 impl PackFormat {
-    /// The current server data pack format (26.2 -> major=81, minor=1).
+    /// The current server data pack format (26.2 -> 107.1).
     pub const CURRENT: Self = Self {
-        major: 81,
+        major: 107,
         minor: 1,
     };
 
@@ -25,6 +25,18 @@ impl PackFormat {
     }
 }
 
+impl PartialOrd for PackFormat {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PackFormat {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.major, self.minor).cmp(&(other.major, other.minor))
+    }
+}
+
 /// A range of pack formats (inclusive on both ends).
 #[derive(Debug, Clone)]
 pub enum FormatRange {
@@ -33,6 +45,15 @@ pub enum FormatRange {
 }
 
 impl FormatRange {
+    /// The inclusive lower and upper bounds of this range.
+    #[must_use]
+    pub const fn bounds(&self) -> (PackFormat, PackFormat) {
+        match self {
+            Self::Single(f) => (*f, *f),
+            Self::Range { min, max } => (*min, *max),
+        }
+    }
+
     /// Check if the given pack format is within this range.
     #[must_use]
     pub const fn contains(&self, format: PackFormat) -> bool {
@@ -71,18 +92,22 @@ pub enum PackCompatibility {
     Compatible,
     TooOld,
     TooNew,
+    /// The pack declares no usable format information.
+    Unknown,
 }
 
 impl PackCompatibility {
     #[must_use]
-    pub const fn check(pack_format: u32, supported: &FormatRange) -> Self {
-        let pf = PackFormat::new(pack_format, 0);
-        if supported.contains(pf) {
-            Self::Compatible
-        } else if pack_format < PackFormat::CURRENT.major {
+    pub fn check(declared: &FormatRange, game: PackFormat) -> Self {
+        let (min, max) = declared.bounds();
+        if min.major == u32::MAX {
+            Self::Unknown
+        } else if max < game {
             Self::TooOld
-        } else {
+        } else if game < min {
             Self::TooNew
+        } else {
+            Self::Compatible
         }
     }
 }

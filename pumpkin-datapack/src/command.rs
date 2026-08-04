@@ -1,5 +1,5 @@
 use crate::DataPackManager;
-use crate::pack::format::PackCompatibility;
+use crate::pack::format::{PackCompatibility, PackFormat};
 
 /// Implements the `/datapack` command.
 ///
@@ -95,14 +95,12 @@ impl DatapackCommand {
         }
         std::fs::create_dir_all(pack_dir.join("data").join("minecraft"))?;
 
+        let current = PackFormat::CURRENT;
         let mcmeta = serde_json::json!({
             "pack": {
                 "description": description,
-                "pack_format": 81,
-                "supported_formats": {
-                    "min_inclusive": [81, 0],
-                    "max_inclusive": [81, 2147483647]
-                }
+                "min_format": current.major,
+                "max_format": [current.major, current.minor],
             }
         });
         std::fs::write(
@@ -132,6 +130,7 @@ impl DatapackCommand {
                     PackCompatibility::Compatible => "§a✔",
                     PackCompatibility::TooOld => "§c✘ (too old)",
                     PackCompatibility::TooNew => "§c✘ (too new)",
+                    PackCompatibility::Unknown => "§7? (unknown)",
                 };
                 let enabled = if repo.selected_ids().contains(&id) {
                     "§e[enabled]"

@@ -20,7 +20,7 @@ pub struct PackSection {
     /// Can be a plain string or a `TextComponent` JSON object.
     #[serde(default)]
     pub description: serde_json::Value,
-    /// Vanilla `pack_format` (e.g. 81). Not present in all packs; some use `min_format`/`max_format`.
+    /// Vanilla `pack_format` (e.g. 107). Legacy; new packs use `min_format`/`max_format`.
     #[serde(default = "default_pack_format")]
     pub pack_format: u32,
     /// Supported format range (object or number); alternative to `min_format`/`max_format`.
@@ -35,23 +35,37 @@ pub struct PackSection {
 }
 
 const fn default_pack_format() -> u32 {
-    81
+    PackFormat::CURRENT.major
 }
 
 impl PackMcmeta {
-    /// Resolve the supported format range from `pack_format` and optional `supported_formats`.
+    /// Resolve the supported format range declared by the pack.
+    ///
+    /// `min_format`/`max_format` fields (used since 25w31a) take precedence,
+    /// then the legacy `supported_formats`, then `pack_format`.
     #[must_use]
     pub fn supported_formats(&self) -> FormatRange {
-        self.pack.supported_formats.as_ref().map_or_else(
-            || FormatRange::Single(PackFormat::new(self.pack.pack_format, 0)),
-            |v| parse_format_range(v, self.pack.pack_format),
-        )
+        if let (Some(min), Some(max)) =
+            (self.pack.min_format.as_ref(), self.pack.max_format.as_ref())
+        {
+            let min = parse_version_pair(Some(min), self.pack.pack_format, 0);
+            let max = parse_version_pair(Some(max), self.pack.pack_format, u32::MAX);
+            return if min == max {
+                FormatRange::Single(min)
+            } else {
+                FormatRange::Range { min, max }
+            };
+        }
+        if let Some(v) = self.pack.supported_formats.as_ref() {
+            return parse_format_range(v, self.pack.pack_format);
+        }
+        FormatRange::Single(PackFormat::new(self.pack.pack_format, 0))
     }
 
     /// Compute compatibility with the server version.
     #[must_use]
     pub fn compatibility(&self) -> PackCompatibility {
-        PackCompatibility::check(self.pack.pack_format, &self.supported_formats())
+        PackCompatibility::check(&self.supported_formats(), PackFormat::CURRENT)
     }
 
     /// Return the list of overlay directories whose format range matches
@@ -79,8 +93,8 @@ fn parse_format_range(v: &serde_json::Value, fallback_major: u32) -> FormatRange
             0,
         )),
         serde_json::Value::Object(map) => {
-            let min = parse_version_pair(map.get("min_inclusive"), fallback_major);
-            let max = parse_version_pair(map.get("max_inclusive"), fallback_major);
+            let min = parse_version_pair(map.get("min_inclusive"), fallback_major, 0);
+            let max = parse_version_pair(map.get("max_inclusive"), fallback_major, 0);
             if min == max {
                 FormatRange::Single(min)
             } else {
@@ -91,17 +105,22 @@ fn parse_format_range(v: &serde_json::Value, fallback_major: u32) -> FormatRange
     }
 }
 
-fn parse_version_pair(v: Option<&serde_json::Value>, fallback_major: u32) -> PackFormat {
+fn parse_version_pair(
+    v: Option<&serde_json::Value>,
+    fallback_major: u32,
+    default_minor: u32,
+) -> PackFormat {
     match v {
-        Some(serde_json::Value::Number(n)) => {
-            PackFormat::new(n.as_u64().unwrap_or(u64::from(fallback_major)) as u32, 0)
-        }
+        Some(serde_json::Value::Number(n)) => PackFormat::new(
+            n.as_u64().unwrap_or(u64::from(fallback_major)) as u32,
+            default_minor,
+        ),
         Some(serde_json::Value::Array(arr)) if arr.len() >= 2 => {
             let major = arr[0].as_u64().unwrap_or(u64::from(fallback_major)) as u32;
-            let minor = arr[1].as_u64().unwrap_or(0) as u32;
+            let minor = arr[1].as_u64().unwrap_or(u64::from(default_minor)) as u32;
             PackFormat::new(major, minor)
         }
-        _ => PackFormat::new(fallback_major, 0),
+        _ => PackFormat::new(fallback_major, default_minor),
     }
 }
 
@@ -144,8 +163,8 @@ impl OverlayEntry {
                     max: PackFormat::new(arr[1], 0),
                 },
                 FormatRangeValue::Object(map) => {
-                    let min = parse_version_pair(map.get("min_inclusive"), 0);
-                    let max = parse_version_pair(map.get("max_inclusive"), 0);
+                    let min = parse_version_pair(map.get("min_inclusive"), 0, 0);
+                    let max = parse_version_pair(map.get("max_inclusive"), 0, 0);
                     if min == max {
                         FormatRange::Single(min)
                     } else {

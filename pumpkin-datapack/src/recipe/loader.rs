@@ -1,9 +1,18 @@
+use pumpkin_data::Enchantment;
+use pumpkin_data::data_component::DataComponent;
+use pumpkin_data::data_component_impl::{
+    BlockStateImpl, CustomModelDataImpl, CustomNameImpl, DamageImpl, DataComponentImpl,
+    EnchantmentsImpl, ItemModelImpl, MapIdImpl, MaxDamageImpl, MaxStackSizeImpl,
+    StoredEnchantmentsImpl, UnbreakableImpl,
+};
 use pumpkin_data::recipes::RecipeCategoryTypes;
 use pumpkin_protocol::codec::recipe::{
     DynamicRecipe, OwnedCookingRecipe, OwnedCookingRecipeType, OwnedCraftingRecipe,
     OwnedRecipeIngredient, OwnedRecipeResult,
 };
+use pumpkin_util::text::TextComponent;
 use serde::Deserialize;
+use std::borrow::Cow;
 
 use crate::resource::ResourceManager;
 
@@ -91,7 +100,7 @@ fn parse_recipe_json(data: &[u8]) -> Result<Option<DynamicRecipe>, serde_json::E
                     })
                 })
                 .unwrap_or_default();
-            let result = parse_result(raw.result)?;
+            let result = parse_result(raw.result.as_ref());
 
             Some(DynamicRecipe::Crafting(OwnedCraftingRecipe::Shaped {
                 category,
@@ -106,7 +115,7 @@ fn parse_recipe_json(data: &[u8]) -> Result<Option<DynamicRecipe>, serde_json::E
             let category = parse_category(raw.category.as_deref());
             let group = raw.group;
             let ingredients = parse_ingredients(raw.ingredients);
-            let result = parse_result(raw.result)?;
+            let result = parse_result(raw.result.as_ref());
 
             Some(DynamicRecipe::Crafting(OwnedCraftingRecipe::Shapeless {
                 category,
@@ -206,37 +215,207 @@ fn parse_ingredient(val: &serde_json::Value) -> OwnedRecipeIngredient {
     }
 }
 
-#[allow(clippy::unnecessary_wraps, clippy::option_if_let_else)]
-fn parse_result(val: Option<serde_json::Value>) -> Result<OwnedRecipeResult, serde_json::Error> {
-    let Some(val) = val else {
-        return Ok(OwnedRecipeResult {
+fn parse_result(val: Option<&serde_json::Value>) -> OwnedRecipeResult {
+    match val {
+        Some(serde_json::Value::String(s)) => OwnedRecipeResult {
+            item_id: s.clone(),
+            count: 1,
+            components: Vec::new(),
+        },
+        Some(serde_json::Value::Object(obj)) => {
+            // 26.x uses `id`; older packs use `item`.
+            let item_id = obj
+                .get("id")
+                .or_else(|| obj.get("item"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("minecraft:air")
+                .to_string();
+            let count = obj
+                .get("count")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(1)
+                .clamp(1, 99) as u8;
+            let components = parse_components(obj.get("components"));
+            OwnedRecipeResult {
+                item_id,
+                count,
+                components,
+            }
+        }
+        _ => OwnedRecipeResult {
             item_id: "minecraft:air".to_string(),
             count: 1,
-        });
-    };
-
-    if let Some(s) = val.as_str() {
-        Ok(OwnedRecipeResult {
-            item_id: s.to_string(),
-            count: 1,
-        })
-    } else if let Some(obj) = val.as_object() {
-        let item_id = obj
-            .get("item")
-            .and_then(|v| v.as_str())
-            .unwrap_or("minecraft:air")
-            .to_string();
-        let count = obj
-            .get("count")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(1) as u8;
-        Ok(OwnedRecipeResult { item_id, count })
-    } else {
-        Ok(OwnedRecipeResult {
-            item_id: "minecraft:air".to_string(),
-            count: 1,
-        })
+            components: Vec::new(),
+        },
     }
+}
+
+/// Parse the `components` object of a recipe result into typed data components.
+/// Unsupported or malformed components are skipped rather than failing the recipe.
+fn parse_components(
+    val: Option<&serde_json::Value>,
+) -> Vec<(DataComponent, Box<dyn DataComponentImpl>)> {
+    let Some(obj) = val.and_then(serde_json::Value::as_object) else {
+        return Vec::new();
+    };
+    let mut components = Vec::new();
+    for (name, value) in obj {
+        let Some(component) = parse_data_component(name, value) else {
+            tracing::warn!("Skipping unsupported recipe result component `{name}`");
+            continue;
+        };
+        components.push(component);
+    }
+    components
+}
+
+fn parse_data_component(
+    name: &str,
+    value: &serde_json::Value,
+) -> Option<(DataComponent, Box<dyn DataComponentImpl>)> {
+    let name = name.strip_prefix("minecraft:").unwrap_or(name);
+    match name {
+        "max_stack_size" => Some((
+            DataComponent::MaxStackSize,
+            MaxStackSizeImpl {
+                size: value.as_u64()? as u8,
+            }
+            .to_dyn(),
+        )),
+        "max_damage" => Some((
+            DataComponent::MaxDamage,
+            MaxDamageImpl {
+                max_damage: value.as_i64()? as i32,
+            }
+            .to_dyn(),
+        )),
+        "damage" => Some((
+            DataComponent::Damage,
+            DamageImpl {
+                damage: value.as_i64()? as i32,
+            }
+            .to_dyn(),
+        )),
+        "unbreakable" if value.is_boolean() || value.is_object() => {
+            Some((DataComponent::Unbreakable, UnbreakableImpl.to_dyn()))
+        }
+        "item_model" => Some((
+            DataComponent::ItemModel,
+            ItemModelImpl {
+                id: Cow::Owned(value.as_str()?.to_string()),
+            }
+            .to_dyn(),
+        )),
+        "custom_name" => Some((
+            DataComponent::CustomName,
+            CustomNameImpl {
+                name: serde_json::from_value::<TextComponent>(value.clone()).ok()?,
+            }
+            .to_dyn(),
+        )),
+        "map_id" => Some((
+            DataComponent::MapId,
+            MapIdImpl {
+                id: value.as_i64()? as i32,
+            }
+            .to_dyn(),
+        )),
+        "block_state" => Some((
+            DataComponent::BlockState,
+            BlockStateImpl {
+                properties: Cow::Owned(parse_block_state_properties(value)),
+            }
+            .to_dyn(),
+        )),
+        "custom_model_data" => Some((
+            DataComponent::CustomModelData,
+            parse_custom_model_data(value)?.to_dyn(),
+        )),
+        "enchantments" => Some((
+            DataComponent::Enchantments,
+            EnchantmentsImpl {
+                enchantment: Cow::Owned(parse_enchantments(value)?),
+            }
+            .to_dyn(),
+        )),
+        "stored_enchantments" => Some((
+            DataComponent::StoredEnchantments,
+            StoredEnchantmentsImpl {
+                enchantment: Cow::Owned(parse_enchantments(value)?),
+            }
+            .to_dyn(),
+        )),
+        _ => None,
+    }
+}
+
+fn parse_block_state_properties(
+    value: &serde_json::Value,
+) -> Vec<(Cow<'static, str>, Cow<'static, str>)> {
+    value
+        .as_object()
+        .map(|obj| {
+            obj.iter()
+                .filter_map(|(key, v)| {
+                    v.as_str()
+                        .map(|s| (Cow::Owned(key.clone()), Cow::Owned(s.to_string())))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_custom_model_data(value: &serde_json::Value) -> Option<CustomModelDataImpl> {
+    let obj = value.as_object()?;
+    let floats = obj
+        .get("floats")
+        .and_then(serde_json::Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_f64().map(|f| f as f32))
+                .collect()
+        })
+        .unwrap_or_default();
+    let flags = obj
+        .get("flags")
+        .and_then(serde_json::Value::as_array)
+        .map(|arr| arr.iter().filter_map(serde_json::Value::as_bool).collect())
+        .unwrap_or_default();
+    let strings = obj
+        .get("strings")
+        .and_then(serde_json::Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+    let colors = obj
+        .get("colors")
+        .and_then(serde_json::Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_i64().map(|i| i as i32))
+                .collect()
+        })
+        .unwrap_or_default();
+    Some(CustomModelDataImpl {
+        floats,
+        flags,
+        strings,
+        colors,
+    })
+}
+
+fn parse_enchantments(value: &serde_json::Value) -> Option<Vec<(&'static Enchantment, i32)>> {
+    let obj = value.as_object()?;
+    let mut out = Vec::with_capacity(obj.len());
+    for (id, level) in obj {
+        let enchantment = Enchantment::from_name(id)?;
+        let level = level.as_i64().unwrap_or(1);
+        out.push((enchantment, level as i32));
+    }
+    Some(out)
 }
 
 fn make_owned_cooking(raw: &RawRecipeJson) -> OwnedCookingRecipe {
@@ -244,33 +423,7 @@ fn make_owned_cooking(raw: &RawRecipeJson) -> OwnedCookingRecipe {
         OwnedRecipeIngredient::Simple("minecraft:air".to_string()),
         parse_ingredient,
     );
-    let result = raw
-        .result
-        .as_ref()
-        .and_then(|r| {
-            r.as_str()
-                .map(|s| OwnedRecipeResult {
-                    item_id: s.to_string(),
-                    count: 1,
-                })
-                .or_else(|| {
-                    r.as_object().map(|o| OwnedRecipeResult {
-                        item_id: o
-                            .get("item")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("minecraft:air")
-                            .to_string(),
-                        count: o
-                            .get("count")
-                            .and_then(serde_json::Value::as_u64)
-                            .unwrap_or(1) as u8,
-                    })
-                })
-        })
-        .unwrap_or_else(|| OwnedRecipeResult {
-            item_id: "minecraft:air".to_string(),
-            count: 1,
-        });
+    let result = parse_result(raw.result.as_ref());
 
     OwnedCookingRecipe {
         recipe_id: String::new(),

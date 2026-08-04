@@ -36,6 +36,7 @@ impl HostRecipeManager for PluginHostState {
             result: OwnedRecipeResult {
                 item_id: result_stack.item.registry_key.to_string(),
                 count: result_stack.item_count,
+                components: Vec::new(),
             },
         };
 
@@ -70,6 +71,7 @@ impl HostRecipeManager for PluginHostState {
             result: OwnedRecipeResult {
                 item_id: result_stack.item.registry_key.to_string(),
                 count: result_stack.item_count,
+                components: Vec::new(),
             },
         };
 
@@ -104,6 +106,7 @@ impl HostRecipeManager for PluginHostState {
             result: OwnedRecipeResult {
                 item_id: result_stack.item.registry_key.to_string(),
                 count: result_stack.item_count,
+                components: Vec::new(),
             },
         };
 
