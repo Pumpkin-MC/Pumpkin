@@ -64,12 +64,29 @@ fn offer_satisfied_by(
     )
 }
 
+/// `MerchantContainer.updateSellItem` (`MerchantContainer.java:107,112`) never selects an
+/// offer for which `offer.isOutOfStock()` (`MerchantOffer.java:197-199`: `uses >=
+/// maxUses`) holds. This must disqualify an offer from being selected, not just an
+/// ingredient mismatch.
+///
+/// Note: this codebase's `MerchantOffer::is_disabled` field is not vanilla's
+/// out-of-stock/disabled concept -- it is populated from `!rewardExp` (see
+/// `pumpkin/src/entity/passive/villager/mod.rs` and `wandering_trader.rs`), so it is
+/// intentionally not checked here; doing so would block every trade that simply doesn't
+/// award XP.
+const fn offer_is_available(offer: &pumpkin_protocol::java::client::play::MerchantOffer) -> bool {
+    offer.uses < offer.max_uses
+}
+
 /// Try both slot orders, matching `offer.take(buyA, buyB) || offer.take(buyB, buyA)`.
 fn offer_matches(
     offer: &pumpkin_protocol::java::client::play::MerchantOffer,
     slot0: &ItemStack,
     slot1: &ItemStack,
 ) -> Option<SlotOrder> {
+    if !offer_is_available(offer) {
+        return None;
+    }
     if offer_satisfied_by(offer, slot0, slot1) {
         Some(SlotOrder::Normal)
     } else if offer_satisfied_by(offer, slot1, slot0) {
@@ -425,5 +442,51 @@ mod test {
 
         assert!(offer_matches(&offer, &slot0, &slot1).is_none());
         assert!(offer_matches(&offer, &slot1, &slot0).is_none());
+    }
+
+    #[test]
+    fn out_of_stock_offer_does_not_match_even_with_correct_ingredients() {
+        let mut out_of_stock = offer(1, Some(5));
+        out_of_stock.uses = out_of_stock.max_uses;
+        let slot0 = ItemStack::new(1, &Item::EMERALD);
+        let slot1 = ItemStack::new(5, &Item::WHEAT);
+
+        assert!(offer_matches(&out_of_stock, &slot0, &slot1).is_none());
+    }
+
+    // A disqualified offer sitting in the offer list must not leak its result into the
+    // output slot, while a valid offer alongside it still trades normally -- mirrors
+    // `MerchantContainer.updateSellItem` refusing an out-of-stock recipe.
+    #[tokio::test]
+    async fn out_of_stock_offer_is_skipped_while_valid_offer_still_trades() {
+        let mut out_of_stock = offer(1, Some(5));
+        out_of_stock.uses = out_of_stock.max_uses;
+        let valid = offer(1, Some(5));
+
+        let slot0 = ItemStack::new(1, &Item::EMERALD);
+        let slot1 = ItemStack::new(5, &Item::WHEAT);
+        let mut inventory = SimpleInventory::new(3);
+        inventory.stacks[0] = Arc::new(tokio::sync::Mutex::new(slot0));
+        inventory.stacks[1] = Arc::new(tokio::sync::Mutex::new(slot1));
+        let mut handler = MerchantScreenHandler {
+            inventory: Arc::new(inventory),
+            behaviour: ScreenHandlerBehaviour::new(0, Some(WindowType::Merchant)),
+            selected_offer: 0,
+            offers: vec![out_of_stock, valid],
+            on_trade: None,
+        };
+
+        handler.update_result_slot().await;
+        {
+            let result = handler.inventory.get_stack(2).await;
+            let result = result.lock().await;
+            assert!(result.is_empty());
+        };
+
+        handler.set_selected_offer(1).await;
+        let result = handler.inventory.get_stack(2).await;
+        let result = result.lock().await;
+        assert_eq!(result.item.id, Item::DIAMOND.id);
+        assert_eq!(result.item_count, 1);
     }
 }
