@@ -118,7 +118,10 @@ impl Mob for PiglinEntity {
             let already_admiring = self.admiring_ticks.load(Ordering::Relaxed) > 0;
 
             if !is_gold_ingot || admiring_disabled || already_admiring || !self.is_adult() {
-                return self.mob_entity.mob_interact(player, item_stack).await;
+                return self
+                    .mob_entity
+                    .mob_interact(player, item_stack, self.can_be_leashed())
+                    .await;
             }
 
             let taken = ItemStack::new(1, &Item::GOLD_INGOT);

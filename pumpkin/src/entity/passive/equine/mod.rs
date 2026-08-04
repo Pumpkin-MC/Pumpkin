@@ -487,7 +487,9 @@ pub trait AbstractHorse: Animal {
             let is_vehicle = !entity.passengers.lock().await.is_empty();
 
             if is_vehicle || self.is_baby() {
-                return mob_entity.mob_interact(player, item_stack).await;
+                return mob_entity
+                    .mob_interact(player, item_stack, self.can_be_leashed())
+                    .await;
             }
 
             if self.is_tamed() && player.get_entity().is_sneaking() {
@@ -699,7 +701,9 @@ pub trait AbstractChestedHorse: AbstractHorse {
                     self.open_chest_inventory(player).await;
                     return true;
                 }
-                return mob_entity.mob_interact(player, item_stack).await;
+                return mob_entity
+                    .mob_interact(player, item_stack, self.can_be_leashed())
+                    .await;
             }
 
             if !item_stack.is_empty() {
