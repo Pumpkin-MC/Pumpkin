@@ -23,30 +23,38 @@ impl GoalSelector {
     }
 
     pub async fn remove_goal<G: Goal + 'static>(&mut self, mob: &dyn Mob) {
-        let mut goals_to_remove = Vec::with_capacity(2);
-        for (i, prioritized_goal) in &mut self.goals.iter_mut().enumerate() {
-            if TypeId::of::<G>() == prioritized_goal.type_id {
-                if prioritized_goal.running {
-                    prioritized_goal.stop(mob).await;
-                }
-                goals_to_remove.push(i);
+        for prioritized_goal in &mut self.goals {
+            if TypeId::of::<G>() == prioritized_goal.type_id && prioritized_goal.running {
+                prioritized_goal.stop(mob).await;
             }
         }
 
-        for goal_idx in goals_to_remove {
-            self.goals.swap_remove(goal_idx);
+        self.remove_goals_of_type(TypeId::of::<G>());
+    }
 
-            // This is very fast because arrays are on the stack and the compiler knows the size
-            for slot in &mut self.goals_by_control {
-                if *slot == usize::MAX {
-                    continue;
-                }
-                // Update the idx
-                if *slot == goal_idx {
-                    *slot = usize::MAX;
-                } else if *slot > goal_idx {
-                    *slot -= 1;
-                }
+    /// Removes every goal matching `type_id` and fixes up `goals_by_control` to still point at
+    /// the correct surviving goals. Split out from `remove_goal` (which additionally has to
+    /// `stop` running goals, requiring a `&dyn Mob`) so this index-remapping logic can be
+    /// exercised without one.
+    ///
+    /// `Vec::retain` preserves the relative order of the surviving goals, so a goal's new index
+    /// is simply the count of surviving goals before it -- unlike `swap_remove`, this can't move
+    /// an unrelated goal into a slot that `goals_by_control` still references.
+    fn remove_goals_of_type(&mut self, type_id: TypeId) {
+        let mut new_index = vec![usize::MAX; self.goals.len()];
+        let mut next = 0usize;
+        for (i, goal) in self.goals.iter().enumerate() {
+            if goal.type_id != type_id {
+                new_index[i] = next;
+                next += 1;
+            }
+        }
+
+        self.goals.retain(|goal| goal.type_id != type_id);
+
+        for slot in &mut self.goals_by_control {
+            if *slot != usize::MAX {
+                *slot = new_index[*slot];
             }
         }
     }
@@ -147,5 +155,44 @@ impl Default for GoalSelector {
             goals: Vec::default(),
             disabled_controls: Controls::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct RemoveMeGoal;
+    impl Goal for RemoveMeGoal {}
+
+    struct KeepMeGoal;
+    impl Goal for KeepMeGoal {}
+
+    #[test]
+    fn remove_goals_of_type_remaps_goals_by_control_after_multi_remove() {
+        let mut selector = GoalSelector::default();
+        selector.add_goal(0, Box::new(RemoveMeGoal)); // index 0
+        selector.add_goal(0, Box::new(RemoveMeGoal)); // index 1
+        selector.add_goal(0, Box::new(KeepMeGoal)); // index 2, should survive
+        selector.add_goal(0, Box::new(RemoveMeGoal)); // index 3
+
+        // Simulate `KeepMeGoal` (index 2) being the currently-running goal for MOVE, and a
+        // `RemoveMeGoal` (index 3) being tracked for LOOK.
+        selector.goals_by_control[Controls::MOVE.idx()] = 2;
+        selector.goals_by_control[Controls::LOOK.idx()] = 3;
+
+        // Removes 3 `RemoveMeGoal`s (indices 0, 1, 3) in a single call. The old `swap_remove`-in-
+        // a-loop code, run against this exact fixture, first misdirects the MOVE slot (its
+        // uniform `*slot -= 1` fixup doesn't account for `swap_remove` moving the *last* element
+        // into the removed slot, not shifting everything down by one) and then panics with an
+        // out-of-bounds `swap_remove` once the vector has shrunk past a stale collected index.
+        // The retain-based remap must instead still find `KeepMeGoal` and clear the LOOK slot.
+        selector.remove_goals_of_type(TypeId::of::<RemoveMeGoal>());
+
+        assert_eq!(selector.goals.len(), 1);
+        let kept_idx = selector.goals_by_control[Controls::MOVE.idx()];
+        assert_ne!(kept_idx, usize::MAX);
+        assert_eq!(selector.goals[kept_idx].type_id, TypeId::of::<KeepMeGoal>());
+        assert_eq!(selector.goals_by_control[Controls::LOOK.idx()], usize::MAX);
     }
 }

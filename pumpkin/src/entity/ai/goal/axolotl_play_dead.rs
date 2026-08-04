@@ -109,7 +109,7 @@ impl Goal for AxolotlPlayDeadGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move { self.ticks_remaining > 0 })
     }
 

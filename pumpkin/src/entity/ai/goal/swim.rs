@@ -31,7 +31,7 @@ impl Goal for SwimGoal {
         Box::pin(async move { Self::is_in_fluid(mob) })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move { Self::is_in_fluid(mob) })
     }
 

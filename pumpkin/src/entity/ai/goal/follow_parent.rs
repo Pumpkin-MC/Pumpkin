@@ -74,7 +74,7 @@ impl Goal for FollowParentGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let age = mob.get_mob_entity().living_entity.entity.age.load(Relaxed);
             if age >= 0 {

@@ -799,7 +799,7 @@ impl Goal for SulfurCubeSearchForItemsGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             !self.cube.is_baby()
                 && self.cube.pickup_timer.load(Ordering::Relaxed) <= 0
@@ -872,7 +872,7 @@ impl Goal for SulfurCubeTemptGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let Some(player) = self.target_player.lock().await.clone() else {
                 return false;

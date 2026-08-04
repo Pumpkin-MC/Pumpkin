@@ -106,7 +106,7 @@ impl Goal for InteractWithDoorGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             // Stop once we've passed through the door
             !self.passed_door

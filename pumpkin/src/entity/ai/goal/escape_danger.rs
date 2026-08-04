@@ -68,7 +68,7 @@ impl Goal for EscapeDangerGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let navigator = mob.get_mob_entity().navigator.lock().unwrap();
             !navigator.is_idle()

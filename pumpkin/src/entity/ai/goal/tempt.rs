@@ -83,7 +83,7 @@ impl Goal for TemptGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             if let Some(player) = &self.target_player {
                 self.is_player_still_tempting(player, mob).await

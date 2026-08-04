@@ -279,7 +279,7 @@ impl Goal for BeeAttackGoal {
         Box::pin(async move { self.can_sting() && self.melee.can_start(mob).await })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move { self.can_sting() && self.melee.should_continue(mob).await })
     }
 
@@ -436,7 +436,7 @@ impl Goal for BeePollinateGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let Some(bee) = self.bee.upgrade() else {
                 return false;

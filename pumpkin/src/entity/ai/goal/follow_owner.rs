@@ -128,7 +128,7 @@ impl Goal for FollowOwnerGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
             if !Self::can_follow(mob) {
                 return false;
