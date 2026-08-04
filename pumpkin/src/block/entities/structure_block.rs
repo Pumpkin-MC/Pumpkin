@@ -316,22 +316,13 @@ impl StructureBlockBlockEntity {
             return true;
         }
 
-        let Ok(bytes) = template.to_nbt_bytes() else {
-            return false;
-        };
         let file_path = world
             .save_root_folder()
             .join("generated")
             .join(&namespace)
             .join("structure")
             .join(format!("{path}.nbt"));
-        let Some(parent) = file_path.parent() else {
-            return false;
-        };
-        if std::fs::create_dir_all(parent).is_err() {
-            return false;
-        }
-        std::fs::write(&file_path, bytes).is_ok()
+        template.save_to_path(&file_path).is_ok()
     }
 }
 

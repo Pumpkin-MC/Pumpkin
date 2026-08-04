@@ -4,10 +4,13 @@
 //! into a runtime representation that can be placed in the world.
 
 use std::io::Cursor;
+use std::path::Path;
 
 use pumpkin_nbt::{
     compound::NbtCompound,
-    nbt_compress::{read_gzip_compound_tag, write_gzip_compound_tag_to_bytes},
+    nbt_compress::{
+        read_gzip_compound_tag, write_gzip_compound_tag, write_gzip_compound_tag_to_bytes,
+    },
     tag::NbtTag,
 };
 use pumpkin_util::math::vector3::Vector3;
@@ -30,6 +33,9 @@ pub enum TemplateError {
 
     #[error("Invalid palette index: {0}")]
     InvalidPaletteIndex(u32),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 /// A loaded structure template from an NBT file.
@@ -304,6 +310,34 @@ impl StructureTemplate {
     /// Returns an error if NBT serialization fails.
     pub fn to_nbt_bytes(&self) -> Result<Vec<u8>, TemplateError> {
         Ok(write_gzip_compound_tag_to_bytes(self.to_nbt_compound())?)
+    }
+
+    /// Writes this template to `path` as gzip-compressed NBT, creating parent directories as
+    /// needed. Mirrors `StructureTemplateManager.save(Path, StructureTemplate, boolean)`
+    /// (the non-text branch).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a parent directory can't be created, the file can't be opened for
+    /// writing, or serialization fails.
+    pub fn save_to_path(&self, path: &Path) -> Result<(), TemplateError> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let file = std::fs::File::create(path)?;
+        write_gzip_compound_tag(self.to_nbt_compound(), file)?;
+        Ok(())
+    }
+
+    /// Loads a structure template from a gzip-compressed NBT file on disk.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file can't be opened or the NBT data is invalid.
+    pub fn load_from_path(path: &Path) -> Result<Self, TemplateError> {
+        let file = std::fs::File::open(path)?;
+        let compound = read_gzip_compound_tag(file)?;
+        Self::from_nbt_compound(&compound)
     }
 
     /// Loads a structure template from gzipped NBT bytes.
@@ -709,5 +743,32 @@ mod tests {
             chest_block.nbt.as_ref().unwrap().get_string("id"),
             Some("minecraft:chest")
         );
+    }
+
+    #[test]
+    fn filesystem_roundtrip_preserves_template() {
+        let blocks = vec![CapturedBlock {
+            pos: Vector3::new(0, 0, 0),
+            palette_entry: PaletteEntry::new("minecraft:stone".to_string()),
+            nbt: None,
+            full_cube: true,
+        }];
+        let template = StructureTemplate::from_captured(Vector3::new(1, 1, 1), blocks, Vec::new());
+
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        let path = dir
+            .path()
+            .join("generated")
+            .join("minecraft")
+            .join("structure")
+            .join("my_house.nbt");
+
+        template.save_to_path(&path).expect("save_to_path failed");
+        assert!(path.exists());
+
+        let loaded = StructureTemplate::load_from_path(&path).expect("load_from_path failed");
+        assert_eq!(loaded.size, template.size);
+        assert_eq!(loaded.blocks.len(), template.blocks.len());
+        assert_eq!(loaded.palette[0].name, "minecraft:stone");
     }
 }
