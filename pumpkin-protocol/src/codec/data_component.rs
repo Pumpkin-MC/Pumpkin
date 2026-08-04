@@ -5,23 +5,25 @@ use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    AxolotlVariantImpl, BlockStateImpl, BundleContentsImpl, CatCollarImpl, CatSoundVariantImpl,
-    CatVariantImpl, ChickenSoundVariantImpl, ChickenVariantImpl, ConsumableImpl, ConsumeAnimation,
-    ConsumeEffect, CowSoundVariantImpl, CowVariantImpl, CustomDataImpl, CustomNameImpl, DamageImpl,
-    DataComponentImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl,
-    FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl, HorseVariantImpl,
-    IDSet, IDSetContent, IdOr, ItemModelImpl, LlamaVariantImpl, MapIdImpl, MaxStackSizeImpl,
-    MooshroomVariantImpl, PaintingVariantImpl, ParrotVariantImpl, PigSoundVariantImpl,
-    PigVariantImpl, PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl, SheepColorImpl,
-    ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
-    TropicalFishBaseColorImpl, TropicalFishPatternColorImpl, TropicalFishPatternImpl,
-    UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl,
-    WolfVariantImpl, ZombieNautilusVariantImpl, get,
+    AxolotlVariantImpl, BaseColorImpl, BlockStateImpl, BundleContentsImpl, CatCollarImpl,
+    CatSoundVariantImpl, CatVariantImpl, ChickenSoundVariantImpl, ChickenVariantImpl,
+    ConsumableImpl, ConsumeAnimation, ConsumeEffect, CowSoundVariantImpl, CowVariantImpl,
+    CustomDataImpl, CustomNameImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, EquipmentSlot,
+    EquippableImpl, FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, FoxVariantImpl,
+    FrogVariantImpl, HorseVariantImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, LlamaVariantImpl,
+    LodestoneTarget, LodestoneTrackerImpl, MapIdImpl, MaxStackSizeImpl, MooshroomVariantImpl,
+    PaintingVariantImpl, ParrotVariantImpl, PigSoundVariantImpl, PigVariantImpl,
+    PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl, SheepColorImpl, ShulkerColorImpl,
+    SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, TropicalFishBaseColorImpl,
+    TropicalFishPatternColorImpl, TropicalFishPatternImpl, UnbreakableImpl, UseCooldownImpl,
+    VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl, WolfVariantImpl,
+    ZombieNautilusVariantImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
+use pumpkin_util::math::position::BlockPos;
 
 const MAX_STATUS_EFFECTS: usize = 128;
 
@@ -778,6 +780,8 @@ pub fn deserialize(
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BlockState => Ok(BlockStateImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::LodestoneTracker => Ok(LodestoneTrackerImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::BaseColor => Ok(BaseColorImpl::deserialize(seq)?.to_dyn()),
         _ => Err(ReadingError::Message(format!("{id:?} (TODO)"))),
     }
 }
@@ -804,6 +808,8 @@ pub fn serialize(
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
         DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
         DataComponent::BlockState => get::<BlockStateImpl>(value).serialize(seq),
+        DataComponent::LodestoneTracker => get::<LodestoneTrackerImpl>(value).serialize(seq),
+        DataComponent::BaseColor => get::<BaseColorImpl>(value).serialize(seq),
         _ => Err(WritingError::Message(format!(
             "{} not yet implemented",
             id.to_name()
@@ -843,6 +849,74 @@ impl DataComponentCodec<Self> for BlockStateImpl {
         Ok(Self {
             properties: Cow::Owned(properties),
         })
+    }
+}
+
+// Matches vanilla `LodestoneTracker.STREAM_CODEC`: an optional `GlobalPos` (a dimension
+// identifier string followed by a packed `BlockPos` long), then the `tracked` bool.
+impl DataComponentCodec<Self> for LodestoneTrackerImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_option(&self.target, |seq, target| {
+            seq.write_string(&target.dimension)?;
+            seq.write_block_pos(&BlockPos::new(target.x, target.y, target.z))
+        })?;
+        seq.write_bool(self.tracked)
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let target = seq.get_option(|seq| {
+            let dimension = seq.get_str()?.to_string();
+            let pos = BlockPos::from_i64(seq.get_i64_be()?);
+            Ok(LodestoneTarget {
+                dimension,
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            })
+        })?;
+        let tracked = seq.get_bool()?;
+        Ok(Self { target, tracked })
+    }
+}
+
+// Matches vanilla `DyeColor.STREAM_CODEC` (`ByteBufCodecs.idMapper`): a VarInt index into
+// the 16 dye colors in their registration order, not the name string `BaseColorImpl`
+// stores for NBT persistence.
+const DYE_COLOR_NAMES: [&str; 16] = [
+    "white",
+    "orange",
+    "magenta",
+    "light_blue",
+    "yellow",
+    "lime",
+    "pink",
+    "gray",
+    "light_gray",
+    "cyan",
+    "purple",
+    "blue",
+    "brown",
+    "green",
+    "red",
+    "black",
+];
+
+impl DataComponentCodec<Self> for BaseColorImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        let id = DYE_COLOR_NAMES
+            .iter()
+            .position(|name| *name == self.color)
+            .ok_or_else(|| WritingError::Message(format!("Unknown dye color: {}", self.color)))?;
+        seq.write_var_int(&VarInt(id as i32))
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let id = seq.get_var_int()?.0;
+        let color = DYE_COLOR_NAMES
+            .get(id as usize)
+            .ok_or_else(|| ReadingError::Message(format!("Invalid dye color id: {id}")))?
+            .to_string();
+        Ok(Self { color })
     }
 }
 
@@ -1032,3 +1106,69 @@ codec_string_variant!(CatSoundVariantImpl);
 codec_string_variant!(CatCollarImpl);
 codec_string_variant!(SheepColorImpl);
 codec_string_variant!(ShulkerColorImpl);
+
+#[cfg(test)]
+mod tests {
+    use super::{BaseColorImpl, DataComponentCodec, LodestoneTarget, LodestoneTrackerImpl};
+
+    #[test]
+    fn lodestone_tracker_round_trips_with_a_target() {
+        let value = LodestoneTrackerImpl {
+            target: Some(LodestoneTarget {
+                dimension: "minecraft:the_nether".to_string(),
+                x: 12,
+                y: -34,
+                z: 56,
+            }),
+            tracked: true,
+        };
+
+        let mut buf = Vec::new();
+        value.serialize(&mut buf).unwrap();
+        let read_back = LodestoneTrackerImpl::deserialize(&mut buf.as_slice()).unwrap();
+        assert_eq!(read_back, value);
+    }
+
+    #[test]
+    fn lodestone_tracker_round_trips_without_a_target() {
+        let value = LodestoneTrackerImpl {
+            target: None,
+            tracked: true,
+        };
+
+        let mut buf = Vec::new();
+        value.serialize(&mut buf).unwrap();
+        let read_back = LodestoneTrackerImpl::deserialize(&mut buf.as_slice()).unwrap();
+        assert_eq!(read_back, value);
+    }
+
+    #[test]
+    fn base_color_round_trips_every_dye_color() {
+        for name in [
+            "white",
+            "orange",
+            "magenta",
+            "light_blue",
+            "yellow",
+            "lime",
+            "pink",
+            "gray",
+            "light_gray",
+            "cyan",
+            "purple",
+            "blue",
+            "brown",
+            "green",
+            "red",
+            "black",
+        ] {
+            let value = BaseColorImpl {
+                color: name.to_string(),
+            };
+            let mut buf = Vec::new();
+            value.serialize(&mut buf).unwrap();
+            let read_back = BaseColorImpl::deserialize(&mut buf.as_slice()).unwrap();
+            assert_eq!(read_back, value);
+        }
+    }
+}

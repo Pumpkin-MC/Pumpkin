@@ -1064,36 +1064,83 @@ pub trait ScreenHandler: Send + Sync {
                     let slot_stack = slot.get_cloned_stack().await;
                     let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
 
+                    // Vanilla `BundleItem#overrideStackedOnOther`/`#overrideOtherStackedOnMe`:
+                    // left-click moves as much of the *other* stack into the bundle as fits
+                    // (right-click, handled below, only ever moves a single item).
+                    if click_type == MouseClick::Left {
+                        // Cursor holds the bundle ("self"); slot is "other". Requires the
+                        // slot to be non-empty, matching `!other.isEmpty()`.
+                        let intercepted = if !cursor_stack.is_empty()
+                            && !slot_stack.is_empty()
+                            && cursor_stack
+                                .get_data_component::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                .is_some()
+                        {
+                            let stack_guard = slot.get_stack().await;
+                            let mut inner_slot_stack = stack_guard.lock().await;
+                            let bundle = cursor_stack
+                                .get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                                .expect("checked above");
+                            let inserted = bundle.try_insert(&mut inner_slot_stack);
+                            if inner_slot_stack.item_count == 0 {
+                                *inner_slot_stack = ItemStack::EMPTY.clone();
+                            }
+                            drop(inner_slot_stack);
+                            player
+                                .play_sound(if inserted {
+                                    Sound::ItemBundleInsert
+                                } else {
+                                    Sound::ItemBundleInsertFail
+                                })
+                                .await;
+                            true
+                        } else if !cursor_stack.is_empty() {
+                            // Slot holds the bundle ("self"); cursor is "other".
+                            let stack_guard = slot.get_stack().await;
+                            let mut inner_slot_stack = stack_guard.lock().await;
+                            if let Some(bundle) = inner_slot_stack
+                                .get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+                            {
+                                let inserted = bundle.try_insert(&mut cursor_stack);
+                                drop(inner_slot_stack);
+                                player
+                                    .play_sound(if inserted {
+                                        Sound::ItemBundleInsert
+                                    } else {
+                                        Sound::ItemBundleInsertFail
+                                    })
+                                    .await;
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        };
+
+                        if intercepted {
+                            if cursor_stack.item_count == 0 {
+                                *cursor_stack = ItemStack::EMPTY.clone();
+                            }
+                            slot.mark_dirty().await;
+                            return;
+                        }
+                    }
+
+                    // Vanilla's right-click paths only fire when the *other* side is empty
+                    // (`clickAction == SECONDARY && other.isEmpty()`) and always move exactly
+                    // one item (`removeOne`), unlike the left-click full-transfer paths above.
                     if click_type == MouseClick::Right {
                         let mut intercepted = false;
 
-                        if !cursor_stack.is_empty() {
-                            let stack_guard = slot.get_stack().await;
-                            let mut inner_slot_stack = stack_guard.lock().await;
-                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                                && bundle.try_insert(&mut cursor_stack) {
-                                    intercepted = true;
-                                }
-                        }
-
-                        if !intercepted && !slot_stack.is_empty()
-                            && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
-                                let stack_guard = slot.get_stack().await;
-                                let mut inner_slot_stack = stack_guard.lock().await;
-                                if bundle.try_insert(&mut inner_slot_stack) {
-                                    if inner_slot_stack.item_count == 0 {
-                                        *inner_slot_stack = ItemStack::EMPTY.clone();
-                                    }
-                                    intercepted = true;
-                                }
-                            }
-
-                        if !intercepted && cursor_stack.is_empty() {
+                        if cursor_stack.is_empty() {
                             let stack_guard = slot.get_stack().await;
                             let mut inner_slot_stack = stack_guard.lock().await;
                             if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
                                 && let Some(extracted) = bundle.try_extract() {
+                                    drop(inner_slot_stack);
                                     *cursor_stack = extracted;
+                                    player.play_sound(Sound::ItemBundleRemoveOne).await;
                                     intercepted = true;
                                 }
                         }
@@ -1102,6 +1149,7 @@ pub trait ScreenHandler: Send + Sync {
                             && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
                                 && let Some(extracted) = bundle.try_extract() {
                                     slot.set_stack(extracted).await;
+                                    player.play_sound(Sound::ItemBundleRemoveOne).await;
                                     intercepted = true;
                                 }
 

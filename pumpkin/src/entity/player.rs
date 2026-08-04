@@ -4377,6 +4377,48 @@ impl Player {
         None
     }
 
+    /// Find arrow or firework rocket ammo in inventory (main hand, offhand, or inventory
+    /// slots). Vanilla `CrossbowItem#getSupportedHeldProjectiles` (`ARROW_OR_FIREWORK`) is
+    /// the loading-time predicate; unlike `find_arrow` (bow ammo, arrows only), a crossbow
+    /// can also be loaded with a firework rocket.
+    pub async fn find_crossbow_projectile(&self) -> Option<usize> {
+        use pumpkin_data::item::Item;
+        let inventory = self.inventory();
+
+        // Check offhand first
+        let stack = inventory.get_stack(PlayerInventory::OFF_HAND_SLOT).await;
+        let item = stack.lock().await;
+        if matches!(
+            item.item.id,
+            id if id == Item::ARROW.id
+                || id == Item::TIPPED_ARROW.id
+                || id == Item::SPECTRAL_ARROW.id
+                || id == Item::FIREWORK_ROCKET.id
+        ) && item.item_count > 0
+        {
+            return Some(PlayerInventory::OFF_HAND_SLOT);
+        }
+        drop(item);
+
+        // Check hotbar and main inventory
+        for slot in 0..PlayerInventory::MAIN_SIZE {
+            let stack = inventory.get_stack(slot).await;
+            let item = stack.lock().await;
+            if matches!(
+                item.item.id,
+                id if id == Item::ARROW.id
+                    || id == Item::TIPPED_ARROW.id
+                    || id == Item::SPECTRAL_ARROW.id
+                    || id == Item::FIREWORK_ROCKET.id
+            ) && item.item_count > 0
+            {
+                return Some(slot);
+            }
+        }
+
+        None
+    }
+
     /// Consume one arrow from the specified slot
     pub async fn consume_arrow(&self, slot: usize) -> bool {
         let gamemode = self.gamemode.load();

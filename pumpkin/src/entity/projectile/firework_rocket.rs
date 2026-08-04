@@ -32,10 +32,10 @@ pub struct FireworkRocketEntity {
     item_stack: ItemStack,
     life: AtomicI32,
     life_time: AtomicI32,
-    /// Vanilla `DATA_SHOT_AT_ANGLE`: true only for a dispenser-fired-at-a-non-default-angle
-    /// rocket, which skips the normal acceleration branch entirely. No current construction
-    /// path sets this true (dispenser wiring for fireworks is out of scope here), but the
-    /// field and the tick-time gate are in place for whoever wires that up next.
+    /// Vanilla `DATA_SHOT_AT_ANGLE`: true for a rocket fired from a crossbow, or a
+    /// dispenser-fired-at-a-non-default-angle rocket (dispenser wiring for fireworks is
+    /// out of scope here). Either way it skips the normal self-propelled acceleration
+    /// branch entirely and flies a plain ballistic arc.
     shot_at_angle: AtomicBool,
 }
 
@@ -113,6 +113,43 @@ impl FireworkRocketEntity {
         );
 
         rocket
+    }
+
+    /// Sets this rocket's velocity from a shot direction, matching the same shot-vector
+    /// math `ArrowEntity::set_velocity_from_rotation` uses.
+    pub fn set_shot_velocity(
+        &self,
+        shooter: &Entity,
+        pitch: f32,
+        yaw: f32,
+        roll: f32,
+        speed: f32,
+        divergence: f32,
+    ) {
+        self.entity
+            .set_velocity_from(shooter, pitch, yaw, roll, speed, divergence);
+    }
+
+    /// Vanilla `CrossbowItem#createProjectile`'s firework branch: `new FireworkRocketEntity(
+    /// level, projectile, shooter, x, y, z, true)`. Unlike `new_shot_with_item` (the
+    /// elytra-boost throw), this does not send `ATTACHED_TO_TARGET` - a crossbow-fired
+    /// rocket is a one-shot projectile, not a rendering-follow boost effect - and it flags
+    /// `shot_at_angle` so `tick` gives it a normal ballistic arc.
+    pub fn new_crossbow_shot(entity: Entity, shooter: &Entity, item_stack: &ItemStack) -> Self {
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+        let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
+        Self {
+            entity: thrown,
+            item_stack: item_stack.clone(),
+            life: 0.into(),
+            life_time: firework_lifetime(
+                flight_duration(item_stack),
+                random.next_bounded_i32(6),
+                random.next_bounded_i32(7),
+            )
+            .into(),
+            shot_at_angle: AtomicBool::new(true),
+        }
     }
 
     pub async fn explode_and_remove(&self, world: &Arc<World>) {
@@ -238,30 +275,30 @@ impl EntityBase for FireworkRocketEntity {
             let world = entity.world.load();
             let mut velocity = entity.velocity.load();
 
-            if let Some(shooter_id) = self.entity.owner_id {
-                // Check if the player who fired this rocket still exists in the world
-                if let Some(shooter) = world.get_entity_by_id(shooter_id) {
-                    let shooter = shooter.get_entity();
+            let boosting_elytra_owner = self
+                .entity
+                .owner_id
+                .and_then(|shooter_id| world.get_entity_by_id(shooter_id))
+                .filter(|shooter| shooter.get_entity().is_fall_flying());
 
-                    // Logic for boosting Elytra flight
-                    if shooter.is_fall_flying() {
-                        let rotation = shooter.rotation().to_f64();
-                        let shooter_vel = shooter.velocity.load();
+            if let Some(shooter) = boosting_elytra_owner {
+                // Logic for boosting Elytra flight
+                let shooter = shooter.get_entity();
+                let rotation = shooter.rotation().to_f64();
+                let shooter_vel = shooter.velocity.load();
 
-                        let new_shooter_vel =
-                            shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);
+                let new_shooter_vel =
+                    shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);
 
-                        shooter.set_velocity(new_shooter_vel);
+                shooter.set_velocity(new_shooter_vel);
 
-                        entity.set_pos(shooter.pos.load());
-                        entity.set_velocity(new_shooter_vel);
-                    }
-                }
+                entity.set_pos(shooter.pos.load());
+                entity.set_velocity(new_shooter_vel);
             } else if !self.shot_at_angle.load(Ordering::Relaxed) {
-                // Standard firework rocket flight logic. Vanilla:
-                // `horizontalAcceleration = horizontalCollision ? 1.0 : 1.15`, and this whole
-                // branch is skipped entirely for a dispenser-fired-at-angle rocket
-                // (`isShotAtAngle()`).
+                // Standard firework rocket flight logic: not applied to a crossbow- or
+                // dispenser-fired-at-angle rocket (`shot_at_angle`), which instead flies a
+                // normal ballistic arc. Vanilla: `horizontalAcceleration = horizontalCollision
+                // ? 1.0 : 1.15`.
                 let horizontal_acceleration = if entity.horizontal_collision.load(Ordering::Relaxed)
                 {
                     1.0

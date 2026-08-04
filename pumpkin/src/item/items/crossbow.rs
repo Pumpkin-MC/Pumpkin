@@ -7,15 +7,33 @@ use tokio::sync::Mutex;
 
 use crate::entity::player::Player;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
+use crate::entity::projectile::firework_rocket::FireworkRocketEntity;
 use crate::entity::{Entity, EntityBase};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{ChargedProjectilesImpl, EnchantmentsImpl};
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::GameMode;
 use pumpkin_world::inventory::Inventory;
+
+/// Vanilla `CrossbowItem#getShootingPower`: `1.6F` if the charged ammo is a firework
+/// rocket, else the usual `3.15F` arrow power.
+fn projectile_power(item: &'static Item) -> f32 {
+    if item == &Item::FIREWORK_ROCKET {
+        1.6
+    } else {
+        3.15
+    }
+}
+
+/// Vanilla `CrossbowItem#getDurabilityUse`: firework rockets cost 3 durability per shot,
+/// arrows cost 1.
+fn durability_use(item: &'static Item) -> i32 {
+    if item == &Item::FIREWORK_ROCKET { 3 } else { 1 }
+}
 
 pub struct CrossbowItem;
 
@@ -44,8 +62,8 @@ impl ItemBehaviour for CrossbowItem {
                 return;
             }
 
-            let has_arrows = player.find_arrow().await.is_some();
-            if !has_arrows && player.gamemode.load() != GameMode::Creative {
+            let has_ammo = player.find_crossbow_projectile().await.is_some();
+            if !has_ammo && player.gamemode.load() != GameMode::Creative {
                 return;
             }
 
@@ -86,7 +104,7 @@ impl ItemBehaviour for CrossbowItem {
             charge_time = charge_time.max(0);
 
             if use_ticks >= charge_time {
-                let arrow_slot = player.find_arrow().await;
+                let arrow_slot = player.find_crossbow_projectile().await;
                 let mut stack = held.lock().await;
                 let (arrow_nbt_wrapper, slot) = {
                     if let Some(slot) = arrow_slot {
@@ -189,11 +207,21 @@ impl CrossbowItem {
             let world = player.world();
             let (yaw, pitch) = player.rotation();
             let mut shot_index = 0u32;
+            // Vanilla `ProjectileWeaponItem#shoot`: `weapon.hurtAndBreak(getDurabilityUse(
+            // projectile), ...)` fires once per projectile *entry* in the charged list, not
+            // once per multishot-fired arrow. Pumpkin only ever stores one entry per load
+            // (multishot's spread is applied at fire time below, not by storing multiple
+            // copies at draw time), so this is equivalent to "once per use" here.
+            let mut total_durability_use = 0;
 
             for projectile_nbt in charged.projectiles {
                 let Some(projectile) = ItemStack::read_item_stack(&projectile_nbt) else {
                     continue;
                 };
+                let is_firework = projectile.item == &Item::FIREWORK_ROCKET;
+                let power = projectile_power(projectile.item);
+                total_durability_use += durability_use(projectile.item);
+
                 let yaws = if has_multishot {
                     vec![yaw - 10.0, yaw, yaw + 10.0]
                 } else {
@@ -201,26 +229,49 @@ impl CrossbowItem {
                 };
 
                 for t_yaw in yaws {
-                    let arrow_entity = Entity::new(
-                        world.clone(),
-                        player.position(),
-                        ArrowEntity::entity_type_for_item(projectile.item),
-                    );
-                    let pickup = if player.gamemode.load() == GameMode::Creative {
-                        ArrowPickup::CreativeOnly
+                    if is_firework {
+                        let rocket_entity = Entity::new(
+                            world.clone(),
+                            player.position(),
+                            &EntityType::FIREWORK_ROCKET,
+                        );
+                        let rocket = FireworkRocketEntity::new_crossbow_shot(
+                            rocket_entity,
+                            player.get_entity(),
+                            &projectile,
+                        );
+                        rocket.set_shot_velocity(
+                            player.get_entity(),
+                            pitch,
+                            t_yaw,
+                            0.0,
+                            power,
+                            1.0,
+                        );
+                        let rocket_arc: Arc<dyn EntityBase> = Arc::new(rocket);
+                        world.spawn_entity(rocket_arc).await;
                     } else {
-                        ArrowPickup::Allowed
-                    };
+                        let arrow_entity = Entity::new(
+                            world.clone(),
+                            player.position(),
+                            ArrowEntity::entity_type_for_item(projectile.item),
+                        );
+                        let pickup = if player.gamemode.load() == GameMode::Creative {
+                            ArrowPickup::CreativeOnly
+                        } else {
+                            ArrowPickup::Allowed
+                        };
 
-                    let arrow = ArrowEntity::new_shot(
-                        arrow_entity,
-                        player.get_entity(),
-                        &projectile,
-                        pickup,
-                    );
-                    arrow.set_velocity_from_rotation(pitch, t_yaw, 0.0, 3.15, 1.0);
-                    let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
-                    world.spawn_entity(arrow_arc).await;
+                        let arrow = ArrowEntity::new_shot(
+                            arrow_entity,
+                            player.get_entity(),
+                            &projectile,
+                            pickup,
+                        );
+                        arrow.set_velocity_from_rotation(pitch, t_yaw, 0.0, power, 1.0);
+                        let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
+                        world.spawn_entity(arrow_arc).await;
+                    }
 
                     // Vanilla `CrossbowItem#shootProjectile` plays CROSSBOW_SHOOT once per fired
                     // projectile at volume 1.0 with `getShotPitch(random, index)`.
@@ -239,7 +290,7 @@ impl CrossbowItem {
                 .await
                 .patch
                 .retain(|(id, _)| *id != DataComponent::ChargedProjectiles);
-            player.damage_held_item(1).await;
+            player.damage_held_item(total_durability_use).await;
         }
     }
 }
