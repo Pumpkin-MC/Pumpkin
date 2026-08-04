@@ -353,6 +353,12 @@ impl JavaClient {
         };
 
         self.send_packet_now(&CChunkBatchStart).await;
+        // Vanilla's PlayerChunkSender.sendNextChunks reports the number of chunks it
+        // actually put on the wire (`chunksToSend.size()`), not the number it was asked
+        // to send: net/minecraft/server/network/PlayerChunkSender.java lines 58-69. A
+        // plugin cancellation or a serialization failure below must not inflate the
+        // count the client uses to size its next batch request.
+        let mut sent_count: u16 = 0;
         for chunk in chunks {
             let mut event = ChunkSend::new(player.world(), chunk.clone());
             server.plugin_manager.fire(&server, &mut event).await;
@@ -371,9 +377,9 @@ impl JavaClient {
                 continue;
             }
             self.send_packet_now_data(buf.into()).await;
+            sent_count += 1;
         }
-        self.send_packet_now(&CChunkBatchEnd::new(chunks.len() as u16))
-            .await;
+        self.send_packet_now(&CChunkBatchEnd::new(sent_count)).await;
     }
 
     pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
