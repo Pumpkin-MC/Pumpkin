@@ -42,6 +42,11 @@ pub enum LoaderError {
     #[error("Missing plugin metadata")]
     MetadataMissing,
 
+    #[error(
+        "Plugin metadata appears corrupt (implausible field sizes). The plugin was likely built with a different Rust toolchain or Pumpkin version; please rebuild it against this Pumpkin build."
+    )]
+    MetadataCorrupt,
+
     #[error("Missing plugin entrypoint")]
     EntrypointMissing,
 
