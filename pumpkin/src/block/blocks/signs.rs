@@ -440,31 +440,37 @@ impl BlockBehaviour for SignBlock {
                 return BlockActionResult::Pass;
             };
 
-            // Vanilla executeClickCommandsIfPresent: run any RunCommand click event on the sign.
+            // Vanilla executeClickCommandsIfPresent: run any RunCommand click event on the
+            // side of the sign the player is actually facing.
             let mut executed_command = false;
             if let Some(server) = args.world.server.upgrade() {
-                for text in [&sign_entity.front_text, &sign_entity.back_text] {
-                    let lines = text.messages.lock().unwrap().clone();
-                    for line in &lines {
-                        let Ok(component) =
-                            serde_json::from_str::<pumpkin_util::text::TextComponent>(line)
-                        else {
-                            continue;
-                        };
-                        let Some(pumpkin_util::text::click::ClickEvent::RunCommand { command }) =
-                            &component.0.style.click_event
-                        else {
-                            continue;
-                        };
-                        let source = CommandSender::Dummy.into_source(&server).await;
-                        server
-                            .command_dispatcher
-                            .read()
-                            .await
-                            .handle_command(&source, command)
-                            .await;
-                        executed_command = true;
-                    }
+                let is_facing_front =
+                    is_facing_front_text(args.world, args.position, args.block, args.player);
+                let text = if is_facing_front {
+                    &sign_entity.front_text
+                } else {
+                    &sign_entity.back_text
+                };
+                let lines = text.messages.lock().unwrap().clone();
+                for line in &lines {
+                    let Ok(component) =
+                        serde_json::from_str::<pumpkin_util::text::TextComponent>(line)
+                    else {
+                        continue;
+                    };
+                    let Some(pumpkin_util::text::click::ClickEvent::RunCommand { command }) =
+                        &component.0.style.click_event
+                    else {
+                        continue;
+                    };
+                    let source = CommandSender::Dummy.into_source(&server).await;
+                    server
+                        .command_dispatcher
+                        .read()
+                        .await
+                        .handle_command(&source, command)
+                        .await;
+                    executed_command = true;
                 }
             }
             if executed_command {

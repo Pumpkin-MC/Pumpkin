@@ -1,6 +1,8 @@
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs};
+use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnPlaceArgs};
 
+use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
 use pumpkin_data::translation;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -17,6 +19,19 @@ use pumpkin_inventory::stonecutter_screen_handler::StonecutterScreenHandler;
 pub struct StonecutterBlock;
 
 impl BlockBehaviour for StonecutterBlock {
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut props = WallTorchLikeProperties::default(args.block);
+            props.facing = args
+                .player
+                .living_entity
+                .entity
+                .get_horizontal_facing()
+                .opposite();
+            props.to_state_id(args.block)
+        })
+    }
+
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             args.player
