@@ -43,8 +43,8 @@ async fn ring_bell(
         Sound::BlockBellUse,
         SoundCategory::Blocks,
         &position.to_centered_f64(),
-        1.0,
         2.0,
+        1.0,
     );
 
     emit_game_event(
