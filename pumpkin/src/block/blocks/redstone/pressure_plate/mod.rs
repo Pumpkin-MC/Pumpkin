@@ -64,14 +64,14 @@ pub(crate) trait PressurePlate {
         let has_output = calc_output > 0;
         if calc_output != output {
             let next_output = if let Some(server) = world.server.upgrade() {
-                let event = crate::plugin::block::block_redstone::BlockRedstoneEvent::new(
+                let mut event = crate::plugin::block::block_redstone::BlockRedstoneEvent::new(
                     world.clone(),
                     state.id,
                     *pos,
                     i32::from(output),
                     i32::from(calc_output),
                 );
-                let event = server.plugin_manager.fire(event).await;
+                server.plugin_manager.fire(&server, &mut event).await;
                 if event.cancelled {
                     return;
                 }

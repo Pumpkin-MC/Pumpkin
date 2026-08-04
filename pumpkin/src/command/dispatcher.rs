@@ -436,7 +436,8 @@ impl CommandDispatcher {
             return Err(CommandFailed(TextComponent::text("Empty Command")));
         }
         let key = args.remove(0).value;
-        Ok((key, args.into_iter().rev().collect()))
+        args.reverse();
+        Ok((key, args))
     }
 
     /// Execute a command using its corresponding [`CommandTree`].
@@ -448,9 +449,9 @@ impl CommandDispatcher {
     ) -> Result<(), CommandError> {
         let (key, raw_args) = Self::split_parts(cmd)?;
 
-        if !self.commands.contains_key(key) {
-            return Err(SyntaxError(unknown_command_syntax_error(cmd, 0)));
-        }
+        let tree = self
+            .get_tree(key)
+            .map_err(|_| SyntaxError(unknown_command_syntax_error(cmd, 0)))?;
 
         let Some(permission) = self.permissions.get(key) else {
             return Err(CommandFailed(TextComponent::text(
@@ -461,8 +462,6 @@ impl CommandDispatcher {
         if !src.has_permission(server, permission.as_str()).await {
             return Err(PermissionDenied);
         }
-
-        let tree = self.get_tree(key)?;
 
         let mut path_failures = Vec::new();
 

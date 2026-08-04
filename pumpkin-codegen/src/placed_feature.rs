@@ -34,10 +34,8 @@ pub fn build_enum() -> TokenStream {
         })
         .collect();
 
-    let all_names_tokens: Vec<TokenStream> = all_names
-        .iter()
-        .map(|name| quote! { #name })
-        .collect();
+    let all_names_tokens: Vec<TokenStream> =
+        all_names.iter().map(|name| quote! { #name }).collect();
 
     quote! {
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

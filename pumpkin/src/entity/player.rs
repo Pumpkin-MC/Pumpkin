@@ -1266,6 +1266,16 @@ impl Player {
         };
 
         if let Some((result, updated_stack)) = updated {
+            if let Some(server) = self.world().server.upgrade()
+                && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+            {
+                let mut event = crate::plugin::api::events::player::player_item_damage::PlayerItemDamageEvent::new(
+                    player_arc,
+                    updated_stack.item.registry_key.to_string(),
+                    amount,
+                );
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
             // Send the break status before clearing the slot so the client can
             // use the item texture for break particles.
             if result == pumpkin_data::item_stack::DamageResult::Broken {
@@ -1766,6 +1776,17 @@ impl Player {
             return;
         };
 
+        if let Some(server) = world.server.upgrade()
+            && let Some(player_arc) = world.get_player_by_uuid(self.gameprofile.id)
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_bed::PlayerBedLeaveEvent::new(
+                    player_arc,
+                    respawn_point.position,
+                );
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+
         let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position);
         BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state).await;
 
@@ -2174,8 +2195,9 @@ impl Player {
         payload: Bytes,
     ) -> bool {
         if let Some(server) = self.world().server.upgrade() {
-            let event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
-            let event = server.plugin_manager.fire(event).await;
+            let mut event =
+                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
+            server.plugin_manager.fire(&server, &mut event).await;
             return event.cancelled;
         }
         false
@@ -2186,8 +2208,9 @@ impl Player {
             // This is a dummy object to satisfy the non-optional requirement in WIT
             // In the future we should make all packets 'static or have a way to represent raw packets in WIT
             struct RawPacket;
-            let event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
-            let event = server.plugin_manager.fire(event).await;
+            let mut event =
+                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
+            server.plugin_manager.fire(&server, &mut event).await;
             return event.cancelled;
         }
         false
@@ -3197,6 +3220,22 @@ impl Player {
 
             let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
             let dropped_stack = item_stack.copy_with_count(drop_amount);
+
+            if let Some(server) = self.world().server.upgrade()
+                && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+            {
+                let mut event =
+                    crate::plugin::api::events::player::player_drop_item::PlayerDropItemEvent::new(
+                        player_arc,
+                        dropped_stack.item.registry_key.to_string(),
+                        dropped_stack.item_count as u8,
+                    );
+                server.plugin_manager.fire(&server, &mut event).await;
+                if event.cancelled {
+                    return;
+                }
+            }
+
             item_stack.decrement(drop_amount);
             let updated_stack = item_stack.clone();
             let selected_slot = self.inventory.get_selected_slot();
@@ -3501,8 +3540,8 @@ impl Player {
     /// Add experience points to the player.
     pub async fn add_experience_points(self: &Arc<Self>, mut added_points: i32) {
         if let Some(server) = self.world().server.upgrade() {
-            let event = PlayerExpChangeEvent::new(self.clone(), added_points);
-            let event = server.plugin_manager.fire(event).await;
+            let mut event = PlayerExpChangeEvent::new(self.clone(), added_points);
+            server.plugin_manager.fire(&server, &mut event).await;
             added_points = event.amount;
         }
 
@@ -3637,15 +3676,12 @@ impl Player {
         };
 
         if let Some(server) = self.living_entity.entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire(
-                    crate::plugin::api::events::player::inventory_close::InventoryCloseEvent::new(
-                        self,
-                        window_type,
-                    ),
-                )
-                .await;
+            let mut event =
+                crate::plugin::api::events::player::inventory_close::InventoryCloseEvent::new(
+                    self,
+                    window_type,
+                );
+            server.plugin_manager.fire(&server, &mut event).await;
         }
 
         let player_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
@@ -3705,6 +3741,17 @@ impl Player {
             .is::<PlayerScreenHandler>()
         {
             self.close_handled_screen().await;
+        }
+
+        if let Some(server) = self.world().server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::inventory::inventory_open::InventoryOpenEvent::new(
+                    self.clone(),
+                );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return None;
+            }
         }
 
         self.increment_screen_handler_sync_id();
@@ -3829,7 +3876,7 @@ impl Player {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Server) {
+    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Arc<Server>) {
         self.update_last_action_time();
         let screen_handler_arc = self.current_screen_handler.lock().await.clone();
         let mut screen_handler = screen_handler_arc.lock().await;
@@ -4060,14 +4107,13 @@ impl Player {
             .await;
         drop(perm_manager);
 
-        let event = server
-            .plugin_manager
-            .fire(PlayerPermissionCheckEvent::new(
-                self.clone(),
-                node.to_string(),
-                result,
-            ))
-            .await;
+        let mut event = PlayerPermissionCheckEvent::new(self.clone(), node.to_string(), result);
+        if let Some(server_arc) = self.world().server.upgrade() {
+            server_arc
+                .plugin_manager
+                .fire(&server_arc, &mut event)
+                .await;
+        }
         event.result
     }
 
