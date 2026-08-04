@@ -216,7 +216,7 @@ impl Goal for IllusionerMirrorSpellGoal {
 pub struct IllusionerBlindnessSpellGoal {
     illusioner: Weak<IllusionerEntity>,
     timer: SpellCastTimer,
-    last_target_id: AtomicCell<i32>,
+    last_target_id: AtomicCell<Option<i32>>,
 }
 
 impl IllusionerBlindnessSpellGoal {
@@ -228,7 +228,7 @@ impl IllusionerBlindnessSpellGoal {
         Self {
             illusioner,
             timer: SpellCastTimer::new(),
-            last_target_id: AtomicCell::new(0),
+            last_target_id: AtomicCell::new(None),
         }
     }
 }
@@ -245,7 +245,7 @@ impl Goal for IllusionerBlindnessSpellGoal {
             let Some(target) = illusioner.mob_entity.target.lock().await.clone() else {
                 return false;
             };
-            if target.get_entity().entity_id == self.last_target_id.load() {
+            if Some(target.get_entity().entity_id) == self.last_target_id.load() {
                 return false;
             }
             let world = illusioner.mob_entity.living_entity.entity.world.load();
@@ -281,7 +281,8 @@ impl Goal for IllusionerBlindnessSpellGoal {
                 IllagerSpell::Blindness,
             );
             if let Some(target) = illusioner.mob_entity.target.lock().await.as_ref() {
-                self.last_target_id.store(target.get_entity().entity_id);
+                self.last_target_id
+                    .store(Some(target.get_entity().entity_id));
             }
             illusioner
                 .mob_entity

@@ -221,8 +221,8 @@ impl WitchEntity {
             &living.entity.pos.load(),
         );
 
-        let mut attributes = living.attributes.write().unwrap();
         let base = living.get_attribute_base(&Attributes::MOVEMENT_SPEED);
+        let mut attributes = living.attributes.write().unwrap();
         let speed = attributes
             .entry(Attributes::MOVEMENT_SPEED.id)
             .or_insert_with(|| AttributeInstance::new(base));

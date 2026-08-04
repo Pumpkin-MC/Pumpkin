@@ -19,7 +19,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-/// Vanilla: the six `AbstractIllager`-family raiders that a roaring Ravager never damages
+/// Vanilla: the four `AbstractIllager`-family raiders that a roaring Ravager never damages
 /// (`entity instanceof AbstractIllager`). Vex extends `Monster`, not `AbstractIllager`, and is
 /// deliberately not in this list.
 fn is_illager(entity_type: &'static EntityType) -> bool {
