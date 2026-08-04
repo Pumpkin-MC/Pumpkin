@@ -344,8 +344,8 @@ impl ToTokens for MaterialConditionStruct {
             } => {
                 // Pre calc for speed :D
                 let bytes = md5::compute(random_name.as_bytes());
-                let lo = u64::from_be_bytes(bytes[0..8].try_into().expect("incorrect length"));
-                let hi = u64::from_be_bytes(bytes[8..16].try_into().expect("incorrect length"));
+                let lo = u64::from_le_bytes(bytes[0..8].try_into().expect("incorrect length"));
+                let hi = u64::from_le_bytes(bytes[8..16].try_into().expect("incorrect length"));
                 tokens.extend(quote!(
                     MaterialCondition::VerticalGradient(VerticalGradientMaterialCondition {
                         random_lo: #lo,

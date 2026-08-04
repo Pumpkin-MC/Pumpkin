@@ -28,6 +28,23 @@ impl SplineValue {
     }
 
     #[inline]
+    pub(crate) fn sample_with_buffers(
+        &self,
+        buffers: &[Vec<f64>],
+        elem_idx: usize,
+        pos: &Vector3<i32>,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) -> f32 {
+        match self {
+            Self::Fixed(fixed) => *fixed,
+            Self::Spline(spline) => {
+                spline.sample_with_buffers(buffers, elem_idx, pos, component_stack, sample_options)
+            }
+        }
+    }
+
+    #[inline]
     fn calculate_min_and_max(&self, component_stack: &[ProtoNoiseFunctionComponent]) -> (f32, f32) {
         match self {
             Self::Fixed(fixed) => (*fixed, *fixed),
@@ -196,6 +213,75 @@ impl Spline {
 
         cubic_part + linear_part
     }
+
+    pub(crate) fn sample_with_buffers(
+        &self,
+        buffers: &[Vec<f64>],
+        elem_idx: usize,
+        pos: &Vector3<i32>,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) -> f32 {
+        let location = buffers[self.input_index][elem_idx] as f32;
+
+        let n = self.points.len();
+        let index_greater_than_x = self.points.partition_point(|p| location >= p.location);
+
+        if index_greater_than_x == 0 {
+            let point = &self.points[0];
+            let val = point.value.sample_with_buffers(
+                buffers,
+                elem_idx,
+                pos,
+                component_stack,
+                sample_options,
+            );
+            return point.sample_outside_range(location, val);
+        }
+
+        if index_greater_than_x == n {
+            let point = &self.points[n - 1];
+            let val = point.value.sample_with_buffers(
+                buffers,
+                elem_idx,
+                pos,
+                component_stack,
+                sample_options,
+            );
+            return point.sample_outside_range(location, val);
+        }
+
+        let lower_point = &self.points[index_greater_than_x - 1];
+        let upper_point = &self.points[index_greater_than_x];
+
+        let lower_value = lower_point.value.sample_with_buffers(
+            buffers,
+            elem_idx,
+            pos,
+            component_stack,
+            sample_options,
+        );
+        let upper_value = upper_point.value.sample_with_buffers(
+            buffers,
+            elem_idx,
+            pos,
+            component_stack,
+            sample_options,
+        );
+
+        let dist = upper_point.location - lower_point.location;
+        let x_scale = (location - lower_point.location) / dist;
+
+        let delta = upper_value - lower_value;
+        let extrapolated_lower = lower_point.derivative * dist - delta;
+        let extrapolated_upper = -upper_point.derivative * dist + delta;
+
+        let cubic_part =
+            (x_scale * (1.0 - x_scale)) * lerp(x_scale, extrapolated_lower, extrapolated_upper);
+        let linear_part = lerp(x_scale, lower_value, upper_value);
+
+        cubic_part + linear_part
+    }
 }
 
 pub struct SplineFunction {
@@ -212,6 +298,10 @@ impl SplineFunction {
             min_value: min_value as f64,
             max_value: max_value as f64,
         }
+    }
+
+    pub const fn spline(&self) -> &Spline {
+        &self.spline
     }
 }
 

@@ -1747,6 +1747,17 @@ impl World {
     }
 
     pub async fn set_raining(&self, raining: bool) {
+        if let Some(server) = self.server.upgrade() {
+            let world_arc = server.get_world_from_dimension(&self.dimension);
+            let mut event =
+                crate::plugin::api::events::world::weather_change::WeatherChangeEvent::new(
+                    world_arc, raining,
+                );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return;
+            }
+        }
         let mut weather = self.weather.lock().await;
         if weather.raining != raining {
             let thunder = weather.thundering;
@@ -1759,6 +1770,17 @@ impl World {
     }
 
     pub async fn set_thundering(&self, thundering: bool) {
+        if let Some(server) = self.server.upgrade() {
+            let world_arc = server.get_world_from_dimension(&self.dimension);
+            let mut event =
+                crate::plugin::api::events::world::weather_change::ThunderChangeEvent::new(
+                    world_arc, thundering,
+                );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return;
+            }
+        }
         let mut weather = self.weather.lock().await;
         if weather.thundering != thundering {
             let raining = weather.raining;
@@ -2688,6 +2710,14 @@ impl World {
             .level
             .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
             .await;
+        if let Some(server) = self.server.upgrade() {
+            let mut event =
+                crate::plugin::world::chunk_send::ChunkSend::new(player.world(), chunk.clone());
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return;
+            }
+        }
         client.send_packet_now(&CChunkBatchStart).await;
         client.send_packet_now(&CChunkData(&chunk)).await;
         client.send_packet_now(&CChunkBatchEnd::new(1u16)).await;

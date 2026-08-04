@@ -4,4 +4,5 @@ pub mod density_function;
 pub mod find_top_surface;
 pub mod multi_noise_sampler;
 pub mod proto_noise_router;
+pub mod static_router;
 pub mod surface_height_sampler;

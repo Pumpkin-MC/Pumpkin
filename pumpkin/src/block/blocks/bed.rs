@@ -358,6 +358,18 @@ impl BlockBehaviour for BedBlock {
                 }
             }
 
+            if let Some(server) = args.world.server.upgrade() {
+                let mut event =
+                    crate::plugin::api::events::player::player_bed::PlayerBedEnterEvent::new(
+                        args.player.clone(),
+                        bed_head_pos,
+                    );
+                server.plugin_manager.fire(&server, &mut event).await;
+                if event.cancelled {
+                    return BlockActionResult::SuccessServer;
+                }
+            }
+
             args.player.sleep(bed_head_pos);
             args.player
                 .trigger_advancement(
