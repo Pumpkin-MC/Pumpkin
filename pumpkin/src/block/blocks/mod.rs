@@ -95,6 +95,7 @@ pub mod grass_block;
 pub mod ice;
 pub mod infested;
 pub mod leaves;
+pub mod mycelium;
 pub mod nylium;
 pub mod potent_sulfur;
 pub mod powder_snow;
