@@ -90,9 +90,18 @@ impl CommandExecutor for LoadExecutor {
                 ))));
             }
 
+            let Some(server_arc) = sender
+                .world_or_first(server)
+                .and_then(|w| w.server.upgrade())
+            else {
+                return Err(CommandError::CommandFailed(TextComponent::text(
+                    "Failed to get server instance",
+                )));
+            };
+
             let result = server
                 .plugin_manager
-                .try_load_plugin(Path::new(plugin_name))
+                .try_load_plugin(&server_arc, Path::new(plugin_name))
                 .await;
 
             match result {
@@ -171,7 +180,16 @@ impl CommandExecutor for HotReloadExecutor {
             let enabled = self.0;
 
             if enabled {
-                if let Err(e) = server.plugin_manager.start_watcher().await {
+                let Some(server_arc) = sender
+                    .world_or_first(server)
+                    .and_then(|w| w.server.upgrade())
+                else {
+                    return Err(CommandError::CommandFailed(TextComponent::text(
+                        "Failed to get server instance",
+                    )));
+                };
+
+                if let Err(e) = server.plugin_manager.start_watcher(&server_arc).await {
                     return Err(CommandError::CommandFailed(TextComponent::text(format!(
                         "Failed to start plugin watcher: {e}"
                     ))));

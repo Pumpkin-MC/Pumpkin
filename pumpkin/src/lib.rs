@@ -1,6 +1,9 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
+#[macro_use]
+extern crate pumpkin_macros;
+
 use crate::crash::CrashReport;
 use crate::data::VanillaData;
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
@@ -8,11 +11,10 @@ use crate::net::bedrock::BedrockClient;
 use crate::net::java::JavaClient;
 use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult};
 use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
+use crate::plugin::server::server_command::ServerCommandEvent;
 use crate::server::{Server, ticker::Ticker};
-use plugin::server::server_command::ServerCommandEvent;
 use plugin::server::server_load::{LoadType, ServerLoadEvent};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
-use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use rustyline::Editor;
@@ -310,15 +312,7 @@ impl PumpkinServer {
     }
 
     pub async fn init_plugins(&self) -> std::time::Duration {
-        self.server
-            .plugin_manager
-            .set_self_ref(self.server.plugin_manager.clone())
-            .await;
-        self.server
-            .plugin_manager
-            .set_server(self.server.clone())
-            .await;
-        match self.server.plugin_manager.load_plugins().await {
+        match self.server.plugin_manager.load_plugins(&self.server).await {
             Ok(duration) => duration,
             Err(err) => {
                 error!("{err}");
@@ -355,10 +349,9 @@ impl PumpkinServer {
         let mut master_client_id: u64 = 0;
         let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
 
-        let _ = self
-            .server
+        self.server
             .plugin_manager
-            .fire(ServerLoadEvent::new(LoadType::Startup))
+            .fire(&self.server, &mut ServerLoadEvent::new(LoadType::Startup))
             .await;
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
@@ -645,16 +638,19 @@ fn setup_stdin_console(server: Arc<Server>) {
     tokio::spawn(async move {
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if let Some(command) = rx.recv().await {
-                send_cancellable! {{
-                    &server;
-                    ServerCommandEvent::new(command.clone());
-
-                    'after: {
-                        server.command_dispatcher.read().await
-                            .handle_command(&command::CommandSender::Console.into_source(&server).await, command.as_str())
-                            .await;
-                    };
-                }}
+                let mut event = ServerCommandEvent::new(command.clone());
+                server.plugin_manager.fire(&server, &mut event).await;
+                if !event.cancelled {
+                    server
+                        .command_dispatcher
+                        .read()
+                        .await
+                        .handle_command(
+                            &command::CommandSender::Console.into_source(&server).await,
+                            command.as_str(),
+                        )
+                        .await;
+                }
             }
         }
     });
@@ -716,18 +712,20 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
             };
 
             if let Some(line) = result {
-                send_cancellable! {{
-                    &server;
-                    ServerCommandEvent::new(line.clone());
-
-                    'after: {
-                        server.command_dispatcher.read().await
-                            .handle_command(&command::CommandSender::Console.into_source(&server).await, &line)
-                            .await;
-
-                        let _ = tx_reply.send(1).await;
-                    }
-                }}
+                let mut event = ServerCommandEvent::new(line.clone());
+                server.plugin_manager.fire(&server, &mut event).await;
+                if !event.cancelled {
+                    server
+                        .command_dispatcher
+                        .read()
+                        .await
+                        .handle_command(
+                            &command::CommandSender::Console.into_source(&server).await,
+                            &line,
+                        )
+                        .await;
+                    let _ = tx_reply.send(1).await;
+                }
             } else {
                 break;
             }
