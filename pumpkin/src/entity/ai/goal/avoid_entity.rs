@@ -10,12 +10,22 @@ const FAST_DISTANCE_SQ: f64 = 49.0;
 const HORIZONTAL_RANGE: f64 = 16.0;
 const VERTICAL_RANGE: i32 = 7;
 
+/// Extra per-candidate gate beyond the base "alive, not spectator" check.
+///
+/// E.g. vanilla Fox's `entity -> AVOID_PLAYERS.test(entity) && !this.trusts(entity) &&
+/// !this.isDefending()`. Plain `dyn Fn`, not the async `EntityPredicate`/`TargetPredicate`
+/// machinery elsewhere in this crate, since every candidate check needed so far is a
+/// synchronously-readable flag/attribute check and `get_closest_player_where`/
+/// `get_closest_entity_where` already take sync closures.
+pub type AvoidEntityPredicate = Arc<dyn Fn(&dyn EntityBase) -> bool + Send + Sync>;
+
 pub struct AvoidEntityGoal {
     goal_control: Controls,
     flee_type: &'static EntityType,
     flee_distance: f64,
     slow_speed: f64,
     fast_speed: f64,
+    extra_predicate: Option<AvoidEntityPredicate>,
     target: Option<Arc<dyn EntityBase>>,
     flee_pos: Option<Vector3<f64>>,
 }
@@ -34,9 +44,19 @@ impl AvoidEntityGoal {
             flee_distance,
             slow_speed,
             fast_speed,
+            extra_predicate: None,
             target: None,
             flee_pos: None,
         }
+    }
+
+    /// Adds a per-candidate gate (see [`AvoidEntityPredicate`]). Checked per candidate inside the
+    /// nearest-entity search (not as a whole-goal `can_start` gate), so a gated-out candidate
+    /// standing closest can't hide a valid threat standing behind it.
+    #[must_use]
+    pub fn with_predicate(mut self, predicate: AvoidEntityPredicate) -> Self {
+        self.extra_predicate = Some(predicate);
+        self
     }
 
     fn find_threat(&self, mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
@@ -50,6 +70,10 @@ impl AvoidEntityGoal {
             world
                 .get_closest_player_where(pos, self.flee_distance, |player| {
                     player.living_entity.is_part_of_game()
+                        && self
+                            .extra_predicate
+                            .as_ref()
+                            .is_none_or(|p| p(player as &dyn EntityBase))
                 })
                 .map(|p| p as Arc<dyn EntityBase>)
         } else {
@@ -61,6 +85,7 @@ impl AvoidEntityGoal {
                     entity
                         .get_living_entity()
                         .is_some_and(LivingEntity::is_part_of_game)
+                        && self.extra_predicate.as_ref().is_none_or(|p| p(entity))
                 },
             )
         }
