@@ -550,6 +550,64 @@ pub trait Mob: EntityBase + Send + Sync {
         0
     }
 
+    /// Vanilla `Mob.aiStep`'s pickup-loot loop: scans nearby dropped items within pickup
+    /// reach and offers each one to `on_item_pickup` if it passes `wants_to_pick_up_item`
+    /// and the item entity's own pickup-delay gate. Gated on `can_pick_up_loot` and the
+    /// `mobGriefing` gamerule.
+    fn mob_try_pick_up_items(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            if !self.can_pick_up_loot() {
+                return;
+            }
+
+            let mob_entity = self.get_mob_entity();
+            let entity = &mob_entity.living_entity.entity;
+            if !entity.is_alive() {
+                return;
+            }
+
+            let world = entity.world.load();
+            if !world.level_info.load().game_rules.mob_griefing {
+                return;
+            }
+
+            let reach = entity.bounding_box.load().expand(1.0, 0.0, 1.0);
+            for candidate in world.get_entities_at_box(&reach) {
+                let Some(item_entity) = candidate.clone().get_item_entity() else {
+                    continue;
+                };
+
+                if !item_entity.get_entity().is_alive() || item_entity.has_pickup_delay() {
+                    continue;
+                }
+
+                let stack_snapshot = { item_entity.get_item_stack().lock().await.clone() };
+                if stack_snapshot.is_empty() || !self.wants_to_pick_up_item(&stack_snapshot) {
+                    continue;
+                }
+
+                let taken = self
+                    .on_item_pickup(&stack_snapshot)
+                    .min(stack_snapshot.item_count);
+                if taken == 0 {
+                    continue;
+                }
+
+                let is_empty = {
+                    let mut stack = item_entity.get_item_stack().lock().await;
+                    stack.decrement(taken);
+                    stack.is_empty()
+                };
+
+                if is_empty {
+                    item_entity.get_entity().remove().await;
+                } else {
+                    item_entity.init_data_tracker().await;
+                }
+            }
+        })
+    }
+
     fn get_owner_uuid(&self) -> Option<Uuid> {
         None
     }
@@ -639,6 +697,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             }
 
             self.mob_tick(caller).await;
+            self.mob_try_pick_up_items().await;
 
             let age = mob_entity.living_entity.entity.age.load(Relaxed);
             let entity_id = mob_entity.living_entity.entity.entity_id;

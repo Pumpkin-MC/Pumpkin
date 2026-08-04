@@ -115,6 +115,11 @@ impl ItemEntity {
         &self.entity
     }
 
+    /// Vanilla `ItemEntity.hasPickUpDelay`.
+    pub fn has_pickup_delay(&self) -> bool {
+        self.pickup_delay.load(Ordering::Relaxed) > 0
+    }
+
     async fn can_merge(&self) -> bool {
         if self.never_pickup.load(Ordering::Relaxed) || self.entity.removed.load(Ordering::Relaxed)
         {
