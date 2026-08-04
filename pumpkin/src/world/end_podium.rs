@@ -15,6 +15,10 @@ use pumpkin_world::world::BlockFlags;
 use super::World;
 
 /// Place the podium structure centred on `origin` into `world`.
+///
+/// Blocks placed into unloaded chunks are silently lost.  The caller should
+/// check after calling whether the portal blocks were actually placed (e.g.
+/// verify `END_PORTAL` exists at origin) and retry on subsequent ticks if not.
 pub async fn place(world: &Arc<World>, origin: BlockPos, active: bool) {
     let ox = origin.0.x;
     let oy = origin.0.y;
@@ -75,7 +79,6 @@ pub async fn place(world: &Arc<World>, origin: BlockPos, active: bool) {
 
     // Wall torches on N/S/E/W faces at pillar height 2
     let torch_y = oy + 2;
-    // Torch position relative to origin and facing direction: (dx, dz, facing)
     for (dx, dz, facing) in [
         (0i32, -1i32, HorizontalFacing::North),
         (0, 1, HorizontalFacing::South),

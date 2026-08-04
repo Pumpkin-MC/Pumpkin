@@ -7,3 +7,5 @@ pub mod placed_features;
 
 mod features;
 mod size;
+
+pub use features::end_spike::get_spikes_for_seed;

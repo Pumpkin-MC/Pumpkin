@@ -4,41 +4,44 @@ use std::sync::atomic::AtomicBool;
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage,
-        projectile::{ProjectileHit, ThrownItemEntity},
+        projectile::{HurtingProjectileEntity, ProjectileHit},
     },
     server::Server,
 };
 
 const EXPLOSION_POWER: f32 = 1.0;
-const GRAVITY: f64 = 0.0;
 
 pub struct FireballEntity {
-    pub thrown: ThrownItemEntity,
+    pub hurting: HurtingProjectileEntity,
     pub explosion_power: f32,
 }
 
 impl FireballEntity {
     #[must_use]
     pub const fn new(entity: Entity) -> Self {
-        let thrown = ThrownItemEntity {
+        let hurting = HurtingProjectileEntity {
             entity,
             owner_id: None,
-            collides_with_projectiles: false,
+            acceleration_power: HurtingProjectileEntity::DEFAULT_ACCELERATION_POWER,
             has_hit: AtomicBool::new(false),
-            gravity: GRAVITY,
+            left_owner: AtomicBool::new(false),
         };
 
         Self {
-            thrown,
+            hurting,
             explosion_power: EXPLOSION_POWER,
         }
     }
 
     #[must_use]
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
-        let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
+        let hurting = HurtingProjectileEntity::new(
+            entity,
+            shooter,
+            HurtingProjectileEntity::DEFAULT_ACCELERATION_POWER,
+        );
         Self {
-            thrown,
+            hurting,
             explosion_power: EXPLOSION_POWER,
         }
     }
@@ -52,11 +55,11 @@ impl EntityBase for FireballEntity {
         caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move { self.thrown.process_tick(caller, server).await })
+        Box::pin(async move { self.hurting.process_tick(caller, server).await })
     }
 
     fn get_entity(&self) -> &Entity {
-        self.thrown.get_entity()
+        &self.hurting.entity
     }
 
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {

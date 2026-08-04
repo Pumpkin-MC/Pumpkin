@@ -943,7 +943,15 @@ impl World {
                     get_section_cord(entity_pos.x.floor() as i32),
                     get_section_cord(entity_pos.z.floor() as i32),
                 );
-                if !active_chunks.contains(&entity_chunk) {
+                // Bosses keep ticking outside the simulation-distance-derived active
+                // chunk set: vanilla's Ender Dragon roams a wide arena (up to ~73
+                // blocks from the portal via its path-node system) that can exceed a
+                // small simulation distance, and freezing mid-flight isn't vanilla
+                // behavior. This also covers the dragon's own hitbox parts, which
+                // share its entity type.
+                if !active_chunks.contains(&entity_chunk)
+                    && entity.get_entity().entity_type != &EntityType::ENDER_DRAGON
+                {
                     continue;
                 }
 
@@ -3791,7 +3799,18 @@ impl World {
                     // entities currently in this chunk.
                     for entity in world.entities.load().iter() {
                         let base_entity = entity.get_entity();
-                        if base_entity.chunk_pos.load() == position {
+                        // Ender dragon parts are never networked entities (vanilla
+                        // clients derive their positions locally from the dragon's own
+                        // spawn packet), so they must never get a spawn packet here
+                        // even though they live in `world.entities` for hit detection.
+                        if base_entity.chunk_pos.load() == position
+                            && entity
+                                .cast_any()
+                                .downcast_ref::<
+                                    crate::entity::boss::ender_dragon::EnderDragonPart,
+                                >()
+                                .is_none()
+                        {
                             player
                                 .client
                                 .enqueue_packet(&base_entity.create_spawn_packet())
