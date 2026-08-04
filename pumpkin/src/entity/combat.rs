@@ -1,12 +1,14 @@
-use std::sync::atomic::Ordering;
+use std::sync::{Arc, atomic::Ordering};
 
 use crate::entity::EntityBase;
 use pumpkin_data::{
     attributes::Attributes,
     particle::Particle,
     sound::{Sound, SoundCategory},
+    world::WorldEvent,
 };
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use uuid::Uuid;
 
 use crate::{
     entity::{Entity, player::Player},
@@ -161,6 +163,18 @@ pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f6
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
 }
 
+/// vanilla `MaceItem.getAttackDamageBonus`: a tiered formula, not a flat multiplier.
+/// 4 per block up to 3 blocks, 2 per block from 3 to 8, then 1 per block beyond that.
+pub fn mace_smash_damage_bonus(fall_distance: f64) -> f64 {
+    if fall_distance <= 3.0 {
+        4.0 * fall_distance
+    } else if fall_distance <= 8.0 {
+        12.0 + 2.0 * (fall_distance - 3.0)
+    } else {
+        22.0 + fall_distance - 8.0
+    }
+}
+
 /// Density (enchantment/density.json): `smash_damage_per_fallen_block`, via the
 /// [`crate::enchantment`] framework's [`EnchantmentEffect::SmashDamagePerFallenBlock`],
 /// multiplied by mace fall distance.
@@ -192,6 +206,106 @@ pub fn wind_burst_knockback_multiplier(level: u32) -> f32 {
         })
         .expect("wind_burst.json always defines the post_attack knockback_multiplier");
     value.calculate(level as i32)
+}
+
+/// vanilla `MaceItem.getKnockbackPower`: knockback falls off linearly with distance from the
+/// impact point out to the 3.5-block radius, doubles when the attacker's fall distance exceeds
+/// the heavy-smash threshold, and is scaled down by the victim's knockback resistance.
+pub fn mace_smash_knockback_power(
+    distance: f64,
+    attacker_fall_distance: f32,
+    resistance: f64,
+) -> f64 {
+    (MACE_SMASH_KNOCKBACK_RADIUS - distance)
+        * MACE_SMASH_KNOCKBACK_BASE
+        * if attacker_fall_distance > MACE_SMASH_HEAVY_FALL_THRESHOLD {
+            2.0
+        } else {
+            1.0
+        }
+        * (1.0 - resistance)
+}
+
+pub const MACE_SMASH_KNOCKBACK_RADIUS: f64 = 3.5;
+const MACE_SMASH_KNOCKBACK_BASE: f64 = 0.7;
+const MACE_SMASH_HEAVY_FALL_THRESHOLD: f32 = 5.0;
+
+/// vanilla `MaceItem.knockback`: unconditional on every successful smash attack, regardless of
+/// enchantments. Plays level event 2013 (particles/sound) at the victim's block position, then
+/// pushes nearby living entities within a 3.5-block radius of the victim away from it.
+///
+/// Scope reduction: vanilla's predicate also excludes entities allied to the attacker
+/// (`attacker.isAlliedTo`, shared scoreboard team) and marker armor stands
+/// (`ArmorStand.isMarker`). Pumpkin has no scoreboard-team lookup wired to this call site and no
+/// way to downcast a `dyn EntityBase` to `ArmorStandEntity` without adding an `as_any` override
+/// there, so both checks are left out here rather than guessed at.
+pub async fn mace_smash_knockback(
+    world: &World,
+    attacker_uuid: Uuid,
+    victim: &Arc<dyn EntityBase>,
+    attacker_fall_distance: f32,
+) {
+    let victim_entity = victim.get_entity();
+    let victim_pos = victim_entity.pos.load();
+    let victim_uuid = victim_entity.entity_uuid;
+
+    let event_pos = BlockPos(Vector3::new(
+        victim_pos.x.floor() as i32,
+        victim_pos.y.floor() as i32,
+        victim_pos.z.floor() as i32,
+    ));
+    world.sync_world_event(WorldEvent::ParticlesSmashAttack, event_pos, 750);
+
+    let search_box = victim_entity
+        .bounding_box
+        .load()
+        .expand_all(MACE_SMASH_KNOCKBACK_RADIUS);
+
+    for nearby in world.get_all_at_box(&search_box) {
+        let nearby_entity = nearby.get_entity();
+        if nearby_entity.entity_uuid == attacker_uuid || nearby_entity.entity_uuid == victim_uuid {
+            continue;
+        }
+        if nearby.is_spectator() {
+            continue;
+        }
+        let Some(nearby_living) = nearby.get_living_entity() else {
+            continue;
+        };
+        // vanilla's isOwnedBy check compares against `entity` (the smashed victim), not the
+        // attacker wielding the mace, despite the local variable being named `livingAttacker`.
+        if let Some(mob) = nearby.get_mob()
+            && mob.get_owner_uuid() == Some(victim_uuid)
+        {
+            continue;
+        }
+        if let Some(player) = world.get_player_by_uuid(nearby_entity.entity_uuid)
+            && player.is_creative()
+            && player.is_flying().await
+        {
+            continue;
+        }
+
+        let nearby_pos = nearby_entity.pos.load();
+        let direction = nearby_pos.sub(&victim_pos);
+        let distance = direction.length();
+        if distance > MACE_SMASH_KNOCKBACK_RADIUS {
+            continue;
+        }
+
+        let resistance = nearby_living.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+        let power = mace_smash_knockback_power(distance, attacker_fall_distance, resistance);
+        if power <= 0.0 {
+            continue;
+        }
+
+        let normalized = direction.normalize();
+        nearby_entity.add_velocity(Vector3::new(
+            normalized.x * power,
+            0.7,
+            normalized.z * power,
+        ));
+    }
 }
 
 /// Breach (enchantment/breach.json): `armor_effectiveness`, via the
@@ -261,7 +375,8 @@ pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type:
 mod tests {
     use super::{
         breach_armor_fraction, can_critical_attack, can_sweep_attack, density_extra_damage,
-        knockback_after_resistance, wind_burst_knockback_multiplier,
+        knockback_after_resistance, mace_smash_damage_bonus, mace_smash_knockback_power,
+        wind_burst_knockback_multiplier,
     };
 
     #[test]
@@ -341,5 +456,47 @@ mod tests {
     #[test]
     fn breach_clamps_armor_fraction_to_zero() {
         assert_eq!(breach_armor_fraction(0.1, 4), 0.0);
+    }
+
+    #[test]
+    fn mace_smash_damage_first_tier() {
+        assert_eq!(mace_smash_damage_bonus(0.0), 0.0);
+        assert_eq!(mace_smash_damage_bonus(2.0), 8.0);
+        assert_eq!(mace_smash_damage_bonus(3.0), 12.0);
+    }
+
+    #[test]
+    fn mace_smash_damage_second_tier() {
+        assert_eq!(mace_smash_damage_bonus(5.0), 16.0);
+        assert_eq!(mace_smash_damage_bonus(8.0), 22.0);
+    }
+
+    #[test]
+    fn mace_smash_damage_third_tier() {
+        assert_eq!(mace_smash_damage_bonus(10.0), 24.0);
+        assert_eq!(mace_smash_damage_bonus(20.0), 34.0);
+    }
+
+    #[test]
+    fn mace_smash_knockback_power_at_impact_point() {
+        assert!((mace_smash_knockback_power(0.0, 1.0, 0.0) - 2.45).abs() < 1e-9);
+    }
+
+    #[test]
+    fn mace_smash_knockback_power_zero_at_radius_edge() {
+        assert_eq!(mace_smash_knockback_power(3.5, 1.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn mace_smash_knockback_power_doubles_past_heavy_threshold() {
+        let light = mace_smash_knockback_power(1.0, 5.0, 0.0);
+        let heavy = mace_smash_knockback_power(1.0, 5.1, 0.0);
+        assert!((heavy - light * 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn mace_smash_knockback_power_scaled_by_resistance() {
+        assert!((mace_smash_knockback_power(0.0, 1.0, 0.5) - 1.225).abs() < 1e-9);
+        assert_eq!(mace_smash_knockback_power(0.0, 1.0, 1.0), 0.0);
     }
 }
