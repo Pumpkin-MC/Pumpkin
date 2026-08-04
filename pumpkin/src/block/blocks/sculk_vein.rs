@@ -6,12 +6,15 @@
 //! Scope (design doc `designs/sculk-and-block-social.md`, Step 2): placement,
 //! neighbour-update face removal, and the two spreader configs
 //! (`veinSpreader`/`sameSpaceSpreader`) with vanilla's exact `stateCanBeReplaced`/
-//! `isOtherBlockValidAsSource` rules. Deliberately does NOT implement `SculkBehaviour`
-//! (`attemptUseCharge`/`attemptPlaceSculk`/`onDischarged`/`hasSubstrateAccess`) — that's
-//! Step 3. Nothing in this codebase drives `SculkSpreader::update_cursors` yet, so this
-//! block is inert with respect to the catalyst; `spread_all`/`same_space_spread_from_random_face`
+//! `isOtherBlockValidAsSource` rules. `spread_all`/`same_space_spread_from_random_face`
 //! below are real, callable spreading entry points for a future driver, matching
 //! vanilla's `attemptSpreadVein`/`performBonemeal`-style direct calls.
+//!
+//! Step 3 (this file's `SculkBehaviour for SculkVeinBlock` impl, `regrow`,
+//! `has_substrate_access`, and `attempt_place_sculk`) adds the real charge-consumer
+//! behaviour (`attemptUseCharge`/`attemptPlaceSculk`/`onDischarged`/`hasSubstrateAccess`).
+//! Nothing in this codebase drives `SculkSpreader::update_cursors` yet (Step 4), so this
+//! block is still inert with respect to the catalyst.
 //!
 //! Verified against vanilla data (`Blocks.java` `SCULK_VEIN` registration): no
 //! `.lightLevel(...)`, no `.randomTicks()`, and no `randomTick` override in
@@ -28,19 +31,25 @@ use std::sync::Arc;
 use pumpkin_data::block_properties::{
     BlockProperties, GlowLichenLikeProperties, WaterLikeProperties,
 };
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, FacingExt, tag};
 use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::random::RandomGenerator;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::{RandomGenerator, RandomImpl};
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
 use crate::block::blocks::abstract_multiface::{
-    FaceSet, MultifaceBlockBase, MultifaceProperties, has_any_vacant_face,
+    FaceSet, MultifaceBlockBase, MultifaceProperties, can_attach_to_pos, has_any_vacant_face,
 };
 use crate::block::blocks::multiface_spreader::{
     self, DEFAULT_SPREAD_ORDER, SpreadConfig, SpreadPos, SpreadTarget, SpreadType,
+};
+use crate::block::sculk_behaviour::{
+    ChargeCursor, SculkBehaviour, SculkSpreaderConfig, SculkWorld,
 };
 use crate::block::{
     BlockBehaviour, BlockFuture, BlockIsReplacing, CanPlaceAtArgs, CanUpdateAtArgs,
@@ -79,22 +88,35 @@ fn default_state_can_be_replaced(existing_state: &BlockState) -> bool {
 }
 
 /// `SculkVeinBlock.SculkVeinSpreaderConfig`.
+///
+/// `source_is_vein` mirrors vanilla's `isOtherBlockValidAsSource(BlockState state) =
+/// !state.is(Blocks.SCULK_VEIN)` (`SculkVeinBlock.java` lines 193-195): vanilla reads
+/// this off the actual source `BlockState` passed into `MultifaceSpreader.spreadAll`.
+/// This config is constructed fresh per call, and the source state is fixed for the
+/// duration of one `spreadAll`, so passing the already-known fact "is the source a vein"
+/// as a constructor argument is equivalent. Step 2 only ever drove this config from a
+/// real, already-placed `sculk_vein` block (`source_is_vein = true`); Step 3 adds the
+/// `attemptPlaceSculk` call path, which spreads from a freshly-placed plain `SCULK`
+/// block instead (`source_is_vein = false`).
 pub struct SculkVeinSpreaderConfig {
     spread_types: &'static [SpreadType],
+    source_is_vein: bool,
 }
 
 impl SculkVeinSpreaderConfig {
     #[must_use]
-    pub const fn vein() -> Self {
+    pub const fn vein(source_is_vein: bool) -> Self {
         Self {
             spread_types: &DEFAULT_SPREAD_ORDER,
+            source_is_vein,
         }
     }
 
     #[must_use]
-    pub const fn same_space() -> Self {
+    pub const fn same_space(source_is_vein: bool) -> Self {
         Self {
             spread_types: &SAME_SPACE_SPREAD_ORDER,
+            source_is_vein,
         }
     }
 }
@@ -104,14 +126,8 @@ impl SpreadConfig for SculkVeinSpreaderConfig {
         self.spread_types
     }
 
-    // Deliberately `false` (matches `DefaultSpreaderConfig`'s own default): vanilla's
-    // override (`!state.is(Blocks.SCULK_VEIN)`) exists so `attemptPlaceSculk` can spread
-    // from a freshly-placed plain `SCULK` block (not a vein) as the source — that call
-    // path belongs to `SculkBehaviour.attemptUseCharge`, Step 3/4, not in scope here. The
-    // only source this Step 2 config is ever driven from is a real, already-placed
-    // `sculk_vein` block, for which vanilla's own formula evaluates to `false` anyway.
     fn is_other_block_valid_as_source(&self, _faces: FaceSet) -> bool {
-        false
+        !self.source_is_vein
     }
 
     fn can_spread_into(
@@ -311,6 +327,37 @@ pub struct WorldSpreadTarget<'a> {
     pub world: &'a Arc<World>,
 }
 
+impl SculkWorld for WorldSpreadTarget<'_> {
+    fn set_block(&self, pos: BlockPos, state_id: BlockStateId) -> BlockFuture<'_, ()> {
+        Box::pin(async move {
+            self.world
+                .set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL)
+                .await;
+        })
+    }
+
+    fn play_block_sound(&self, pos: BlockPos, sound: Sound) {
+        self.world
+            .play_block_sound(sound, SoundCategory::Blocks, pos);
+    }
+
+    fn push_entities_up(&self, pos: BlockPos) {
+        // Simplified `Block.pushEntitiesUp`, matching the existing approximation in
+        // `farmland.rs`/`dirt_path.rs`: teleport entities in this 1x1x1 column up by one
+        // block rather than diffing old/new collision shapes.
+        let min = Vector3::new(f64::from(pos.0.x), f64::from(pos.0.y), f64::from(pos.0.z));
+        let max = Vector3::new(min.x + 1.0, min.y + 1.0, min.z + 1.0);
+        let aabb = BoundingBox::new(min, max);
+        for entity in self.world.get_entities_at_box(&aabb) {
+            let entity = entity.get_entity();
+            let entity_pos = entity.pos.load();
+            entity
+                .pos
+                .store(Vector3::new(entity_pos.x, entity_pos.y + 1.0, entity_pos.z));
+        }
+    }
+}
+
 impl SpreadTarget for WorldSpreadTarget<'_> {
     fn accessor(&self) -> &dyn BlockAccessor {
         self.world.as_ref()
@@ -333,17 +380,175 @@ impl SpreadTarget for WorldSpreadTarget<'_> {
     }
 }
 
-impl SculkVeinBlock {
-    /// `getSpreader()`.
-    #[must_use]
-    pub const fn vein_spreader() -> SculkVeinSpreaderConfig {
-        SculkVeinSpreaderConfig::vein()
+/// `SculkVeinBlock.regrow` (lines 46-67): rebuild a vein state at `pos` keeping only the
+/// faces from `faces` that still `canAttachTo` their neighbour, or return `false` (no
+/// write) if none survive. Reads `pos`'s current state to preserve its waterlogged bit
+/// and existing faces (vanilla starts from a fresh `defaultBlockState()` and only sets
+/// `WATERLOGGED` from `existing.getFluidState()`, which this matches since a plain
+/// vein's default state carries no other faces to begin with).
+pub(crate) async fn regrow(world: &dyn SculkWorld, pos: BlockPos, faces: FaceSet) -> bool {
+    let mut new_faces = FaceSet::EMPTY;
+    for direction in faces.iter() {
+        if can_attach_to_pos(world.accessor(), &pos, direction) {
+            new_faces = new_faces.with(direction);
+        }
+    }
+    if new_faces.is_empty() {
+        return false;
     }
 
-    /// `getSameSpaceSpreader()`.
+    let existing_state = world.accessor().get_block_state(&pos);
+    let mut props = GlowLichenLikeProperties::default(&Block::SCULK_VEIN);
+    props.set_faces(new_faces);
+    props.r#waterlogged = world.accessor().get_fluid(&pos) != pumpkin_data::fluid::Fluid::EMPTY
+        || is_water_source(existing_state);
+    world
+        .set_block(pos, props.to_state_id(&Block::SCULK_VEIN))
+        .await;
+    true
+}
+
+/// `SculkVeinBlock.hasSubstrateAccess` (lines 139-151): true if any of this vein's own
+/// faces points at a `SCULK_REPLACEABLE` neighbour.
+#[must_use]
+pub fn has_substrate_access(accessor: &dyn BlockAccessor, pos: BlockPos) -> bool {
+    let state = accessor.get_block_state(&pos);
+    let Some(faces) = existing_vein_faces(state) else {
+        return false;
+    };
+    faces.iter().any(|direction| {
+        let neighbour = pos.offset(direction.to_offset());
+        accessor
+            .get_block(&neighbour)
+            .has_tag(&tag::Block::MINECRAFT_SCULK_REPLACEABLE)
+    })
+}
+
+/// `SculkVeinBlock.attemptPlaceSculk` (lines 105-137).
+async fn attempt_place_sculk(
+    world: &dyn SculkWorld,
+    spreader: &SculkSpreaderConfig,
+    pos: BlockPos,
+    random: &mut RandomGenerator,
+) -> bool {
+    let state = world.accessor().get_block_state(&pos);
+    let Some(faces) = existing_vein_faces(state) else {
+        return false;
+    };
+
+    for support in multiface_spreader::shuffled_directions(random) {
+        if !faces.contains(support) {
+            continue;
+        }
+        let support_pos = pos.offset(support.to_offset());
+        let support_block = world.accessor().get_block(&support_pos);
+        if !support_block.has_tag(spreader.replaceable_blocks()) {
+            continue;
+        }
+
+        world
+            .set_block(support_pos, Block::SCULK.default_state.id)
+            .await;
+        world.push_entities_up(support_pos);
+        world.play_block_sound(support_pos, Sound::BlockSculkSpread);
+
+        let vein_config = SculkVeinSpreaderConfig::vein(false);
+        multiface_spreader::spread_all(&vein_config, world, FaceSet::EMPTY, support_pos).await;
+
+        let skip = support.opposite();
+        for direction in BlockDirection::all() {
+            if direction == skip {
+                continue;
+            }
+            let vein_pos = support_pos.offset(direction.to_offset());
+            let vein_state = world.accessor().get_block_state(&vein_pos);
+            if Block::from_state_id(vein_state.id) == &Block::SCULK_VEIN {
+                SculkVeinBlock.on_discharged(world, vein_pos, random).await;
+            }
+        }
+
+        return true;
+    }
+
+    false
+}
+
+impl SculkBehaviour for SculkVeinBlock {
+    /// `SculkVeinBlock.onDischarged` (lines 69-87): strip any face pointing at a now-
+    /// `SCULK` neighbour; revert to air/water if no faces remain.
+    fn on_discharged<'a>(
+        &'a self,
+        world: &'a dyn SculkWorld,
+        pos: BlockPos,
+        _random: &'a mut RandomGenerator,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let existing_state = world.accessor().get_block_state(&pos);
+            let Some(mut faces) = existing_vein_faces(existing_state) else {
+                return;
+            };
+
+            for direction in BlockDirection::all() {
+                if faces.contains(direction) {
+                    let neighbour = pos.offset(direction.to_offset());
+                    if world.accessor().get_block(&neighbour) == &Block::SCULK {
+                        faces = faces.without(direction);
+                    }
+                }
+            }
+
+            let new_state_id = if faces.is_empty() {
+                if world.accessor().get_fluid(&pos) == pumpkin_data::fluid::Fluid::EMPTY {
+                    Block::AIR.default_state.id
+                } else {
+                    Block::WATER.default_state.id
+                }
+            } else {
+                let mut props =
+                    GlowLichenLikeProperties::from_state_id(existing_state.id, &Block::SCULK_VEIN);
+                props.set_faces(faces);
+                props.to_state_id(&Block::SCULK_VEIN)
+            };
+            world.set_block(pos, new_state_id).await;
+        })
+    }
+
+    /// `SculkVeinBlock.attemptUseCharge` (lines 90-103).
+    fn attempt_use_charge<'a>(
+        &'a self,
+        cursor: &'a ChargeCursor,
+        world: &'a dyn SculkWorld,
+        _origin_pos: BlockPos,
+        random: &'a mut RandomGenerator,
+        spreader: &'a SculkSpreaderConfig,
+        spread_veins: bool,
+    ) -> BlockFuture<'a, i32> {
+        Box::pin(async move {
+            if spread_veins && attempt_place_sculk(world, spreader, cursor.pos(), random).await {
+                cursor.charge() - 1
+            } else if random.next_bounded_i32(spreader.charge_decay_rate()) == 0 {
+                // `Mth.floor(cursor.getCharge() * 0.5F)`: exact via integer division since
+                // charge is never negative here.
+                cursor.charge() / 2
+            } else {
+                cursor.charge()
+            }
+        })
+    }
+}
+
+impl SculkVeinBlock {
+    /// `getSpreader()`. Always driven from a real, already-placed vein (see
+    /// `spread_all`'s `existing_vein_faces` guard), so `source_is_vein = true`.
+    #[must_use]
+    pub const fn vein_spreader() -> SculkVeinSpreaderConfig {
+        SculkVeinSpreaderConfig::vein(true)
+    }
+
+    /// `getSameSpaceSpreader()`. Same `source_is_vein = true` reasoning as above.
     #[must_use]
     pub const fn same_space_spreader() -> SculkVeinSpreaderConfig {
-        SculkVeinSpreaderConfig::same_space()
+        SculkVeinSpreaderConfig::same_space(true)
     }
 
     /// `MultifaceSpreader.spreadAll` driven by this block's `veinSpreader`, against a
@@ -382,6 +587,7 @@ mod tests {
     use super::*;
     use crate::block::blocks::abstract_multiface::can_attach_to;
     use pumpkin_data::fluid::Fluid;
+    use pumpkin_util::random::xoroshiro128::Xoroshiro;
     use std::collections::HashMap;
     use std::sync::Mutex;
 
@@ -432,23 +638,33 @@ mod tests {
         }
     }
 
-    /// A `SpreadTarget` writing into a shared, in-memory state map, so tests can drive
-    /// the real `multiface_spreader` algorithm end-to-end without a live `World`.
+    /// A `SpreadTarget`/`SculkWorld` writing into a shared, in-memory state map, so
+    /// tests can drive the real `multiface_spreader`/`SculkBehaviour` algorithms
+    /// end-to-end without a live `World`.
     struct RecordingTarget {
         states: Mutex<HashMap<BlockPos, &'static BlockState>>,
+        fluids: Mutex<HashMap<BlockPos, Fluid>>,
         default: &'static BlockState,
+        sounds_played: Mutex<Vec<(BlockPos, Sound)>>,
     }
 
     impl RecordingTarget {
         fn new(default: &'static BlockState) -> Self {
             Self {
                 states: Mutex::new(HashMap::new()),
+                fluids: Mutex::new(HashMap::new()),
                 default,
+                sounds_played: Mutex::new(Vec::new()),
             }
         }
 
         fn with(self, pos: BlockPos, state: &'static BlockState) -> Self {
             self.states.lock().unwrap().insert(pos, state);
+            self
+        }
+
+        fn with_fluid(self, pos: BlockPos, fluid: Fluid) -> Self {
+            self.fluids.lock().unwrap().insert(pos, fluid);
             self
         }
 
@@ -483,8 +699,13 @@ mod tests {
             (Block::from_state_id(state.id), state)
         }
 
-        fn get_fluid(&self, _position: &BlockPos) -> Fluid {
-            Fluid::EMPTY
+        fn get_fluid(&self, position: &BlockPos) -> Fluid {
+            self.fluids
+                .lock()
+                .unwrap()
+                .get(position)
+                .cloned()
+                .unwrap_or(Fluid::EMPTY)
         }
     }
 
@@ -507,6 +728,20 @@ mod tests {
                 true
             })
         }
+    }
+
+    impl SculkWorld for RecordingTarget {
+        fn set_block(&self, pos: BlockPos, state_id: BlockStateId) -> BlockFuture<'_, ()> {
+            Box::pin(async move {
+                self.states.lock().unwrap().insert(pos, state_id.to_state());
+            })
+        }
+
+        fn play_block_sound(&self, pos: BlockPos, sound: Sound) {
+            self.sounds_played.lock().unwrap().push((pos, sound));
+        }
+
+        fn push_entities_up(&self, _pos: BlockPos) {}
     }
 
     fn vein_state(faces: &[BlockDirection]) -> &'static BlockState {
@@ -698,5 +933,219 @@ mod tests {
             Block::AIR.default_state,
             BlockDirection::North
         ));
+    }
+
+    #[test]
+    fn has_substrate_access_true_when_a_face_points_at_a_replaceable_neighbour() {
+        let pos = BlockPos::new(0, 0, 0);
+        let north = pos.offset(BlockDirection::North.to_offset());
+        let vein = vein_state(&[BlockDirection::North]);
+        // STONE is in `minecraft:sculk_replaceable`.
+        let target = RecordingTarget::new(Block::AIR.default_state)
+            .with(pos, vein)
+            .with(north, Block::STONE.default_state);
+        assert!(has_substrate_access(&target, pos));
+    }
+
+    #[test]
+    fn has_substrate_access_false_when_no_face_points_at_a_replaceable_neighbour() {
+        let pos = BlockPos::new(0, 0, 0);
+        let north = pos.offset(BlockDirection::North.to_offset());
+        let vein = vein_state(&[BlockDirection::North]);
+        // OAK_LOG is not in `minecraft:sculk_replaceable`.
+        let target = RecordingTarget::new(Block::AIR.default_state)
+            .with(pos, vein)
+            .with(north, Block::OAK_LOG.default_state);
+        assert!(!has_substrate_access(&target, pos));
+    }
+
+    #[test]
+    fn has_substrate_access_false_for_a_non_vein_block() {
+        let pos = BlockPos::new(0, 0, 0);
+        let target = RecordingTarget::new(Block::STONE.default_state);
+        assert!(!has_substrate_access(&target, pos));
+    }
+
+    #[tokio::test]
+    async fn regrow_keeps_only_faces_that_still_attach() {
+        let pos = BlockPos::new(0, 0, 0);
+        let north = pos.offset(BlockDirection::North.to_offset());
+        let up = pos.offset(BlockDirection::Up.to_offset());
+        // North still has sturdy support, Up does not.
+        let target = RecordingTarget::new(Block::AIR.default_state)
+            .with(north, Block::STONE.default_state)
+            .with(up, Block::AIR.default_state);
+
+        let faces = FaceSet::from_directions([BlockDirection::North, BlockDirection::Up]);
+        let regrew = regrow(&target, pos, faces).await;
+        assert!(regrew);
+
+        let new_faces = existing_vein_faces(target.state_at(pos)).unwrap();
+        assert!(new_faces.contains(BlockDirection::North));
+        assert!(!new_faces.contains(BlockDirection::Up));
+    }
+
+    #[tokio::test]
+    async fn regrow_fails_when_no_face_can_reattach() {
+        let pos = BlockPos::new(0, 0, 0);
+        let target = RecordingTarget::new(Block::AIR.default_state);
+        let faces = FaceSet::from_directions([BlockDirection::North]);
+        assert!(!regrow(&target, pos, faces).await);
+        // No write happened.
+        assert_eq!(target.state_at(pos), Block::AIR.default_state);
+    }
+
+    #[tokio::test]
+    async fn on_discharged_strips_faces_pointing_at_sculk_neighbours() {
+        let pos = BlockPos::new(0, 0, 0);
+        let north = pos.offset(BlockDirection::North.to_offset());
+        let up = pos.offset(BlockDirection::Up.to_offset());
+        let vein = vein_state(&[BlockDirection::North, BlockDirection::Up]);
+        let target = RecordingTarget::new(Block::AIR.default_state)
+            .with(pos, vein)
+            .with(north, Block::SCULK.default_state)
+            .with(up, Block::STONE.default_state);
+
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(0));
+        SculkVeinBlock
+            .on_discharged(&target, pos, &mut random)
+            .await;
+
+        let remaining = existing_vein_faces(target.state_at(pos)).unwrap();
+        assert!(!remaining.contains(BlockDirection::North));
+        assert!(remaining.contains(BlockDirection::Up));
+    }
+
+    #[tokio::test]
+    async fn on_discharged_reverts_to_air_when_no_faces_remain() {
+        let pos = BlockPos::new(0, 0, 0);
+        let north = pos.offset(BlockDirection::North.to_offset());
+        let vein = vein_state(&[BlockDirection::North]);
+        let target = RecordingTarget::new(Block::AIR.default_state)
+            .with(pos, vein)
+            .with(north, Block::SCULK.default_state);
+
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(0));
+        SculkVeinBlock
+            .on_discharged(&target, pos, &mut random)
+            .await;
+
+        assert_eq!(target.state_at(pos), Block::AIR.default_state);
+    }
+
+    #[tokio::test]
+    async fn on_discharged_reverts_to_water_when_waterlogged_and_no_faces_remain() {
+        let pos = BlockPos::new(0, 0, 0);
+        let north = pos.offset(BlockDirection::North.to_offset());
+        let vein = vein_state(&[BlockDirection::North]);
+        let target = RecordingTarget::new(Block::AIR.default_state)
+            .with(pos, vein)
+            .with(north, Block::SCULK.default_state)
+            .with_fluid(pos, Fluid::WATER);
+
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(0));
+        SculkVeinBlock
+            .on_discharged(&target, pos, &mut random)
+            .await;
+
+        assert_eq!(target.state_at(pos), Block::WATER.default_state);
+    }
+
+    #[tokio::test]
+    async fn attempt_use_charge_places_sculk_and_spends_one_charge_when_a_replaceable_face_exists()
+    {
+        let pos = BlockPos::new(0, 0, 0);
+        let north = pos.offset(BlockDirection::North.to_offset());
+        let vein = vein_state(&[BlockDirection::North]);
+        // STONE is in `minecraft:sculk_replaceable`, so attemptPlaceSculk always
+        // succeeds regardless of the direction shuffle (this vein has only one face).
+        let target = RecordingTarget::new(Block::AIR.default_state)
+            .with(pos, vein)
+            .with(north, Block::STONE.default_state);
+
+        let cursor = ChargeCursor::new(pos, 100, 1);
+        let spreader = SculkSpreaderConfig::level_spreader();
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(0));
+
+        let new_charge = SculkVeinBlock
+            .attempt_use_charge(
+                &cursor,
+                &target,
+                BlockPos::new(0, 0, 0),
+                &mut random,
+                &spreader,
+                true,
+            )
+            .await;
+
+        assert_eq!(new_charge, 99);
+        assert_eq!(
+            Block::from_state_id(target.state_at(north).id),
+            &Block::SCULK
+        );
+        assert!(
+            target
+                .sounds_played
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(p, s)| *p == north && *s == Sound::BlockSculkSpread)
+        );
+    }
+
+    #[tokio::test]
+    async fn attempt_use_charge_holds_or_halves_charge_when_spread_veins_is_false() {
+        let pos = BlockPos::new(0, 0, 0);
+        let vein = vein_state(&[BlockDirection::North]);
+        let target = RecordingTarget::new(Block::AIR.default_state).with(pos, vein);
+        let spreader = SculkSpreaderConfig::level_spreader();
+
+        // `spread_veins = false`: attemptPlaceSculk is never attempted, so charge only
+        // holds or halves via the decay-rate roll, never drops by exactly 1 from a
+        // placement.
+        for seed in 0..32u64 {
+            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed));
+            let cursor = ChargeCursor::new(pos, 100, 1);
+            let new_charge = SculkVeinBlock
+                .attempt_use_charge(
+                    &cursor,
+                    &target,
+                    BlockPos::new(0, 0, 0),
+                    &mut random,
+                    &spreader,
+                    false,
+                )
+                .await;
+            assert!(new_charge == 100 || new_charge == 50);
+        }
+    }
+
+    #[tokio::test]
+    async fn attempt_use_charge_does_nothing_without_a_replaceable_face() {
+        let pos = BlockPos::new(0, 0, 0);
+        let north = pos.offset(BlockDirection::North.to_offset());
+        let vein = vein_state(&[BlockDirection::North]);
+        // North is an oak log: not in `minecraft:sculk_replaceable`, so
+        // attemptPlaceSculk always fails.
+        let target = RecordingTarget::new(Block::AIR.default_state)
+            .with(pos, vein)
+            .with(north, Block::OAK_LOG.default_state);
+        let spreader = SculkSpreaderConfig::level_spreader();
+
+        for seed in 0..32u64 {
+            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed));
+            let cursor = ChargeCursor::new(pos, 100, 1);
+            let new_charge = SculkVeinBlock
+                .attempt_use_charge(
+                    &cursor,
+                    &target,
+                    BlockPos::new(0, 0, 0),
+                    &mut random,
+                    &spreader,
+                    true,
+                )
+                .await;
+            assert!(new_charge == 100 || new_charge == 50);
+        }
     }
 }
