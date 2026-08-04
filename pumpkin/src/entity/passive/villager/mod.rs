@@ -42,7 +42,7 @@ pub mod data;
 pub mod gossip;
 pub use data::{
     BREEDING_FOOD_THRESHOLD, GossipType, VillagerData, VillagerProfession, VillagerType,
-    get_food_points,
+    get_food_points, villager_type_at, villager_type_by_biome,
 };
 pub use gossip::GossipContainer;
 
@@ -65,8 +65,11 @@ pub struct VillagerEntity {
 
 impl VillagerEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
+        // Vanilla `Villager#finalizeSpawn` sets the type from `VillagerType.byBiome`
+        // at the spawn position.
+        let villager_type = data::villager_type_at(&entity);
         let mob_entity = MobEntity::new(entity);
-        let villager_data = VillagerData::new(VillagerType::Plains, VillagerProfession::None, 1);
+        let villager_data = VillagerData::new(villager_type, VillagerProfession::None, 1);
         let inventory = Arc::new(Mutex::new(
             (0..8)
                 .map(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone())))
