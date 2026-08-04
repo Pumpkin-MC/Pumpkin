@@ -3,7 +3,6 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::Half;
 use pumpkin_data::block_properties::HorizontalAxis;
-use pumpkin_data::block_properties::HorizontalAxis;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::StairsShape;
 use pumpkin_data::tag::Taggable;
