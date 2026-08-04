@@ -2,8 +2,9 @@ use std::sync::Weak;
 
 use pumpkin_data::Block;
 use pumpkin_util::math::position::{BlockPos, BlockPosIterator};
+use rand::RngExt;
 
-use super::{Controls, Goal, GoalFuture};
+use super::{Controls, Goal, GoalFuture, to_goal_ticks};
 use crate::entity::{
     ageable::AgeableMob, ai::pathfinder::NavigatorGoal, mob::Mob, passive::turtle::TurtleEntity,
 };
@@ -13,12 +14,18 @@ use crate::entity::{
 const RECALC_INTERVAL: i32 = 160;
 const SEARCH_RADIUS: i32 = 8;
 const SEARCH_HEIGHT: i32 = 3;
+/// Minimum ticks between `find_water` scans while the goal isn't running (the scan is an
+/// ~17x7x17 block-position walk; unlike vanilla's `MoveToBlockGoal`, which throttles its
+/// re-evaluation the same way, this codebase has no other guard against evaluating `can_start`
+/// on every selector pass).
+const MIN_SCAN_INTERVAL: i32 = 200;
 
 pub struct TurtleGoToWaterGoal {
     turtle: Weak<TurtleEntity>,
     speed: f64,
     target: Option<BlockPos>,
     recalc_cooldown: i32,
+    scan_cooldown: i32,
 }
 
 impl TurtleGoToWaterGoal {
@@ -29,6 +36,7 @@ impl TurtleGoToWaterGoal {
             speed,
             target: None,
             recalc_cooldown: 0,
+            scan_cooldown: 0,
         })
     }
 
@@ -63,6 +71,14 @@ impl TurtleGoToWaterGoal {
 impl Goal for TurtleGoToWaterGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
+            if self.scan_cooldown > 0 {
+                self.scan_cooldown -= 1;
+                return false;
+            }
+            self.scan_cooldown = to_goal_ticks(
+                MIN_SCAN_INTERVAL + mob.get_random().random_range(0..MIN_SCAN_INTERVAL),
+            );
+
             let Some(turtle) = self.turtle.upgrade() else {
                 return false;
             };

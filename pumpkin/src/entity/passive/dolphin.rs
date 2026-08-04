@@ -194,8 +194,11 @@ impl Mob for DolphinEntity {
         })
     }
 
-    /// `Dolphin.mobInteract`: feeding a tagged fish item plays the eat sound, then either ages
-    /// up a baby or sets `gotFish` on an adult, consuming one item either way.
+    /// `Dolphin.mobInteract`: feeding a tagged fish item plays the eat sound and sets
+    /// `gotFish`, consuming one item. Vanilla also ages up a baby dolphin instead of setting
+    /// `gotFish` in that case; `DolphinEntity` does not implement `AgeableMob` (no baby/age
+    /// state is tracked for Dolphin in this pass, see the report), so that branch is not
+    /// ported and every feed currently takes the adult path.
     fn mob_interact<'a>(
         &'a self,
         player: &'a Arc<Player>,

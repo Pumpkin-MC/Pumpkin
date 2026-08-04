@@ -56,15 +56,13 @@ pub const fn dye_color_from_id(id: u8) -> DyeColor {
     }
 }
 
-/// Rolls a value from a `(value, weight)` list, matching vanilla's `WeightedList` semantics
-/// (uniform pick over the sum of weights). Returns the first entry if `choices` is empty or all
-/// weights are zero.
-pub fn pick_weighted<T: Copy>(rng: &mut impl RngExt, choices: &[(T, u32)]) -> T {
-    let total: u32 = choices.iter().map(|(_, w)| *w).sum();
-    if total == 0 {
-        return choices[0].0;
-    }
-    let mut roll = rng.random_range(0..total);
+/// Pure cumulative-weight walk.
+///
+/// Matches vanilla's `WeightedList` semantics (uniform pick over the sum of weights). `roll`
+/// must be `< sum of weights`; split out from [`pick_weighted`] so the boundary logic is
+/// testable without an RNG.
+#[must_use]
+pub fn pick_weighted_by_roll<T: Copy>(mut roll: u32, choices: &[(T, u32)]) -> T {
     for (value, weight) in choices {
         if roll < *weight {
             return *value;
@@ -72,6 +70,16 @@ pub fn pick_weighted<T: Copy>(rng: &mut impl RngExt, choices: &[(T, u32)]) -> T 
         roll -= *weight;
     }
     choices[choices.len() - 1].0
+}
+
+/// Rolls a value from a `(value, weight)` list. Returns the first entry if `choices` is empty
+/// or all weights are zero.
+pub fn pick_weighted<T: Copy>(rng: &mut impl RngExt, choices: &[(T, u32)]) -> T {
+    let total: u32 = choices.iter().map(|(_, w)| *w).sum();
+    if total == 0 {
+        return choices[0].0;
+    }
+    pick_weighted_by_roll(rng.random_range(0..total), choices)
 }
 
 #[cfg(test)]
@@ -104,10 +112,20 @@ mod tests {
     }
 
     #[test]
-    fn pick_weighted_respects_boundaries() {
+    fn pick_weighted_by_roll_respects_boundaries() {
+        // Salmon's 30/50/15 split: small is [0,30), medium is [30,80), large is [80,95).
         let choices = [("small", 30u32), ("medium", 50u32), ("large", 15u32)];
-        // Deterministic check: manually walk the cumulative boundaries the function uses.
-        let total: u32 = choices.iter().map(|(_, w)| *w).sum();
-        assert_eq!(total, 95);
+        assert_eq!(pick_weighted_by_roll(0, &choices), "small");
+        assert_eq!(pick_weighted_by_roll(29, &choices), "small");
+        assert_eq!(pick_weighted_by_roll(30, &choices), "medium");
+        assert_eq!(pick_weighted_by_roll(79, &choices), "medium");
+        assert_eq!(pick_weighted_by_roll(80, &choices), "large");
+        assert_eq!(pick_weighted_by_roll(94, &choices), "large");
+    }
+
+    #[test]
+    fn pick_weighted_falls_back_to_first_when_all_weights_are_zero() {
+        let choices = [("only", 0u32)];
+        assert_eq!(pick_weighted(&mut rand::rng(), &choices), "only");
     }
 }
