@@ -77,6 +77,7 @@ use crate::entity::passive::iron_golem::IronGolemEntity;
 use crate::entity::passive::llama::LlamaEntity;
 use crate::entity::passive::mooshroom::MooshroomEntity;
 use crate::entity::passive::mule::MuleEntity;
+use crate::entity::passive::nautilus::NautilusEntity;
 use crate::entity::passive::ocelot::OcelotEntity;
 use crate::entity::passive::panda::PandaEntity;
 use crate::entity::passive::parrot::ParrotEntity;
@@ -205,6 +206,7 @@ pub fn from_type(
         id if id == EntityType::HAPPY_GHAST.id => HappyGhastEntity::new(entity),
         id if id == EntityType::MOOSHROOM.id => MooshroomEntity::new(entity),
         id if id == EntityType::OCELOT.id => OcelotEntity::new(entity),
+        id if id == EntityType::NAUTILUS.id => NautilusEntity::new(entity),
         id if id == EntityType::PANDA.id => PandaEntity::new(entity),
         id if id == EntityType::PARROT.id => ParrotEntity::new(entity),
         id if id == EntityType::POLAR_BEAR.id => PolarBearEntity::new(entity),
