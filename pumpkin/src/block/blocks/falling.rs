@@ -166,6 +166,43 @@ pub fn on_land_state(
     }
 }
 
+/// `FallingBlockEntity.causeFallDamage`: `Mth.ceil(fallDistance - 1.0)`.
+#[must_use]
+pub fn fall_damage_distance(fall_distance: f64) -> i32 {
+    (fall_distance - 1.0).ceil() as i32
+}
+
+/// `FallingBlockEntity.causeFallDamage`:
+/// `Math.min(Mth.floor(fallDistanceInt * this.fallDamagePerDistance), this.fallDamageMax)`.
+#[must_use]
+pub fn fall_damage_amount(
+    fall_distance_int: i32,
+    damage_per_distance: f32,
+    damage_max: i32,
+) -> f32 {
+    (fall_distance_int as f32 * damage_per_distance)
+        .floor()
+        .min(damage_max as f32)
+}
+
+/// `FallingBlockEntity.causeFallDamage`: `this.random.nextFloat() < 0.05F + fallDistanceInt * 0.05F`.
+#[must_use]
+pub fn anvil_damage_chance(fall_distance_int: i32) -> f32 {
+    0.05 + fall_distance_int as f32 * 0.05
+}
+
+/// `AnvilBlock.damage`: anvil -> chipped anvil -> damaged anvil -> destroyed (`None`).
+#[must_use]
+pub fn anvil_damage_tier(block: &'static Block) -> Option<&'static Block> {
+    if block == &Block::ANVIL {
+        Some(&Block::CHIPPED_ANVIL)
+    } else if block == &Block::CHIPPED_ANVIL {
+        Some(&Block::DAMAGED_ANVIL)
+    } else {
+        None
+    }
+}
+
 impl BlockBehaviour for ConcretePowderBlock {
     /// `ConcretePowderBlock.getStateForPlacement`.
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
@@ -243,5 +280,44 @@ mod tests {
     fn can_solidify_matches_water_block() {
         assert!(can_solidify(Block::WATER.default_state));
         assert!(!can_solidify(Block::STONE.default_state));
+    }
+
+    #[test]
+    fn fall_damage_distance_matches_vanilla_ceil_minus_one() {
+        assert_eq!(fall_damage_distance(1.0), 0);
+        assert_eq!(fall_damage_distance(1.5), 1);
+        assert_eq!(fall_damage_distance(2.0), 1);
+        assert_eq!(fall_damage_distance(0.5), 0);
+        assert_eq!(fall_damage_distance(0.0), -1);
+    }
+
+    #[test]
+    fn fall_damage_amount_scales_and_caps() {
+        // 10 blocks at 2.0/distance -> 20 damage, under the 40 cap.
+        assert!((fall_damage_amount(10, 2.0, 40) - 20.0).abs() < f32::EPSILON);
+        // 30 blocks at 2.0/distance -> 60 damage, capped at 40.
+        assert!((fall_damage_amount(30, 2.0, 40) - 40.0).abs() < f32::EPSILON);
+        // Non-positive fall distance yields no damage.
+        assert_eq!(fall_damage_amount(0, 2.0, 40), 0.0);
+    }
+
+    #[test]
+    fn anvil_damage_chance_scales_with_fall_distance() {
+        assert!((anvil_damage_chance(0) - 0.05).abs() < f32::EPSILON);
+        assert!((anvil_damage_chance(1) - 0.10).abs() < f32::EPSILON);
+        assert!((anvil_damage_chance(10) - 0.55).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn anvil_damage_tier_progresses_then_destroys() {
+        assert_eq!(
+            anvil_damage_tier(&Block::ANVIL),
+            Some(&Block::CHIPPED_ANVIL)
+        );
+        assert_eq!(
+            anvil_damage_tier(&Block::CHIPPED_ANVIL),
+            Some(&Block::DAMAGED_ANVIL)
+        );
+        assert_eq!(anvil_damage_tier(&Block::DAMAGED_ANVIL), None);
     }
 }

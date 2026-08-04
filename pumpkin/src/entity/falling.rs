@@ -7,9 +7,11 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag, tag::Taggable, tracked_data::TrackedData};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::generation::structure::template::{BlockStateResolver, PaletteEntry};
 use pumpkin_world::world::BlockFlags;
@@ -37,22 +39,33 @@ pub struct FallingEntity {
     fall_damage_per_distance: AtomicCell<f32>,
     fall_damage_max: AtomicI32,
     block_data: Mutex<Option<NbtCompound>>,
+    /// Distance fallen since the last time this entity was on the ground, used by the
+    /// `causeFallDamage`-equivalent crushing/anvil-damage-tier logic on landing. Not persisted:
+    /// vanilla's `FallingBlockEntity` does not save it either.
+    fall_distance: AtomicCell<f64>,
 }
 
 impl FallingEntity {
     pub fn new(entity: Entity, block_state_id: BlockStateId) -> Self {
-        let hurt_entities =
-            Block::from_state_id(block_state_id).has_tag(&tag::Block::MINECRAFT_ANVIL);
+        let is_anvil = Block::from_state_id(block_state_id).has_tag(&tag::Block::MINECRAFT_ANVIL);
+        // `AnvilBlock.falling`: `entity.setHurtsEntities(2.0F, 40)`, applied at spawn time since
+        // it is unconditional for every anvil falling entity.
+        let (fall_damage_per_distance, fall_damage_max) = if is_anvil {
+            (2.0, 40)
+        } else {
+            (0.0, DEFAULT_FALL_DAMAGE_MAX)
+        };
         Self {
             entity,
             block_state_id: AtomicCell::new(block_state_id),
             time: AtomicI32::new(0),
             drop_item: AtomicBool::new(true),
             cancel_drop: AtomicBool::new(false),
-            hurt_entities: AtomicBool::new(hurt_entities),
-            fall_damage_per_distance: AtomicCell::new(0.0),
-            fall_damage_max: AtomicI32::new(DEFAULT_FALL_DAMAGE_MAX),
+            hurt_entities: AtomicBool::new(is_anvil),
+            fall_damage_per_distance: AtomicCell::new(fall_damage_per_distance),
+            fall_damage_max: AtomicI32::new(fall_damage_max),
             block_data: Mutex::new(None),
+            fall_distance: AtomicCell::new(0.0),
         }
     }
 
@@ -99,6 +112,154 @@ impl FallingEntity {
 
     fn entity_drops_enabled(world: &World) -> bool {
         world.level_info.load().game_rules.entity_drops
+    }
+
+    /// `FallingBlockEntity.causeFallDamage`: hurts living entities in the falling block's
+    /// current bounding box, then (anvils only) rolls the chip/damage/destroy progression.
+    /// Called once per landing tick; `fall_distance` is the accumulated fall distance already
+    /// consumed (reset) by the caller.
+    async fn crush_and_progress(&self, world: &Arc<World>, fall_distance: f64) {
+        if !self.hurt_entities.load(Ordering::Relaxed) {
+            return;
+        }
+        let fall_distance_int = crate::block::blocks::falling::fall_damage_distance(fall_distance);
+        if fall_distance_int < 0 {
+            return;
+        }
+
+        let damage = crate::block::blocks::falling::fall_damage_amount(
+            fall_distance_int,
+            self.fall_damage_per_distance.load(),
+            self.fall_damage_max.load(Ordering::Relaxed),
+        );
+
+        let falling_block = Block::from_state_id(self.block_state_id.load());
+        let is_anvil = falling_block.has_tag(&tag::Block::MINECRAFT_ANVIL);
+        let damage_type = if is_anvil {
+            DamageType::FALLING_ANVIL
+        } else {
+            DamageType::FALLING_BLOCK
+        };
+
+        let bb = self.entity.bounding_box.load();
+        let mut candidates = world.get_entities_at_box(&bb);
+        for player in world.get_players_at_box(&bb) {
+            candidates.push(player as Arc<dyn EntityBase>);
+        }
+        for candidate in candidates {
+            if candidate.get_living_entity().is_none() || !candidate.get_entity().is_alive() {
+                continue;
+            }
+            if candidate.is_spectator() {
+                continue;
+            }
+            if let Some(player) = candidate.get_player()
+                && player.gamemode.load() == GameMode::Creative
+            {
+                continue;
+            }
+            candidate
+                .damage(candidate.as_ref(), damage, damage_type)
+                .await;
+        }
+
+        if is_anvil && damage > 0.0 {
+            let chance = crate::block::blocks::falling::anvil_damage_chance(fall_distance_int);
+            if rand::random::<f32>() < chance {
+                match crate::block::blocks::falling::anvil_damage_tier(falling_block) {
+                    Some(next) => self.block_state_id.store(next.default_state.id),
+                    None => self.cancel_drop.store(true, Ordering::Relaxed),
+                }
+            }
+        }
+    }
+
+    /// `AnvilBlock.onLand`: `level.levelEvent(1031, pos, 0)`.
+    fn play_land_sound(world: &Arc<World>, pos: &BlockPos, block: &'static Block) {
+        if block.has_tag(&tag::Block::MINECRAFT_ANVIL) {
+            world.sync_world_event(WorldEvent::SoundAnvilLand, *pos, 0);
+        }
+    }
+
+    /// `AnvilBlock.onBrokenAfterFall`: `level.levelEvent(1029, pos, 0)`.
+    fn play_broken_sound(world: &Arc<World>, pos: &BlockPos, block: &'static Block) {
+        if block.has_tag(&tag::Block::MINECRAFT_ANVIL) {
+            world.sync_world_event(WorldEvent::SoundAnvilBroken, *pos, 0);
+        }
+    }
+
+    /// Resolves what happens once the falling block has settled onto solid ground: either it
+    /// gets placed (successfully or replaced by a solidified variant) or it breaks and drops.
+    #[allow(clippy::too_many_arguments)]
+    async fn handle_landing(
+        &self,
+        server: &Server,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        falling_state_id: BlockStateId,
+        falling_block: &'static Block,
+        current_state: &'static BlockState,
+        is_concrete: bool,
+        is_stuck_in_water: bool,
+    ) {
+        let entity = &self.entity;
+        if self.cancel_drop.load(Ordering::Relaxed) {
+            Self::play_broken_sound(world, pos, falling_block);
+            entity.remove().await;
+            return;
+        }
+
+        let may_replace = current_state.replaceable();
+        let below_pos = pos.down();
+        let below_state = world.get_block_state(&below_pos);
+        let below_block = Block::from_state_id(below_state.id);
+        let would_continue_falling = FallingBlock::can_fall_through(below_state, below_block)
+            && !(is_concrete && is_stuck_in_water);
+        let placed_state = BlockState::from_id(falling_state_id);
+        let would_survive = world.block_registry.can_place_at(
+            Some(server),
+            Some(world),
+            &**world,
+            None,
+            falling_block,
+            placed_state,
+            pos,
+            Some(BlockDirection::Down),
+            None,
+        ) && !would_continue_falling;
+
+        if may_replace && would_survive {
+            let final_state_id = crate::block::blocks::falling::on_land_state(
+                &**world,
+                pos,
+                falling_state_id,
+                current_state,
+            );
+            world
+                .set_block_state(pos, final_state_id, BlockFlags::NOTIFY_ALL)
+                .await;
+            Self::play_land_sound(world, pos, falling_block);
+            entity.remove().await;
+
+            let stored_block_data = self.block_data.lock().await.take();
+            if let Some(block_data) = stored_block_data
+                && has_block_block_entity(Block::from_state_id(final_state_id))
+                && let Some(block_entity) = world.get_block_entity(pos)
+            {
+                let mut merged = NbtCompound::new();
+                block_entity.write_internal(&mut merged).await;
+                merged.child_tags.extend(block_data.child_tags);
+                if let Some(new_entity) = block_entity_from_nbt(&merged) {
+                    world.add_block_entity(new_entity);
+                }
+            }
+        } else {
+            Self::play_broken_sound(world, pos, falling_block);
+            entity.remove().await;
+            if self.drop_item.load(Ordering::Relaxed) && Self::entity_drops_enabled(world) {
+                self.drop_carried_item(world, pos).await;
+            }
+        }
     }
 }
 
@@ -207,12 +368,24 @@ impl EntityBase for FallingEntity {
 
             entity.velocity.store(velo);
 
+            let y_before = entity.pos.load().y;
             entity.move_entity(caller, velo).await;
             entity.tick_block_collisions(caller, server).await;
+            let fell = y_before - entity.pos.load().y;
+            if fell > 0.0 {
+                self.fall_distance.store(self.fall_distance.load() + fell);
+            } else {
+                self.fall_distance.store(0.0);
+            }
 
             let world = entity.world.load();
             let pos = entity.block_pos.load();
             let on_ground = entity.on_ground.load(Ordering::Relaxed);
+
+            if on_ground {
+                let fall_distance = self.fall_distance.swap(0.0);
+                self.crush_and_progress(&world, fall_distance).await;
+            }
 
             let falling_state_id = self.block_state_id.load();
             let falling_block = Block::from_state_id(falling_state_id);
@@ -238,63 +411,17 @@ impl EntityBase for FallingEntity {
                 entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
                 let current_state = world.get_block_state(&pos);
                 if Block::from_state_id(current_state.id) != &Block::MOVING_PISTON {
-                    if self.cancel_drop.load(Ordering::Relaxed) {
-                        entity.remove().await;
-                        return;
-                    }
-
-                    let may_replace = current_state.replaceable();
-                    let below_pos = pos.down();
-                    let below_state = world.get_block_state(&below_pos);
-                    let below_block = Block::from_state_id(below_state.id);
-                    let would_continue_falling =
-                        FallingBlock::can_fall_through(below_state, below_block)
-                            && !(is_concrete && is_stuck_in_water);
-                    let placed_state = BlockState::from_id(falling_state_id);
-                    let would_survive = world.block_registry.can_place_at(
-                        Some(server),
-                        Some(&world),
-                        &**world,
-                        None,
-                        falling_block,
-                        placed_state,
+                    self.handle_landing(
+                        server,
+                        &world,
                         &pos,
-                        Some(BlockDirection::Down),
-                        None,
-                    ) && !would_continue_falling;
-
-                    if may_replace && would_survive {
-                        let final_state_id = crate::block::blocks::falling::on_land_state(
-                            &**world,
-                            &pos,
-                            falling_state_id,
-                            current_state,
-                        );
-                        world
-                            .set_block_state(&pos, final_state_id, BlockFlags::NOTIFY_ALL)
-                            .await;
-                        entity.remove().await;
-
-                        let stored_block_data = self.block_data.lock().await.take();
-                        if let Some(block_data) = stored_block_data
-                            && has_block_block_entity(Block::from_state_id(final_state_id))
-                            && let Some(block_entity) = world.get_block_entity(&pos)
-                        {
-                            let mut merged = NbtCompound::new();
-                            block_entity.write_internal(&mut merged).await;
-                            merged.child_tags.extend(block_data.child_tags);
-                            if let Some(new_entity) = block_entity_from_nbt(&merged) {
-                                world.add_block_entity(new_entity);
-                            }
-                        }
-                    } else {
-                        entity.remove().await;
-                        if self.drop_item.load(Ordering::Relaxed)
-                            && Self::entity_drops_enabled(&world)
-                        {
-                            self.drop_carried_item(&world, &pos).await;
-                        }
-                    }
+                        falling_state_id,
+                        falling_block,
+                        current_state,
+                        is_concrete,
+                        is_stuck_in_water,
+                    )
+                    .await;
                     return;
                 }
             }
