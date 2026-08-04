@@ -1,13 +1,23 @@
+use std::sync::Arc;
+
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
     block_properties::{AttachFace, BlockProperties, GrindstoneLikeProperties},
 };
+use pumpkin_inventory::grindstone_screen_handler::GrindstoneScreenHandler;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::{
+    BoxFuture as ScreenHandlerBoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockAccessor;
+use tokio::sync::Mutex;
 
 use crate::block::CanPlaceAtArgs;
-use crate::block::{BlockBehaviour, BlockFuture};
+use crate::block::registry::BlockActionResult;
+use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs};
 use crate::block::{GetStateForNeighborUpdateArgs, OnPlaceArgs};
 
 use super::abstract_wall_mounting::WallMountedBlock;
@@ -24,6 +34,25 @@ impl BlockBehaviour for GrindstoneBlock {
                 WallMountedBlock::get_placement_face(self, args.player, args.direction);
 
             props.to_state_id(args.block)
+        })
+    }
+
+    // useWithoutItem (GrindstoneBlock.java:73-83): opens the repair/disenchant menu and awards
+    // the interaction stat.
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            args.player
+                .increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Custom,
+                    pumpkin_data::statistic::CustomStatistic::InteractWithGrindstone as i32,
+                    1,
+                )
+                .await;
+            args.player
+                .open_handled_screen(&GrindstoneScreenFactory, Some(*args.position))
+                .await;
+
+            BlockActionResult::Success
         })
     }
 
@@ -61,5 +90,33 @@ impl WallMountedBlock for GrindstoneBlock {
             AttachFace::Ceiling => BlockDirection::Down,
             AttachFace::Wall => props.facing.to_block_direction(),
         }
+    }
+}
+
+struct GrindstoneScreenFactory;
+
+impl ScreenHandlerFactory for GrindstoneScreenFactory {
+    fn create_screen_handler<'a>(
+        &'a self,
+        sync_id: u8,
+        player_inventory: &'a Arc<PlayerInventory>,
+        _player: &'a dyn InventoryPlayer,
+    ) -> ScreenHandlerBoxFuture<'a, Option<SharedScreenHandler>> {
+        Box::pin(async move {
+            let handler: SharedScreenHandler = Arc::new(Mutex::new(GrindstoneScreenHandler::new(
+                sync_id,
+                player_inventory,
+            )));
+            Some(handler)
+        })
+    }
+
+    fn get_display_name(&self) -> TextComponent {
+        // No Bedrock-side `container.grindstone_title` key exists; unlike Loom/Stonecutter,
+        // Bedrock has no direct equivalent to translate against.
+        TextComponent::translate(
+            pumpkin_data::translation::java::CONTAINER_GRINDSTONE_TITLE,
+            &[],
+        )
     }
 }
