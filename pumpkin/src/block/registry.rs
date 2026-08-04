@@ -102,6 +102,7 @@ use crate::block::blocks::plant::tall_seagrass::TallSeaGrassBlock;
 use crate::block::blocks::plant::twisting_vines::TwistingVinesBlock;
 use crate::block::blocks::plant::weeping_vines::WeepingVinesBlock;
 use crate::block::blocks::plant::wither_rose::WitherRoseBlock;
+use crate::block::blocks::potent_sulfur::PotentSulfurBlock;
 use crate::block::blocks::powder_snow::PowderSnowBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
 use crate::block::blocks::redstone::bell::BellBlock;
@@ -291,6 +292,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(NetherPortalBlock);
     manager.register(TallPlantBlock);
     manager.register(NoteBlock);
+    manager.register(PotentSulfurBlock);
     manager.register(PowderSnowBlock);
     manager.register(SpongeBlock);
     manager.register(PumpkinBlock);

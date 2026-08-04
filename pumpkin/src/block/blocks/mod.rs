@@ -92,6 +92,7 @@ pub mod ice;
 pub mod infested;
 pub mod leaves;
 pub mod nylium;
+pub mod potent_sulfur;
 pub mod powder_snow;
 pub mod snow;
 pub mod sponge;
