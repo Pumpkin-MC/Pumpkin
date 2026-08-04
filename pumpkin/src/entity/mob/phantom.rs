@@ -1,52 +1,92 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
-use std::sync::{Arc, Weak};
 
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::entity::EntityType;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
     Entity, NBTStorage, NbtFuture,
+    ai::control::phantom_move_control::PhantomMoveControl,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        phantom_attack_player_target::PhantomAttackPlayerTargetGoal,
+        phantom_attack_strategy::PhantomAttackStrategyGoal,
+        phantom_circle_anchor::PhantomCircleAroundAnchorGoal,
+        phantom_sweep_attack::PhantomSweepAttackGoal,
     },
     mob::{Mob, MobEntity},
 };
 
+/// Vanilla: `Phantom.AttackPhase` (`Phantom.java:211-214`).
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum AttackPhase {
+    #[default]
+    Circle,
+    Swoop,
+}
+
 pub struct PhantomEntity {
     pub mob_entity: MobEntity,
     size: AtomicI32,
+    /// Vanilla: `Phantom.moveTargetPoint`. Written by the circle/sweep goals, read every tick
+    /// by `PhantomMoveControl`.
+    move_target_point: AtomicCell<Vector3<f64>>,
+    /// Vanilla: `Phantom.anchorPoint`.
+    anchor_point: AtomicCell<Option<BlockPos>>,
+    /// Vanilla: `Phantom.attackPhase`.
+    attack_phase: AtomicCell<AttackPhase>,
 }
 
 impl PhantomEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
+        // Vanilla: `Phantom`'s constructor replaces the default `MoveControl` with the
+        // circling/diving `PhantomMoveControl` (`Phantom.java:55`).
+        // `finalizeSpawn` (`Phantom.java:156`) sets `anchorPoint = blockPosition().above(5)`;
+        // there's no dedicated spawn-finalization hook here, so it's seeded from the entity's
+        // position at construction time instead, which is equivalent in practice.
+        let initial_anchor = entity.block_pos.load().up_height(5);
         let mob_entity = MobEntity::new(entity);
+        *mob_entity.move_control.lock().unwrap() = Box::new(PhantomMoveControl::default());
         let phantom = Self {
             mob_entity,
             size: AtomicI32::new(0),
+            move_target_point: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
+            anchor_point: AtomicCell::new(Some(initial_anchor)),
+            attack_phase: AtomicCell::new(AttackPhase::Circle),
         };
         let mob_arc = Arc::new(phantom);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
+        let phantom_weak = Arc::downgrade(&mob_arc);
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
-            goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.0, false)));
+            // Vanilla `Phantom.registerGoals` (`Phantom.java:70-74`). Note vanilla installs a
+            // no-op `PhantomLookControl` (`Phantom.java:375-383`) precisely because it has no
+            // look-related goals; `LookControl` here isn't swappable (concrete field, not a
+            // trait object like `move_control`), but since `move_control.tick()` runs after
+            // `look_control.tick()` every tick (see `MobEntity`'s tick order), the pitch this
+            // sets below always wins. Only head-yaw drifts slightly toward body-yaw each tick
+            // as an approximation of the missing no-op.
             goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+                1,
+                Box::new(PhantomAttackStrategyGoal::new(phantom_weak.clone())),
             );
-            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(
+                2,
+                Box::new(PhantomSweepAttackGoal::new(phantom_weak.clone())),
+            );
+            goal_selector.add_goal(
+                3,
+                Box::new(PhantomCircleAroundAnchorGoal::new(phantom_weak.clone())),
+            );
 
             target_selector.add_goal(
                 1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+                Box::new(PhantomAttackPlayerTargetGoal::new(phantom_weak)),
             );
         };
 
@@ -90,6 +130,33 @@ impl PhantomEntity {
     #[must_use]
     pub fn size(&self) -> i32 {
         self.size.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn move_target_point(&self) -> Vector3<f64> {
+        self.move_target_point.load()
+    }
+
+    pub fn set_move_target_point(&self, point: Vector3<f64>) {
+        self.move_target_point.store(point);
+    }
+
+    #[must_use]
+    pub fn anchor_point(&self) -> Option<BlockPos> {
+        self.anchor_point.load()
+    }
+
+    pub fn set_anchor_point(&self, anchor: Option<BlockPos>) {
+        self.anchor_point.store(anchor);
+    }
+
+    #[must_use]
+    pub fn attack_phase(&self) -> AttackPhase {
+        self.attack_phase.load()
+    }
+
+    pub fn set_attack_phase(&self, phase: AttackPhase) {
+        self.attack_phase.store(phase);
     }
 }
 

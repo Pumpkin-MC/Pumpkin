@@ -4,6 +4,7 @@ use pumpkin_util::math::subtract_angles;
 pub mod ghast_move_control;
 pub mod look_control;
 pub mod move_control;
+pub mod phantom_move_control;
 pub mod vex_move_control;
 
 pub trait Control: Send + Sync {
