@@ -96,95 +96,105 @@ impl CommandExecutor for Executor {
             );
             sender
                 .send_message(
-                    TextComponent::custom(
-                        "pumpkin",
-                        "commands.pumpkin.version",
-                        locale,
-                        vec![TextComponent::text(version_string.clone())],
-                    )
-                    .hover_event(HoverEvent::show_text(
-                        TextComponent::text(format!("Commit: {GIT_HASH_FULL}\n\nContributors:\n"))
-                            .add_child(
-                                TextComponent::text(contributor_names)
-                                    .gradient_named(&[NamedColor::DarkGreen, NamedColor::Green])
-                                    .new_line(),
-                            ),
-                    ))
-                    .click_event(ClickEvent::CopyToClipboard {
-                        value: Cow::from(
-                            get_translation_text(
-                                "pumpkin:commands.pumpkin.version",
+                    TextComponent::empty()
+                        .add_child(
+                            TextComponent::custom(
+                                "pumpkin",
+                                "commands.pumpkin.version",
                                 locale,
-                                vec![TextComponent::text(version_string).0],
+                                vec![TextComponent::text(version_string.clone())],
                             )
-                            .replace('\n', ""),
-                        ),
-                    })
-                    .color_named(NamedColor::Green)
-                    .add_child(
-                        TextComponent::custom(
-                            "pumpkin",
-                            "commands.pumpkin.description",
-                            locale,
-                            vec![],
-                        )
-                        .click_event(ClickEvent::CopyToClipboard {
-                            value: Cow::from(
-                                get_translation_text(
-                                    "pumpkin:commands.pumpkin.description",
-                                    locale,
-                                    vec![],
-                                )
-                                .replace('\n', ""),
-                            ),
-                        })
-                        .hover_event(HoverEvent::show_text(TextComponent::custom(
-                            "pumpkin",
-                            "commands.pumpkin.description.hover",
-                            locale,
-                            vec![],
-                        )))
-                        .color_named(NamedColor::White),
-                    )
-                    .add_child(
-                        TextComponent::custom(
-                            "pumpkin",
-                            "commands.pumpkin.minecraft_version",
-                            locale,
-                            vec![
-                                TextComponent::text(CURRENT_MC_VERSION.to_string()),
-                                TextComponent::text(
-                                    CURRENT_MC_VERSION.protocol_version().to_string(),
+                            .hover_event(HoverEvent::show_text(
+                                TextComponent::text(format!(
+                                    "Commit: {GIT_HASH_FULL}\n\nContributors:\n"
+                                ))
+                                .add_child(
+                                    TextComponent::text(contributor_names)
+                                        .gradient_named(&[NamedColor::DarkGreen, NamedColor::Green])
+                                        .new_line(),
                                 ),
-                            ],
+                            ))
+                            .click_event(ClickEvent::CopyToClipboard {
+                                value: Cow::from(
+                                    get_translation_text(
+                                        "pumpkin:commands.pumpkin.version",
+                                        locale,
+                                        vec![TextComponent::text(version_string).0],
+                                    )
+                                    .replace('\n', ""),
+                                ),
+                            })
+                            .color_named(NamedColor::Green),
                         )
-                        .click_event(ClickEvent::CopyToClipboard {
-                            value: Cow::from(
-                                get_translation_text(
-                                    "pumpkin:commands.pumpkin.minecraft_version",
-                                    locale,
-                                    vec![
-                                        TextComponent::text(CURRENT_MC_VERSION.to_string()).0,
-                                        TextComponent::text(
-                                            CURRENT_MC_VERSION.protocol_version().to_string(),
-                                        )
-                                        .0,
-                                    ],
-                                )
-                                .replace('\n', ""),
-                            ),
-                        })
-                        .hover_event(HoverEvent::show_text(TextComponent::custom(
-                            "pumpkin",
-                            "commands.pumpkin.minecraft_version.hover",
-                            locale,
-                            vec![],
-                        )))
-                        .color_named(NamedColor::Gold),
-                    )
-                    // https://pumpkinmc.org/
-                    .add_child(
-                        TextComponent::custom("pumpkin", "commands.pumpkin.github", locale, vec![])
+                        .add_child(
+                            TextComponent::custom(
+                                "pumpkin",
+                                "commands.pumpkin.description",
+                                locale,
+                                vec![],
+                            )
+                            .click_event(ClickEvent::CopyToClipboard {
+                                value: Cow::from(
+                                    get_translation_text(
+                                        "pumpkin:commands.pumpkin.description",
+                                        locale,
+                                        vec![],
+                                    )
+                                    .replace('\n', ""),
+                                ),
+                            })
+                            .hover_event(HoverEvent::show_text(TextComponent::custom(
+                                "pumpkin",
+                                "commands.pumpkin.description.hover",
+                                locale,
+                                vec![],
+                            )))
+                            .color_named(NamedColor::White),
+                        )
+                        .add_child(
+                            TextComponent::custom(
+                                "pumpkin",
+                                "commands.pumpkin.minecraft_version",
+                                locale,
+                                vec![
+                                    TextComponent::text(CURRENT_MC_VERSION.to_string()),
+                                    TextComponent::text(
+                                        CURRENT_MC_VERSION.protocol_version().to_string(),
+                                    ),
+                                ],
+                            )
+                            .click_event(ClickEvent::CopyToClipboard {
+                                value: Cow::from(
+                                    get_translation_text(
+                                        "pumpkin:commands.pumpkin.minecraft_version",
+                                        locale,
+                                        vec![
+                                            TextComponent::text(CURRENT_MC_VERSION.to_string()).0,
+                                            TextComponent::text(
+                                                CURRENT_MC_VERSION.protocol_version().to_string(),
+                                            )
+                                            .0,
+                                        ],
+                                    )
+                                    .replace('\n', ""),
+                                ),
+                            })
+                            .hover_event(HoverEvent::show_text(TextComponent::custom(
+                                "pumpkin",
+                                "commands.pumpkin.minecraft_version.hover",
+                                locale,
+                                vec![],
+                            )))
+                            .color_named(NamedColor::Gold),
+                        )
+                        .add_child(
+                            // https://pumpkinmc.org/
+                            TextComponent::custom(
+                                "pumpkin",
+                                "commands.pumpkin.github",
+                                locale,
+                                vec![],
+                            )
                             .click_event(ClickEvent::OpenUrl {
                                 url: Cow::from("https://github.com/Pumpkin-MC/Pumpkin"),
                             })
@@ -197,43 +207,47 @@ impl CommandExecutor for Executor {
                             .color_named(NamedColor::Blue)
                             .bold()
                             .underlined(),
-                    )
-                    // Spacing
-                    .add_child(TextComponent::text("  "))
-                    .add_child(
-                        TextComponent::text("[Donate]")
+                        )
+                        .add_child(
+                            // Spacing
+                            TextComponent::text("  "),
+                        )
+                        .add_child(
+                            TextComponent::text("[Donate]")
+                                .click_event(ClickEvent::OpenUrl {
+                                    url: Cow::from("https://pumpkinmc.org/donate/"),
+                                })
+                                .hover_event(HoverEvent::show_text(TextComponent::text(
+                                    "Click to open Donate",
+                                )))
+                                .rainbow()
+                                .bold()
+                                .underlined(),
+                        )
+                        .add_child(
+                            // Spacing
+                            TextComponent::text("  "),
+                        )
+                        .add_child(
+                            TextComponent::custom(
+                                "pumpkin",
+                                "commands.pumpkin.website",
+                                locale,
+                                vec![],
+                            )
                             .click_event(ClickEvent::OpenUrl {
-                                url: Cow::from("https://pumpkinmc.org/donate/"),
+                                url: Cow::from("https://pumpkinmc.org/"),
                             })
-                            .hover_event(HoverEvent::show_text(TextComponent::text(
-                                "Click to open Donate",
+                            .hover_event(HoverEvent::show_text(TextComponent::custom(
+                                "pumpkin",
+                                "commands.pumpkin.website.hover",
+                                locale,
+                                vec![],
                             )))
-                            .rainbow()
+                            .color_named(NamedColor::Blue)
                             .bold()
                             .underlined(),
-                    )
-                    // Spacing
-                    .add_child(TextComponent::text("  "))
-                    .add_child(
-                        TextComponent::custom(
-                            "pumpkin",
-                            "commands.pumpkin.website",
-                            locale,
-                            vec![],
-                        )
-                        .click_event(ClickEvent::OpenUrl {
-                            url: Cow::from("https://pumpkinmc.org/"),
-                        })
-                        .hover_event(HoverEvent::show_text(TextComponent::custom(
-                            "pumpkin",
-                            "commands.pumpkin.website.hover",
-                            locale,
-                            vec![],
-                        )))
-                        .color_named(NamedColor::Blue)
-                        .bold()
-                        .underlined(),
-                    ),
+                        ),
                 )
                 .await;
 
