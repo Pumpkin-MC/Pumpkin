@@ -18,6 +18,7 @@ pub mod crafting_table;
 pub mod enchanting_table;
 pub mod furnace;
 pub mod grindstone;
+pub mod loom;
 pub mod smithing_table;
 pub mod smoker;
 pub mod stonecutter;
