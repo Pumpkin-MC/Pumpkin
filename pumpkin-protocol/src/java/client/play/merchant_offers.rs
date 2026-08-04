@@ -57,7 +57,10 @@ impl MerchantOffer {
         write.write_option(&self.cost_b, |w, cost_b| {
             cost_b.write_with_version(w, &version)
         })?;
-        write.write_bool(self.is_disabled)?;
+        // Vanilla `MerchantOffer.writeToStream` (`MerchantOffer.java:242`) writes
+        // `offer.isOutOfStock()` (`uses >= maxUses`) in this slot, not `rewardExp` -- that
+        // field is never sent over the wire at all, only through NBT (`rewardExp` key).
+        write.write_bool(self.uses >= self.max_uses)?;
         write.write_i32_be(self.uses)?;
         write.write_i32_be(self.max_uses)?;
         write.write_i32_be(self.xp)?;
@@ -166,5 +169,71 @@ mod test {
         offer.update_demand();
         // demand += 0 - 12 = 12 - 12 = 0
         assert_eq!(offer.demand, 0);
+    }
+
+    fn test_offer(is_disabled: bool, uses: i32, max_uses: i32) -> MerchantOffer {
+        MerchantOffer {
+            base_cost_a: crate::codec::item_stack_seralizer::ItemStackSerializer(
+                std::borrow::Cow::Owned(pumpkin_data::item_stack::ItemStack::EMPTY.clone()),
+            ),
+            output: crate::codec::item_stack_seralizer::ItemStackSerializer(
+                std::borrow::Cow::Owned(pumpkin_data::item_stack::ItemStack::EMPTY.clone()),
+            ),
+            cost_b: None,
+            is_disabled,
+            uses,
+            max_uses,
+            xp: 2,
+            special_price: 0,
+            price_multiplier: 0.05,
+            demand: 0,
+        }
+    }
+
+    fn write_bytes(offer: &MerchantOffer) -> Vec<u8> {
+        let mut buf = Vec::new();
+        offer
+            .write(
+                &mut buf,
+                pumpkin_util::version::JavaMinecraftVersion::V_1_21_11,
+            )
+            .unwrap();
+        buf
+    }
+
+    #[test]
+    fn wire_write_ignores_is_disabled_reward_exp_flag() {
+        // `is_disabled` (populated from `!rewardExp` elsewhere) must have no effect on the
+        // wire encoding: vanilla `MerchantOffer.writeToStream` (`MerchantOffer.java:242`)
+        // never sends `rewardExp` over the network at all.
+        let a = write_bytes(&test_offer(false, 3, 12));
+        let b = write_bytes(&test_offer(true, 3, 12));
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn wire_write_sends_is_out_of_stock_not_is_disabled() {
+        // Vanilla `MerchantOffer.writeToStream` (`MerchantOffer.java:242`) writes
+        // `offer.isOutOfStock()`, i.e. `uses >= maxUses`, in the boolean slot right after the
+        // optional second cost. `is_disabled` true here must not force that byte to 1, and
+        // `uses >= max_uses` must force it to 1 even when `is_disabled` is false.
+        let not_exhausted = write_bytes(&test_offer(true, 3, 12));
+        let exhausted = write_bytes(&test_offer(false, 12, 12));
+
+        // The flag is derived from `uses`, so flipping it also changes the `uses` i32 field
+        // written right after it -- but the flag byte itself always comes first, so it is
+        // always the first differing byte.
+        assert_eq!(not_exhausted.len(), exhausted.len());
+        let diff_positions: Vec<usize> = not_exhausted
+            .iter()
+            .zip(exhausted.iter())
+            .enumerate()
+            .filter(|(_, (x, y))| x != y)
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(diff_positions.len(), 2);
+        let pos = diff_positions[0];
+        assert_eq!(not_exhausted[pos], 0);
+        assert_eq!(exhausted[pos], 1);
     }
 }

@@ -228,6 +228,7 @@ impl SheepEntity {
     pub async fn shear(&self, world: &Arc<World>) {
         let entity = &self.mob_entity.living_entity.entity;
         let pos = entity.pos.load();
+        let drop_pos = drop_spawn_pos(pos);
 
         world.play_sound(Sound::EntitySheepShear, SoundCategory::Players, &pos);
 
@@ -244,7 +245,7 @@ impl SheepEntity {
                 rand::random(),
             );
             let item_entity = Arc::new(ItemEntity::new_with_velocity(
-                Entity::new(world.clone(), pos, &EntityType::ITEM),
+                Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
                 ItemStack::new(1, wool_item),
                 velocity,
                 10,
@@ -254,6 +255,15 @@ impl SheepEntity {
 
         self.set_sheared(true);
     }
+}
+
+/// Vanilla `Sheep.shear` (`Sheep.java:171`) drops wool via
+/// `this.spawnAtLocation(l, drop.copyWithCount(1), 1.0F)`, which resolves through
+/// `Entity.spawnAtLocation(ServerLevel, ItemStack, float)` (`Entity.java:2246-2248`) to
+/// `spawnAtLocation(level, itemStack, new Vec3(0.0, offset, 0.0))` (`Entity.java:2235-2243`):
+/// only the Y coordinate is offset, by `+1.0`, X and Z are unchanged.
+fn drop_spawn_pos(pos: Vector3<f64>) -> Vector3<f64> {
+    Vector3::new(pos.x, pos.y + 1.0, pos.z)
 }
 
 /// Vanilla's per-drop wool velocity is a base term plus jitter, not a single draw:
@@ -526,5 +536,19 @@ mod shear_drop_velocity_tests {
             assert!(v.y >= 0.2 - 1e-9 && v.y <= 0.25 + 1e-9);
             assert!(v.z >= -0.2 - 1e-9 && v.z <= 0.2 + 1e-9);
         }
+    }
+}
+
+#[cfg(test)]
+mod drop_spawn_pos_tests {
+    use super::{Vector3, drop_spawn_pos};
+
+    #[test]
+    fn only_offsets_y_by_one() {
+        let pos = Vector3::new(12.5, 64.0, -3.25);
+        let drop_pos = drop_spawn_pos(pos);
+        assert!((drop_pos.x - pos.x).abs() < 1e-12);
+        assert!((drop_pos.y - (pos.y + 1.0)).abs() < 1e-12);
+        assert!((drop_pos.z - pos.z).abs() < 1e-12);
     }
 }
