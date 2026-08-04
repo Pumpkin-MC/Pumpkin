@@ -5,7 +5,10 @@ use std::{
 };
 
 use crate::{
-    LoggerOption, command::client_suggestions, net::ClientPlatform, plugin::PluginMetadata,
+    LoggerOption,
+    command::client_suggestions,
+    net::ClientPlatform,
+    plugin::{PluginMetadata, loader::wasm::wasm_host::state::config::PluginConfigManager},
     plugin_log,
 };
 use pumpkin_util::{
@@ -39,7 +42,9 @@ pub struct Context {
     pub plugin_manager: Arc<PluginManager>,
     pub permission_manager: Arc<RwLock<PermissionManager>>,
     pub logger: Arc<OnceLock<LoggerOption>>,
+    pub config: Arc<PluginConfigManager>,
 }
+
 impl Context {
     /// Creates a new instance of `Context`.
     ///
@@ -57,6 +62,7 @@ impl Context {
         handlers: Arc<RwLock<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
         logger: Arc<OnceLock<LoggerOption>>,
+        config: Arc<PluginConfigManager>,
     ) -> Self {
         let permission_manager = server.permission_manager.clone();
         Self {
@@ -66,6 +72,7 @@ impl Context {
             plugin_manager,
             permission_manager,
             logger,
+            config,
         }
     }
 

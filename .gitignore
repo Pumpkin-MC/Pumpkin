@@ -102,6 +102,7 @@ plugins/
 world/*
 logs/
 crash-reports/
+config/
 
 # docker-compose
 data/*
