@@ -40,7 +40,7 @@ impl CodEntity {
                 2,
                 Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 8.0, 1.6, 1.4)),
             );
-            goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(4, Box::new(WanderAroundGoal::new_with_interval(1.0, 40)));
             goal_selector.add_goal(5, FollowFlockLeaderGoal::new());
             goal_selector.add_goal(
                 2,

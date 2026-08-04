@@ -35,7 +35,7 @@ impl GuardianEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(4, Box::new(GuardianAttackGoal::new()));
             goal_selector.add_goal(5, MoveTowardsRestrictionGoal::new(1.0));
-            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new_with_interval(1.0, 80)));
             goal_selector.add_goal(
                 8,
                 LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),

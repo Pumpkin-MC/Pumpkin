@@ -14,13 +14,23 @@ pub struct WanderAroundGoal {
 }
 
 impl WanderAroundGoal {
+    /// Vanilla: `RandomStrollGoal.DEFAULT_INTERVAL` (`RandomStrollGoal.java`).
+    const DEFAULT_INTERVAL: i32 = 120;
+
     #[must_use]
     pub const fn new(speed: f64) -> Self {
+        Self::new_with_interval(speed, Self::DEFAULT_INTERVAL)
+    }
+
+    /// Vanilla: `RandomStrollGoal(mob, speedModifier, interval)` / `RandomSwimmingGoal`, whose
+    /// callers pass a mob-specific interval instead of the 120-tick default.
+    #[must_use]
+    pub const fn new_with_interval(speed: f64, interval: i32) -> Self {
         Self {
             goal_control: Controls::MOVE,
             speed,
             target: None,
-            chance: to_goal_ticks(120),
+            chance: to_goal_ticks(interval),
             avoid_water: false,
         }
     }
@@ -32,7 +42,7 @@ impl WanderAroundGoal {
             goal_control: Controls::MOVE,
             speed,
             target: None,
-            chance: to_goal_ticks(120),
+            chance: to_goal_ticks(Self::DEFAULT_INTERVAL),
             avoid_water: true,
         }
     }
@@ -111,5 +121,31 @@ impl Goal for WanderAroundGoal {
 
     fn controls(&self) -> Controls {
         self.goal_control
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn default_interval_matches_vanilla() {
+        let goal = WanderAroundGoal::new(1.0);
+        assert_eq!(goal.chance, to_goal_ticks(120));
+    }
+
+    #[test]
+    fn custom_interval_is_applied() {
+        // Fish family: AbstractFish.FishSwimGoal uses interval 40.
+        let goal = WanderAroundGoal::new_with_interval(1.0, 40);
+        assert_eq!(goal.chance, to_goal_ticks(40));
+        assert_ne!(goal.chance, to_goal_ticks(120));
+    }
+
+    #[test]
+    fn water_avoiding_keeps_default_interval() {
+        let goal = WanderAroundGoal::new_water_avoiding(0.4);
+        assert_eq!(goal.chance, to_goal_ticks(120));
+        assert!(goal.avoid_water);
     }
 }
