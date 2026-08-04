@@ -60,6 +60,15 @@ impl TemplateCache {
         }
     }
 
+    /// Inserts a template into the cache under `name`, overwriting any existing entry.
+    ///
+    /// Used to make a runtime-captured (structure block SAVE) template immediately
+    /// available to LOAD without a filesystem round-trip.
+    pub fn insert(&self, name: &str, template: Arc<StructureTemplate>) {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        self.cache.insert(name.to_owned(), template);
+    }
+
     /// Gets a template by name, returning an error if loading fails.
     ///
     /// # Errors
