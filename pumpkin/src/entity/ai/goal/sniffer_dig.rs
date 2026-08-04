@@ -99,6 +99,12 @@ impl Goal for SnifferDigGoal {
         Box::pin(async {
             self.move_to_target_pos_goal.stop(mob).await;
             self.digging_ticks = 0;
+            if let Some(sniffer) = mob
+                .cast_any()
+                .downcast_ref::<crate::entity::passive::sniffer::SnifferEntity>()
+            {
+                sniffer.transition_to(crate::entity::passive::sniffer::SnifferState::Idling);
+            }
         })
     }
 
@@ -127,6 +133,12 @@ impl Goal for SnifferDigGoal {
                     1.0,
                     1.0,
                 );
+                if let Some(sniffer) = mob
+                    .cast_any()
+                    .downcast_ref::<crate::entity::passive::sniffer::SnifferEntity>()
+                {
+                    sniffer.transition_to(crate::entity::passive::sniffer::SnifferState::Digging);
+                }
                 return;
             }
 
@@ -158,6 +170,12 @@ impl Goal for SnifferDigGoal {
             if self.digging_ticks <= 0 {
                 self.digging_ticks = 0;
                 self.move_to_target_pos_goal.cooldown = to_goal_ticks(200);
+                if let Some(sniffer) = mob
+                    .cast_any()
+                    .downcast_ref::<crate::entity::passive::sniffer::SnifferEntity>()
+                {
+                    sniffer.transition_to(crate::entity::passive::sniffer::SnifferState::Idling);
+                }
             }
         })
     }

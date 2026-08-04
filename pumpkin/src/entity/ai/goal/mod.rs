@@ -57,6 +57,8 @@ pub mod owner_hurt_target;
 pub mod pick_up_block;
 pub mod piglin_admire;
 pub mod place_block;
+pub mod rabbit_avoid_entity;
+pub mod rabbit_hop;
 pub mod raid_garden;
 pub mod ranged_bow_attack;
 pub mod ranged_crossbow_attack;
