@@ -219,6 +219,44 @@ impl Mob for WolfEntity {
         })
     }
 
+    /// Vanilla `Wolf.wantsToAttack` (Wolf.java:638-648). The player/pvp branch checks only the
+    /// server's pvp toggle, not scoreboard team allied-friendly-fire (`Player.canHarmPlayer`,
+    /// Player.java:727-735) since Pumpkin has no team-alliance query wired to entities yet.
+    /// The tamed-horse branch (`AbstractHorse.isTamed()`) is folded into the generic
+    /// "any tamed `Mob`" check below since Pumpkin does not track horse taming separately.
+    fn can_attack_with_owner(&self, target: &dyn EntityBase, owner: &dyn EntityBase) -> bool {
+        let entity_type = target.get_entity().entity_type;
+
+        if entity_type == &EntityType::CREEPER
+            || entity_type == &EntityType::GHAST
+            || entity_type == &EntityType::ARMOR_STAND
+        {
+            return false;
+        }
+
+        if entity_type == &EntityType::WOLF {
+            let owner_uuid = owner.get_entity().entity_uuid;
+            return target.get_mob().is_none_or(|target_mob| {
+                !target_mob.get_mob_entity().is_tamed()
+                    || target_mob.get_owner_uuid() != Some(owner_uuid)
+            });
+        }
+
+        if target.get_player().is_some() && owner.get_player().is_some() {
+            let world = self.get_entity().world.load_full();
+            if let Some(server) = world.server.upgrade()
+                && !server.advanced_config.pvp.enabled
+            {
+                return false;
+            }
+            return true;
+        }
+
+        !target
+            .get_mob()
+            .is_some_and(|target_mob| target_mob.get_mob_entity().is_tamed())
+    }
+
     fn mob_set_variant_name(&self, name: &str) {
         let variant = match name.strip_prefix("minecraft:").unwrap_or(name) {
             "ashen" => 0,
