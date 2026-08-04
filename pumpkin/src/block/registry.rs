@@ -200,6 +200,7 @@ use crate::block::blocks::ladder::LadderBlock;
 use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::leaves::LeavesBlock;
 use crate::block::blocks::lectern::LecternBlock;
+use crate::block::blocks::loom::LoomBlock;
 use crate::block::blocks::respawn_anchor::RespawnAnchorBlock;
 use crate::block::blocks::scaffolding::ScaffoldingBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
@@ -320,6 +321,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChiseledBookshelfBlock);
     manager.register(ShelfBlock);
     manager.register(LecternBlock);
+    manager.register(LoomBlock);
     manager.register(DragonEggBlock);
     manager.register(StemBlock);
     manager.register(AttachedStemBlock);
