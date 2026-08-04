@@ -5,7 +5,7 @@ use crate::chunk::{
 use crate::generation::biome_coords;
 use crate::tick::scheduler::ChunkTickScheduler;
 use pumpkin_config::lighting::LightingEngineConfig;
-use pumpkin_data::dimension::Dimension;
+use pumpkin_data::{Block, dimension::Dimension};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
@@ -207,11 +207,17 @@ impl Chunk {
     fn build_level_sections(proto_chunk: &ProtoChunk, dimension: &Dimension) -> ChunkSections {
         let total_sections = dimension.height as usize / BlockPalette::SIZE;
         let biome_min_y = biome_coords::from_block(dimension.min_y);
+        let generated_block_height = proto_chunk.height() as usize;
+        let generated_biome_height = biome_coords::from_block(proto_chunk.height() as i32) as usize;
         let block_sections = (0..total_sections)
             .map(|section_index| {
                 BlockPalette::from_fn(|x, y, z| {
                     let y = section_index * BlockPalette::SIZE + y;
-                    proto_chunk.get_block_state_raw(x as i32, y as i32, z as i32)
+                    if y < generated_block_height {
+                        proto_chunk.get_block_state_raw(x as i32, y as i32, z as i32)
+                    } else {
+                        Block::AIR.default_state.id
+                    }
                 })
             })
             .collect::<Vec<_>>()
@@ -219,7 +225,8 @@ impl Chunk {
         let biome_sections = (0..total_sections)
             .map(|section_index| {
                 BiomePalette::from_fn(|x, y, z| {
-                    let y = section_index * BiomePalette::SIZE + y;
+                    let y =
+                        (section_index * BiomePalette::SIZE + y).min(generated_biome_height - 1);
                     proto_chunk.get_biome_id(x as i32, biome_min_y + y as i32, z as i32)
                 })
             })
