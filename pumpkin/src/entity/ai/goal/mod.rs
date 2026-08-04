@@ -62,6 +62,7 @@ pub mod teleport_towards_player;
 pub mod tempt;
 pub(crate) mod track_target;
 pub mod transport_items;
+pub mod turtle_go_to_water;
 pub mod villager_schedule;
 pub mod wander_around;
 pub mod witch_attack;
