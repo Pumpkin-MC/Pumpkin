@@ -12,6 +12,9 @@ use pumpkin_util::math::position::BlockPos;
 /// and optionally close them after passing through.
 pub struct InteractWithDoorGoal {
     close_door_after: bool,
+    /// Vanilla: `RaiderOpenDoorGoal.canUse() = super.canUse() && hasActiveRaid()`. When set, this
+    /// goal only opens doors while the mob has an active raid membership.
+    only_during_raid: bool,
     door_pos: Option<BlockPos>,
     passed_door: bool,
     door_open_dir_x: f32,
@@ -23,6 +26,7 @@ impl InteractWithDoorGoal {
     pub const fn new(close_door_after: bool) -> Self {
         Self {
             close_door_after,
+            only_during_raid: false,
             door_pos: None,
             passed_door: false,
             door_open_dir_x: 0.0,
@@ -30,14 +34,21 @@ impl InteractWithDoorGoal {
         }
     }
 
+    /// Vanilla: `Vindicator`'s `RaiderOpenDoorGoal` -- gates door-opening on `hasActiveRaid()`.
+    #[must_use]
+    pub const fn raid_gated(mut self, only_during_raid: bool) -> Self {
+        self.only_during_raid = only_during_raid;
+        self
+    }
+
     /// Checks if a block is a mob-interactable door
-    fn is_mob_interactable_door(world: &World, pos: &BlockPos) -> bool {
+    pub(crate) fn is_mob_interactable_door(world: &World, pos: &BlockPos) -> bool {
         let block = world.get_block(pos);
         block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_MOB_INTERACTABLE_DOORS)
     }
 
     /// Checks if the door at the given position is currently open
-    fn is_door_open(world: &World, pos: &BlockPos) -> bool {
+    pub(crate) fn is_door_open(world: &World, pos: &BlockPos) -> bool {
         let (block, state_id) = world.get_block_and_state_id(pos);
         let door_props = OakDoorLikeProperties::from_state_id(state_id, block);
         door_props.open
@@ -49,6 +60,10 @@ impl Goal for InteractWithDoorGoal {
         Box::pin(async move {
             let mob_entity = mob.get_mob_entity();
             let entity = &mob_entity.living_entity.entity;
+
+            if self.only_during_raid && !mob_entity.living_entity.has_active_raid() {
+                return false;
+            }
 
             // Must have horizontal collision to be trying to open a door
             if !entity

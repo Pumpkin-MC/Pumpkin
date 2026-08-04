@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{DataComponentImpl, PotionContentsImpl};
@@ -7,14 +7,17 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Potion;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::{self, Taggable};
 
 use super::{Controls, Goal, GoalFuture};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
+use crate::entity::mob::witch::WitchEntity;
 use crate::entity::projectile::splash_potion::SplashPotionEntity;
 use crate::entity::{Entity, EntityBase};
 
 pub struct WitchAttackGoal {
+    witch: Weak<WitchEntity>,
     cooldown: i32,
     interval: i32,
     range: f64,
@@ -22,8 +25,9 @@ pub struct WitchAttackGoal {
 
 impl WitchAttackGoal {
     #[must_use]
-    pub const fn new(interval: i32, range: f64) -> Self {
+    pub const fn new(witch: Weak<WitchEntity>, interval: i32, range: f64) -> Self {
         Self {
+            witch,
             cooldown: 0,
             interval,
             range,
@@ -50,6 +54,17 @@ impl WitchAttackGoal {
         }
     }
 
+    /// Vanilla `Witch.performRangedAttack`'s `target instanceof Raider` branch: heals rather than
+    /// harms hurt raid-mates.
+    #[must_use]
+    const fn choose_raider_heal_potion(health: f32) -> &'static Potion {
+        if health <= 4.0 {
+            &Potion::HEALING
+        } else {
+            &Potion::REGENERATION
+        }
+    }
+
     async fn shoot(&self, mob: &dyn Mob, target: &dyn EntityBase) {
         let shooter = mob.get_entity();
         let world = shooter.world.load_full();
@@ -61,6 +76,10 @@ impl WitchAttackGoal {
         let y = target_pos.y + target_entity.get_eye_height() - 1.1 - shooter_pos.y;
         let z = target_pos.z + target_velocity.z - shooter_pos.z;
         let distance = x.hypot(z);
+
+        let is_raider = target_entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_RAIDERS);
         let (health, has_slowness, has_poison, has_weakness) =
             if let Some(living) = target.get_living_entity() {
                 (
@@ -81,14 +100,20 @@ impl WitchAttackGoal {
             } else {
                 (0.0, false, false, false)
             };
-        let potion = Self::choose_potion(
-            distance,
-            health,
-            has_slowness,
-            has_poison,
-            has_weakness,
-            rand::random(),
-        );
+
+        let potion = if is_raider {
+            Self::choose_raider_heal_potion(health)
+        } else {
+            Self::choose_potion(
+                distance,
+                health,
+                has_slowness,
+                has_poison,
+                has_weakness,
+                rand::random(),
+            )
+        };
+
         let stack = ItemStack::new_with_component(
             1,
             &Item::SPLASH_POTION,
@@ -121,12 +146,25 @@ impl WitchAttackGoal {
             SoundCategory::Hostile,
             &shooter_pos,
         );
+
+        // Vanilla: a witch that decides to help a hurt raid-mate immediately clears its own
+        // target, rather than continuing to treat it as an attack target.
+        if is_raider {
+            mob.set_mob_target(None).await;
+        }
     }
 }
 
 impl Goal for WitchAttackGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
+            if self
+                .witch
+                .upgrade()
+                .is_some_and(|witch| witch.is_drinking_potion())
+            {
+                return false;
+            }
             mob.get_mob_entity()
                 .target
                 .lock()
@@ -138,6 +176,13 @@ impl Goal for WitchAttackGoal {
 
     fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
+            if self
+                .witch
+                .upgrade()
+                .is_some_and(|witch| witch.is_drinking_potion())
+            {
+                return false;
+            }
             mob.get_mob_entity()
                 .target
                 .lock()
@@ -163,6 +208,13 @@ impl Goal for WitchAttackGoal {
 
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
+            if self
+                .witch
+                .upgrade()
+                .is_some_and(|witch| witch.is_drinking_potion())
+            {
+                return;
+            }
             let Some(target) = mob.get_mob_entity().target.lock().await.clone() else {
                 return;
             };
@@ -227,6 +279,18 @@ mod tests {
         assert_eq!(
             WitchAttackGoal::choose_potion(4.0, 6.0, true, true, true, 1.0).id,
             Potion::HARMING.id
+        );
+    }
+
+    #[test]
+    fn raider_heal_potion_matches_vanilla_health_threshold() {
+        assert_eq!(
+            WitchAttackGoal::choose_raider_heal_potion(4.0).id,
+            Potion::HEALING.id
+        );
+        assert_eq!(
+            WitchAttackGoal::choose_raider_heal_potion(4.01).id,
+            Potion::REGENERATION.id
         );
     }
 }

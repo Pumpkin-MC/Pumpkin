@@ -8,6 +8,9 @@ pub struct WanderAroundGoal {
     speed: f64,
     target: Option<Vector3<f64>>,
     chance: i32,
+    /// Vanilla: `WaterAvoidingRandomStrollGoal` overrides `getPosition()` to reject candidate
+    /// positions inside a liquid.
+    avoid_water: bool,
 }
 
 impl WanderAroundGoal {
@@ -18,6 +21,19 @@ impl WanderAroundGoal {
             speed,
             target: None,
             chance: to_goal_ticks(120),
+            avoid_water: false,
+        }
+    }
+
+    /// Vanilla: `WaterAvoidingRandomStrollGoal`.
+    #[must_use]
+    pub const fn new_water_avoiding(speed: f64) -> Self {
+        Self {
+            goal_control: Controls::MOVE,
+            speed,
+            target: None,
+            chance: to_goal_ticks(120),
+            avoid_water: true,
         }
     }
 
@@ -42,6 +58,27 @@ impl Goal for WanderAroundGoal {
         Box::pin(async move {
             if mob.get_random().random_range(0..self.chance) != 0 {
                 return false;
+            }
+
+            if self.avoid_water {
+                let world = mob.get_entity().world.load();
+                // Reroll a bounded number of times looking for a non-liquid landing spot,
+                // falling back to the last roll (matching vanilla's "give up" behavior) rather
+                // than not moving at all.
+                let mut candidate = Self::find_wander_target(mob);
+                for _ in 0..10 {
+                    let block_pos = pumpkin_util::math::position::BlockPos::new(
+                        candidate.x.floor() as i32,
+                        candidate.y.floor() as i32,
+                        candidate.z.floor() as i32,
+                    );
+                    if !world.get_block_state(&block_pos).is_liquid() {
+                        break;
+                    }
+                    candidate = Self::find_wander_target(mob);
+                }
+                self.target = Some(candidate);
+                return true;
             }
 
             self.target = Some(Self::find_wander_target(mob));
