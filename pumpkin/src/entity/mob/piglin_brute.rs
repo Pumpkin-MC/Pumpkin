@@ -1,15 +1,15 @@
 use std::sync::{Arc, Weak};
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::{damage::DamageType, entity::EntityType};
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, piglin_shared},
 };
 
 pub struct PiglinBruteEntity {
@@ -66,5 +66,25 @@ impl NBTStorage for PiglinBruteEntity {}
 impl Mob for PiglinBruteEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    /// `PiglinBruteAi.wasHurtBy`: unlike `Piglin`, brutes have no baby-flee or
+    /// hoglin-outnumbered branch -- any non-piglin attacker is retaliated against
+    /// directly via the same `maybeRetaliate`/`broadcastAngerTarget` piglins use.
+    fn on_damage<'a>(
+        &'a self,
+        _damage_type: DamageType,
+        source: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            if let Some(source) = source {
+                if source.get_entity().entity_type.id == EntityType::PIGLIN.id
+                    || source.get_entity().entity_type.id == EntityType::PIGLIN_BRUTE.id
+                {
+                    return;
+                }
+                piglin_shared::retaliate_and_alert_piglins(self, source).await;
+            }
+        })
     }
 }

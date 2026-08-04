@@ -514,6 +514,20 @@ pub static EQUIPMENT_REGISTRY: LazyLock<HashMap<&'static str, MobEquipmentDef>> 
             },
         );
 
+        // ─── Piglin Brute ───
+        // `PiglinBrute.populateDefaultEquipmentSlots`: unconditional golden axe, no
+        // armor roll, no enchant roll (unlike the regular Piglin).
+        m.insert(
+            "piglin_brute",
+            MobEquipmentDef {
+                entity_type: "piglin_brute",
+                weapon: WeaponConfig::Always(&Item::GOLDEN_AXE),
+                armor: ArmorConfig::None,
+                enchanted: false,
+                can_pick_up_loot: false,
+            },
+        );
+
         // ─── Pillager ───
         m.insert(
             "pillager",
