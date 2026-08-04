@@ -215,13 +215,7 @@ impl BlockBehaviour for RedstoneWireBlock {
     ) -> BlockFuture<'a, u8> {
         Box::pin(async move {
             let wire = RedstoneWireProperties::from_state_id(args.state.id, args.block);
-            if args.direction == BlockDirection::Up
-                || wire.is_side_connected(args.direction.opposite().to_horizontal_facing().unwrap())
-            {
-                wire.power
-            } else {
-                0
-            }
+            strong_power_toward(wire, args.direction)
         })
     }
 
@@ -235,6 +229,24 @@ impl BlockBehaviour for RedstoneWireBlock {
         Box::pin(async move {
             update_wire_neighbors(args.world, args.position).await;
         })
+    }
+}
+
+/// Strong power the wire emits to the block that queried it, where `direction`
+/// points from the querying block toward the wire.
+///
+/// `to_horizontal_facing` returns `None` for the vertical directions, so the
+/// result has to be matched instead of unwrapped: a block sitting directly above
+/// the wire queries it with `BlockDirection::Down`, whose opposite is
+/// `BlockDirection::Up`.
+fn strong_power_toward(wire: RedstoneWireProperties, direction: BlockDirection) -> u8 {
+    if direction == BlockDirection::Up {
+        return wire.power;
+    }
+
+    match direction.opposite().to_horizontal_facing() {
+        Some(facing) if wire.is_side_connected(facing) => wire.power,
+        _ => 0,
     }
 }
 
@@ -560,4 +572,49 @@ async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
     }
 
     block_power.max(wire_power.saturating_sub(1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn powered_wire(power: u8) -> RedstoneWireProperties {
+        let mut wire = RedstoneWireProperties::default(&Block::REDSTONE_WIRE);
+        wire.power = power;
+        wire.north = NorthRedstone::None;
+        wire.south = SouthRedstone::None;
+        wire.east = EastRedstone::None;
+        wire.west = WestRedstone::None;
+        wire
+    }
+
+    #[test]
+    fn queried_from_above_yields_no_strong_power() {
+        // A block directly above the wire queries it with `Down`, and the
+        // opposite of `Down` is `Up`, which has no horizontal facing. Matching
+        // that `None` is what keeps the query from panicking.
+        assert_eq!(
+            strong_power_toward(powered_wire(15), BlockDirection::Down),
+            0
+        );
+    }
+
+    #[test]
+    fn queried_from_below_yields_full_strong_power() {
+        assert_eq!(
+            strong_power_toward(powered_wire(15), BlockDirection::Up),
+            15
+        );
+    }
+
+    #[test]
+    fn horizontal_strong_power_follows_connections() {
+        let mut wire = powered_wire(15);
+        wire.north = NorthRedstone::Side;
+
+        // Queried from the south: the opposite side is north, which is connected.
+        assert_eq!(strong_power_toward(wire, BlockDirection::South), 15);
+        // Queried from the east: the opposite side is west, which is not.
+        assert_eq!(strong_power_toward(wire, BlockDirection::East), 0);
+    }
 }
