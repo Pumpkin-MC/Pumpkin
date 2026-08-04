@@ -530,6 +530,11 @@ impl ClientPacket for CRecipeBookAdd<'_> {
 
         // Write crafting recipes
         for recipe in RECIPES_CRAFTING {
+            // CraftingSpecial and CraftingDecoratedPot have no RecipeDisplay and must be
+            // skipped entirely before any bytes are written for them. write_entry writes
+            // the display id up front and only then discovers there is nothing to display
+            // for these two variants; writing that id anyway leaves a stray VarInt in the
+            // stream with no matching entry, desyncing every entry that follows.
             let (group, notification) = match recipe {
                 CraftingRecipeTypes::CraftingShaped {
                     group,
@@ -541,7 +546,7 @@ impl ClientPacket for CRecipeBookAdd<'_> {
                     (group.map(Cow::Borrowed), true)
                 }
                 CraftingRecipeTypes::CraftingDecoratedPot { .. }
-                | CraftingRecipeTypes::CraftingSpecial => (None, true),
+                | CraftingRecipeTypes::CraftingSpecial => continue,
             };
             let group_id = resolve_group_id_owned(&mut group_ids, &mut next_group_id, group);
             let flags = entry_flags(self.replace, notification, highlight);
@@ -974,4 +979,259 @@ fn write_dynamic_cooking_entry(
     write_dynamic_ingredient_holderset(write, Some(&cooking.ingredient), version)?;
     write.write_u8(flags)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING};
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    use crate::ClientPacket;
+    use crate::codec::recipe::DynamicRecipe;
+    use crate::ser::NetworkReadExt;
+
+    use super::CRecipeBookAdd;
+
+    // Minimal reader that walks the exact wire structure CRecipeBookAdd writes,
+    // verified field-for-field against the decompiled vanilla 26.2 sources
+    // (ClientboundRecipeBookAddPacket, RecipeDisplayEntry, RecipeDisplay/SlotDisplay
+    // registries, Ingredient.CONTENTS_STREAM_CODEC, ByteBufCodecs.holderSet/optional).
+    // It exists to catch stream desyncs (extra/missing bytes) that a plain
+    // "did write_packet_data return Ok" check would miss.
+    struct Reader<'a> {
+        cursor: Cursor<&'a [u8]>,
+        item_id: i32,
+        item_stack_id: i32,
+        composite_id: i32,
+    }
+
+    impl Reader<'_> {
+        fn new(bytes: &[u8], version: JavaMinecraftVersion) -> Reader<'_> {
+            let legacy = version < JavaMinecraftVersion::V_26_1;
+            Reader {
+                cursor: Cursor::new(bytes),
+                item_id: if legacy { 2 } else { 4 },
+                item_stack_id: if legacy { 3 } else { 5 },
+                composite_id: if legacy { 7 } else { 10 },
+            }
+        }
+
+        fn var_int(&mut self) -> i32 {
+            self.cursor.get_var_int().unwrap().0
+        }
+
+        fn u8(&mut self) -> u8 {
+            self.cursor.get_u8().unwrap()
+        }
+
+        fn bool(&mut self) -> bool {
+            self.cursor.get_bool().unwrap()
+        }
+
+        fn f32(&mut self) -> f32 {
+            self.cursor.get_f32_be().unwrap()
+        }
+
+        fn remaining(&self) -> usize {
+            let pos = self.cursor.position() as usize;
+            self.cursor.get_ref().len() - pos
+        }
+
+        fn slot_display(&mut self) {
+            let ty = self.var_int();
+            if ty == 0 || ty == 1 {
+                return; // empty / any_fuel
+            }
+            if ty == self.item_id {
+                self.var_int(); // item id
+                return;
+            }
+            if ty == self.item_stack_id {
+                // item_stack: item id, count, then a component patch. Every
+                // ItemStack this packet ever constructs comes from
+                // ItemStack::new / OwnedRecipeResult, both of which start
+                // with an empty component patch, so to_add/to_remove are
+                // always 0 here and there is nothing further to skip.
+                self.var_int(); // item id
+                self.var_int(); // count
+                let to_add = self.var_int();
+                let to_remove = self.var_int();
+                assert_eq!(to_add, 0, "unexpected added components in recipe result");
+                assert_eq!(
+                    to_remove, 0,
+                    "unexpected removed components in recipe result"
+                );
+                return;
+            }
+            if ty == self.composite_id {
+                let count = self.var_int();
+                for _ in 0..count {
+                    self.slot_display();
+                }
+                return;
+            }
+            panic!("unexpected slot display type id {ty}");
+        }
+
+        fn holderset(&mut self) {
+            let n = self.var_int();
+            assert!(
+                n >= 1,
+                "craftingRequirements holder set must never take the tag-reference form (VarInt 0) -- no recipe ingredient here is registered as Tagged"
+            );
+            for _ in 0..(n - 1) {
+                self.var_int(); // item id
+            }
+        }
+
+        fn crafting_requirements(&mut self) {
+            let present = self.bool();
+            assert!(present, "craftingRequirements is always written as present");
+            let count = self.var_int();
+            for _ in 0..count {
+                self.holderset();
+            }
+        }
+
+        /// Returns the ingredient slot count consumed by the `RecipeDisplay` body,
+        /// for cross-checking against the craftingRequirements count that follows.
+        fn recipe_display(&mut self) -> i32 {
+            let display_type = self.var_int();
+            match display_type {
+                0 => {
+                    // crafting_shapeless
+                    let count = self.var_int();
+                    for _ in 0..count {
+                        self.slot_display();
+                    }
+                    self.slot_display(); // result
+                    self.slot_display(); // crafting station
+                    count
+                }
+                1 => {
+                    // crafting_shaped
+                    let width = self.var_int();
+                    let height = self.var_int();
+                    let count = self.var_int();
+                    assert_eq!(count, width * height);
+                    for _ in 0..count {
+                        self.slot_display();
+                    }
+                    self.slot_display(); // result
+                    self.slot_display(); // crafting station
+                    count
+                }
+                2 => {
+                    // furnace
+                    self.slot_display(); // ingredient
+                    self.slot_display(); // fuel (any_fuel)
+                    self.slot_display(); // result
+                    self.slot_display(); // crafting station
+                    self.var_int(); // duration
+                    self.f32(); // experience
+                    1
+                }
+                other => panic!("unexpected recipe display type id {other}"),
+            }
+        }
+
+        fn entry(&mut self) {
+            self.var_int(); // RecipeDisplayId
+            self.recipe_display();
+            self.var_int(); // group (OptionalInt)
+            self.var_int(); // category
+            self.crafting_requirements();
+            self.u8(); // flags
+        }
+    }
+
+    fn decode_and_validate(bytes: &[u8], expected_total: i32, version: JavaMinecraftVersion) {
+        let mut reader = Reader::new(bytes, version);
+        let total = reader.var_int();
+        assert_eq!(total, expected_total, "declared entry count mismatch");
+        for _ in 0..total {
+            reader.entry();
+        }
+        reader.bool(); // replace
+        assert_eq!(
+            reader.remaining(),
+            0,
+            "trailing/missing bytes after decoding every declared entry -- stream desync"
+        );
+    }
+
+    fn expected_crafting_entries() -> i32 {
+        RECIPES_CRAFTING
+            .iter()
+            .filter(|r| {
+                !matches!(
+                    r,
+                    CraftingRecipeTypes::CraftingSpecial
+                        | CraftingRecipeTypes::CraftingDecoratedPot { .. }
+                )
+            })
+            .count() as i32
+    }
+
+    #[test]
+    fn full_recipe_book_add_round_trips_for_26_2() {
+        let dynamic_recipes: Vec<DynamicRecipe> = Vec::new();
+        let packet = CRecipeBookAdd::new(true, &dynamic_recipes);
+        let mut bytes = Vec::new();
+        packet
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_2)
+            .expect("writing the full recipe book must not fail");
+
+        assert!(
+            bytes.len() > 10_000,
+            "expected a substantial packet for the full recipe list, got {} bytes",
+            bytes.len()
+        );
+
+        let expected_total = expected_crafting_entries() + RECIPES_COOKING.len() as i32;
+        decode_and_validate(&bytes, expected_total, JavaMinecraftVersion::V_26_2);
+    }
+
+    #[test]
+    fn full_recipe_book_add_round_trips_for_legacy_version() {
+        let dynamic_recipes: Vec<DynamicRecipe> = Vec::new();
+        let packet = CRecipeBookAdd::new(true, &dynamic_recipes);
+        let mut bytes = Vec::new();
+        packet
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_21_11)
+            .expect("writing the full recipe book must not fail on a legacy version");
+
+        let expected_total = expected_crafting_entries() + RECIPES_COOKING.len() as i32;
+        decode_and_validate(&bytes, expected_total, JavaMinecraftVersion::V_1_21_11);
+    }
+
+    #[test]
+    fn decorated_pot_recipe_does_not_leave_a_stray_varint() {
+        // Regression test for the join-blocking bug: CraftingDecoratedPot has no
+        // RecipeDisplay, so it must contribute zero bytes to the stream. Before the
+        // fix, write_entry wrote the entry's display id before discovering there was
+        // nothing else to write, leaving an extra unpaired VarInt that desynced every
+        // following entry for a real client's decoder.
+        assert!(
+            RECIPES_CRAFTING
+                .iter()
+                .any(|r| matches!(r, CraftingRecipeTypes::CraftingDecoratedPot { .. })),
+            "test fixture assumption broken: no CraftingDecoratedPot recipe in RECIPES_CRAFTING"
+        );
+
+        let dynamic_recipes: Vec<DynamicRecipe> = Vec::new();
+        let packet = CRecipeBookAdd::new(true, &dynamic_recipes);
+        let mut bytes = Vec::new();
+        packet
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_2)
+            .unwrap();
+
+        let expected_total = expected_crafting_entries() + RECIPES_COOKING.len() as i32;
+        // decode_and_validate itself fails with a stream desync if any stray bytes
+        // were emitted anywhere in the stream, including around the decorated pot
+        // recipe.
+        decode_and_validate(&bytes, expected_total, JavaMinecraftVersion::V_26_2);
+    }
 }
