@@ -80,6 +80,7 @@ pub mod logs;
 pub mod mangrove_roots;
 pub mod plant;
 pub mod pumpkin;
+pub mod sculk_vein;
 pub mod vine;
 
 // Terrain / environment / physics
