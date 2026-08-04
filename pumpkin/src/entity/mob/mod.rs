@@ -661,7 +661,7 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn is_sitting(&self) -> bool {
-        false
+        self.get_mob_entity().is_ordered_to_sit()
     }
 
     fn get_base_experience_reward(&self) -> u32 {
