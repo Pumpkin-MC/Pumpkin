@@ -460,15 +460,27 @@ fn end_islands_2d(sampler_index: u32, x: i32, z: i32) -> f32 {
     let k = x % 2;
     let l = z % 2;
 
-    var f = clamp(100.0 - sqrt(f32(x * x + z * z)) * 8.0, -100.0, 80.0);
+    // Distances are computed in f32: the exact i32 products wrap past ±46340
+    // (~±741k blocks in the End), which vanilla avoids with i64 in the inner
+    // radius test below. For |x|,|z| <= 4096 the f32 sums are exact, and far
+    // above that the threshold comparisons are unambiguous, so this matches the
+    // CPU reference at every coordinate.
+    var f = clamp(100.0 - sqrt(f32(x) * f32(x) + f32(z) * f32(z)) * 8.0, -100.0, 80.0);
 
     for (var m: i32 = -12; m <= 12; m = m + 1) {
         for (var n: i32 = -12; n <= 12; n = n + 1) {
             let o = i + m;
             let p = j + n;
 
-            if (o * o + p * p > 4096 && simplex_sample_2d(sampler_index, f32(o), f32(p)) < -0.9) {
-                let g = (abs(f32(o)) * 3439.0 + abs(f32(p)) * 147.0) % 13.0 + 9.0;
+            if (f32(o) * f32(o) + f32(p) * f32(p) > 4096.0
+                && simplex_sample_2d(sampler_index, f32(o), f32(p)) < -0.9) {
+                // Vanilla computes g as `(float)(abs(o) * 3439 + abs(p) * 147) % 13 + 9`.
+                // The float form is not portable: some backends approximate `%` for
+                // large f32 operands, and at |o|,|p| ~ 50k the product is ~1.6e8 where
+                // a 1-ulp error shifts the remainder by up to ±13. Reducing modulo 13
+                // in integers first is exact on every backend (3439 ≡ 7, 147 ≡ 4), and
+                // agrees with vanilla whenever the float sum is exactly representable.
+                let g = f32(((abs(o) % 13) * 7 + (abs(p) % 13) * 4) % 13 + 9);
                 let h = f32(k - m * 2);
                 let q = f32(l - n * 2);
                 let s = clamp(100.0 - length(vec2<f32>(h, q)) * g, -100.0, 80.0);

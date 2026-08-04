@@ -1871,6 +1871,91 @@ mod test {
         );
     }
 
+    /// The shader's EndIslands must stay overflow-free at coordinates where the
+    /// exact i32 products would wrap (|block| ≳ 741k). Both this and the f32
+    /// reference compute the radius and `g` without any large-integer wrap now,
+    /// so they must still agree there — a regression to the old `o * o + p * p`
+    /// i32 form (or to the float `% 13.0` form) would diverge on nearly every
+    /// point. The only allowed disagreement is the documented `simplex < -0.9`
+    /// boundary flip, which affects a rare point (the old overflow made ~94% of
+    /// points diverge; the boundary flip is ~1%).
+    #[test]
+    fn gpu_end_islands_no_overflow_at_extreme_coords() {
+        use crate::world::graph::{CompiledGraph, Instruction, OpCode, SamplerPool};
+        use pumpkin_util::random::{RandomImpl, legacy_rand::LegacyRand};
+
+        const SEED: u64 = 55555;
+
+        let Some(ctx) = GpuNoiseContext::try_new() else {
+            return;
+        };
+
+        let mut rand = LegacyRand::from_seed(SEED);
+        rand.skip(17292);
+        let sampler = pumpkin_util::noise::simplex::SimplexNoiseSampler::new(&mut rand);
+
+        let mut samplers = SamplerPool::default();
+        let mut node = Instruction::new_for_test(OpCode::EndIslands, 0);
+        node.sampler_index = samplers.push_simplex(&sampler);
+
+        let compiled = CompiledGraph {
+            instructions: vec![node],
+            samplers,
+            ..Default::default()
+        };
+
+        // Sweep across the i32 overflow threshold on both axes.
+        let points: Vec<[f32; 3]> = (0..300)
+            .map(|i| {
+                let f = i as f32;
+                [741_440.0 + f * 1200.0, 64.0, 741_440.0 - f * 900.0]
+            })
+            .collect();
+
+        let gpu_results = ctx.evaluate_graph(&compiled, &points);
+
+        let mut flips = 0usize;
+        for (point, &gpu_value) in points.iter().zip(&gpu_results) {
+            let reference = crate::world::graph::evaluate_cpu(
+                &compiled,
+                &crate::world::graph::BeardifierData::default(),
+                point[0],
+                point[1],
+                point[2],
+            );
+            if (reference - gpu_value).abs() > 0.02 {
+                flips += 1;
+            }
+        }
+
+        // Rare boundary flips are the documented f32 tradeoff for this opcode.
+        assert!(
+            flips * 50 < points.len(),
+            "{flips}/{} points diverge from the f32 reference by more than f32 drift; \
+             the overflow fix regressed",
+            points.len()
+        );
+        // The non-flipped majority must still agree tightly.
+        let mut tight = 0usize;
+        for (point, &gpu_value) in points.iter().zip(&gpu_results) {
+            let reference = crate::world::graph::evaluate_cpu(
+                &compiled,
+                &crate::world::graph::BeardifierData::default(),
+                point[0],
+                point[1],
+                point[2],
+            );
+            if (reference - gpu_value).abs() < 1e-3 {
+                tight += 1;
+            }
+        }
+        assert!(
+            tight * 10 >= points.len() * 9,
+            "only {tight}/{} extreme-coordinate points agree within f32 drift",
+            points.len()
+        );
+    }
+
     /// Tests that the GPU sky-light scan matches the CPU reference on a trivial
     /// column: one solid block at y=0 surrounded by air, in a 1-column region.
     #[test]

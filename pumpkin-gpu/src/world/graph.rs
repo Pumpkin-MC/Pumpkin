@@ -1060,10 +1060,25 @@ fn eval_opcode(
             let clamped = a.clamp(-1.0, 1.0);
             clamped / 2.0 - clamped * clamped * clamped / 24.0
         }
-        op if op == OpCode::UnaryInvert as u32 => 1.0 / a,
+        // Vanilla returns +inf for zero, including -0.0; matches the shader.
+        op if op == OpCode::UnaryInvert as u32 => {
+            if a == 0.0 {
+                f32::INFINITY
+            } else {
+                1.0 / a
+            }
+        }
         op if op == OpCode::Clamp as u32 => a.clamp(p.param0, p.param1),
         op if op == OpCode::BinaryAdd as u32 => a + b,
-        op if op == OpCode::BinaryMul as u32 => a * b,
+        // Vanilla short-circuits on a == 0 so 0 * inf stays 0 instead of NaN;
+        // the shader reproduces that, so the reference must too.
+        op if op == OpCode::BinaryMul as u32 => {
+            if a == 0.0 {
+                0.0
+            } else {
+                a * b
+            }
+        }
         op if op == OpCode::BinaryMin as u32 => a.min(b),
         op if op == OpCode::BinaryMax as u32 => a.max(b),
         op if op == OpCode::ClampedYGradient as u32 => {
@@ -1149,7 +1164,11 @@ fn end_islands_2d(pool: &SamplerPool, sampler_index: usize, x: i32, z: i32) -> f
     let k = x % 2;
     let l = z % 2;
 
-    let mut f = (((x * x + z * z) as f32).sqrt())
+    // f32 arithmetic, mirroring the shader: the exact i32 products wrap past
+    // ±46340 (~±741k blocks in the End), which the old `(x * x + z * z) as f32`
+    // form would silently wrap in release and panic in debug builds.
+    let mut f = (x as f32 * x as f32 + z as f32 * z as f32)
+        .sqrt()
         .mul_add(-8.0, 100.0)
         .clamp(-100.0, 80.0);
 
@@ -1161,7 +1180,12 @@ fn end_islands_2d(pool: &SamplerPool, sampler_index: usize, x: i32, z: i32) -> f
             if o * o + p * p > 4096
                 && simplex_sample_2d(pool, sampler_index, o as f32, p as f32) < -0.9
             {
-                let g = (o as f32).abs().mul_add(3439.0, (p as f32).abs() * 147.0) % 13.0 + 9.0;
+                // Vanilla computes g as `(float)(abs(o) * 3439 + abs(p) * 147) % 13 + 9`.
+                // The float form is not portable (some GPU backends approximate `%` for
+                // large f32 operands), so reduce modulo 13 in integers first — exact on
+                // every backend and identical to vanilla when the float sum is exact.
+                // 3439 ≡ 7 and 147 ≡ 4 (mod 13).
+                let g = (((o.abs() % 13) * 7 + (p.abs() % 13) * 4) % 13 + 9) as f32;
                 let h = (k - m * 2) as f32;
                 let q = (l - n * 2) as f32;
                 let s = h.hypot(q).mul_add(-g, 100.0).clamp(-100.0, 80.0);
@@ -1172,7 +1196,11 @@ fn end_islands_2d(pool: &SamplerPool, sampler_index: usize, x: i32, z: i32) -> f
     f
 }
 
-const SIMPLEX_SKEW_2D: f32 = 0.366_025_4;
+// Must stay bit-identical to `SIMPLEX_SKEW_2D` in graph.wgsl: 0.366_025_4 would
+// round one ulp low (0.36602539 vs vanilla's correctly-rounded 0.36602542), and
+// that ulp in `d` shifts `simplex_sample_2d` enough to flip the -0.9 island
+// threshold near the boundary.
+const SIMPLEX_SKEW_2D: f32 = 0.366_025_42;
 const SIMPLEX_UNSKEW_2D: f32 = 0.211_324_87;
 
 fn simplex_perm(pool: &SamplerPool, sampler_index: usize, input: i32) -> i32 {
@@ -1698,7 +1726,10 @@ pub(crate) mod test {
         BaseNoiseFunctionComponent, NETHER_BASE_NOISE_ROUTER, OVERWORLD_BASE_NOISE_ROUTER,
         UnaryOperation,
     };
-    use pumpkin_util::random::xoroshiro128::{Xoroshiro, XoroshiroSplitter};
+    use pumpkin_util::{
+        noise::simplex::SimplexNoiseSampler,
+        random::{RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro, xoroshiro128::XoroshiroSplitter},
+    };
     use pumpkin_world::generation::GlobalRandomConfig;
 
     fn instruction(opcode: OpCode, index: usize) -> Instruction {
@@ -1914,5 +1945,85 @@ pub(crate) mod test {
             .is_infinite()
         );
         let _ = UnaryOperation::Invert;
+    }
+
+    /// The reference must return +inf for -0.0 too, exactly like the shader and
+    /// vanilla (`density == 0.0 -> INFINITY`).
+    #[test]
+    fn unary_invert_negative_zero_is_positive_infinity() {
+        let mut constant = instruction(OpCode::Constant, 0);
+        constant.param0 = -0.0;
+        let mut invert = instruction(OpCode::UnaryInvert, 1);
+        invert.input0 = 0;
+
+        let value = evaluate_cpu(
+            &bare_graph(&[constant, invert]),
+            &BeardifierData::default(),
+            0.0,
+            0.0,
+            0.0,
+        );
+        assert!(value.is_infinite() && value.is_sign_positive(), "got {value}");
+    }
+
+    /// BinaryMul must short-circuit on a == 0 (0 * inf = 0, not NaN), matching
+    /// the shader and vanilla.
+    #[test]
+    fn binary_mul_short_circuits_zero() {
+        let mut zero = instruction(OpCode::Constant, 0);
+        zero.param0 = 0.0;
+        let mut also_zero = instruction(OpCode::Constant, 1);
+        also_zero.param0 = 0.0;
+        let mut invert = instruction(OpCode::UnaryInvert, 2);
+        invert.input0 = 1;
+        let mut mul = instruction(OpCode::BinaryMul, 3);
+        mul.input0 = 0;
+        mul.input1 = 2;
+
+        let value = evaluate_cpu(
+            &bare_graph(&[zero, also_zero, invert, mul]),
+            &BeardifierData::default(),
+            0.0,
+            0.0,
+            0.0,
+        );
+        assert_eq!(value, 0.0);
+    }
+
+    /// The EndIslands reference must stay overflow-free at coordinates where the
+    /// i32 products would wrap (~±741k blocks in the End) instead of panicking
+    /// in debug builds or wrapping in release.
+    #[test]
+    fn end_islands_reference_no_overflow() {
+        let mut rand = LegacyRand::from_seed(55555);
+        rand.skip(17292);
+        let sampler = SimplexNoiseSampler::new(&mut rand);
+
+        let mut samplers = SamplerPool::default();
+        let mut node = Instruction::new_for_test(OpCode::EndIslands, 0);
+        node.sampler_index = samplers.push_simplex(&sampler);
+        let compiled = CompiledGraph {
+            instructions: vec![node],
+            samplers,
+            ..Default::default()
+        };
+
+        // Well past the i32 overflow threshold, in both axes.
+        let points = [
+            [800_000.0f32, 64.0, 800_000.0],
+            [-900_000.0, 64.0, 850_000.0],
+            [1_400_000.0, 64.0, -1_200_000.0],
+            [-1_500_000.0, 64.0, -1_500_000.0],
+        ];
+        for [x, y, z] in points {
+            let value = evaluate_cpu(
+                &compiled,
+                &BeardifierData::default(),
+                x,
+                y,
+                z,
+            );
+            assert!(value.is_finite(), "got {value} at ({x}, {y}, {z})");
+        }
     }
 }

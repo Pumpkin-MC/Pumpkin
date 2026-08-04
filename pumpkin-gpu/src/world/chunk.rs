@@ -54,10 +54,14 @@ impl OverworldNoisePipeline {
         self.compiled.outputs_per_point()
     }
 
-    /// Evaluate the density-function graph on the GPU for all `positions`,
-    /// returning `outputs_per_point()` values per point in row-major order.
+    /// Evaluate the density-function graph on the GPU for all `positions`.
     ///
-    /// The 10 outputs per point are laid out as:
+    /// The result is output-major: `outputs_per_point()` contiguous runs of
+    /// `positions.len()` values, one run per output slot — all points for slot
+    /// 0 first, then all points for slot 1, and so on. Use [`collect_output`]
+    /// to extract a single slot.
+    ///
+    /// The 10 slots are:
     ///
     /// | Index | Name |
     /// |-------|------|
