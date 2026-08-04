@@ -166,13 +166,22 @@ impl FoxEntity {
         self.flags.load(Relaxed) & mask != 0
     }
 
+    /// Note: `TrackedData::FOX_FLAGS` resolves to the "not present in this protocol version"
+    /// sentinel (255, a documented no-op in `Metadata::write`) on the v26.x versions this
+    /// build targets -- `pumpkin-data`'s codegen flattens `DATA_FLAGS_ID` across every vanilla
+    /// class that reuses that literal field name (Fox, Bee, Spider, Vex, `IronGolem`,
+    /// `TamableAnimal`, Blaze) into one global key per version, and loses Fox's entry for v26.x
+    /// in the process. `BeeEntity` hits the identical gap with `BEE_FLAGS` today. Server-side
+    /// state (`self.flags`) stays authoritative either way; this only means clients on v26.x
+    /// won't see the crouch/sit/sleep pose until `pumpkin-data`'s tracked-data generation is
+    /// fixed to disambiguate per-class collisions (out of scope here).
     fn set_flag(&self, mask: u8, value: bool) {
-        let byte = if value {
-            self.flags.load(Relaxed) | mask
+        let old = if value {
+            self.flags.fetch_or(mask, Relaxed)
         } else {
-            self.flags.load(Relaxed) & !mask
+            self.flags.fetch_and(!mask, Relaxed)
         };
-        self.flags.store(byte, Relaxed);
+        let byte = if value { old | mask } else { old & !mask };
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
                 TrackedData::FOX_FLAGS,
@@ -275,7 +284,7 @@ impl FoxEntity {
         self.variant.store(variant as u8, Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::TYPE,
+                TrackedData::TYPE_ID,
                 MetaDataType::INT,
                 VarInt(i32::from(variant as u8)),
             )],
