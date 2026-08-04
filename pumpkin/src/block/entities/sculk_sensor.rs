@@ -64,4 +64,8 @@ impl SculkSensorBlockEntity {
             last_vibration_frequency: Mutex::new(0),
         }
     }
+
+    pub async fn set_last_vibration_frequency(&self, frequency: i32) {
+        *self.last_vibration_frequency.lock().await = frequency;
+    }
 }
