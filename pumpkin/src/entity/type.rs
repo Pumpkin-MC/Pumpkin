@@ -10,8 +10,8 @@ use crate::entity::boss::ender_dragon::EnderDragonEntity;
 use crate::entity::boss::wither::WitherEntity;
 use crate::entity::decoration::{
     armor_stand::ArmorStandEntity, block_display::BlockDisplayEntity,
-    end_crystal::EndCrystalEntity, item_display::ItemDisplayEntity, item_frame::ItemFrameEntity,
-    painting::PaintingEntity, text_display::TextDisplayEntity,
+    end_crystal::EndCrystalEntity, interaction::InteractionEntity, item_display::ItemDisplayEntity,
+    item_frame::ItemFrameEntity, painting::PaintingEntity, text_display::TextDisplayEntity,
 };
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::falling::FallingEntity;
@@ -238,6 +238,7 @@ pub fn from_type(
             Arc::new(ItemFrameEntity::new(entity))
         }
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
+        id if id == EntityType::INTERACTION.id => Arc::new(InteractionEntity::new(entity)),
         id if id == EntityType::TEXT_DISPLAY.id => Arc::new(TextDisplayEntity::new(entity)),
         id if id == EntityType::ITEM_DISPLAY.id => Arc::new(ItemDisplayEntity::new(entity)),
         id if id == EntityType::BLOCK_DISPLAY.id => Arc::new(BlockDisplayEntity::new(entity)),
