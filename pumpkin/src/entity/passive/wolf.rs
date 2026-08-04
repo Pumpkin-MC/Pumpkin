@@ -211,11 +211,13 @@ impl WolfEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_idle();
 
-        if touching_water
-            && !self.is_shaking.load(Ordering::Relaxed)
-            && !is_pathfinding
-            && on_ground
-        {
+        // Vanilla's `aiStep` gates the shake start on the *latched* `isWet` flag (set by the
+        // previous tick's `tick()` while in water and surviving until the shake cycle ends),
+        // not on being in water right now -- the wolf actually starts shaking after it has
+        // already left the water. Read the flag before this tick's `touching_water` update
+        // below overwrites it.
+        let was_wet = self.is_wet.load(Ordering::Relaxed);
+        if was_wet && !self.is_shaking.load(Ordering::Relaxed) && !is_pathfinding && on_ground {
             self.is_shaking.store(true, Ordering::Relaxed);
             self.shake_anim.store(0f32.to_bits(), Ordering::Relaxed);
             world.send_entity_status(entity, EntityStatus::ShakeWetness);

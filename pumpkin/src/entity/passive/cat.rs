@@ -254,6 +254,16 @@ impl NBTStorage for CatEntity {
             if let Some(color) = nbt.get_byte("CollarColor") {
                 self.collar_color.store(color as u8, Ordering::Relaxed);
             }
+            // Vanilla calls `reassessTameGoals` from both the constructor and `setTame` (which
+            // fires on load); `CatEntity::new` only covers the always-untamed spawn case, so a
+            // cat that loads already tamed needs the flee-from-players goal removed here too.
+            // (Pumpkin does not currently persist/restore mob ownership at all across a
+            // save/load cycle -- this is a pre-existing, unrelated gap -- so this branch is
+            // presently unreachable in practice; it's wired now so it's already correct once
+            // owner persistence lands.)
+            if self.mob_entity.is_tamed() {
+                self.reassess_tame_goals().await;
+            }
         })
     }
 }
