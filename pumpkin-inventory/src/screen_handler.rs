@@ -35,6 +35,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     screen::WindowType,
+    sound::Sound,
     statistic::StatisticCategory,
 };
 use pumpkin_protocol::{
@@ -131,6 +132,9 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Gets the player's inventory.
     fn get_inventory(&self) -> Arc<PlayerInventory>;
+
+    /// Plays a sound at the player's own position, broadcast to nearby players.
+    fn play_sound(&self, sound: Sound) -> PlayerFuture<'_, ()>;
 
     /// Checks if the player has infinite materials (creative mode).
     fn has_infinite_materials(&self) -> bool;

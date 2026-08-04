@@ -5283,6 +5283,13 @@ impl InventoryPlayer for Player {
         })
     }
 
+    fn play_sound(&self, sound: Sound) -> PlayerFuture<'_, ()> {
+        Box::pin(async move {
+            self.world()
+                .play_sound(sound, SoundCategory::Blocks, &self.position());
+        })
+    }
+
     // Synchronous methods remain unchanged
     fn has_infinite_materials(&self) -> bool {
         self.gamemode.load() == GameMode::Creative

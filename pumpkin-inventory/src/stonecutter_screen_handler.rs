@@ -13,6 +13,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{RECIPES_STONECUTTING, StonecutterRecipe};
 use pumpkin_data::screen::WindowType;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_protocol::java::server::play::SlotActionType;
 use pumpkin_world::inventory::Inventory;
@@ -263,6 +264,7 @@ impl Slot for StonecutterOutputSlot {
                 }
             }
             self.mark_dirty().await;
+            player.play_sound(Sound::UiStonecutterTakeResult).await;
         })
     }
 
