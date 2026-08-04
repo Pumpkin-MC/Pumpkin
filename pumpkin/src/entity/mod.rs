@@ -95,6 +95,7 @@ pub mod item;
 pub mod living;
 pub mod mob;
 pub mod passive;
+pub mod persistent_anger;
 pub mod player;
 pub mod projectile;
 pub mod projectile_deflection;

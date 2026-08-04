@@ -1,25 +1,31 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         melee_attack::MeleeAttackGoal, revenge::RevengeGoal, spear_use::SpearUseGoal,
         swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
+    persistent_anger::PersistentAnger,
 };
 
 pub struct ZombifiedPiglinEntity {
     pub mob_entity: MobEntity,
+    pub persistent_anger: PersistentAnger,
 }
 
 impl ZombifiedPiglinEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let piglin = Self { mob_entity };
+        let piglin = Self {
+            mob_entity,
+            persistent_anger: PersistentAnger::default(),
+        };
         let mob_arc = Arc::new(piglin);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -51,10 +57,22 @@ impl ZombifiedPiglinEntity {
     }
 }
 
-impl NBTStorage for ZombifiedPiglinEntity {}
+impl NBTStorage for ZombifiedPiglinEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async { self.persistent_anger.write_nbt(nbt).await })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async { self.persistent_anger.read_nbt(nbt).await })
+    }
+}
 
 impl Mob for ZombifiedPiglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move { self.persistent_anger.tick().await })
     }
 }
