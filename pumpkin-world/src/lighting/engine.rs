@@ -17,6 +17,65 @@ use std::collections::VecDeque;
 type FastHashSet<K> = rustc_hash::FxHashSet<K>;
 type FastHashMap<K, V> = rustc_hash::FxHashMap<K, V>;
 
+/// Pre-computed opacity for the 18×18×N BFS propagation region.
+///
+/// Built once before propagation starts so that `cache.get_block_state()`
+/// calls (and their inner mutex acquisitions for Level chunks) are replaced
+/// by plain array lookups during BFS traversal.
+pub struct OpacityCache {
+    data: Box<[u8]>,
+    start_x: i32,
+    start_z: i32,
+    bottom_y: i32,
+    height: u32,
+}
+
+impl OpacityCache {
+    fn build(
+        cache: &Cache,
+        start_x: i32,
+        start_z: i32,
+        end_x: i32,
+        end_z: i32,
+        bottom_y: i32,
+        max_y: i32,
+    ) -> Self {
+        let width = (end_x - start_x) as u32;
+        let depth = (end_z - start_z) as u32;
+        let height = (max_y - bottom_y) as u32;
+        let total = (width * depth * height) as usize;
+        let mut data = vec![0u8; total].into_boxed_slice();
+        for z in start_z..end_z {
+            let zi = (z - start_z) as u32;
+            for x in start_x..end_x {
+                let xi = (x - start_x) as u32;
+                let col = (zi * width + xi) as usize;
+                for y in bottom_y..max_y {
+                    let yi = (y - bottom_y) as u32;
+                    let pos = Vector3::new(x, y, z);
+                    data[col * height as usize + yi as usize] =
+                        cache.get_block_state(&pos).to_state().opacity;
+                }
+            }
+        }
+        Self {
+            data,
+            start_x,
+            start_z,
+            bottom_y,
+            height,
+        }
+    }
+
+    fn get(&self, x: i32, y: i32, z: i32) -> u8 {
+        let zi = (z - self.start_z) as u32;
+        let xi = (x - self.start_x) as u32;
+        let col = (zi * 18 + xi) as usize;
+        let yi = (y - self.bottom_y) as u32;
+        self.data[col * self.height as usize + yi as usize]
+    }
+}
+
 /// Trait to unify Block and Sky light logic
 pub trait LightProvider {
     fn get_light(cache: &Cache, pos: BlockPos) -> u8;
@@ -86,11 +145,10 @@ impl<P: LightProvider> LightPropagator<P> {
 
     /// Core Propagation Logic (BFS).
     ///
-    /// Reads and writes light directly through the light storage (a fast array
-    /// lookup) instead of maintaining a separate hashed shadow cache and batched
-    /// write buffer; the storage is the single source of truth.
-    pub fn propagate(&mut self, cache: &mut Cache) {
-        // Cache metadata for bounds checking
+    /// When `opacity_cache` is `Some`, opacity is read from the pre-computed
+    /// array instead of calling `cache.get_block_state()`, avoiding mutex lock
+    /// acquisition for every visited block.
+    pub fn propagate(&mut self, cache: &mut Cache, opacity_cache: Option<&OpacityCache>) {
         let cache_x = cache.x;
         let cache_z = cache.z;
         let cache_size = cache.size;
@@ -106,7 +164,6 @@ impl<P: LightProvider> LightPropagator<P> {
             }
 
             for dir in BlockDirection::all() {
-                // Skip the direction we came from (if specified)
                 if let Some(skip_dir) = entry.skip_direction
                     && dir == skip_dir
                 {
@@ -115,12 +172,10 @@ impl<P: LightProvider> LightPropagator<P> {
 
                 let neighbor_pos = pos.offset(dir.to_offset());
 
-                // Skip if already visited (critical early-exit optimization)
                 if self.visited.contains(&neighbor_pos) {
                     continue;
                 }
 
-                // Skip neighbor if it's outside world bounds
                 if neighbor_pos.0.y < min_y || neighbor_pos.0.y >= max_y {
                     continue;
                 }
@@ -132,9 +187,10 @@ impl<P: LightProvider> LightPropagator<P> {
                     continue;
                 }
 
-                // Get block opacity
-                let state = cache.get_block_state(&neighbor_pos.0);
-                let opacity = state.to_state().opacity;
+                let opacity = opacity_cache.map_or_else(
+                    || cache.get_block_state(&neighbor_pos.0).to_state().opacity,
+                    |oc| oc.get(neighbor_pos.0.x, neighbor_pos.0.y, neighbor_pos.0.z),
+                );
 
                 let new_level = P::propagate_level(current_light, opacity, dir);
                 let neighbor_light = P::get_light(cache, neighbor_pos);
@@ -142,7 +198,6 @@ impl<P: LightProvider> LightPropagator<P> {
                 if new_level > neighbor_light {
                     P::set_light(cache, neighbor_pos, new_level);
 
-                    // Add to propagation queue if bright enough
                     if new_level > 1 && self.visited.insert(neighbor_pos) {
                         self.queue.push_back(PropagationEntry {
                             pos: neighbor_pos,
@@ -155,7 +210,11 @@ impl<P: LightProvider> LightPropagator<P> {
     }
 
     /// Handle light removal
-    pub fn process_decrease_queue(&mut self, cache: &mut Cache) {
+    pub fn process_decrease_queue(
+        &mut self,
+        cache: &mut Cache,
+        opacity_cache: Option<&OpacityCache>,
+    ) {
         {
             // Cache metadata for bounds checking
             let cache_x = cache.x;
@@ -180,8 +239,10 @@ impl<P: LightProvider> LightPropagator<P> {
                         continue;
                     }
 
-                    let state = cache.get_block_state(&neighbor_pos.0);
-                    let opacity = state.to_state().opacity;
+                    let opacity = opacity_cache.map_or_else(
+                        || cache.get_block_state(&neighbor_pos.0).to_state().opacity,
+                        |oc| oc.get(neighbor_pos.0.x, neighbor_pos.0.y, neighbor_pos.0.z),
+                    );
 
                     let predicted = P::propagate_level(old_val, opacity, dir);
 
@@ -202,7 +263,7 @@ impl<P: LightProvider> LightPropagator<P> {
             }
         }
 
-        self.propagate(cache); // Re-propagate from survivors
+        self.propagate(cache, opacity_cache); // Re-propagate from survivors
     }
 }
 
@@ -254,7 +315,9 @@ impl BlockLightPropagator {
         //let scan_elapsed = scan_start.elapsed();
         //let propagate_start = Instant::now();
 
-        self.propagate(cache);
+        let opacity_cache =
+            OpacityCache::build(cache, start_x, start_z, end_x, end_z, min_y, max_y);
+        self.propagate(cache, Some(&opacity_cache));
 
         //let propagate_elapsed = propagate_start.elapsed();
         //log::info!("Block light timing - Scan: {:?}, Propagate: {:?}", scan_elapsed, propagate_elapsed);
@@ -292,11 +355,9 @@ impl SkyLightPropagator {
                 let chunk_x = x >> 4;
                 let local_x = (x & 15) as usize;
 
-                // Get heightmap (top solid blocks)
                 let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
                 surface_heights.insert((x, z), top_y);
 
-                // Get chunk index once per column
                 let rel_x = chunk_x - cache.x;
                 let rel_z = chunk_z - cache.z;
 
@@ -306,73 +367,78 @@ impl SkyLightPropagator {
 
                 let chunk_idx = (rel_x * cache.size + rel_z) as usize;
 
-                // Fill everything above heightmap with 15 immediately
-                for y in (top_y + 1)..max_y {
-                    let section_idx = ((y - bottom_y) >> 4) as usize;
-                    let local_y = (y & 15) as usize;
+                // Pre-collect opacity so we can release the immutable cache
+                // borrow before matching the chunk type and (for Level chunks)
+                // acquiring the mutex just once per column, not per block.
+                let scan_count = (top_y - bottom_y + 1) as usize;
+                let mut scan_opacity = Vec::with_capacity(scan_count);
+                for y in (bottom_y..=top_y).rev() {
+                    let pos_vec = Vector3::new(x, y, z);
+                    scan_opacity.push(cache.get_block_state(&pos_vec).to_state().opacity);
+                }
 
-                    // Direct array access - skip all function call overhead
-                    match &mut cache.chunks[chunk_idx] {
-                        Chunk::Proto(c) => {
+                // Lock once per column (not per block) for Level chunks.
+                match &mut cache.chunks[chunk_idx] {
+                    Chunk::Proto(c) => {
+                        for y in (top_y + 1)..max_y {
+                            let section_idx = ((y - bottom_y) >> 4) as usize;
+                            let local_y = (y & 15) as usize;
                             if section_idx < c.light.sky_light.len() {
                                 c.light.sky_light[section_idx].set(local_x, local_y, local_z, 15);
                             }
                         }
-                        Chunk::Level(c) => {
-                            let mut light_engine = c
-                                .light_engine
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+                        let mut light: i32 = 15;
+                        for (step, &opacity) in scan_opacity.iter().enumerate() {
+                            let y = top_y - step as i32;
+                            let section_idx = ((y - bottom_y) >> 4) as usize;
+                            let local_y = (y & 15) as usize;
+
+                            light = light.saturating_sub(opacity as i32);
+                            let light_val = if light <= 0 { 0 } else { light as u8 };
+
+                            if section_idx < c.light.sky_light.len() {
+                                c.light.sky_light[section_idx]
+                                    .set(local_x, local_y, local_z, light_val);
+                            }
+                            if light <= 0 {
+                                break;
+                            }
+                        }
+                    }
+                    Chunk::Level(c) => {
+                        let mut light_engine = c
+                            .light_engine
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+                        for y in (top_y + 1)..max_y {
+                            let section_idx = ((y - bottom_y) >> 4) as usize;
+                            let local_y = (y & 15) as usize;
                             if section_idx < light_engine.sky_light.len() {
                                 light_engine.sky_light[section_idx]
                                     .set(local_x, local_y, local_z, 15);
                             }
                         }
-                    }
-                }
 
-                // Only iterate from top_y DOWN - not from max_y
-                let mut light: i32 = 15;
+                        let mut light: i32 = 15;
+                        for (step, &opacity) in scan_opacity.iter().enumerate() {
+                            let y = top_y - step as i32;
+                            let section_idx = ((y - bottom_y) >> 4) as usize;
+                            let local_y = (y & 15) as usize;
 
-                for y in (bottom_y..=top_y).rev() {
-                    let section_idx = ((y - bottom_y) >> 4) as usize;
-                    let local_y = (y & 15) as usize;
+                            light = light.saturating_sub(opacity as i32);
+                            let light_val = if light <= 0 { 0 } else { light as u8 };
 
-                    // Get block opacity
-                    let opacity = {
-                        let pos_vec = Vector3::new(x, y, z);
-                        let state = cache.get_block_state(&pos_vec);
-                        state.to_state().opacity
-                    } as i32;
-
-                    // Reduce light by opacity
-                    light = light.saturating_sub(opacity);
-
-                    // Set the light value directly
-                    let light_val = if light <= 0 { 0 } else { light as u8 };
-
-                    match &mut cache.chunks[chunk_idx] {
-                        Chunk::Proto(c) => {
-                            if section_idx < c.light.sky_light.len() {
-                                c.light.sky_light[section_idx]
-                                    .set(local_x, local_y, local_z, light_val);
-                            }
-                        }
-                        Chunk::Level(c) => {
-                            let mut light_engine = c
-                                .light_engine
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner);
                             if section_idx < light_engine.sky_light.len() {
                                 light_engine.sky_light[section_idx]
                                     .set(local_x, local_y, local_z, light_val);
                             }
+                            if light <= 0 {
+                                break;
+                            }
                         }
-                    }
-
-                    // Early exit when light hits 0
-                    if light <= 0 {
-                        break;
+                        drop(light_engine);
                     }
                 }
             }
@@ -425,7 +491,9 @@ impl SkyLightPropagator {
 
         //let propagate_start = Instant::now();
 
-        self.propagate(cache);
+        let opacity_cache =
+            OpacityCache::build(cache, start_x, start_z, end_x, end_z, bottom_y, max_y);
+        self.propagate(cache, Some(&opacity_cache));
 
         //let propagate_elapsed = propagate_start.elapsed();
         //let scan_elapsed = scan_start.elapsed();
@@ -498,18 +566,19 @@ impl LightEngine {
     }
 
     pub fn run_light_updates(&mut self, cache: &mut Cache) {
+        // Runtime updates don't have a pre-computed opacity cache.
         if !self.block_light.decrease_queue.is_empty() {
-            self.block_light.process_decrease_queue(cache);
+            self.block_light.process_decrease_queue(cache, None);
         }
         if !self.block_light.queue.is_empty() {
-            self.block_light.propagate(cache);
+            self.block_light.propagate(cache, None);
             self.block_light.visited.clear();
         }
         if !self.sky_light.decrease_queue.is_empty() {
-            self.sky_light.process_decrease_queue(cache);
+            self.sky_light.process_decrease_queue(cache, None);
         }
         if !self.sky_light.queue.is_empty() {
-            self.sky_light.propagate(cache);
+            self.sky_light.propagate(cache, None);
             self.sky_light.visited.clear();
         }
     }
