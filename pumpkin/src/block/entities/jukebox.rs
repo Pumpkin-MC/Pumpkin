@@ -32,6 +32,9 @@ pub struct JukeboxBlockEntity {
 
 const RECORD_ITEM_NBT_KEY: &str = "RecordItem";
 const TICKS_SINCE_SONG_STARTED_NBT_KEY: &str = "ticks_since_song_started";
+/// Matches vanilla `JukeboxSong.SONG_END_PADDING_TICKS`: a song keeps "playing"
+/// for 20 extra ticks after its nominal length before actually stopping.
+const SONG_END_PADDING_TICKS: u64 = 20;
 
 impl BlockEntity for JukeboxBlockEntity {
     fn resource_location(&self) -> &'static str {
@@ -90,8 +93,8 @@ impl BlockEntity for JukeboxBlockEntity {
                 let ticks = self
                     .ticks_since_song_started
                     .fetch_add(1, Ordering::Relaxed);
-                // Check if song has finished
-                if ticks >= song_length {
+                // Check if song has finished (with vanilla's end-padding grace period)
+                if ticks >= song_length + SONG_END_PADDING_TICKS {
                     self.stop_playing();
                     world.update_neighbors(&self.position, None).await;
                     world
@@ -198,7 +201,7 @@ impl JukeboxBlockEntity {
             return false;
         }
         let ticks = self.ticks_since_song_started.load(Ordering::Relaxed);
-        ticks < song_length
+        ticks < song_length + SONG_END_PADDING_TICKS
     }
 
     fn mark_dirty(&self) {
@@ -273,5 +276,29 @@ impl Clearable for JukeboxBlockEntity {
             *self.record_stack.lock().await = ItemStack::EMPTY.clone();
             self.mark_dirty();
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Matches vanilla `JukeboxSong.hasFinished`: a song is still considered
+    // playing for SONG_END_PADDING_TICKS (20) ticks past its nominal length.
+    #[test]
+    fn is_playing_respects_song_end_padding() {
+        let entity = JukeboxBlockEntity::new(BlockPos(Vector3::new(0, 0, 0)));
+        let song_length = 100;
+        entity.start_playing(song_length);
+
+        entity
+            .ticks_since_song_started
+            .store(song_length + SONG_END_PADDING_TICKS - 1, Ordering::Relaxed);
+        assert!(entity.is_playing());
+
+        entity
+            .ticks_since_song_started
+            .store(song_length + SONG_END_PADDING_TICKS, Ordering::Relaxed);
+        assert!(!entity.is_playing());
     }
 }
