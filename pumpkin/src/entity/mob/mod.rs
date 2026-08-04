@@ -292,7 +292,7 @@ impl MobEntity {
                 .store(target.get_entity().entity_id, Relaxed);
             self.living_entity
                 .last_attack_time
-                .store(self.living_entity.entity.age.load(Relaxed), Relaxed);
+                .store(self.living_entity.entity.tick_count.load(Relaxed), Relaxed);
         }
     }
 
@@ -618,8 +618,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             self.mob_tick(caller).await;
 
-            let age = mob_entity.living_entity.entity.age.load(Relaxed);
+            let entity_tick_count = mob_entity.living_entity.entity.tick_count.load(Relaxed);
             let entity_id = mob_entity.living_entity.entity.entity_id;
+            let full_goal_pass =
+                crate::entity::ai::goal::runs_full_goal_pass(entity_id, entity_tick_count);
 
             // 1. "Take" selectors out of the mutexes
             let mut target_selector = {
@@ -632,12 +634,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             };
 
             // 2. Perform AI logic (No locks held, so .await is safe!)
-            if (age + entity_id) % 2 != 0 && age > 1 {
-                target_selector.tick_goals(self, false).await;
-                goals_selector.tick_goals(self, false).await;
-            } else {
+            if full_goal_pass {
                 target_selector.tick(self).await;
                 goals_selector.tick(self).await;
+            } else {
+                target_selector.tick_goals(self, false).await;
+                goals_selector.tick_goals(self, false).await;
             }
 
             // 3. "Put back" selectors

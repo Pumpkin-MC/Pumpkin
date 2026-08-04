@@ -36,8 +36,8 @@ impl EscapeDangerGoal {
         if last_attacked == 0 {
             return false;
         }
-        let age = living.entity.age.load(Relaxed);
-        age - last_attacked < RECENT_DAMAGE_TICKS
+        let now = living.entity.tick_count.load(Relaxed);
+        now - last_attacked < RECENT_DAMAGE_TICKS
     }
 
     fn find_escape_target(mob: &dyn Mob) -> Option<Vector3<f64>> {

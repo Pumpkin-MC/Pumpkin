@@ -952,7 +952,9 @@ impl World {
                 let p_cache = players_cache.clone();
 
                 tasks.spawn(async move {
-                    e_clone.get_entity().age.fetch_add(1, Relaxed);
+                    let entity = e_clone.get_entity();
+                    entity.tick_count.fetch_add(1, Relaxed);
+                    entity.tick_age();
                     e_clone.tick(&e_clone, &s_clone).await;
 
                     let entity_inner = e_clone.get_entity();

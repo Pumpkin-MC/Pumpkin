@@ -37,6 +37,33 @@ pub const fn to_goal_ticks(server_ticks: i32) -> i32 {
     -(-server_ticks).div_euclid(2)
 }
 
+/// Whether this tick should run the full goal-selector pass, which re-evaluates
+/// `can_start`/`should_continue` and starts and stops goals, as opposed to only
+/// ticking the goals that are already running.
+///
+/// Mirrors vanilla `Mob#serverAiStep`, which computes a single
+/// `idBasedTickCount = this.tickCount + this.getId()` and takes the reduced pass
+/// only when that is odd *and* `this.tickCount > 1`. So both terms come off the
+/// entity's own tick count: it drives the alternation, and `entity_id` merely
+/// staggers it so that not every mob re-plans on the same tick. A mob that has
+/// just spawned always takes the full pass, so its goals can start without
+/// waiting for the alternation.
+///
+/// Keying the alternation off the *server* tick instead would look equivalent —
+/// the two differ by a per-entity constant — but it is not: an entity that
+/// misses server ticks keeps its own counter contiguous while the server's runs
+/// on, so its parity would shift for reasons that have nothing to do with how
+/// often it has actually ticked.
+///
+/// Using the ageable age for either term, as this did before, means babies —
+/// whose age is negative for their whole 20 minutes of childhood — never satisfy
+/// the warm-up check and so re-plan twice as often as vanilla, which also halves
+/// every interval that [`to_goal_ticks`] computes.
+#[must_use]
+pub const fn runs_full_goal_pass(entity_id: i32, entity_tick_count: i32) -> bool {
+    entity_tick_count <= 1 || entity_tick_count.wrapping_add(entity_id) % 2 == 0
+}
+
 pub type GoalFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait Goal: Send + Sync {
@@ -281,3 +308,91 @@ impl<P> Default for ParentHandle<P> {
 // This is safe since we own everything.
 unsafe impl<P> Sync for ParentHandle<P> {}
 unsafe impl<P> Send for ParentHandle<P> {}
+
+#[cfg(test)]
+mod tests {
+    use super::{runs_full_goal_pass, to_goal_ticks};
+
+    #[test]
+    fn goal_ticks_halve_and_round_up() {
+        // `to_goal_ticks` assumes the caller is only re-evaluated every other
+        // tick, so an interval of n server ticks becomes ceil(n / 2) passes.
+        assert_eq!(to_goal_ticks(120), 60);
+        assert_eq!(to_goal_ticks(10), 5);
+        assert_eq!(to_goal_ticks(1), 1);
+        assert_eq!(to_goal_ticks(0), 0);
+    }
+
+    #[test]
+    fn full_goal_pass_alternates_every_other_tick() {
+        let entity_id = 0;
+        let passes: Vec<bool> = (100..106)
+            .map(|entity_tick_count| runs_full_goal_pass(entity_id, entity_tick_count))
+            .collect();
+        assert_eq!(passes, vec![true, false, true, false, true, false]);
+    }
+
+    #[test]
+    fn full_goal_pass_is_staggered_by_entity_id() {
+        // Two mobs with adjacent ids must not re-plan on the same tick, which is
+        // the whole point of folding the id into the parity.
+        for entity_tick_count in 100..108 {
+            assert_ne!(
+                runs_full_goal_pass(7, entity_tick_count),
+                runs_full_goal_pass(8, entity_tick_count),
+                "ids 7 and 8 collided on entity tick {entity_tick_count}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_freshly_spawned_mob_always_takes_the_full_pass() {
+        // Vanilla's `tickCount > 1` warm-up: goals must be able to start on the
+        // first ticks without waiting for the alternation to come round. Both
+        // parities of `entity_id` have to pass, since the id is the only other
+        // term and the warm-up must win regardless of it.
+        for entity_id in 0..4 {
+            assert!(runs_full_goal_pass(entity_id, 0));
+            assert!(runs_full_goal_pass(entity_id, 1));
+        }
+    }
+
+    #[test]
+    fn a_settled_mob_skips_half_of_the_full_passes() {
+        // Regression: this gate used to key off the ageable age instead of a
+        // tick count. A baby's age stays negative for its whole 20 minutes of
+        // childhood, so the warm-up check never stopped applying and babies took
+        // the full pass on *every* tick — twice vanilla's decision rate, and
+        // twice the goal-selection work. Any mob past the warm-up must skip half
+        // the passes, which is also what every `to_goal_ticks` interval assumes.
+        let full_passes = (500..600)
+            .filter(|&entity_tick_count| runs_full_goal_pass(3, entity_tick_count))
+            .count();
+        assert_eq!(full_passes, 50);
+    }
+
+    #[test]
+    fn the_alternation_follows_the_entity_not_the_server() {
+        // Vanilla's `idBasedTickCount` is `this.tickCount + this.getId()`, so a
+        // mob that has ticked n times is at the same point in the alternation
+        // however long the server has been up. Keying off the server tick would
+        // shift an entity's parity whenever it missed a tick the server did not.
+        for entity_id in 0..4 {
+            for entity_tick_count in 2..20 {
+                assert_eq!(
+                    runs_full_goal_pass(entity_id, entity_tick_count),
+                    (entity_tick_count + entity_id) % 2 == 0,
+                    "id {entity_id} at entity tick {entity_tick_count}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn full_goal_pass_survives_tick_counter_wraparound() {
+        // The entity tick count is an i32 that is only ever incremented, so the
+        // parity add must wrap rather than panic in a debug build.
+        assert!(runs_full_goal_pass(1, i32::MAX));
+        let _ = runs_full_goal_pass(i32::MAX, i32::MAX);
+    }
+}

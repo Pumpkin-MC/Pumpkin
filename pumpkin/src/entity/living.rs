@@ -1582,7 +1582,12 @@ impl LivingEntity {
 
         {
             let mut effects = self.active_effects.lock().await;
-            let entity_age = self.entity.age.load(Relaxed);
+            // Infinite effects have no duration of their own to count down, so
+            // the entity's own tick counter drives their periodic ticks. It has
+            // to be the tick counter rather than the ageable age: a baby's age
+            // is negative, and every branch of `should_apply_effect_tick` that
+            // guards on `duration <= 0` would refuse to fire.
+            let entity_ticks = self.entity.tick_count.load(Relaxed);
             for effect in effects.values_mut() {
                 if effect.duration == 0 {
                     effects_to_remove.push(effect.effect_type);
@@ -1590,7 +1595,7 @@ impl LivingEntity {
                 }
 
                 let tick_duration = if effect.duration == -1 {
-                    entity_age
+                    entity_ticks
                 } else {
                     effect.duration
                 };
@@ -2470,7 +2475,7 @@ impl EntityBase for LivingEntity {
                     self.last_attacker_id
                         .store(attacker.get_entity().entity_id, Relaxed);
                     self.last_attacked_time
-                        .store(self.entity.age.load(Relaxed), Relaxed);
+                        .store(self.entity.tick_count.load(Relaxed), Relaxed);
                 }
             }
 
@@ -2507,7 +2512,7 @@ impl EntityBase for LivingEntity {
                     self.last_attacker_id
                         .store(attacker.get_entity().entity_id, Relaxed);
                     self.last_attacked_time
-                        .store(self.entity.age.load(Relaxed), Relaxed);
+                        .store(self.entity.tick_count.load(Relaxed), Relaxed);
                 }
             }
 
