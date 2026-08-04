@@ -255,7 +255,9 @@ impl SheepEntity {
 impl NBTStorage for SheepEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            self.write_ageable_nbt(nbt);
+            self.write_animal_nbt(nbt);
             nbt.put_bool("Sheared", self.is_sheared());
             nbt.put_byte("Color", self.get_color() as i8);
         })
@@ -263,11 +265,9 @@ impl NBTStorage for SheepEntity {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.read_ageable_nbt(nbt);
+            self.read_animal_nbt(nbt);
             let sheared = nbt.get_bool("Sheared").unwrap_or(false);
             let color = nbt.get_byte("Color").unwrap_or(0) as u8;
             let byte = (color & 0x0F) | if sheared { 0x10 } else { 0 };
