@@ -17,7 +17,7 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        wander_around::WanderAroundGoal,
+        squid_flee::SquidFleeGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -53,6 +53,8 @@ impl GlowSquidEntity {
             // See the identical note in squid.rs: vanilla GlowSquid inherits Squid's
             // jet-propulsion `aiStep`/neutered `travel`, which isn't portable without a
             // travel-override hook this codebase doesn't have yet.
+            // See squid.rs for why SquidFleeGoal is 0 (higher priority) instead of vanilla's 1.
+            goal_selector.add_goal(0, SquidFleeGoal::new());
             goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 2,

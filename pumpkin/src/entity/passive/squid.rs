@@ -10,7 +10,7 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        wander_around::WanderAroundGoal,
+        squid_flee::SquidFleeGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -43,6 +43,10 @@ impl SquidEntity {
             // either need that hook added first or would double-apply movement on top of the
             // goal-driven system. Kept as the existing placeholder rather than removed, since
             // removing it with no replacement would leave squids unable to move at all.
+            // Vanilla `Squid.registerGoals` puts `SquidFleeGoal` above `SquidRandomMovementGoal`
+            // (priorities 1 and 0 respectively); reversed here so fleeing can interrupt the
+            // `WanderAroundGoal` placeholder, which occupies priority 1 rather than 0.
+            goal_selector.add_goal(0, SquidFleeGoal::new());
             goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(
                 2,

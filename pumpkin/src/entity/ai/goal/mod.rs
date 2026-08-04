@@ -78,6 +78,7 @@ pub mod skeleton_trap;
 pub mod sniffer_dig;
 pub mod spear_use;
 pub mod spellcaster;
+pub mod squid_flee;
 pub mod step_and_destroy_block;
 pub mod swim;
 pub mod teleport_towards_player;
