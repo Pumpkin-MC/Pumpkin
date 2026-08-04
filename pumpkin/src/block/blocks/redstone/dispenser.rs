@@ -223,6 +223,9 @@ impl BlockBehaviour for DispenserBlock {
                     } else if item.item.id == Item::TNT.id {
                         // TNT
                         Self::dispense_tnt(&ctx, &mut item).await;
+                    } else if item.item.id == Item::WIND_CHARGE.id {
+                        // Wind charges
+                        Self::dispense_wind_charge(&ctx, &mut item).await;
                     } else if entity_from_egg(item.item.id).is_some() {
                         // Spawn eggs
                         Self::dispense_spawn_egg(&ctx, &mut item).await;
@@ -399,6 +402,57 @@ impl DispenserBlock {
 
         ctx.world
             .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
+    }
+
+    /// Vanilla `WindChargeItem`. `asProjectile` spreads the launch direction per-axis via
+    /// `random.triangle(direction.component, 0.11485)` and sets it as the wind charge's
+    /// delta movement directly (no normalization, no power scaling). `WindChargeItem.shoot`
+    /// is overridden to a no-op, so `createDispenseConfig`'s `uncertainty = 6.6666665F` /
+    /// `power = 1.0F` are declared but never actually applied by the generic dispenser
+    /// machinery for this item - `asProjectile`'s own spread is the only randomization that
+    /// happens. Do NOT route this through `ThrownItemEntity::set_velocity`'s uncertainty/power
+    /// pipeline (`0.0172275`-scaled normalize-then-scale): that is vanilla's *generic*
+    /// `Projectile.spawnProjectileUsingShoot` formula, a different one from this item's own,
+    /// and using it here would both double the spread and incorrectly renormalize direction.
+    async fn dispense_wind_charge(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
+        let _ = item.split(1);
+        let facing = to_normal(ctx.facing);
+        // Vanilla: `DispenserBlock.getDispensePosition(source, 1.0, Vec3.ZERO)` - a full
+        // block offset along facing, no extra vector.
+        let spawn_pos = ctx.position.to_centered_f64().add(&(facing * 1.0));
+
+        let dir = {
+            let mut random = rng();
+            Vector3::new(
+                triangle(&mut random, facing.x, 0.11485),
+                triangle(&mut random, facing.y, 0.11485),
+                triangle(&mut random, facing.z, 0.11485),
+            )
+        };
+
+        let entity = Entity::new(ctx.world.clone(), spawn_pos, &EntityType::WIND_CHARGE);
+        entity.velocity.store(dir);
+        let len = dir.horizontal_length();
+        entity.set_rotation(
+            dir.x.atan2(dir.z) as f32 * 57.295_776,
+            dir.y.atan2(len) as f32 * 57.295_776,
+        );
+
+        let thrown = crate::entity::projectile::ThrownItemEntity {
+            entity,
+            owner_id: None,
+            collides_with_projectiles: false,
+            has_hit: std::sync::atomic::AtomicBool::new(false),
+            gravity: crate::entity::projectile::wind_charge::WIND_CHARGE_GRAVITY,
+        };
+        let wind_charge =
+            Arc::new(crate::entity::projectile::wind_charge::WindChargeEntity::new_normal(thrown));
+        ctx.world.spawn_entity(wind_charge).await;
+
+        // Vanilla `overrideDispenseEvent = 1051`, a level-event id distinct from the generic
+        // dispense sound/smoke fired by the other branches above.
+        ctx.world
+            .sync_world_event(WorldEvent::SoundWindChargeShoot, *ctx.position, 0);
     }
 
     async fn dispense_spawn_egg(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
