@@ -1,5 +1,5 @@
 use std::sync::{
-    Arc, Weak,
+    Arc, Mutex, Weak,
     atomic::{AtomicU8, Ordering::Relaxed},
 };
 
@@ -11,25 +11,43 @@ use pumpkin_data::{
 };
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
+use rand::{RngExt, rng};
+use uuid::Uuid;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
-        active_target::ActiveTargetGoal, breed::BreedGoal,
+        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, breed::BreedGoal,
         climb_on_top_of_powder_snow::ClimbOnTopOfPowderSnowGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, fox_pounce::FoxPounceGoal, fox_sleep::FoxSleepGoal,
-        fox_stalk_prey::StalkPreyGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        follow_parent::FollowParentGoal, fox_defend_trusted::DefendTrustedTargetGoal,
+        fox_faceplant::FoxFaceplantGoal, fox_melee_attack::FoxMeleeAttackGoal,
+        fox_pounce::FoxPounceGoal, fox_sleep::FoxSleepGoal, fox_stalk_prey::StalkPreyGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
 };
+use crate::world::World;
 use pumpkin_nbt::compound::NbtCompound;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::SWEET_BERRIES, &Item::GLOW_BERRIES];
+
+/// `Fox.addTrustedEntity`'s slot-fill rule, split out as a free function (mirroring
+/// `fox_util::sample_offsets`) so it's testable without a live `FoxEntity`: fills slot 0 if
+/// empty, else slot 1 if empty, else leaves both slots as they were (a third trust is dropped,
+/// not swapped in).
+#[must_use]
+const fn fill_trust_slot(mut slots: [Option<Uuid>; 2], uuid: Uuid) -> [Option<Uuid>; 2] {
+    if slots[0].is_none() {
+        slots[0] = Some(uuid);
+    } else if slots[1].is_none() {
+        slots[1] = Some(uuid);
+    }
+    slots
+}
 
 const FLAG_SITTING: u8 = 1;
 const FLAG_CROUCHING: u8 = 4;
@@ -88,14 +106,27 @@ impl FoxVariant {
 ///
 /// PR-1 scope: synced flag state (`isSitting`/`isCrouching`/`isInterested`/`isPouncing`/
 /// `isSleeping`/`isFaceplanted`/`isDefending`), biome-based variant, sleeping, and the
-/// crouch/stalk/pounce state machine. Deferred to a follow-up PR: item-in-mouth mechanics
-/// (hold/steal/spit/eat), the melee attack goal, the three `AvoidEntityGoal` registrations,
-/// trust list + `DefendTrustedTargetGoal`, berries-eating, `FaceplantGoal` (the pounce goal
-/// can still set `isFaceplanted` on a snow landing, but nothing clears it back to `false`
-/// until that goal lands -- harmless today since no other PR-1 code reads the flag except the
-/// pounce goal's own `should_continue`), village-stroll, and per-variant target-goal ordering
-/// (all foxes currently hunt chickens/rabbits with the same priority, rather than red foxes
-/// preferring land prey and snow foxes preferring fish).
+/// crouch/stalk/pounce state machine.
+///
+/// PR-2 scope: `FaceplantGoal` (clearing `isFaceplanted` back to `false` -- the pounce goal could
+/// already set it on a snow landing, but nothing cleared it back until this landed); the melee
+/// attack goal (gated off while sitting/sleeping/crouching/faceplanted, matching vanilla's
+/// `FoxMeleeAttackGoal.canUse` -- the `FOX_BITE` sound on a successful bite is left as a
+/// documented simplification, see `fox_melee_attack.rs`); the three `AvoidEntityGoal`
+/// registrations (Player/Wolf/`PolarBear` -- vanilla `Fox.java`, not Player/Wolf/Monster as an
+/// earlier design pass had it); the two-slot trust list plus `DefendTrustedTargetGoal` and trust
+/// inheritance on breeding; and per-variant target-goal ordering (red foxes prefer land prey and
+/// turtle eggs over fish; snow foxes prefer fish first -- `register_target_goals`).
+///
+/// Still deferred: item-in-mouth mechanics (hold/steal/spit/eat) -- this needs a generic mob
+/// item-pickup pipeline that doesn't exist yet anywhere in this codebase (confirmed against
+/// `PillagerEntity`'s own identical gap, `pumpkin/src/entity/mob/pillager.rs`), plus a
+/// food-component query surface on `ItemStack` this pass didn't confirm exists; berries-eating
+/// (needs that same deferred mouth-item slot, a `MoveToBlockGoal` analog, and
+/// `SweetBerryBushBlock` age-state mutation from mob AI, none wired together yet); and
+/// village-stroll (`pumpkin/src/world/village_poi.rs` has low-level POI classification/distance
+/// helpers, but no `ServerLevel.isVillage`-equivalent village-boundary query built on top of them
+/// yet, which `StrollThroughVillageGoal`'s `canUse` needs).
 ///
 /// Wiki: <https://minecraft.wiki/w/Fox>
 pub struct FoxEntity {
@@ -104,6 +135,14 @@ pub struct FoxEntity {
     flags: AtomicU8,
     variant: AtomicU8,
     crouch_ticks: AtomicU8,
+    /// `Fox.DATA_TRUSTED_ID_0`/`_1`: up to two entities (usually the players that bred this fox
+    /// or its ancestor) this fox won't flee from or attack via `DefendTrustedTargetGoal`.
+    trusted: Mutex<[Option<Uuid>; 2]>,
+    /// Guards the one-time per-variant target-selector registration in `mob_init_data_tracker`
+    /// (mirrors `RabbitEntity::evil_goals_registered`'s reasoning: nothing else calls
+    /// `mob_init_data_tracker` more than once in practice, but the guard makes that an invariant
+    /// instead of an assumption).
+    target_goals_registered: std::sync::atomic::AtomicBool,
 }
 
 impl FoxEntity {
@@ -115,12 +154,15 @@ impl FoxEntity {
             flags: AtomicU8::new(0),
             variant: AtomicU8::new(VARIANT_UNSET),
             crouch_ticks: AtomicU8::new(0),
+            trusted: Mutex::new([None, None]),
+            target_goals_registered: std::sync::atomic::AtomicBool::new(false),
         };
         let mob_arc = Arc::new(this);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
         };
+        let fox_weak = Arc::downgrade(&mob_arc);
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
@@ -128,13 +170,76 @@ impl FoxEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(0, ClimbOnTopOfPowderSnowGoal::new());
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
+            // Note: vanilla registers `FaceplantGoal` at the same relative slot (above panic/
+            // breed, below float/climb) -- also priority 1 here since `EscapeDangerGoal` already
+            // occupies it, matching vanilla's own numbering.
+            goal_selector.add_goal(1, FoxFaceplantGoal::new());
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.2, TEMPT_ITEMS, false)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
-            // Below `WanderAroundGoal`'s priority 6 so stalking/pouncing/sleeping always
-            // preempts idle wandering when their own gates are satisfied.
+            // Vanilla registers the three `AvoidEntityGoal`s at priority 4 too (above stalk/
+            // pounce/sleep at 5, below tempt/follow-parent) -- kept at the same relative slot.
+            goal_selector.add_goal(
+                4,
+                Box::new(
+                    AvoidEntityGoal::new(&EntityType::PLAYER, 16.0, 1.6, 1.4).with_predicate({
+                        let fox_weak = fox_weak.clone();
+                        Arc::new(move |candidate: &dyn EntityBase| {
+                            let Some(fox) = fox_weak.upgrade() else {
+                                return false;
+                            };
+                            if fox.is_defending() {
+                                return false;
+                            }
+                            if fox.trusts(candidate.get_entity().entity_uuid) {
+                                return false;
+                            }
+                            let Some(player) = candidate.get_player() else {
+                                return false;
+                            };
+                            !candidate.get_entity().is_sneaking()
+                                && !player.is_creative()
+                                && !player.is_spectator()
+                        })
+                    }),
+                ),
+            );
+            goal_selector.add_goal(
+                4,
+                Box::new(
+                    AvoidEntityGoal::new(&EntityType::WOLF, 8.0, 1.6, 1.4).with_predicate({
+                        let fox_weak = fox_weak.clone();
+                        Arc::new(move |candidate: &dyn EntityBase| {
+                            let Some(fox) = fox_weak.upgrade() else {
+                                return false;
+                            };
+                            !fox.is_defending()
+                                && candidate
+                                    .get_mob()
+                                    .is_some_and(|m| !m.get_mob_entity().is_tamed())
+                        })
+                    }),
+                ),
+            );
+            goal_selector.add_goal(
+                4,
+                Box::new(
+                    AvoidEntityGoal::new(&EntityType::POLAR_BEAR, 8.0, 1.6, 1.4).with_predicate(
+                        Arc::new(move |_candidate: &dyn EntityBase| {
+                            fox_weak.upgrade().is_some_and(|fox| !fox.is_defending())
+                        }),
+                    ),
+                ),
+            );
+            // Below `WanderAroundGoal`'s priority 6 so stalking/pouncing/sleeping/melee always
+            // preempts idle wandering when their own gates are satisfied. Equal-priority goals
+            // are never preempted by one another (`can_be_replaced_by` needs strictly-lower
+            // priority) and ties break by insertion order, so melee is registered before sleep
+            // here to match vanilla's own relative order (`FoxMeleeAttackGoal` before
+            // `SleepGoal`, both priority 7 in `Fox.java`).
             goal_selector.add_goal(5, StalkPreyGoal::new());
             goal_selector.add_goal(5, FoxPounceGoal::new());
+            goal_selector.add_goal(5, FoxMeleeAttackGoal::new());
             goal_selector.add_goal(5, FoxSleepGoal::new());
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -144,22 +249,65 @@ impl FoxEntity {
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
 
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
-            // `Fox.landTargetGoal`, simplified: vanilla targets `Animal.class` filtered to
-            // chicken/rabbit via a single `NearestAttackableTargetGoal`; this codebase's
-            // `ActiveTargetGoal` only matches a single `EntityType`, so it's registered twice
-            // instead. Per-variant reordering against the (not yet ported) fish/turtle-egg
-            // target goals is deferred, see the struct doc comment.
-            target_selector.add_goal(
-                4,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::CHICKEN, false),
-            );
-            target_selector.add_goal(
-                4,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
-            );
+            target_selector.add_goal(3, DefendTrustedTargetGoal::new());
+            // The land/turtle-egg/fish target goals are registered from `mob_init_data_tracker`
+            // once the biome variant is known, since their relative ordering depends on it (see
+            // `register_target_goals`).
         };
 
         mob_arc
+    }
+
+    /// `Fox.setTargetGoals`: red foxes prefer land prey (chicken/rabbit, vanilla's
+    /// `landTargetGoal`) and turtle eggs over fish; snow foxes prefer fish first.
+    ///
+    /// Vanilla's `landTargetGoal` targets `Animal.class` filtered to chicken/rabbit via a single
+    /// `NearestAttackableTargetGoal`; `turtleEggTargetGoal` targets `Turtle` filtered to
+    /// `BABY_ON_LAND_SELECTOR`; `fishTargetGoal` targets `AbstractFish` filtered to
+    /// `AbstractSchoolingFish` (cod/salmon, not the solitary pufferfish/tropical fish). This
+    /// codebase's `ActiveTargetGoal` only matches a single `EntityType`, so each vanilla goal is
+    /// registered as 1-2 separate `ActiveTargetGoal`s instead, mirroring how the land-target
+    /// split already worked before this method existed.
+    fn register_target_goals(&self, variant: FoxVariant) {
+        let mut target_selector = self.mob_entity.target_selector.lock().unwrap();
+
+        let (land_prio, fish_prio) = match variant {
+            FoxVariant::Red => (4, 6),
+            FoxVariant::Snow => (6, 4),
+        };
+
+        target_selector.add_goal(
+            land_prio,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::CHICKEN, false),
+        );
+        target_selector.add_goal(
+            land_prio,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::RABBIT, false),
+        );
+        target_selector.add_goal(
+            land_prio,
+            Box::new(ActiveTargetGoal::new(
+                &self.mob_entity,
+                &EntityType::TURTLE,
+                10,
+                false,
+                false,
+                Some(
+                    |target: Arc<crate::entity::living::LivingEntity>, _world| async move {
+                        target.entity.age.load(Relaxed) < 0 && !target.is_in_water()
+                    },
+                ),
+            )),
+        );
+
+        target_selector.add_goal(
+            fish_prio,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::COD, false),
+        );
+        target_selector.add_goal(
+            fish_prio,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::SALMON, false),
+        );
     }
 
     fn flag(&self, mask: u8) -> bool {
@@ -291,6 +439,32 @@ impl FoxEntity {
             None,
         );
     }
+
+    /// `Fox.trusts`.
+    #[must_use]
+    pub fn trusts(&self, uuid: Uuid) -> bool {
+        self.trusted.lock().unwrap().contains(&Some(uuid))
+    }
+
+    /// `Fox.addTrustedEntity`: fills the first empty of the two trust slots, overwriting neither
+    /// if both are already taken (matches vanilla -- a third trust never displaces the first
+    /// two).
+    pub fn add_trusted_entity(&self, uuid: Uuid) {
+        let mut trusted = self.trusted.lock().unwrap();
+        *trusted = fill_trust_slot(*trusted, uuid);
+    }
+
+    /// `Fox.clearTrusted`.
+    pub fn clear_trusted(&self) {
+        *self.trusted.lock().unwrap() = [None, None];
+    }
+
+    /// `Fox.getTrustedEntities`, flattened to just the UUIDs (callers resolve them against a
+    /// `World` themselves, e.g. `DefendTrustedTargetGoal`).
+    pub fn trusted_uuids(&self) -> impl Iterator<Item = Uuid> + use<> {
+        let trusted = *self.trusted.lock().unwrap();
+        trusted.into_iter().flatten()
+    }
 }
 
 impl AgeableMob for FoxEntity {
@@ -315,6 +489,16 @@ impl NBTStorage for FoxEntity {
             nbt.put_string("Type", self.variant().name().to_string());
             nbt.put_bool("Sitting", self.is_sitting());
             nbt.put_bool("Crouching", self.is_crouching());
+            // `Fox.addAdditionalSaveData`'s `Trusted` is a list of `EntityReference`s; simplified
+            // here to up to two flat optional UUID keys since this fox's trust list is already
+            // capped at two slots.
+            let trusted = *self.trusted.lock().unwrap();
+            if let Some(uuid) = trusted[0] {
+                nbt.put_uuid("TrustedUuid0", uuid);
+            }
+            if let Some(uuid) = trusted[1] {
+                nbt.put_uuid("TrustedUuid1", uuid);
+            }
         })
     }
 
@@ -330,6 +514,13 @@ impl NBTStorage for FoxEntity {
             self.set_variant(variant);
             self.set_sitting(nbt.get_bool("Sitting").unwrap_or(false));
             self.set_is_crouching(nbt.get_bool("Crouching").unwrap_or(false));
+            self.clear_trusted();
+            if let Some(uuid) = nbt.get_uuid("TrustedUuid0") {
+                self.add_trusted_entity(uuid);
+            }
+            if let Some(uuid) = nbt.get_uuid("TrustedUuid1") {
+                self.add_trusted_entity(uuid);
+            }
         })
     }
 }
@@ -367,6 +558,11 @@ impl Mob for FoxEntity {
                 )],
                 None,
             );
+            // `Fox.setTargetGoals`, called once the variant is known either way (freshly rolled
+            // above, or already restored from NBT before this ran).
+            if !self.target_goals_registered.swap(true, Relaxed) {
+                self.register_target_goals(self.variant());
+            }
         })
     }
 
@@ -380,6 +576,12 @@ impl Mob for FoxEntity {
             if !target_alive {
                 self.set_is_crouching(false);
                 self.set_is_interested(false);
+                // `Fox.setTarget`: clearing the target also clears `isDefending` -- without this,
+                // one `DefendTrustedTargetGoal` trigger would permanently suppress all three
+                // `AvoidEntityGoal`s (they all gate on `!isDefending()`).
+                if self.is_defending() {
+                    self.set_defending(false);
+                }
             }
 
             let in_water = self.mob_entity.living_entity.is_in_water();
@@ -407,5 +609,77 @@ impl Mob for FoxEntity {
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         self.animal_interact(player, item_stack, Sound::EntityFoxAmbient)
+    }
+
+    /// `Fox.getBreedOffspring` + `FoxBreedGoal.breed`'s trust-inheritance: the kit's variant is a
+    /// coin flip between the two parents', and it trusts whichever parent(s) have a recorded
+    /// love-cause player (the player(s) that fed them to start breeding).
+    fn create_offspring<'a>(
+        &'a self,
+        mate: &'a dyn EntityBase,
+        world: &'a Arc<World>,
+    ) -> EntityBaseFuture<'a, Option<Arc<dyn EntityBase>>> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            let baby = crate::entity::r#type::from_type(
+                entity.entity_type,
+                entity.pos.load(),
+                world,
+                Uuid::new_v4(),
+            );
+
+            if let Some(kit) = baby.cast_any().downcast_ref::<Self>() {
+                let mate_variant = mate.cast_any().downcast_ref::<Self>().map(Self::variant);
+                let variant = if rng().random_bool(0.5) {
+                    self.variant()
+                } else {
+                    mate_variant.unwrap_or_else(|| self.variant())
+                };
+                kit.set_variant(variant);
+
+                let self_love_cause = self.mob_entity.breeder.load();
+                let mate_love_cause = mate
+                    .get_mob()
+                    .and_then(|m| m.get_mob_entity().breeder.load());
+
+                if let Some(uuid) = self_love_cause {
+                    kit.add_trusted_entity(uuid);
+                }
+                if let Some(uuid) = mate_love_cause
+                    && Some(uuid) != self_love_cause
+                {
+                    kit.add_trusted_entity(uuid);
+                }
+            }
+
+            Some(baby)
+        })
+    }
+}
+
+#[cfg(test)]
+mod trust_slot_tests {
+    use super::fill_trust_slot;
+    use uuid::Uuid;
+
+    #[test]
+    fn fills_first_empty_slot() {
+        let a = Uuid::new_v4();
+        assert_eq!(fill_trust_slot([None, None], a), [Some(a), None]);
+    }
+
+    #[test]
+    fn fills_second_slot_once_first_is_taken() {
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        assert_eq!(fill_trust_slot([Some(a), None], b), [Some(a), Some(b)]);
+    }
+
+    #[test]
+    fn third_trust_is_dropped_once_both_slots_are_full() {
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let c = Uuid::new_v4();
+        assert_eq!(fill_trust_slot([Some(a), Some(b)], c), [Some(a), Some(b)]);
     }
 }
