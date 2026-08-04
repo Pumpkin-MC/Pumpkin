@@ -28,6 +28,7 @@ pub mod potions;
 pub mod shovel;
 pub mod snowball;
 pub mod spawn_egg;
+pub mod spyglass;
 pub mod swords;
 pub mod trident;
 pub mod wind_charge;
@@ -71,6 +72,7 @@ use ink_sac::InkSacItem;
 use mace::MaceItem;
 use shovel::ShovelItem;
 use snowball::SnowBallItem;
+use spyglass::SpyglassItem;
 use std::sync::Arc;
 use swords::SwordItem;
 use trident::TridentItem;
@@ -153,6 +155,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(LingeringPotionItem);
     manager.register(BundleItem);
     manager.register(LeadItem);
+    manager.register(SpyglassItem);
 
     Arc::new(manager)
 }
