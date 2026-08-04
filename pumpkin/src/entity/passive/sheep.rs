@@ -15,6 +15,7 @@ use rand::{RngExt, rng};
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    ageable::{AgeableData, AgeableMob},
     ai::goal::{
         breed::BreedGoal, eat_grass::EatGrassGoal, escape_danger::EscapeDangerGoal,
         follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
@@ -123,6 +124,7 @@ fn wool_item_for_color(color: u8) -> &'static Item {
 pub struct SheepEntity {
     pub mob_entity: MobEntity,
     color_and_sheared: AtomicU8,
+    ageable_data: AgeableData,
 }
 
 impl SheepEntity {
@@ -131,6 +133,7 @@ impl SheepEntity {
         let sheep = Self {
             mob_entity,
             color_and_sheared: AtomicU8::new(COLOR_UNSET),
+            ageable_data: AgeableData::default(),
         };
         let mob_arc = Arc::new(sheep);
         let mob_weak: Weak<dyn Mob> = {
@@ -279,14 +282,25 @@ impl super::animal::Animal for SheepEntity {
     }
 }
 
+impl AgeableMob for SheepEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for SheepEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
+    /// Vanilla `Sheep.ate`: un-shears the sheep and, if it's a baby, ages it up by 60 seconds
+    /// (60 * 20 ticks), same as `Animal.ate` -> `AgeableMob.ageUp(int)`.
     fn on_eating_grass(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {
             self.set_sheared(false);
+            if AgeableMob::can_age_up(self) {
+                self.age_up(60, false);
+            }
         })
     }
 
