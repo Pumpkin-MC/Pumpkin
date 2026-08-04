@@ -3731,8 +3731,12 @@ impl EntityBase for Entity {
                 }
             }
 
-            // Check if visual fire should be sent
-            let should_render_fire = self.fire_ticks.load(Ordering::Relaxed) > 0 && !is_immune;
+            // Check if visual fire should be sent.
+            // MagmaCube.java isOnFire(): always false, purely a render override; it still
+            // takes normal fire damage above since is_immune is untouched.
+            let is_magma_cube = self.entity_type == &EntityType::MAGMA_CUBE;
+            let should_render_fire =
+                self.fire_ticks.load(Ordering::Relaxed) > 0 && !is_immune && !is_magma_cube;
             self.set_on_fire(should_render_fire).await;
 
             let riding_cooldown = self.riding_cooldown.load(Ordering::Relaxed);
