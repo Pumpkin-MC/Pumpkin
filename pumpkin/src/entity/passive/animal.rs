@@ -10,6 +10,13 @@ use pumpkin_util::math::vector3::Vector3;
 pub trait Animal: Mob {
     fn is_food(&self, item_stack: &ItemStack) -> bool;
 
+    /// `ZombieHorse.canAgeUp` overrides this to `false` so babies never grow up from food.
+    /// Every other current `Animal` implementor keeps the default (vanilla's own default is
+    /// also `true`).
+    fn can_age_up(&self) -> bool {
+        true
+    }
+
     fn play_eating_sound(&self, sound: Sound) {
         let mob_entity = self.get_mob_entity();
         let entity = &mob_entity.living_entity.entity;
@@ -74,7 +81,7 @@ pub trait Animal: Mob {
                     return true;
                 }
 
-                if age < 0 {
+                if age < 0 && self.can_age_up() {
                     item_stack.decrement_unless_creative(player.gamemode.load(), 1);
                     let speedup = (-age / 10).max(1);
                     mob_entity
