@@ -397,11 +397,10 @@ pub(crate) async fn regrow(world: &dyn SculkWorld, pos: BlockPos, faces: FaceSet
         return false;
     }
 
-    let existing_state = world.accessor().get_block_state(&pos);
     let mut props = GlowLichenLikeProperties::default(&Block::SCULK_VEIN);
     props.set_faces(new_faces);
-    props.r#waterlogged = world.accessor().get_fluid(&pos) != pumpkin_data::fluid::Fluid::EMPTY
-        || is_water_source(existing_state);
+    // `!existing.getFluidState().isEmpty()`: any fluid, not source-only.
+    props.r#waterlogged = world.accessor().get_fluid(&pos) != pumpkin_data::fluid::Fluid::EMPTY;
     world
         .set_block(pos, props.to_state_id(&Block::SCULK_VEIN))
         .await;
@@ -1147,5 +1146,88 @@ mod tests {
                 .await;
             assert!(new_charge == 100 || new_charge == 50);
         }
+    }
+
+    #[tokio::test]
+    async fn default_behaviour_regrow_branch_requires_air_or_water() {
+        use crate::block::sculk_behaviour::DefaultSculkBehaviour;
+
+        let pos = BlockPos::new(0, 0, 0);
+        let north = pos.offset(BlockDirection::North.to_offset());
+        let facings = FaceSet::from_directions([BlockDirection::North]);
+
+        // Position is STONE (not air/water): vanilla's DEFAULT.attemptSpreadVein
+        // refuses to regrow onto it regardless of whether the tracked face would
+        // otherwise reattach.
+        let blocked = RecordingTarget::new(Block::AIR.default_state)
+            .with(pos, Block::STONE.default_state)
+            .with(north, Block::STONE.default_state);
+        let result = DefaultSculkBehaviour
+            .attempt_spread_vein(&blocked, pos, FaceSet::EMPTY, false, Some(facings))
+            .await;
+        assert!(!result);
+        assert_eq!(blocked.state_at(pos), Block::STONE.default_state);
+
+        // Position is air with a sturdy neighbour: regrow succeeds and writes a vein.
+        let open =
+            RecordingTarget::new(Block::AIR.default_state).with(north, Block::STONE.default_state);
+        let result = DefaultSculkBehaviour
+            .attempt_spread_vein(&open, pos, FaceSet::EMPTY, false, Some(facings))
+            .await;
+        assert!(result);
+        let regrown = existing_vein_faces(open.state_at(pos)).unwrap();
+        assert!(regrown.contains(BlockDirection::North));
+    }
+
+    #[tokio::test]
+    async fn default_behaviour_null_facings_uses_same_space_spreader_only() {
+        use crate::block::sculk_behaviour::DefaultSculkBehaviour;
+
+        // A vein occupying North at `pos`. Directly above `pos` is air (SAME_POSITION
+        // toward Up fails: `can_attach_to` needs a sturdy neighbour), but the block
+        // north of `pos.up()` is sturdy, so the *normal* spreader's SAME_PLANE fallback
+        // can place a brand-new vein at `pos.up()` facing North. The same-space
+        // spreader has no such fallback (its only spread type is SAME_POSITION), so it
+        // can never grow past `pos` itself. East/West/Down all get sturdy neighbours so
+        // both configs place identically there — only the Up direction diverges.
+        let pos = BlockPos::new(0, 0, 0);
+        let up = pos.offset(BlockDirection::Up.to_offset());
+        let up_north = up.offset(BlockDirection::North.to_offset());
+        let vein = vein_state(&[BlockDirection::North]);
+
+        let build = || {
+            RecordingTarget::new(Block::AIR.default_state)
+                .with(pos, vein)
+                .with(
+                    pos.offset(BlockDirection::Down.to_offset()),
+                    Block::STONE.default_state,
+                )
+                .with(
+                    pos.offset(BlockDirection::East.to_offset()),
+                    Block::STONE.default_state,
+                )
+                .with(
+                    pos.offset(BlockDirection::West.to_offset()),
+                    Block::STONE.default_state,
+                )
+                .with(up_north, Block::STONE.default_state)
+        };
+
+        let faces = existing_vein_faces(vein).unwrap();
+
+        let same_space_target = build();
+        DefaultSculkBehaviour
+            .attempt_spread_vein(&same_space_target, pos, faces, true, None)
+            .await;
+        // Same-space spreader never places anything at `up` (no SAME_PLANE fallback).
+        assert_eq!(same_space_target.state_at(up), Block::AIR.default_state);
+
+        let interface_default_target = build();
+        SculkVeinBlock
+            .attempt_spread_vein(&interface_default_target, pos, faces, true, None)
+            .await;
+        // The normal spreader's SAME_PLANE fallback places a new vein at `up`.
+        let new_vein = existing_vein_faces(interface_default_target.state_at(up)).unwrap();
+        assert!(new_vein.contains(BlockDirection::North));
     }
 }

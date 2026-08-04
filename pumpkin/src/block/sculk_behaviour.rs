@@ -10,7 +10,7 @@
 
 use pumpkin_data::BlockStateId;
 use pumpkin_data::sound::Sound;
-use pumpkin_data::tag::Tag;
+use pumpkin_data::tag::{Tag, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 
@@ -199,7 +199,7 @@ pub trait SculkBehaviour: Send + Sync {
         _facings: Option<FaceSet>,
     ) -> BlockFuture<'a, bool> {
         Box::pin(async move {
-            let config = SculkVeinSpreaderConfig::vein(!source_is_vein);
+            let config = SculkVeinSpreaderConfig::vein(source_is_vein);
             multiface_spreader::spread_all(&config, world, source_faces, pos).await > 0
         })
     }
@@ -251,14 +251,24 @@ impl SculkBehaviour for DefaultSculkBehaviour {
         Box::pin(async move {
             match facings {
                 None => {
-                    let config = SculkVeinSpreaderConfig::same_space(!source_is_vein);
+                    let config = SculkVeinSpreaderConfig::same_space(source_is_vein);
                     multiface_spreader::spread_all(&config, world, source_faces, pos).await > 0
                 }
                 Some(regrow_faces) if !regrow_faces.is_empty() => {
-                    sculk_vein::regrow(world, pos, regrow_faces).await
+                    // `!state.isAir() && !state.getFluidState().is(Fluids.WATER) -> false`.
+                    let state = world.accessor().get_block_state(&pos);
+                    let is_water = world
+                        .accessor()
+                        .get_fluid(&pos)
+                        .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER);
+                    if !state.is_air() && !is_water {
+                        false
+                    } else {
+                        sculk_vein::regrow(world, pos, regrow_faces).await
+                    }
                 }
                 Some(_) => {
-                    let config = SculkVeinSpreaderConfig::vein(!source_is_vein);
+                    let config = SculkVeinSpreaderConfig::vein(source_is_vein);
                     multiface_spreader::spread_all(&config, world, source_faces, pos).await > 0
                 }
             }
