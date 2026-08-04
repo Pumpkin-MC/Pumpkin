@@ -129,7 +129,7 @@ impl Navigator {
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn compute_path(
+    pub(crate) async fn compute_path(
         &mut self,
         entity: &LivingEntity,
         destination: Vector3<f64>,
