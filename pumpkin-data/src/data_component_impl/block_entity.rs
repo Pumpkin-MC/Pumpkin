@@ -18,6 +18,9 @@ impl BlockEntityDataImpl {
     }
 }
 impl DataComponentImpl for BlockEntityDataImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(self.nbt.clone())
+    }
     default_impl!(BlockEntityData);
 }
 
@@ -67,6 +70,18 @@ impl ContainerImpl {
     }
 }
 impl DataComponentImpl for ContainerImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut list = Vec::new();
+        for (slot, stack) in &self.items {
+            let mut entry = NbtCompound::new();
+            entry.put_int("slot", *slot as i32);
+            let mut item_compound = NbtCompound::new();
+            stack.write_item_stack(&mut item_compound);
+            entry.put_compound("item", item_compound);
+            list.push(NbtTag::Compound(entry));
+        }
+        NbtTag::List(list)
+    }
     default_impl!(Container);
 }
 

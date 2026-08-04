@@ -54,7 +54,15 @@ impl DataComponentImpl for MaxStackSizeImpl {
 pub struct MaxDamageImpl {
     pub max_damage: i32,
 }
+impl MaxDamageImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_int().map(|max_damage| Self { max_damage })
+    }
+}
 impl DataComponentImpl for MaxDamageImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.max_damage)
+    }
     default_impl!(MaxDamage);
 }
 

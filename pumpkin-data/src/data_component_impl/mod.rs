@@ -512,7 +512,11 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::CustomData => Some(CustomDataImpl::read_data(data)?.to_dyn()),
         DataComponent::Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         DataComponent::Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
+        DataComponent::MaxDamage => Some(MaxDamageImpl::read_data(data)?.to_dyn()),
         DataComponent::Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
+        DataComponent::Food => Some(FoodImpl::read_data(data)?.to_dyn()),
+        DataComponent::Tool => Some(ToolImpl::read_data(data)?.to_dyn()),
+        DataComponent::Enchantable => Some(EnchantableImpl::read_data(data)?.to_dyn()),
         DataComponent::DamageResistant => Some(DamageResistantImpl::read_data(data)?.to_dyn()),
         DataComponent::PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         DataComponent::PotionDurationScale => {
@@ -621,6 +625,64 @@ mod tests {
         );
         assert_eq!(MaxStackSizeImpl { size: 99 }.get_hash(), -1632321551i32);
         assert_eq!(MapIdImpl { id: 10 }.get_hash(), -919192125i32);
+    }
+
+    #[test]
+    fn max_damage_write_read_round_trip() {
+        let value = MaxDamageImpl { max_damage: 1561 };
+        let read = MaxDamageImpl::read_data(&value.write_data()).unwrap();
+        assert!(value.equal(&read));
+    }
+
+    #[test]
+    fn enchantable_write_read_round_trip() {
+        let value = EnchantableImpl { value: 14 };
+        let read = EnchantableImpl::read_data(&value.write_data()).unwrap();
+        assert!(value.equal(&read));
+    }
+
+    #[test]
+    fn food_write_read_round_trip() {
+        let value = FoodImpl {
+            nutrition: 4,
+            saturation: 2.4,
+            can_always_eat: true,
+        };
+        let read = FoodImpl::read_data(&value.write_data()).unwrap();
+        assert!(value.equal(&read));
+    }
+
+    #[test]
+    fn block_entity_data_write_read_round_trip() {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:chest".to_string());
+        nbt.put_int("x", 12);
+        let value = BlockEntityDataImpl { nbt };
+        let read = BlockEntityDataImpl::read_data(&value.write_data()).unwrap();
+        assert!(value.equal(&read));
+    }
+
+    #[test]
+    fn tool_write_read_round_trip() {
+        let value = ToolImpl {
+            rules: Cow::Owned(vec![
+                ToolRule {
+                    blocks: IDSet::Tag(Cow::Borrowed("mineable/pickaxe")),
+                    speed: Some(6.0),
+                    correct_for_drops: Some(true),
+                },
+                ToolRule {
+                    blocks: IDSet::Tag(Cow::Borrowed("incorrect_for_wooden_tool")),
+                    speed: None,
+                    correct_for_drops: Some(false),
+                },
+            ]),
+            default_mining_speed: 1.0,
+            damage_per_block: 2,
+            can_destroy_blocks_in_creative: false,
+        };
+        let read = ToolImpl::read_data(&value.write_data()).unwrap();
+        assert!(value.equal(&read));
     }
 
     fn assert_round_trip<T: DataComponentImpl + Clone + 'static>(

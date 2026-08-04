@@ -19,7 +19,27 @@ pub struct FoodImpl {
     pub saturation: f32,
     pub can_always_eat: bool,
 }
+impl FoodImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let nutrition = compound.get_int("nutrition")?;
+        let saturation = compound.get_float("saturation")?;
+        let can_always_eat = compound.get_bool("can_always_eat").unwrap_or(false);
+        Some(Self {
+            nutrition,
+            saturation,
+            can_always_eat,
+        })
+    }
+}
 impl DataComponentImpl for FoodImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_int("nutrition", self.nutrition);
+        compound.put_float("saturation", self.saturation);
+        compound.put_bool("can_always_eat", self.can_always_eat);
+        NbtTag::Compound(compound)
+    }
     default_impl!(Food);
 }
 impl Hash for FoodImpl {
