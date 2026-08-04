@@ -1,5 +1,7 @@
 use fun::FunConfig;
 use logging::LoggingConfig;
+use networking::versions::VersionAccessMode;
+use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl, random};
 use recipe::RecipeConfig;
@@ -106,6 +108,40 @@ impl LoadConfiguration for PumpkinConfig {
                 self.advanced.networking.java.online_mode,
                 "When allow_chat_reports is enabled, java.online_mode must be enabled"
             );
+        }
+
+        // Validate networking.java.versions
+        let versions_cfg = &self.advanced.networking.java.versions;
+        match versions_cfg.mode {
+            VersionAccessMode::Range => {
+                let min = &versions_cfg.min_version;
+                if !min.is_empty() {
+                    assert!(
+                        min.parse::<JavaMinecraftVersion>().is_ok(),
+                        "networking.java.versions.min_version '{min}' is not a recognized Minecraft version"
+                    );
+                }
+                let max = &versions_cfg.max_version;
+                if !max.is_empty() {
+                    assert!(
+                        max.parse::<JavaMinecraftVersion>().is_ok(),
+                        "networking.java.versions.max_version '{max}' is not a recognized Minecraft version"
+                    );
+                }
+            }
+            VersionAccessMode::Allowlist | VersionAccessMode::Denylist => {
+                assert!(
+                    !versions_cfg.versions.is_empty(),
+                    "networking.java.versions.versions must not be empty when mode is 'allowlist' or 'denylist'"
+                );
+                for v in &versions_cfg.versions {
+                    assert!(
+                        v.parse::<JavaMinecraftVersion>().is_ok(),
+                        "networking.java.versions.versions entry '{v}' is not a recognized Minecraft version"
+                    );
+                }
+            }
+            VersionAccessMode::Any | VersionAccessMode::Latest => {}
         }
     }
 }

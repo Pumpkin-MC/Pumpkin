@@ -15,6 +15,7 @@ pub mod lan_broadcast;
 pub mod proxy;
 pub mod query;
 pub mod rcon;
+pub mod versions;
 
 /// Configuration for server networking features.
 ///

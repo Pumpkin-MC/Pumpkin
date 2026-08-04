@@ -9,11 +9,12 @@ impl JavaClient {
     pub async fn handle_status_request(&self, server: &Server) {
         debug!("Handling status request");
         let status = server.get_status();
+        let versions_config = &server.advanced_config.networking.java.versions;
         self.send_packet_now(
             &status
                 .lock()
                 .await
-                .get_status_packet(self.version.load().protocol_version()),
+                .get_status_packet(self.version.load().protocol_version(), versions_config),
         )
         .await;
     }

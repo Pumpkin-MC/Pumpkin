@@ -265,6 +265,82 @@ impl std::fmt::Display for JavaMinecraftVersion {
     }
 }
 
+/// Error returned when a string doesn't match a known Minecraft version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnknownVersionError;
+
+impl std::fmt::Display for UnknownVersionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unrecognized Minecraft version")
+    }
+}
+
+impl std::error::Error for UnknownVersionError {}
+
+impl std::str::FromStr for JavaMinecraftVersion {
+    type Err = UnknownVersionError;
+
+    /// Parses a version string such as `"1.8"` or `"1.21.9"` into a [`JavaMinecraftVersion`].
+    ///
+    /// Matches the same strings produced by this type's [`Display`](std::fmt::Display) impl.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.trim() {
+            "1.7.2" => Self::V_1_7_2,
+            "1.7.6" => Self::V_1_7_6,
+            "1.8" => Self::V_1_8,
+            "1.9" => Self::V_1_9,
+            "1.9.1" => Self::V_1_9_1,
+            "1.9.2" => Self::V_1_9_2,
+            "1.9.3" => Self::V_1_9_3,
+            "1.10" => Self::V_1_10,
+            "1.11" => Self::V_1_11,
+            "1.11.1" => Self::V_1_11_1,
+            "1.12" => Self::V_1_12,
+            "1.12.1" => Self::V_1_12_1,
+            "1.12.2" => Self::V_1_12_2,
+            "1.13" => Self::V_1_13,
+            "1.13.1" => Self::V_1_13_1,
+            "1.13.2" => Self::V_1_13_2,
+            "1.14" => Self::V_1_14,
+            "1.14.1" => Self::V_1_14_1,
+            "1.14.2" => Self::V_1_14_2,
+            "1.14.3" => Self::V_1_14_3,
+            "1.14.4" => Self::V_1_14_4,
+            "1.15" => Self::V_1_15,
+            "1.15.1" => Self::V_1_15_1,
+            "1.15.2" => Self::V_1_15_2,
+            "1.16" => Self::V_1_16,
+            "1.16.1" => Self::V_1_16_1,
+            "1.16.2" => Self::V_1_16_2,
+            "1.16.3" => Self::V_1_16_3,
+            "1.16.4" => Self::V_1_16_4,
+            "1.17" => Self::V_1_17,
+            "1.17.1" => Self::V_1_17_1,
+            "1.18" => Self::V_1_18,
+            "1.18.2" => Self::V_1_18_2,
+            "1.19" => Self::V_1_19,
+            "1.19.1" => Self::V_1_19_1,
+            "1.19.3" => Self::V_1_19_3,
+            "1.19.4" => Self::V_1_19_4,
+            "1.20" => Self::V_1_20,
+            "1.20.2" => Self::V_1_20_2,
+            "1.20.3" => Self::V_1_20_3,
+            "1.20.5" => Self::V_1_20_5,
+            "1.21" => Self::V_1_21,
+            "1.21.2" => Self::V_1_21_2,
+            "1.21.4" => Self::V_1_21_4,
+            "1.21.5" => Self::V_1_21_5,
+            "1.21.6" => Self::V_1_21_6,
+            "1.21.7" => Self::V_1_21_7,
+            "1.21.9" => Self::V_1_21_9,
+            "1.21.11" => Self::V_1_21_11,
+            "26.1" => Self::V_26_1,
+            "26.2" => Self::V_26_2,
+            _ => return Err(UnknownVersionError),
+        })
+    }
+}
+
 /// Represents a specific version of the Minecraft Bedrock Edition protocol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 #[allow(non_camel_case_types)]
