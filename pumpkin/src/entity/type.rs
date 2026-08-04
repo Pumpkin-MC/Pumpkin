@@ -404,6 +404,23 @@ pub fn check_spawn_rules(
         return pos.0.y < world.sea_level - 5 && rand::random_range(0u8..40) == 0;
     }
 
+    // `AgeableWaterCreature.checkSurfaceAgeableWaterCreatureSpawnRules`: only in a shallow
+    // band just below sea level, directly under a water surface (block above is water).
+    if id == EntityType::SQUID.id {
+        return is_in_surface_squid_y_range(pos.0.y, world.sea_level)
+            && world
+                .get_fluid(&pos.down())
+                .has_tag(&tag::Fluid::MINECRAFT_WATER)
+            && world.get_block(&pos.up()) == &Block::WATER;
+    }
+
+    // `GlowSquid.checkGlowSquidSpawnRules`: only deep below sea level, in complete darkness.
+    if id == EntityType::GLOW_SQUID.id {
+        return is_below_glow_squid_y_threshold(pos.0.y, world.sea_level)
+            && world.get_raw_brightness(pos, 0) == 0
+            && world.get_block(pos) == &Block::WATER;
+    }
+
     if entity_type.category == &MobCategory::MONSTER {
         return mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering);
     }
@@ -440,4 +457,37 @@ pub fn check_spawn_rules(
 
     // TODO
     true
+}
+
+/// `AgeableWaterCreature.checkSurfaceAgeableWaterCreatureSpawnRules`'s Y-range gate:
+/// `pos.getY() >= seaLevel - 13 && pos.getY() <= seaLevel`.
+const fn is_in_surface_squid_y_range(y: i32, sea_level: i32) -> bool {
+    y >= sea_level - 13 && y <= sea_level
+}
+
+/// `GlowSquid.checkGlowSquidSpawnRules`'s Y gate: `pos.getY() <= level.getSeaLevel() - 33`.
+const fn is_below_glow_squid_y_threshold(y: i32, sea_level: i32) -> bool {
+    y <= sea_level - 33
+}
+
+#[cfg(test)]
+mod squid_spawn_rule_tests {
+    use super::{is_below_glow_squid_y_threshold, is_in_surface_squid_y_range};
+
+    #[test]
+    fn surface_squid_range_matches_vanilla_bounds() {
+        let sea_level = 63;
+        assert!(!is_in_surface_squid_y_range(sea_level - 14, sea_level));
+        assert!(is_in_surface_squid_y_range(sea_level - 13, sea_level));
+        assert!(is_in_surface_squid_y_range(sea_level, sea_level));
+        assert!(!is_in_surface_squid_y_range(sea_level + 1, sea_level));
+    }
+
+    #[test]
+    fn glow_squid_threshold_matches_vanilla_bound() {
+        let sea_level = 63;
+        assert!(!is_below_glow_squid_y_threshold(sea_level - 32, sea_level));
+        assert!(is_below_glow_squid_y_threshold(sea_level - 33, sea_level));
+        assert!(is_below_glow_squid_y_threshold(sea_level - 100, sea_level));
+    }
 }

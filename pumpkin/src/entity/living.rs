@@ -1121,6 +1121,7 @@ impl LivingEntity {
     async fn travel_in_fluid<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, water: bool) {
         let movement_input = self.movement_input.load();
 
+        let old_y = self.entity.pos.load().y;
         let falling = self.entity.velocity.load().y <= 0.0;
         let gravity = self.get_effective_gravity(caller).await;
         let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
@@ -1191,12 +1192,30 @@ impl LivingEntity {
 
         let mut velo = self.entity.velocity.load();
 
+        // Vanilla `LivingEntity.jumpOutOfFluid`: nudges the entity upward when it's swum
+        // into a wall, but only if the space it would be nudged into is actually free
+        // (`Entity.isFree` = no block collision *and* no liquid there, Entity.java:668-670).
+        // This previously probed a box shifted by the raw velocity and checked only for
+        // the absence of liquid, so pushing against solid ground or a wall while
+        // horizontally colliding (e.g. a Drowned pathing along an uneven seafloor) would
+        // repeatedly apply the 0.3 upward boost even though the probed space was inside a
+        // solid block, launching the entity above the water surface.
+        //
+        // Vanilla probes `(movement.x, movement.y + 0.6 - getY() + oldY, movement.z)`: a
+        // roughly fixed ~0.6-block step-up check, adjusted for how much of the intended Y
+        // movement collision actually consumed this tick. `getY() - oldY` is the actual
+        // net Y movement already applied by `make_move` above; the `+ 0.6` alone is used
+        // when movement wasn't vertically obstructed.
+        let world = self.entity.world.load();
+        let actual_dy = self.entity.pos.load().y - old_y;
+        let probe_box = self.entity.bounding_box.load().shift(Vector3::new(
+            velo.x,
+            velo.y + 0.6 - actual_dy,
+            velo.z,
+        ));
         if self.entity.horizontal_collision.load(SeqCst)
-            && !self
-                .entity
-                .world
-                .load()
-                .check_fluid_collision(self.entity.bounding_box.load().shift(velo))
+            && !world.check_fluid_collision(probe_box)
+            && world.is_space_empty(probe_box)
         {
             velo.y = 0.3;
 
