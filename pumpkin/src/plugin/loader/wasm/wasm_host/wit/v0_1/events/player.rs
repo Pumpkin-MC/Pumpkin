@@ -14,12 +14,15 @@ use crate::plugin::{
             pumpkin::plugin::event::{
                 BedrockFormResponseEventData, CustomClickActionEventData, Event,
                 InteractAction as WasmInteractAction, InventoryClickEventData,
-                InventoryCloseEventData, PlayerChangeWorldEventData,
+                InventoryCloseEventData, PlayerBedEnterEventData, PlayerBedLeaveEventData,
+                PlayerBucketEmptyEventData, PlayerBucketFillEventData, PlayerChangeWorldEventData,
                 PlayerChangedMainHandEventData, PlayerChatEventData, PlayerCommandSendEventData,
-                PlayerCustomPayloadEventData, PlayerEggThrowEventData, PlayerExpChangeEventData,
-                PlayerFishEventData, PlayerFishState as WasmPlayerFishState,
-                PlayerGamemodeChangeEventData, PlayerInteractEventData,
-                PlayerInteractUnknownEntityEventData, PlayerItemHeldEventData, PlayerJoinEventData,
+                PlayerCustomPayloadEventData, PlayerDropItemEventData, PlayerEggThrowEventData,
+                PlayerExpChangeEventData, PlayerFishEventData,
+                PlayerFishState as WasmPlayerFishState, PlayerGamemodeChangeEventData,
+                PlayerInteractEntityEventData, PlayerInteractEventData,
+                PlayerInteractUnknownEntityEventData, PlayerItemConsumeEventData,
+                PlayerItemDamageEventData, PlayerItemHeldEventData, PlayerJoinEventData,
                 PlayerLeaveEventData, PlayerLoginEventData, PlayerMoveEventData,
                 PlayerPermissionCheckEventData, PlayerRespawnEventData, PlayerTeleportEventData,
                 PlayerToggleFlightEventData, PlayerToggleSneakEventData,
@@ -43,6 +46,7 @@ use crate::plugin::{
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
+        player_interact_entity_event::PlayerInteractEntityEvent,
         player_interact_event::{InteractAction, PlayerInteractEvent},
         player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
         player_join::PlayerJoinEvent,
@@ -843,6 +847,228 @@ impl ToFromWasmEvent for CustomClickActionEvent {
                 player: consume_player(state, &data.player),
                 id: data.id,
                 payload: data.payload.map(Bytes::from),
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for PlayerInteractEntityEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerInteractEntityEvent(PlayerInteractEntityEventData {
+            player,
+            entity_id: self.target.get_entity().entity_id,
+            action: to_wasm_entity_interaction_action(&self.action),
+            sneaking: self.sneaking,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerInteractEntityEvent(data) => {
+                let player = consume_player(state, &data.player);
+                let target = player
+                    .world()
+                    .get_entity_by_id(data.entity_id)
+                    .expect("entity not found");
+                Self {
+                    player,
+                    target,
+                    action: from_wasm_entity_interaction_action(data.action),
+                    target_position: None,
+                    sneaking: data.sneaking,
+                    cancelled: data.cancelled,
+                }
+            }
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent
+    for crate::plugin::api::events::player::player_item_consume::PlayerItemConsumeEvent
+{
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerItemConsumeEvent(PlayerItemConsumeEventData {
+            player,
+            item_name: self.item_name.clone(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerItemConsumeEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                item_name: data.item_name,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent
+    for crate::plugin::api::events::player::player_item_damage::PlayerItemDamageEvent
+{
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerItemDamageEvent(PlayerItemDamageEventData {
+            player,
+            item_name: self.item_name.clone(),
+            damage: self.damage,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerItemDamageEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                item_name: data.item_name,
+                damage: data.damage,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for crate::plugin::api::events::player::player_drop_item::PlayerDropItemEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerDropItemEvent(PlayerDropItemEventData {
+            player,
+            item_name: self.item_name.clone(),
+            count: self.count,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerDropItemEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                item_name: data.item_name,
+                count: data.count,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for crate::plugin::api::events::player::player_bed::PlayerBedEnterEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerBedEnterEvent(PlayerBedEnterEventData {
+            player,
+            bed_pos: to_wasm_block_position(self.bed_pos),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerBedEnterEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                bed_pos: from_wasm_block_position(data.bed_pos),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for crate::plugin::api::events::player::player_bed::PlayerBedLeaveEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerBedLeaveEvent(PlayerBedLeaveEventData {
+            player,
+            bed_pos: to_wasm_block_position(self.bed_pos),
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerBedLeaveEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                bed_pos: from_wasm_block_position(data.bed_pos),
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for crate::plugin::api::events::player::player_bucket::PlayerBucketEmptyEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerBucketEmptyEvent(PlayerBucketEmptyEventData {
+            player,
+            block_pos: to_wasm_block_position(self.block_pos),
+            bucket: self.bucket.clone(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerBucketEmptyEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                block_pos: from_wasm_block_position(data.block_pos),
+                bucket: data.bucket,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for crate::plugin::api::events::player::player_bucket::PlayerBucketFillEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerBucketFillEvent(PlayerBucketFillEventData {
+            player,
+            block_pos: to_wasm_block_position(self.block_pos),
+            bucket: self.bucket.clone(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerBucketFillEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                block_pos: from_wasm_block_position(data.block_pos),
+                bucket: data.bucket,
+                cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
         }

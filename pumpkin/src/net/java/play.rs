@@ -1933,6 +1933,24 @@ impl JavaClient {
                     let world = entity.world.load_full();
                     let (block, state) = world.get_block_and_state(&position);
 
+                    if let Some(server_arc) = world.server.upgrade() {
+                        let mut event =
+                            crate::plugin::api::events::block::block_damage::BlockDamageEvent::new(
+                                player.clone(),
+                                block,
+                                position,
+                                false,
+                            );
+                        server_arc
+                            .plugin_manager
+                            .fire(&server_arc, &mut event)
+                            .await;
+                        if event.cancelled {
+                            self.update_sequence(player, player_action.sequence.0);
+                            return;
+                        }
+                    }
+
                     if block == &pumpkin_data::Block::NOTE_BLOCK {
                         let props =
                             pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
