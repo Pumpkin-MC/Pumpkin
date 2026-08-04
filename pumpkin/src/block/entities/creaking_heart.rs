@@ -163,6 +163,20 @@ impl CreakingHeartBlockEntity {
     pub const fn compute_analog_output_signal(&self) -> i32 {
         0
     }
+
+    /// `CreakingHeartBlockEntity.isProtector`. Since `spawn_protector`/`remove_protector` (the
+    /// mechanics that would reassign or clear `creaking_uuid` mid-game) aren't ported yet, this
+    /// is exactly "is this the creaking whose UUID we're holding" -- there is no live `Creaking`
+    /// reference stored here to compare identity against, only the persisted UUID.
+    pub async fn is_protector(&self, creaking_uuid: Uuid) -> bool {
+        *self.creaking_uuid.lock().await == Some(creaking_uuid)
+    }
+
+    /// `CreakingHeartBlockEntity.creakingHurt`. The particle/resin-spread effects this drives
+    /// in vanilla are deliberately not ported here (same scope cut as this file's existing
+    /// doc comment already calls out for `spawnProtector`/`removeProtector`/`spreadResin`) --
+    /// this just gives `CreakingEntity`'s damage gate a real method to call.
+    pub const fn creaking_hurt(&self) {}
 }
 
 /// `UUIDUtil.CODEC`: four big-endian ints, most-significant first.
