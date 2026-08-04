@@ -9,6 +9,7 @@ pub mod barrel;
 pub mod chests;
 pub mod ender_chest;
 pub mod hopper;
+pub mod respawn_anchor;
 pub mod shulker_box;
 
 // Workstations & processing
