@@ -4470,10 +4470,22 @@ impl World {
         replaced_block_state_id
     }
 
-    pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
-        let sky_light = self.get_sky_light_level(pos);
+    /// The greater of the block light and the sky light reduced by
+    /// `ambient_darkness`, matching vanilla's `getRawBrightness`.
+    ///
+    /// Pass `0` for checks that must ignore the time of day, such as crop
+    /// growth.
+    pub fn get_raw_brightness(&self, pos: &BlockPos, ambient_darkness: u8) -> u8 {
+        let sky_light = self
+            .get_sky_light_level(pos)
+            .saturating_sub(ambient_darkness);
         let block_light = self.get_block_light_level(pos).unwrap_or(0);
-        sky_light.max(block_light) // TODO: getSkyDarken
+        sky_light.max(block_light)
+    }
+
+    pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
+        // TODO: pass the sky darken value here once it is tracked.
+        self.get_raw_brightness(pos, 0)
     }
 
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {

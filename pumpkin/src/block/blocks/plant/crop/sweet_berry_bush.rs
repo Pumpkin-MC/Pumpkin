@@ -4,7 +4,10 @@ use crate::{
     block::{
         BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
         OnEntityCollisionArgs, RandomTickArgs, UseWithItemArgs,
-        blocks::plant::{PlantBlockBase, crop::CropBlockBase},
+        blocks::plant::{
+            PlantBlockBase,
+            crop::{CropBlockBase, MIN_GROWTH_LIGHT},
+        },
         registry::BlockActionResult,
     },
     world::World,
@@ -134,7 +137,15 @@ impl BlockBehaviour for SweetBerryBushBlock {
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
+            // Vanilla checks the light above the bush rather than at it, so
+            // this cannot rely on the generic crop tick's own check.
+            if args.world.get_raw_brightness(&args.position.up(), 0) < MIN_GROWTH_LIGHT {
+                return;
+            }
             if rand::rng().random_range(0..5) == 0 {
+                // Resolves to this type's own `CropBlockBase::random_tick` below,
+                // not the default in `crop::mod`, so the light is only checked
+                // once and only above the bush.
                 <Self as CropBlockBase>::random_tick(self, args.world, args.position).await;
             }
         })
