@@ -16,11 +16,18 @@ use crate::entity::{
     Entity, EntityBase, NBTStorage, NbtFuture,
     ai::control::{Control, MoveControlTrait},
     ai::goal::{Goal, GoalFuture, active_target::ActiveTargetGoal},
+    living::LivingEntity,
     mob::{Mob, MobEntity},
 };
 use crate::world::World;
 use pumpkin_util::random::RandomImpl;
 use rand::RngExt;
+
+/// `Slime.java:44`'s target predicate: `Math.abs(target.getY() - this.getY()) <= 4.0`.
+#[must_use]
+pub fn is_within_slime_target_y_range(slime_y: f64, target_y: f64) -> bool {
+    (target_y - slime_y).abs() <= 4.0
+}
 
 pub struct SlimeEntity {
     entity: Arc<MobEntity>,
@@ -59,14 +66,33 @@ impl SlimeEntity {
             let mut goal_selector = mob_arc.entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.entity.target_selector.lock().unwrap();
 
+            // `AbstractCubeMob.java:60-63` (`registerGoals`): float=1, randomDirection=4,
+            // keepOnJumping=5; `Slime.java:38` adds attack=2.
             goal_selector.add_goal(1, Box::new(SlimeFloatGoal::new(mob_arc.clone())));
             goal_selector.add_goal(2, Box::new(SlimeAttackGoal::new(mob_arc.clone())));
-            goal_selector.add_goal(3, Box::new(SlimeRandomDirectionGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(4, Box::new(SlimeRandomDirectionGoal::new(mob_arc.clone())));
             goal_selector.add_goal(5, Box::new(SlimeKeepOnJumpingGoal::new(mob_arc.clone())));
 
+            // `Slime.java:44`: `NearestAttackableTargetGoal<>(this, Player.class, 10, true,
+            // false, (target, level) -> Math.abs(target.getY() - this.getY()) <= 4.0)`.
+            let y_check_slime = mob_arc.clone();
             target_selector.add_goal(
                 1,
-                ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::PLAYER, true),
+                Box::new(ActiveTargetGoal::new(
+                    &mob_arc.entity,
+                    &EntityType::PLAYER,
+                    10,
+                    true,
+                    false,
+                    Some(move |target: Arc<LivingEntity>, _world: Arc<World>| {
+                        let slime = y_check_slime.clone();
+                        async move {
+                            let slime_y = slime.entity.living_entity.entity.pos.load().y;
+                            let target_y = target.entity.pos.load().y;
+                            is_within_slime_target_y_range(slime_y, target_y)
+                        }
+                    }),
+                )),
             );
             target_selector.add_goal(
                 3,
@@ -690,6 +716,19 @@ impl Goal for SlimeKeepOnJumpingGoal {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn within_four_blocks_targets_player() {
+        assert!(is_within_slime_target_y_range(64.0, 68.0));
+        assert!(is_within_slime_target_y_range(64.0, 60.0));
+        assert!(is_within_slime_target_y_range(64.0, 64.0));
+    }
+
+    #[test]
+    fn beyond_four_blocks_does_not_target_player() {
+        assert!(!is_within_slime_target_y_range(64.0, 68.1));
+        assert!(!is_within_slime_target_y_range(64.0, 59.9));
+    }
 
     #[test]
     fn uses_small_hurt_sound_only_for_smallest_slimes() {
