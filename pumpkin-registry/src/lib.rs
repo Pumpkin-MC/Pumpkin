@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-mod error;
+pub mod error;
 mod key;
 mod lookup;
 mod mapping;
