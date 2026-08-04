@@ -3,7 +3,11 @@ use std::sync::{Arc, Weak};
 
 use crate::entity::{
     Entity, NBTStorage,
-    ai::goal::{Controls, Goal, GoalFuture},
+    ai::control::ghast_move_control::GhastMoveControl,
+    ai::goal::{
+        Controls, Goal, GoalFuture, ghast_random_float::GhastRandomFloatAroundGoal,
+        ghast_shoot_fireball::GhastShootFireballGoal, ghast_target::GhastNearestPlayerTargetGoal,
+    },
     mob::{Mob, MobEntity},
 };
 
@@ -16,6 +20,9 @@ pub struct GhastEntity {
 impl GhastEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
+        // Vanilla: `Ghast`'s constructor replaces the default `MoveControl` with
+        // `Ghast.GhastMoveControl` (Ghast.java:52).
+        *mob_entity.move_control.lock().unwrap() = Box::new(GhastMoveControl::default());
         let ghast = Self {
             mob_entity,
             is_charging: AtomicBool::new(false),
@@ -27,11 +34,19 @@ impl GhastEntity {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
         };
+        let ghast_weak = Arc::downgrade(&mob_arc);
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // Vanilla: Ghast.java:57-59.
+            goal_selector.add_goal(5, Box::new(GhastRandomFloatAroundGoal::new()));
             goal_selector.add_goal(7, Box::new(GhastLookGoal::new(mob_weak.clone())));
+            goal_selector.add_goal(7, Box::new(GhastShootFireballGoal::new(ghast_weak)));
+
+            // Vanilla: Ghast.java:60-61.
+            target_selector.add_goal(1, GhastNearestPlayerTargetGoal::new(&mob_arc.mob_entity));
         };
 
         mob_arc
@@ -44,6 +59,10 @@ impl GhastEntity {
 
     pub fn is_charging(&self) -> bool {
         self.is_charging.load(Ordering::Relaxed)
+    }
+
+    pub fn explosion_power(&self) -> u8 {
+        self.explosion_power.load(Ordering::Relaxed)
     }
 }
 
