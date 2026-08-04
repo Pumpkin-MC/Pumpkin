@@ -136,3 +136,75 @@ impl<T: ?Sized + Send + Sync + 'static> DataKeyBuilder<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn id(value: &'static str) -> Identifier {
+        Identifier::from_static("test", value)
+    }
+
+    #[test]
+    fn builder_creates_single_element_path() {
+        let key = DataKey::<u32>::builder(id("blocks")).build();
+
+        assert_eq!(key.identifier(), &id("blocks"));
+        assert_eq!(key.path(), &[id("blocks")]);
+        assert_eq!(key.to_string(), "test:blocks");
+    }
+
+    #[test]
+    fn builder_preserves_subkey_order() {
+        let key = DataKey::<String>::builder(id("root"))
+            .add_subkey(id("registries"))
+            .add_subkey(id("items"))
+            .build();
+
+        assert_eq!(key.path(), &[id("root"), id("registries"), id("items")]);
+        assert_eq!(key.to_string(), "test:root/test:registries/test:items");
+    }
+
+    #[test]
+    fn child_appends_identifier_and_changes_value_type() {
+        let parent = DataKey::<u32>::builder(id("numbers")).build();
+        let child = parent.child::<String>(id("name"));
+
+        assert_eq!(parent.path(), &[id("numbers")]);
+        assert_eq!(child.path(), &[id("numbers"), id("name")]);
+        assert_eq!(child.erased().type_id(), TypeId::of::<String>());
+    }
+
+    #[test]
+    fn clone_shares_the_same_logical_path() {
+        let key = DataKey::<[u8]>::builder(id("root"))
+            .add_subkey(id("bytes"))
+            .build();
+        let cloned = key.clone();
+
+        assert_eq!(key, cloned);
+        assert_eq!(key.path(), cloned.path());
+    }
+
+    #[test]
+    fn erased_key_retains_path_and_type_information() {
+        let key = DataKey::<str>::builder(id("strings"))
+            .add_subkey(id("hello"))
+            .build();
+        let erased = key.erased();
+
+        assert_eq!(erased.identifier(), &id("strings"));
+        assert_eq!(erased.path(), key.path());
+        assert_eq!(erased.type_id(), TypeId::of::<str>());
+        assert_eq!(erased.type_name(), type_name::<str>());
+        assert_eq!(erased.to_string(), key.to_string());
+    }
+
+    #[test]
+    fn different_generic_types_produce_different_erased_keys() {
+        let number = DataKey::<u32>::builder(id("value")).build().erased();
+        let text = DataKey::<String>::builder(id("value")).build().erased();
+
+        assert_ne!(number, text);
+    }
+}

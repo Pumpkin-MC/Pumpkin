@@ -2808,14 +2808,9 @@ name = "pumpkin-registry"
 version = "0.1.0-dev+26.2"
 dependencies = [
  "dashmap",
- "pumpkin-data",
- "pumpkin-macros",
- "pumpkin-nbt",
  "pumpkin-util",
- "pumpkin-world",
  "rustc-hash",
  "thiserror 2.0.19",
- "tokio",
 ]
 
 [[package]]

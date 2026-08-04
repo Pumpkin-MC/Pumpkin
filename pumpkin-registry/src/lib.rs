@@ -1,5 +1,5 @@
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     sync::{Arc, LazyLock},
 };
 
@@ -15,6 +15,7 @@ pub use crate::registry::Registry;
 
 pub trait RegistryAccess {
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
+    fn type_id(&self) -> TypeId;
     fn type_name(&self) -> &'static str;
 }
 

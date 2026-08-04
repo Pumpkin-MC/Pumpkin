@@ -2,7 +2,7 @@ use dashmap::{DashMap, Entry, mapref::multiple::RefMulti};
 use pumpkin_util::{identifier::Identifier, version::MinecraftVersion};
 use rustc_hash::FxHashMap;
 use std::{
-    any::{Any, type_name},
+    any::{Any, TypeId, type_name},
     collections::HashMap,
     sync::{Arc, PoisonError, RwLock},
 };
@@ -296,6 +296,10 @@ impl<T: ?Sized + Send + Sync + 'static> RegistryAccess for Registry<T> {
         self
     }
 
+    fn type_id(&self) -> std::any::TypeId {
+        TypeId::of::<T>()
+    }
+
     fn type_name(&self) -> &'static str {
         type_name::<T>()
     }
@@ -307,5 +311,176 @@ impl<T: ?Sized + Send + Sync + 'static> Default for Registry<T> {
             entries: DashMap::new(),
             version_mappings: DashMap::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        sync::{
+            Arc, Barrier,
+            atomic::{AtomicUsize, Ordering},
+        },
+        thread,
+    };
+
+    fn id(value: &'static str) -> Identifier {
+        Identifier::from_static("test", value)
+    }
+
+    #[test]
+    fn new_registry_is_empty() {
+        let registry = Registry::<u32>::new();
+
+        assert!(registry.is_empty());
+        assert_eq!(registry.len(), 0);
+        assert!(!registry.contains(&id("missing")));
+        assert!(registry.get(&id("missing")).is_none());
+    }
+
+    #[test]
+    fn register_stores_and_returns_value() {
+        let registry = Registry::new();
+        registry.register(id("answer"), 42u32).unwrap();
+
+        assert_eq!(*registry.get(&id("answer")).unwrap(), 42);
+        assert!(registry.contains(&id("answer")));
+        assert_eq!(registry.len(), 1);
+    }
+
+    #[test]
+    fn register_arc_preserves_arc_identity() {
+        let registry = Registry::new();
+        let value = Arc::new(String::from("shared"));
+
+        registry
+            .register_arc(id("value"), Arc::clone(&value))
+            .unwrap();
+        let stored = registry.get(&id("value")).unwrap();
+
+        assert!(Arc::ptr_eq(&value, &stored));
+    }
+
+    #[test]
+    fn duplicate_registration_keeps_original_value() {
+        let registry = Registry::new();
+        registry.register(id("value"), 1u32).unwrap();
+
+        let error = registry.register(id("value"), 2u32).unwrap_err();
+
+        assert!(
+            matches!(error, RegistryInsertError::AlreadyRegistered(identifier) if identifier == id("value"))
+        );
+        assert_eq!(*registry.get(&id("value")).unwrap(), 1);
+    }
+
+    #[test]
+    fn get_or_register_only_calls_factory_for_missing_entry() {
+        let registry = Registry::new();
+        registry.register(id("value"), 7u32).unwrap();
+        let calls = AtomicUsize::new(0);
+
+        let value = registry.get_or_register(id("value"), || {
+            calls.fetch_add(1, Ordering::Relaxed);
+            99
+        });
+
+        assert_eq!(*value, 7);
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn get_or_register_arc_inserts_factory_result() {
+        let registry = Registry::new();
+        let created = Arc::new(String::from("created"));
+
+        let returned = registry.get_or_register_arc(id("value"), || Arc::clone(&created));
+
+        assert!(Arc::ptr_eq(&created, &returned));
+        assert!(Arc::ptr_eq(&created, &registry.get(&id("value")).unwrap()));
+    }
+
+    #[test]
+    fn remove_returns_value_and_updates_registry() {
+        let registry = Registry::new();
+        registry.register(id("value"), 11u32).unwrap();
+
+        let removed = registry.remove(&id("value")).unwrap();
+
+        assert_eq!(*removed, 11);
+        assert!(registry.is_empty());
+        assert!(registry.remove(&id("value")).is_none());
+    }
+
+    #[test]
+    fn iter_visits_every_registered_entry() {
+        let registry = Registry::new();
+        registry.register(id("one"), 1u32).unwrap();
+        registry.register(id("two"), 2u32).unwrap();
+        registry.register(id("three"), 3u32).unwrap();
+
+        let mut values: Vec<_> = registry.iter().map(|entry| **entry.value()).collect();
+        values.sort_unstable();
+
+        assert_eq!(values, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn concurrent_get_or_register_creates_exactly_one_entry() {
+        const THREADS: usize = 16;
+        let registry = Arc::new(Registry::new());
+        let barrier = Arc::new(Barrier::new(THREADS));
+        let factory_calls = Arc::new(AtomicUsize::new(0));
+
+        let handles = (0..THREADS).map(|_| {
+            let registry = Arc::clone(&registry);
+            let barrier = Arc::clone(&barrier);
+            let factory_calls = Arc::clone(&factory_calls);
+            thread::spawn(move || {
+                barrier.wait();
+                registry.get_or_register(id("shared"), || {
+                    factory_calls.fetch_add(1, Ordering::SeqCst);
+                    123u32
+                })
+            })
+        });
+
+        let values: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect();
+
+        assert_eq!(factory_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(registry.len(), 1);
+        assert!(values.iter().all(|value| Arc::ptr_eq(value, &values[0])));
+    }
+
+    #[test]
+    fn concurrent_registration_has_one_winner() {
+        const THREADS: usize = 12;
+        let registry = Arc::new(Registry::new());
+        let barrier = Arc::new(Barrier::new(THREADS));
+
+        let handles = (0..THREADS).map(|value| {
+            let registry = Arc::clone(&registry);
+            let barrier = Arc::clone(&barrier);
+            thread::spawn(move || {
+                barrier.wait();
+                registry.register(id("shared"), value)
+            })
+        });
+
+        let results: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect();
+
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(
+            results.iter().filter(|result| result.is_err()).count(),
+            THREADS - 1
+        );
+        assert_eq!(registry.len(), 1);
     }
 }
