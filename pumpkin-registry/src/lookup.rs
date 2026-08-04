@@ -11,39 +11,45 @@ impl RegistryLookup {
         Self(root)
     }
 
-    pub fn get<T>(&self, key: &DataKey<T>) -> Result<Arc<Registry<T>>, RegistryGetError>
+    pub fn get<T>(&self, key: &DataKey<T>) -> Result<Arc<T>, RegistryGetError>
     where
         T: ?Sized + Send + Sync + 'static,
     {
-        let (registry_id, parent_ids) =
-            key.path().split_last().ok_or(RegistryGetError::EmptyPath)?;
+        let (item_id, registry_ids) = key.path().split_last().ok_or(RegistryGetError::EmptyPath)?;
 
         let mut parent = self.0.clone();
 
+        let (registry_id, parent_ids) = registry_ids
+            .split_last()
+            .ok_or(RegistryGetError::EmptyPath)?;
+
         for identifier in parent_ids {
-            let erased = parent
+            let child = parent
                 .get(identifier)
                 .ok_or_else(|| RegistryGetError::NotFound(identifier.clone()))?;
 
-            parent = erased
+            parent = child
                 .into_any()
                 .downcast::<RootRegistry>()
                 .map_err(|_| RegistryGetError::ExpectedRegistry(identifier.clone()))?;
         }
 
-        let erased = parent
+        let registry = parent
             .get(registry_id)
             .ok_or_else(|| RegistryGetError::NotFound(registry_id.clone()))?;
 
-        let expected = erased.type_name();
+        let expected = registry.type_name();
 
-        erased
-            .into_any()
-            .downcast::<Registry<T>>()
-            .map_err(|_| RegistryGetError::TypeMismatch {
+        let registry = registry.into_any().downcast::<Registry<T>>().map_err(|_| {
+            RegistryGetError::TypeMismatch {
                 identifier: registry_id.clone(),
                 expected,
-            })
+            }
+        })?;
+
+        registry
+            .get(item_id)
+            .ok_or_else(|| RegistryGetError::NotFound(item_id.clone()))
     }
 }
 
