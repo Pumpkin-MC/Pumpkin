@@ -104,6 +104,14 @@ impl MoveControlTrait for MoveControl {
 
         // Navigator owns movement input while this controller waits.
     }
+
+    fn has_wanted(&self) -> bool {
+        Self::has_wanted(self)
+    }
+
+    fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed_modifier: f64) {
+        Self::set_wanted_position(self, x, y, z, speed_modifier);
+    }
 }
 
 fn normalized_strafe_input(forwards: f32, right: f32, speed_modifier: f64) -> (f64, f64) {
