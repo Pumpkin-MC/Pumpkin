@@ -1,6 +1,6 @@
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI32, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicI32, Ordering};
 
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{
@@ -10,6 +10,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use rand::RngExt;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -31,7 +32,6 @@ pub struct CreakingHeartBlockEntity {
     pub position: BlockPos,
     /// `creakingInfo`, reduced to the persisted UUID arm (`Either.right`).
     pub creaking_uuid: Mutex<Option<Uuid>>,
-    pub ticks_existed: AtomicI64,
     pub ticker: AtomicI32,
     pub output_signal: AtomicI32,
 }
@@ -54,7 +54,6 @@ impl BlockEntity for CreakingHeartBlockEntity {
         Self {
             position,
             creaking_uuid: Mutex::new(creaking_uuid),
-            ticks_existed: AtomicI64::new(0),
             ticker: AtomicI32::new(0),
             output_signal: AtomicI32::new(0),
         }
@@ -86,8 +85,6 @@ impl BlockEntity for CreakingHeartBlockEntity {
                 return;
             }
 
-            self.ticks_existed.fetch_add(1, Ordering::Relaxed);
-
             let computed = self.compute_analog_output_signal();
             if self.output_signal.swap(computed, Ordering::Relaxed) != computed {
                 world.update_comparators(&self.position, block).await;
@@ -99,7 +96,7 @@ impl BlockEntity for CreakingHeartBlockEntity {
                 return;
             }
             self.ticker
-                .store(20 + i32::from(rand::random::<u8>() % 5), Ordering::Relaxed);
+                .store(20 + rand::rng().random_range(0..5), Ordering::Relaxed);
 
             // updateCreakingState: an uprooted-eligible heart (no logs, no bound creaking)
             // goes UPROOTED, otherwise it tracks the creaking_active environment attribute.
@@ -151,7 +148,6 @@ impl CreakingHeartBlockEntity {
         Self {
             position,
             creaking_uuid: Mutex::new(None),
-            ticks_existed: AtomicI64::new(0),
             ticker: AtomicI32::new(0),
             output_signal: AtomicI32::new(0),
         }
