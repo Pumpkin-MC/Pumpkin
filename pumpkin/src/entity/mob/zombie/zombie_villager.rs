@@ -339,7 +339,10 @@ impl Mob for ZombieVillagerEntity {
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             if item_stack.item.id != Item::GOLDEN_APPLE.id {
-                return self.get_mob_entity().mob_interact(player, item_stack).await;
+                return self
+                    .get_mob_entity()
+                    .mob_interact(player, item_stack, self.can_be_leashed())
+                    .await;
             }
 
             if !self

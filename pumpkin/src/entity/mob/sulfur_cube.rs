@@ -434,7 +434,10 @@ impl Mob for SulfurCubeEntity {
                     self.play_sound(Sound::EntitySmallSulfurCubeEat);
                     return true;
                 }
-                return self.entity.mob_interact(player, item_stack).await;
+                return self
+                    .entity
+                    .mob_interact(player, item_stack, self.can_be_leashed())
+                    .await;
             }
 
             if item_stack.item.id == Item::SHEARS.id && self.has_body_item().await {
@@ -450,7 +453,9 @@ impl Mob for SulfurCubeEntity {
                 return equipped;
             }
 
-            self.entity.mob_interact(player, item_stack).await
+            self.entity
+                .mob_interact(player, item_stack, self.can_be_leashed())
+                .await
         })
     }
 

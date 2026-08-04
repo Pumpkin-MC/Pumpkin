@@ -132,7 +132,9 @@ impl Mob for ParrotEntity {
                 return true;
             }
 
-            self.mob_entity.mob_interact(player, item_stack).await
+            self.mob_entity
+                .mob_interact(player, item_stack, self.can_be_leashed())
+                .await
         })
     }
 }

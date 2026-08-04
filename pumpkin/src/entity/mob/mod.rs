@@ -492,7 +492,12 @@ impl MobEntity {
         entity.set_on_fire_for(8.0);
     }
 
-    pub async fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+    pub async fn mob_interact(
+        &self,
+        player: &Arc<Player>,
+        item_stack: &mut ItemStack,
+        can_be_leashed: bool,
+    ) -> bool {
         let entity = &self.living_entity.entity;
 
         // If already leashed to player, right-clicking unleashes the mob
@@ -514,8 +519,9 @@ impl MobEntity {
         }
 
         // If holding a lead, leash the mob to the player
-        if item_stack.item.registry_key == "lead"
-            || item_stack.item.registry_key == "minecraft:lead"
+        if can_be_leashed
+            && (item_stack.item.registry_key == "lead"
+                || item_stack.item.registry_key == "minecraft:lead")
         {
             let diff = entity.pos.load() - player.get_entity().pos.load();
             let dist_sq = diff.length_squared();
@@ -662,7 +668,17 @@ pub trait Mob: EntityBase + Send + Sync {
         player: &'a Arc<Player>,
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move { self.get_mob_entity().mob_interact(player, item_stack).await })
+        Box::pin(async move {
+            self.get_mob_entity()
+                .mob_interact(player, item_stack, self.can_be_leashed())
+                .await
+        })
+    }
+
+    /// Vanilla `Mob.canBeLeashed`: whether a lead can be attached to this mob at all.
+    /// Defaults to `true`; species that are never leashable (e.g. Turtle) override this.
+    fn can_be_leashed(&self) -> bool {
+        true
     }
 
     fn mob_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
