@@ -4,15 +4,23 @@ use std::sync::{
 };
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
+use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBase, NBTStorage, NbtFuture,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         skeleton_trap::SkeletonTrapGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
+    passive::{
+        animal::Animal,
+        equine::{AbstractHorse, AbstractHorseData},
+    },
+    player::Player,
 };
 
 /// Vanilla: `SkeletonHorse.TRAP_MAX_LIFE` -- an un-persistence-required trap horse despawns after
@@ -30,6 +38,7 @@ pub struct SkeletonHorseEntity {
     /// whichever spawn path is later updated to set it just works.
     is_trap: AtomicBool,
     trap_time: AtomicI32,
+    pub horse_data: AbstractHorseData,
 }
 
 impl SkeletonHorseEntity {
@@ -39,8 +48,10 @@ impl SkeletonHorseEntity {
             mob_entity,
             is_trap: AtomicBool::new(false),
             trap_time: AtomicI32::new(0),
+            horse_data: AbstractHorseData::default(),
         };
         let mob_arc = Arc::new(horse);
+        AbstractHorse::randomize_attributes(mob_arc.as_ref(), &mut rand::rng());
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
@@ -78,6 +89,8 @@ impl NBTStorage for SkeletonHorseEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.mob_entity.living_entity.write_nbt(nbt).await;
+            self.write_animal_nbt(nbt);
+            self.write_horse_nbt(nbt);
             nbt.put_bool("SkeletonTrap", self.is_trap.load(Ordering::Relaxed));
             nbt.put_int("SkeletonTrapTime", self.trap_time.load(Ordering::Relaxed));
         })
@@ -86,6 +99,8 @@ impl NBTStorage for SkeletonHorseEntity {
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.read_animal_nbt(nbt);
+            self.read_horse_nbt(nbt);
             self.is_trap.store(
                 nbt.get_bool("SkeletonTrap").unwrap_or(false),
                 Ordering::Relaxed,
@@ -98,9 +113,58 @@ impl NBTStorage for SkeletonHorseEntity {
     }
 }
 
+impl Animal for SkeletonHorseEntity {
+    fn is_food(&self, item_stack: &ItemStack) -> bool {
+        item_stack.item.has_tag(&tag::Item::MINECRAFT_HORSE_FOOD)
+    }
+
+    /// `SkeletonHorse.canAgeUp` -- babies never grow up from food.
+    fn can_age_up(&self) -> bool {
+        false
+    }
+}
+
+impl AbstractHorse for SkeletonHorseEntity {
+    fn horse_data(&self) -> &AbstractHorseData {
+        &self.horse_data
+    }
+
+    /// `SkeletonHorse.randomizeAttributes`: only jump-strength is rolled (the base
+    /// `AbstractHorse` formula); max-health (15) and speed (0.2) stay fixed at
+    /// `createAttributes`'s values.
+    fn randomize_attributes(&self, random: &mut impl RngExt)
+    where
+        Self: Sized,
+    {
+        let mut attrs = self.mob_entity.living_entity.attributes.write().unwrap();
+        if let Some(a) = attrs.get_mut(&pumpkin_data::attributes::Attributes::JUMP_STRENGTH.id) {
+            a.base_value = crate::entity::passive::equine::generate_jump_strength(random);
+            a.dirty.store(true, Ordering::Relaxed);
+        }
+    }
+}
+
 impl Mob for SkeletonHorseEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    /// `SkeletonHorse.mobInteract` (`SkeletonHorse.java:174-176`): the trap-despawn timer above
+    /// is already correctly ported; this is the one missing gate -- an untamed (non-trap-yet)
+    /// skeleton horse cannot be fed/ridden/opened at all until tamed by some other mechanism
+    /// (this fully replaces `AbstractHorse::abstract_horse_mob_interact`'s feed/makeMad path
+    /// when untamed, it doesn't just skip the ride step).
+    fn mob_interact<'a>(
+        &'a self,
+        player: &'a Arc<Player>,
+        item_stack: &'a mut ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            if !self.is_tamed() {
+                return false;
+            }
+            self.abstract_horse_mob_interact(player, item_stack).await
+        })
     }
 
     fn mob_tick<'a>(

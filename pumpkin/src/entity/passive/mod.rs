@@ -11,6 +11,7 @@ pub mod copper_golem;
 pub mod cow;
 pub mod dolphin;
 pub mod donkey;
+pub mod equine;
 pub mod fox;
 pub mod frog;
 pub mod glow_squid;
