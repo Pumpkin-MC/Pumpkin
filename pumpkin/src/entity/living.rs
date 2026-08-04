@@ -3054,86 +3054,97 @@ impl EntityBase for LivingEntity {
                             })
                             .await;
 
-                        // Prefer modifying the exact stack that matches the consumed item:
-                        // 1) selected hotbar (held_item)
-                        // 2) off-hand
-                        // 3) fallback to active_hand if the above didn't match
-                        let mut handled = false;
-                        let mut slot_to_sync = None;
+                        // Vanilla `Item#finishUsingItem` (default, non-food/non-consumable)
+                        // returns the stack unchanged: no decrement happens on natural
+                        // use-duration completion unless the item actually has FoodProperties
+                        // or a Consumable component. Without this guard, any item with a
+                        // finite get_use_duration() that a player holds to completion (e.g.
+                        // SpyglassItem at 1200 ticks) gets silently consumed here.
+                        if is_consumed_on_finish(item) {
+                            // Prefer modifying the exact stack that matches the consumed item:
+                            // 1) selected hotbar (held_item)
+                            // 2) off-hand
+                            // 3) fallback to active_hand if the above didn't match
+                            let mut handled = false;
+                            let mut slot_to_sync = None;
 
-                        // Check main hand (hotbar selected)
-                        let held_arc = player.inventory.held_item();
-                        {
-                            let mut held_lock = held_arc.lock().await;
-                            if held_lock.are_items_and_components_equal(item) {
+                            // Check main hand (hotbar selected)
+                            let held_arc = player.inventory.held_item();
+                            {
+                                let mut held_lock = held_arc.lock().await;
+                                if held_lock.are_items_and_components_equal(item) {
+                                    if let Some(remainder) = consumable_remainder(item) {
+                                        if player.gamemode.load() != GameMode::Creative {
+                                            held_lock.decrement(1);
+                                            if held_lock.is_empty() {
+                                                *held_lock = ItemStack::new(1, remainder);
+                                            }
+                                        }
+                                    } else {
+                                        held_lock
+                                            .decrement_unless_creative(player.gamemode.load(), 1);
+                                    }
+                                    handled = true;
+                                    slot_to_sync =
+                                        Some(player.inventory.get_selected_slot() as usize);
+                                }
+                            }
+
+                            if !handled {
+                                // Check off-hand
+                                let off_arc = player.inventory.off_hand_item().await;
+                                let mut off_lock = off_arc.lock().await;
+                                if off_lock.are_items_and_components_equal(item) {
+                                    if let Some(remainder) = consumable_remainder(item) {
+                                        if player.gamemode.load() != GameMode::Creative {
+                                            off_lock.decrement(1);
+                                            if off_lock.is_empty() {
+                                                *off_lock = ItemStack::new(1, remainder);
+                                            }
+                                        }
+                                    } else {
+                                        off_lock
+                                            .decrement_unless_creative(player.gamemode.load(), 1);
+                                    }
+
+                                    handled = true;
+                                    slot_to_sync = Some(PlayerInventory::OFF_HAND_SLOT);
+                                }
+                            }
+
+                            if !handled {
+                                // Use stored active_hand (as a fallback)
+                                let active_hand = *self.active_hand.lock().await;
+                                let hand_to_modify = active_hand.unwrap_or(Hand::Right);
+                                let item_stack = self
+                                    .get_stack_in_hand(caller.as_ref(), hand_to_modify)
+                                    .await;
+                                let mut item_lock = item_stack.lock().await;
+
                                 if let Some(remainder) = consumable_remainder(item) {
                                     if player.gamemode.load() != GameMode::Creative {
-                                        held_lock.decrement(1);
-                                        if held_lock.is_empty() {
-                                            *held_lock = ItemStack::new(1, remainder);
+                                        item_lock.decrement(1);
+                                        if item_lock.is_empty() {
+                                            *item_lock = ItemStack::new(1, remainder);
                                         }
                                     }
                                 } else {
-                                    held_lock.decrement_unless_creative(player.gamemode.load(), 1);
+                                    item_lock.decrement_unless_creative(player.gamemode.load(), 1);
                                 }
-                                handled = true;
-                                slot_to_sync = Some(player.inventory.get_selected_slot() as usize);
+                                slot_to_sync = Some(match hand_to_modify {
+                                    Hand::Left => PlayerInventory::OFF_HAND_SLOT,
+                                    Hand::Right => player.inventory.get_selected_slot() as usize,
+                                });
                             }
-                        }
 
-                        if !handled {
-                            // Check off-hand
-                            let off_arc = player.inventory.off_hand_item().await;
-                            let mut off_lock = off_arc.lock().await;
-                            if off_lock.are_items_and_components_equal(item) {
-                                if let Some(remainder) = consumable_remainder(item) {
-                                    if player.gamemode.load() != GameMode::Creative {
-                                        off_lock.decrement(1);
-                                        if off_lock.is_empty() {
-                                            *off_lock = ItemStack::new(1, remainder);
-                                        }
-                                    }
+                            if let Some(slot) = slot_to_sync {
+                                let updated = if slot == PlayerInventory::OFF_HAND_SLOT {
+                                    player.inventory.off_hand_item().await.lock().await.clone()
                                 } else {
-                                    off_lock.decrement_unless_creative(player.gamemode.load(), 1);
-                                }
-
-                                handled = true;
-                                slot_to_sync = Some(PlayerInventory::OFF_HAND_SLOT);
+                                    player.inventory.held_item().lock().await.clone()
+                                };
+                                player.sync_hand_slot(slot, updated).await;
                             }
-                        }
-
-                        if !handled {
-                            // Use stored active_hand (as a fallback)
-                            let active_hand = *self.active_hand.lock().await;
-                            let hand_to_modify = active_hand.unwrap_or(Hand::Right);
-                            let item_stack = self
-                                .get_stack_in_hand(caller.as_ref(), hand_to_modify)
-                                .await;
-                            let mut item_lock = item_stack.lock().await;
-
-                            if let Some(remainder) = consumable_remainder(item) {
-                                if player.gamemode.load() != GameMode::Creative {
-                                    item_lock.decrement(1);
-                                    if item_lock.is_empty() {
-                                        *item_lock = ItemStack::new(1, remainder);
-                                    }
-                                }
-                            } else {
-                                item_lock.decrement_unless_creative(player.gamemode.load(), 1);
-                            }
-                            slot_to_sync = Some(match hand_to_modify {
-                                Hand::Left => PlayerInventory::OFF_HAND_SLOT,
-                                Hand::Right => player.inventory.get_selected_slot() as usize,
-                            });
-                        }
-
-                        if let Some(slot) = slot_to_sync {
-                            let updated = if slot == PlayerInventory::OFF_HAND_SLOT {
-                                player.inventory.off_hand_item().await.lock().await.clone()
-                            } else {
-                                player.inventory.held_item().lock().await.clone()
-                            };
-                            player.sync_hand_slot(slot, updated).await;
                         }
 
                         if let Some(cooldown) = item.get_use_cooldown() {
@@ -3267,6 +3278,15 @@ const fn consume_effect_probability_applies(probability: f32, random: f32) -> bo
     random < probability
 }
 
+/// Vanilla `Item#finishUsingItem`: the default implementation returns the
+/// stack unchanged. Only the food/consumable override
+/// (`ItemUtils#finishUsingItem`) decrements the stack on natural use-duration
+/// completion.
+fn is_consumed_on_finish(item: &ItemStack) -> bool {
+    item.get_data_component::<FoodImpl>().is_some()
+        || item.get_data_component::<ConsumableImpl>().is_some()
+}
+
 /// Returns whether this consumable has vanilla's `clear_all_effects` consume effect.
 fn consumable_clears_all_effects(item: &ItemStack) -> bool {
     item.get_data_component::<ConsumableImpl>()
@@ -3318,6 +3338,7 @@ const fn should_replace_effect(current: &Effect, candidate: &Effect) -> bool {
 mod milk_bucket_tests {
     use super::{
         consumable_clears_all_effects, consumable_remainder, consume_effect_probability_applies,
+        is_consumed_on_finish,
     };
     use pumpkin_data::{item::Item, item_stack::ItemStack};
 
@@ -3344,6 +3365,20 @@ mod milk_bucket_tests {
         assert!(consume_effect_probability_applies(1.0, 0.999));
         assert!(consume_effect_probability_applies(0.5, 0.499));
         assert!(!consume_effect_probability_applies(0.5, 0.5));
+    }
+
+    #[test]
+    fn non_consumable_items_are_not_consumed_on_finish() {
+        let spyglass = ItemStack::new(1, &Item::SPYGLASS);
+        assert!(!is_consumed_on_finish(&spyglass));
+    }
+
+    #[test]
+    fn food_and_consumable_items_are_consumed_on_finish() {
+        let milk = ItemStack::new(1, &Item::MILK_BUCKET);
+        let apple = ItemStack::new(1, &Item::APPLE);
+        assert!(is_consumed_on_finish(&milk));
+        assert!(is_consumed_on_finish(&apple));
     }
 }
 

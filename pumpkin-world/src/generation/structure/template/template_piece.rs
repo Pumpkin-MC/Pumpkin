@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use pumpkin_data::{Mirror, Rotation};
+use pumpkin_data::{Block, Mirror, Rotation};
 use pumpkin_util::{
     math::{block_box::BlockBox, vector3::Vector3},
     random::RandomGenerator,
@@ -120,7 +120,12 @@ impl TemplatePiece {
     }
 
     /// Places all blocks from the template into the chunk.
-    fn place_blocks(&self, chunk: &mut ProtoChunk, chunk_box: &BlockBox) {
+    fn place_blocks(
+        &self,
+        chunk: &mut ProtoChunk,
+        block_registry: &dyn WorldPortalExt,
+        chunk_box: &BlockBox,
+    ) {
         let box_limit = self.piece.bounding_box;
 
         for block in &self.template.blocks {
@@ -131,13 +136,22 @@ impl TemplatePiece {
                 continue;
             }
 
-            // Resolve the block state with rotation/mirror
-            let Some(state) =
-                BlockStateResolver::resolve(palette_entry, self.rotation, self.mirror)
-            else {
+            // Resolve the untransformed block state, then apply rotation/mirror through the
+            // block registry so per-block BlockBehaviour overrides (e.g. redstone wire, stairs)
+            // run the same transform as every other placement path.
+            let Some(base_state) = BlockStateResolver::resolve_simple(palette_entry) else {
                 debug!("Failed to resolve block: {}", palette_entry.name);
                 continue;
             };
+
+            let resolved_block = Block::from_state_id(base_state.id);
+            let mut state = base_state;
+            if self.mirror != Mirror::None {
+                state = block_registry.mirror(resolved_block, state.id, self.mirror);
+            }
+            if self.rotation != Rotation::None {
+                state = block_registry.rotate(resolved_block, state.id, self.rotation);
+            }
 
             // Transform position to world coordinates
             let world_pos = self.transform_pos(block.pos);
@@ -198,12 +212,12 @@ impl StructurePieceBase for TemplatePiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
-        _block_registry: &dyn WorldPortalExt,
+        block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,
     ) {
-        self.place_blocks(chunk, chunk_box);
+        self.place_blocks(chunk, block_registry, chunk_box);
     }
 
     fn get_structure_piece(&self) -> &StructurePiece {
