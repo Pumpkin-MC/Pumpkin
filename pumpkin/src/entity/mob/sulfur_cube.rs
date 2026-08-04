@@ -819,6 +819,11 @@ impl Goal for SulfurCubeSearchForItemsGoal {
 
 /// SulfurCube.java:998-1018 (`SulfurCubeTemptGoal`): babies are tempted by
 /// `sulfur_cube_food` (slimeballs), adults by anything swallowable.
+///
+/// `SulfurCube.java:125` constructs this as `TemptGoal.ForNonPathfinders(this, 1.0, ...,
+/// false, 1.0)` -- a `stopDistance` of 1.0, unlike vanilla's 2.5 default.
+const STOP_DISTANCE_SQUARED: f64 = 1.0;
+
 pub struct SulfurCubeTemptGoal {
     cube: Arc<SulfurCubeEntity>,
     target_player: tokio::sync::Mutex<Option<Arc<Player>>>,
@@ -903,7 +908,13 @@ impl Goal for SulfurCubeTemptGoal {
             let dz = player_pos.z - my_pos.z;
             let yaw = dx.atan2(dz).to_degrees() as f32;
             self.cube.target_yaw.store(yaw);
-            self.cube.speed_modifier.store(1.0);
+
+            // `TemptGoal.tick`: stop navigating once within `stopDistance` (1.0 here).
+            if my_pos.squared_distance_to_vec(&player_pos) < STOP_DISTANCE_SQUARED {
+                self.cube.speed_modifier.store(0.0);
+            } else {
+                self.cube.speed_modifier.store(1.0);
+            }
         })
     }
 
