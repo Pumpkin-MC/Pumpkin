@@ -138,11 +138,7 @@ mod tests {
         let generated = chunk.heightmap.lock().unwrap();
         for x in 0..16 {
             for z in 0..16 {
-                for heightmap_type in [
-                    ChunkHeightmapType::WorldSurface,
-                    ChunkHeightmapType::MotionBlocking,
-                    ChunkHeightmapType::MotionBlockingNoLeaves,
-                ] {
+                for heightmap_type in ChunkHeightmapType::ALL {
                     assert_eq!(
                         generated.get(heightmap_type, x, z, chunk.section.min_y),
                         recalculated.get(heightmap_type, x, z, chunk.section.min_y),

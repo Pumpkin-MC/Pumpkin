@@ -332,6 +332,10 @@ impl ProtoChunk {
                 proto_chunk.flat_surface_height_map[index] =
                     heightmap_data.get(ChunkHeightmapType::WorldSurface, x, z, section_data.min_y)
                         as i16;
+
+                proto_chunk.flat_ocean_floor_height_map[index] =
+                    heightmap_data.get(ChunkHeightmapType::OceanFloor, x, z, section_data.min_y)
+                        as i16;
             }
         }
 
@@ -393,6 +397,38 @@ impl ProtoChunk {
     fn maybe_update_ocean_floor_height_map(&mut self, index: usize, y: i16) {
         let current_height = self.flat_ocean_floor_height_map[index];
         self.flat_ocean_floor_height_map[index] = current_height.max(y) as _;
+    }
+
+    /// Unlike the other heightmaps, `OCEAN_FLOOR`'s predicate can be downgraded
+    /// in place: aquifers/carvers replace already-placed solid blocks with
+    /// fluid at the same position without an intervening air write, so the
+    /// monotonic max above can go stale. If the recorded height was exactly
+    /// this position, rescan downward for the new true max (mirrors
+    /// `ChunkHeightmaps::update`'s downward rescan on downgrade).
+    fn maybe_downgrade_ocean_floor_height_map(
+        &mut self,
+        index: usize,
+        local_x: i32,
+        local_z: i32,
+        y: i16,
+    ) {
+        if self.flat_ocean_floor_height_map[index] != y {
+            return;
+        }
+        let mut new_height = i16::MIN;
+        let mut scan_y = i32::from(y) - 1;
+        while scan_y >= self.bottom_y() as i32 {
+            let local_y = scan_y - self.bottom_y() as i32;
+            let state_id = self.get_block_state_raw(local_x, local_y, local_z);
+            let state = BlockState::from_id(state_id);
+            let block = BlockId::from_state_id(state_id);
+            if blocks_movement(state, block) {
+                new_height = scan_y as i16;
+                break;
+            }
+            scan_y -= 1;
+        }
+        self.flat_ocean_floor_height_map[index] = new_height;
     }
 
     fn maybe_update_motion_blocking_height_map(&mut self, index: usize, y: i16) {
@@ -510,6 +546,8 @@ impl ProtoChunk {
             let blocks_movement = blocks_movement(block_state, block);
             if blocks_movement {
                 self.maybe_update_ocean_floor_height_map(index, y);
+            } else {
+                self.maybe_downgrade_ocean_floor_height_map(index, local_x, local_z, y);
             }
             if blocks_movement || block_state.is_liquid() {
                 self.maybe_update_motion_blocking_height_map(index, y);

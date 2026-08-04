@@ -162,6 +162,7 @@ pub enum ChunkHeightmapType {
     WorldSurface = 0,
     MotionBlocking = 1,
     MotionBlockingNoLeaves = 2,
+    OceanFloor = 3,
 }
 impl TryFrom<usize> for ChunkHeightmapType {
     type Error = &'static str;
@@ -171,12 +172,22 @@ impl TryFrom<usize> for ChunkHeightmapType {
             0 => Ok(Self::WorldSurface),
             1 => Ok(Self::MotionBlocking),
             2 => Ok(Self::MotionBlockingNoLeaves),
-            _ => Err("Invalid usize value for ChunkHeightmapType. The value should be 0~2."),
+            3 => Ok(Self::OceanFloor),
+            _ => Err("Invalid usize value for ChunkHeightmapType. The value should be 0~3."),
         }
     }
 }
 
 impl ChunkHeightmapType {
+    /// All variants, in the order used for per-column iteration during
+    /// heightmap computation/updates.
+    pub const ALL: [Self; 4] = [
+        Self::WorldSurface,
+        Self::MotionBlocking,
+        Self::MotionBlockingNoLeaves,
+        Self::OceanFloor,
+    ];
+
     #[must_use]
     pub fn is_opaque(&self, block_state: &BlockState) -> bool {
         let block = block_state.id.to_block_id();
@@ -187,6 +198,10 @@ impl ChunkHeightmapType {
                 (blocks_movement(block_state, block) || block_state.is_liquid())
                     && !block.has_tag(MINECRAFT_LEAVES)
             }
+            // Vanilla `Heightmap.Types.OCEAN_FLOOR` uses `MATERIAL_MOTION_BLOCKING`
+            // (`BlockStateBase::blocksMotion`), unlike `MOTION_BLOCKING` it does NOT
+            // additionally count fluids as blocking.
+            Self::OceanFloor => blocks_movement(block_state, block),
         }
     }
 }
@@ -209,6 +224,11 @@ pub struct ChunkHeightmaps {
         skip_serializing_if = "Option::is_none"
     )]
     pub motion_blocking_no_leaves: Option<Box<[i64]>>,
+    #[serde(
+        serialize_with = "nbt_long_array",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub ocean_floor: Option<Box<[i64]>>,
 }
 
 impl ChunkHeightmaps {
@@ -217,6 +237,7 @@ impl ChunkHeightmaps {
             ChunkHeightmapType::WorldSurface => &mut self.world_surface,
             ChunkHeightmapType::MotionBlocking => &mut self.motion_blocking,
             ChunkHeightmapType::MotionBlockingNoLeaves => &mut self.motion_blocking_no_leaves,
+            ChunkHeightmapType::OceanFloor => &mut self.ocean_floor,
         };
 
         let data = data.get_or_insert_with(|| vec![0; 37].into_boxed_slice());
@@ -246,6 +267,7 @@ impl ChunkHeightmaps {
             ChunkHeightmapType::WorldSurface => &self.world_surface,
             ChunkHeightmapType::MotionBlocking => &self.motion_blocking,
             ChunkHeightmapType::MotionBlockingNoLeaves => &self.motion_blocking_no_leaves,
+            ChunkHeightmapType::OceanFloor => &self.ocean_floor,
         };
 
         let Some(data) = data else {
@@ -312,6 +334,7 @@ impl Default for ChunkHeightmaps {
             motion_blocking: None,
             motion_blocking_no_leaves: None,
             world_surface: None,
+            ocean_floor: None,
         }
     }
 }
@@ -650,11 +673,7 @@ impl ChunkData {
         let y = relative_y as i32 + min_y;
         let z = relative_z as i32;
 
-        for &hm_type in &[
-            ChunkHeightmapType::WorldSurface,
-            ChunkHeightmapType::MotionBlocking,
-            ChunkHeightmapType::MotionBlockingNoLeaves,
-        ] {
+        for hm_type in ChunkHeightmapType::ALL {
             heightmap.update(hm_type, x, z, y, block_state, min_y, |y_at| {
                 let id = self
                     .section
@@ -738,17 +757,13 @@ impl ChunkData {
         z: usize,
     ) {
         let start_height = (start_sub_chunk as i32) * 16 - self.section.min_y.abs() + 15;
-        let mut has_found = [false, false, false];
+        let mut has_found = [false; ChunkHeightmapType::ALL.len()];
 
         for y in (self.section.min_y..=start_height).rev() {
             let state_id = self.section.get_block_absolute_y(x, y, z).unwrap();
             let block_state = BlockState::from_id(state_id);
 
-            for hm_type in [
-                ChunkHeightmapType::WorldSurface,
-                ChunkHeightmapType::MotionBlocking,
-                ChunkHeightmapType::MotionBlockingNoLeaves,
-            ] {
+            for hm_type in ChunkHeightmapType::ALL {
                 let idx = hm_type as usize;
                 if !has_found[idx] && hm_type.is_opaque(block_state) {
                     heightmaps.set(hm_type, x as i32, z as i32, y, self.section.min_y);
@@ -896,5 +911,30 @@ mod tests {
         assert!(ChunkHeightmapType::MotionBlockingNoLeaves.is_opaque(stone));
         assert!(!ChunkHeightmapType::MotionBlockingNoLeaves.is_opaque(leaves)); // Excludes leaves
         assert!(ChunkHeightmapType::MotionBlockingNoLeaves.is_opaque(water)); // Water is liquid
+
+        // OCEAN_FLOOR: blocksMotion only, unlike MOTION_BLOCKING water is NOT counted
+        assert!(!ChunkHeightmapType::OceanFloor.is_opaque(air));
+        assert!(ChunkHeightmapType::OceanFloor.is_opaque(stone));
+        assert!(ChunkHeightmapType::OceanFloor.is_opaque(leaves)); // Leaves block movement
+        assert!(!ChunkHeightmapType::OceanFloor.is_opaque(water)); // Water does not
+    }
+
+    #[test]
+    fn heightmap_ocean_floor_round_trip() {
+        use crate::chunk::{ChunkHeightmapType, ChunkHeightmaps};
+
+        let mut heightmaps = ChunkHeightmaps::default();
+        let min_y = -64;
+        heightmaps.set(ChunkHeightmapType::OceanFloor, 3, 5, 40, min_y);
+        assert_eq!(
+            heightmaps.get(ChunkHeightmapType::OceanFloor, 3, 5, min_y),
+            40
+        );
+        // Absent heightmap data (e.g. a chunk saved before this variant existed)
+        // must be handled gracefully rather than panicking.
+        assert_eq!(
+            heightmaps.get(ChunkHeightmapType::OceanFloor, 0, 0, min_y),
+            min_y - 1
+        );
     }
 }

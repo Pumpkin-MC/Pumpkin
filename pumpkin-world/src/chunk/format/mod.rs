@@ -369,6 +369,7 @@ impl ChunkData {
                 world_surface: None,
                 motion_blocking: None,
                 motion_blocking_no_leaves: None,
+                ocean_floor: None,
             },
             |h_compound| ChunkHeightmaps {
                 world_surface: h_compound
@@ -379,6 +380,11 @@ impl ChunkData {
                     .map(|a| a.to_vec().into_boxed_slice()),
                 motion_blocking_no_leaves: h_compound
                     .get_long_array("MOTION_BLOCKING_NO_LEAVES")
+                    .map(|a| a.to_vec().into_boxed_slice()),
+                // Absent on chunks saved before this heightmap was added; None is
+                // handled gracefully by `ChunkHeightmaps::get` (returns min_y - 1).
+                ocean_floor: h_compound
+                    .get_long_array("OCEAN_FLOOR")
                     .map(|a| a.to_vec().into_boxed_slice()),
             },
         );
@@ -513,6 +519,9 @@ impl ChunkData {
         }
         if let Some(ref arr) = heightmap_lock.motion_blocking_no_leaves {
             heightmaps_compound.put("MOTION_BLOCKING_NO_LEAVES", NbtTag::LongArray(arr.to_vec()));
+        }
+        if let Some(ref arr) = heightmap_lock.ocean_floor {
+            heightmaps_compound.put("OCEAN_FLOOR", NbtTag::LongArray(arr.to_vec()));
         }
         root_compound.put_compound("Heightmaps", heightmaps_compound);
 

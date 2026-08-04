@@ -105,8 +105,15 @@ fn get_level_respawn_pos(world: &World, x: i32, z: i32) -> Option<BlockPos> {
         return None;
     }
 
-    // Vanilla also rejects shallow-water/ice-plateau columns via the OCEAN_FLOOR
-    // heightmap; Pumpkin has no OceanFloor variant, so that filter is skipped.
+    // Vanilla rejects columns where a body of water sits over dry terrain: the
+    // WORLD_SURFACE height (ignores fluids) is at or below the MOTION_BLOCKING
+    // top (which counts water as blocking) but above the true OCEAN_FLOOR.
+    let surface = world.get_heightmap_height(ChunkHeightmapType::WorldSurface, x, z);
+    let ocean_floor = world.get_heightmap_height(ChunkHeightmapType::OceanFloor, x, z);
+    if is_ocean_covered_column(surface, top_y, ocean_floor) {
+        return None;
+    }
+
     let mut y = top_y + 1;
     while y >= min_y {
         let pos = BlockPos(Vector3::new(x, y, z));
@@ -170,4 +177,43 @@ fn at_bottom_center_of(pos: BlockPos) -> Vector3<f64> {
         f64::from(pos.0.y),
         f64::from(pos.0.z) + 0.5,
     )
+}
+
+/// Vanilla's `getLevelRespawnPos` ocean-column rejection: `surface <= topY &&
+/// surface > oceanFloor`. True when a body of water sits over dry-ish
+/// terrain, e.g. shallow water or ice over land.
+const fn is_ocean_covered_column(surface: i32, top_y: i32, ocean_floor: i32) -> bool {
+    surface <= top_y && surface > ocean_floor
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_ocean_covered_column;
+
+    #[test]
+    fn rejects_water_over_dry_terrain() {
+        // WORLD_SURFACE sits at the water's surface (== MOTION_BLOCKING top),
+        // but well above the true OCEAN_FLOOR: a deep column of water.
+        assert!(is_ocean_covered_column(70, 70, 60));
+    }
+
+    #[test]
+    fn accepts_dry_land() {
+        // No water: WORLD_SURFACE, MOTION_BLOCKING top, and OCEAN_FLOOR all
+        // agree on the same solid ground height.
+        assert!(!is_ocean_covered_column(70, 70, 70));
+    }
+
+    #[test]
+    fn accepts_surface_above_motion_blocking_top() {
+        // topY came from a cave-world spawn height below the true surface;
+        // vanilla only rejects when surface <= topY.
+        assert!(!is_ocean_covered_column(80, 70, 60));
+    }
+
+    #[test]
+    fn accepts_when_ocean_floor_matches_surface() {
+        // No fluid above the floor at all: surface == ocean_floor.
+        assert!(!is_ocean_covered_column(70, 75, 70));
+    }
 }

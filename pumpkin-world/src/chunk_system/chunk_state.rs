@@ -247,6 +247,10 @@ impl Chunk {
                         ChunkHeightmapType::MotionBlockingNoLeaves,
                         proto_chunk.flat_motion_blocking_no_leaves_height_map[source_index],
                     ),
+                    (
+                        ChunkHeightmapType::OceanFloor,
+                        proto_chunk.flat_ocean_floor_height_map[source_index],
+                    ),
                 ] {
                     heightmaps.set(heightmap_type, x as i32, z as i32, i32::from(height), min_y);
                 }
