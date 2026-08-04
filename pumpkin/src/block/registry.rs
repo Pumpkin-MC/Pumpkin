@@ -41,6 +41,7 @@ use crate::block::blocks::glazed_terracotta::GlazedTerracottaBlock;
 use crate::block::blocks::grass_block::GrassBlock;
 use crate::block::blocks::grindstone::GrindstoneBlock;
 use crate::block::blocks::hay::HayBlock;
+use crate::block::blocks::ice::IceBlock;
 use crate::block::blocks::infested::InfestedBlock;
 use crate::block::blocks::iron_bars::IronBarsBlock;
 use crate::block::blocks::jigsaw::JigsawBlock;
@@ -298,6 +299,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
     manager.register(LayeredSnowBlock);
+    manager.register(IceBlock);
     manager.register(CobwebBlock);
     manager.register(WitherRoseBlock);
     manager.register(FungusBlock);
