@@ -110,6 +110,35 @@ impl From<DyeColor> for NbtTag {
     }
 }
 
+impl DyeColor {
+    /// Vanilla `DyeColor.getMixedColor`: mixes two dye colors the way a loom/crafting-table
+    /// dye-combine would, used e.g. by `SheepEntity::create_offspring` to color a lamb.
+    ///
+    /// Only nine unordered pairs have a defined 2-ingredient mixing recipe (verified against
+    /// `data/minecraft/recipe/*_dye.json`/`*_dye_from_*.json`); every other pair -- including a
+    /// color mixed with itself -- falls through to vanilla's 50/50 coin flip.
+    #[must_use]
+    pub fn mixed_color(a: Self, b: Self, rng: &mut impl rand::RngExt) -> Self {
+        const PAIRS: &[(DyeColor, DyeColor, DyeColor)] = &[
+            (DyeColor::Blue, DyeColor::White, DyeColor::LightBlue),
+            (DyeColor::Gray, DyeColor::White, DyeColor::LightGray),
+            (DyeColor::Black, DyeColor::White, DyeColor::Gray),
+            (DyeColor::Blue, DyeColor::Green, DyeColor::Cyan),
+            (DyeColor::Green, DyeColor::White, DyeColor::Lime),
+            (DyeColor::Red, DyeColor::White, DyeColor::Pink),
+            (DyeColor::Blue, DyeColor::Red, DyeColor::Purple),
+            (DyeColor::Purple, DyeColor::Pink, DyeColor::Magenta),
+            (DyeColor::Red, DyeColor::Yellow, DyeColor::Orange),
+        ];
+        for &(x, y, result) in PAIRS {
+            if (a == x && b == y) || (a == y && b == x) {
+                return result;
+            }
+        }
+        if rng.random_bool(0.5) { a } else { b }
+    }
+}
+
 pub struct SignBlockEntity {
     pub front_text: Text,
     pub back_text: Text,
@@ -299,6 +328,41 @@ impl SignBlockEntity {
             front_text: Text::default(),
             back_text: Text::default(),
             currently_editing_player: Arc::new(Mutex::new(None)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod dye_color_tests {
+    use super::DyeColor;
+    use rand::rng;
+
+    #[test]
+    fn mixed_color_known_pairs() {
+        assert_eq!(
+            DyeColor::mixed_color(DyeColor::Blue, DyeColor::White, &mut rng()),
+            DyeColor::LightBlue
+        );
+        assert_eq!(
+            DyeColor::mixed_color(DyeColor::White, DyeColor::Blue, &mut rng()),
+            DyeColor::LightBlue
+        );
+        assert_eq!(
+            DyeColor::mixed_color(DyeColor::Purple, DyeColor::Pink, &mut rng()),
+            DyeColor::Magenta
+        );
+        assert_eq!(
+            DyeColor::mixed_color(DyeColor::Red, DyeColor::Yellow, &mut rng()),
+            DyeColor::Orange
+        );
+    }
+
+    #[test]
+    fn mixed_color_unknown_pair_falls_back_to_one_of_the_parents() {
+        let mut rng = rng();
+        for _ in 0..50 {
+            let result = DyeColor::mixed_color(DyeColor::Brown, DyeColor::Cyan, &mut rng);
+            assert!(result == DyeColor::Brown || result == DyeColor::Cyan);
         }
     }
 }
