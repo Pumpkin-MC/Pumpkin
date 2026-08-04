@@ -402,6 +402,8 @@ impl Raid {
                         .await;
                 }
                 self.join_raid(group_number, uuid, mob.get_mob_entity(), is_leader);
+                // Raid.java:582 passes `false` unconditionally, regardless of leader status.
+                mob.apply_raid_buffs(group_number, false).await;
 
                 if raider_type == RaiderType::Ravager {
                     let rider_type =
@@ -430,6 +432,7 @@ impl Raid {
                                 rider_mob.get_mob_entity(),
                                 false,
                             );
+                            rider_mob.apply_raid_buffs(group_number, false).await;
                         }
                         world.spawn_entity(rider.clone()).await;
                         raider
