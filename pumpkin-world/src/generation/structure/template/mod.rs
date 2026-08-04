@@ -46,7 +46,9 @@ pub use cache::{
 };
 pub use processor::StructureProcessor;
 pub use pumpkin_data::{BlockState, Mirror as BlockMirror, Rotation as BlockRotation};
-pub use structure_template::{PaletteEntry, StructureTemplate, TemplateBlock, TemplateEntity};
+pub use structure_template::{
+    CapturedBlock, PaletteEntry, StructureTemplate, TemplateBlock, TemplateEntity,
+};
 pub use template_piece::TemplatePiece;
 
 /// Abstraction over block placement, implemented by both [`ProtoChunk`] (worldgen) and

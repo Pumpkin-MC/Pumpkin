@@ -4,10 +4,20 @@
 //! into a runtime representation that can be placed in the world.
 
 use std::io::Cursor;
+use std::path::Path;
 
-use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
+use pumpkin_nbt::{
+    compound::NbtCompound,
+    nbt_compress::{
+        read_gzip_compound_tag, write_gzip_compound_tag, write_gzip_compound_tag_to_bytes,
+    },
+    tag::NbtTag,
+};
 use pumpkin_util::math::vector3::Vector3;
 use thiserror::Error;
+
+/// Current world data version, written into saved structure NBT (`NbtUtils.addCurrentDataVersion`).
+const STRUCTURE_DATA_VERSION: i32 = crate::chunk::format::anvil::WORLD_DATA_VERSION;
 
 /// Errors that can occur when loading a structure template.
 #[derive(Debug, Error)]
@@ -23,6 +33,9 @@ pub enum TemplateError {
 
     #[error("Invalid palette index: {0}")]
     InvalidPaletteIndex(u32),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 /// A loaded structure template from an NBT file.
@@ -123,7 +136,210 @@ pub struct TemplateEntity {
     pub nbt: NbtCompound,
 }
 
+/// A single block read from the world by a capture routine, before palette assignment.
+///
+/// Mirrors vanilla's `StructureTemplate.StructureBlockInfo` prior to `SimplePalette` interning.
+#[derive(Debug, Clone)]
+pub struct CapturedBlock {
+    /// Position relative to the capture region's minimum corner.
+    pub pos: Vector3<i32>,
+
+    /// The block's name and properties (pre-palette-dedup).
+    pub palette_entry: PaletteEntry,
+
+    /// Optional block-entity NBT (`id` + fields, no position).
+    pub nbt: Option<NbtCompound>,
+
+    /// Whether this block occupies a full unit cube (used only to mirror vanilla's
+    /// full/other/block-entity ordering in the saved block list; does not affect placement).
+    pub full_cube: bool,
+}
+
 impl StructureTemplate {
+    /// Builds a template from blocks captured out of a live world (`StructureTemplate.fillFromWorld`
+    /// equivalent), interning identical blocks into a shared palette the same way vanilla's
+    /// `SimplePalette.idFor` does.
+    ///
+    /// `blocks` need not be pre-sorted or deduplicated. Ordering mirrors vanilla's
+    /// `buildInfoList`: blocks with no NBT and a full collision cube first, other plain blocks
+    /// second, blocks carrying NBT last, each group sorted by (y, x, z). Vanilla additionally
+    /// excludes blocks with a "dynamic shape" from the full-cube group; this codebase has no
+    /// equivalent check, so `full_cube` alone decides the grouping.
+    #[must_use]
+    pub fn from_captured(
+        size: Vector3<i32>,
+        mut blocks: Vec<CapturedBlock>,
+        entities: Vec<TemplateEntity>,
+    ) -> Self {
+        blocks.sort_by_key(|b| (b.pos.y, b.pos.x, b.pos.z));
+
+        let (mut with_nbt, without_nbt): (Vec<_>, Vec<_>) =
+            blocks.into_iter().partition(|b| b.nbt.is_some());
+        let (mut full, mut other): (Vec<_>, Vec<_>) =
+            without_nbt.into_iter().partition(|b| b.full_cube);
+
+        let mut ordered = Vec::with_capacity(full.len() + other.len() + with_nbt.len());
+        ordered.append(&mut full);
+        ordered.append(&mut other);
+        ordered.append(&mut with_nbt);
+
+        let mut palette: Vec<PaletteEntry> = Vec::new();
+        let mut find_index = |entry: &PaletteEntry| -> u32 {
+            palette
+                .iter()
+                .position(|existing| {
+                    existing.name == entry.name && existing.properties == entry.properties
+                })
+                .map_or_else(
+                    || {
+                        palette.push(entry.clone());
+                        (palette.len() - 1) as u32
+                    },
+                    |idx| idx as u32,
+                )
+        };
+
+        let blocks = ordered
+            .into_iter()
+            .map(|captured| TemplateBlock {
+                pos: captured.pos,
+                state: find_index(&captured.palette_entry),
+                nbt: captured.nbt,
+            })
+            .collect();
+
+        Self {
+            size,
+            palette,
+            blocks,
+            entities,
+        }
+    }
+
+    /// Serializes this template to an NBT compound matching vanilla's on-disk structure format
+    /// (`StructureTemplate.save`). The inverse of `from_nbt_compound`.
+    #[must_use]
+    pub fn to_nbt_compound(&self) -> NbtCompound {
+        let mut root = NbtCompound::new();
+
+        let palette_list = self
+            .palette
+            .iter()
+            .map(|entry| {
+                let mut entry_compound = NbtCompound::new();
+                entry_compound.put_string("Name", entry.name.clone());
+                if !entry.properties.is_empty() {
+                    let mut props = NbtCompound::new();
+                    for (key, value) in &entry.properties {
+                        props.put_string(key, value.clone());
+                    }
+                    entry_compound.put_compound("Properties", props);
+                }
+                NbtTag::Compound(entry_compound)
+            })
+            .collect();
+        root.put("palette", NbtTag::List(palette_list));
+
+        let blocks_list = self
+            .blocks
+            .iter()
+            .map(|block| {
+                let mut block_compound = NbtCompound::new();
+                block_compound.put(
+                    "pos",
+                    NbtTag::List(vec![
+                        NbtTag::Int(block.pos.x),
+                        NbtTag::Int(block.pos.y),
+                        NbtTag::Int(block.pos.z),
+                    ]),
+                );
+                block_compound.put_int("state", block.state as i32);
+                if let Some(nbt) = &block.nbt {
+                    block_compound.put_compound("nbt", nbt.clone());
+                }
+                NbtTag::Compound(block_compound)
+            })
+            .collect();
+        root.put("blocks", NbtTag::List(blocks_list));
+
+        let entities_list = self
+            .entities
+            .iter()
+            .map(|entity| {
+                let mut entity_compound = NbtCompound::new();
+                entity_compound.put(
+                    "pos",
+                    NbtTag::List(vec![
+                        entity.pos.x.into(),
+                        entity.pos.y.into(),
+                        entity.pos.z.into(),
+                    ]),
+                );
+                entity_compound.put(
+                    "blockPos",
+                    NbtTag::List(vec![
+                        NbtTag::Int(entity.block_pos.x),
+                        NbtTag::Int(entity.block_pos.y),
+                        NbtTag::Int(entity.block_pos.z),
+                    ]),
+                );
+                entity_compound.put_compound("nbt", entity.nbt.clone());
+                NbtTag::Compound(entity_compound)
+            })
+            .collect();
+        root.put("entities", NbtTag::List(entities_list));
+
+        root.put(
+            "size",
+            NbtTag::List(vec![
+                NbtTag::Int(self.size.x),
+                NbtTag::Int(self.size.y),
+                NbtTag::Int(self.size.z),
+            ]),
+        );
+        root.put_int("DataVersion", STRUCTURE_DATA_VERSION);
+
+        root
+    }
+
+    /// Serializes this template to gzip-compressed NBT bytes, the exact on-disk format of a
+    /// vanilla `.nbt` structure file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if NBT serialization fails.
+    pub fn to_nbt_bytes(&self) -> Result<Vec<u8>, TemplateError> {
+        Ok(write_gzip_compound_tag_to_bytes(self.to_nbt_compound())?)
+    }
+
+    /// Writes this template to `path` as gzip-compressed NBT, creating parent directories as
+    /// needed. Mirrors `StructureTemplateManager.save(Path, StructureTemplate, boolean)`
+    /// (the non-text branch).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a parent directory can't be created, the file can't be opened for
+    /// writing, or serialization fails.
+    pub fn save_to_path(&self, path: &Path) -> Result<(), TemplateError> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let file = std::fs::File::create(path)?;
+        write_gzip_compound_tag(self.to_nbt_compound(), file)?;
+        Ok(())
+    }
+
+    /// Loads a structure template from a gzip-compressed NBT file on disk.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file can't be opened or the NBT data is invalid.
+    pub fn load_from_path(path: &Path) -> Result<Self, TemplateError> {
+        let file = std::fs::File::open(path)?;
+        let compound = read_gzip_compound_tag(file)?;
+        Self::from_nbt_compound(&compound)
+    }
+
     /// Loads a structure template from gzipped NBT bytes.
     ///
     /// # Errors
@@ -396,5 +612,163 @@ mod tests {
             ],
         );
         assert_eq!(entry_with_props.properties.len(), 2);
+    }
+
+    #[test]
+    fn from_captured_interns_duplicate_palette_entries() {
+        let stone = PaletteEntry::new("minecraft:stone".to_string());
+        let blocks = vec![
+            CapturedBlock {
+                pos: Vector3::new(0, 0, 0),
+                palette_entry: stone.clone(),
+                nbt: None,
+                full_cube: true,
+            },
+            CapturedBlock {
+                pos: Vector3::new(1, 0, 0),
+                palette_entry: stone,
+                nbt: None,
+                full_cube: true,
+            },
+        ];
+        let template = StructureTemplate::from_captured(Vector3::new(2, 1, 1), blocks, Vec::new());
+        assert_eq!(template.palette.len(), 1);
+        assert_eq!(template.blocks.len(), 2);
+        assert_eq!(template.blocks[0].state, template.blocks[1].state);
+    }
+
+    #[test]
+    fn from_captured_orders_block_entities_last() {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:chest".to_string());
+        let blocks = vec![
+            CapturedBlock {
+                pos: Vector3::new(0, 0, 0),
+                palette_entry: PaletteEntry::new("minecraft:chest".to_string()),
+                nbt: Some(nbt),
+                full_cube: false,
+            },
+            CapturedBlock {
+                pos: Vector3::new(0, 0, 0),
+                palette_entry: PaletteEntry::new("minecraft:stone".to_string()),
+                nbt: None,
+                full_cube: true,
+            },
+            CapturedBlock {
+                pos: Vector3::new(0, 0, 0),
+                palette_entry: PaletteEntry::new("minecraft:oak_stairs".to_string()),
+                nbt: None,
+                full_cube: false,
+            },
+        ];
+        let template = StructureTemplate::from_captured(Vector3::new(1, 1, 1), blocks, Vec::new());
+        assert_eq!(
+            template.palette[template.blocks[0].state as usize].name,
+            "minecraft:stone"
+        );
+        assert_eq!(
+            template.palette[template.blocks[1].state as usize].name,
+            "minecraft:oak_stairs"
+        );
+        assert_eq!(
+            template.palette[template.blocks[2].state as usize].name,
+            "minecraft:chest"
+        );
+        assert!(template.blocks[2].nbt.is_some());
+    }
+
+    #[test]
+    fn nbt_roundtrip_preserves_blocks_palette_entities_and_size() {
+        let mut chest_nbt = NbtCompound::new();
+        chest_nbt.put_string("id", "minecraft:chest".to_string());
+
+        let blocks = vec![
+            CapturedBlock {
+                pos: Vector3::new(0, 0, 0),
+                palette_entry: PaletteEntry::with_properties(
+                    "minecraft:oak_stairs".to_string(),
+                    vec![("facing".to_string(), "north".to_string())],
+                ),
+                nbt: None,
+                full_cube: false,
+            },
+            CapturedBlock {
+                pos: Vector3::new(1, 0, 0),
+                palette_entry: PaletteEntry::new("minecraft:chest".to_string()),
+                nbt: Some(chest_nbt),
+                full_cube: false,
+            },
+        ];
+        let entities = vec![TemplateEntity {
+            pos: Vector3::new(0.5, 0.0, 0.5),
+            block_pos: Vector3::new(0, 0, 0),
+            nbt: {
+                let mut nbt = NbtCompound::new();
+                nbt.put_string("id", "minecraft:zombie".to_string());
+                nbt
+            },
+        }];
+
+        let template = StructureTemplate::from_captured(Vector3::new(2, 1, 1), blocks, entities);
+        let bytes = template.to_nbt_bytes().expect("serialization failed");
+        let loaded = StructureTemplate::from_nbt_bytes(&bytes).expect("deserialization failed");
+
+        assert_eq!(loaded.size, Vector3::new(2, 1, 1));
+        assert_eq!(loaded.blocks.len(), 2);
+        assert_eq!(loaded.entities.len(), 1);
+        assert_eq!(
+            loaded.entities[0].nbt.get_string("id"),
+            Some("minecraft:zombie")
+        );
+
+        let stairs_block = loaded
+            .blocks
+            .iter()
+            .find(|b| b.pos == Vector3::new(0, 0, 0))
+            .unwrap();
+        let stairs_entry = &loaded.palette[stairs_block.state as usize];
+        assert_eq!(stairs_entry.name, "minecraft:oak_stairs");
+        assert_eq!(
+            stairs_entry.properties,
+            vec![("facing".to_string(), "north".to_string())]
+        );
+
+        let chest_block = loaded
+            .blocks
+            .iter()
+            .find(|b| b.pos == Vector3::new(1, 0, 0))
+            .unwrap();
+        assert!(chest_block.nbt.is_some());
+        assert_eq!(
+            chest_block.nbt.as_ref().unwrap().get_string("id"),
+            Some("minecraft:chest")
+        );
+    }
+
+    #[test]
+    fn filesystem_roundtrip_preserves_template() {
+        let blocks = vec![CapturedBlock {
+            pos: Vector3::new(0, 0, 0),
+            palette_entry: PaletteEntry::new("minecraft:stone".to_string()),
+            nbt: None,
+            full_cube: true,
+        }];
+        let template = StructureTemplate::from_captured(Vector3::new(1, 1, 1), blocks, Vec::new());
+
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        let path = dir
+            .path()
+            .join("generated")
+            .join("minecraft")
+            .join("structure")
+            .join("my_house.nbt");
+
+        template.save_to_path(&path).expect("save_to_path failed");
+        assert!(path.exists());
+
+        let loaded = StructureTemplate::load_from_path(&path).expect("load_from_path failed");
+        assert_eq!(loaded.size, template.size);
+        assert_eq!(loaded.blocks.len(), template.blocks.len());
+        assert_eq!(loaded.palette[0].name, "minecraft:stone");
     }
 }

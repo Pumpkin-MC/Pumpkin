@@ -84,8 +84,14 @@ impl BlockBehaviour for StructureBlockBlock {
             else {
                 return;
             };
-            if structure_block.mode.lock().await.as_str() == "LOAD" {
-                structure_block.place_structure(args.world).await;
+            match structure_block.mode.lock().await.as_str() {
+                "LOAD" => {
+                    structure_block.place_structure(args.world).await;
+                }
+                "SAVE" => {
+                    structure_block.save_structure(args.world, false).await;
+                }
+                _ => {}
             }
         })
     }
