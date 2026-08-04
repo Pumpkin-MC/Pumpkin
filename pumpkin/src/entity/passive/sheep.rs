@@ -162,6 +162,16 @@ impl SheepEntity {
         self.color_and_sheared.load(Ordering::Relaxed)
     }
 
+    /// The packed byte with the pre-spawn-init `COLOR_UNSET` sentinel normalized to `0`. Every
+    /// read-modify-write on the packed byte must go through this instead of `get_packed_byte`
+    /// directly -- otherwise a `set_color`/`set_sheared` call landing before
+    /// `mob_init_data_tracker` has rolled a real color (e.g. `create_offspring` coloring a lamb
+    /// before it's spawned) would fold `0xFF`'s garbage high bits into the result.
+    fn base_byte(&self) -> u8 {
+        let byte = self.get_packed_byte();
+        if byte == COLOR_UNSET { 0 } else { byte }
+    }
+
     pub fn get_color(&self) -> u8 {
         self.get_packed_byte() & 0x0F
     }
@@ -183,15 +193,15 @@ impl SheepEntity {
     }
 
     pub fn set_color(&self, color: u8) {
-        let byte = (self.get_packed_byte() & 0xF0) | (color & 0x0F);
+        let byte = (self.base_byte() & 0xF0) | (color & 0x0F);
         self.set_packed_and_sync(byte);
     }
 
     pub fn set_sheared(&self, sheared: bool) {
         let byte = if sheared {
-            self.get_packed_byte() | 0x10
+            self.base_byte() | 0x10
         } else {
-            self.get_packed_byte() & !0x10
+            self.base_byte() & !0x10
         };
         self.set_packed_and_sync(byte);
     }
@@ -282,8 +292,9 @@ impl Mob for SheepEntity {
 
     fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
+            let entity = &self.mob_entity.living_entity.entity;
+
             if self.color_and_sheared.load(Ordering::Relaxed) == COLOR_UNSET {
-                let entity = &self.mob_entity.living_entity.entity;
                 let world = entity.world.load();
                 let pos = entity.block_pos.load();
                 let color = get_random_sheep_color(&world, pos);
@@ -292,6 +303,20 @@ impl Mob for SheepEntity {
                 // NBT restore already loaded a valid color; just resend it so the client has
                 // the up-to-date tracked value.
                 self.set_packed_and_sync(self.get_packed_byte());
+            }
+
+            // This override replaces (rather than chains to) `Mob::mob_init_data_tracker`'s
+            // default body, which sends `BABY_ID` for age < 0 -- replicate that here so bred
+            // lambs (spawned at age -24000) still render baby-sized.
+            if entity.age.load(Ordering::Relaxed) < 0 {
+                entity.send_meta_data(
+                    &[pumpkin_protocol::java::client::play::Metadata::new(
+                        TrackedData::BABY_ID,
+                        MetaDataType::BOOLEAN,
+                        true,
+                    )],
+                    None,
+                );
             }
         })
     }

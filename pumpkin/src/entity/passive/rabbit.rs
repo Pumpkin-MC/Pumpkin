@@ -5,9 +5,12 @@ use std::sync::{
 
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{entity::EntityType, item::Item};
+use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
@@ -90,6 +93,12 @@ pub struct RabbitEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
     variant: AtomicU8,
+    /// Guards the one-time goal/target-selector registration in `set_variant(Evil)`. Without
+    /// this, an evil kit gets `set_variant` called twice (once explicitly by
+    /// `create_offspring`, once again by `mob_init_data_tracker`'s NBT-restore branch after
+    /// spawning) and would otherwise register duplicate `MeleeAttackGoal`/`RevengeGoal`/
+    /// `ActiveTargetGoal`s.
+    evil_goals_registered: std::sync::atomic::AtomicBool,
 }
 
 impl RabbitEntity {
@@ -99,6 +108,7 @@ impl RabbitEntity {
             mob_entity,
             ageable_data: AgeableData::default(),
             variant: AtomicU8::new(VARIANT_UNSET),
+            evil_goals_registered: std::sync::atomic::AtomicBool::new(false),
         };
         let mob_arc = Arc::new(this);
         let mob_weak: Weak<dyn Mob> = {
@@ -131,7 +141,14 @@ impl RabbitEntity {
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
             );
             goal_selector.add_goal(11, Box::new(RandomLookAroundGoal::default()));
-            goal_selector.add_goal(1, RabbitHopGoal::new());
+            // Lower priority (higher number) than `ClimbOnTopOfPowderSnowGoal` (priority 1):
+            // both claim `Controls::JUMP`, and priority is the only tie-break the goal selector
+            // uses to preempt a same-control goal that's already running -- equal priority never
+            // preempts (see `PrioritizedGoal::can_be_replaced_by`), so if this ran at the same
+            // priority and grabbed the control first (its `can_start` is unconditionally `true`,
+            // unlike the powder-snow goal's conditional one), the powder-snow climb would be
+            // permanently locked out.
+            goal_selector.add_goal(10, RabbitHopGoal::new());
         };
 
         mob_arc
@@ -171,23 +188,25 @@ impl RabbitEntity {
                     });
                 });
 
-            self.mob_entity
-                .goals_selector
-                .lock()
-                .unwrap()
-                .add_goal(4, Box::new(MeleeAttackGoal::new(1.4, true)));
+            if !self.evil_goals_registered.swap(true, Ordering::Relaxed) {
+                self.mob_entity
+                    .goals_selector
+                    .lock()
+                    .unwrap()
+                    .add_goal(4, Box::new(MeleeAttackGoal::new(1.4, true)));
 
-            let mut target_selector = self.mob_entity.target_selector.lock().unwrap();
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::WOLF, true),
-            );
-            drop(target_selector);
+                let mut target_selector = self.mob_entity.target_selector.lock().unwrap();
+                target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+                target_selector.add_goal(
+                    2,
+                    ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::PLAYER, true),
+                );
+                target_selector.add_goal(
+                    2,
+                    ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::WOLF, true),
+                );
+                drop(target_selector);
+            }
 
             let entity = &self.mob_entity.living_entity.entity;
             if (**entity.custom_name.load()).is_none() {
@@ -241,14 +260,29 @@ impl Mob for RabbitEntity {
 
     fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
+            let entity = &self.mob_entity.living_entity.entity;
+
             if self.variant.load(Ordering::Relaxed) == VARIANT_UNSET {
-                let entity = &self.mob_entity.living_entity.entity;
                 let world = entity.world.load();
                 let pos = entity.block_pos.load();
                 let variant = get_random_rabbit_variant(&world, pos);
                 self.set_variant(variant);
             } else {
                 self.set_variant(self.get_variant());
+            }
+
+            // This override replaces (rather than chains to) `Mob::mob_init_data_tracker`'s
+            // default body, which sends `BABY_ID` for age < 0 -- replicate that here so bred
+            // kits (spawned at age -24000) still render baby-sized.
+            if entity.age.load(Ordering::Relaxed) < 0 {
+                entity.send_meta_data(
+                    &[Metadata::new(
+                        TrackedData::BABY_ID,
+                        MetaDataType::BOOLEAN,
+                        true,
+                    )],
+                    None,
+                );
             }
         })
     }

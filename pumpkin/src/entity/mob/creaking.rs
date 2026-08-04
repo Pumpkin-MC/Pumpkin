@@ -27,6 +27,10 @@ pub struct CreakingEntity {
     home_pos: AtomicCell<Option<BlockPos>>,
     /// `IS_ACTIVE`.
     is_active: AtomicBool,
+    /// `CAN_MOVE`. Cached across ticks so `mob_tick` can detect an actual transition (vanilla
+    /// `aiStep` diffs `checkCanMove()`'s fresh result against this each tick and only plays the
+    /// freeze/unfreeze sound and fires the game event on a change, not every tick).
+    can_move: AtomicBool,
     /// `invulnerabilityAnimationRemainingTicks`. While positive, incoming damage that would
     /// otherwise be absorbed by the heart-bound gate is a strict no-op (double-hit within the
     /// same 8-tick window doesn't retrigger the resin-spread effect).
@@ -40,6 +44,7 @@ impl CreakingEntity {
             mob_entity,
             home_pos: AtomicCell::new(None),
             is_active: AtomicBool::new(false),
+            can_move: AtomicBool::new(true),
             invulnerability_ticks: AtomicI32::new(0),
         };
         let mob_arc = Arc::new(creaking);
@@ -74,6 +79,17 @@ impl CreakingEntity {
     /// `LAVA`/`FIRE`/`FIRE_IN_NEIGHBOR`) is deferred: Pumpkin's `PathType` enum doesn't have a
     /// clean 1:1 mapping onto vanilla's taxonomy for those five keys, and it isn't needed for
     /// the invulnerability/watched-immobility behavior this pass focuses on.
+    ///
+    /// IMPORTANT: nothing in this codebase calls `set_transient` yet. Vanilla only ever calls it
+    /// from `CreakingHeartBlockEntity.spawnProtector` (the heart spawning its own protector
+    /// mob), which is not ported -- that's the other half of the "deliberately not ported"
+    /// scope cut this file's own doc comment on `CreakingHeartBlockEntity` already calls out.
+    /// Until something calls `set_transient` (either `spawn_protector` landing, or a command/
+    /// admin tool wiring one up for testing), every `CreakingEntity` has `home_pos == None`
+    /// forever, so `is_heart_bound()` is always `false` and the invulnerability gate and the
+    /// heart-protector death check in `mob_tick`/`pre_damage` are both unreachable at runtime
+    /// today. The logic is exercised by manually calling `set_transient` (e.g. from a test or a
+    /// future `spawn_protector`), not by anything currently wired into natural gameplay.
     pub fn set_transient(&self, pos: BlockPos) {
         self.home_pos.store(Some(pos));
     }
@@ -234,9 +250,11 @@ impl Mob for CreakingEntity {
                 return;
             }
 
-            let was_movable = !self.is_active();
+            let was_movable = self.can_move.load(Relaxed);
             let now_movable = self.check_can_move().await;
             if now_movable != was_movable {
+                self.can_move.store(now_movable, Relaxed);
+
                 let entity = &self.mob_entity.living_entity.entity;
                 let world = entity.world.load();
                 let pos = entity.pos.load();
