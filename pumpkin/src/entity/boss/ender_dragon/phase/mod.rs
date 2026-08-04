@@ -83,6 +83,26 @@ impl EnderDragonPhase {
     pub const fn network_id(self) -> i32 {
         self as i32
     }
+
+    /// Inverse of the ordinal used by `write_nbt`/`network_id`. Falls back to the
+    /// default phase for an out-of-range id, matching vanilla `EnderDragonPhase.getById`'s
+    /// fallback-to-a-known-phase behavior for corrupt saves.
+    #[must_use]
+    pub const fn from_ordinal(id: i32) -> Self {
+        match id {
+            1 => Self::Strafing,
+            2 => Self::Charging,
+            3 => Self::FlyToPortal,
+            4 => Self::LandingApproach,
+            5 => Self::Landing,
+            6 => Self::SitAttacking,
+            7 => Self::SitBreathing,
+            8 => Self::TakingOff,
+            9 => Self::Hovering,
+            10 => Self::Dying,
+            _ => Self::Circling,
+        }
+    }
 }
 
 pub struct PhaseManager {
@@ -118,5 +138,42 @@ impl PhaseManager {
     #[must_use]
     pub fn get_phase(&self, phase_type: EnderDragonPhase) -> Arc<dyn Phase> {
         self.phases[phase_type as usize].clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EnderDragonPhase;
+
+    #[test]
+    fn from_ordinal_round_trips_all_phases() {
+        let phases = [
+            EnderDragonPhase::Circling,
+            EnderDragonPhase::Strafing,
+            EnderDragonPhase::Charging,
+            EnderDragonPhase::FlyToPortal,
+            EnderDragonPhase::LandingApproach,
+            EnderDragonPhase::Landing,
+            EnderDragonPhase::SitAttacking,
+            EnderDragonPhase::SitBreathing,
+            EnderDragonPhase::TakingOff,
+            EnderDragonPhase::Hovering,
+            EnderDragonPhase::Dying,
+        ];
+        for phase in phases {
+            assert_eq!(EnderDragonPhase::from_ordinal(phase.network_id()), phase);
+        }
+    }
+
+    #[test]
+    fn from_ordinal_falls_back_to_circling_for_corrupt_ids() {
+        assert_eq!(
+            EnderDragonPhase::from_ordinal(-1),
+            EnderDragonPhase::Circling
+        );
+        assert_eq!(
+            EnderDragonPhase::from_ordinal(999),
+            EnderDragonPhase::Circling
+        );
     }
 }

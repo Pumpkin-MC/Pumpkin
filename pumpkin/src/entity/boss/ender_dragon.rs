@@ -2,6 +2,7 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::{Block, BlockStateId};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
@@ -10,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     living::LivingEntity,
     mob::{Mob, MobEntity},
     player::Player,
@@ -804,7 +805,32 @@ impl EnderDragonEntity {
     }
 }
 
-impl NBTStorage for EnderDragonEntity {}
+impl NBTStorage for EnderDragonEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            nbt.put_int("DragonPhase", *self.phase.lock().await as i32);
+            nbt.put_int("DragonDeathTime", *self.dragon_death_time.lock().await);
+            nbt.put_float(
+                "sitting_damage_received",
+                *self.sitting_damage_received.lock().await,
+            );
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            if let Some(phase_id) = nbt.get_int("DragonPhase") {
+                self.set_phase(EnderDragonPhase::from_ordinal(phase_id))
+                    .await;
+            }
+            *self.dragon_death_time.lock().await = nbt.get_int("DragonDeathTime").unwrap_or(0);
+            *self.sitting_damage_received.lock().await =
+                nbt.get_float("sitting_damage_received").unwrap_or(0.0);
+        })
+    }
+}
 
 impl Mob for EnderDragonEntity {
     fn get_mob_entity(&self) -> &MobEntity {
