@@ -6,5 +6,6 @@ pub mod interaction;
 pub mod item_display;
 pub mod item_frame;
 pub mod leash_knot;
+pub mod mannequin;
 pub mod painting;
 pub mod text_display;
