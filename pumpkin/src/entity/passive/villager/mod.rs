@@ -55,6 +55,13 @@ pub struct VillagerEntity {
     pub restocks_today: AtomicI32,
     pub gossips: Mutex<GossipContainer>,
     pub last_gossip_decay_time: AtomicI64,
+    /// Vanilla `LAST_SLEPT` brain memory (`Villager::golemSpawnConditionsMet`). World-age tick
+    /// at which this villager last entered the sleeping pose; 0 == never slept.
+    pub last_slept_time: AtomicI64,
+    /// Vanilla `GOLEM_DETECTED_RECENTLY` brain memory (599-tick expiry), set both by a
+    /// successful golem spawn and by nearby-golem detection. World-age tick after which the
+    /// memory is considered expired; 0 == not set.
+    pub golem_detected_until: AtomicI64,
     pub inventory: Arc<Mutex<Vec<Arc<Mutex<ItemStack>>>>>,
     pub merchant_inventory: Arc<SimpleInventory>,
     pub offers: Mutex<Vec<pumpkin_protocol::java::client::play::MerchantOffer>>,
@@ -64,6 +71,7 @@ pub struct VillagerEntity {
 }
 
 impl VillagerEntity {
+    #[allow(clippy::too_many_lines)]
     pub fn new(entity: Entity) -> Arc<Self> {
         // Vanilla `Villager#finalizeSpawn` sets the type from `VillagerType.byBiome`
         // at the spawn position.
@@ -85,6 +93,8 @@ impl VillagerEntity {
             restocks_today: AtomicI32::new(0),
             gossips: Mutex::new(GossipContainer::new()),
             last_gossip_decay_time: AtomicI64::new(0),
+            last_slept_time: AtomicI64::new(0),
+            golem_detected_until: AtomicI64::new(0),
             inventory,
             merchant_inventory: Arc::new(SimpleInventory::new(3)),
             offers: Mutex::new(Vec::new()),
@@ -355,6 +365,203 @@ impl VillagerEntity {
             None,
         );
     }
+
+    /// Vanilla `Villager::wantsToSpawnGolem` + `golemSpawnConditionsMet`
+    /// (`Villager.java:850-852, 896-899`). Despite the "panicking neighbors" framing in
+    /// vanilla's constant names, the actual gate checked in code is "slept within the last
+    /// in-game day" (`LAST_SLEPT` recency), not a live panic flag -- Pumpkin has no brain/
+    /// panic-activity system, so this is ported exactly as read from the cited lines rather
+    /// than inventing a stricter panic-based gate.
+    #[must_use]
+    pub fn wants_to_spawn_golem(&self, world_age: i64) -> bool {
+        golem_spawn_conditions_met(
+            self.last_slept_time.load(Ordering::Relaxed),
+            self.golem_detected_until.load(Ordering::Relaxed),
+            world_age,
+        )
+    }
+
+    /// Vanilla `Villager::spawnGolemIfNeeded` (`Villager.java:834-848`).
+    ///
+    /// **Trigger deviation from vanilla, documented per repo standing rule:** vanilla only
+    /// reaches this method from `Villager::gossip`, itself only called by the panic-activity
+    /// brain package when two panicking villagers meet at close range. Pumpkin has neither a
+    /// brain/activity system nor any villager panic goal (confirmed absent from the goal
+    /// directory), so there is no faithful trigger to call this from. As the pragmatic
+    /// approximation documented in the design doc, this is called from `on_damage` (a
+    /// villager being attacked is the closest existing analogue to "a villager in a crisis"
+    /// this codebase can express without building a full panic-goal subsystem) rather than
+    /// from a gossip-transfer event. The summoning *mechanics* below (AABB scan, agreement
+    /// count, spawn, suppression) are ported faithfully from the cited vanilla lines.
+    pub async fn spawn_golem_if_needed(
+        &self,
+        world: &Arc<World>,
+        world_age: i64,
+        villagers_needed: usize,
+    ) {
+        if !self.wants_to_spawn_golem(world_age) {
+            return;
+        }
+
+        let pos = self.get_entity().pos.load();
+        let aabb = BoundingBox::new(
+            Vector3::new(pos.x - 10.0, pos.y - 10.0, pos.z - 10.0),
+            Vector3::new(pos.x + 10.0, pos.y + 10.0, pos.z + 10.0),
+        );
+
+        // Vanilla's `.limit(5L)` -- a hard cap regardless of `villagers_needed` (`Villager.java:838`).
+        let agreeing = world
+            .get_all_at_box(&aabb)
+            .into_iter()
+            .filter(|e| {
+                e.get_entity().entity_type == &EntityType::VILLAGER
+                    && e.cast_any()
+                        .downcast_ref::<Self>()
+                        .is_some_and(|v| v.wants_to_spawn_golem(world_age))
+            })
+            .count()
+            .min(5);
+        if agreeing < villagers_needed {
+            return;
+        }
+
+        // `SpawnUtil.trySpawnMob(IRON_GOLEM, ..., 10, 8, 6, ...)` (`Villager.java:840-842`):
+        // vanilla searches a 10-horizontal/8-up/6-down radius for a valid position. The exact
+        // placement-validity rules inside `SpawnUtil.trySpawnMob` were not read for this pass
+        // (flagged in the design doc as needing follow-up); this uses the simplest possible
+        // approximation available from existing Rust infrastructure -- `World::is_space_empty`
+        // for a golem-sized bounding box plus a solid-ground check directly below -- searched
+        // over a small horizontal ring at the villager's own height, rather than porting
+        // `SpawnUtil`'s full search shape.
+        let block_pos = self.get_entity().block_pos.load();
+        let mut spawn_pos = None;
+        'search: for dx in -3..=3i32 {
+            for dz in -3..=3i32 {
+                let candidate =
+                    BlockPos::new(block_pos.0.x + dx, block_pos.0.y, block_pos.0.z + dz);
+                let below = candidate.down();
+                let (_, below_state) = world.get_block_and_state(&below);
+                if !below_state.is_solid() {
+                    continue;
+                }
+                let feet = candidate.to_f64();
+                let check_box = BoundingBox::new(
+                    Vector3::new(feet.x - 0.7, feet.y, feet.z - 0.7),
+                    Vector3::new(feet.x + 0.7, feet.y + 2.7, feet.z + 0.7),
+                );
+                if world.is_space_empty(check_box) {
+                    spawn_pos = Some(candidate);
+                    break 'search;
+                }
+            }
+        }
+
+        let Some(spawn_pos) = spawn_pos else {
+            return;
+        };
+
+        let entity = Entity::new(
+            world.clone(),
+            spawn_pos.to_centered_f64(),
+            &EntityType::IRON_GOLEM,
+        );
+        let golem = crate::entity::passive::iron_golem::IronGolemEntity::new(entity);
+        world.spawn_entity(golem).await;
+
+        // `nearbyVillagers.forEach(GolemSensor::golemDetected)` (`Villager.java:844`) --
+        // every villager in the *unfiltered* nearby list is suppressed, not just the ones
+        // that agreed. Re-scan since `nearby_villagers` above was already filtered.
+        for entity in world.get_all_at_box(&aabb) {
+            if entity.get_entity().entity_type == &EntityType::VILLAGER
+                && let Some(villager) = entity.cast_any().downcast_ref::<Self>()
+            {
+                villager
+                    .golem_detected_until
+                    .store(world_age + 599, Ordering::Relaxed);
+            }
+        }
+    }
+
+    /// Vanilla `Villager::restock` (`Villager.java:365-375`): recompute demand for every
+    /// offer and reset its use counter. Does not resend the updated offers to a currently
+    /// trading player -- vanilla's `resendOffersToTradingPlayer` (`Villager.java:377-385`)
+    /// has no Rust equivalent since `VillagerEntity` doesn't track a persistent
+    /// "currently trading player" handle; a player with the trade screen already open will
+    /// see the new prices next time they reopen it. Documented deviation, not silently
+    /// dropped.
+    pub async fn restock(&self, world_age: i64) {
+        let mut offers = self.offers.lock().await;
+        for offer in offers.iter_mut() {
+            offer.update_demand();
+            offer.uses = 0;
+        }
+        drop(offers);
+        self.last_restock_time.store(world_age, Ordering::Relaxed);
+        self.restocks_today.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Vanilla `Villager::shouldRestock`/`needsToRestock` (`Villager.java:387-419`),
+    /// approximated: a villager may restock up to twice per in-game day, at least
+    /// 12000 ticks (half a day) apart, whenever any offer has been used at least once.
+    /// Vanilla's exact `isNewDay` check against a `Timelines.OVERWORLD_DAY` clock was not
+    /// read for this pass (flagged in the design doc); this derives the day boundary from
+    /// `world_age / 24000`, which is the same 24000-tick day length already used elsewhere
+    /// in this file (gossip decay), and resets the daily restock counter on a day rollover.
+    pub async fn maybe_restock(&self, world_age: i64) {
+        let last_restock = self.last_restock_time.load(Ordering::Relaxed);
+        if is_new_restock_day(last_restock, world_age) {
+            self.restocks_today.store(0, Ordering::Relaxed);
+        }
+
+        if !restock_is_due(
+            last_restock,
+            self.restocks_today.load(Ordering::Relaxed),
+            world_age,
+        ) {
+            return;
+        }
+
+        let needs_restock = {
+            let offers = self.offers.lock().await;
+            offers.iter().any(|o| o.uses > 0)
+        };
+        if needs_restock {
+            self.restock(world_age).await;
+        }
+    }
+}
+
+/// Vanilla `Villager::golemSpawnConditionsMet` (`Villager.java:896-899`), extracted as a
+/// pure function for unit testing.
+#[must_use]
+const fn golem_spawn_conditions_met(
+    last_slept: i64,
+    golem_detected_until: i64,
+    world_age: i64,
+) -> bool {
+    if last_slept == 0 || world_age - last_slept >= 24000 {
+        return false;
+    }
+    golem_detected_until == 0 || world_age >= golem_detected_until
+}
+
+/// Day-boundary check for the restock-counter reset, extracted as a pure function for unit
+/// testing. See `maybe_restock`'s doc comment for the approximation this makes relative to
+/// vanilla's `Timelines.OVERWORLD_DAY`-based `isNewDay`.
+#[must_use]
+const fn is_new_restock_day(last_restock: i64, world_age: i64) -> bool {
+    last_restock != 0 && world_age / 24000 != last_restock / 24000
+}
+
+/// Vanilla `Villager::shouldRestock` (`Villager.java:387-419`) gate (minus the `needsRestock`
+/// per-offer check, which needs the offers list and stays in `maybe_restock`), extracted as a
+/// pure function for unit testing.
+#[must_use]
+const fn restock_is_due(last_restock: i64, restocks_today: i32, world_age: i64) -> bool {
+    if restocks_today >= 2 {
+        return false;
+    }
+    last_restock == 0 || world_age - last_restock >= 12000
 }
 
 impl ScreenHandlerFactory for VillagerEntity {
@@ -837,6 +1044,13 @@ impl Mob for VillagerEntity {
                     25,
                 );
             }
+
+            // Golem summoning trigger deviation: see `spawn_golem_if_needed`'s doc comment.
+            // Vanilla only reaches `spawnGolemIfNeeded` via panicking-villager gossip
+            // exchange, which Pumpkin has no infrastructure for; being attacked is used here
+            // as the closest existing "villager in a crisis" event.
+            let world_age = world.get_world_age().await;
+            self.spawn_golem_if_needed(&world, world_age, 5).await;
         })
     }
 
@@ -902,6 +1116,28 @@ impl Mob for VillagerEntity {
                 self.last_gossip_decay_time
                     .store(world_age, Ordering::Relaxed);
             }
+
+            // `GolemSensor` equivalent (`GolemSensor.java`): approximated with a 16-block box
+            // (vanilla scans the brain's `NEAREST_LIVING_ENTITIES` memory, itself populated
+            // from a follow-range-sized box -- Pumpkin has no such memory, so this piggybacks
+            // on the existing 20-tick cadence instead of a distinct sensor abstraction).
+            {
+                let pos = self.get_entity().pos.load();
+                let aabb = BoundingBox::new(
+                    Vector3::new(pos.x - 16.0, pos.y - 16.0, pos.z - 16.0),
+                    Vector3::new(pos.x + 16.0, pos.y + 16.0, pos.z + 16.0),
+                );
+                if world
+                    .get_all_at_box(&aabb)
+                    .iter()
+                    .any(|e| e.get_entity().entity_type == &EntityType::IRON_GOLEM)
+                {
+                    self.golem_detected_until
+                        .store(world_age + 599, Ordering::Relaxed);
+                }
+            }
+
+            self.maybe_restock(world_age).await;
 
             // 1. Bed / Sleeping logic (for all villagers: babies, nitwits, adults)
             let is_sleeping = self.get_entity().pose.load() == EntityPose::Sleeping;
@@ -979,6 +1215,12 @@ impl Mob for VillagerEntity {
                                     .await;
 
                                     self.get_entity().set_pose(EntityPose::Sleeping);
+                                    // Vanilla `LAST_SLEPT` brain memory, set whenever the
+                                    // sleep-behavior brain task puts the villager to sleep
+                                    // (referenced by `golemSpawnConditionsMet`,
+                                    // `Villager.java:896-899`; the task that sets it wasn't
+                                    // itself read for this pass).
+                                    self.last_slept_time.store(world_age, Ordering::Relaxed);
                                     self.get_entity().send_meta_data(
                                         &[Metadata::new(
                                             TrackedData::SLEEPING_POS_ID,
@@ -1174,5 +1416,39 @@ impl Mob for VillagerEntity {
 
             true
         })
+    }
+}
+
+#[cfg(test)]
+mod villager_tick_logic_tests {
+    use super::{golem_spawn_conditions_met, is_new_restock_day, restock_is_due};
+
+    #[test]
+    fn golem_conditions_require_recent_sleep() {
+        assert!(!golem_spawn_conditions_met(0, 0, 100));
+        assert!(golem_spawn_conditions_met(100, 0, 200));
+        assert!(!golem_spawn_conditions_met(100, 0, 100 + 24000));
+    }
+
+    #[test]
+    fn golem_conditions_respect_suppression_window() {
+        assert!(!golem_spawn_conditions_met(100, 1000, 500));
+        assert!(golem_spawn_conditions_met(100, 1000, 1000));
+        assert!(golem_spawn_conditions_met(100, 1000, 1500));
+    }
+
+    #[test]
+    fn restock_day_rollover_detected_by_24000_tick_boundary() {
+        assert!(!is_new_restock_day(0, 100));
+        assert!(!is_new_restock_day(100, 24000 - 1));
+        assert!(is_new_restock_day(100, 24000));
+    }
+
+    #[test]
+    fn restock_due_gates_on_count_and_cooldown() {
+        assert!(restock_is_due(0, 0, 0));
+        assert!(!restock_is_due(100, 0, 100 + 11999));
+        assert!(restock_is_due(100, 0, 100 + 12000));
+        assert!(!restock_is_due(100, 2, 100 + 24000));
     }
 }
