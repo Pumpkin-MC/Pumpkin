@@ -83,6 +83,13 @@ pub struct ChunkData {
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub dirty: AtomicBool,
     pub inhabited_time: AtomicU64,
+    /// Root NBT tags read off disk that we do not model, kept verbatim so saving a
+    /// chunk does not strip them.
+    ///
+    /// Populated only for chunks loaded at `Status: full`; empty for generated chunks
+    /// and for anything that re-enters the generation pipeline. Immutable after
+    /// construction, hence no lock. See `format::retain_foreign_root_tags`.
+    pub retained_nbt: NbtCompound,
 }
 
 pub struct ChunkEntityData {

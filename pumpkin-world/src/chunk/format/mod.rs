@@ -21,6 +21,7 @@ use crate::{
         format::anvil::{SingleChunkDataSerializer, WORLD_DATA_VERSION},
         io::{Dirtiable, file_manager::PathFromLevelFolder},
     },
+    chunk_system::chunk_state::StagedChunkEnum,
     generation::section_coords,
     level::LevelFolder,
     tick::{ScheduledTick, TickPriority, scheduler::ChunkTickScheduler},
@@ -150,6 +151,90 @@ where
         position: BlockPos::new(x, y, z),
         value,
     })
+}
+
+/// Root NBT keys that `ChunkData::internal_to_bytes` writes itself.
+///
+/// Some are recomputed from live state (`DataVersion`, `xPos`/`yPos`/`zPos`, `Status`,
+/// `sections`, `isLightOn`, `InhabitedTime`); the rest are echoed back out of a typed
+/// field that `internal_from_bytes` parsed them into (`Heightmaps`, `block_ticks`,
+/// `fluid_ticks`, `block_entities`). Either way the writer owns them, so they must
+/// never be sourced from [`ChunkData::retained_nbt`].
+///
+/// Keep in sync with the `root_compound.put_*` calls in `internal_to_bytes`;
+/// `writer_emits_exactly_the_written_root_keys` fails on drift.
+const WRITTEN_ROOT_KEYS: &[&str] = &[
+    "DataVersion",
+    "xPos",
+    "yPos",
+    "zPos",
+    "Status",
+    "Heightmaps",
+    "sections",
+    "block_ticks",
+    "fluid_ticks",
+    "block_entities",
+    "isLightOn",
+    "InhabitedTime",
+];
+
+/// Root keys we neither write nor carry over, because writing them back would be worse
+/// than losing them.
+///
+/// The rule: retain keys that *describe* what is already in the chunk, drop keys that
+/// record *work still to be done*. We have no code for any key below, so we can never
+/// clear one once it has been applied — we would re-assert the same directive on every
+/// save, against blocks that have since changed.
+///
+/// - `entities`: entities live in the separate `entities/` region folder, so a retained
+///   copy would be a second, never-updated set of the same mobs.
+/// - `PostProcessing`, `below_zero_retrogen`, `UpgradeData`: work records.
+/// - `carving_mask`: generation-stage scratch state.
+/// - `Lights`: vanilla's per-section list of light sources still to be processed,
+///   written for chunks below `light` status. Retaining it would put a work record on a
+///   chunk we go on to stamp `Status: minecraft:full`.
+///
+/// `carving_mask` and `Lights` only became reachable when the retention cutoff moved from
+/// `full` down to `features`; both belong to chunks caught mid-generation.
+///
+/// How these are classified is reasoning about vanilla rather than something validated
+/// against a real region file. What is verified is that we have no code for any of them.
+const NEVER_RETAINED_ROOT_KEYS: &[&str] = &[
+    "entities",
+    "PostProcessing",
+    "below_zero_retrogen",
+    "UpgradeData",
+    "carving_mask",
+    "Lights",
+];
+
+fn is_owned_root_key(key: &str) -> bool {
+    WRITTEN_ROOT_KEYS.contains(&key) || NEVER_RETAINED_ROOT_KEYS.contains(&key)
+}
+
+/// Clones the root tags we do not model out of a freshly parsed chunk, so they can be
+/// written back untouched instead of dropped.
+fn retain_foreign_root_tags(root: &NbtCompound) -> NbtCompound {
+    root.child_tags
+        .iter()
+        .filter(|&(key, _)| !is_owned_root_key(key))
+        .map(|(key, tag)| (key.clone(), tag.clone()))
+        .collect()
+}
+
+/// Writes retained tags back onto a root compound.
+///
+/// Must be called *after* every `root_compound.put_*` in `internal_to_bytes`:
+/// [`NbtCompound::put`] is insert-if-absent, so merging last makes it structurally
+/// impossible for a stale disk value to shadow live chunk state. A bug in the filter can
+/// then only ever drop a foreign tag, never corrupt an owned one.
+///
+/// Deliberately not `Extend`: `NbtCompound` has two `Extend` impls that disagree about
+/// overwriting, and the call site cannot show which one is selected.
+fn merge_foreign_root_tags(root: &mut NbtCompound, retained: &NbtCompound) {
+    for (key, tag) in &retained.child_tags {
+        root.put(key, tag.clone());
+    }
 }
 
 impl ChunkData {
@@ -367,6 +452,31 @@ impl ChunkData {
             _ => ChunkStatus::Empty,
         };
 
+        // Retain only from a chunk that will be written back over the same terrain the
+        // metadata describes.
+        //
+        // A chunk below `features` goes back into the generation pipeline through
+        // `ProtoChunk::from_chunk_data`, which restores blocks and heightmaps but leaves
+        // `structure_starts` empty and `carving_mask` fresh, so it is finished *without*
+        // the structures the retained metadata claims are there. An unrecognised `Status`
+        // falls through to `Empty` above and lands here too — precisely the case where we
+        // must not vouch for anything.
+        //
+        // At or above `features` that cannot happen: the features/structures step never
+        // re-runs for such a chunk. `drop_satisfied_tasks` deletes every task at or below
+        // the loaded stage, `Cache::advance` early-returns for a stage already reached,
+        // and the dispatch loop drops queued nodes for reached stages. `structure_starts`
+        // is only ever filled by `set_structure_starts`/`set_structure_references`, whose
+        // tasks are dropped for anything loaded at or above `StructureReferences`.
+        //
+        // So `features` is the boundary, not `full` — gating on `full` made this a no-op
+        // for exactly the chunks #2626 reported, which sit at `initialize_light`.
+        let retained_nbt = if StagedChunkEnum::from(status) >= StagedChunkEnum::Features {
+            retain_foreign_root_tags(&root_tag)
+        } else {
+            NbtCompound::new()
+        };
+
         Ok(Self {
             section,
             heightmap: std::sync::Mutex::new(heightmaps),
@@ -382,6 +492,7 @@ impl ChunkData {
             status,
             blending_data: None,
             inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
+            retained_nbt,
         })
     }
 
@@ -533,6 +644,18 @@ impl ChunkData {
             "InhabitedTime",
             self.inhabited_time.load(Ordering::Relaxed) as i64,
         );
+
+        // The live value, never a retained one — this is incremented every tick in
+        // `World::tick`. Before this it was parsed on load and then never written, so the
+        // first save zeroed whatever had accumulated.
+        root_compound.put_long(
+            "InhabitedTime",
+            self.inhabited_time.load(Ordering::Relaxed) as i64,
+        );
+
+        // Last. See `merge_foreign_root_tags` — `put` is insert-if-absent, so an owned key
+        // can never be shadowed by a stale value off disk.
+        merge_foreign_root_tags(&mut root_compound, &self.retained_nbt);
 
         let mut result = Vec::new();
         pumpkin_nbt::serializer::to_bytes(&root_compound, &mut result)
@@ -761,4 +884,342 @@ struct EntityNbt {
     data_version: i32,
     position: [i32; 2],
     entities: Vec<NbtCompound>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{NEVER_RETAINED_ROOT_KEYS, WORLD_DATA_VERSION, WRITTEN_ROOT_KEYS};
+    use crate::chunk::ChunkData;
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_nbt::tag::NbtTag;
+    use pumpkin_util::math::vector2::Vector2;
+    use std::sync::atomic::Ordering;
+
+    /// The smallest root compound `internal_from_bytes` accepts. An empty `sections` list
+    /// is valid: `max_y_section` starts at `min_y_section`, so the section count is 1.
+    fn minimal_root(status: &str) -> NbtCompound {
+        let mut root = NbtCompound::new();
+        root.put_int("DataVersion", WORLD_DATA_VERSION);
+        root.put_int("xPos", 0);
+        root.put_int("zPos", 0);
+        root.put_int("yPos", -4);
+        root.put_string("Status", status.to_string());
+        root.put_list("sections", Vec::new());
+        root
+    }
+
+    fn encode(root: &NbtCompound) -> Vec<u8> {
+        let mut buf = Vec::new();
+        pumpkin_nbt::serializer::to_bytes(root, &mut buf).expect("serialize fixture");
+        buf
+    }
+
+    fn decode_root(bytes: &[u8]) -> NbtCompound {
+        let mut cursor = std::io::Cursor::new(bytes);
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+        pumpkin_nbt::Nbt::read(&mut reader)
+            .expect("reparse written chunk")
+            .root_tag
+    }
+
+    fn parse(root: &NbtCompound) -> ChunkData {
+        ChunkData::internal_from_bytes(&encode(root), Vector2::new(0, 0)).expect("parse fixture")
+    }
+
+    fn round_trip(root: &NbtCompound) -> NbtCompound {
+        decode_root(&parse(root).internal_to_bytes().expect("serialize chunk"))
+    }
+
+    fn sorted_keys(root: &NbtCompound) -> Vec<&str> {
+        let mut keys: Vec<&str> = root.child_tags.keys().map(AsRef::as_ref).collect();
+        keys.sort_unstable();
+        keys
+    }
+
+    #[test]
+    fn foreign_root_tags_survive_a_disk_round_trip() {
+        let mut fixture = minimal_root("minecraft:full");
+
+        let mut structures = NbtCompound::new();
+        structures.put_compound("starts", NbtCompound::new());
+        structures.put_compound("References", NbtCompound::new());
+        fixture.put_compound("structures", structures);
+        fixture.put("LastUpdate", NbtTag::Long(1_287_805));
+        fixture.put_compound("blending_data", NbtCompound::new());
+        // A tag no version of this server knows about, to pin the future-proofing claim:
+        // an unrecognised key survives with no code change. The list of empty lists is the
+        // load-bearing shape here, being the only nested empty sequence.
+        fixture.put_list(
+            "some_future_mojang_tag",
+            (0..24).map(|_| NbtTag::List(Vec::new())).collect(),
+        );
+
+        let out = round_trip(&fixture);
+
+        for key in [
+            "structures",
+            "LastUpdate",
+            "blending_data",
+            "some_future_mojang_tag",
+        ] {
+            assert_eq!(
+                out.get(key),
+                fixture.get(key),
+                "foreign root tag `{key}` was not preserved across a save"
+            );
+        }
+    }
+
+    #[test]
+    fn work_directive_root_tags_are_never_retained() {
+        let mut fixture = minimal_root("minecraft:full");
+        // Spelled out rather than iterated from NEVER_RETAINED_ROOT_KEYS, so that deleting
+        // a key from that constant also has to fail here.
+        fixture.put_list("entities", vec![NbtTag::Compound(NbtCompound::new())]);
+        fixture.put_list("PostProcessing", Vec::new());
+        fixture.put_compound("below_zero_retrogen", NbtCompound::new());
+        fixture.put_compound("UpgradeData", NbtCompound::new());
+        fixture.put("carving_mask", NbtTag::LongArray(vec![1, 2, 3]));
+        fixture.put_list(
+            "Lights",
+            (0..24).map(|_| NbtTag::List(Vec::new())).collect(),
+        );
+
+        let out = round_trip(&fixture);
+
+        // `entities` is excluded because entities live in the separate `entities/` region
+        // folder; a retained copy would be a second, never-updated set of the same mobs.
+        // The rest record work still to be done, which we have no way to perform or clear.
+        for key in [
+            "entities",
+            "PostProcessing",
+            "below_zero_retrogen",
+            "UpgradeData",
+            "carving_mask",
+            "Lights",
+        ] {
+            assert!(!out.has(key), "`{key}` should never be written back");
+        }
+    }
+
+    #[test]
+    fn work_directive_root_tags_are_never_retained_below_full_either() {
+        // The exclusions have to hold at the bottom of the retention range too, which is
+        // where a half-generated vanilla chunk actually carries them. `carving_mask` and
+        // `Lights` are unreachable at `full` and reachable here.
+        let mut fixture = minimal_root("minecraft:initialize_light");
+        fixture.put("carving_mask", NbtTag::LongArray(vec![1, 2, 3]));
+        fixture.put_list(
+            "Lights",
+            (0..24).map(|_| NbtTag::List(Vec::new())).collect(),
+        );
+        fixture.put_list("PostProcessing", Vec::new());
+
+        let out = round_trip(&fixture);
+
+        for key in ["carving_mask", "Lights", "PostProcessing"] {
+            assert!(!out.has(key), "`{key}` should never be written back");
+        }
+    }
+
+    #[test]
+    fn owned_root_keys_are_rewritten_from_the_live_chunk() {
+        let mut fixture = minimal_root("minecraft:full");
+        fixture.put_int("DataVersion", 1234);
+
+        let out = round_trip(&fixture);
+
+        // Regression test for the insert-if-absent `put`: if `merge_foreign_root_tags` ever
+        // moves above the owned puts, `DataVersion` comes back as 1234 and this fails.
+        assert_eq!(out.get_int("DataVersion"), Some(WORLD_DATA_VERSION));
+        assert_eq!(out.get_string("Status"), Some("minecraft:full"));
+        assert_eq!(out.get_int("xPos"), Some(0));
+        assert_eq!(out.get_int("zPos"), Some(0));
+        assert_eq!(out.get_int("yPos"), Some(-4));
+    }
+
+    #[test]
+    fn heightmaps_round_trip_verbatim_through_the_typed_field() {
+        let mut heightmaps = NbtCompound::new();
+        heightmaps.put("WORLD_SURFACE", NbtTag::LongArray(vec![7; 37]));
+        let mut fixture = minimal_root("minecraft:full");
+        fixture.put_compound("Heightmaps", heightmaps);
+
+        let out = round_trip(&fixture);
+
+        // Heightmaps are parsed into `ChunkHeightmaps` and re-emitted from it; nothing
+        // recomputes them on the load path. So they are owned by the writer but not
+        // *derived* by it, and they never route through `retained_nbt`.
+        let written = out.get_compound("Heightmaps").expect("Heightmaps written");
+        assert_eq!(
+            written.get_long_array("WORLD_SURFACE"),
+            Some(&[7i64; 37][..])
+        );
+    }
+
+    #[test]
+    fn inhabited_time_round_trips_through_disk() {
+        let mut fixture = minimal_root("minecraft:full");
+        fixture.put_long("InhabitedTime", 123_456);
+
+        assert_eq!(
+            parse(&fixture).inhabited_time.load(Ordering::Relaxed),
+            123_456
+        );
+        // Before this fix the key was parsed and never written, so the first save zeroed
+        // whatever had accumulated.
+        assert_eq!(
+            round_trip(&fixture).get_long("InhabitedTime"),
+            Some(123_456)
+        );
+    }
+
+    #[test]
+    fn inhabited_time_is_written_from_the_live_value() {
+        let mut fixture = minimal_root("minecraft:full");
+        fixture.put_long("InhabitedTime", 100);
+
+        let chunk = parse(&fixture);
+        chunk.inhabited_time.store(500, Ordering::Relaxed);
+        let out = decode_root(&chunk.internal_to_bytes().expect("serialize chunk"));
+
+        assert_eq!(out.get_long("InhabitedTime"), Some(500));
+    }
+
+    #[test]
+    fn writer_emits_exactly_the_written_root_keys() {
+        let out = round_trip(&minimal_root("minecraft:full"));
+
+        let mut expected: Vec<&str> = WRITTEN_ROOT_KEYS.to_vec();
+        expected.sort_unstable();
+        assert_eq!(sorted_keys(&out), expected);
+
+        // Cross-check against a literal list. Without this, a change that stops writing a
+        // key *and* drops it from the constant would pass the assertion above, and that key
+        // would silently start being echoed back off disk instead.
+        assert_eq!(
+            expected,
+            [
+                "DataVersion",
+                "Heightmaps",
+                "InhabitedTime",
+                "Status",
+                "block_entities",
+                "block_ticks",
+                "fluid_ticks",
+                "isLightOn",
+                "sections",
+                "xPos",
+                "yPos",
+                "zPos",
+            ]
+        );
+    }
+
+    #[test]
+    fn chunks_below_the_features_stage_retain_nothing() {
+        let mut fixture = minimal_root("minecraft:carvers");
+        fixture.put_compound("structures", NbtCompound::new());
+        fixture.put("LastUpdate", NbtTag::Long(1));
+
+        // A chunk below `features` still has its features/structures step ahead of it, so
+        // it is finished without the structures this metadata describes. Losing the tags is
+        // what we already did; writing them back beside contradicting terrain would be new
+        // damage.
+        assert!(parse(&fixture).retained_nbt.is_empty());
+        let out = round_trip(&fixture);
+        assert!(!out.has("structures"));
+        assert!(!out.has("LastUpdate"));
+    }
+
+    #[test]
+    fn chunks_from_the_features_stage_up_retain_their_metadata() {
+        // The statuses a half-generated vanilla world actually contains, including the
+        // `initialize_light` of #2626's reported chunk. Gating on `full` meant every one of
+        // these was still stripped on save.
+        for status in [
+            "minecraft:features",
+            "minecraft:initialize_light",
+            "minecraft:light",
+            "minecraft:spawn",
+            "minecraft:full",
+        ] {
+            let mut fixture = minimal_root(status);
+            fixture.put_compound("structures", NbtCompound::new());
+            fixture.put("LastUpdate", NbtTag::Long(1));
+
+            assert!(
+                !parse(&fixture).retained_nbt.is_empty(),
+                "`{status}` should retain foreign tags"
+            );
+            let out = round_trip(&fixture);
+            assert!(out.has("structures"), "`{status}` dropped `structures`");
+            assert!(out.has("LastUpdate"), "`{status}` dropped `LastUpdate`");
+        }
+    }
+
+    #[test]
+    fn unrecognized_status_retains_nothing() {
+        let mut fixture = minimal_root("minecraft:some_future_step");
+        fixture.put_compound("structures", NbtCompound::new());
+
+        // An unknown status falls through to `ChunkStatus::Empty`, so the terrain is
+        // regenerated from scratch — the worst case for vouching for stale metadata.
+        assert!(parse(&fixture).retained_nbt.is_empty());
+    }
+
+    #[test]
+    fn retained_tags_survive_the_proto_chunk_round_trip() {
+        use crate::ProtoChunk;
+        use crate::chunk_system::chunk_state::Chunk;
+        use crate::generation::get_world_gen;
+        use pumpkin_config::lighting::LightingEngineConfig;
+        use pumpkin_data::dimension::Dimension;
+        use pumpkin_util::world_seed::Seed;
+
+        // Flat, so there is no noise-router setup cost.
+        let world_gen = get_world_gen(
+            Seed(0),
+            Dimension::OVERWORLD,
+            true,
+            Vec::new(),
+            String::new(),
+        );
+
+        // A chunk we generated ourselves pays nothing for any of this.
+        assert!(ProtoChunk::new(0, 0, &world_gen).retained_nbt.is_empty());
+
+        let mut fixture = minimal_root("minecraft:full");
+        fixture.put_compound("structures", NbtCompound::new());
+        fixture.put_long("InhabitedTime", 777);
+
+        // The level -> proto -> level trip a full chunk makes when it is downgraded for
+        // relighting. Without the carry on `ProtoChunk`, both assertions below fail and the
+        // fix is silently vacuous on this path.
+        let mut chunk = Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
+            &parse(&fixture),
+            &world_gen,
+        )));
+        chunk.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(rebuilt) = chunk else {
+            panic!("upgrade_to_level_chunk did not produce a level chunk");
+        };
+
+        let out = decode_root(&rebuilt.internal_to_bytes().expect("serialize chunk"));
+        assert_eq!(out.get("structures"), fixture.get("structures"));
+        assert_eq!(out.get_long("InhabitedTime"), Some(777));
+        // Deliberately asserts nothing about section counts: #2551 changes
+        // `ProtoChunk::new`'s height source, which changes them.
+    }
+
+    #[test]
+    fn owned_keys_are_disjoint_from_never_retained_keys() {
+        for key in NEVER_RETAINED_ROOT_KEYS {
+            assert!(
+                !WRITTEN_ROOT_KEYS.contains(key),
+                "`{key}` is both written and never-retained; the writer would emit it \
+                 while the filter claims we drop it"
+            );
+        }
+    }
 }

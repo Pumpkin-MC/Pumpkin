@@ -6,6 +6,7 @@ use crate::generation::biome_coords;
 use crate::tick::scheduler::ChunkTickScheduler;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_nbt::compound::NbtCompound;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
@@ -278,6 +279,7 @@ impl Chunk {
                 blending_data: None,
                 dirty: AtomicBool::new(false),
                 inhabited_time: AtomicU64::new(0),
+                retained_nbt: NbtCompound::new(),
             })),
         ) {
             Self::Proto(proto) => proto,
@@ -323,7 +325,8 @@ impl Chunk {
             pending_block_entities: Mutex::new(pending_block_entities),
             status: proto_chunk.stage.into(),
             blending_data: proto_chunk.blending_data,
-            inhabited_time: AtomicU64::new(0),
+            inhabited_time: AtomicU64::new(proto_chunk.inhabited_time),
+            retained_nbt: proto_chunk.retained_nbt,
         };
 
         *self = Self::Level(Arc::new(chunk));

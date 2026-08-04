@@ -147,6 +147,14 @@ pub struct ProtoChunk {
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
+    /// Carried through the level -> proto -> level round trip performed when a full chunk
+    /// is downgraded for relighting; see [`ChunkData::retained_nbt`]. Empty for every
+    /// chunk loaded below `Status: full`, because capture is gated on `full`, so this can
+    /// never re-attach metadata to terrain the generation pipeline rebuilt.
+    pub retained_nbt: NbtCompound,
+    /// Ditto. Without this the relight downgrade resets a loaded chunk's inhabited time
+    /// to zero when the level chunk is rebuilt.
+    pub inhabited_time: u64,
 }
 
 pub struct TerrainCache {
@@ -241,6 +249,8 @@ impl ProtoChunk {
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
             fluid_ticks: Vec::new(),
+            retained_nbt: NbtCompound::new(),
+            inhabited_time: 0,
         }
     }
 
@@ -255,6 +265,12 @@ impl ProtoChunk {
         proto_chunk
             .blending_data
             .clone_from(&chunk_data.blending_data);
+        proto_chunk
+            .retained_nbt
+            .clone_from(&chunk_data.retained_nbt);
+        proto_chunk.inhabited_time = chunk_data
+            .inhabited_time
+            .load(std::sync::atomic::Ordering::Relaxed);
 
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data.heightmap.lock().unwrap();
