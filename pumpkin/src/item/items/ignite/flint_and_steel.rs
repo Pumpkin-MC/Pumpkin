@@ -35,15 +35,16 @@ impl ItemBehaviour for FlintAndSteelItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
+            let world = player.world();
             let ignited = Ignition::ignite_block(
                 |world: Arc<World>, pos: BlockPos, new_state_id: BlockStateId| async move {
                     world
                         .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
                         .await;
                 },
-                player,
+                &world,
                 location,
-                face,
+                location.offset(face.to_offset()),
                 block,
             )
             .await;
