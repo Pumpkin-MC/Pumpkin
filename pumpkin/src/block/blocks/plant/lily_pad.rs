@@ -14,13 +14,11 @@ pub struct LilyPadBlock;
 impl BlockBehaviour for LilyPadBlock {
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            // Proberbly not the best solution, but works
             if args
                 .entity
                 .get_entity()
                 .entity_type
-                .resource_name
-                .ends_with("_boat")
+                .has_tag(&tag::EntityType::C_BOATS)
             {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
