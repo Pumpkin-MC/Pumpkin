@@ -151,7 +151,7 @@ async fn turn_to_dirt(world: &Arc<World>, block_pos: &BlockPos) {
 
 fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     let (block, state) = world.get_block_and_state(&block_pos.up());
-    !state.is_solid() || block.has_tag(&tag::Block::C_FENCE_GATES)
+    !state.is_solid() || block.has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
 }
 
 /// Simplified port of vanilla's `Block.pushEntitiesUp`: teleports any entity
