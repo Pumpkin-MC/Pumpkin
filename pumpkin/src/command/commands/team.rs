@@ -83,10 +83,7 @@ const SEE_FRIENDLY_INVISIBLES_ALREADY_DISABLED_ERROR: CommandErrorType<0> = Comm
 );
 
 fn get_entity_scoreboard_name(entity: &dyn EntityBase) -> String {
-    entity.get_player().map_or_else(
-        || entity.get_entity().entity_uuid.to_string(),
-        |player| player.gameprofile.name.clone(),
-    )
+    crate::world::scoreboard::entity_scoreboard_name(entity)
 }
 
 struct TeamAddExecutor {
