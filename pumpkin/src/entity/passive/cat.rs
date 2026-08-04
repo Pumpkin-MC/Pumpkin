@@ -110,7 +110,7 @@ impl CatEntity {
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(2, SitGoal::new());
-            goal_selector.add_goal(4, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS)));
+            goal_selector.add_goal(4, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS, true)));
             goal_selector.add_goal(5, BreedGoal::new(0.8));
             // goal_selector.add_goal(7, FollowOwnerGoal::new(1.0, 10.0, 5.0, false));
             goal_selector.add_goal(9, Box::new(FollowParentGoal::new(0.8)));
