@@ -381,6 +381,23 @@ impl LivingEntity {
         self.set_living_flag(Self::USING_ITEM_FLAG, false);
     }
 
+    /// Vanilla: `Raider::hasActiveRaid` (`getCurrentRaid() != null && raid.isActive()`).
+    ///
+    /// Approximation: reads the cached `RaidMembership` captured at spawn time rather than
+    /// re-querying `RaidManager`; membership is cleared on death (see `on_death` below), so
+    /// `is_some()` is a reasonable proxy for a live raider's `hasActiveRaid` for the raid-gated
+    /// goals that consume this (Vindicator's door goals, Witch's heal-raiders goal).
+    #[must_use]
+    pub fn has_active_raid(&self) -> bool {
+        self.raid_membership.load().is_some()
+    }
+
+    /// Vanilla: `Raider::getWave` (via `getCurrentRaid()`/`Raid.getGroupsSpawned() + 1`).
+    #[must_use]
+    pub fn raid_wave(&self) -> Option<i32> {
+        self.raid_membership.load().map(|m| m.wave)
+    }
+
     pub async fn is_blocking(&self) -> bool {
         let item_in_use = self.item_in_use.lock().await;
         if let Some(item) = item_in_use.as_ref()
