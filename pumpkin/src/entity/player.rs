@@ -2174,8 +2174,9 @@ impl Player {
         payload: Bytes,
     ) -> bool {
         if let Some(server) = self.world().server.upgrade() {
-            let event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
-            let event = server.plugin_manager.fire(event).await;
+            let mut event =
+                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
+            server.plugin_manager.fire(&server, &mut event).await;
             return event.cancelled;
         }
         false
@@ -2186,8 +2187,9 @@ impl Player {
             // This is a dummy object to satisfy the non-optional requirement in WIT
             // In the future we should make all packets 'static or have a way to represent raw packets in WIT
             struct RawPacket;
-            let event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
-            let event = server.plugin_manager.fire(event).await;
+            let mut event =
+                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
+            server.plugin_manager.fire(&server, &mut event).await;
             return event.cancelled;
         }
         false
@@ -3501,8 +3503,8 @@ impl Player {
     /// Add experience points to the player.
     pub async fn add_experience_points(self: &Arc<Self>, mut added_points: i32) {
         if let Some(server) = self.world().server.upgrade() {
-            let event = PlayerExpChangeEvent::new(self.clone(), added_points);
-            let event = server.plugin_manager.fire(event).await;
+            let mut event = PlayerExpChangeEvent::new(self.clone(), added_points);
+            server.plugin_manager.fire(&server, &mut event).await;
             added_points = event.amount;
         }
 
@@ -3637,15 +3639,12 @@ impl Player {
         };
 
         if let Some(server) = self.living_entity.entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire(
-                    crate::plugin::api::events::player::inventory_close::InventoryCloseEvent::new(
-                        self,
-                        window_type,
-                    ),
-                )
-                .await;
+            let mut event =
+                crate::plugin::api::events::player::inventory_close::InventoryCloseEvent::new(
+                    self,
+                    window_type,
+                );
+            server.plugin_manager.fire(&server, &mut event).await;
         }
 
         let player_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
@@ -3829,7 +3828,7 @@ impl Player {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Server) {
+    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Arc<Server>) {
         self.update_last_action_time();
         let screen_handler_arc = self.current_screen_handler.lock().await.clone();
         let mut screen_handler = screen_handler_arc.lock().await;
@@ -4060,14 +4059,13 @@ impl Player {
             .await;
         drop(perm_manager);
 
-        let event = server
-            .plugin_manager
-            .fire(PlayerPermissionCheckEvent::new(
-                self.clone(),
-                node.to_string(),
-                result,
-            ))
-            .await;
+        let mut event = PlayerPermissionCheckEvent::new(self.clone(), node.to_string(), result);
+        if let Some(server_arc) = self.world().server.upgrade() {
+            server_arc
+                .plugin_manager
+                .fire(&server_arc, &mut event)
+                .await;
+        }
         event.result
     }
 

@@ -72,14 +72,11 @@ pub async fn update_position(player: &Arc<Player>) {
                 .await;
         }
     }
-    let mut loading_chunks = Vec::new();
-    let mut unloading_chunks = Vec::new();
-    Cylindrical::for_each_changed_chunk(
-        old_cylindrical,
-        new_cylindrical,
-        &mut loading_chunks,
-        &mut unloading_chunks,
-    );
+
+    let (loading_iter, unloading_iter) =
+        Cylindrical::changed_chunks(old_cylindrical, new_cylindrical);
+    let loading_chunks: Vec<_> = loading_iter.collect();
+    let unloading_chunks: Vec<_> = unloading_iter.collect();
 
     // Use the chunk_manager's world reference, which is updated on dimension change.
     // This ensures we load chunks from the correct world after portal teleportation.
@@ -95,13 +92,11 @@ pub async fn update_position(player: &Arc<Player>) {
         );
         world
     };
-
     player.watched_section.store(new_cylindrical);
 
-    if let ClientPlatform::Java(_) = player.client.as_ref() {
+    if let ClientPlatform::Java(client) = player.client.as_ref() {
         for chunk in &unloading_chunks {
-            player
-                .client
+            client
                 .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                 .await;
         }

@@ -17,25 +17,22 @@ impl Cylindrical {
         }
     }
 
-    pub fn for_each_changed_chunk(
-        old_cylindrical: Self,
-        new_cylindrical: Self,
-        newly_included: &mut Vec<Vector2<i32>>,
-        just_removed: &mut Vec<Vector2<i32>>,
+    pub fn changed_chunks(
+        old: Self,
+        new: Self,
+    ) -> (
+        impl Iterator<Item = Vector2<i32>>,
+        impl Iterator<Item = Vector2<i32>>,
     ) {
-        for new_cylindrical_chunk in new_cylindrical.all_chunks_within() {
-            if !old_cylindrical.is_within_distance(new_cylindrical_chunk.x, new_cylindrical_chunk.y)
-            {
-                newly_included.push(new_cylindrical_chunk);
-            }
-        }
+        let loading = new
+            .all_chunks_within()
+            .filter(move |c| !old.is_within_distance(c.x, c.y));
 
-        for old_cylindrical_chunk in old_cylindrical.all_chunks_within() {
-            if !new_cylindrical.is_within_distance(old_cylindrical_chunk.x, old_cylindrical_chunk.y)
-            {
-                just_removed.push(old_cylindrical_chunk);
-            }
-        }
+        let unloading = old
+            .all_chunks_within()
+            .filter(move |c| !new.is_within_distance(c.x, c.y));
+
+        (loading, unloading)
     }
 
     #[allow(dead_code)]

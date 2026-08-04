@@ -126,7 +126,7 @@ async fn setworldspawn(
     let previous_pitch = current_info.spawn_pitch;
     let mut new_yaw = yaw;
     let mut new_pitch = pitch;
-    let event = SpawnChangeEvent::new(
+    let mut event = SpawnChangeEvent::new(
         world.clone(),
         previous_position,
         previous_yaw,
@@ -135,7 +135,12 @@ async fn setworldspawn(
         new_yaw,
         new_pitch,
     );
-    let event = server.plugin_manager.fire(event).await;
+    if let Some(server_arc) = world.server.upgrade() {
+        server_arc
+            .plugin_manager
+            .fire(&server_arc, &mut event)
+            .await;
+    }
     new_position = event.new_position;
     new_yaw = event.new_yaw;
     new_pitch = event.new_pitch;

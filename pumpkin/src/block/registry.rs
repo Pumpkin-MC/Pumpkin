@@ -460,7 +460,7 @@ impl BlockRegistry {
         &self,
         player: &Arc<Player>,
         placed_block: &'static Block,
-        server: &Server,
+        server: &Arc<Server>,
         use_item_on: &SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
@@ -605,16 +605,16 @@ impl BlockRegistry {
             }
         }
 
-        let event = crate::plugin::block::block_place::BlockPlaceEvent::new(
+        let mut event = crate::plugin::block::block_place::BlockPlaceEvent::new(
             player.clone(),
             placed_block,
             clicked_block,
             final_block_pos,
             true,
         );
-        let event = server
+        server
             .plugin_manager
-            .fire::<crate::plugin::block::block_place::BlockPlaceEvent>(event)
+            .fire::<crate::plugin::block::block_place::BlockPlaceEvent>(server, &mut event)
             .await;
         if event.cancelled {
             return Ok(None);
