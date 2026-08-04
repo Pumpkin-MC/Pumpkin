@@ -37,6 +37,7 @@ pub mod goal_selector;
 pub mod goat_ram;
 pub mod guardian_attack;
 pub mod horse_breed;
+pub mod illusioner_spell;
 pub mod interact_with_door;
 pub mod look_around;
 pub mod look_at_entity;
