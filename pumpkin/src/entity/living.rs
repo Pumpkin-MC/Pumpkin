@@ -2973,8 +2973,21 @@ impl EntityBase for LivingEntity {
             // Current active item
             {
                 let item_in_use = self.item_in_use.lock().await.clone();
+                let remaining_use_ticks = item_in_use
+                    .is_some()
+                    .then(|| self.item_use_time.fetch_sub(1, Ordering::Relaxed));
+
                 if let Some(item) = item_in_use.as_ref()
-                    && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
+                    && let Some(player) = caller.get_player()
+                {
+                    server
+                        .item_registry
+                        .on_use_tick(item, player, remaining_use_ticks.unwrap_or(0))
+                        .await;
+                }
+
+                if let Some(item) = item_in_use.as_ref()
+                    && remaining_use_ticks.is_some_and(|r| r <= 0)
                 {
                     // Consume item
                     if let Some(food) = item.get_data_component::<FoodImpl>()
