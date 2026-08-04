@@ -181,18 +181,59 @@ fn rotate_direction(dir: BlockDirection, rotation: Rotation) -> BlockDirection {
     }
 }
 
+/// Matches vanilla `Mirror.rotation()`: `LEFT_RIGHT` is `OctahedralGroup.INVERT_Z`
+/// (flips north/south), `FRONT_BACK` is `OctahedralGroup.INVERT_X` (flips east/west).
 const fn mirror_direction(dir: BlockDirection, mirror: Mirror) -> BlockDirection {
     match mirror {
         Mirror::None => dir,
         Mirror::LeftRight => match dir {
-            BlockDirection::East => BlockDirection::West,
-            BlockDirection::West => BlockDirection::East,
-            _ => dir,
-        },
-        Mirror::FrontBack => match dir {
             BlockDirection::North => BlockDirection::South,
             BlockDirection::South => BlockDirection::North,
             _ => dir,
         },
+        Mirror::FrontBack => match dir {
+            BlockDirection::East => BlockDirection::West,
+            BlockDirection::West => BlockDirection::East,
+            _ => dir,
+        },
+    }
+}
+
+#[cfg(test)]
+mod mirror_direction_tests {
+    use super::*;
+
+    #[test]
+    fn left_right_flips_north_south() {
+        assert!(
+            mirror_direction(BlockDirection::North, Mirror::LeftRight) == BlockDirection::South
+        );
+        assert!(
+            mirror_direction(BlockDirection::South, Mirror::LeftRight) == BlockDirection::North
+        );
+        assert!(mirror_direction(BlockDirection::East, Mirror::LeftRight) == BlockDirection::East);
+    }
+
+    #[test]
+    fn front_back_flips_east_west() {
+        assert!(mirror_direction(BlockDirection::East, Mirror::FrontBack) == BlockDirection::West);
+        assert!(mirror_direction(BlockDirection::West, Mirror::FrontBack) == BlockDirection::East);
+        assert!(
+            mirror_direction(BlockDirection::North, Mirror::FrontBack) == BlockDirection::North
+        );
+    }
+
+    #[test]
+    fn none_is_identity() {
+        for dir in [
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::East,
+            BlockDirection::West,
+            BlockDirection::Up,
+            BlockDirection::Down,
+        ] {
+            assert!(mirror_direction(dir, Mirror::None) == dir);
+        }
     }
 }
