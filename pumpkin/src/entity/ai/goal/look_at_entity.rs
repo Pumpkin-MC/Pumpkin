@@ -120,7 +120,7 @@ impl Goal for LookAtEntityGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
             let mob_entity = mob.get_mob_entity();
             if let Some(target) = &self.target {

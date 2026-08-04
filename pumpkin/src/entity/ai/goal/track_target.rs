@@ -115,7 +115,7 @@ impl TrackTargetGoal {
 }
 
 impl Goal for TrackTargetGoal {
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
             let mob_entity = mob.get_mob_entity();
             let target_arc = mob_entity.target.lock().await.clone();

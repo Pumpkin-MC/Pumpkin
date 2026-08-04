@@ -73,7 +73,7 @@ impl Goal for CamelSitGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             if self.pose_ticks < MIN_POSE_TICKS {
                 return true;

@@ -267,7 +267,7 @@ impl Goal for GoatRamGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             match &self.phase {
                 Some(RamPhase::Preparing { target, .. } | RamPhase::Charging { target, .. }) => {
