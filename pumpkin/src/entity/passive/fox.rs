@@ -19,9 +19,10 @@ use crate::entity::{
         active_target::ActiveTargetGoal, breed::BreedGoal,
         climb_on_top_of_powder_snow::ClimbOnTopOfPowderSnowGoal, escape_danger::EscapeDangerGoal,
         follow_parent::FollowParentGoal, fox_faceplant::FoxFaceplantGoal,
-        fox_pounce::FoxPounceGoal, fox_sleep::FoxSleepGoal, fox_stalk_prey::StalkPreyGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
+        fox_melee_attack::FoxMeleeAttackGoal, fox_pounce::FoxPounceGoal, fox_sleep::FoxSleepGoal,
+        fox_stalk_prey::StalkPreyGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     passive::animal::Animal,
@@ -90,13 +91,16 @@ impl FoxVariant {
 /// `isSleeping`/`isFaceplanted`/`isDefending`), biome-based variant, sleeping, and the
 /// crouch/stalk/pounce state machine.
 ///
-/// PR-2 scope so far: `FaceplantGoal`, clearing `isFaceplanted` back to `false` -- the pounce
-/// goal could already set it on a snow landing, but nothing cleared it back until this landed.
+/// PR-2 scope so far: `FaceplantGoal` (clearing `isFaceplanted` back to `false` -- the pounce
+/// goal could already set it on a snow landing, but nothing cleared it back until this landed),
+/// and the melee attack goal (gated off while sitting/sleeping/crouching/faceplanted, matching
+/// vanilla's `FoxMeleeAttackGoal.canUse` -- the `FOX_BITE` sound on a successful bite is left as
+/// a documented simplification, see `fox_melee_attack.rs`).
 ///
 /// Still deferred to this same follow-up PR: item-in-mouth mechanics (hold/steal/spit/eat), the
-/// melee attack goal, the three `AvoidEntityGoal` registrations, trust list +
-/// `DefendTrustedTargetGoal`, berries-eating, village-stroll, and per-variant target-goal
-/// ordering (all foxes currently hunt chickens/rabbits with the same priority, rather than red
+/// three `AvoidEntityGoal` registrations, trust list + `DefendTrustedTargetGoal`, berries-eating,
+/// village-stroll, and per-variant target-goal ordering (all foxes currently hunt
+/// chickens/rabbits with the same priority, rather than red
 /// foxes preferring land prey and snow foxes preferring fish).
 ///
 /// Wiki: <https://minecraft.wiki/w/Fox>
@@ -137,10 +141,15 @@ impl FoxEntity {
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.2, TEMPT_ITEMS, false)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
-            // Below `WanderAroundGoal`'s priority 6 so stalking/pouncing/sleeping always
-            // preempts idle wandering when their own gates are satisfied.
+            // Below `WanderAroundGoal`'s priority 6 so stalking/pouncing/sleeping/melee always
+            // preempts idle wandering when their own gates are satisfied. Equal-priority goals
+            // are never preempted by one another (`can_be_replaced_by` needs strictly-lower
+            // priority) and ties break by insertion order, so melee is registered before sleep
+            // here to match vanilla's own relative order (`FoxMeleeAttackGoal` before
+            // `SleepGoal`, both priority 7 in `Fox.java`).
             goal_selector.add_goal(5, StalkPreyGoal::new());
             goal_selector.add_goal(5, FoxPounceGoal::new());
+            goal_selector.add_goal(5, FoxMeleeAttackGoal::new());
             goal_selector.add_goal(5, FoxSleepGoal::new());
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(

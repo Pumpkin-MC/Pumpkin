@@ -30,6 +30,7 @@ pub mod follow_flock_leader;
 pub mod follow_owner;
 pub mod follow_parent;
 pub mod fox_faceplant;
+pub mod fox_melee_attack;
 pub mod fox_pounce;
 pub mod fox_sleep;
 pub mod fox_stalk_prey;
