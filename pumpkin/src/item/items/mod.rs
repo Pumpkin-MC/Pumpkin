@@ -29,6 +29,7 @@ pub mod shears;
 pub mod shovel;
 pub mod snowball;
 pub mod spawn_egg;
+pub mod spyglass;
 pub mod swords;
 pub mod trident;
 pub mod wind_charge;
@@ -73,6 +74,7 @@ use mace::MaceItem;
 use shears::ShearsItem;
 use shovel::ShovelItem;
 use snowball::SnowBallItem;
+use spyglass::SpyglassItem;
 use std::sync::Arc;
 use swords::SwordItem;
 use trident::TridentItem;
@@ -155,6 +157,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(LingeringPotionItem);
     manager.register(BundleItem);
     manager.register(LeadItem);
+    manager.register(SpyglassItem);
     manager.register(ShearsItem);
 
     Arc::new(manager)
