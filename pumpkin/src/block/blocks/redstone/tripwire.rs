@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use pumpkin_data::item::Item;
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId,
     block_properties::{BlockProperties, HorizontalFacing},
@@ -101,11 +100,7 @@ impl BlockBehaviour for TripwireBlock {
         Box::pin(async move {
             let has_shears = {
                 let main_hand_item_stack = args.player.inventory().held_item();
-                main_hand_item_stack
-                    .lock()
-                    .await
-                    .get_item()
-                    .eq(&Item::SHEARS)
+                main_hand_item_stack.lock().await.is_shears()
             };
             if has_shears {
                 let mut props = TripwireProperties::from_state_id(args.state.id, args.block);

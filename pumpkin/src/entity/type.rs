@@ -116,6 +116,7 @@ use crate::entity::projectile::snowball::SnowballEntity;
 use crate::entity::projectile::splash_potion::SplashPotionEntity;
 use crate::entity::projectile::trident::TridentEntity;
 use crate::entity::projectile::wind_charge::{WIND_CHARGE_GRAVITY, WindChargeEntity};
+use crate::entity::projectile::wither_skull::WitherSkullEntity;
 use crate::entity::tnt::TNTEntity;
 use crate::entity::vehicle::boat::BoatEntity;
 use crate::entity::vehicle::minecart::MinecartEntity;
@@ -280,6 +281,7 @@ pub fn from_type(
         }
         id if id == EntityType::FIREBALL.id => Arc::new(FireballEntity::new(entity)),
         id if id == EntityType::SMALL_FIREBALL.id => Arc::new(SmallFireballEntity::new(entity)),
+        id if id == EntityType::WITHER_SKULL.id => Arc::new(WitherSkullEntity::new(entity)),
         id if id == EntityType::WIND_CHARGE.id => {
             let thrown = ThrownItemEntity {
                 entity,
