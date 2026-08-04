@@ -108,26 +108,25 @@ impl FoxVariant {
 /// `isSleeping`/`isFaceplanted`/`isDefending`), biome-based variant, sleeping, and the
 /// crouch/stalk/pounce state machine.
 ///
-/// PR-2 scope so far: `FaceplantGoal` (clearing `isFaceplanted` back to `false` -- the pounce
-/// goal could already set it on a snow landing, but nothing cleared it back until this landed);
-/// the melee attack goal (gated off while sitting/sleeping/crouching/faceplanted, matching
-/// vanilla's `FoxMeleeAttackGoal.canUse` -- the `FOX_BITE` sound on a successful bite is left as
-/// a documented simplification, see `fox_melee_attack.rs`); the three `AvoidEntityGoal`
+/// PR-2 scope: `FaceplantGoal` (clearing `isFaceplanted` back to `false` -- the pounce goal could
+/// already set it on a snow landing, but nothing cleared it back until this landed); the melee
+/// attack goal (gated off while sitting/sleeping/crouching/faceplanted, matching vanilla's
+/// `FoxMeleeAttackGoal.canUse` -- the `FOX_BITE` sound on a successful bite is left as a
+/// documented simplification, see `fox_melee_attack.rs`); the three `AvoidEntityGoal`
 /// registrations (Player/Wolf/`PolarBear` -- vanilla `Fox.java`, not Player/Wolf/Monster as an
-/// earlier design pass had it); and the two-slot trust list plus `DefendTrustedTargetGoal` and
-/// trust inheritance on breeding.
+/// earlier design pass had it); the two-slot trust list plus `DefendTrustedTargetGoal` and trust
+/// inheritance on breeding; and per-variant target-goal ordering (red foxes prefer land prey and
+/// turtle eggs over fish; snow foxes prefer fish first -- `register_target_goals`).
 ///
-/// Still deferred to this same follow-up PR: item-in-mouth mechanics (hold/steal/spit/eat) --
-/// this needs a generic mob item-pickup pipeline that doesn't exist yet anywhere in this
-/// codebase (confirmed against `PillagerEntity`'s own identical gap,
-/// `pumpkin/src/entity/mob/pillager.rs`), plus a food-component query surface on `ItemStack` this
-/// pass didn't confirm exists; berries-eating (needs that same deferred mouth-item slot, a
-/// `MoveToBlockGoal` analog, and `SweetBerryBushBlock` age-state mutation from mob AI, none wired
-/// together yet); village-stroll (`pumpkin/src/world/village_poi.rs` has low-level POI
-/// classification/distance helpers, but no `ServerLevel.isVillage`-equivalent village-boundary
-/// query built on top of them yet, which `StrollThroughVillageGoal`'s `canUse` needs); and
-/// per-variant target-goal ordering (all foxes currently hunt chickens/rabbits with the same
-/// priority, rather than red foxes preferring land prey and snow foxes preferring fish).
+/// Still deferred: item-in-mouth mechanics (hold/steal/spit/eat) -- this needs a generic mob
+/// item-pickup pipeline that doesn't exist yet anywhere in this codebase (confirmed against
+/// `PillagerEntity`'s own identical gap, `pumpkin/src/entity/mob/pillager.rs`), plus a
+/// food-component query surface on `ItemStack` this pass didn't confirm exists; berries-eating
+/// (needs that same deferred mouth-item slot, a `MoveToBlockGoal` analog, and
+/// `SweetBerryBushBlock` age-state mutation from mob AI, none wired together yet); and
+/// village-stroll (`pumpkin/src/world/village_poi.rs` has low-level POI classification/distance
+/// helpers, but no `ServerLevel.isVillage`-equivalent village-boundary query built on top of them
+/// yet, which `StrollThroughVillageGoal`'s `canUse` needs).
 ///
 /// Wiki: <https://minecraft.wiki/w/Fox>
 pub struct FoxEntity {
@@ -139,6 +138,11 @@ pub struct FoxEntity {
     /// `Fox.DATA_TRUSTED_ID_0`/`_1`: up to two entities (usually the players that bred this fox
     /// or its ancestor) this fox won't flee from or attack via `DefendTrustedTargetGoal`.
     trusted: Mutex<[Option<Uuid>; 2]>,
+    /// Guards the one-time per-variant target-selector registration in `mob_init_data_tracker`
+    /// (mirrors `RabbitEntity::evil_goals_registered`'s reasoning: nothing else calls
+    /// `mob_init_data_tracker` more than once in practice, but the guard makes that an invariant
+    /// instead of an assumption).
+    target_goals_registered: std::sync::atomic::AtomicBool,
 }
 
 impl FoxEntity {
@@ -151,6 +155,7 @@ impl FoxEntity {
             variant: AtomicU8::new(VARIANT_UNSET),
             crouch_ticks: AtomicU8::new(0),
             trusted: Mutex::new([None, None]),
+            target_goals_registered: std::sync::atomic::AtomicBool::new(false),
         };
         let mob_arc = Arc::new(this);
         let mob_weak: Weak<dyn Mob> = {
@@ -245,22 +250,64 @@ impl FoxEntity {
 
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
             target_selector.add_goal(3, DefendTrustedTargetGoal::new());
-            // `Fox.landTargetGoal`, simplified: vanilla targets `Animal.class` filtered to
-            // chicken/rabbit via a single `NearestAttackableTargetGoal`; this codebase's
-            // `ActiveTargetGoal` only matches a single `EntityType`, so it's registered twice
-            // instead. Per-variant reordering against the (not yet ported) fish/turtle-egg
-            // target goals is deferred, see the struct doc comment.
-            target_selector.add_goal(
-                4,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::CHICKEN, false),
-            );
-            target_selector.add_goal(
-                4,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
-            );
+            // The land/turtle-egg/fish target goals are registered from `mob_init_data_tracker`
+            // once the biome variant is known, since their relative ordering depends on it (see
+            // `register_target_goals`).
         };
 
         mob_arc
+    }
+
+    /// `Fox.setTargetGoals`: red foxes prefer land prey (chicken/rabbit, vanilla's
+    /// `landTargetGoal`) and turtle eggs over fish; snow foxes prefer fish first.
+    ///
+    /// Vanilla's `landTargetGoal` targets `Animal.class` filtered to chicken/rabbit via a single
+    /// `NearestAttackableTargetGoal`; `turtleEggTargetGoal` targets `Turtle` filtered to
+    /// `BABY_ON_LAND_SELECTOR`; `fishTargetGoal` targets `AbstractFish` filtered to
+    /// `AbstractSchoolingFish` (cod/salmon, not the solitary pufferfish/tropical fish). This
+    /// codebase's `ActiveTargetGoal` only matches a single `EntityType`, so each vanilla goal is
+    /// registered as 1-2 separate `ActiveTargetGoal`s instead, mirroring how the land-target
+    /// split already worked before this method existed.
+    fn register_target_goals(&self, variant: FoxVariant) {
+        let mut target_selector = self.mob_entity.target_selector.lock().unwrap();
+
+        let (land_prio, fish_prio) = match variant {
+            FoxVariant::Red => (4, 6),
+            FoxVariant::Snow => (6, 4),
+        };
+
+        target_selector.add_goal(
+            land_prio,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::CHICKEN, false),
+        );
+        target_selector.add_goal(
+            land_prio,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::RABBIT, false),
+        );
+        target_selector.add_goal(
+            land_prio,
+            Box::new(ActiveTargetGoal::new(
+                &self.mob_entity,
+                &EntityType::TURTLE,
+                10,
+                false,
+                false,
+                Some(
+                    |target: Arc<crate::entity::living::LivingEntity>, _world| async move {
+                        target.entity.age.load(Relaxed) < 0 && !target.is_in_water()
+                    },
+                ),
+            )),
+        );
+
+        target_selector.add_goal(
+            fish_prio,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::COD, false),
+        );
+        target_selector.add_goal(
+            fish_prio,
+            ActiveTargetGoal::with_default(&self.mob_entity, &EntityType::SALMON, false),
+        );
     }
 
     fn flag(&self, mask: u8) -> bool {
@@ -511,6 +558,11 @@ impl Mob for FoxEntity {
                 )],
                 None,
             );
+            // `Fox.setTargetGoals`, called once the variant is known either way (freshly rolled
+            // above, or already restored from NBT before this ran).
+            if !self.target_goals_registered.swap(true, Relaxed) {
+                self.register_target_goals(self.variant());
+            }
         })
     }
 
