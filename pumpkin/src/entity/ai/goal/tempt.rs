@@ -3,10 +3,10 @@ use std::sync::Arc;
 use super::{Controls, Goal, GoalFuture};
 use crate::entity::EntityBase;
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob, player::Player};
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::item::Item;
 use pumpkin_util::math::vector3::Vector3;
 
-const TEMPT_RANGE: f64 = 10.0;
 const STOP_DISTANCE: f64 = 2.5;
 const SCARE_RANGE_SQUARED: f64 = 36.0;
 const SCARE_MOVE_THRESHOLD_SQUARED: f64 = 0.01;
@@ -81,15 +81,22 @@ impl TemptGoal {
         self.is_tempt_item(&*off.lock().await)
     }
 
+    fn tempt_range(mob: &dyn Mob) -> f64 {
+        mob.get_mob_entity()
+            .living_entity
+            .get_attribute_value(&Attributes::TEMPT_RANGE)
+    }
+
     async fn find_tempting_player(&self, mob: &dyn Mob) -> Option<Arc<Player>> {
         let mob_entity = mob.get_mob_entity();
         let pos = mob_entity.living_entity.entity.pos.load();
         let world = mob_entity.living_entity.entity.world.load();
+        let range = Self::tempt_range(mob);
 
         // Vanilla TemptGoal#canUse: `getNearestPlayer` selects the closest qualifying player,
         // not an arbitrary one in range.
         let mut nearest: Option<(Arc<Player>, f64)> = None;
-        for player in world.get_nearby_players(pos, TEMPT_RANGE) {
+        for player in world.get_nearby_players(pos, range) {
             if !self.is_holding_tempt_item(&player).await {
                 continue;
             }
@@ -104,7 +111,8 @@ impl TemptGoal {
     async fn is_player_still_tempting(&self, player: &Player, mob: &dyn Mob) -> bool {
         let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
         let player_pos = player.get_entity().pos.load();
-        if mob_pos.squared_distance_to_vec(&player_pos) > TEMPT_RANGE * TEMPT_RANGE {
+        let range = Self::tempt_range(mob);
+        if mob_pos.squared_distance_to_vec(&player_pos) > range * range {
             return false;
         }
         self.is_holding_tempt_item(player).await
