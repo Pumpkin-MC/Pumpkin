@@ -45,10 +45,16 @@ impl EntityBase for EndCrystalEntity {
         _amount: f32,
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&'a dyn EntityBase>,
+        source: Option<&'a dyn EntityBase>,
         _cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
+            if source.is_some_and(|source| {
+                source.get_entity().entity_type == &pumpkin_data::entity::EntityType::ENDER_DRAGON
+            }) {
+                return false;
+            }
+
             self.entity.remove().await;
             if !is_explosion_damage(&damage_type) {
                 self.entity
