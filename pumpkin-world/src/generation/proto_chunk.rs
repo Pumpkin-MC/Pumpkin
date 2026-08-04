@@ -180,8 +180,16 @@ impl TerrainCache {
 impl ProtoChunk {
     #[must_use]
     pub fn new(x: i32, z: i32, generator: &super::generator::WorldGenerator) -> Self {
-        let dimension = generator.dimension();
-        let height = dimension.height as u16;
+        let (height, bottom_y) = match generator {
+            super::generator::WorldGenerator::Noise(noise_gen) => (
+                noise_gen.settings.shape.height,
+                noise_gen.settings.shape.min_y,
+            ),
+            super::generator::WorldGenerator::Flat(flat_gen) => (
+                flat_gen.dimension.logical_height as u16,
+                flat_gen.dimension.min_y as i8,
+            ),
+        };
         let section_count = (height as usize) / 16;
 
         let default_block = match generator {
@@ -223,7 +231,7 @@ impl ProtoChunk {
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
             structure_starts: FxHashMap::default(),
             height,
-            bottom_y: dimension.min_y as i8,
+            bottom_y,
             sea_level,
             stage: StagedChunkEnum::Empty,
             light: ChunkLight {
@@ -236,7 +244,7 @@ impl ProtoChunk {
             },
             carving_mask: crate::generation::carver::mask::CarvingMask::new(
                 height as i32,
-                dimension.min_y,
+                bottom_y as i32,
             ),
             blending_data: None,
             pending_block_entities: Vec::new(),

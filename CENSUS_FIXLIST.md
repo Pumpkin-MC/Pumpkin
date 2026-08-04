@@ -8,25 +8,19 @@ Jukebox song end-padding — fixed at `b560f26`). This file tracks what's left.
 
 ## Newly found, not yet fixed
 
-- **SheepEntity NBT corruption (higher severity than the age-up fix that found it)**:
-  `SheepEntity::write_nbt`/`read_nbt_non_mut` call
-  `self.mob_entity.living_entity.entity.write_nbt` directly instead of
-  `self.mob_entity.living_entity.write_nbt`, unlike every other animal (pig/cow/
-  chicken). This skips `LivingEntity`'s own NBT (Health, AbsorptionAmount, active
-  effects, fall distance) entirely for sheep, and also skips
-  `write_animal_nbt`/`read_animal_nbt` (breeding love-ticks/breeder persistence).
-  Sheep saved and reloaded likely lose health/effects/breeding state. Needs its own
-  dedicated fix — a real data-loss bug, not cosmetic.
+- ~~SheepEntity NBT corruption~~ **fixed** (pre-existing, earlier this session):
+  `write_nbt`/`read_nbt_non_mut` now go through `LivingEntity::write_nbt` plus
+  `write_ageable_nbt`/`write_animal_nbt`, matching pig/cow/chicken.
 - ~~Sheep::shear() velocity jitter is ~4x narrower than vanilla~~ **fixed** (`a3cac37`):
   `shear_drop_velocity` now computes base+jitter matching vanilla's combined range.
-  Separate finding surfaced during the fix, not yet folded in: wool drops spawn at
-  the sheep's raw Y instead of `Y + 1.0` (`Entity.spawnAtLocation`'s y-offset arg).
+- ~~Sheep wool drop Y-offset~~ **fixed** (`372d2b5`): drops now spawn at `Y + 1.0` via
+  `drop_spawn_pos`, matching `Entity.spawnAtLocation`'s offset argument.
 - ~~MerchantMenu offer stock gating~~ **fixed** (`08f5a8e`): `offer_matches` now
   disqualifies `uses >= max_uses` offers. `is_disabled` deliberately NOT used as the
-  gate — it's actually `!rewardExp`, not vanilla's out-of-stock concept; a real
-  wire-protocol bug was found instead (Pumpkin sends `is_disabled`/`!rewardExp` in the
-  byte slot vanilla uses for `isOutOfStock()`, so exhausted trades never grey out
-  client-side) — left as a separate follow-up, not folded into this fix.
+  gate — it's actually `!rewardExp`, not vanilla's out-of-stock concept.
+- ~~MerchantOffer wire-protocol out-of-stock byte~~ **fixed** (`372d2b5`): the wire
+  writer now sends `uses >= max_uses` in the slot vanilla uses for `isOutOfStock()`,
+  instead of the unrelated `is_disabled`/`!rewardExp` flag.
 
 ## Other real gaps this fresh sample surfaced (not yet dispatched)
 
