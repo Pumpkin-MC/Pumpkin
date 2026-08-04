@@ -115,7 +115,9 @@ pub mod vault;
 pub mod coral;
 
 // Misc / abstract
+pub mod abstract_multiface;
 pub mod abstract_wall_mounting;
+pub mod multiface_spreader;
 
 pub mod beacon;
 pub mod heavy_core;
