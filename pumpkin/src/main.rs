@@ -24,7 +24,7 @@ use pumpkin::{
     data::VanillaData,
     stop_or_exit_server,
 };
-use pumpkin::{PumpkinServer, stop_server};
+use pumpkin::{PumpkinServer, restore_terminal, stop_server};
 
 use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_util::text::{
@@ -160,6 +160,7 @@ async fn main() {
             .to_pretty_console()
     );
 
+    restore_terminal();
     exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
 }
 fn print_support_links_and_warning() {
@@ -247,6 +248,7 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
             );
         }
 
+        restore_terminal();
         exit(1);
     }
 
