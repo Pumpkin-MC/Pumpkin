@@ -315,11 +315,12 @@ impl PortalProcessor {
         if self.inside_portal_this_tick {
             self.inside_portal_this_tick = false;
             if allowed_to_teleport {
-                self.portal_time += 1;
                 let transition_time = self
                     .portal_type
                     .get_portal_transition_time(current_world, entity);
-                self.portal_time >= transition_time
+                let (ready, new_portal_time) = portal_tick_step(self.portal_time, transition_time);
+                self.portal_time = new_portal_time;
+                ready
             } else {
                 false
             }
@@ -336,5 +337,39 @@ impl PortalProcessor {
     #[must_use]
     pub const fn has_expired(&self) -> bool {
         self.portal_time == 0
+    }
+}
+
+const fn portal_tick_step(portal_time: u32, transition_time: u32) -> (bool, u32) {
+    (portal_time >= transition_time, portal_time + 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::portal_tick_step;
+
+    #[test]
+    fn not_ready_before_transition_time_elapsed() {
+        let transition_time = 4;
+        let mut portal_time = 0;
+        for _ in 0..transition_time {
+            let (ready, new_portal_time) = portal_tick_step(portal_time, transition_time);
+            assert!(!ready);
+            portal_time = new_portal_time;
+        }
+        assert_eq!(portal_time, transition_time);
+    }
+
+    #[test]
+    fn ready_exactly_at_transition_time() {
+        let transition_time = 4;
+        let (ready, _) = portal_tick_step(transition_time, transition_time);
+        assert!(ready);
+    }
+
+    #[test]
+    fn zero_transition_time_is_ready_immediately() {
+        let (ready, _) = portal_tick_step(0, 0);
+        assert!(ready);
     }
 }

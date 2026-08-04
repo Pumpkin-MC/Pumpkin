@@ -15,7 +15,7 @@ use pumpkin_util::math::{
     vector3::Vector3,
 };
 
-use crate::{block::entities::BlockEntity, world::World};
+use crate::{block::entities::BlockEntity, entity::EntityBase, world::World};
 
 pub struct MobSpawnerBlockEntity {
     pub position: BlockPos,
@@ -24,6 +24,8 @@ pub struct MobSpawnerBlockEntity {
     pub min_delay: i32,
     pub spawn_count: i32,
     pub spawn_range: i32,
+    pub max_nearby_entities: i32,
+    pub required_player_range: i32,
     pub entity_type: AtomicCell<Option<&'static EntityType>>,
 }
 
@@ -34,6 +36,8 @@ impl MobSpawnerBlockEntity {
     pub const DEFAULT_MIN_SPAWN_DELAY: i32 = 200;
     pub const DEFAULT_SPAWN_COUNT: i32 = 4;
     pub const DEFAULT_SPAWN_RANGE: i32 = 4;
+    pub const DEFAULT_MAX_NEARBY_ENTITIES: i32 = 6;
+    pub const DEFAULT_REQUIRED_PLAYER_RANGE: i32 = 16;
 
     #[must_use]
     pub const fn new(position: BlockPos, entity_type: Option<&'static EntityType>) -> Self {
@@ -44,6 +48,8 @@ impl MobSpawnerBlockEntity {
             min_delay: Self::DEFAULT_MIN_SPAWN_DELAY,
             spawn_count: Self::DEFAULT_SPAWN_COUNT,
             spawn_range: Self::DEFAULT_SPAWN_RANGE,
+            max_nearby_entities: Self::DEFAULT_MAX_NEARBY_ENTITIES,
+            required_player_range: Self::DEFAULT_REQUIRED_PLAYER_RANGE,
             entity_type: AtomicCell::new(entity_type),
         }
     }
@@ -54,6 +60,13 @@ impl MobSpawnerBlockEntity {
         nbt.put_int("x", position.0.x);
         nbt.put_int("y", position.0.y);
         nbt.put_int("z", position.0.z);
+        nbt.put_short("Delay", self.delay.load(Ordering::Relaxed) as i16);
+        nbt.put_short("MinSpawnDelay", self.min_delay as i16);
+        nbt.put_short("MaxSpawnDelay", self.max_delay as i16);
+        nbt.put_short("SpawnCount", self.spawn_count as i16);
+        nbt.put_short("MaxNearbyEntities", self.max_nearby_entities as i16);
+        nbt.put_short("RequiredPlayerRange", self.required_player_range as i16);
+        nbt.put_short("SpawnRange", self.spawn_range as i16);
         if let Some(entity_type) = self.entity_type.load() {
             let mut spawn_entry = NbtCompound::new();
 
@@ -100,6 +113,16 @@ impl BlockEntity for MobSpawnerBlockEntity {
     fn tick<'a>(&'a self, world: &'a Arc<World>) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             if let Some(entity_type) = &self.entity_type.load() {
+                if world
+                    .get_closest_player_where(
+                        self.position.to_centered_f64(),
+                        self.required_player_range as f64,
+                        |player| !player.is_spectator() && player.living_entity.health.load() > 0.0,
+                    )
+                    .is_none()
+                {
+                    return;
+                }
                 if self.delay.load(Ordering::Relaxed) == -1 {
                     self.update_spawns(world).await;
                 } else {
@@ -113,11 +136,11 @@ impl BlockEntity for MobSpawnerBlockEntity {
 
                     let spawn_pos = Vector3::new(
                         pos.x as f64
-                            + (rand::random::<f64>() + rand::random::<f64>()) * spawn_range as f64
+                            + spawn_offset(rand::random(), rand::random(), spawn_range as f64)
                             + 0.5,
                         (pos.y + rand::random_range(0..3) - 1) as f64,
                         pos.z as f64
-                            + (rand::random::<f64>() + rand::random::<f64>()) * spawn_range as f64
+                            + spawn_offset(rand::random(), rand::random(), spawn_range as f64)
                             + 0.5,
                     );
                     if !world.is_space_empty(BoundingBox::new_from_pos(
@@ -155,17 +178,23 @@ impl BlockEntity for MobSpawnerBlockEntity {
     {
         let delay = nbt.get_short("Delay").unwrap_or(Self::DEFAULT_DELAY as i16) as i32;
         let min_delay = nbt
-            .get_int("MinSpawnDelay")
-            .unwrap_or(Self::DEFAULT_MIN_SPAWN_DELAY);
+            .get_short("MinSpawnDelay")
+            .unwrap_or(Self::DEFAULT_MIN_SPAWN_DELAY as i16) as i32;
         let max_delay = nbt
-            .get_int("MaxSpawnDelay")
-            .unwrap_or(Self::DEFAULT_MAX_SPAWN_DELAY);
+            .get_short("MaxSpawnDelay")
+            .unwrap_or(Self::DEFAULT_MAX_SPAWN_DELAY as i16) as i32;
         let spawn_count = nbt
-            .get_int("SpawnCount")
-            .unwrap_or(Self::DEFAULT_SPAWN_COUNT);
+            .get_short("SpawnCount")
+            .unwrap_or(Self::DEFAULT_SPAWN_COUNT as i16) as i32;
+        let max_nearby_entities =
+            nbt.get_short("MaxNearbyEntities")
+                .unwrap_or(Self::DEFAULT_MAX_NEARBY_ENTITIES as i16) as i32;
+        let required_player_range =
+            nbt.get_short("RequiredPlayerRange")
+                .unwrap_or(Self::DEFAULT_REQUIRED_PLAYER_RANGE as i16) as i32;
         let spawn_range = nbt
-            .get_int("SpawnRange")
-            .unwrap_or(Self::DEFAULT_SPAWN_RANGE);
+            .get_short("SpawnRange")
+            .unwrap_or(Self::DEFAULT_SPAWN_RANGE as i16) as i32;
 
         let entity_type = nbt
             .get_compound("SpawnData")
@@ -183,6 +212,8 @@ impl BlockEntity for MobSpawnerBlockEntity {
             min_delay,
             spawn_count,
             spawn_range,
+            max_nearby_entities,
+            required_player_range,
             entity_type: AtomicCell::new(entity_type),
         }
     }
@@ -213,5 +244,50 @@ impl BlockEntity for MobSpawnerBlockEntity {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+fn spawn_offset(r1: f64, r2: f64, range: f64) -> f64 {
+    (r1 - r2) * range
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spawn_offset_is_symmetric_around_zero() {
+        assert!(spawn_offset(0.1, 0.9, 4.0) < 0.0);
+        assert!(spawn_offset(0.9, 0.1, 4.0) > 0.0);
+        assert_eq!(spawn_offset(0.5, 0.5, 4.0), 0.0);
+    }
+
+    #[test]
+    fn nbt_round_trip_preserves_spawner_fields() {
+        let position = BlockPos::new(1, 2, 3);
+        let entity = MobSpawnerBlockEntity {
+            position,
+            delay: AtomicI32::new(123),
+            max_delay: 900,
+            min_delay: 300,
+            spawn_count: 5,
+            spawn_range: 6,
+            max_nearby_entities: 8,
+            required_player_range: 12,
+            entity_type: AtomicCell::new(None),
+        };
+
+        let mut nbt = NbtCompound::new();
+        entity.write_nbt(&mut nbt);
+
+        let restored = MobSpawnerBlockEntity::from_nbt(&nbt, position);
+
+        assert_eq!(restored.delay.load(Ordering::Relaxed), 123);
+        assert_eq!(restored.max_delay, 900);
+        assert_eq!(restored.min_delay, 300);
+        assert_eq!(restored.spawn_count, 5);
+        assert_eq!(restored.spawn_range, 6);
+        assert_eq!(restored.max_nearby_entities, 8);
+        assert_eq!(restored.required_player_range, 12);
     }
 }
