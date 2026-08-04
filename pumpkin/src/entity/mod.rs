@@ -129,6 +129,60 @@ pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub type TeleportFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
+/// vanilla `EntitySelector.pushableBy`.
+///
+/// Whether scoreboard team collision rules allow an entity with the resolved `pusher_rule`/
+/// `pusher_team_name` (see [`pusher_team_state`]) to push `other`. Entities with no team resolve
+/// to `CollisionRule::Always`, so untagged entities always push normally.
+/// (net.minecraft.world.entity.EntitySelector, decompiled 26.2, lines 29-56)
+async fn team_allows_push(
+    world: &World,
+    pusher_rule: crate::world::scoreboard::CollisionRule,
+    pusher_team_name: Option<&str>,
+    other: &dyn EntityBase,
+) -> bool {
+    use crate::world::scoreboard::{
+        CollisionRule, collision_rule_permits_push, entity_scoreboard_name,
+    };
+
+    if matches!(pusher_rule, CollisionRule::Never) {
+        return false;
+    }
+
+    let other_name = entity_scoreboard_name(other);
+    let scoreboard = world.scoreboard.lock().await;
+    let other_team = scoreboard.get_team_for_scoreboard_name(&other_name);
+    let other_rule = other_team.map_or(CollisionRule::Always, |t| t.collision_rule);
+    let same_team = pusher_team_name.is_some_and(|name| other_team.is_some_and(|t| t.name == name));
+
+    collision_rule_permits_push(pusher_rule, other_rule, same_team)
+}
+
+/// Resolves the pusher's own collision rule/team name once per `push_entities` call, and whether
+/// any teams exist at all (so the common no-teams case can skip per-candidate locking entirely).
+async fn pusher_team_state(
+    world: &World,
+    pusher: &dyn EntityBase,
+) -> (
+    crate::world::scoreboard::CollisionRule,
+    Option<String>,
+    bool,
+) {
+    use crate::world::scoreboard::{CollisionRule, entity_scoreboard_name};
+
+    let scoreboard = world.scoreboard.lock().await;
+    if scoreboard.get_teams().is_empty() {
+        return (CollisionRule::Always, None, false);
+    }
+    let pusher_name = entity_scoreboard_name(pusher);
+    let team = scoreboard.get_team_for_scoreboard_name(&pusher_name);
+    (
+        team.map_or(CollisionRule::Always, |t| t.collision_rule),
+        team.map(|t| t.name.clone()),
+        true,
+    )
+}
+
 pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
     /// Called every tick for this entity.
     ///
@@ -469,6 +523,19 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
 
             let world = self_entity.world.load();
 
+            let (pusher_collision_rule, pusher_team_name, has_teams) =
+                pusher_team_state(&world, dyn_self.as_ref()).await;
+            if has_teams
+                && matches!(
+                    pusher_collision_rule,
+                    crate::world::scoreboard::CollisionRule::Never
+                )
+            {
+                // vanilla `EntitySelector.pushableBy`: own CollisionRule::NEVER makes the
+                // predicate `Predicates.alwaysFalse()`, emptying the candidate list entirely.
+                return false;
+            }
+
             let is_rideable_minecart = self_entity.entity_type.id == EntityType::MINECART.id;
             let is_abstract_minecart = is_rideable_minecart
                 || self_entity.entity_type.id == EntityType::CHEST_MINECART.id
@@ -506,6 +573,14 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                                 && !other.is_passenger().await
                                 && other.is_pushable()
                                 && other.get_entity().riding_cooldown.load(Relaxed) == 0
+                                && (!has_teams
+                                    || team_allows_push(
+                                        &world,
+                                        pusher_collision_rule,
+                                        pusher_team_name.as_deref(),
+                                        other.as_ref(),
+                                    )
+                                    .await)
                             {
                                 dyn_self
                                     .get_entity()
@@ -533,6 +608,14 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                                 || is_vehicle
                                 || !other.get_entity().has_vehicle().await)
                                 && other.is_pushable()
+                                && (!has_teams
+                                    || team_allows_push(
+                                        &world,
+                                        pusher_collision_rule,
+                                        pusher_team_name.as_deref(),
+                                        other.as_ref(),
+                                    )
+                                    .await)
                             {
                                 dyn_self.push(&other).await;
                                 pushed = true;
@@ -551,6 +634,14 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                 for player in players {
                     if player.get_entity().entity_id != self_entity.entity_id
                         && is_rideable_minecart
+                        && (!has_teams
+                            || team_allows_push(
+                                &world,
+                                pusher_collision_rule,
+                                pusher_team_name.as_deref(),
+                                player.as_ref(),
+                            )
+                            .await)
                     {
                         let player_base: Arc<dyn EntityBase> = player.clone();
                         dyn_self.push(&player_base).await;
@@ -561,7 +652,16 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
             } else {
                 let other_entities = world.get_entities_at_box(&entity_bb);
                 for other in other_entities {
-                    if other.get_entity().entity_id != self_entity.entity_id {
+                    if other.get_entity().entity_id != self_entity.entity_id
+                        && (!has_teams
+                            || team_allows_push(
+                                &world,
+                                pusher_collision_rule,
+                                pusher_team_name.as_deref(),
+                                other.as_ref(),
+                            )
+                            .await)
+                    {
                         dyn_self.push(&other).await;
                         pushed = true;
                     }
@@ -569,7 +669,16 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
 
                 let players = world.get_players_at_box(&entity_bb);
                 for player in players {
-                    if player.get_entity().entity_id != self_entity.entity_id {
+                    if player.get_entity().entity_id != self_entity.entity_id
+                        && (!has_teams
+                            || team_allows_push(
+                                &world,
+                                pusher_collision_rule,
+                                pusher_team_name.as_deref(),
+                                player.as_ref(),
+                            )
+                            .await)
+                    {
                         let player_base: Arc<dyn EntityBase> = player.clone();
                         dyn_self.push(&player_base).await;
                         pushed = true;

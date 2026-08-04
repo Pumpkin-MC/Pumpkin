@@ -195,6 +195,15 @@ impl Scoreboard {
         &self.teams
     }
 
+    /// Finds the team a scoreholder (player name, or UUID string for non-player entities)
+    /// belongs to. Mirrors `Scoreboard.getPlayersTeam` (`net.minecraft.world.scores.Scoreboard`).
+    #[must_use]
+    pub fn get_team_for_scoreboard_name(&self, name: &str) -> Option<&Team> {
+        self.teams
+            .values()
+            .find(|team| team.players.iter().any(|p| p == name))
+    }
+
     async fn broadcast_editioned<J: ClientPacket, B: BClientPacket>(
         world: &World,
         je_packet: &J,
@@ -1166,6 +1175,79 @@ impl CollisionRule {
             "pushOwnTeam" => Self::PushOwnTeam,
             _ => Self::Always,
         }
+    }
+}
+
+/// A scoreholder's scoreboard entry name: the player name for players, or the UUID string for
+/// any other entity (`net.minecraft.world.entity.Entity#getScoreboardName`).
+#[must_use]
+pub fn entity_scoreboard_name(entity: &dyn crate::entity::EntityBase) -> String {
+    entity.get_player().map_or_else(
+        || entity.get_entity().entity_uuid.to_string(),
+        |player| player.gameprofile.name.clone(),
+    )
+}
+
+/// vanilla `EntitySelector.pushableBy(Entity)`.
+///
+/// Whether `pusher` and `other` should push each other given their resolved collision rules
+/// (`Team.CollisionRule::ALWAYS` when a side has no team) and whether they share a team.
+/// (net.minecraft.world.entity.EntitySelector, decompiled 26.2, lines 29-56)
+#[must_use]
+pub const fn collision_rule_permits_push(
+    pusher: CollisionRule,
+    other: CollisionRule,
+    same_team: bool,
+) -> bool {
+    if matches!(pusher, CollisionRule::Never) || matches!(other, CollisionRule::Never) {
+        return false;
+    }
+    if (matches!(pusher, CollisionRule::PushOwnTeam) || matches!(other, CollisionRule::PushOwnTeam))
+        && same_team
+    {
+        return false;
+    }
+    (!matches!(pusher, CollisionRule::PushOtherTeams)
+        && !matches!(other, CollisionRule::PushOtherTeams))
+        || same_team
+}
+
+#[cfg(test)]
+mod collision_rule_tests {
+    use super::CollisionRule::{Always, Never, PushOtherTeams, PushOwnTeam};
+    use super::collision_rule_permits_push;
+
+    #[test]
+    fn no_team_always_pushes() {
+        assert!(collision_rule_permits_push(Always, Always, false));
+    }
+
+    #[test]
+    fn never_blocks_regardless_of_side_or_team() {
+        assert!(!collision_rule_permits_push(Never, Always, false));
+        assert!(!collision_rule_permits_push(Always, Never, false));
+        assert!(!collision_rule_permits_push(Never, Never, true));
+    }
+
+    #[test]
+    fn push_own_team_blocks_only_within_the_same_team() {
+        assert!(!collision_rule_permits_push(PushOwnTeam, Always, true));
+        assert!(collision_rule_permits_push(PushOwnTeam, Always, false));
+    }
+
+    #[test]
+    fn push_other_teams_blocks_across_teams_but_allows_within_same_team() {
+        assert!(!collision_rule_permits_push(PushOtherTeams, Always, false));
+        assert!(collision_rule_permits_push(PushOtherTeams, Always, true));
+    }
+
+    #[test]
+    fn push_own_team_wins_over_push_other_teams_on_same_team() {
+        assert!(!collision_rule_permits_push(
+            PushOwnTeam,
+            PushOtherTeams,
+            true
+        ));
     }
 }
 
