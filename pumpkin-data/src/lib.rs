@@ -342,6 +342,9 @@ pub use blocks::{Block, BlockId};
 #[path = "generated/chunk_gen_settings.rs"]
 pub mod chunk_gen_settings;
 
+#[cfg(feature = "chunk_gen_settings")]
+pub mod worldgen;
+
 #[cfg(feature = "carver")]
 #[rustfmt::skip]
 #[path = "generated/carver.rs"]
