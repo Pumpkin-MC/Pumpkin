@@ -5409,6 +5409,20 @@ impl InventoryPlayer for Player {
         })
     }
 
+    fn play_block_sound(&self, sound: Sound, pitch: f32) -> PlayerFuture<'_, ()> {
+        Box::pin(async move {
+            if let Some(pos) = self.open_container_pos.load() {
+                self.world().play_sound_fine(
+                    sound,
+                    SoundCategory::Blocks,
+                    &pos.to_centered_f64(),
+                    1.0,
+                    pitch,
+                );
+            }
+        })
+    }
+
     fn increment_stat(
         &self,
         category: StatisticCategory,
