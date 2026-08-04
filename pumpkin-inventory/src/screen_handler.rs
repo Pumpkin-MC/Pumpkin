@@ -35,6 +35,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     screen::WindowType,
+    sound::Sound,
     statistic::StatisticCategory,
 };
 use pumpkin_protocol::{
@@ -189,6 +190,9 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Awards experience points to the player (used for furnace smelting, etc.)
     fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()>;
+
+    /// Plays a block sound at the open container position.
+    fn play_block_sound(&self, sound: Sound, pitch: f32) -> PlayerFuture<'_, ()>;
 
     /// Increments a statistic for the player.
     fn increment_stat(
