@@ -71,6 +71,20 @@ impl BreathManager {
             let new_air = (prev - AIR_DEPLETION_RATE).max(0);
             if new_air != prev {
                 self.air_supply.store(new_air, Ordering::Relaxed);
+                if let Some(server) = player.world().server.upgrade() {
+                    let mut event = crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
+                        player.entity_id(),
+                        new_air,
+                    );
+                    tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current()
+                            .block_on(server.plugin_manager.fire(&server, &mut event));
+                    });
+                    if event.cancelled {
+                        self.air_supply.store(prev, Ordering::Relaxed);
+                        return;
+                    }
+                }
                 self.send_air_supply(player);
             }
 

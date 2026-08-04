@@ -17,6 +17,7 @@ impl Cylindrical {
         }
     }
 
+    #[inline]
     pub fn changed_chunks(
         old: Self,
         new: Self,
@@ -35,50 +36,59 @@ impl Cylindrical {
         (loading, unloading)
     }
 
-    #[allow(dead_code)]
-    const fn left(&self) -> i32 {
+    #[must_use]
+    #[inline]
+    pub const fn left(&self) -> i32 {
         self.center.x - self.view_distance.get() as i32 - 1
     }
 
-    #[allow(dead_code)]
-    const fn bottom(&self) -> i32 {
+    #[must_use]
+    #[inline]
+    pub const fn bottom(&self) -> i32 {
         self.center.y - self.view_distance.get() as i32 - 1
     }
 
-    #[allow(dead_code)]
-    const fn right(&self) -> i32 {
+    #[must_use]
+    #[inline]
+    pub const fn right(&self) -> i32 {
         self.center.x + self.view_distance.get() as i32 + 1
     }
 
-    #[allow(dead_code)]
-    const fn top(&self) -> i32 {
+    #[must_use]
+    #[inline]
+    pub const fn top(&self) -> i32 {
         self.center.y + self.view_distance.get() as i32 + 1
     }
 
     #[must_use]
-    pub fn is_within_distance(&self, x: i32, z: i32) -> bool {
-        if self.view_distance.get() == 1 {
+    #[inline]
+    pub const fn is_within_distance(&self, x: i32, z: i32) -> bool {
+        let vd = self.view_distance.get() as i64;
+        if vd == 1 {
             return false;
         }
-        let rel_x = ((x - self.center.x).abs() as i64 - 2).max(0);
-        let rel_z = ((z - self.center.y).abs() as i64 - 2).max(0);
+        let dx = (x - self.center.x).abs() as i64 - 2;
+        let dz = (z - self.center.y).abs() as i64 - 2;
+        let rel_x = if dx > 0 { dx } else { 0 };
+        let rel_z = if dz > 0 { dz } else { 0 };
 
         let hyp_sqr = rel_x * rel_x + rel_z * rel_z;
-        //The view distance should be converted to i64 first because u8 * u8 can overflow
-        hyp_sqr < (self.view_distance.get() as i64).pow(2)
+        hyp_sqr < vd * vd
     }
 
     /// Returns a precomputed list of relative chunk offset pairs `(dx, dy)` for a given view distance.
     #[must_use]
     #[inline]
-    pub fn get_offsets(view_distance: u8) -> &'static [(i8, i8)] {
-        let idx =
-            (view_distance as usize).min(pumpkin_data::chunk_view_lut::MAX_VIEW_DISTANCE as usize);
+    pub const fn get_offsets(view_distance: u8) -> &'static [(i8, i8)] {
+        let vd = view_distance as usize;
+        let max = pumpkin_data::chunk_view_lut::MAX_VIEW_DISTANCE as usize;
+        let idx = if vd < max { vd } else { max };
         pumpkin_data::chunk_view_lut::CHUNK_VIEW_LUT[idx]
     }
 
     /// Returns an iterator of all chunks within this cylinder using the precomputed LUT
     #[must_use]
+    #[inline]
     pub fn all_chunks_within(self) -> impl ExactSizeIterator<Item = Vector2<i32>> {
         let offsets = Self::get_offsets(self.view_distance.get());
         offsets.iter().map(move |&(dx, dy)| {

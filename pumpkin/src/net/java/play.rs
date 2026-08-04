@@ -1356,6 +1356,18 @@ impl JavaClient {
             return;
         };
 
+        let mut anim_event = crate::plugin::api::events::player::player_animation::PlayerAnimationEvent::new(
+            player.clone(),
+            match hand {
+                Hand::Left => crate::plugin::api::events::player::player_animation::PlayerAnimationType::ArmSwingOff,
+                Hand::Right => crate::plugin::api::events::player::player_animation::PlayerAnimationType::ArmSwingMain,
+            },
+        );
+        server.plugin_manager.fire(server, &mut anim_event).await;
+        if anim_event.cancelled {
+            return;
+        }
+
         let (yaw, pitch) = player.rotation();
         let hit_result = player
             .world()
@@ -1932,6 +1944,24 @@ impl JavaClient {
                     let entity = &player.get_entity();
                     let world = entity.world.load_full();
                     let (block, state) = world.get_block_and_state(&position);
+
+                    if let Some(server_arc) = world.server.upgrade() {
+                        let mut event =
+                            crate::plugin::api::events::block::block_damage::BlockDamageEvent::new(
+                                player.clone(),
+                                block,
+                                position,
+                                false,
+                            );
+                        server_arc
+                            .plugin_manager
+                            .fire(&server_arc, &mut event)
+                            .await;
+                        if event.cancelled {
+                            self.update_sequence(player, player_action.sequence.0);
+                            return;
+                        }
+                    }
 
                     if block == &pumpkin_data::Block::NOTE_BLOCK {
                         let props =

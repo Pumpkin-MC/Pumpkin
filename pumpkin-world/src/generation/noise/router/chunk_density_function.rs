@@ -5,7 +5,6 @@ use super::{
     chunk_noise_router::{ChunkNoiseFunctionComponent, MutableChunkNoiseFunctionComponentImpl},
     density_function::{IndexToNoisePos, NoiseFunctionComponentRange},
 };
-use enum_dispatch::enum_dispatch;
 use pumpkin_util::math::{lerp, lerp3, vector3::Vector3};
 
 use crate::generation::{biome_coords, positions::chunk_pos};
@@ -205,7 +204,7 @@ pub struct DensityInterpolator {
     first_pass: [f64; 8],
     second_pass: [f64; 4],
     third_pass: [f64; 2],
-    result: f64,
+    pub(crate) result: f64,
 
     pub(crate) vertical_cell_count: usize,
     min_value: f64,
@@ -737,7 +736,6 @@ impl CellCache {
     }
 }
 
-#[enum_dispatch(MutableChunkNoiseFunctionComponentImpl, NoiseFunctionComponentRange)]
 pub enum ChunkSpecificNoiseFunctionComponent {
     DensityInterpolator(DensityInterpolator),
     FlatCache(FlatCache),
@@ -745,4 +743,67 @@ pub enum ChunkSpecificNoiseFunctionComponent {
     CacheOnce(CacheOnce),
     CellCache(CellCache),
     Beardifier(crate::generation::noise::router::density_function::beardifier::Beardifier),
+}
+
+impl NoiseFunctionComponentRange for ChunkSpecificNoiseFunctionComponent {
+    #[inline]
+    fn min(&self) -> f64 {
+        match self {
+            Self::DensityInterpolator(d) => d.min(),
+            Self::FlatCache(f) => f.min(),
+            Self::Cache2D(c) => c.min(),
+            Self::CacheOnce(c) => c.min(),
+            Self::CellCache(c) => c.min(),
+            Self::Beardifier(b) => b.min(),
+        }
+    }
+
+    #[inline]
+    fn max(&self) -> f64 {
+        match self {
+            Self::DensityInterpolator(d) => d.max(),
+            Self::FlatCache(f) => f.max(),
+            Self::Cache2D(c) => c.max(),
+            Self::CacheOnce(c) => c.max(),
+            Self::CellCache(c) => c.max(),
+            Self::Beardifier(b) => b.max(),
+        }
+    }
+}
+
+impl MutableChunkNoiseFunctionComponentImpl for ChunkSpecificNoiseFunctionComponent {
+    #[inline]
+    fn sample(
+        &mut self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) -> f64 {
+        match self {
+            Self::DensityInterpolator(d) => d.sample(component_stack, pos, sample_options),
+            Self::FlatCache(f) => f.sample(component_stack, pos, sample_options),
+            Self::Cache2D(c) => c.sample(component_stack, pos, sample_options),
+            Self::CacheOnce(c) => c.sample(component_stack, pos, sample_options),
+            Self::CellCache(c) => c.sample(component_stack, pos, sample_options),
+            Self::Beardifier(b) => b.sample(component_stack, pos, sample_options),
+        }
+    }
+
+    #[inline]
+    fn fill(
+        &mut self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        array: &mut [f64],
+        mapper: &impl IndexToNoisePos,
+        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+    ) {
+        match self {
+            Self::DensityInterpolator(d) => d.fill(component_stack, array, mapper, sample_options),
+            Self::FlatCache(f) => f.fill(component_stack, array, mapper, sample_options),
+            Self::Cache2D(c) => c.fill(component_stack, array, mapper, sample_options),
+            Self::CacheOnce(c) => c.fill(component_stack, array, mapper, sample_options),
+            Self::CellCache(c) => c.fill(component_stack, array, mapper, sample_options),
+            Self::Beardifier(b) => b.fill(component_stack, array, mapper, sample_options),
+        }
+    }
 }
