@@ -370,7 +370,7 @@ pub fn build() -> TokenStream {
                 id: 5,
                 max: 5,
                 is_friendly: true,
-                is_persistent: true,
+                is_persistent: false,
                 despawn_distance: 128,
             };
             pub const WATER_AMBIENT: MobCategory = MobCategory {
