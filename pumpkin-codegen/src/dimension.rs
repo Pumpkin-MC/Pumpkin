@@ -148,9 +148,8 @@ pub fn build() -> TokenStream {
         };
 
         variants.extend(quote! {
-            pub const #format_name: Self = Self {
+            registry.register(Identifier::parse_static(#minecraft_name), Dimension {
                 id: #id,
-                minecraft_name: #minecraft_name,
                 fixed_time: #fixed_time,
                 has_skylight: #has_skylight,
                 has_ceiling: #has_ceiling,
@@ -166,7 +165,7 @@ pub fn build() -> TokenStream {
                 fog_color: #fog_color_literal,
                 cloud_color: #cloud_color_literal,
                 timelines: #timelines_literal,
-            };
+            })?;
         });
 
         name_to_type.extend(quote! {
@@ -175,16 +174,28 @@ pub fn build() -> TokenStream {
     }
 
     quote!(
-        use pumpkin_util::math::int_provider::{
-            BiasedToBottomIntProvider, ClampedIntProvider, TrapezoidIntProvider, ClampedNormalIntProvider,
-            ConstantIntProvider, IntProvider, NormalIntProvider, UniformIntProvider,
-            WeightedEntry, WeightedListIntProvider,
-        };
+        use pumpkin_util::{identifier::Identifier, math::int_provider::{
+            BiasedToBottomIntProvider, ClampedIntProvider, ClampedNormalIntProvider, ConstantIntProvider,
+            IntProvider, NormalIntProvider, TrapezoidIntProvider, UniformIntProvider, WeightedEntry,
+            WeightedListIntProvider,
+        }};
+        use std::sync::{Arc, LazyLock};
+        use pumpkin_registry::{Registry, error::RegistryInsertError};
+
+        pub static DIMENSIONS: LazyLock<Arc<Registry<Dimension>>> =
+            LazyLock::new(|| {
+                let registry = Arc::new(Registry::new());
+                // This should never fail as the registry is empty
+                initialize(&registry).unwrap();
+                // This should never fail unless dimension_type got registered in another piece of code
+                pumpkin_registry::ROOT.register_arc(Identifier::vanilla_static("dimension_type"),registry.clone()).unwrap();
+                return registry;
+            });
+
 
         #[derive(Debug, Clone)]
         pub struct Dimension {
             pub id: u8,
-            pub minecraft_name: &'static str,
             pub fixed_time: Option<i64>,
             pub has_skylight: bool,
             pub has_ceiling: bool,
@@ -202,21 +213,18 @@ pub fn build() -> TokenStream {
             pub timelines: Option<&'static str>,
         }
 
-        impl Dimension {
+        fn initialize(registry: &Arc<Registry<Dimension>>) -> Result<(), RegistryInsertError> {
             #variants
 
-            pub fn from_name(name: &str) -> Option<&'static Self> {
-                match name {
-                    #name_to_type
-                    _ => None
-                }
-            }
+            Ok(())
         }
+
         impl PartialEq for Dimension {
             fn eq(&self, other: &Self) -> bool {
                  self.id == other.id
             }
-       }
+        }
+
         impl Eq for Dimension {}
     )
 }

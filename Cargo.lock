@@ -2722,6 +2722,7 @@ dependencies = [
  "criterion",
  "phf",
  "pumpkin-nbt",
+ "pumpkin-registry",
  "pumpkin-util",
  "rand",
  "serde",
