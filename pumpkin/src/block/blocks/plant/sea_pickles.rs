@@ -22,6 +22,25 @@ type SeaPickleProperties = pumpkin_data::block_properties::SeaPickleLikeProperti
 #[pumpkin_block("minecraft:sea_pickle")]
 pub struct SeaPickleBlock;
 
+/// `SeaPickleBlock.performBonemeal`'s diamond-shaped z-span/z-offset progression across
+/// its 5 x-iterations: widest (5) at the middle iteration, narrowing to 1 at the edges.
+fn diamond_z_spans_and_offsets() -> [(i32, i32); 5] {
+    let mut z_span = 1;
+    let mut removed_z = 0;
+    let mut spans = [(0, 0); 5];
+    for (count, slot) in spans.iter_mut().enumerate() {
+        *slot = (z_span, removed_z);
+        if count < 2 {
+            z_span += 2;
+            removed_z += 1;
+        } else {
+            z_span -= 2;
+            removed_z -= 1;
+        }
+    }
+    spans
+}
+
 impl BlockBehaviour for SeaPickleBlock {
     fn use_with_item<'a>(
         &'a self,
@@ -42,17 +61,13 @@ impl BlockBehaviour for SeaPickleBlock {
                 return BlockActionResult::Pass;
             }
 
-            //let mut j = 1;
-            let mut count = 0;
             let base_x = args.position.0.x - 2;
-            let mut removed_z = 0;
-            for added_x in 0..5 {
-                for added_z in 0..1 {
+            for (added_x, (z_span, removed_z)) in diamond_z_spans_and_offsets().iter().enumerate() {
+                for added_z in 0..*z_span {
                     let temp_y = 2 + args.position.0.y - 1;
                     for y in (temp_y - 2)..temp_y {
-                        //let mut lv2: BlockState;
                         let lv = BlockPos::new(
-                            base_x + added_x,
+                            base_x + added_x as i32,
                             y,
                             args.position.0.z - removed_z + added_z,
                         );
@@ -78,14 +93,6 @@ impl BlockBehaviour for SeaPickleBlock {
                             .await;
                     }
                 }
-                if count < 2 {
-                    //j += 2;
-                    removed_z += 1;
-                } else {
-                    //j -= 2;
-                    removed_z -= 1;
-                }
-                count += 1;
             }
             let mut sea_pickle_prop = SeaPickleProperties::default(args.block);
             sea_pickle_prop.pickles = 4;
@@ -146,3 +153,26 @@ impl BlockBehaviour for SeaPickleBlock {
 }
 
 impl PlantBlockBase for SeaPickleBlock {}
+
+#[cfg(test)]
+mod tests {
+    use super::diamond_z_spans_and_offsets;
+
+    #[test]
+    fn diamond_z_span_widens_then_narrows() {
+        let spans: Vec<i32> = diamond_z_spans_and_offsets()
+            .iter()
+            .map(|(span, _)| *span)
+            .collect();
+        assert_eq!(spans, vec![1, 3, 5, 3, 1]);
+    }
+
+    #[test]
+    fn diamond_z_offset_rises_then_falls() {
+        let offsets: Vec<i32> = diamond_z_spans_and_offsets()
+            .iter()
+            .map(|(_, offset)| *offset)
+            .collect();
+        assert_eq!(offsets, vec![0, 1, 2, 1, 0]);
+    }
+}
