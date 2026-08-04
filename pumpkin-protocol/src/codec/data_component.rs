@@ -10,18 +10,19 @@ use pumpkin_data::data_component_impl::{
     ConsumeEffect, CowSoundVariantImpl, CowVariantImpl, CustomDataImpl, CustomNameImpl, DamageImpl,
     DataComponentImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl,
     FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl, HorseVariantImpl,
-    IDSet, IDSetContent, IdOr, ItemModelImpl, LlamaVariantImpl, MapIdImpl, MaxStackSizeImpl,
-    MooshroomVariantImpl, PaintingVariantImpl, ParrotVariantImpl, PigSoundVariantImpl,
-    PigVariantImpl, PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl, SheepColorImpl,
-    ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
-    TropicalFishBaseColorImpl, TropicalFishPatternColorImpl, TropicalFishPatternImpl,
-    UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl,
-    WolfVariantImpl, ZombieNautilusVariantImpl, get,
+    IDSet, IDSetContent, IdOr, ItemModelImpl, LlamaVariantImpl, LodestoneTarget,
+    LodestoneTrackerImpl, MapIdImpl, MaxStackSizeImpl, MooshroomVariantImpl, PaintingVariantImpl,
+    ParrotVariantImpl, PigSoundVariantImpl, PigVariantImpl, PotionContentsImpl, RabbitVariantImpl,
+    SalmonSizeImpl, SheepColorImpl, ShulkerColorImpl, SoundEvent, StatusEffectInstance,
+    StoredEnchantmentsImpl, TropicalFishBaseColorImpl, TropicalFishPatternColorImpl,
+    TropicalFishPatternImpl, UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl,
+    WolfSoundVariantImpl, WolfVariantImpl, ZombieNautilusVariantImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
+use pumpkin_util::math::position::BlockPos;
 
 const MAX_STATUS_EFFECTS: usize = 128;
 
@@ -778,6 +779,7 @@ pub fn deserialize(
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BlockState => Ok(BlockStateImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::LodestoneTracker => Ok(LodestoneTrackerImpl::deserialize(seq)?.to_dyn()),
         _ => Err(ReadingError::Message(format!("{id:?} (TODO)"))),
     }
 }
@@ -804,6 +806,7 @@ pub fn serialize(
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
         DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
         DataComponent::BlockState => get::<BlockStateImpl>(value).serialize(seq),
+        DataComponent::LodestoneTracker => get::<LodestoneTrackerImpl>(value).serialize(seq),
         _ => Err(WritingError::Message(format!(
             "{} not yet implemented",
             id.to_name()
@@ -843,6 +846,33 @@ impl DataComponentCodec<Self> for BlockStateImpl {
         Ok(Self {
             properties: Cow::Owned(properties),
         })
+    }
+}
+
+// Matches vanilla `LodestoneTracker.STREAM_CODEC`: an optional `GlobalPos` (a dimension
+// identifier string followed by a packed `BlockPos` long), then the `tracked` bool.
+impl DataComponentCodec<Self> for LodestoneTrackerImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_option(&self.target, |seq, target| {
+            seq.write_string(&target.dimension)?;
+            seq.write_block_pos(&BlockPos::new(target.x, target.y, target.z))
+        })?;
+        seq.write_bool(self.tracked)
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let target = seq.get_option(|seq| {
+            let dimension = seq.get_str()?.to_string();
+            let pos = BlockPos::from_i64(seq.get_i64_be()?);
+            Ok(LodestoneTarget {
+                dimension,
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            })
+        })?;
+        let tracked = seq.get_bool()?;
+        Ok(Self { target, tracked })
     }
 }
 
