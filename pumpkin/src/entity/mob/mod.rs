@@ -582,6 +582,11 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
+    /// Vanilla `CrossbowAttackMob.setChargingCrossbow` (synced data, drives `getArmPose`'s
+    /// `CROSSBOW_CHARGE` state client-side). Default no-op; crossbow-wielding mobs (Pillager)
+    /// override this to store and broadcast the flag.
+    fn set_charging_crossbow(&self, _charging: bool) {}
+
     fn try_attack<'a>(&'a self, target: &'a dyn EntityBase) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             let damaged = self.get_mob_entity().try_attack(target).await;

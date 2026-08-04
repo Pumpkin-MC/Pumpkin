@@ -6,6 +6,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 use crate::entity::ai::goal::{Controls, Goal, GoalFuture};
 use crate::entity::ai::pathfinder::NavigatorGoal;
@@ -13,17 +14,38 @@ use crate::entity::mob::Mob;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
 use crate::entity::{Entity, EntityBase};
 
+/// Vanilla: `RangedCrossbowAttackGoal.CrossbowState`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CrossbowState {
+    Uncharged,
+    Charging,
+    Charged,
+    ReadyToAttack,
+}
+
+/// Vanilla: `CrossbowItem.getChargeDuration` -- `Mth.floor(1.25F * 20.0F)` with no Quick Charge
+/// enchant applied (mobs never have it).
+const CHARGE_DURATION_TICKS: i32 = 25;
+
 pub struct RangedCrossbowAttackGoal {
-    attack_cooldown: i32,
-    range: f64,
+    state: CrossbowState,
+    speed_modifier: f64,
+    attack_radius_sqr: f64,
+    see_time: i32,
+    attack_delay: i32,
+    update_path_delay: i32,
 }
 
 impl RangedCrossbowAttackGoal {
     #[must_use]
     pub const fn new(range: f64) -> Self {
         Self {
-            attack_cooldown: 0,
-            range,
+            state: CrossbowState::Uncharged,
+            speed_modifier: 1.0,
+            attack_radius_sqr: range * range,
+            see_time: 0,
+            attack_delay: 0,
+            update_path_delay: 0,
         }
     }
 
@@ -108,7 +130,10 @@ impl Goal for RangedCrossbowAttackGoal {
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            self.attack_cooldown = 20;
+            self.state = CrossbowState::Uncharged;
+            self.see_time = 0;
+            self.attack_delay = 0;
+            self.update_path_delay = 0;
             mob.get_mob_entity().set_attacking(true);
         })
     }
@@ -117,6 +142,8 @@ impl Goal for RangedCrossbowAttackGoal {
         Box::pin(async move {
             mob.get_mob_entity().navigator.lock().unwrap().stop();
             mob.get_mob_entity().set_attacking(false);
+            self.state = CrossbowState::Uncharged;
+            mob.set_charging_crossbow(false);
         })
     }
 
@@ -128,29 +155,81 @@ impl Goal for RangedCrossbowAttackGoal {
             let entity = mob.get_entity();
             let target_pos = target.get_entity().pos.load();
             let distance_squared = entity.pos.load().squared_distance_to_vec(&target_pos);
+
+            let has_line_of_sight = Self::has_line_of_sight(mob, target.as_ref()).await;
+            let had_line_of_sight = self.see_time > 0;
+            if has_line_of_sight != had_line_of_sight {
+                self.see_time = 0;
+            }
+            if has_line_of_sight {
+                self.see_time += 1;
+            } else {
+                self.see_time -= 1;
+            }
+
+            let needs_to_move = (distance_squared > self.attack_radius_sqr || self.see_time < 5)
+                && self.attack_delay == 0;
+
+            if needs_to_move {
+                self.update_path_delay -= 1;
+                if self.update_path_delay <= 0 {
+                    let speed = if self.state == CrossbowState::Uncharged {
+                        self.speed_modifier
+                    } else {
+                        self.speed_modifier * 0.5
+                    };
+                    mob.get_mob_entity()
+                        .navigator
+                        .lock()
+                        .unwrap()
+                        .set_progress(NavigatorGoal {
+                            current_progress: entity.pos.load(),
+                            destination: target_pos,
+                            speed,
+                        });
+                    self.update_path_delay = rand::rng().random_range(20..=40);
+                }
+            } else {
+                self.update_path_delay = 0;
+                mob.get_mob_entity().navigator.lock().unwrap().stop();
+            }
+
             mob.get_mob_entity()
                 .look_control
                 .lock()
                 .unwrap()
                 .look_at_entity_with_range(&target, 30.0, 30.0);
-            self.attack_cooldown = (self.attack_cooldown - 1).max(0);
 
-            if distance_squared > self.range * self.range {
-                mob.get_mob_entity()
-                    .navigator
-                    .lock()
-                    .unwrap()
-                    .set_progress(NavigatorGoal {
-                        current_progress: entity.pos.load(),
-                        destination: target_pos,
-                        speed: 1.0,
-                    });
-            } else {
-                mob.get_mob_entity().navigator.lock().unwrap().stop();
-                if self.attack_cooldown == 0 && Self::has_line_of_sight(mob, target.as_ref()).await
-                {
-                    Self::shoot(mob, target.as_ref()).await;
-                    self.attack_cooldown = 40;
+            match self.state {
+                CrossbowState::Uncharged => {
+                    if !needs_to_move {
+                        self.state = CrossbowState::Charging;
+                        mob.set_charging_crossbow(true);
+                    }
+                }
+                CrossbowState::Charging => {
+                    // Pumpkin has no generic mob item-use-ticks counter to drive this the way
+                    // vanilla's `getTicksUsingItem()` does; the goal tracks its own elapsed ticks
+                    // instead, which is equivalent since nothing else can interrupt the "use".
+                    self.attack_delay += 1;
+                    if self.attack_delay >= CHARGE_DURATION_TICKS {
+                        self.state = CrossbowState::Charged;
+                        self.attack_delay = 20 + rand::rng().random_range(0..20);
+                        mob.set_charging_crossbow(false);
+                    }
+                }
+                CrossbowState::Charged => {
+                    self.attack_delay -= 1;
+                    if self.attack_delay <= 0 {
+                        self.state = CrossbowState::ReadyToAttack;
+                    }
+                }
+                CrossbowState::ReadyToAttack => {
+                    if has_line_of_sight {
+                        Self::shoot(mob, target.as_ref()).await;
+                        self.state = CrossbowState::Uncharged;
+                        self.attack_delay = 0;
+                    }
                 }
             }
         })
