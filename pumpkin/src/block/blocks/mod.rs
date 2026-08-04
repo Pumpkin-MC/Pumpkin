@@ -9,6 +9,7 @@ pub mod barrel;
 pub mod chests;
 pub mod ender_chest;
 pub mod hopper;
+pub mod respawn_anchor;
 pub mod shulker_box;
 
 // Workstations & processing
@@ -18,6 +19,7 @@ pub mod crafting_table;
 pub mod enchanting_table;
 pub mod furnace;
 pub mod grindstone;
+pub mod loom;
 pub mod smithing_table;
 pub mod smoker;
 pub mod stonecutter;
@@ -114,7 +116,9 @@ pub mod vault;
 pub mod coral;
 
 // Misc / abstract
+pub mod abstract_multiface;
 pub mod abstract_wall_mounting;
+pub mod multiface_spreader;
 
 pub mod beacon;
 pub mod heavy_core;
@@ -127,3 +131,6 @@ pub mod copper_full;
 pub mod copper_golem_statue;
 pub mod copper_grate;
 pub mod creaking_heart;
+
+pub mod scaffolding;
+pub mod structure_block;

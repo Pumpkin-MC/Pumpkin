@@ -8,7 +8,8 @@ use crate::{
 };
 use pumpkin_data::{
     damage::DamageType, data_component_impl::FireworksImpl, entity::EntityStatus, item::Item,
-    item_stack::ItemStack, meta_data_type::MetaDataType, tracked_data::TrackedData,
+    item_stack::ItemStack, meta_data_type::MetaDataType, sound::Sound, sound::SoundCategory,
+    tracked_data::TrackedData,
 };
 use pumpkin_protocol::{
     codec::{item_stack_seralizer::ItemStackSerializer, optional_int::OptionalInt},
@@ -31,10 +32,11 @@ pub struct FireworkRocketEntity {
     item_stack: ItemStack,
     life: AtomicI32,
     life_time: AtomicI32,
-    /// Vanilla `DATA_SHOT_AT_ANGLE`: true for a rocket fired from a crossbow. It flies a
-    /// normal ballistic arc instead of the self-propelled acceleration a freely-thrown or
-    /// elytra-boost rocket uses.
-    shot_at_angle: bool,
+    /// Vanilla `DATA_SHOT_AT_ANGLE`: true for a rocket fired from a crossbow, or a
+    /// dispenser-fired-at-a-non-default-angle rocket (dispenser wiring for fireworks is
+    /// out of scope here). Either way it skips the normal self-propelled acceleration
+    /// branch entirely and flies a plain ballistic arc.
+    shot_at_angle: AtomicBool,
 }
 
 impl FireworkRocketEntity {
@@ -66,7 +68,7 @@ impl FireworkRocketEntity {
                 random.next_bounded_i32(7),
             )
             .into(),
-            shot_at_angle: false,
+            shot_at_angle: AtomicBool::new(false),
         }
     }
 
@@ -97,7 +99,7 @@ impl FireworkRocketEntity {
                 random.next_bounded_i32(7),
             )
             .into(),
-            shot_at_angle: false,
+            shot_at_angle: AtomicBool::new(false),
         };
 
         // Set shooter metadata
@@ -146,7 +148,7 @@ impl FireworkRocketEntity {
                 random.next_bounded_i32(7),
             )
             .into(),
-            shot_at_angle: true,
+            shot_at_angle: AtomicBool::new(true),
         }
     }
 
@@ -185,15 +187,28 @@ impl FireworkRocketEntity {
                 let Some(amount) = firework_damage(damage, distance) else {
                     continue;
                 };
-                if world
-                    .raycast(
-                        rocket_pos,
-                        target_entity.get_eye_pos(),
-                        async |block_pos, world| world.get_block_state(block_pos).is_solid(),
-                    )
-                    .await
-                    .is_some()
-                {
+
+                // Vanilla `dealExplosionDamage`: tests line-of-sight to the target twice, at
+                // `getY(0)` (feet) and `getY(0.5)` (bounding-box midpoint), taking the first
+                // clear one - not a single eye-height raycast.
+                let target_pos = target_entity.pos.load();
+                let target_bb = target_entity.bounding_box.load();
+                let mid_y = target_bb.min.y + (target_bb.max.y - target_bb.min.y) * 0.5;
+                let mut can_see = false;
+                for test_y in [target_bb.min.y, mid_y] {
+                    let to = Vector3::new(target_pos.x, test_y, target_pos.z);
+                    if world
+                        .raycast(rocket_pos, to, async |block_pos, world| {
+                            world.get_block_state(block_pos).is_solid()
+                        })
+                        .await
+                        .is_none()
+                    {
+                        can_see = true;
+                        break;
+                    }
+                }
+                if !can_see {
                     continue;
                 }
                 target.damage(self, amount, DamageType::FIREWORKS).await;
@@ -279,13 +294,37 @@ impl EntityBase for FireworkRocketEntity {
 
                 entity.set_pos(shooter.pos.load());
                 entity.set_velocity(new_shooter_vel);
-            } else if !self.shot_at_angle {
-                // Standard firework rocket flight logic: not applied to a crossbow-fired
-                // rocket (`shot_at_angle`), which instead flies a normal ballistic arc.
-                velocity.x *= 1.15;
-                velocity.z *= 1.15;
+            } else if !self.shot_at_angle.load(Ordering::Relaxed) {
+                // Standard firework rocket flight logic: not applied to a crossbow- or
+                // dispenser-fired-at-angle rocket (`shot_at_angle`), which instead flies a
+                // normal ballistic arc. Vanilla: `horizontalAcceleration = horizontalCollision
+                // ? 1.0 : 1.15`.
+                let horizontal_acceleration = if entity.horizontal_collision.load(Ordering::Relaxed)
+                {
+                    1.0
+                } else {
+                    1.15
+                };
+                velocity.x *= horizontal_acceleration;
+                velocity.z *= horizontal_acceleration;
                 velocity.y += 0.04;
                 entity.set_velocity(velocity);
+            }
+
+            // Vanilla: `if (this.life == 0 && !this.isSilent()) { playSound(FIREWORK_ROCKET_LAUNCH...) }`,
+            // called before `this.life++`. Pumpkin entities have no `isSilent` flag yet, so the
+            // silence check is not modelled. The client-side `FIREWORK` particle trail
+            // (`this.level().isClientSide()`-guarded in vanilla) is intentionally not ported: it
+            // is generated by the client itself, and spawning it server-side would double it.
+            if self.life.load(Ordering::Relaxed) == 0 {
+                let pos = entity.pos.load();
+                world.play_sound_raw(
+                    Sound::EntityFireworkRocketLaunch as u16,
+                    SoundCategory::Ambient,
+                    &pos,
+                    3.0,
+                    1.0,
+                );
             }
 
             // Increment life and check for explosion

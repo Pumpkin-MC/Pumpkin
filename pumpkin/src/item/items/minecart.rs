@@ -2,15 +2,18 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::entity::vehicle::minecart::MinecartEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{
     BlockProperties, PoweredRailLikeProperties, RailLikeProperties,
 };
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::Taggable;
@@ -88,6 +91,20 @@ impl ItemBehaviour for MinecartItem {
             );
             let minecart_entity = Arc::new(MinecartEntity::new(entity));
             world.spawn_entity(minecart_entity).await;
+
+            // Vanilla: `serverLevel.gameEvent(GameEvent.ENTITY_PLACE, pos, Context.of(player,
+            // blockState below))`. Pumpkin's `GameEventContext` has no block-state-carrying
+            // variant yet, so only the entity source is passed.
+            if let Some(player_arc) = world.get_player_by_id(player.get_entity().entity_id) {
+                emit_game_event(
+                    &world,
+                    GameEvent::EntityPlace,
+                    pos,
+                    GameEventContext::of_entity(player_arc),
+                )
+                .await;
+            }
+
             // Vanilla `MinecartItem#useOn` ends with `itemStack.shrink(1)`.
             item.decrement_unless_creative(player.gamemode.load(), 1);
         })
