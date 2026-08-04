@@ -28,6 +28,7 @@ pub mod snowball;
 pub mod splash_potion;
 pub mod trident;
 pub mod wind_charge;
+pub mod wither_skull;
 
 #[must_use]
 pub fn is_projectile(entity_type: &EntityType) -> bool {
@@ -45,6 +46,7 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::SMALL_FIREBALL
         || *entity_type == EntityType::FISHING_BOBBER
         || *entity_type == EntityType::EXPERIENCE_BOTTLE
+        || *entity_type == EntityType::WITHER_SKULL
 }
 
 /// Minimum horizontal distance between the shooter and the impact for `adventure/bullseye`.
