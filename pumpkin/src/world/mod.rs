@@ -510,6 +510,22 @@ impl World {
             .unwrap_or("world")
     }
 
+    /// The per-save (not per-dimension) root directory vanilla calls the "world path", used
+    /// as the base for `LevelResource.GENERATED_DIR` (`generated`) among other shared data.
+    ///
+    /// The nether/end store their region files under `<world>/DIM-1` and `<world>/DIM1`
+    /// (see `pumpkin_world::dimension::into_level`), so `level_folder.root_folder` is
+    /// dimension-specific; this walks back up to the shared save root the same way
+    /// `Level::from_root_folder`'s local `main_folder` does.
+    pub fn save_root_folder(&self) -> std::path::PathBuf {
+        let root = &self.level.level_folder.root_folder;
+        if self.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name {
+            root.clone()
+        } else {
+            root.parent().unwrap_or(root).to_path_buf()
+        }
+    }
+
     pub async fn shutdown(&self) {
         for entity in self.entities.load().iter() {
             self.save_entity(entity).await;
