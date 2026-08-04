@@ -44,6 +44,7 @@ pub mod ghast;
 pub mod giant;
 pub mod guardian;
 pub mod hoglin;
+pub mod hoglin_gore;
 pub mod illusioner;
 pub mod magma_cube;
 pub mod phantom;
