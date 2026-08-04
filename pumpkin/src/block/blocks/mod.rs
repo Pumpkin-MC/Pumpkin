@@ -9,6 +9,7 @@ pub mod barrel;
 pub mod chests;
 pub mod ender_chest;
 pub mod hopper;
+pub mod respawn_anchor;
 pub mod shulker_box;
 
 // Workstations & processing
@@ -130,3 +131,6 @@ pub mod copper_full;
 pub mod copper_golem_statue;
 pub mod copper_grate;
 pub mod creaking_heart;
+
+pub mod scaffolding;
+pub mod structure_block;
