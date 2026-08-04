@@ -3,7 +3,10 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use rand::RngExt;
 use std::sync::Arc;
+
+const GROWTH_LIGHT: u8 = 9;
 
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::{
@@ -15,6 +18,12 @@ type SaplingProperties = pumpkin_data::block_properties::OakSaplingLikePropertie
 
 #[pumpkin_block_from_tag("minecraft:saplings")]
 pub struct SaplingBlock;
+
+/// `SaplingBlock.randomTick`'s light gate: the raw brightness directly above the sapling
+/// must be at least `GROWTH_LIGHT`.
+const fn has_enough_light(light_above: u8) -> bool {
+    light_above >= GROWTH_LIGHT
+}
 
 impl SaplingBlock {
     async fn generate(&self, world: &Arc<World>, pos: &BlockPos) {
@@ -53,9 +62,31 @@ impl BlockBehaviour for SaplingBlock {
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
+            if !has_enough_light(args.world.get_raw_brightness(&args.position.up(), 0)) {
+                return;
+            }
+            if rand::rng().random_range(0..7) != 0 {
+                return;
+            }
             self.generate(args.world, args.position).await;
         })
     }
 }
 
 impl PlantBlockBase for SaplingBlock {}
+
+#[cfg(test)]
+mod tests {
+    use super::{GROWTH_LIGHT, has_enough_light};
+
+    #[test]
+    fn blocks_growth_below_threshold() {
+        assert!(!has_enough_light(GROWTH_LIGHT - 1));
+    }
+
+    #[test]
+    fn allows_growth_at_and_above_threshold() {
+        assert!(has_enough_light(GROWTH_LIGHT));
+        assert!(has_enough_light(15));
+    }
+}
