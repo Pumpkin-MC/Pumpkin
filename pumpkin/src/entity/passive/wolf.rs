@@ -1,13 +1,14 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicU8, Ordering},
+    atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering},
 };
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
@@ -20,15 +21,19 @@ use crate::block::entities::sign::DyeColor;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        beg::BegGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        active_target::ActiveTargetGoal, beg::BegGoal, breed::BreedGoal,
+        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
         follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, non_tame_random_target::NonTameRandomTargetGoal,
-        sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
+        revenge::RevengeGoal, sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
+    living::LivingEntity,
     mob::{Mob, MobEntity},
     persistent_anger::PersistentAnger,
     player::Player,
 };
+use crate::world::World;
 
 // Vanilla Wolf.java: `private static final DyeColor DEFAULT_COLLAR_COLOR = DyeColor.RED;`
 const DEFAULT_COLLAR_COLOR: u8 = DyeColor::Red as u8;
@@ -39,11 +44,37 @@ const DEFAULT_COLLAR_COLOR: u8 = DyeColor::Red as u8;
 const WOLF_PREY_TYPES: &[&EntityType] =
     &[&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX];
 
+/// Vanilla `AbstractSkeleton` covers `Skeleton`/`Stray`/`WitherSkeleton`; Pumpkin has no shared
+/// class hierarchy for these three, so target-selector priority 7 registers one
+/// `ActiveTargetGoal` per concrete type below rather than extending `ActiveTargetGoal` to
+/// search multiple types at once.
+const SKELETON_FAMILY: &[&EntityType] = &[
+    &EntityType::SKELETON,
+    &EntityType::STRAY,
+    &EntityType::WITHER_SKELETON,
+];
+
+/// Vanilla Wolf.java `tick()`'s shake-splash particle count:
+/// `(int)(Mth.sin((shakeAnim - 0.4F) * PI) * 7.0F)`, clamped to non-negative since a negative
+/// Java int loop bound simply skips the loop.
+#[must_use]
+fn shake_particle_count(shake_anim: f32) -> i32 {
+    (((shake_anim - 0.4) * std::f32::consts::PI).sin() * 7.0).max(0.0) as i32
+}
+
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
     collar_color: AtomicU8,
     pub persistent_anger: PersistentAnger,
+    // Vanilla Wolf.java shake/wet animation state (`isWet`/`isShaking`/`shakeAnim`). The
+    // render-only companions (`interestedAngle`, `getTailAngle`, `getWetShade`, ...) are
+    // deliberately not ported: they're pure client-side lerp values nothing server-side
+    // branches on. `shake_anim` stores an `f32` bit pattern (see `entity::attributes` for the
+    // same convention with `f64`).
+    is_wet: AtomicBool,
+    is_shaking: AtomicBool,
+    shake_anim: AtomicU32,
 }
 
 impl WolfEntity {
@@ -54,6 +85,9 @@ impl WolfEntity {
             variant: AtomicU8::new(3), // Default to pale
             collar_color: AtomicU8::new(DEFAULT_COLLAR_COLOR),
             persistent_anger: PersistentAnger::default(),
+            is_wet: AtomicBool::new(false),
+            is_shaking: AtomicBool::new(false),
+            shake_anim: AtomicU32::new(0),
         };
         let mob_arc = Arc::new(wolf);
         let mob_weak: Weak<dyn Mob> = {
@@ -68,20 +102,48 @@ impl WolfEntity {
             goal_selector.add_goal(2, SitGoal::new());
             goal_selector.add_goal(4, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(5, BreedGoal::new(1.0));
-            // goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0, false));
+            goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0));
             goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(9, BegGoal::new(8.0, &[&Item::BONE]));
             goal_selector.add_goal(
                 10,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(12, Box::new(WanderAroundGoal::new(1.0)));
 
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
-            // Vanilla priorities 1-3 (OwnerHurtByTarget/OwnerHurtTarget/HurtByTarget[+alert]) and
-            // 4/7 (angry-at-player / hostile-skeleton) target goals aren't ported here -- only
-            // the untamed prey-targeting behavior requested for this cluster.
+            target_selector.add_goal(1, OwnerHurtByTargetGoal::new());
+            target_selector.add_goal(2, OwnerHurtTargetGoal::new());
+            target_selector.add_goal(3, Box::new(RevengeGoal::new(true)));
+
+            // Vanilla priority 4: `NearestAttackableTargetGoal<Player>(..., this::isAngryAt)`.
+            // The predicate only sees the candidate, not the mob, so it closes over a weak
+            // handle back to this wolf to consult its own `PersistentAnger` state.
+            let angry_weak = mob_weak.clone();
+            target_selector.add_goal(
+                4,
+                Box::new(ActiveTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    &EntityType::PLAYER,
+                    10,
+                    true,
+                    false,
+                    Some(move |target: Arc<LivingEntity>, _world: Arc<World>| {
+                        let angry_weak = angry_weak.clone();
+                        async move {
+                            let Some(mob) = angry_weak.upgrade() else {
+                                return false;
+                            };
+                            let Some(anger) = mob.persistent_anger() else {
+                                return false;
+                            };
+                            anger.is_angry_at(target.entity.entity_uuid).await
+                        }
+                    }),
+                )),
+            );
+
             target_selector.add_goal(
                 5,
                 NonTameRandomTargetGoal::without_predicate(
@@ -99,6 +161,22 @@ impl WolfEntity {
                     Some(crate::entity::ai::goal::non_tame_random_target::baby_turtle_on_land),
                 ),
             );
+
+            // Vanilla priority 7: one `ActiveTargetGoal` per skeleton-family type (see
+            // `SKELETON_FAMILY` above).
+            for skeleton_type in SKELETON_FAMILY {
+                target_selector.add_goal(
+                    7,
+                    ActiveTargetGoal::with_default(&mob_arc.mob_entity, skeleton_type, false),
+                );
+            }
+
+            // Vanilla priority 8, `ResetUniversalAngerTargetGoal(this, true)`, re-targets any
+            // nearby player while "universally angry" (a targetless grudge gated behind the
+            // `UNIVERSAL_ANGER` game rule) and separately expires the anger timer. Pumpkin has
+            // no `UNIVERSAL_ANGER` game rule and `PersistentAnger::tick` already expires the
+            // timer on its own, so only the universal-anger-only re-targeting behavior is
+            // missing here; deferred until that game rule exists.
         };
 
         mob_arc
@@ -114,6 +192,80 @@ impl WolfEntity {
             )],
             None,
         );
+    }
+
+    /// Ports Wolf.java's `aiStep`/`tick` shake-off-water state machine (server-observable
+    /// subset only: sound, splash particles, `ShakeWetness`/`CancelShakeWetness` entity
+    /// events). The rain half of vanilla's `isInWaterOrRain()` trigger is intentionally not
+    /// ported: `isRainingAt` is a known-broken, unfixed check (see repo CLAUDE.md), so this
+    /// only reacts to standing water.
+    fn tick_shake_animation(&self) {
+        let entity = &self.mob_entity.living_entity.entity;
+        let world = entity.world.load();
+        let touching_water = entity.touching_water.load(Ordering::SeqCst);
+        let on_ground = entity.on_ground.load(Ordering::Relaxed);
+        let is_pathfinding = !self
+            .mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_idle();
+
+        // Vanilla's `aiStep` gates the shake start on the *latched* `isWet` flag (set by the
+        // previous tick's `tick()` while in water and surviving until the shake cycle ends),
+        // not on being in water right now -- the wolf actually starts shaking after it has
+        // already left the water. Read the flag before this tick's `touching_water` update
+        // below overwrites it.
+        let was_wet = self.is_wet.load(Ordering::Relaxed);
+        if was_wet && !self.is_shaking.load(Ordering::Relaxed) && !is_pathfinding && on_ground {
+            self.is_shaking.store(true, Ordering::Relaxed);
+            self.shake_anim.store(0f32.to_bits(), Ordering::Relaxed);
+            world.send_entity_status(entity, EntityStatus::ShakeWetness);
+        }
+
+        if touching_water {
+            self.is_wet.store(true, Ordering::Relaxed);
+            if self.is_shaking.load(Ordering::Relaxed) {
+                world.send_entity_status(entity, EntityStatus::CancelShakeWetness);
+                self.is_shaking.store(false, Ordering::Relaxed);
+                self.shake_anim.store(0f32.to_bits(), Ordering::Relaxed);
+            }
+            return;
+        }
+
+        if !self.is_shaking.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let shake_anim = f32::from_bits(self.shake_anim.load(Ordering::Relaxed));
+        if shake_anim == 0.0 {
+            entity.play_sound(Sound::EntityWolfShake);
+        }
+
+        let new_shake_anim = shake_anim + 0.05;
+
+        if shake_anim >= 2.0 {
+            self.is_wet.store(false, Ordering::Relaxed);
+            self.is_shaking.store(false, Ordering::Relaxed);
+            self.shake_anim.store(0f32.to_bits(), Ordering::Relaxed);
+            return;
+        }
+
+        self.shake_anim
+            .store(new_shake_anim.to_bits(), Ordering::Relaxed);
+
+        if new_shake_anim > 0.4 {
+            let width = entity.entity_dimension.load().width;
+            let count = shake_particle_count(new_shake_anim);
+            let pos = entity.pos.load();
+            world.spawn_particle(
+                Vector3::new(pos.x, pos.y + 0.8, pos.z),
+                Vector3::new(width * 0.5, 0.0, width * 0.5),
+                1.0,
+                count,
+                Particle::Splash,
+            );
+        }
     }
 }
 
@@ -176,7 +328,30 @@ impl Mob for WolfEntity {
     }
 
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move { self.persistent_anger.tick().await })
+        Box::pin(async move {
+            self.persistent_anger.tick().await;
+
+            // Simplified `NeutralMob::updatePersistentAnger(level, true)`: whenever this wolf
+            // currently has a live target (set by e.g. `RevengeGoal`/`OwnerHurtByTargetGoal`),
+            // adopt it as the anger target and (re)start the timer. Vanilla additionally
+            // re-resolves a persisted target reference across entity reloads and clears anger
+            // early for creative/spectator/peaceful targets; Pumpkin's `PersistentAnger::tick`
+            // already handles timer expiry on its own.
+            let current_target = self.mob_entity.target.lock().await.clone();
+            if let Some(target) = current_target {
+                let target_uuid = target.get_entity().entity_uuid;
+                if !self.persistent_anger.is_angry_at(target_uuid).await {
+                    self.persistent_anger.set_angry_at(Some(target_uuid)).await;
+                    self.persistent_anger.start_timer();
+                }
+            }
+
+            self.tick_shake_animation();
+        })
+    }
+
+    fn persistent_anger(&self) -> Option<&PersistentAnger> {
+        Some(&self.persistent_anger)
     }
 
     fn mob_interact<'a>(
@@ -312,5 +487,29 @@ impl Mob for WolfEntity {
                 None,
             );
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shake_particle_count;
+
+    #[test]
+    fn shake_particle_count_is_zero_at_threshold() {
+        assert_eq!(shake_particle_count(0.4), 0);
+    }
+
+    #[test]
+    fn shake_particle_count_peaks_near_quarter_cycle() {
+        // sin((0.9 - 0.4) * PI) == sin(PI/2) == 1.0, so count should hit the full 7.
+        assert_eq!(shake_particle_count(0.9), 7);
+    }
+
+    #[test]
+    fn shake_particle_count_never_negative() {
+        for i in 0..40 {
+            let anim = i as f32 * 0.05;
+            assert!(shake_particle_count(anim) >= 0);
+        }
     }
 }

@@ -56,6 +56,13 @@ impl Goal for RevengeGoal {
                 return false;
             };
 
+            // Vanilla `TamableAnimal::canAttack` unconditionally excludes the mob's own owner
+            // from any attack target, regardless of which targeting goal found them; for
+            // non-tameable mobs `get_owner_uuid()` is always `None` so this is a no-op.
+            if mob.get_owner_uuid() == Some(attacker.get_entity().entity_uuid) {
+                return false;
+            }
+
             if !self
                 .target_predicate
                 .test(&world, Some(&mob_entity.living_entity), attacker_living)
