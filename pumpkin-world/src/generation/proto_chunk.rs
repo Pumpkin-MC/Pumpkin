@@ -527,9 +527,9 @@ impl ProtoChunk {
     #[must_use]
     pub fn get_biome_id(&self, x: i32, y: i32, z: i32) -> u8 {
         let index = self.local_biome_pos_to_biome_index(
-            x & biome_coords::from_block(15),
+            x & 3,
             y - biome_coords::from_block(self.bottom_y() as i32),
-            z & biome_coords::from_block(15),
+            z & 3,
         );
         self.flat_biome_map[index]
     }

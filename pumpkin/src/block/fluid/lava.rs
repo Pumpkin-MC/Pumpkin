@@ -124,6 +124,17 @@ impl FlowingLava {
                 return false;
             }
             if below_is_soul_soil && world.get_block(&neighbor_pos) == &Block::BLUE_ICE {
+                if let Some(server) = world.server.upgrade() {
+                    let mut event =
+                        crate::plugin::api::events::block::block_form::BlockFormEvent::new(
+                            *block_pos,
+                            &Block::BASALT,
+                        );
+                    server.plugin_manager.fire(&server, &mut event).await;
+                    if event.cancelled {
+                        return false;
+                    }
+                }
                 world
                     .set_block_state(
                         block_pos,

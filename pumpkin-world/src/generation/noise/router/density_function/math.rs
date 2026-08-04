@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use pumpkin_data::noise_router::{BinaryData, BinaryOperation, ClampData, LinearData, UnaryData};
 use pumpkin_util::math::vector3::Vector3;
 
@@ -5,6 +7,10 @@ use crate::generation::noise::router::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
     chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
 };
+
+thread_local! {
+    static SCRATCH_BUFFER: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+}
 
 use super::{
     IndexToNoisePos, NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComponentImpl,
@@ -46,7 +52,7 @@ pub struct Linear {
     pub(crate) input_index: usize,
     min_value: f64,
     max_value: f64,
-    data: &'static LinearData,
+    pub(crate) data: &'static LinearData,
 }
 
 impl NoiseFunctionComponentRange for Linear {
@@ -98,7 +104,7 @@ pub struct Binary {
     pub(crate) input2_index: usize,
     min_value: f64,
     max_value: f64,
-    data: &'static BinaryData,
+    pub(crate) data: &'static BinaryData,
 }
 
 impl NoiseFunctionComponentRange for Binary {
@@ -194,18 +200,27 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
             sample_options,
         );
 
+        let len = array.len();
         match self.data.operation {
             BinaryOperation::Add => {
-                let mut scratch = vec![0.0f64; array.len()];
-                ChunkNoiseFunctionComponent::fill_from_stack(
-                    &mut component_stack[..=self.input2_index],
-                    &mut scratch,
-                    mapper,
-                    sample_options,
-                );
-                for (a, b) in array.iter_mut().zip(scratch.iter()) {
-                    *a += b;
-                }
+                SCRATCH_BUFFER.with(|scratch_cell| {
+                    let mut scratch = scratch_cell.borrow_mut();
+                    if scratch.len() < len {
+                        scratch.resize(len, 0.0);
+                    }
+                    let scratch_slice = &mut scratch[..len];
+
+                    ChunkNoiseFunctionComponent::fill_from_stack(
+                        &mut component_stack[..=self.input2_index],
+                        scratch_slice,
+                        mapper,
+                        sample_options,
+                    );
+
+                    for (a, b) in array.iter_mut().zip(scratch_slice.iter()) {
+                        *a += b;
+                    }
+                });
             }
             BinaryOperation::Mul => {
                 for (index, value) in array.iter_mut().enumerate() {
@@ -224,7 +239,6 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                 let input2_min = component_stack[self.input2_index].min();
                 for (index, value) in array.iter_mut().enumerate() {
                     if *value >= input2_min {
-                        // NOTE: vanilla is v < min ? v : min(v, compute)
                         let pos = mapper.at(index, Some(sample_options));
                         let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
                             &mut component_stack[..=self.input2_index],
@@ -239,7 +253,6 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                 let input2_max = component_stack[self.input2_index].max();
                 for (index, value) in array.iter_mut().enumerate() {
                     if *value <= input2_max {
-                        // NOTE: vanilla is v > max ? v : max(v, compute)
                         let pos = mapper.at(index, Some(sample_options));
                         let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
                             &mut component_stack[..=self.input2_index],
@@ -276,7 +289,7 @@ pub struct Unary {
     pub(crate) input_index: usize,
     min_value: f64,
     max_value: f64,
-    data: &'static UnaryData,
+    pub(crate) data: &'static UnaryData,
 }
 
 impl NoiseFunctionComponentRange for Unary {
@@ -342,8 +355,8 @@ impl Unary {
 }
 
 pub struct Clamp {
-    input_index: usize,
-    data: &'static ClampData,
+    pub(crate) input_index: usize,
+    pub(crate) data: &'static ClampData,
 }
 
 impl Clamp {

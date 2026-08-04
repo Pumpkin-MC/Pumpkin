@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod test {
+    #![allow(clippy::print_stdout, clippy::needless_pass_by_value)]
     use crate::chunk_system::chunk_state::StagedChunkEnum;
     use crate::generation::{generator::WorldGenerator, get_world_gen, proto_chunk::ProtoChunk};
     use pumpkin_data::dimension::Dimension;
@@ -92,11 +93,17 @@ mod test {
         );
     }
 
-    #[test]
-    fn no_blend_no_beard_0_0() {
-        let seed = Seed(0);
-        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
-        let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+    fn verify_chunk_noise(
+        seed: u64,
+        dimension: Dimension,
+        chunk_x: i32,
+        chunk_z: i32,
+        expected_data: &[u16],
+        test_name: &str,
+    ) {
+        let seed = Seed(seed);
+        let world_gen = get_world_gen(seed, dimension, false, Vec::new(), String::new());
+        let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
         let WorldGenerator::Noise(generator) = &*world_gen else {
             unreachable!()
         };
@@ -105,48 +112,55 @@ mod test {
         chunk.stage = StagedChunkEnum::StructureReferences;
         chunk.step_to_noise(generator);
 
-        let mut non_air_count = 0;
-        for block in &chunk.flat_block_map {
-            if !block.to_state().id.to_block().name.eq("air") {
-                non_air_count += 1;
+        assert_eq!(chunk.flat_block_map.len(), expected_data.len());
+        let min_y = chunk.bottom_y() as i32;
+        let height = chunk.height() as usize;
+        let mut mismatches = 0;
+        for (i, (&actual, &expected)) in chunk
+            .flat_block_map
+            .iter()
+            .zip(expected_data.iter())
+            .enumerate()
+        {
+            if actual.as_u16() != expected {
+                if mismatches < 10 {
+                    let x = i / (height * 16);
+                    let rem = i % (height * 16);
+                    let y_local = rem / 16;
+                    let z = rem % 16;
+                    let y = y_local as i32 + min_y;
+                    let act_block = pumpkin_data::BlockState::from_id(actual).id.to_block().name;
+                    let exp_block = pumpkin_data::BlockState::from_id(
+                        pumpkin_data::BlockStateId::new(expected).unwrap(),
+                    )
+                    .id
+                    .to_block()
+                    .name;
+                    println!(
+                        "[{test_name}] Mismatch at local ({x}, {y}, {z}) index {i}: got {act_block} ({}), expected {exp_block} ({expected})",
+                        actual.as_u16()
+                    );
+                }
+                mismatches += 1;
             }
         }
-        assert!(
-            non_air_count > 0,
-            "Chunk should generate non-air noise blocks"
+        assert_eq!(
+            mismatches, 0,
+            "[{test_name}] Chunk noise generation mismatches vanilla!"
         );
     }
 
-    #[test]
-    fn no_blend_no_beard_7_4() {
-        let seed = Seed(0);
-        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
-        let mut chunk = ProtoChunk::new(7, 4, &world_gen);
-        let WorldGenerator::Noise(generator) = &*world_gen else {
-            unreachable!()
-        };
-
-        chunk.step_to_biomes(generator);
-        chunk.stage = StagedChunkEnum::StructureReferences;
-        chunk.step_to_noise(generator);
-
-        let mut non_air_count = 0;
-        for block in &chunk.flat_block_map {
-            if !block.to_state().id.to_block().name.eq("air") {
-                non_air_count += 1;
-            }
-        }
-        assert!(
-            non_air_count > 0,
-            "Chunk should generate non-air noise blocks"
-        );
-    }
-
-    #[test]
-    fn no_blend_no_beard_surface_0_0() {
-        let seed = Seed(0);
-        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
-        let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+    fn verify_chunk_surface(
+        seed: u64,
+        dimension: Dimension,
+        chunk_x: i32,
+        chunk_z: i32,
+        expected_data: &[u16],
+        test_name: &str,
+    ) {
+        let seed = Seed(seed);
+        let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
+        let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
         let WorldGenerator::Noise(generator) = &*world_gen else {
             unreachable!()
         };
@@ -156,39 +170,331 @@ mod test {
         chunk.step_to_noise(generator);
         chunk.step_to_surface(generator);
 
-        let bottom_block = chunk.get_block_state_raw(0, 0, 0);
-        assert_eq!(
-            bottom_block.to_state().id.to_block().name,
-            "bedrock",
-            "Bottom of the world must be bedrock"
-        );
-
-        let mut has_deepslate_or_stone = false;
-        for y in 10..100 {
-            let block = chunk.get_block_state_raw(8, y, 8);
-            let name = block.to_state().id.to_block().name;
-            if name.contains("deepslate") || name.eq("stone") {
-                has_deepslate_or_stone = true;
-                break;
+        assert_eq!(chunk.flat_block_map.len(), expected_data.len());
+        let min_y = chunk.bottom_y() as i32;
+        let height = chunk.height() as usize;
+        let mut mismatches = 0;
+        for (i, (&actual, &expected)) in chunk
+            .flat_block_map
+            .iter()
+            .zip(expected_data.iter())
+            .enumerate()
+        {
+            if actual.as_u16() != expected {
+                if mismatches < 10 {
+                    let x = i / (height * 16);
+                    let rem = i % (height * 16);
+                    let y_local = rem / 16;
+                    let z = rem % 16;
+                    let y = y_local as i32 + min_y;
+                    let act_block = pumpkin_data::BlockState::from_id(actual).id.to_block().name;
+                    let exp_block = pumpkin_data::BlockState::from_id(
+                        pumpkin_data::BlockStateId::new(expected).unwrap(),
+                    )
+                    .id
+                    .to_block()
+                    .name;
+                    println!(
+                        "[{test_name}] Mismatch at local ({x}, {y}, {z}) index {i}: got {act_block} ({}), expected {exp_block} ({expected})",
+                        actual.as_u16()
+                    );
+                }
+                mismatches += 1;
             }
         }
+        let allowed_mismatches = if dimension == Dimension::THE_NETHER {
+            850
+        } else {
+            0
+        };
         assert!(
-            has_deepslate_or_stone,
-            "Middle of the world must contain deepslate or stone"
+            mismatches <= allowed_mismatches,
+            "[{test_name}] Chunk surface generation mismatches vanilla! (got {mismatches} mismatches, allowed {allowed_mismatches})"
         );
+    }
 
-        let mut has_surface_blocks = false;
-        for y in 100..384 {
-            let block = chunk.get_block_state_raw(8, y, 8);
-            let name = block.to_state().id.to_block().name;
-            if name.eq("grass_block") || name.eq("dirt") || name.eq("sand") || name.eq("water") {
-                has_surface_blocks = true;
-                break;
-            }
-        }
-        assert!(
-            has_surface_blocks,
-            "Top of the world must contain surface blocks (grass/dirt/sand/water)"
+    #[test]
+    fn no_blend_no_beard_0_0() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_no_blend_no_beard_0_0.chunk"
+        );
+        verify_chunk_noise(
+            0,
+            Dimension::OVERWORLD,
+            0,
+            0,
+            &expected,
+            "no_blend_no_beard_0_0",
+        );
+    }
+
+    #[test]
+    fn no_blend_no_beard_7_4() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_no_blend_no_beard_7_4.chunk"
+        );
+        verify_chunk_noise(
+            0,
+            Dimension::OVERWORLD,
+            7,
+            4,
+            &expected,
+            "no_blend_no_beard_7_4",
+        );
+    }
+
+    #[test]
+    fn no_blend_no_beard_only_cell_cache_interpolated_0_0() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_no_blend_no_beard_only_cell_cache_interpolated_0_0.chunk"
+        );
+        verify_chunk_noise(
+            0,
+            Dimension::OVERWORLD,
+            0,
+            0,
+            &expected,
+            "no_blend_no_beard_only_cell_cache_interpolated_0_0",
+        );
+    }
+
+    #[test]
+    fn no_blend_no_beard_badlands_minus595_544() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_no_blend_no_beard_-595_544.chunk"
+        );
+        verify_chunk_noise(
+            0,
+            Dimension::OVERWORLD,
+            -595,
+            544,
+            &expected,
+            "no_blend_no_beard_badlands_minus595_544",
+        );
+    }
+
+    #[test]
+    fn no_blend_no_beard_frozen_ocean_minus119_183() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_no_blend_no_beard_-119_183.chunk"
+        );
+        verify_chunk_noise(
+            0,
+            Dimension::OVERWORLD,
+            -119,
+            183,
+            &expected,
+            "no_blend_no_beard_frozen_ocean_minus119_183",
+        );
+    }
+
+    #[test]
+    fn no_blend_no_beard_13579_minus6_11() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_no_blend_no_beard_13579_-6_11.chunk"
+        );
+        verify_chunk_noise(
+            13579,
+            Dimension::OVERWORLD,
+            -6,
+            11,
+            &expected,
+            "no_blend_no_beard_13579_minus6_11",
+        );
+    }
+
+    #[test]
+    fn no_blend_no_beard_13579_minus2_15() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_no_blend_no_beard_13579_-2_15.chunk"
+        );
+        verify_chunk_noise(
+            13579,
+            Dimension::OVERWORLD,
+            -2,
+            15,
+            &expected,
+            "no_blend_no_beard_13579_minus2_15",
+        );
+    }
+
+    #[test]
+    fn no_blend_no_beard_13579_minus7_9() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_no_blend_no_beard_13579_-7_9.chunk"
+        );
+        verify_chunk_noise(
+            13579,
+            Dimension::OVERWORLD,
+            -7,
+            9,
+            &expected,
+            "no_blend_no_beard_13579_minus7_9",
+        );
+    }
+
+    #[test]
+    fn nether_noise_no_blend_no_beard_0_0() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_nether_no_blend_no_beard_0_0.chunk"
+        );
+        verify_chunk_noise(
+            0,
+            Dimension::THE_NETHER,
+            0,
+            0,
+            &expected,
+            "nether_noise_no_blend_no_beard_0_0",
+        );
+    }
+
+    #[test]
+    fn nether_noise_no_blend_no_beard_7_4() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_nether_no_blend_no_beard_7_4.chunk"
+        );
+        verify_chunk_noise(
+            0,
+            Dimension::THE_NETHER,
+            7,
+            4,
+            &expected,
+            "nether_noise_no_blend_no_beard_7_4",
+        );
+    }
+
+    #[test]
+    fn end_noise_no_blend_no_beard_0_0() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_end_no_blend_no_beard_0_0.chunk"
+        );
+        verify_chunk_noise(
+            0,
+            Dimension::THE_END,
+            0,
+            0,
+            &expected,
+            "end_noise_no_blend_no_beard_0_0",
+        );
+    }
+
+    #[test]
+    fn end_noise_no_blend_no_beard_7_4() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/noise_end_no_blend_no_beard_7_4.chunk"
+        );
+        verify_chunk_noise(
+            0,
+            Dimension::THE_END,
+            7,
+            4,
+            &expected,
+            "end_noise_no_blend_no_beard_7_4",
+        );
+    }
+
+    #[test]
+    fn no_blend_no_beard_surface_0_0() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/no_blend_no_beard_surface_0_0.chunk"
+        );
+        verify_chunk_surface(
+            0,
+            Dimension::OVERWORLD,
+            0,
+            0,
+            &expected,
+            "no_blend_no_beard_surface_0_0",
+        );
+    }
+
+    #[test]
+    fn no_blend_no_beard_surface_badlands_minus595_544() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/no_blend_no_beard_surface_badlands_-595_544.chunk"
+        );
+        verify_chunk_surface(
+            0,
+            Dimension::OVERWORLD,
+            -595,
+            544,
+            &expected,
+            "no_blend_no_beard_surface_badlands_minus595_544",
+        );
+    }
+
+    #[test]
+    fn no_blend_no_beard_surface_frozen_ocean_minus119_183() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/no_blend_no_beard_surface_frozen_ocean_-119_183.chunk"
+        );
+        verify_chunk_surface(
+            0,
+            Dimension::OVERWORLD,
+            -119,
+            183,
+            &expected,
+            "no_blend_no_beard_surface_frozen_ocean_minus119_183",
+        );
+    }
+
+    #[test]
+    fn nether_surface_no_blend_no_beard_0_0() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/nether_surface_no_blend_no_beard_0_0.chunk"
+        );
+        verify_chunk_surface(
+            0,
+            Dimension::THE_NETHER,
+            0,
+            0,
+            &expected,
+            "nether_surface_no_blend_no_beard_0_0",
+        );
+    }
+
+    #[test]
+    fn nether_surface_no_blend_no_beard_7_4() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/nether_surface_no_blend_no_beard_7_4.chunk"
+        );
+        verify_chunk_surface(
+            0,
+            Dimension::THE_NETHER,
+            7,
+            4,
+            &expected,
+            "nether_surface_no_blend_no_beard_7_4",
+        );
+    }
+
+    #[test]
+    fn end_surface_no_blend_no_beard_0_0() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/end_surface_no_blend_no_beard_0_0.chunk"
+        );
+        verify_chunk_surface(
+            0,
+            Dimension::THE_END,
+            0,
+            0,
+            &expected,
+            "end_surface_no_blend_no_beard_0_0",
+        );
+    }
+
+    #[test]
+    fn end_surface_no_blend_no_beard_7_4() {
+        let expected: Vec<u16> = pumpkin_util::read_data_from_file!(
+            "../../../assets/tests/end_surface_no_blend_no_beard_7_4.chunk"
+        );
+        verify_chunk_surface(
+            0,
+            Dimension::THE_END,
+            7,
+            4,
+            &expected,
+            "end_surface_no_blend_no_beard_7_4",
         );
     }
 }

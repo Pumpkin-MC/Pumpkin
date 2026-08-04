@@ -491,6 +491,21 @@ impl ItemBehaviour for EmptyBucketItem {
                 return;
             };
 
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+            {
+                let mut event =
+                    crate::plugin::api::events::player::player_bucket::PlayerBucketFillEvent::new(
+                        player_arc,
+                        block_pos,
+                        item.registry_key.to_string(),
+                    );
+                server.plugin_manager.fire(&server, &mut event).await;
+                if event.cancelled {
+                    return;
+                }
+            }
+
             // BucketItem.java:77: level.gameEvent(player, GameEvent.FLUID_PICKUP, pos)
             if let Some(player_arc) = world.get_player_by_id(player.get_entity().entity_id) {
                 crate::world::game_event::emit_game_event(
@@ -619,6 +634,18 @@ impl ItemBehaviour for FilledBucketItem {
                     crate::world::game_event::GameEventContext::of_entity(player_arc),
                 )
                 .await;
+            }
+
+            if let Some(server) = world.server.upgrade()
+                && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+            {
+                let mut event =
+                    crate::plugin::api::events::player::player_bucket::PlayerBucketEmptyEvent::new(
+                        player_arc,
+                        pos,
+                        item.registry_key.to_string(),
+                    );
+                server.plugin_manager.fire(&server, &mut event).await;
             }
 
             if !evaporated && let Some(sound) = bucket_empty_sound(item) {
