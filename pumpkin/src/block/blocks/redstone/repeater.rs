@@ -114,6 +114,10 @@ impl BlockBehaviour for RepeaterBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
+            if !args.player.abilities.lock().await.allow_modify_world {
+                return BlockActionResult::Pass;
+            }
+
             let state = args.world.get_block_state(args.position);
             let props = RepeaterProperties::from_state_id(state.id, args.block);
             self.on_use(props, args.world, *args.position, args.block)
