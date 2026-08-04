@@ -240,6 +240,7 @@ pub fn from_type(
         }
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
         id if id == EntityType::INTERACTION.id => Arc::new(InteractionEntity::new(entity)),
+        id if id == EntityType::MARKER.id => crate::entity::marker::MarkerEntity::new(entity),
         id if id == EntityType::MANNEQUIN.id => Arc::new(MannequinEntity::new(entity)),
         id if id == EntityType::TEXT_DISPLAY.id => Arc::new(TextDisplayEntity::new(entity)),
         id if id == EntityType::ITEM_DISPLAY.id => Arc::new(ItemDisplayEntity::new(entity)),
