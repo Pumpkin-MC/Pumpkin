@@ -433,18 +433,20 @@ mod tests {
         let barrier = Arc::new(Barrier::new(THREADS));
         let factory_calls = Arc::new(AtomicUsize::new(0));
 
-        let handles = (0..THREADS).map(|_| {
+        let mut handles = Vec::new();
+
+        for _ in 0..THREADS {
             let registry = Arc::clone(&registry);
             let barrier = Arc::clone(&barrier);
             let factory_calls = Arc::clone(&factory_calls);
-            thread::spawn(move || {
+            handles.push(thread::spawn(move || {
                 barrier.wait();
                 registry.get_or_register(id("shared"), || {
                     factory_calls.fetch_add(1, Ordering::SeqCst);
                     123u32
                 })
-            })
-        });
+            }));
+        }
 
         let values: Vec<_> = handles
             .into_iter()
@@ -462,14 +464,16 @@ mod tests {
         let registry = Arc::new(Registry::new());
         let barrier = Arc::new(Barrier::new(THREADS));
 
-        let handles = (0..THREADS).map(|value| {
+        let mut handles = Vec::new();
+
+        for index in 0..THREADS {
             let registry = Arc::clone(&registry);
             let barrier = Arc::clone(&barrier);
-            thread::spawn(move || {
+            handles.push(thread::spawn(move || {
                 barrier.wait();
-                registry.register(id("shared"), value)
-            })
-        });
+                registry.register(id("shared"), index)
+            }));
+        }
 
         let results: Vec<_> = handles
             .into_iter()
