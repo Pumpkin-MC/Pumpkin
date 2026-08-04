@@ -67,6 +67,9 @@ struct Spawner {
     min_count: i32,
     /// Maximum number of entities in a spawn group.
     max_count: i32,
+    /// Relative weight used when randomly selecting among a biome's spawner
+    /// entries for the same category (vanilla `WeightedList`/`SpawnerData.weight`).
+    weight: i32,
 }
 
 impl Spawner {
@@ -75,11 +78,13 @@ impl Spawner {
         let r#type = &self.r#type;
         let min_count = &self.min_count;
         let max_count = &self.max_count;
+        let weight = &self.weight;
         quote! {
             Spawner {
                 r#type: #r#type,
                 min_count: #min_count,
                 max_count: #max_count,
+                weight: #weight,
             }
         }
     }
@@ -416,6 +421,7 @@ pub fn build() -> TokenStream {
             pub r#type: &'static str,
             pub min_count: i32,
             pub max_count: i32,
+            pub weight: i32,
         }
 
         impl PartialEq for Biome {

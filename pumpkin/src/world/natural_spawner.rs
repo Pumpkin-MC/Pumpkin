@@ -529,7 +529,7 @@ pub fn spawn_mobs_for_chunk_generation(
     let zo = chunk_z << 4;
 
     while rand::random::<f32>() < biome.creature_spawn_probability {
-        let Some(spawner_data) = creatures.choose(&mut rand::rng()) else {
+        let Ok(spawner_data) = creatures.choose_weighted(&mut rand::rng(), |s| s.weight) else {
             continue;
         };
 
@@ -789,7 +789,8 @@ pub fn get_random_spawn_mob_at(
             id if id == MobCategory::MISC.id => biome.spawners.misc,
             _ => panic!(),
         }
-        .choose(&mut rng())
+        .choose_weighted(&mut rng(), |s| s.weight)
+        .ok()
     }
 }
 
@@ -991,13 +992,53 @@ pub fn is_valid_empty_spawn_block(
 #[cfg(test)]
 mod tests {
     use super::{
-        can_spawn_in_water, is_right_distance_to_player_and_spawn_point, is_valid_empty_spawn_block,
+        IndexedRandom, can_spawn_in_water, is_right_distance_to_player_and_spawn_point,
+        is_valid_empty_spawn_block,
     };
     use pumpkin_data::Block;
+    use pumpkin_data::biome::Spawner;
     use pumpkin_data::entity::EntityType;
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector2::Vector2;
     use pumpkin_util::math::vector3::Vector3;
+
+    /// Vanilla `WeightedList` picks entries proportionally to `weight` (e.g. `warm_ocean`'s
+    /// `water_creature` list: nautilus weight 5, squid weight 10, dolphin weight 2 - see
+    /// `assets/biome.json`). Selection must not degrade to a uniform pick across entries,
+    /// which would bias squid's real ~59% share down to an even 1/3.
+    #[test]
+    fn spawner_selection_is_weighted_not_uniform() {
+        let spawners = [
+            Spawner {
+                r#type: "minecraft:heavy",
+                min_count: 1,
+                max_count: 1,
+                weight: 1000,
+            },
+            Spawner {
+                r#type: "minecraft:light",
+                min_count: 1,
+                max_count: 1,
+                weight: 1,
+            },
+        ];
+
+        let mut heavy_picks = 0;
+        for _ in 0..200 {
+            if let Ok(pick) = spawners.choose_weighted(&mut rand::rng(), |s| s.weight)
+                && pick.r#type == "minecraft:heavy"
+            {
+                heavy_picks += 1;
+            }
+        }
+
+        // With a 1000:1 weight ratio the light entry should be picked essentially never;
+        // a uniform `.choose()` would instead land on it roughly half the time.
+        assert!(
+            heavy_picks >= 190,
+            "expected the heavily-weighted entry to dominate selection, got {heavy_picks}/200"
+        );
+    }
 
     #[test]
     fn dangerous_blocks_reject_nonimmune_spawns() {
