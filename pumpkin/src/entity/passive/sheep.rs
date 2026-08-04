@@ -234,10 +234,14 @@ impl SheepEntity {
         let wool_item = wool_item_for_color(self.get_color());
         let count = rng().random_range(1u32..=3);
         for _ in 0..count {
-            let velocity = Vector3::new(
-                (rand::random::<f64>() - 0.5) * 0.1,
-                rand::random::<f64>() * 0.05 + 0.2,
-                (rand::random::<f64>() - 0.5) * 0.1,
+            let velocity = shear_drop_velocity(
+                rand::random(),
+                rand::random(),
+                rand::random(),
+                rand::random(),
+                rand::random(),
+                rand::random(),
+                rand::random(),
             );
             let item_entity = Arc::new(ItemEntity::new_with_velocity(
                 Entity::new(world.clone(), pos, &EntityType::ITEM),
@@ -250,6 +254,35 @@ impl SheepEntity {
 
         self.set_sheared(true);
     }
+}
+
+/// Vanilla's per-drop wool velocity is a base term plus jitter, not a single draw:
+/// - `Entity.spawnAtLocation(ServerLevel, ItemStack, float)` (`Entity.java:2246`), the overload
+///   `Sheep.shear` calls, constructs `new ItemEntity(level, x, y, z, itemStack)`
+///   (`ItemEntity.java:65`), whose constructor sets the base
+///   `setDeltaMovement(random.nextDouble() * 0.2 - 0.1, 0.2, random.nextDouble() * 0.2 - 0.1)`.
+/// - `Sheep.shear` (`Sheep.java:163-183`, jitter add at `:172-179`) then adds
+///   `(random.nextFloat() - random.nextFloat()) * 0.1F` to dx/dz and
+///   `random.nextFloat() * 0.05F` to dy on top of that base.
+///
+/// Combined range: dx/dz in `[-0.2, 0.2]`, dy in `[0.2, 0.25]`. `ItemEntity::new_with_velocity`
+/// stores whatever velocity it is given verbatim, so the base term is computed here too.
+fn shear_drop_velocity(
+    base_dx_rand: f64,
+    base_dz_rand: f64,
+    jitter_dx_a: f64,
+    jitter_dx_b: f64,
+    jitter_dy_rand: f64,
+    jitter_dz_a: f64,
+    jitter_dz_b: f64,
+) -> Vector3<f64> {
+    let base_dx = base_dx_rand.mul_add(0.2, -0.1);
+    let base_dz = base_dz_rand.mul_add(0.2, -0.1);
+    let jitter_dx = (jitter_dx_a - jitter_dx_b) * 0.1;
+    let jitter_dz = (jitter_dz_a - jitter_dz_b) * 0.1;
+    let jitter_dy = jitter_dy_rand * 0.05;
+
+    Vector3::new(base_dx + jitter_dx, 0.2 + jitter_dy, base_dz + jitter_dz)
 }
 
 impl NBTStorage for SheepEntity {
@@ -447,5 +480,51 @@ mod weighted_sheep_color_tests {
             }
         }
         assert!(dominant_count > pink_count * 50);
+    }
+}
+
+#[cfg(test)]
+mod shear_drop_velocity_tests {
+    use super::shear_drop_velocity;
+
+    #[test]
+    fn minimum_corner_matches_vanilla_lower_bound() {
+        // base_dx_rand=0 -> base -0.1; jitter_dx_a=0,jitter_dx_b=1 -> jitter -0.1; same for dz.
+        // jitter_dy_rand=0 -> dy jitter 0, so dy sits at its minimum 0.2.
+        let v = shear_drop_velocity(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0);
+        assert!((v.x - (-0.2)).abs() < 1e-12);
+        assert!((v.y - 0.2).abs() < 1e-12);
+        assert!((v.z - (-0.2)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn maximum_corner_matches_vanilla_upper_bound() {
+        // base_dx_rand=1 -> base 0.1; jitter_dx_a=1,jitter_dx_b=0 -> jitter 0.1; same for dz.
+        // jitter_dy_rand=1 -> dy jitter 0.05, so dy sits at its maximum 0.25.
+        let v = shear_drop_velocity(1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0);
+        assert!((v.x - 0.2).abs() < 1e-12);
+        assert!((v.y - 0.25).abs() < 1e-12);
+        assert!((v.z - 0.2).abs() < 1e-12);
+    }
+
+    #[test]
+    fn zero_jitter_leaves_only_the_item_entity_base_velocity() {
+        // With both jitter draws equal, the additive term cancels, leaving exactly
+        // ItemEntity's base spawn velocity (dx/dz in [-0.1, 0.1], dy fixed at 0.2).
+        let v = shear_drop_velocity(0.25, 0.75, 0.5, 0.5, 0.0, 0.5, 0.5);
+        assert!((v.x - (-0.05)).abs() < 1e-12);
+        assert!((v.y - 0.2).abs() < 1e-12);
+        assert!((v.z - 0.05).abs() < 1e-12);
+    }
+
+    #[test]
+    fn full_range_is_bounded_by_combined_base_plus_jitter() {
+        for i in 0..=10 {
+            let f = f64::from(i) / 10.0;
+            let v = shear_drop_velocity(f, 1.0 - f, f, 1.0 - f, f, 1.0 - f, f);
+            assert!(v.x >= -0.2 - 1e-9 && v.x <= 0.2 + 1e-9);
+            assert!(v.y >= 0.2 - 1e-9 && v.y <= 0.25 + 1e-9);
+            assert!(v.z >= -0.2 - 1e-9 && v.z <= 0.2 + 1e-9);
+        }
     }
 }
