@@ -21,6 +21,12 @@ const fn should_continue_melee_goal(
     }
 }
 
+/// Vanilla `MeleeAttackGoal.canUse`: a path was found, or (failing that) the target is
+/// already within melee range without needing to move.
+const fn should_start_melee_goal(path_found: bool, in_attack_range: bool) -> bool {
+    path_found || in_attack_range
+}
+
 /// Vanilla: `MeleeAttackGoal::canPerformAttack` requires sensing line of sight.
 async fn has_melee_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
     let mob_entity = mob.get_entity();
@@ -87,16 +93,34 @@ impl Goal for MeleeAttackGoal {
             }
             self.last_update_time = time;
 
-            let target = mob.get_mob_entity().target.lock().await;
-
-            let Some(target) = target.as_ref() else {
-                return false;
+            let (destination, target) = {
+                let target = mob.get_mob_entity().target.lock().await;
+                let Some(target) = target.as_ref() else {
+                    return false;
+                };
+                if !target.get_entity().is_alive() {
+                    return false;
+                }
+                (target.get_entity().pos.load(), target.clone())
             };
-            if !target.get_entity().is_alive() {
-                return false;
-            }
-            // TODO: add path when is implemented Navigation
-            true //TODO: modify that because if a path to the target not exists then call mob.is_in_attack_range(target)
+
+            // Vanilla `MeleeAttackGoal.canUse`:
+            // this.path = this.mob.getNavigation().createPath(target, 0);
+            // return this.path != null ? true : this.mob.isWithinMeleeAttackRange(target);
+            let mob_entity = mob.get_mob_entity();
+            let mut navigator = {
+                let mut guard = mob_entity.navigator.lock().unwrap();
+                std::mem::take(&mut *guard)
+            };
+            let path = navigator
+                .compute_path(&mob_entity.living_entity, destination)
+                .await;
+            *mob_entity.navigator.lock().unwrap() = navigator;
+
+            let path_found = path.is_some();
+            let in_attack_range =
+                !path_found && mob_entity.is_in_attack_range(target.as_ref()).await;
+            should_start_melee_goal(path_found, in_attack_range)
         })
     }
 
@@ -243,7 +267,7 @@ impl Goal for MeleeAttackGoal {
 
 #[cfg(test)]
 mod tests {
-    use super::should_continue_melee_goal;
+    use super::{should_continue_melee_goal, should_start_melee_goal};
 
     #[test]
     fn in_range_targets_continue_when_navigation_is_idle() {
@@ -251,5 +275,17 @@ mod tests {
         assert!(!should_continue_melee_goal(false, true, false));
         assert!(!should_continue_melee_goal(true, true, false));
         assert!(should_continue_melee_goal(true, false, true));
+    }
+
+    #[test]
+    fn starts_when_path_found_regardless_of_range() {
+        assert!(should_start_melee_goal(true, true));
+        assert!(should_start_melee_goal(true, false));
+    }
+
+    #[test]
+    fn falls_back_to_attack_range_when_no_path() {
+        assert!(should_start_melee_goal(false, true));
+        assert!(!should_start_melee_goal(false, false));
     }
 }
