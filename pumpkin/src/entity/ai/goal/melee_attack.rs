@@ -9,6 +9,21 @@ use rand::RngExt;
 
 const MAX_ATTACK_TIME: i64 = 20;
 
+/// Vanilla: `MeleeAttackGoal::canPerformAttack` requires sensing line of sight.
+async fn has_melee_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
+    let mob_entity = mob.get_entity();
+    let world = mob_entity.world.load_full();
+
+    world
+        .raycast(
+            mob_entity.get_eye_pos(),
+            target.get_entity().get_eye_pos(),
+            async |block_pos, world| world.get_block_state(block_pos).is_solid(),
+        )
+        .await
+        .is_none()
+}
+
 pub struct MeleeAttackGoal {
     goal_control: Controls,
     speed: f64,
@@ -189,12 +204,12 @@ impl Goal for MeleeAttackGoal {
 
             self.cooldown = (self.cooldown - 1).max(0);
 
-            // TODO: Add visibility check (canSee) - requires world raycast
             if self.cooldown <= 0
                 && mob
                     .get_mob_entity()
                     .is_in_attack_range(target.as_ref())
                     .await
+                && has_melee_line_of_sight(mob, target.as_ref()).await
             {
                 self.cooldown = self.get_max_cooldown();
                 mob.get_mob_entity().living_entity.swing_hand().await;
