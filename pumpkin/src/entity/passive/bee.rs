@@ -25,7 +25,8 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         Controls, Goal, GoalFuture, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     ai::pathfinder::NavigatorGoal,
     mob::{Mob, MobEntity},
@@ -125,14 +126,21 @@ impl BeeEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(BeePollinateGoal::new(bee_weak)));
-            goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(0, Box::new(BeeAttackGoal::new(bee_weak.clone())));
+            goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(2, Box::new(BeePollinateGoal::new(bee_weak)));
+            goal_selector.add_goal(3, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                3,
+                4,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(4, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(5, Box::new(RandomLookAroundGoal::default()));
+
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            // `Bee.BeeHurtByOtherGoal extends HurtByTargetGoal`. Its `setAlertOthers` alerting of
+            // nearby bees and `BeeBecomeAngryTargetGoal` both need the per-player persistent
+            // anger state Pumpkin does not track yet, so only the revenge part is ported.
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
         };
 
         mob_arc
@@ -243,6 +251,59 @@ fn attracts_bees(block: &Block, state: &BlockState) -> bool {
     true
 }
 
+/// `Bee.BeeAttackGoal`: a `MeleeAttackGoal` that stops once the bee has stung.
+///
+/// Vanilla additionally requires `isAngry()`; Pumpkin tracks no persistent anger, so the bee's
+/// target (set only by `RevengeGoal`) stands in for it.
+pub struct BeeAttackGoal {
+    bee: Weak<BeeEntity>,
+    melee: MeleeAttackGoal,
+}
+
+impl BeeAttackGoal {
+    #[must_use]
+    pub fn new(bee: Weak<BeeEntity>) -> Self {
+        Self {
+            bee,
+            melee: MeleeAttackGoal::new(1.4, true),
+        }
+    }
+
+    fn can_sting(&self) -> bool {
+        self.bee.upgrade().is_some_and(|bee| !bee.has_stung())
+    }
+}
+
+impl Goal for BeeAttackGoal {
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async move { self.can_sting() && self.melee.can_start(mob).await })
+    }
+
+    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async move { self.can_sting() && self.melee.should_continue(mob).await })
+    }
+
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        self.melee.start(mob)
+    }
+
+    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        self.melee.stop(mob)
+    }
+
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        self.melee.tick(mob)
+    }
+
+    fn should_run_every_tick(&self) -> bool {
+        self.melee.should_run_every_tick()
+    }
+
+    fn controls(&self) -> Controls {
+        self.melee.controls()
+    }
+}
+
 /// `Bee.BeePollinateGoal`.
 ///
 /// Ported with two documented reductions, both forced by engine gaps rather than choice:
@@ -257,7 +318,7 @@ fn attracts_bees(block: &Block, state: &BlockState) -> bool {
 ///   Pumpkin's `MoveControl` only produces yaw plus forward input and cannot hold a Y target,
 ///   so the hover jitter is dropped; the bee stops navigating on arrival and pollinates in
 ///   place. The pollination timings (`MIN_POLLINATION_TICKS`, `MAX_POLLINATING_TICKS`, the
-///   1-in-20 continue roll and the pollinate sound throttle) are unchanged.
+///   1-in-5 continue roll and the pollinate sound throttle) are unchanged.
 pub struct BeePollinateGoal {
     bee: Weak<BeeEntity>,
     goal_control: Controls,
@@ -309,11 +370,14 @@ impl BeePollinateGoal {
                     if z > FLOWER_SEARCH_RADIUS {
                         continue;
                     }
-                    for z in if z == 0 { vec![z] } else { vec![z, -z] } {
+                    for z in [z, -z] {
                         let pos = BlockPos::new(origin.0.x + x, origin.0.y + y, origin.0.z + z);
                         let (block, state) = world.get_block_and_state(&pos);
                         if attracts_bees(block, state) {
                             return Some(pos);
+                        }
+                        if z == 0 {
+                            break;
                         }
                     }
                 }
@@ -517,8 +581,16 @@ impl NBTStorage for BeeEntity {
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.set_has_nectar(nbt.get_bool("HasNectar").unwrap_or(false));
-            self.set_has_stung(nbt.get_bool("HasStung").unwrap_or(false));
+            // Store the flag bits directly: the entity has no viewers yet during load, so the
+            // byte is published by `mob_init_data_tracker` instead of broadcast from here.
+            let mut flags = 0u8;
+            if nbt.get_bool("HasNectar").unwrap_or(false) {
+                flags |= FLAG_HAS_NECTAR;
+            }
+            if nbt.get_bool("HasStung").unwrap_or(false) {
+                flags |= FLAG_HAS_STUNG;
+            }
+            self.flags.store(flags, Relaxed);
             self.ticks_without_nectar
                 .store(nbt.get_int("TicksSincePollination").unwrap_or(0), Relaxed);
             self.stay_out_of_hive_countdown
@@ -536,6 +608,19 @@ impl NBTStorage for BeeEntity {
 impl Mob for BeeEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::BEE_FLAGS,
+                    MetaDataType::BYTE,
+                    self.flags.load(Relaxed) as i8,
+                )],
+                None,
+            );
+        })
     }
 
     /// `Bee.doHurtTarget`: the poison, the stung flag and the sting sound are all gated on the
@@ -560,6 +645,9 @@ impl Mob for BeeEntity {
             }
 
             self.set_has_stung(true);
+            // `Bee.doHurtTarget` calls `stopBeingAngry`. Pumpkin has no persistent anger state,
+            // so clearing the target is the equivalent that keeps a stung bee from pursuing.
+            self.set_mob_target(None).await;
             let entity = &self.mob_entity.living_entity.entity;
             entity.world.load().play_sound(
                 Sound::EntityBeeSting,
