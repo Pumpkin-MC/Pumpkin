@@ -1,13 +1,14 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicU8, Ordering},
+    atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering},
 };
 
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
@@ -53,11 +54,27 @@ const SKELETON_FAMILY: &[&EntityType] = &[
     &EntityType::WITHER_SKELETON,
 ];
 
+/// Vanilla Wolf.java `tick()`'s shake-splash particle count:
+/// `(int)(Mth.sin((shakeAnim - 0.4F) * PI) * 7.0F)`, clamped to non-negative since a negative
+/// Java int loop bound simply skips the loop.
+#[must_use]
+fn shake_particle_count(shake_anim: f32) -> i32 {
+    (((shake_anim - 0.4) * std::f32::consts::PI).sin() * 7.0).max(0.0) as i32
+}
+
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
     collar_color: AtomicU8,
     pub persistent_anger: PersistentAnger,
+    // Vanilla Wolf.java shake/wet animation state (`isWet`/`isShaking`/`shakeAnim`). The
+    // render-only companions (`interestedAngle`, `getTailAngle`, `getWetShade`, ...) are
+    // deliberately not ported: they're pure client-side lerp values nothing server-side
+    // branches on. `shake_anim` stores an `f32` bit pattern (see `entity::attributes` for the
+    // same convention with `f64`).
+    is_wet: AtomicBool,
+    is_shaking: AtomicBool,
+    shake_anim: AtomicU32,
 }
 
 impl WolfEntity {
@@ -68,6 +85,9 @@ impl WolfEntity {
             variant: AtomicU8::new(3), // Default to pale
             collar_color: AtomicU8::new(DEFAULT_COLLAR_COLOR),
             persistent_anger: PersistentAnger::default(),
+            is_wet: AtomicBool::new(false),
+            is_shaking: AtomicBool::new(false),
+            shake_anim: AtomicU32::new(0),
         };
         let mob_arc = Arc::new(wolf);
         let mob_weak: Weak<dyn Mob> = {
@@ -173,6 +193,78 @@ impl WolfEntity {
             None,
         );
     }
+
+    /// Ports Wolf.java's `aiStep`/`tick` shake-off-water state machine (server-observable
+    /// subset only: sound, splash particles, `ShakeWetness`/`CancelShakeWetness` entity
+    /// events). The rain half of vanilla's `isInWaterOrRain()` trigger is intentionally not
+    /// ported: `isRainingAt` is a known-broken, unfixed check (see repo CLAUDE.md), so this
+    /// only reacts to standing water.
+    fn tick_shake_animation(&self) {
+        let entity = &self.mob_entity.living_entity.entity;
+        let world = entity.world.load();
+        let touching_water = entity.touching_water.load(Ordering::SeqCst);
+        let on_ground = entity.on_ground.load(Ordering::Relaxed);
+        let is_pathfinding = !self
+            .mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_idle();
+
+        if touching_water
+            && !self.is_shaking.load(Ordering::Relaxed)
+            && !is_pathfinding
+            && on_ground
+        {
+            self.is_shaking.store(true, Ordering::Relaxed);
+            self.shake_anim.store(0f32.to_bits(), Ordering::Relaxed);
+            world.send_entity_status(entity, EntityStatus::ShakeWetness);
+        }
+
+        if touching_water {
+            self.is_wet.store(true, Ordering::Relaxed);
+            if self.is_shaking.load(Ordering::Relaxed) {
+                world.send_entity_status(entity, EntityStatus::CancelShakeWetness);
+                self.is_shaking.store(false, Ordering::Relaxed);
+                self.shake_anim.store(0f32.to_bits(), Ordering::Relaxed);
+            }
+            return;
+        }
+
+        if !self.is_shaking.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let shake_anim = f32::from_bits(self.shake_anim.load(Ordering::Relaxed));
+        if shake_anim == 0.0 {
+            entity.play_sound(Sound::EntityWolfShake);
+        }
+
+        let new_shake_anim = shake_anim + 0.05;
+
+        if shake_anim >= 2.0 {
+            self.is_wet.store(false, Ordering::Relaxed);
+            self.is_shaking.store(false, Ordering::Relaxed);
+            self.shake_anim.store(0f32.to_bits(), Ordering::Relaxed);
+            return;
+        }
+
+        self.shake_anim
+            .store(new_shake_anim.to_bits(), Ordering::Relaxed);
+
+        if new_shake_anim > 0.4 {
+            let width = entity.entity_dimension.load().width;
+            let count = shake_particle_count(new_shake_anim);
+            let pos = entity.pos.load();
+            world.spawn_particle(
+                Vector3::new(pos.x, pos.y + 0.8, pos.z),
+                Vector3::new(width * 0.5, 0.0, width * 0.5),
+                1.0,
+                count,
+                Particle::Splash,
+            );
+        }
+    }
 }
 
 impl NBTStorage for WolfEntity {
@@ -251,6 +343,8 @@ impl Mob for WolfEntity {
                     self.persistent_anger.start_timer();
                 }
             }
+
+            self.tick_shake_animation();
         })
     }
 
@@ -391,5 +485,29 @@ impl Mob for WolfEntity {
                 None,
             );
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shake_particle_count;
+
+    #[test]
+    fn shake_particle_count_is_zero_at_threshold() {
+        assert_eq!(shake_particle_count(0.4), 0);
+    }
+
+    #[test]
+    fn shake_particle_count_peaks_near_quarter_cycle() {
+        // sin((0.9 - 0.4) * PI) == sin(PI/2) == 1.0, so count should hit the full 7.
+        assert_eq!(shake_particle_count(0.9), 7);
+    }
+
+    #[test]
+    fn shake_particle_count_never_negative() {
+        for i in 0..40 {
+            let anim = i as f32 * 0.05;
+            assert!(shake_particle_count(anim) >= 0);
+        }
     }
 }
