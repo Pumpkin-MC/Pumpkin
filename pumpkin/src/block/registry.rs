@@ -132,6 +132,7 @@ use crate::block::blocks::redstone::sculk_sensor::SculkSensorBlock;
 use crate::block::blocks::redstone::target_block::TargetBlock;
 use crate::block::blocks::redstone::tripwire::TripwireBlock;
 use crate::block::blocks::redstone::tripwire_hook::TripwireHookBlock;
+use crate::block::blocks::sculk_vein::SculkVeinBlock;
 use crate::block::blocks::shelf::ShelfBlock;
 use crate::block::blocks::signs::SignBlock;
 use crate::block::blocks::slabs::SlabBlock;
@@ -271,6 +272,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(LilyPadBlock);
     manager.register(SugarCaneBlock);
     manager.register(VineBlock);
+    manager.register(SculkVeinBlock);
     manager.register(TNTBlock);
     manager.register(BushBlock);
     manager.register(FlowerBlock);
