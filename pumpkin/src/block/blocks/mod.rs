@@ -130,3 +130,4 @@ pub mod copper_grate;
 pub mod creaking_heart;
 
 pub mod scaffolding;
+pub mod structure_block;

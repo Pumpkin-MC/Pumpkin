@@ -207,6 +207,7 @@ use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smithing_table::SmithingTableBlock;
 use crate::block::blocks::smoker::SmokerBlock;
 use crate::block::blocks::stonecutter::StonecutterBlock;
+use crate::block::blocks::structure_block::StructureBlockBlock;
 
 #[must_use]
 #[expect(clippy::too_many_lines)]
@@ -402,6 +403,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(DaylightDetectorBlock);
     manager.register(RespawnAnchorBlock);
     manager.register(ScaffoldingBlock);
+    manager.register(StructureBlockBlock);
 
     // Rails
     manager.register(RailBlock);
