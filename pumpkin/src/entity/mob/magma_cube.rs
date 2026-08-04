@@ -5,6 +5,18 @@ use crate::entity::{
     mob::{Mob, MobEntity, slime::SlimeEntity},
 };
 
+/// Wraps `SlimeEntity`, mirroring how `MagmaCube.java` extends `AbstractCubeMob` the same
+/// way `Slime.java` does.
+///
+/// `SlimeEntity` branches internally on `EntityType::MAGMA_CUBE` for the handful of
+/// overrides that differ (sounds, jump delay, squish decay, attack damage/armor scaling,
+/// fire-render suppression in `Entity::tick`).
+///
+/// Not ported: `MagmaCube.jumpInLiquid` (extra upward velocity while jumping in lava) and
+/// `MagmaCube.jumpFromGround`'s size-scaled jump boost. Both hook into `LivingEntity`'s
+/// liquid-jump/jump-from-ground physics, which this codebase does not implement for any
+/// mob (jumping only ever comes from the `JUMP_STRENGTH` attribute via `LivingEntity::jump`).
+/// Porting them would mean building that physics hook first, which is out of scope here.
 pub struct MagmaCubeEntity {
     pub slime: Arc<SlimeEntity>,
 }

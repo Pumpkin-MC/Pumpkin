@@ -92,6 +92,7 @@ impl SlimeEntity {
         let actual_size = size.clamp(1, 127);
         let entity = &self.entity.living_entity.entity;
         entity.data.store(actual_size, Ordering::Relaxed);
+        let is_magma_cube = entity.entity_type == &EntityType::MAGMA_CUBE;
 
         // Update attributes
         {
@@ -105,8 +106,20 @@ impl SlimeEntity {
                 speed.dirty.store(true, Ordering::Relaxed);
             }
             if let Some(damage) = attributes.get_mut(&Attributes::ATTACK_DAMAGE.id) {
-                damage.base_value = actual_size as f64;
+                // MagmaCube.java getAttackDamage(): super.getAttackDamage() + 2.0, folded
+                // into the base value since this codebase has no separate contact-damage
+                // hook and try_attack reads the attribute directly.
+                damage.base_value = if is_magma_cube {
+                    actual_size as f64 + 2.0
+                } else {
+                    actual_size as f64
+                };
                 damage.dirty.store(true, Ordering::Relaxed);
+            }
+            // MagmaCube.java setSize(): getAttribute(ARMOR).setBaseValue(size * 3).
+            if is_magma_cube && let Some(armor) = attributes.get_mut(&Attributes::ARMOR.id) {
+                armor.base_value = (actual_size * 3) as f64;
+                armor.dirty.store(true, Ordering::Relaxed);
             }
         }
 
@@ -206,8 +219,29 @@ impl SlimeEntity {
         }
     }
 
-    fn get_jump_delay() -> i32 {
-        rand::random_range(10..30)
+    /// `MagmaCube.java` `getHurtSound()`: size-dependent, distinct from Slime's sound set.
+    pub(crate) const fn magma_cube_hurt_sound_for_size(size: i32) -> Sound {
+        if size == 1 {
+            Sound::EntityMagmaCubeHurtSmall
+        } else {
+            Sound::EntityMagmaCubeHurt
+        }
+    }
+
+    fn is_magma_cube(&self) -> bool {
+        self.entity.living_entity.entity.entity_type == &EntityType::MAGMA_CUBE
+    }
+
+    /// `MagmaCube.java` `getJumpDelay()`: `super.getJumpDelay()` * 4.
+    fn get_jump_delay(&self) -> i32 {
+        let base = rand::random_range(10..30);
+        if self.is_magma_cube() { base * 4 } else { base }
+    }
+
+    /// `MagmaCube.java` `decreaseSquish()`: targetSquish *= 0.9F (Slime keeps `AbstractCubeMob`'s
+    /// default 0.6F, hardcoded below in `mob_tick`).
+    fn squish_decay(&self) -> f32 {
+        if self.is_magma_cube() { 0.9 } else { 0.6 }
     }
 
     fn rot_lerp(start: f32, end: f32, max_step: f32) -> f32 {
@@ -223,7 +257,10 @@ impl SlimeEntity {
     }
 
     fn get_jump_sound(&self) -> Sound {
-        if self.is_tiny() {
+        // MagmaCube.java getJumpSound(): always MAGMA_CUBE_JUMP, unlike Slime's size split.
+        if self.is_magma_cube() {
+            Sound::EntityMagmaCubeJump
+        } else if self.is_tiny() {
             Sound::EntitySlimeJumpSmall
         } else {
             Sound::EntitySlimeJump
@@ -231,7 +268,13 @@ impl SlimeEntity {
     }
 
     fn get_squish_sound(&self) -> Sound {
-        if self.is_tiny() {
+        if self.is_magma_cube() {
+            if self.is_tiny() {
+                Sound::EntityMagmaCubeSquishSmall
+            } else {
+                Sound::EntityMagmaCubeSquish
+            }
+        } else if self.is_tiny() {
             Sound::EntitySlimeSquishSmall
         } else {
             Sound::EntitySlimeSquish
@@ -310,7 +353,8 @@ impl Mob for SlimeEntity {
             }
 
             self.was_on_ground.store(on_ground, Ordering::Relaxed);
-            self.target_squish.store(self.target_squish.load() * 0.6);
+            self.target_squish
+                .store(self.target_squish.load() * self.squish_decay());
 
             self.is_aggressive.store(false, Ordering::Relaxed);
             self.speed_modifier.store(0.0);
@@ -416,7 +460,7 @@ impl MoveControlTrait for SlimeMoveControl {
                 let current_delay = slime.jump_delay.load(Ordering::Relaxed);
                 if current_delay <= 0 {
                     // Start jump
-                    let mut next_delay = SlimeEntity::get_jump_delay();
+                    let mut next_delay = slime.get_jump_delay();
                     if slime.is_aggressive.load(Ordering::Relaxed) {
                         next_delay /= 3;
                     }
@@ -663,5 +707,33 @@ mod tests {
         assert_eq!(SlimeEntity::surface_spawn_chance(24_000), 0.375);
         assert_eq!(SlimeEntity::surface_spawn_chance(96_000), 0.0);
         assert_eq!(SlimeEntity::surface_spawn_chance(-24_000), 0.375);
+    }
+
+    #[test]
+    fn magma_cube_uses_small_hurt_sound_only_for_smallest_size() {
+        assert_eq!(
+            SlimeEntity::magma_cube_hurt_sound_for_size(1),
+            Sound::EntityMagmaCubeHurtSmall
+        );
+        assert_eq!(
+            SlimeEntity::magma_cube_hurt_sound_for_size(0),
+            Sound::EntityMagmaCubeHurt
+        );
+        assert_eq!(
+            SlimeEntity::magma_cube_hurt_sound_for_size(2),
+            Sound::EntityMagmaCubeHurt
+        );
+    }
+
+    #[test]
+    fn magma_cube_hurt_sound_differs_from_slime_hurt_sound() {
+        assert_ne!(
+            SlimeEntity::magma_cube_hurt_sound_for_size(1),
+            SlimeEntity::hurt_sound_for_size(1)
+        );
+        assert_ne!(
+            SlimeEntity::magma_cube_hurt_sound_for_size(2),
+            SlimeEntity::hurt_sound_for_size(2)
+        );
     }
 }

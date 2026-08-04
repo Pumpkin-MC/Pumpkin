@@ -2201,6 +2201,8 @@ impl LivingEntity {
     fn hurt_sound(&self) -> Sound {
         if self.entity.entity_type == &EntityType::SLIME {
             SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
+        } else if self.entity.entity_type == &EntityType::MAGMA_CUBE {
+            SlimeEntity::magma_cube_hurt_sound_for_size(self.entity.data.load(Relaxed))
         } else if self.entity.entity_type == &EntityType::SULFUR_CUBE {
             SulfurCubeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
         } else {
