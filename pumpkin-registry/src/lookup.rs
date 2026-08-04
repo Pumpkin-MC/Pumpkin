@@ -4,16 +4,9 @@ use pumpkin_util::identifier::Identifier;
 
 use crate::{Registry, RegistryAccess, error::RegistryGetError, key::DataKey};
 
-#[derive(Clone)]
-pub struct RegistryLookup(Arc<dyn RegistryAccess + Send + Sync>);
+pub trait RegistryLookup: RegistryAccess + Sized + Send + Sync {
 
-impl RegistryLookup {
-    #[must_use]
-    pub fn new(root: Arc<dyn RegistryAccess + Send + Sync>) -> Self {
-        Self(root)
-    }
-
-    pub fn get<T>(&self, key: &DataKey<T>) -> Result<Arc<T>, RegistryGetError>
+    fn lookup<T>(self: Arc<Self>, key: &DataKey<T>) -> Result<Arc<T>, RegistryGetError>
     where
         T: ?Sized + Send + Sync + 'static,
     {
@@ -22,7 +15,6 @@ impl RegistryLookup {
         let registry = match registry_ids.split_last() {
             Some((registry_id, parent_ids)) => {
                 let mut parent = self
-                    .0
                     .clone()
                     .into_any()
                     .downcast::<RootRegistry>()
@@ -47,7 +39,7 @@ impl RegistryLookup {
                     .get(registry_id)
                     .ok_or_else(|| RegistryGetError::NotFound(registry_id.clone()))
             }
-            None => Ok(self.0.clone()),
+            None => Ok(self.clone() as Arc<dyn RegistryAccess + Send + Sync>),
         }?;
 
         let expected = registry.type_name();
@@ -99,7 +91,7 @@ mod tests {
             .add_subkey(id("answer"))
             .build();
 
-        assert_eq!(*RegistryLookup::new(root).get(&key).unwrap(), 42);
+        assert_eq!(*root.lookup(&key).unwrap(), 42);
     }
 
     #[test]
@@ -120,7 +112,7 @@ mod tests {
             .add_subkey(id("player"))
             .build();
 
-        assert_eq!(&*RegistryLookup::new(root).get(&key).unwrap(), "Steve");
+        assert_eq!(&*root.lookup(&key).unwrap(), "Steve");
     }
 
     #[test]
@@ -130,7 +122,7 @@ mod tests {
 
         let key = DataKey::<u32>::builder(id("answer")).build();
 
-        assert_eq!(*RegistryLookup::new(root).get(&key).unwrap(), 42);
+        assert_eq!(*root.lookup(&key).unwrap(), 42);
     }
 
     #[test]
@@ -142,7 +134,7 @@ mod tests {
             .build();
 
         assert!(matches!(
-            RegistryLookup::new(root).get(&key),
+            root.lookup(&key),
             Err(RegistryGetError::NotFound(identifier)) if identifier == id("missing-parent")
         ));
     }
@@ -160,7 +152,7 @@ mod tests {
             .build();
 
         assert!(matches!(
-            RegistryLookup::new(root).get(&key),
+            root.lookup(&key),
             Err(RegistryGetError::ExpectedRegistry(identifier)) if identifier == id("not-a-root")
         ));
     }
@@ -179,7 +171,7 @@ mod tests {
             .build();
 
         assert!(matches!(
-            RegistryLookup::new(root).get(&key),
+            root.lookup(&key),
             Err(RegistryGetError::TypeMismatch { identifier, expected }) if identifier == id("answer") && expected == "alloc::string::String"
         ));
     }
@@ -194,25 +186,8 @@ mod tests {
             .build();
 
         assert!(matches!(
-            RegistryLookup::new(root).get(&key),
+            root.lookup(&key),
             Err(RegistryGetError::NotFound(identifier)) if identifier == id("missing")
         ));
-    }
-
-    #[test]
-    fn cloned_lookup_observes_later_registrations() {
-        let root = Arc::new(RootRegistry::new());
-        let numbers = Arc::new(Registry::new());
-        register_registry(&root, id("numbers"), Arc::clone(&numbers));
-        let lookup = RegistryLookup::new(root);
-        let cloned = lookup.clone();
-
-        numbers.register(id("answer"), 42u32).unwrap();
-        let key = DataKey::<u32>::builder(id("numbers"))
-            .add_subkey(id("answer"))
-            .build();
-
-        assert_eq!(*lookup.get(&key).unwrap(), 42);
-        assert_eq!(*cloned.get(&key).unwrap(), 42);
     }
 }

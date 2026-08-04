@@ -8,9 +8,7 @@ use std::{
 };
 
 use crate::{
-    RegistryAccess,
-    error::{RegistryInsertError, VersionMappingError},
-    mapping::{NetworkId, VersionMapping},
+    RegistryAccess, RegistryLookup, error::{RegistryInsertError, VersionMappingError}, mapping::{NetworkId, VersionMapping},
 };
 
 pub struct Registry<T: ?Sized + Send + Sync + 'static> {
@@ -304,6 +302,8 @@ impl<T: ?Sized + Send + Sync + 'static> RegistryAccess for Registry<T> {
         type_name::<T>()
     }
 }
+
+impl<T: ?Sized + Send + Sync + 'static> RegistryLookup for Registry<T> {}
 
 impl<T: ?Sized + Send + Sync + 'static> Default for Registry<T> {
     fn default() -> Self {
