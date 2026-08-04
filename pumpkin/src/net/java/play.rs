@@ -14,7 +14,6 @@ use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self};
 use crate::entity::EntityBase;
-use crate::entity::equipment_break_status;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::entity::player::{ChatMode, ChatSession, MINE_BLOCK_EXHAUSTION, Player};
 use crate::error::PumpkinError;
@@ -2563,18 +2562,12 @@ impl JavaClient {
         let after = stack.clone();
         drop(stack);
 
-        // Broadcast the break entity status before the slot sync; the client
-        // needs the old item texture in the slot for break particles.
-        if !before.is_empty() && after.is_empty() {
-            let slot = if slot_index == player.inventory.get_selected_slot() as usize {
-                &EquipmentSlot::MAIN_HAND
-            } else {
-                &EquipmentSlot::OFF_HAND
-            };
-            player
-                .world()
-                .send_entity_status(player.get_entity(), equipment_break_status(slot));
-        }
+        // NOTE: the equipment-break entity status (item_break sound/particles) is NOT
+        // broadcast here. A stack reaching zero via placement/consumption (spawn eggs,
+        // the last block in a stack, ...) is not the same event as a damageable item's
+        // durability reaching zero -- vanilla only plays the break effect for the latter.
+        // Actual tool-durability breakage already broadcasts this status correctly,
+        // gated on `DamageResult::Broken`, in `Player::damage_item_in_slot`.
 
         if !after.are_equal(&before) {
             player.sync_hand_slot(slot_index, after).await;
