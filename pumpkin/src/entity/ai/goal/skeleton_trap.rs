@@ -28,9 +28,10 @@ const EXTRA_HORSE_COUNT: usize = 3;
 /// registers it unconditionally on every `SkeletonHorseEntity` and instead gates on
 /// `SkeletonHorseEntity::is_trap()` inside `can_start`, which is behaviorally equivalent (a
 /// non-trap horse's `can_start` always returns `false`) without needing a dynamic
-/// add/remove-goal API. Once triggered, `tick()` immediately clears `is_trap`, so (matching
-/// Pumpkin's `Goal::should_continue` defaulting to `false` when unset) the goal naturally runs
-/// for exactly one active tick before the goal selector stops it again.
+/// add/remove-goal API. Once triggered, `tick()` immediately clears `is_trap` via
+/// `horse.set_trap(false)`, so the next `should_continue` check (which defaults to
+/// re-evaluating `can_start`, matching vanilla's `canContinueToUse` -> `canUse` delegation)
+/// fails and the goal selector stops it again after exactly one active tick.
 ///
 /// Scope reduction: vanilla enchants the spawned skeletons' weapon/helmet via
 /// `EnchantmentHelper.enchantItemFromProvider(..., VanillaEnchantmentProviders.MOB_SPAWN_EQUIPMENT,

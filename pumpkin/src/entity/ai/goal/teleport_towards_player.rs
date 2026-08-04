@@ -97,7 +97,7 @@ impl Goal for TeleportTowardsPlayerGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             if let Some(target) = &self.target_player
                 && let Some(player) = target.get_player()

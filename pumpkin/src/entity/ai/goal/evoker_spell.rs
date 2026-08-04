@@ -43,7 +43,7 @@ impl Goal for EvokerCastingSpellGoal {
 
     // Vanilla's base `Goal#canContinueToUse` defaults to `canUse()` when not overridden, and
     // `SpellcasterCastingSpellGoal` doesn't override it.
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             self.evoker
                 .upgrade()
@@ -257,7 +257,7 @@ impl Goal for EvokerAttackSpellGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let Some(evoker) = self.evoker.upgrade() else {
                 return false;
@@ -399,7 +399,7 @@ impl Goal for EvokerSummonSpellGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let Some(evoker) = self.evoker.upgrade() else {
                 return false;
@@ -533,7 +533,7 @@ impl Goal for EvokerWololoSpellGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let Some(evoker) = self.evoker.upgrade() else {
                 return false;

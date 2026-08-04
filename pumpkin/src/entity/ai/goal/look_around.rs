@@ -27,7 +27,7 @@ impl Goal for RandomLookAroundGoal {
         Box::pin(async { mob.get_random().random::<f32>() < 0.02 })
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async { self.look_time >= 0 })
     }
 

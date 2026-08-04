@@ -108,7 +108,7 @@ impl Goal for GuardianAttackGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let target = mob.get_mob_entity().target.lock().await.clone();
             let Some(target) = target else {

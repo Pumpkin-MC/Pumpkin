@@ -23,7 +23,7 @@ impl Goal for ZombieAttackGoal {
         Box::pin(async { self.melee_attack_goal.can_start(mob).await })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async { self.melee_attack_goal.should_continue(mob).await })
     }
 

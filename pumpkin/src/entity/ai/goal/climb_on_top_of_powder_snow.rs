@@ -56,7 +56,7 @@ impl Goal for ClimbOnTopOfPowderSnowGoal {
         Box::pin(async move { Self::wants_to_climb(mob) })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         // Vanilla has no `canContinueToUse` override, so it defaults to re-running `canUse`.
         Box::pin(async move { Self::wants_to_climb(mob) })
     }

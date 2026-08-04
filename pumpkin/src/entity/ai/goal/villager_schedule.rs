@@ -101,7 +101,7 @@ impl Goal for VillagerScheduleGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let Some(target) = self.target else {
                 return false;

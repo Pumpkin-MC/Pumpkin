@@ -11,6 +11,13 @@ use std::sync::atomic::Ordering::Relaxed;
 pub struct DolphinJumpGoal {
     interval: i32,
     next_jump_tick: i32,
+    /// Vanilla: `DolphinJumpGoal.breached`. Latches true the first time `tick()` observes the
+    /// dolphin in water and is never reset (not even in `start`/`stop`) -- verified against
+    /// `DolphinJumpGoal.java` (no other write site exists in the decompiled source). Since the
+    /// goal starts while the dolphin is still in water, this usually latches (and plays the
+    /// sound) on the very first tick after `start()`, then never again for the lifetime of this
+    /// goal instance. That is vanilla's actual behavior, not a bug to "fix" here.
+    breached: bool,
 }
 
 impl DolphinJumpGoal {
@@ -19,6 +26,7 @@ impl DolphinJumpGoal {
         Self {
             interval: to_goal_ticks(interval),
             next_jump_tick: 0,
+            breached: false,
         }
     }
 
@@ -111,7 +119,7 @@ impl Goal for DolphinJumpGoal {
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let entity = mob.get_entity();
             let velocity = entity.velocity.load();
@@ -154,14 +162,15 @@ impl Goal for DolphinJumpGoal {
             let entity = mob.get_entity();
             let world = entity.world.load();
 
-            // Detect when dolphin breaches the water surface
-            let current_pos = entity.block_pos.load();
-            let fluid = world.get_fluid(&current_pos);
+            // Detect the false->true transition of being back in water (vanilla: `breached`).
+            let already_breached = self.breached;
+            if !already_breached {
+                let current_pos = entity.block_pos.load();
+                let fluid = world.get_fluid(&current_pos);
+                self.breached = fluid == &Fluid::WATER || fluid == &Fluid::FLOWING_WATER;
+            }
 
-            let is_in_water = fluid == &Fluid::WATER || fluid == &Fluid::FLOWING_WATER;
-
-            // Play sound when breaching
-            if is_in_water {
+            if self.breached && !already_breached {
                 world.play_sound(
                     Sound::EntityDolphinJump,
                     SoundCategory::Neutral,
