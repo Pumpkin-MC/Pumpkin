@@ -73,4 +73,22 @@ impl ItemStack {
     pub fn is_hoe(&self) -> bool {
         self.item.has_tag(&tag::Item::MINECRAFT_HOES)
     }
+
+    #[inline]
+    #[must_use]
+    pub fn is_shears(&self) -> bool {
+        self.item == &crate::item::Item::SHEARS
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::item::Item;
+    use crate::item_stack::ItemStack;
+
+    #[test]
+    fn is_shears_only_matches_shears() {
+        assert!(ItemStack::new(1, &Item::SHEARS).is_shears());
+        assert!(!ItemStack::new(1, &Item::DIAMOND_AXE).is_shears());
+    }
 }

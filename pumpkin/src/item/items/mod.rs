@@ -25,6 +25,7 @@ pub mod map;
 pub mod minecart;
 pub mod name_tag;
 pub mod potions;
+pub mod shears;
 pub mod shovel;
 pub mod snowball;
 pub mod spawn_egg;
@@ -69,6 +70,7 @@ use ignite::fire_charge::FireChargeItem;
 use ignite::flint_and_steel::FlintAndSteelItem;
 use ink_sac::InkSacItem;
 use mace::MaceItem;
+use shears::ShearsItem;
 use shovel::ShovelItem;
 use snowball::SnowBallItem;
 use std::sync::Arc;
@@ -153,6 +155,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(LingeringPotionItem);
     manager.register(BundleItem);
     manager.register(LeadItem);
+    manager.register(ShearsItem);
 
     Arc::new(manager)
 }
