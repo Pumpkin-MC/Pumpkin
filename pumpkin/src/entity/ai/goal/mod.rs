@@ -19,6 +19,8 @@ pub mod climb_on_top_of_powder_snow;
 pub mod creeper_ignite;
 pub mod destroy_egg;
 pub mod dolphin_jump;
+pub mod dolphin_swim_to_treasure;
+pub mod dolphin_swim_with_player;
 pub mod eat_grass;
 pub mod escape_danger;
 pub mod evoker_spell;
