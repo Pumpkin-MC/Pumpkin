@@ -26,6 +26,7 @@ use crate::block::blocks::copper_grate::CopperGrateBlock;
 use crate::block::blocks::coral::coral_block::CoralBlock;
 use crate::block::blocks::coral::coral_fan::CoralFanBlock;
 use crate::block::blocks::coral::coral_plant::CoralPlantBlock;
+use crate::block::blocks::creaking_heart::CreakingHeartBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
 use crate::block::blocks::dripstone::DripstoneBlock;
@@ -333,6 +334,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ConduitBlock);
     manager.register(CopperFullBlock);
     manager.register(CopperGolemStatueBlock);
+    manager.register(CreakingHeartBlock);
     manager.register(CopperGrateBlock);
     manager.register(DripstoneBlock);
     manager.register(TwistingVinesBlock);

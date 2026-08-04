@@ -125,3 +125,4 @@ pub mod copper_weathering;
 pub mod copper_full;
 pub mod copper_golem_statue;
 pub mod copper_grate;
+pub mod creaking_heart;
