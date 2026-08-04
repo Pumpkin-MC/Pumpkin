@@ -22,6 +22,31 @@ pub struct MerchantOffer {
 }
 
 impl MerchantOffer {
+    /// Vanilla `MerchantOffer::getModifiedCostCount` (`MerchantOffer.java:123-127`): the
+    /// actual price charged/displayed, layering demand-driven inflation and the
+    /// reputation/hero-of-the-village `special_price` discount on top of the trade
+    /// definition's base count. Demand only ever raises the price (`max(0, ...)`);
+    /// `special_price` can be negative.
+    #[must_use]
+    pub fn modified_cost_count(
+        base_count: i32,
+        demand: i32,
+        price_multiplier: f32,
+        special_price: i32,
+        max_stack_size: i32,
+    ) -> i32 {
+        #[allow(clippy::cast_possible_truncation)]
+        let demand_diff = ((base_count as f32) * (demand as f32) * price_multiplier)
+            .floor()
+            .max(0.0) as i32;
+        (base_count + demand_diff + special_price).clamp(1, max_stack_size.max(1))
+    }
+
+    /// Vanilla `MerchantOffer::updateDemand` (`MerchantOffer.java:145-147`).
+    pub const fn update_demand(&mut self) {
+        self.demand += self.uses - (self.max_uses - self.uses);
+    }
+
     fn write(
         &self,
         mut write: impl std::io::Write,
@@ -90,5 +115,56 @@ impl ClientPacket for CMerchantOffers {
         write.write_bool(self.is_regular_villager)?;
         write.write_bool(self.can_restock)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::MerchantOffer;
+
+    #[test]
+    fn modified_cost_count_applies_demand_and_special_price() {
+        // No demand or discount: unchanged.
+        assert_eq!(MerchantOffer::modified_cost_count(10, 0, 0.05, 0, 64), 10);
+        // Demand raises price: floor(10 * 3 * 0.05) = 1.
+        assert_eq!(MerchantOffer::modified_cost_count(10, 3, 0.05, 0, 64), 11);
+        // Negative demand never lowers price below base (max(0, ...)).
+        assert_eq!(MerchantOffer::modified_cost_count(10, -5, 0.05, 0, 64), 10);
+        // Special price (reputation discount) can reduce below base.
+        assert_eq!(MerchantOffer::modified_cost_count(10, 0, 0.05, -4, 64), 6);
+    }
+
+    #[test]
+    fn modified_cost_count_clamps_between_one_and_max_stack() {
+        assert_eq!(MerchantOffer::modified_cost_count(1, 0, 0.05, -10, 64), 1);
+        assert_eq!(MerchantOffer::modified_cost_count(60, 20, 0.5, 0, 64), 64);
+    }
+
+    #[test]
+    fn update_demand_matches_vanilla_formula() {
+        let mut offer = MerchantOffer {
+            base_cost_a: crate::codec::item_stack_seralizer::ItemStackSerializer(
+                std::borrow::Cow::Owned(pumpkin_data::item_stack::ItemStack::EMPTY.clone()),
+            ),
+            output: crate::codec::item_stack_seralizer::ItemStackSerializer(
+                std::borrow::Cow::Owned(pumpkin_data::item_stack::ItemStack::EMPTY.clone()),
+            ),
+            cost_b: None,
+            is_disabled: false,
+            uses: 12,
+            max_uses: 12,
+            xp: 2,
+            special_price: 0,
+            price_multiplier: 0.05,
+            demand: 0,
+        };
+        // demand += uses - (max_uses - uses) = 12 - 0 = 12
+        offer.update_demand();
+        assert_eq!(offer.demand, 12);
+
+        offer.uses = 0;
+        offer.update_demand();
+        // demand += 0 - 12 = 12 - 12 = 0
+        assert_eq!(offer.demand, 0);
     }
 }

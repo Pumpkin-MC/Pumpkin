@@ -67,8 +67,19 @@ impl MerchantScreenHandler {
         let input_b = self.inventory.get_stack(1).await;
         let input_b = input_b.lock().await;
 
+        // `MerchantOffer::getCostA` (`MerchantOffer.java:119-121`): the affordability check
+        // must use the demand/special-price-modified cost, not the raw base count, or the
+        // output slot would light up (and later `on_slot_click` would charge) for a price
+        // the player can't actually pay once demand has inflated it.
+        let cost_a_count = pumpkin_protocol::java::client::play::MerchantOffer::modified_cost_count(
+            offer.base_cost_a.0.item_count as i32,
+            offer.demand,
+            offer.price_multiplier,
+            offer.special_price,
+            offer.base_cost_a.0.get_max_stack_size() as i32,
+        );
         let match_a = input_a.are_items_and_components_equal(&offer.base_cost_a.0)
-            && input_a.item_count >= offer.base_cost_a.0.item_count;
+            && input_a.item_count >= cost_a_count as u8;
 
         let match_b = offer.cost_b.as_ref().map_or_else(
             || input_b.is_empty(),
@@ -184,12 +195,23 @@ impl ScreenHandler for MerchantScreenHandler {
                 if result_slot.has_stack().await {
                     let result_stack = result_slot.get_cloned_stack().await;
                     if !result_stack.is_empty() {
-                        // Consume inputs
+                        // Consume inputs. `MerchantOffer::getCostA` (`MerchantOffer.java:119-121`):
+                        // charge the demand/special-price-modified count, matching the
+                        // affordability check in `update_result_slot` above -- `cost_b` (the
+                        // secondary ingredient) is never demand-adjusted in vanilla, only `costA`.
                         let (count_a, count_b, offer_xp) = {
                             let offer = &mut self.offers[self.selected_offer];
                             offer.uses += 1;
+                            let count_a =
+                                pumpkin_protocol::java::client::play::MerchantOffer::modified_cost_count(
+                                    offer.base_cost_a.0.item_count as i32,
+                                    offer.demand,
+                                    offer.price_multiplier,
+                                    offer.special_price,
+                                    offer.base_cost_a.0.get_max_stack_size() as i32,
+                                ) as u8;
                             let count_b = offer.cost_b.as_ref().map(|c| c.0.item_count);
-                            (offer.base_cost_a.0.item_count, count_b, offer.xp)
+                            (count_a, count_b, offer.xp)
                         };
 
                         let input_a = self.inventory.get_stack(0).await;

@@ -72,6 +72,7 @@ pub mod swim;
 pub mod teleport_towards_player;
 pub mod tempt;
 pub(crate) mod track_target;
+pub mod trader_llama_defend_wandering_trader;
 pub mod transport_items;
 pub mod turtle_go_to_water;
 pub mod vex_charge_attack;
