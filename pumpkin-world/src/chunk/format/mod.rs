@@ -173,6 +173,22 @@ impl ChunkData {
         .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         let root_tag = nbt.root_tag;
+        let mut unknown_nbt = root_tag.clone();
+        for key in [
+            "DataVersion",
+            "xPos",
+            "zPos",
+            "yPos",
+            "Status",
+            "Heightmaps",
+            "sections",
+            "block_ticks",
+            "fluid_ticks",
+            "block_entities",
+            "isLightOn",
+        ] {
+            unknown_nbt.child_tags.remove(key);
+        }
 
         let x_pos = root_tag.get_int("xPos").ok_or_else(|| {
             ChunkParsingError::ErrorDeserializingChunk("Missing xPos".to_string())
@@ -382,6 +398,7 @@ impl ChunkData {
             status,
             blending_data: None,
             inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
+            unknown_nbt,
         })
     }
 
@@ -412,7 +429,7 @@ impl ChunkData {
 
         let min_section_y = (self.section.min_y >> 4) as i8;
 
-        let mut root_compound = NbtCompound::new();
+        let mut root_compound = self.unknown_nbt.clone();
         root_compound.put_int("DataVersion", WORLD_DATA_VERSION);
         root_compound.put_int("xPos", self.x);
         root_compound.put_int("zPos", self.z);
@@ -761,4 +778,46 @@ struct EntityNbt {
     data_version: i32,
     position: [i32; 2],
     entities: Vec<NbtCompound>,
+}
+
+#[cfg(test)]
+mod chunk_codec_tests {
+    use super::*;
+    use pumpkin_nbt::tag::NbtTag;
+
+    fn section(y: i8) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_byte("Y", y);
+        NbtTag::Compound(compound)
+    }
+
+    #[test]
+    fn preserves_unknown_root_tags_when_reserializing() {
+        let mut root = NbtCompound::new();
+        root.put_int("xPos", 0);
+        root.put_int("zPos", 0);
+        root.put_int("yPos", 0);
+        root.put_list("sections", vec![section(0)]);
+
+        let mut future_data = NbtCompound::new();
+        future_data.put_string("owner", "vanilla".to_string());
+        root.put_compound("FutureData", future_data.clone());
+
+        let mut bytes = Vec::new();
+        pumpkin_nbt::serializer::to_bytes(&root, &mut bytes).unwrap();
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let encoded = chunk.internal_to_bytes().unwrap();
+        let mut cursor = std::io::Cursor::new(encoded.to_vec());
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+        let decoded = pumpkin_nbt::Nbt::read(&mut reader).unwrap();
+
+        assert_eq!(
+            decoded.root_tag.get_compound("FutureData"),
+            Some(&future_data)
+        );
+        assert_eq!(
+            decoded.root_tag.get_int("DataVersion"),
+            Some(WORLD_DATA_VERSION)
+        );
+    }
 }
