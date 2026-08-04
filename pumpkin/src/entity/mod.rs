@@ -93,6 +93,7 @@ pub mod falling;
 pub mod hunger;
 pub mod item;
 pub mod living;
+pub mod marker;
 pub mod mob;
 pub mod passive;
 pub mod persistent_anger;
