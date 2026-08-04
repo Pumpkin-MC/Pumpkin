@@ -571,6 +571,17 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
+    /// Vanilla `LivingEntity.blockedByItem`: called on the attacker (`self`) when `defender`
+    /// successfully shield-blocks one of `self`'s attacks. Default no-op; Ravager overrides this
+    /// to sometimes stun itself, Hoglin/Zoglin have their own vanilla overrides not yet ported.
+    fn blocked_by_item<'a>(
+        &'a self,
+        _defender: &'a dyn EntityBase,
+        _damage: f32,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     fn try_attack<'a>(&'a self, target: &'a dyn EntityBase) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             let damaged = self.get_mob_entity().try_attack(target).await;

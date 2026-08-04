@@ -2589,6 +2589,12 @@ impl EntityBase for LivingEntity {
                 if source_to_player.dot(&look_vec) < 0.0 {
                     world.play_sound(Sound::ItemShieldBlock, SoundCategory::Players, &player_pos);
 
+                    // Vanilla: `LivingEntity.blockUsingShield` -> `attacker.blockedByItem(this,
+                    // source, damage)`. Called on the attacker, not the defender.
+                    if let Some(attacker_mob) = cause.and_then(EntityBase::get_mob) {
+                        attacker_mob.blocked_by_item(caller, effective_amount).await;
+                    }
+
                     if let Some(player) = caller.get_player() {
                         player
                             .increment_stat(
