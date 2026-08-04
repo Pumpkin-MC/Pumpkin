@@ -5,7 +5,6 @@ use pumpkin_util::identifier::Identifier;
 use crate::{Registry, RegistryAccess, error::RegistryGetError, key::DataKey};
 
 pub trait RegistryLookup: RegistryAccess + Sized + Send + Sync {
-
     fn lookup<T>(self: Arc<Self>, key: &DataKey<T>) -> Result<Arc<T>, RegistryGetError>
     where
         T: ?Sized + Send + Sync + 'static,
@@ -14,15 +13,9 @@ pub trait RegistryLookup: RegistryAccess + Sized + Send + Sync {
 
         let registry = match registry_ids.split_last() {
             Some((registry_id, parent_ids)) => {
-                let mut parent = self
-                    .clone()
-                    .into_any()
-                    .downcast::<RootRegistry>()
-                    .map_err(|_| {
-                        RegistryGetError::ExpectedRegistry(Identifier::from_static(
-                            "lookup", "root",
-                        ))
-                    })?;
+                let mut parent = self.into_any().downcast::<RootRegistry>().map_err(|_| {
+                    RegistryGetError::ExpectedRegistry(Identifier::from_static("lookup", "root"))
+                })?;
 
                 for identifier in parent_ids {
                     let child = parent
@@ -39,7 +32,7 @@ pub trait RegistryLookup: RegistryAccess + Sized + Send + Sync {
                     .get(registry_id)
                     .ok_or_else(|| RegistryGetError::NotFound(registry_id.clone()))
             }
-            None => Ok(self.clone() as Arc<dyn RegistryAccess + Send + Sync>),
+            None => Ok(self as Arc<dyn RegistryAccess + Send + Sync>),
         }?;
 
         let expected = registry.type_name();

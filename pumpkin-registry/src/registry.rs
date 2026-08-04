@@ -8,7 +8,9 @@ use std::{
 };
 
 use crate::{
-    RegistryAccess, RegistryLookup, error::{RegistryInsertError, VersionMappingError}, mapping::{NetworkId, VersionMapping},
+    RegistryAccess, RegistryLookup,
+    error::{RegistryInsertError, VersionMappingError},
+    mapping::{NetworkId, VersionMapping},
 };
 
 pub struct Registry<T: ?Sized + Send + Sync + 'static> {
