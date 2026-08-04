@@ -20,15 +20,19 @@ use crate::block::entities::sign::DyeColor;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        beg::BegGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
+        active_target::ActiveTargetGoal, beg::BegGoal, breed::BreedGoal,
+        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
         follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, non_tame_random_target::NonTameRandomTargetGoal,
-        sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
+        revenge::RevengeGoal, sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
+    living::LivingEntity,
     mob::{Mob, MobEntity},
     persistent_anger::PersistentAnger,
     player::Player,
 };
+use crate::world::World;
 
 // Vanilla Wolf.java: `private static final DyeColor DEFAULT_COLLAR_COLOR = DyeColor.RED;`
 const DEFAULT_COLLAR_COLOR: u8 = DyeColor::Red as u8;
@@ -38,6 +42,16 @@ const DEFAULT_COLLAR_COLOR: u8 = DyeColor::Red as u8;
 /// ported as a separate closure).
 const WOLF_PREY_TYPES: &[&EntityType] =
     &[&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX];
+
+/// Vanilla `AbstractSkeleton` covers `Skeleton`/`Stray`/`WitherSkeleton`; Pumpkin has no shared
+/// class hierarchy for these three, so target-selector priority 7 registers one
+/// `ActiveTargetGoal` per concrete type below rather than extending `ActiveTargetGoal` to
+/// search multiple types at once.
+const SKELETON_FAMILY: &[&EntityType] = &[
+    &EntityType::SKELETON,
+    &EntityType::STRAY,
+    &EntityType::WITHER_SKELETON,
+];
 
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
@@ -68,20 +82,48 @@ impl WolfEntity {
             goal_selector.add_goal(2, SitGoal::new());
             goal_selector.add_goal(4, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(5, BreedGoal::new(1.0));
-            // goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0, false));
+            goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0));
             goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(9, BegGoal::new(8.0, &[&Item::BONE]));
             goal_selector.add_goal(
                 10,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(12, Box::new(WanderAroundGoal::new(1.0)));
 
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
-            // Vanilla priorities 1-3 (OwnerHurtByTarget/OwnerHurtTarget/HurtByTarget[+alert]) and
-            // 4/7 (angry-at-player / hostile-skeleton) target goals aren't ported here -- only
-            // the untamed prey-targeting behavior requested for this cluster.
+            target_selector.add_goal(1, OwnerHurtByTargetGoal::new());
+            target_selector.add_goal(2, OwnerHurtTargetGoal::new());
+            target_selector.add_goal(3, Box::new(RevengeGoal::new(true)));
+
+            // Vanilla priority 4: `NearestAttackableTargetGoal<Player>(..., this::isAngryAt)`.
+            // The predicate only sees the candidate, not the mob, so it closes over a weak
+            // handle back to this wolf to consult its own `PersistentAnger` state.
+            let angry_weak = mob_weak.clone();
+            target_selector.add_goal(
+                4,
+                Box::new(ActiveTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    &EntityType::PLAYER,
+                    10,
+                    true,
+                    false,
+                    Some(move |target: Arc<LivingEntity>, _world: Arc<World>| {
+                        let angry_weak = angry_weak.clone();
+                        async move {
+                            let Some(mob) = angry_weak.upgrade() else {
+                                return false;
+                            };
+                            let Some(anger) = mob.persistent_anger() else {
+                                return false;
+                            };
+                            anger.is_angry_at(target.entity.entity_uuid).await
+                        }
+                    }),
+                )),
+            );
+
             target_selector.add_goal(
                 5,
                 NonTameRandomTargetGoal::without_predicate(
@@ -99,6 +141,22 @@ impl WolfEntity {
                     Some(crate::entity::ai::goal::non_tame_random_target::baby_turtle_on_land),
                 ),
             );
+
+            // Vanilla priority 7: one `ActiveTargetGoal` per skeleton-family type (see
+            // `SKELETON_FAMILY` above).
+            for skeleton_type in SKELETON_FAMILY {
+                target_selector.add_goal(
+                    7,
+                    ActiveTargetGoal::with_default(&mob_arc.mob_entity, skeleton_type, false),
+                );
+            }
+
+            // Vanilla priority 8, `ResetUniversalAngerTargetGoal(this, true)`, re-targets any
+            // nearby player while "universally angry" (a targetless grudge gated behind the
+            // `UNIVERSAL_ANGER` game rule) and separately expires the anger timer. Pumpkin has
+            // no `UNIVERSAL_ANGER` game rule and `PersistentAnger::tick` already expires the
+            // timer on its own, so only the universal-anger-only re-targeting behavior is
+            // missing here; deferred until that game rule exists.
         };
 
         mob_arc
@@ -176,7 +234,28 @@ impl Mob for WolfEntity {
     }
 
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move { self.persistent_anger.tick().await })
+        Box::pin(async move {
+            self.persistent_anger.tick().await;
+
+            // Simplified `NeutralMob::updatePersistentAnger(level, true)`: whenever this wolf
+            // currently has a live target (set by e.g. `RevengeGoal`/`OwnerHurtByTargetGoal`),
+            // adopt it as the anger target and (re)start the timer. Vanilla additionally
+            // re-resolves a persisted target reference across entity reloads and clears anger
+            // early for creative/spectator/peaceful targets; Pumpkin's `PersistentAnger::tick`
+            // already handles timer expiry on its own.
+            let current_target = self.mob_entity.target.lock().await.clone();
+            if let Some(target) = current_target {
+                let target_uuid = target.get_entity().entity_uuid;
+                if !self.persistent_anger.is_angry_at(target_uuid).await {
+                    self.persistent_anger.set_angry_at(Some(target_uuid)).await;
+                    self.persistent_anger.start_timer();
+                }
+            }
+        })
+    }
+
+    fn persistent_anger(&self) -> Option<&PersistentAnger> {
+        Some(&self.persistent_anger)
     }
 
     fn mob_interact<'a>(

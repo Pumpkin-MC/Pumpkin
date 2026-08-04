@@ -635,6 +635,12 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    /// Exposes this mob's `NeutralMob`-equivalent grudge state (Wolf, `ZombifiedPiglin`),
+    /// if it has one, for shared goals (`ActiveTargetGoal`'s angry-at-player predicate).
+    fn persistent_anger(&self) -> Option<&crate::entity::persistent_anger::PersistentAnger> {
+        None
+    }
+
     fn get_mob_gravity(&self) -> f64 {
         self.get_mob_entity().living_entity.get_gravity()
     }
