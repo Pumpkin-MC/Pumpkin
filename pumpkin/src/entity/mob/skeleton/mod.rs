@@ -169,6 +169,10 @@ mod tests {
             ),
         ));
 
+        // `ArrowEntity::new_shot` stores `item_stack.copy_with_count(1)`, so the patch has
+        // to survive that copy for the fired arrow to carry the effect.
+        let arrow = arrow.copy_with_count(1);
+
         let effects = PotionContents::read_potion_effects(&arrow);
         assert_eq!(effects.len(), 1);
         let (effect_type, duration, amplifier, ambient, particles, icon) = effects[0];
