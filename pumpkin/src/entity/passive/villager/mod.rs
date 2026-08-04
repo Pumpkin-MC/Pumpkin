@@ -693,7 +693,7 @@ impl ScreenHandlerFactory for VillagerEntity {
 impl NBTStorage for VillagerEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
+            self.mob_entity.living_entity.write_nbt(nbt).await;
             let data = self.villager_data.lock().await;
             let mut villager_data_nbt = NbtCompound::new();
             villager_data_nbt.put_int("Type", data.r#type.0);
@@ -802,11 +802,7 @@ impl NBTStorage for VillagerEntity {
     #[allow(clippy::too_many_lines)]
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(villager_data_nbt) = nbt.get_compound("VillagerData") {
                 let mut data = self.villager_data.lock().await;
                 if let Some(t) = villager_data_nbt.get_int("Type") {

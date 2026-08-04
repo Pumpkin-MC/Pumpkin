@@ -207,7 +207,7 @@ impl ScreenHandlerFactory for WanderingTraderEntity {
 impl NBTStorage for WanderingTraderEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
+            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_int("DespawnDelay", self.despawn_delay.load(Ordering::Relaxed));
 
             let offers = self.offers.lock().await;
@@ -249,11 +249,7 @@ impl NBTStorage for WanderingTraderEntity {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Some(delay) = nbt.get_int("DespawnDelay") {
                 self.despawn_delay.store(delay, Ordering::Relaxed);
             }
