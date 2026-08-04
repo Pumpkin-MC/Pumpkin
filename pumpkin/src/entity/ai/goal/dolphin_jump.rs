@@ -86,6 +86,17 @@ impl DolphinJumpGoal {
 
         block_state_1.is_air() && block_state_2.is_air()
     }
+
+    /// Vanilla `DolphinJumpGoal.canContinueToUse`:
+    /// `(!(yd*yd<0.03) || xRot==0 || !(abs(xRot)<10) || !isInWater) && !onGround`
+    fn should_continue_jump(
+        y_velocity_sq: f64,
+        x_rot: f32,
+        is_in_water: bool,
+        on_ground: bool,
+    ) -> bool {
+        (y_velocity_sq >= 0.03 || x_rot == 0.0 || x_rot.abs() >= 10.0 || !is_in_water) && !on_ground
+    }
 }
 
 impl Goal for DolphinJumpGoal {
@@ -123,15 +134,12 @@ impl Goal for DolphinJumpGoal {
         Box::pin(async move {
             let entity = mob.get_entity();
             let velocity = entity.velocity.load();
-
-            // Continue while dolphin is airborne and in water
             let y_velocity_sq = velocity.y * velocity.y;
-            let is_falling = y_velocity_sq < 0.03
-                || entity.pitch.load() == 0.0
-                || (entity.pitch.load().abs() < 10.0);
+            let x_rot = entity.pitch.load();
             let is_in_water = entity.touching_water.load(Relaxed);
+            let on_ground = entity.on_ground.load(Relaxed);
 
-            !(is_falling) && !entity.on_ground.load(Relaxed) && is_in_water
+            Self::should_continue_jump(y_velocity_sq, x_rot, is_in_water, on_ground)
         })
     }
 
@@ -220,4 +228,53 @@ fn lerp_rotation(progress: f32, current: f32, target: f32) -> f32 {
         diff += 360.0;
     }
     current + progress * diff
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn on_ground_always_stops() {
+        // Even with every other term true, onGround forces a stop.
+        assert!(!DolphinJumpGoal::should_continue_jump(
+            1.0, 45.0, true, true
+        ));
+        assert!(!DolphinJumpGoal::should_continue_jump(0.0, 0.0, true, true));
+    }
+
+    #[test]
+    fn normal_mid_jump_continues() {
+        // Rising/falling fast, pitched over, still in water, not on ground.
+        assert!(DolphinJumpGoal::should_continue_jump(
+            0.5, 30.0, true, false
+        ));
+    }
+
+    #[test]
+    fn audit_case_fast_fall_shallow_pitch_in_water_continues() {
+        // yd*yd >= 0.03 (fast), xRot != 0, abs(xRot) < 10 (shallow pitch), still in water,
+        // not on ground. Vanilla's OR-of-4 structure continues here because the first
+        // term alone (yd*yd >= 0.03) is enough, regardless of the other three terms all
+        // being false. A prior Rust implementation computed a single `is_falling` OR and
+        // negated the whole thing, which incorrectly stopped the goal in this case.
+        assert!(DolphinJumpGoal::should_continue_jump(1.0, 5.0, true, false));
+    }
+
+    #[test]
+    fn slow_vertical_speed_shallow_pitch_in_water_stops() {
+        // yd*yd < 0.03, xRot != 0, abs(xRot) < 10, still in water: all four OR terms are
+        // false, so the goal should stop even though on_ground is false.
+        assert!(!DolphinJumpGoal::should_continue_jump(
+            0.0, 5.0, true, false
+        ));
+    }
+
+    #[test]
+    fn zero_pitch_alone_continues() {
+        // xRot == 0 term alone makes the OR true, everything else false.
+        assert!(DolphinJumpGoal::should_continue_jump(
+            0.0, 0.0, false, false
+        ));
+    }
 }
