@@ -693,6 +693,26 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_set_variant_name(&self, _name: &str) {}
+
+    /// Vanilla `Animal.getBreedOffspring`: builds the baby entity to spawn after a successful
+    /// breed with `mate`. Override to customize the offspring (e.g. inherited color/variant)
+    /// before it enters the world. Returning `None` skips spawning a baby entity entirely,
+    /// matching `Sniffer`'s override, which drops a `SNIFFER_EGG` item instead.
+    fn create_offspring<'a>(
+        &'a self,
+        _mate: &'a dyn EntityBase,
+        world: &'a Arc<World>,
+    ) -> EntityBaseFuture<'a, Option<Arc<dyn EntityBase>>> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            Some(crate::entity::r#type::from_type(
+                entity.entity_type,
+                entity.pos.load(),
+                world,
+                Uuid::new_v4(),
+            ))
+        })
+    }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
