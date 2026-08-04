@@ -14,7 +14,7 @@ use crate::entity::{
         swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{Mob, MobEntity, piglin_shared},
     player::Player,
 };
 use pumpkin_data::{
@@ -152,10 +152,12 @@ impl Mob for PiglinEntity {
         })
     }
 
-    /// `PiglinAi.wasHurtBy` (PiglinAi.java:556-587), simplified: cancels admiring and
-    /// applies the player-attacker lockout. The anger/avoid/retaliation broadcasting
-    /// half of `wasHurtBy` is skipped -- it needs a shared anger-propagation subsystem
-    /// Pumpkin doesn't have (see task note on zombified-piglin anger propagation).
+    /// `PiglinAi.wasHurtBy` (PiglinAi.java:556-587), simplified: cancels admiring,
+    /// applies the player-attacker lockout, then retaliates and alerts nearby piglins
+    /// (see `piglin_shared::retaliate_and_alert_piglins`). Not implemented: baby-flee
+    /// (100-tick flee instead of retaliating) and the hoglin-outnumbered retreat
+    /// branch -- both need per-mob-type special-casing beyond this goal-based
+    /// approximation of `maybeRetaliate`.
     fn on_damage<'a>(
         &'a self,
         _damage_type: DamageType,
@@ -199,6 +201,10 @@ impl Mob for PiglinEntity {
             if attacker_is_player {
                 self.admiring_disabled_ticks
                     .store(ADMIRING_DISABLED_TICKS, Ordering::Relaxed);
+            }
+
+            if let Some(source) = source {
+                piglin_shared::retaliate_and_alert_piglins(self, source).await;
             }
         })
     }

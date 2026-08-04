@@ -49,6 +49,7 @@ pub mod magma_cube;
 pub mod phantom;
 pub mod piglin;
 pub mod piglin_brute;
+pub mod piglin_shared;
 pub mod pillager;
 pub mod ravager;
 pub mod shulker;
