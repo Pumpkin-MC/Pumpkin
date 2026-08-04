@@ -16,10 +16,12 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ageable::{AgeableData, AgeableMob},
     ai::goal::{
-        breed::BreedGoal, climb_on_top_of_powder_snow::ClimbOnTopOfPowderSnowGoal,
-        escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, breed::BreedGoal,
+        climb_on_top_of_powder_snow::ClimbOnTopOfPowderSnowGoal, escape_danger::EscapeDangerGoal,
+        follow_parent::FollowParentGoal, fox_pounce::FoxPounceGoal, fox_sleep::FoxSleepGoal,
+        fox_stalk_prey::StalkPreyGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     passive::animal::Animal,
@@ -84,9 +86,16 @@ impl FoxVariant {
 
 /// Represents a Fox, a passive nocturnal mob.
 ///
-/// Synced flag state (`isSitting`/`isCrouching`/`isInterested`/`isPouncing`/`isSleeping`/
-/// `isFaceplanted`/`isDefending`) and biome-based variant; the sleep/stalk/pounce goals that
-/// consume this state land in a follow-up commit.
+/// PR-1 scope: synced flag state (`isSitting`/`isCrouching`/`isInterested`/`isPouncing`/
+/// `isSleeping`/`isFaceplanted`/`isDefending`), biome-based variant, sleeping, and the
+/// crouch/stalk/pounce state machine. Deferred to a follow-up PR: item-in-mouth mechanics
+/// (hold/steal/spit/eat), the melee attack goal, the three `AvoidEntityGoal` registrations,
+/// trust list + `DefendTrustedTargetGoal`, berries-eating, `FaceplantGoal` (the pounce goal
+/// can still set `isFaceplanted` on a snow landing, but nothing clears it back to `false`
+/// until that goal lands -- harmless today since no other PR-1 code reads the flag except the
+/// pounce goal's own `should_continue`), village-stroll, and per-variant target-goal ordering
+/// (all foxes currently hunt chickens/rabbits with the same priority, rather than red foxes
+/// preferring land prey and snow foxes preferring fish).
 ///
 /// Wiki: <https://minecraft.wiki/w/Fox>
 pub struct FoxEntity {
@@ -122,12 +131,32 @@ impl FoxEntity {
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.2, TEMPT_ITEMS, false)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
+            // Below `WanderAroundGoal`'s priority 6 so stalking/pouncing/sleeping always
+            // preempts idle wandering when their own gates are satisfied.
+            goal_selector.add_goal(5, StalkPreyGoal::new());
+            goal_selector.add_goal(5, FoxPounceGoal::new());
+            goal_selector.add_goal(5, FoxSleepGoal::new());
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                7,
+                9,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
+
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            // `Fox.landTargetGoal`, simplified: vanilla targets `Animal.class` filtered to
+            // chicken/rabbit via a single `NearestAttackableTargetGoal`; this codebase's
+            // `ActiveTargetGoal` only matches a single `EntityType`, so it's registered twice
+            // instead. Per-variant reordering against the (not yet ported) fish/turtle-egg
+            // target goals is deferred, see the struct doc comment.
+            target_selector.add_goal(
+                4,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::CHICKEN, false),
+            );
+            target_selector.add_goal(
+                4,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
+            );
         };
 
         mob_arc
