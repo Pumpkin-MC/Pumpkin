@@ -26,6 +26,7 @@ use crate::entity::{
         sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
+    persistent_anger::PersistentAnger,
     player::Player,
 };
 
@@ -42,6 +43,7 @@ pub struct WolfEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
     collar_color: AtomicU8,
+    pub persistent_anger: PersistentAnger,
 }
 
 impl WolfEntity {
@@ -51,6 +53,7 @@ impl WolfEntity {
             mob_entity,
             variant: AtomicU8::new(3), // Default to pale
             collar_color: AtomicU8::new(DEFAULT_COLLAR_COLOR),
+            persistent_anger: PersistentAnger::default(),
         };
         let mob_arc = Arc::new(wolf);
         let mob_weak: Weak<dyn Mob> = {
@@ -135,12 +138,14 @@ impl NBTStorage for WolfEntity {
                 _ => "minecraft:pale",
             };
             nbt.put_string("variant", variant_str.to_string());
+            self.persistent_anger.write_nbt(nbt).await;
         })
     }
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.persistent_anger.read_nbt(nbt).await;
             if let Some(variant_str) = nbt.get_string("variant") {
                 let variant = match variant_str
                     .strip_prefix("minecraft:")
@@ -168,6 +173,10 @@ impl NBTStorage for WolfEntity {
 impl Mob for WolfEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move { self.persistent_anger.tick().await })
     }
 
     fn mob_interact<'a>(
