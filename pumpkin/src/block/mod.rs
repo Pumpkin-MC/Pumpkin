@@ -446,13 +446,21 @@ pub async fn drop_loot(
     experience: bool,
     params: LootContextParameters,
 ) {
-    if let Some(loot_table) = &block.loot_table {
+    // Vanilla gates both item drops and experience on this rule, in
+    // `Block#popResource` and `Block#popExperience` respectively, so with the
+    // rule off an ore drops neither its item nor its experience orbs.
+    let block_drops = world.level_info.load().game_rules.block_drops;
+
+    if block_drops && let Some(loot_table) = &block.loot_table {
         for stack in loot_table.get_loot(params) {
             world.drop_stack(pos, stack).await;
         }
     }
 
-    if experience && let Some(experience) = &block.experience {
+    if block_drops
+        && experience
+        && let Some(experience) = &block.experience
+    {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
         let amount = experience.experience.get(&mut random);
         // TODO: Silk touch gives no exp
