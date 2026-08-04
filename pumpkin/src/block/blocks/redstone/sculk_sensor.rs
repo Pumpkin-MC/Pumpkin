@@ -14,7 +14,7 @@ use pumpkin_data::block_properties::{
     SculkSensorPhase,
 };
 use pumpkin_data::game_event::GameEvent;
-use pumpkin_data::{Block, BlockId, BlockStateId};
+use pumpkin_data::{Block, BlockId, BlockStateId, HorizontalFacingExt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::tick::TickPriority;
@@ -70,9 +70,10 @@ impl GameEventListener for SculkSensorListener {
                 .expect("block position source always resolves");
             let distance = (listener_pos - source_position).length() as f32;
             let power = redstone_strength_for_distance(distance, LISTENER_RANGE);
+            let frequency = crate::world::game_event::vibration_frequency(event);
 
             let _ = context;
-            SculkSensorBlock::trigger(world, &self.pos, block, power).await;
+            SculkSensorBlock::trigger(world, &self.pos, block, power, frequency).await;
             true
         })
     }
@@ -85,7 +86,13 @@ impl BlockMetadata for SculkSensorBlock {
 }
 
 impl SculkSensorBlock {
-    pub async fn trigger(world: &Arc<World>, pos: &BlockPos, block: &Block, power: u8) {
+    pub async fn trigger(
+        world: &Arc<World>,
+        pos: &BlockPos,
+        block: &Block,
+        power: u8,
+        frequency: i32,
+    ) {
         if block.id == BlockId::SCULK_SENSOR {
             let state = world.get_block_state(pos);
             let mut props = SculkSensorLikeProperties::from_state_id(state.id, block);
@@ -97,6 +104,13 @@ impl SculkSensorBlock {
                     .await;
                 world.update_neighbors(pos, None).await;
                 world.schedule_block_tick(block, *pos, 30, TickPriority::Normal);
+                if let Some(block_entity) = world.get_block_entity(pos)
+                    && let Some(sculk_sensor) = block_entity
+                        .as_any()
+                        .downcast_ref::<crate::block::entities::sculk_sensor::SculkSensorBlockEntity>()
+                {
+                    sculk_sensor.set_last_vibration_frequency(frequency).await;
+                }
             }
         } else if block.id == BlockId::CALIBRATED_SCULK_SENSOR {
             let state = world.get_block_state(pos);
@@ -108,7 +122,15 @@ impl SculkSensorBlock {
                     .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                     .await;
                 world.update_neighbors(pos, None).await;
-                world.schedule_block_tick(block, *pos, 30, TickPriority::Normal);
+                // CalibratedSculkSensorBlock overrides getActiveTicks() to 10.
+                world.schedule_block_tick(block, *pos, 10, TickPriority::Normal);
+                if let Some(block_entity) = world.get_block_entity(pos)
+                    && let Some(calibrated) = block_entity
+                        .as_any()
+                        .downcast_ref::<crate::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockEntity>()
+                {
+                    calibrated.set_last_vibration_frequency(frequency).await;
+                }
             }
         }
     }
@@ -168,7 +190,9 @@ impl BlockBehaviour for SculkSensorBlock {
             } else if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
                 let props =
                     CalibratedSculkSensorLikeProperties::from_state_id(args.state.id, args.block);
-                if props.sculk_sensor_phase == SculkSensorPhase::Active {
+                if props.sculk_sensor_phase == SculkSensorPhase::Active
+                    && args.direction != props.facing.to_block_direction()
+                {
                     props.power
                 } else {
                     0
