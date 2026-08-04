@@ -4681,7 +4681,7 @@ impl NBTStorage for Player {
             // Load from total XP
             let total_exp = nbt.get_int("XpTotal").unwrap_or(0);
             let (level, points) = experience::total_to_level_and_points(total_exp);
-            let progress = experience::progress_in_level(level, points);
+            let progress = experience::progress_in_level(points, level);
             self.experience_level.store(level, Ordering::Relaxed);
             self.experience_progress.store(progress);
             self.experience_points.store(points, Ordering::Relaxed);
