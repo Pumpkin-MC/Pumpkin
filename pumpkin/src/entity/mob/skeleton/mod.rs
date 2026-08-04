@@ -160,7 +160,10 @@ impl Mob for SkeletonEntityBase {
 
 #[cfg(test)]
 mod tests {
-    use super::{PARCHED_ARROW_EFFECTS, PARCHED_ATTACK_INTERVAL, SKELETON_ATTACK_INTERVAL};
+    use super::{
+        BOGGED_ARROW_EFFECTS, BOGGED_ATTACK_INTERVAL, PARCHED_ARROW_EFFECTS,
+        PARCHED_ATTACK_INTERVAL, SKELETON_ATTACK_INTERVAL,
+    };
     use crate::item::potion::PotionContents;
     use pumpkin_data::data_component::DataComponent;
     use pumpkin_data::data_component_impl::{DataComponentImpl, PotionContentsImpl};
@@ -199,6 +202,39 @@ mod tests {
         let (effect_type, duration, amplifier, ambient, particles, icon) = effects[0];
         assert_eq!(effect_type.id, StatusEffect::WEAKNESS.id);
         assert_eq!(duration, 600);
+        assert_eq!(amplifier, 0);
+        assert!(!ambient);
+        assert!(particles);
+        assert!(icon);
+    }
+
+    #[test]
+    fn bogged_shoots_at_the_hard_attack_interval() {
+        assert_eq!(BOGGED_ATTACK_INTERVAL, 50);
+    }
+
+    #[test]
+    fn bogged_arrows_carry_five_second_poison() {
+        let mut arrow = ItemStack::new(1, &Item::ARROW);
+        arrow.patch.push((
+            DataComponent::PotionContents,
+            Some(
+                PotionContentsImpl {
+                    potion_id: None,
+                    custom_color: None,
+                    custom_effects: BOGGED_ARROW_EFFECTS.to_vec(),
+                    custom_name: None,
+                }
+                .to_dyn(),
+            ),
+        ));
+        let arrow = arrow.copy_with_count(1);
+
+        let effects = PotionContents::read_potion_effects(&arrow);
+        assert_eq!(effects.len(), 1);
+        let (effect_type, duration, amplifier, ambient, particles, icon) = effects[0];
+        assert_eq!(effect_type.id, StatusEffect::POISON.id);
+        assert_eq!(duration, 100);
         assert_eq!(amplifier, 0);
         assert!(!ambient);
         assert!(particles);

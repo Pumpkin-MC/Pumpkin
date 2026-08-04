@@ -21,6 +21,13 @@ const WATER_TICKS_TO_START_CONVERSION: i32 = 600;
 /// `startUnderWaterConversion(300)`).
 const CONVERSION_TICKS: i32 = 300;
 
+/// `Husk::doHurtTarget`: `140 * (int) difficulty`. Vanilla truncates `difficulty` to `int`
+/// *before* multiplying, so `effective_difficulty` (clamped to `[2.0, 4.0]`) only ever produces
+/// 280, 420, or 560 ticks.
+const fn husk_hunger_duration(effective_difficulty: f32) -> i32 {
+    140 * (effective_difficulty as i32)
+}
+
 pub struct HuskEntity {
     entity: Arc<ZombieEntityBase>,
     /// Vanilla `Zombie::inWaterTime`. `Entity::touching_water` stands in for
@@ -151,7 +158,7 @@ impl Mob for HuskEntity {
             };
 
             let difficulty = RegionalDifficulty::at(&entity.world.load(), entity.pos.load());
-            let duration = (140.0 * difficulty.effective_difficulty) as i32;
+            let duration = husk_hunger_duration(difficulty.effective_difficulty);
             target_living
                 .add_effect(Effect {
                     effect_type: &StatusEffect::HUNGER,
@@ -206,5 +213,19 @@ impl Mob for HuskEntity {
                 self.in_water_time.store(-1, Ordering::Relaxed);
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::husk_hunger_duration;
+
+    #[test]
+    fn hunger_duration_truncates_difficulty_before_multiplying() {
+        assert_eq!(husk_hunger_duration(2.0), 280);
+        // 2.7 truncates to 2, not 2.7 * 140 = 378.
+        assert_eq!(husk_hunger_duration(2.7), 280);
+        assert_eq!(husk_hunger_duration(3.5), 420);
+        assert_eq!(husk_hunger_duration(4.0), 560);
     }
 }

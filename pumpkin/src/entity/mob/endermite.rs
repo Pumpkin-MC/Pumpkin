@@ -94,12 +94,11 @@ impl Mob for EndermiteEntity {
     fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.mob_entity.living_entity.entity;
-            if entity.custom_name.load().is_some() {
-                return;
+            if entity.custom_name.load().is_none() {
+                self.life.fetch_add(1, Ordering::Relaxed);
             }
 
-            let new_life = self.life.fetch_add(1, Ordering::Relaxed) + 1;
-            if new_life >= MAX_LIFE {
+            if self.life.load(Ordering::Relaxed) >= MAX_LIFE {
                 entity.world.load().remove_entity(caller.as_ref()).await;
             }
         })
