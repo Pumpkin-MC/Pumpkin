@@ -204,9 +204,9 @@ pub enum Mirror {
     /// No mirroring
     #[default]
     None,
-    /// Mirror along the X axis (left-right flip when looking north)
+    /// Mirror along the Z axis (`OctahedralGroup.INVERT_Z` in vanilla) - flips north/south
     LeftRight,
-    /// Mirror along the Z axis (front-back flip)
+    /// Mirror along the X axis (`OctahedralGroup.INVERT_X` in vanilla) - flips east/west
     FrontBack,
 }
 
@@ -222,8 +222,8 @@ impl Mirror {
     pub const fn transform_pos(&self, pos: Vector3<i32>, size: Vector3<i32>) -> Vector3<i32> {
         match self {
             Self::None => pos,
-            Self::LeftRight => Vector3::new(size.x - 1 - pos.x, pos.y, pos.z),
-            Self::FrontBack => Vector3::new(pos.x, pos.y, size.z - 1 - pos.z),
+            Self::LeftRight => Vector3::new(pos.x, pos.y, size.z - 1 - pos.z),
+            Self::FrontBack => Vector3::new(size.x - 1 - pos.x, pos.y, pos.z),
         }
     }
 
@@ -239,33 +239,42 @@ impl Mirror {
                 _ => leak_str(facing),
             },
             Self::LeftRight => match facing {
-                "east" => "west",
-                "west" => "east",
-                "north" => "north",
-                "south" => "south",
-                _ => leak_str(facing),
-            },
-            Self::FrontBack => match facing {
                 "north" => "south",
                 "south" => "north",
                 "east" => "east",
                 "west" => "west",
                 _ => leak_str(facing),
             },
+            Self::FrontBack => match facing {
+                "east" => "west",
+                "west" => "east",
+                "north" => "north",
+                "south" => "south",
+                _ => leak_str(facing),
+            },
         }
     }
 
     /// Mirrors a block rotation value (0-15, used for signs and banners).
+    ///
+    /// Matches vanilla `Mirror.mirror(rotation, steps)` for `steps == 16`: vanilla first
+    /// corrects `rotation` into `-8..=8` before applying the formula, but for `steps == 16`
+    /// that correction is a no-op modulo 16 over the `0..16` input range this takes, so it's
+    /// omitted here.
     #[must_use]
     pub const fn mirror_block_rotation(&self, rotation: i32) -> i32 {
         match self {
             Self::None => rotation,
-            Self::LeftRight => (16 - rotation) % 16,
-            Self::FrontBack => (8 - rotation + 16) % 16,
+            Self::LeftRight => (8 - rotation + 16) % 16,
+            Self::FrontBack => (16 - rotation) % 16,
         }
     }
 
     /// Returns the rotation needed to achieve this mirror from a base rotation.
+    ///
+    /// Unlike the other methods on this type, this has no identified vanilla counterpart
+    /// (vanilla's `Mirror.getRotation` takes a `Direction`, not a `Rotation`) and currently
+    /// has no callers, so its behavior is left as-is rather than guessed at.
     #[must_use]
     pub const fn get_rotation(&self, rotation: Rotation) -> Rotation {
         match self {
@@ -290,4 +299,88 @@ impl Mirror {
 /// This is used for non-standard property values that aren't covered by static strings.
 pub fn leak_str(s: &str) -> &'static str {
     s.to_string().leak()
+}
+
+#[cfg(test)]
+mod mirror_tests {
+    use super::*;
+
+    // Vanilla `Mirror.java`: LEFT_RIGHT is OctahedralGroup.INVERT_Z and only flips
+    // directions on the Z axis (north/south). FRONT_BACK is INVERT_X and only flips
+    // directions on the X axis (east/west).
+
+    #[test]
+    fn left_right_flips_north_south() {
+        assert_eq!(Mirror::LeftRight.mirror_facing("north"), "south");
+        assert_eq!(Mirror::LeftRight.mirror_facing("south"), "north");
+    }
+
+    #[test]
+    fn left_right_leaves_east_west_unchanged() {
+        assert_eq!(Mirror::LeftRight.mirror_facing("east"), "east");
+        assert_eq!(Mirror::LeftRight.mirror_facing("west"), "west");
+    }
+
+    #[test]
+    fn front_back_flips_east_west() {
+        assert_eq!(Mirror::FrontBack.mirror_facing("east"), "west");
+        assert_eq!(Mirror::FrontBack.mirror_facing("west"), "east");
+    }
+
+    #[test]
+    fn front_back_leaves_north_south_unchanged() {
+        assert_eq!(Mirror::FrontBack.mirror_facing("north"), "north");
+        assert_eq!(Mirror::FrontBack.mirror_facing("south"), "south");
+    }
+
+    #[test]
+    fn left_right_transform_pos_flips_z() {
+        let size = Vector3::new(4, 1, 6);
+        let pos = Vector3::new(1, 0, 2);
+        assert_eq!(
+            Mirror::LeftRight.transform_pos(pos, size),
+            Vector3::new(1, 0, 3)
+        );
+    }
+
+    #[test]
+    fn front_back_transform_pos_flips_x() {
+        let size = Vector3::new(4, 1, 6);
+        let pos = Vector3::new(1, 0, 2);
+        assert_eq!(
+            Mirror::FrontBack.transform_pos(pos, size),
+            Vector3::new(2, 0, 2)
+        );
+    }
+
+    #[test]
+    fn left_right_block_rotation_matches_vanilla_formula() {
+        // vanilla: (halfSteps - correctedRotation + steps) % steps, steps=16, halfSteps=8
+        for rotation in 0..16 {
+            assert_eq!(
+                Mirror::LeftRight.mirror_block_rotation(rotation),
+                (8 - rotation + 16) % 16
+            );
+        }
+    }
+
+    #[test]
+    fn front_back_block_rotation_matches_vanilla_formula() {
+        // vanilla: (steps - correctedRotation) % steps, steps=16
+        for rotation in 0..16 {
+            assert_eq!(
+                Mirror::FrontBack.mirror_block_rotation(rotation),
+                (16 - rotation) % 16
+            );
+        }
+    }
+
+    #[test]
+    fn none_is_identity() {
+        assert_eq!(Mirror::None.mirror_facing("north"), "north");
+        assert_eq!(Mirror::None.mirror_block_rotation(5), 5);
+        let size = Vector3::new(4, 1, 6);
+        let pos = Vector3::new(1, 0, 2);
+        assert_eq!(Mirror::None.transform_pos(pos, size), pos);
+    }
 }

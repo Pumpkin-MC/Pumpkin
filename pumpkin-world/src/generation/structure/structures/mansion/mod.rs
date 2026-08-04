@@ -99,10 +99,8 @@ impl TemplateMirror {
     const fn state_mirror(self) -> Mirror {
         match self {
             Self::None => Mirror::None,
-            // Mojang names a Z reflection LEFT_RIGHT and an X reflection FRONT_BACK.
-            // Pumpkin names the axis being reflected, so the variants are exchanged.
-            Self::LeftRight => Mirror::FrontBack,
-            Self::FrontBack => Mirror::LeftRight,
+            Self::LeftRight => Mirror::LeftRight,
+            Self::FrontBack => Mirror::FrontBack,
         }
     }
 }
