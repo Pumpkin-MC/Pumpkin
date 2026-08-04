@@ -201,6 +201,7 @@ use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::leaves::LeavesBlock;
 use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::respawn_anchor::RespawnAnchorBlock;
+use crate::block::blocks::scaffolding::ScaffoldingBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smithing_table::SmithingTableBlock;
@@ -400,6 +401,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(LadderBlock);
     manager.register(DaylightDetectorBlock);
     manager.register(RespawnAnchorBlock);
+    manager.register(ScaffoldingBlock);
 
     // Rails
     manager.register(RailBlock);
