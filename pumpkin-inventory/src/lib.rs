@@ -44,6 +44,7 @@ pub mod furnace_like;
 pub mod generic_container_screen_handler;
 pub mod grindstone_screen_handler;
 pub mod gui_builder;
+pub mod loom_screen_handler;
 pub mod merchant;
 pub mod player;
 pub mod screen_handler;
