@@ -996,7 +996,7 @@ mod tests {
         is_valid_empty_spawn_block,
     };
     use pumpkin_data::Block;
-    use pumpkin_data::biome::Spawner;
+    use pumpkin_data::biome::{Biome, Spawner};
     use pumpkin_data::entity::EntityType;
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector2::Vector2;
@@ -1037,6 +1037,55 @@ mod tests {
         assert!(
             heavy_picks >= 190,
             "expected the heavily-weighted entry to dominate selection, got {heavy_picks}/200"
+        );
+    }
+
+    /// Every `Spawner::r#type` entry in every biome's spawn tables must resolve
+    /// through `EntityType::from_name`. `spawn_category_for_position` and
+    /// `spawn_mobs_for_chunk_generation` both do
+    /// `EntityType::from_name(spawner.r#type.strip_prefix("minecraft:").unwrap()).unwrap()`
+    /// with no fallback, so an unresolvable name panics the chunk-tick task that
+    /// runs natural spawning (see `World::tick`'s `chunk_tasks.spawn`, whose only
+    /// handling is logging the panic) for every category attempted in that tick,
+    /// not just the offending one. Vanilla's equivalent, `getMobForSpawn` in
+    /// `NaturalSpawner.java`, explicitly catches the failure and returns `null`
+    /// instead of propagating.
+    #[test]
+    fn all_biome_spawner_entries_resolve_to_known_entity_types() {
+        let mut missing = Vec::new();
+        for biome in Biome::ALL {
+            let groups = [
+                ("monster", biome.spawners.monster),
+                ("ambient", biome.spawners.ambient),
+                ("axolotls", biome.spawners.axolotls),
+                ("creature", biome.spawners.creature),
+                ("misc", biome.spawners.misc),
+                (
+                    "underground_water_creature",
+                    biome.spawners.underground_water_creature,
+                ),
+                ("water_ambient", biome.spawners.water_ambient),
+                ("water_creature", biome.spawners.water_creature),
+            ];
+            for (category, entries) in groups {
+                for entry in entries {
+                    let name = entry
+                        .r#type
+                        .strip_prefix("minecraft:")
+                        .unwrap_or(entry.r#type);
+                    if EntityType::from_name(name).is_none() {
+                        missing.push(format!(
+                            "{}/{category}: {}",
+                            biome.registry_id, entry.r#type
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "biome spawn tables reference unknown entity types (would panic the \
+             natural-spawn tick task): {missing:#?}"
         );
     }
 

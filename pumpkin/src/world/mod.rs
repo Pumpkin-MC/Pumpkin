@@ -1531,7 +1531,7 @@ impl World {
                 lock.difficulty == Difficulty::Peaceful,
             )
         };
-        let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
+        let spawn_passives = self.level_time.lock().await.opens_persistent_spawn_gate();
         let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
         let spawn_passives = spawn_passives && spawn_mobs;
 
