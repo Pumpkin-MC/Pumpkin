@@ -64,6 +64,11 @@ impl Goal for EatGrassGoal {
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             self.timer = MAX_TIMER;
+            // Vanilla EatBlockGoal.start(): broadcasts entity-event byte 10, which drives the
+            // client-side head-eating animation (Sheep.handleEntityEvent / getHeadEatAngleScale).
+            let entity = &mob.get_mob_entity().living_entity.entity;
+            let world = entity.world.load();
+            world.send_entity_status(entity, pumpkin_data::entity::EntityStatus::EatGrass);
             let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
             navigator.stop();
         })
