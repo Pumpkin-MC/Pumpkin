@@ -38,7 +38,12 @@ impl ClientPacket for CChunkData<'_> {
             .lock()
             .map_err(|_| WritingError::Message("heightmap lock poisoned".into()))?;
         if version <= &JavaMinecraftVersion::V_1_21_4 {
-            pumpkin_nbt::serializer::to_bytes_unnamed(&*heightmaps, &mut write)
+            // Vanilla's Heightmap.Types marks OCEAN_FLOOR as Usage.LIVE_WORLD, not
+            // Usage.CLIENT (unlike the other three types here) - it is never sent
+            // to the client, only persisted to disk. Strip it before serializing.
+            let mut network_heightmaps = heightmaps.clone();
+            network_heightmaps.ocean_floor = None;
+            pumpkin_nbt::serializer::to_bytes_unnamed(&network_heightmaps, &mut write)
                 .map_err(|err| WritingError::Serde(err.to_string()))?;
         } else {
             write.write_var_int(&VarInt(3))?; // Map size
