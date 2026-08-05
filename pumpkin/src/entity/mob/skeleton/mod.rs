@@ -5,9 +5,10 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage, NbtFuture,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
-        swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, bow_attack::BowAttackGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -38,7 +39,11 @@ impl SkeletonEntityBase {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.2, false)));
+            if mob_arc.mob_entity.living_entity.entity.entity_type == &EntityType::WITHER_SKELETON {
+                goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.2, false)));
+            } else {
+                goal_selector.add_goal(2, Box::new(BowAttackGoal::new(1.0, 15.0)));
+            }
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 8,
