@@ -400,10 +400,17 @@ impl NumberFormat {
     ) -> Result<(), ser::WritingError> {
         match self {
             Self::Blank => write.write_var_int(&0.into()),
-            Self::Styled(style) => {
+            Self::Styled(_style) => {
                 write.write_var_int(&1.into())?;
-                pumpkin_nbt::serializer::to_bytes_unnamed(style, write)
-                    .map_err(|err| ser::WritingError::Serde(err.to_string()))
+                // TODO: serialize the style itself. `pumpkin-nbt` no longer has a serde
+                // bridge, so the style compound is written empty for now; the tag still
+                // has to be present or the client desyncs on the following field.
+                let compound = pumpkin_nbt::compound::NbtCompound::new();
+                let bytes = pumpkin_nbt::Nbt::from(compound).write_unnamed();
+                write
+                    .write_all(&bytes)
+                    .map_err(ser::WritingError::IoError)?;
+                Ok(())
             }
             Self::Fixed(text) => {
                 write.write_var_int(&2.into())?;

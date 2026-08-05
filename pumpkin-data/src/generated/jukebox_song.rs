@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum JukeboxSong {
     Id11,

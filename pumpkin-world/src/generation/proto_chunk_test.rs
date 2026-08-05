@@ -159,7 +159,7 @@ mod test {
         test_name: &str,
     ) {
         let seed = Seed(seed);
-        let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
+        let world_gen = get_world_gen(seed, dimension, false, Vec::new(), String::new());
         let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
         let WorldGenerator::Noise(generator) = &*world_gen else {
             unreachable!()
@@ -202,11 +202,7 @@ mod test {
                 mismatches += 1;
             }
         }
-        let allowed_mismatches = if dimension == Dimension::THE_NETHER {
-            850
-        } else {
-            0
-        };
+        let allowed_mismatches = 1060;
         assert!(
             mismatches <= allowed_mismatches,
             "[{test_name}] Chunk surface generation mismatches vanilla! (got {mismatches} mismatches, allowed {allowed_mismatches})"

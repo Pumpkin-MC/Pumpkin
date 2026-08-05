@@ -284,7 +284,7 @@ mod test {
         assert_eq!(name, "player_head[minecraft:profile={name:\"Username\"}]");
         assert_eq!(stack.item.registry_key, "player_head");
         assert_eq!(stack.patch.len(), 1);
-        assert_eq!(stack.patch[0].0, DataComponent::Profile);
+        assert_eq!(stack.patch[0].0.to_id(), DataComponent::Profile.to_id());
     }
 
     #[test]
@@ -301,6 +301,6 @@ mod test {
         assert_eq!(name, "stick[minecraft:custom_name=\"Magic wand\"]");
         assert_eq!(stack.item.registry_key, "stick");
         assert_eq!(stack.patch.len(), 1);
-        assert_eq!(stack.patch[0].0, DataComponent::CustomName);
+        assert_eq!(stack.patch[0].0.to_id(), DataComponent::CustomName.to_id());
     }
 }

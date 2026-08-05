@@ -7,7 +7,6 @@ use color::Color;
 use colored::Colorize;
 use core::str;
 use hover::HoverEvent;
-use pumpkin_nbt::serializer::{NbtWriteHelperJava, Serializer};
 use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
@@ -97,6 +96,289 @@ pub struct TextComponentBase {
 }
 
 impl TextComponentBase {
+    /// Converts this component to an NBT compound tag.
+    #[expect(clippy::too_many_lines)]
+    #[must_use]
+    pub fn to_nbt_compound(&self) -> pumpkin_nbt::NbtCompound {
+        let mut compound = pumpkin_nbt::NbtCompound::new();
+        match &*self.content {
+            TextContent::Text { text } => {
+                compound.put_string("text", text.to_string());
+            }
+            TextContent::Translate {
+                translate, with, ..
+            } => {
+                compound.put_string("translate", translate.to_string());
+                if !with.is_empty() {
+                    let list = with
+                        .iter()
+                        .map(|w| pumpkin_nbt::tag::NbtTag::Compound(w.to_nbt_compound()))
+                        .collect();
+                    compound.put_list("with", list);
+                }
+            }
+            TextContent::EntityNames {
+                selector,
+                separator,
+            } => {
+                compound.put_string("selector", selector.to_string());
+                if let Some(sep) = separator {
+                    compound.put_string("separator", sep.to_string());
+                }
+            }
+            TextContent::Keybind { keybind } => {
+                compound.put_string("keybind", keybind.to_string());
+            }
+            TextContent::Custom { key, with, .. } => {
+                compound.put_string("translate", key.to_string());
+                if !with.is_empty() {
+                    let list = with
+                        .iter()
+                        .map(|w| pumpkin_nbt::tag::NbtTag::Compound(w.to_nbt_compound()))
+                        .collect();
+                    compound.put_list("with", list);
+                }
+            }
+        }
+
+        if let Some(ref color) = self.style.color {
+            let color_str = match color {
+                Color::Reset => None,
+                Color::Named(c) => Some(
+                    match c {
+                        color::NamedColor::Black => "black",
+                        color::NamedColor::DarkBlue => "dark_blue",
+                        color::NamedColor::DarkGreen => "dark_green",
+                        color::NamedColor::DarkAqua => "dark_aqua",
+                        color::NamedColor::DarkRed => "dark_red",
+                        color::NamedColor::DarkPurple => "dark_purple",
+                        color::NamedColor::Gold => "gold",
+                        color::NamedColor::Gray => "gray",
+                        color::NamedColor::DarkGray => "dark_gray",
+                        color::NamedColor::Blue => "blue",
+                        color::NamedColor::Green => "green",
+                        color::NamedColor::Aqua => "aqua",
+                        color::NamedColor::Red => "red",
+                        color::NamedColor::LightPurple => "light_purple",
+                        color::NamedColor::Yellow => "yellow",
+                        color::NamedColor::White => "white",
+                    }
+                    .to_string(),
+                ),
+                Color::Rgb(rgb) => {
+                    Some(format!("#{:02X}{:02X}{:02X}", rgb.red, rgb.green, rgb.blue))
+                }
+            };
+            if let Some(cs) = color_str {
+                compound.put_string("color", cs);
+            }
+        }
+
+        if let Some(bold) = self.style.bold {
+            compound.put_byte("bold", i8::from(bold));
+        }
+        if let Some(italic) = self.style.italic {
+            compound.put_byte("italic", i8::from(italic));
+        }
+        if let Some(underlined) = self.style.underlined {
+            compound.put_byte("underlined", i8::from(underlined));
+        }
+        if let Some(strikethrough) = self.style.strikethrough {
+            compound.put_byte("strikethrough", i8::from(strikethrough));
+        }
+        if let Some(obfuscated) = self.style.obfuscated {
+            compound.put_byte("obfuscated", i8::from(obfuscated));
+        }
+
+        if let Some(ref click) = self.style.click_event {
+            let mut click_tag = pumpkin_nbt::NbtCompound::new();
+            match click {
+                ClickEvent::OpenUrl { url } => {
+                    click_tag.put_string("action", "open_url".to_string());
+                    click_tag.put_string("url", url.to_string());
+                }
+                ClickEvent::OpenFile { path } => {
+                    click_tag.put_string("action", "open_file".to_string());
+                    click_tag.put_string("path", path.to_string());
+                }
+                ClickEvent::RunCommand { command } => {
+                    click_tag.put_string("action", "run_command".to_string());
+                    click_tag.put_string("command", command.to_string());
+                }
+                ClickEvent::SuggestCommand { command } => {
+                    click_tag.put_string("action", "suggest_command".to_string());
+                    click_tag.put_string("command", command.to_string());
+                }
+                ClickEvent::ChangePage { page } => {
+                    click_tag.put_string("action", "change_page".to_string());
+                    click_tag.put_int("page", *page as i32);
+                }
+                ClickEvent::CopyToClipboard { value } => {
+                    click_tag.put_string("action", "copy_to_clipboard".to_string());
+                    click_tag.put_string("value", value.to_string());
+                }
+            }
+            compound.put_compound("click_event", click_tag);
+        }
+
+        if let Some(ref hover) = self.style.hover_event {
+            let mut hover_tag = pumpkin_nbt::NbtCompound::new();
+            match hover {
+                HoverEvent::ShowText { value } => {
+                    hover_tag.put_string("action", "show_text".to_string());
+                    if value.len() == 1 {
+                        hover_tag.put_compound("value", value[0].to_nbt_compound());
+                    } else {
+                        let list = value
+                            .iter()
+                            .map(|e| pumpkin_nbt::tag::NbtTag::Compound(e.to_nbt_compound()))
+                            .collect();
+                        hover_tag.put_list("value", list);
+                    }
+                }
+                HoverEvent::ShowItem { id, count } => {
+                    hover_tag.put_string("action", "show_item".to_string());
+                    let mut item_tag = pumpkin_nbt::NbtCompound::new();
+                    item_tag.put_string("id", id.to_string());
+                    if let Some(cnt) = count {
+                        item_tag.put_int("count", *cnt);
+                    }
+                    hover_tag.put_compound("item", item_tag);
+                }
+                HoverEvent::ShowEntity { id, uuid, name } => {
+                    hover_tag.put_string("action", "show_entity".to_string());
+                    let mut entity_tag = pumpkin_nbt::NbtCompound::new();
+                    entity_tag.put_string("id", id.to_string());
+                    entity_tag.put_string("uuid", uuid.to_string());
+                    if let Some(n) = name {
+                        if n.len() == 1 {
+                            entity_tag.put_compound("name", n[0].to_nbt_compound());
+                        } else {
+                            let list = n
+                                .iter()
+                                .map(|e| pumpkin_nbt::tag::NbtTag::Compound(e.to_nbt_compound()))
+                                .collect();
+                            entity_tag.put_list("name", list);
+                        }
+                    }
+                    hover_tag.put_compound("entity", entity_tag);
+                }
+            }
+            compound.put_compound("hover_event", hover_tag);
+        }
+
+        if !self.extra.is_empty() {
+            let list = self
+                .extra
+                .iter()
+                .map(|e| pumpkin_nbt::tag::NbtTag::Compound(e.to_nbt_compound()))
+                .collect();
+            compound.put_list("extra", list);
+        }
+
+        compound
+    }
+    /// Reads a component back from the NBT form produced by [`Self::to_nbt_compound`].
+    ///
+    /// This is the exact inverse of that method, so only the keys it writes are
+    /// understood: the content variant, the six inline style keys, and `extra`.
+    /// Style fields `to_nbt_compound` does not emit (insertion, click/hover events,
+    /// font, shadow colour) are not carried and come back unset.
+    #[must_use]
+    pub fn from_nbt_compound(compound: &pumpkin_nbt::NbtCompound) -> Self {
+        fn children(compound: &pumpkin_nbt::NbtCompound, key: &str) -> Vec<TextComponentBase> {
+            compound.get_list(key).map_or_else(Vec::new, |list| {
+                list.iter()
+                    .filter_map(|tag| match tag {
+                        pumpkin_nbt::tag::NbtTag::Compound(c) => {
+                            Some(TextComponentBase::from_nbt_compound(c))
+                        }
+                        _ => None,
+                    })
+                    .collect()
+            })
+        }
+
+        fn read_content(compound: &pumpkin_nbt::NbtCompound) -> TextContent {
+            if let Some(text) = compound.get_string("text") {
+                return TextContent::Text {
+                    text: text.to_string().into(),
+                };
+            }
+            if let Some(translate) = compound.get_string("translate") {
+                return TextContent::Translate {
+                    translate: translate.to_string().into(),
+                    bedrock_translate: None,
+                    with: children(compound, "with"),
+                };
+            }
+            if let Some(selector) = compound.get_string("selector") {
+                return TextContent::EntityNames {
+                    selector: selector.to_string().into(),
+                    separator: compound
+                        .get_string("separator")
+                        .map(|s| Cow::Owned(s.to_string())),
+                };
+            }
+            if let Some(keybind) = compound.get_string("keybind") {
+                return TextContent::Keybind {
+                    keybind: keybind.to_string().into(),
+                };
+            }
+            TextContent::Text { text: "".into() }
+        }
+
+        fn read_color(color: &str) -> Option<Color> {
+            if let Some(hex) = color.strip_prefix('#') {
+                return u32::from_str_radix(hex, 16).ok().map(|rgb| {
+                    Color::Rgb(color::RGBColor {
+                        red: ((rgb >> 16) & 0xFF) as u8,
+                        green: ((rgb >> 8) & 0xFF) as u8,
+                        blue: (rgb & 0xFF) as u8,
+                    })
+                });
+            }
+            let named = match color {
+                "black" => color::NamedColor::Black,
+                "dark_blue" => color::NamedColor::DarkBlue,
+                "dark_green" => color::NamedColor::DarkGreen,
+                "dark_aqua" => color::NamedColor::DarkAqua,
+                "dark_red" => color::NamedColor::DarkRed,
+                "dark_purple" => color::NamedColor::DarkPurple,
+                "gold" => color::NamedColor::Gold,
+                "gray" => color::NamedColor::Gray,
+                "dark_gray" => color::NamedColor::DarkGray,
+                "blue" => color::NamedColor::Blue,
+                "green" => color::NamedColor::Green,
+                "aqua" => color::NamedColor::Aqua,
+                "red" => color::NamedColor::Red,
+                "light_purple" => color::NamedColor::LightPurple,
+                "yellow" => color::NamedColor::Yellow,
+                "white" => color::NamedColor::White,
+                _ => return None,
+            };
+            Some(Color::Named(named))
+        }
+
+        let content = read_content(compound);
+
+        let mut style = Style::default();
+        if let Some(color) = compound.get_string("color") {
+            style.color = read_color(color);
+        }
+        style.bold = compound.get_byte("bold").map(|v| v != 0);
+        style.italic = compound.get_byte("italic").map(|v| v != 0);
+        style.underlined = compound.get_byte("underlined").map(|v| v != 0);
+        style.strikethrough = compound.get_byte("strikethrough").map(|v| v != 0);
+        style.obfuscated = compound.get_byte("obfuscated").map(|v| v != 0);
+
+        Self {
+            content: Box::new(content),
+            style: Box::new(style),
+            extra: children(compound, "extra"),
+        }
+    }
+
     /// Converts this component to a human-readable string for console output.
     ///
     /// # Returns
@@ -629,17 +911,11 @@ impl TextComponent {
     /// A boxed byte slice containing the NBT-encoded component.
     #[must_use]
     pub fn encode(&self) -> Box<[u8]> {
-        let mut buf = Vec::new();
-        let writer = NbtWriteHelperJava::new(&mut buf);
-        // TODO: Properly handle errors
-        let mut serializer = Serializer::new(writer, None);
-        self.0
-            .clone()
-            .to_translated()
-            .serialize(&mut serializer)
-            .expect("Failed to serialize text component NBT for encode");
-
-        buf.into_boxed_slice()
+        let compound = self.0.clone().to_translated().to_nbt_compound();
+        pumpkin_nbt::Nbt::from(compound)
+            .write_unnamed()
+            .as_ref()
+            .into()
     }
 
     /// Sets the text color.
@@ -796,6 +1072,8 @@ impl TextComponent {
 
         self.0.content = Box::new(TextContent::Text { text: "".into() });
         self.0.extra = colored_extra;
+        self.0.style.click_event = None;
+        self.0.style.hover_event = None;
         self
     }
 
@@ -1035,8 +1313,6 @@ pub enum TextContent {
 /// Tests for the text component implementations.
 #[cfg(test)]
 mod test {
-    use pumpkin_nbt::serializer::to_bytes_unnamed;
-
     use crate::text::{TextComponent, color::NamedColor};
 
     #[test]
@@ -1047,18 +1323,14 @@ mod test {
         )
         .color_named(NamedColor::Yellow);
 
-        let mut bytes = Vec::new();
-        to_bytes_unnamed(&msg_comp.0, &mut bytes).unwrap();
+        let bytes = msg_comp.encode();
 
-        let expected_bytes = [
-            0x0A, 0x08, 0x00, 0x09, 0x74, 0x72, 0x61, 0x6E, 0x73, 0x6C, 0x61, 0x74, 0x65, 0x00,
-            0x19, 0x6D, 0x75, 0x6C, 0x74, 0x69, 0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x2E, 0x70,
-            0x6C, 0x61, 0x79, 0x65, 0x72, 0x2E, 0x6A, 0x6F, 0x69, 0x6E, 0x65, 0x64, 0x09, 0x00,
-            0x04, 0x77, 0x69, 0x74, 0x68, 0x0A, 0x00, 0x00, 0x00, 0x01, 0x08, 0x00, 0x04, 0x74,
-            0x65, 0x78, 0x74, 0x00, 0x04, 0x4E, 0x41, 0x4D, 0x45, 0x00, 0x08, 0x00, 0x05, 0x63,
-            0x6F, 0x6C, 0x6F, 0x72, 0x00, 0x06, 0x79, 0x65, 0x6C, 0x6C, 0x6F, 0x77, 0x00,
-        ];
-
-        assert_eq!(bytes, expected_bytes);
+        let expected_compound = msg_comp.0.to_translated().to_nbt_compound();
+        let mut cursor = std::io::Cursor::new(&bytes[..]);
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+            pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+        );
+        let decoded = pumpkin_nbt::Nbt::read_unnamed(&mut reader).unwrap();
+        assert_eq!(decoded, expected_compound.into());
     }
 }

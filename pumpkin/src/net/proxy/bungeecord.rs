@@ -71,3 +71,64 @@ pub async fn bungeecord_login(
         },
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_protocol::ser::NetworkWriteExt;
+    use pumpkin_protocol::{
+        ServerPacket, codec::var_int::VarInt, java::server::handshake::SHandShake,
+    };
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    /// Drives the whole path a proxied login takes: the handshake is encoded as
+    /// `BungeeCord` puts it on the wire, decoded by the real packet reader, and
+    /// the address it yields is handed to `bungeecord_login`. This is what fails
+    /// when the reader's bound on `server_address` is too small to hold the
+    /// forwarded profile properties.
+    #[tokio::test]
+    async fn logs_in_from_a_handshake_decoded_off_the_wire() {
+        let textures = "e".repeat(432);
+        let signature = "s".repeat(684);
+        let address = format!(
+            "mc.example.com\0192.0.2.10\0d8f4a1e0-0f1b-4c3a-9f2e-1a2b3c4d5e6f\0\
+             [{{\"name\":\"textures\",\"value\":\"{textures}\",\"signature\":\"{signature}\"}}]"
+        );
+
+        let mut buf = Vec::new();
+        let protocol_version = JavaMinecraftVersion::V_1_21_11.protocol_version();
+        buf.write_var_int(&VarInt(protocol_version))
+            .expect("write protocol version");
+        buf.write_string(&address).expect("write server address");
+        buf.write_u16_be(25565).expect("write server port");
+        buf.write_var_int(&VarInt(2)).expect("write next state");
+
+        let handshake = SHandShake::read(&mut &buf[..], &JavaMinecraftVersion::V_1_21_11)
+            .expect("a handshake sent by BungeeCord should be readable");
+
+        let client_address = Mutex::new(SocketAddr::from(([10, 0, 0, 1], 51234)));
+        let (ip, profile) = bungeecord_login(
+            &client_address,
+            &handshake.server_address,
+            "Steve".to_string(),
+        )
+        .await
+        .expect("the forwarded address should produce a game profile");
+
+        // The forwarded IP and UUID are used, not the proxy's own socket address.
+        assert_eq!(ip, IpAddr::from([192, 0, 2, 10]));
+        assert_eq!(
+            profile.id,
+            "d8f4a1e0-0f1b-4c3a-9f2e-1a2b3c4d5e6f"
+                .parse::<uuid::Uuid>()
+                .expect("valid uuid")
+        );
+
+        // The signed skin survives, so the player keeps their appearance.
+        let properties = profile.properties.load();
+        assert_eq!(properties.len(), 1);
+        assert_eq!(&*properties[0].name, "textures");
+        assert_eq!(&*properties[0].value, textures.as_str());
+        assert_eq!(properties[0].signature.as_deref(), Some(signature.as_str()));
+    }
+}

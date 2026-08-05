@@ -28,6 +28,7 @@ pub mod recipe;
 pub mod scheduler;
 pub mod scoreboard;
 pub mod server;
+pub mod status_effect;
 pub mod text;
 pub mod uuid;
 pub mod world;

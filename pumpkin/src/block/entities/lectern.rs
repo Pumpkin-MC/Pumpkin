@@ -1,3 +1,4 @@
+use pumpkin_data::data_component_impl::{WritableBookContentImpl, WrittenBookContentImpl};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
@@ -36,15 +37,17 @@ impl BlockEntity for LecternBlockEntity {
     where
         Self: Sized,
     {
-        let book = nbt
+        let book_stack = nbt
             .get_compound("Book")
             .and_then(ItemStack::read_item_stack)
-            .map_or_else(
-                || Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
-                |stack| Arc::new(Mutex::new(stack)),
-            );
+            .unwrap_or_else(|| ItemStack::EMPTY.clone());
 
-        let page = nbt.get_int("Page").unwrap_or(0).max(0) as usize;
+        let page_count = Self::page_count_of(&book_stack);
+        let page = nbt
+            .get_int("Page")
+            .unwrap_or(0)
+            .clamp(0, page_count.saturating_sub(1).max(0)) as usize;
+        let book = Arc::new(Mutex::new(book_stack));
 
         Self {
             position,
@@ -111,6 +114,40 @@ impl LecternBlockEntity {
             dirty: AtomicBool::new(false),
         }
     }
+
+    /// Number of pages in a writable or written book, `0` for anything else.
+    #[must_use]
+    pub fn page_count_of(stack: &ItemStack) -> i32 {
+        stack
+            .get_data_component::<WrittenBookContentImpl>()
+            .map(|content| content.pages.len())
+            .or_else(|| {
+                stack
+                    .get_data_component::<WritableBookContentImpl>()
+                    .map(|content| content.pages.len())
+            })
+            .map_or(0, |pages| pages as i32)
+    }
+
+    pub async fn page_count(&self) -> i32 {
+        Self::page_count_of(&*self.book.lock().await)
+    }
+
+    /// Vanilla comparator output: `floor(page / (page_count - 1) * 14) + 1`,
+    /// or `0` without a book. Single-page books emit `1` (`0 / 0` is `NaN`,
+    /// which vanilla's `MathHelper.floor` turns into `0`).
+    pub async fn comparator_output(&self) -> u8 {
+        let book = self.book.lock().await;
+        if book.is_empty() {
+            return 0;
+        }
+
+        let page = self.page.load(Ordering::Relaxed) as f32;
+        let page_count = Self::page_count_of(&book) as f32;
+        let fraction = page / (page_count - 1.0) * 14.0;
+        // `NaN as u8` is 0, matching vanilla's cast of NaN to int.
+        fraction.floor() as u8 + 1
+    }
 }
 
 impl Inventory for LecternBlockEntity {
@@ -151,6 +188,8 @@ impl Inventory for LecternBlockEntity {
     fn set_stack(&self, _slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
             *self.book.lock().await = stack;
+            // A freshly placed book always opens on its first page.
+            self.page.store(0, Ordering::Relaxed);
             self.mark_dirty();
         })
     }
