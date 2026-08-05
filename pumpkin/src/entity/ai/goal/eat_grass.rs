@@ -10,6 +10,55 @@ use rand::RngExt;
 
 const MAX_TIMER: i32 = 40;
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum Destroy {
+    /// The block the mob stands in (`minecraft:edible_for_sheep`) is removed.
+    EdibleBlock,
+    /// The grass block underneath the mob is turned to dirt.
+    GrassBlockBelow,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct EatOutcome {
+    destroy: Option<Destroy>,
+    ate: bool,
+}
+
+/// Vanilla `EatBlockGoal.tick` (1.21.4, `EatBlockGoal.java:59-81`): both branches perform the
+/// world edit only when the `mobGriefing` game rule is on, but call `this.mob.ate()`
+/// unconditionally once the corresponding block was found. So with `mobGriefing false` a sheep
+/// still regrows its wool and a lamb still ages up, but the grass survives.
+const fn eat_outcome(
+    mob_griefing: bool,
+    standing_in_edible: bool,
+    grass_below: bool,
+) -> EatOutcome {
+    if standing_in_edible {
+        EatOutcome {
+            destroy: if mob_griefing {
+                Some(Destroy::EdibleBlock)
+            } else {
+                None
+            },
+            ate: true,
+        }
+    } else if grass_below {
+        EatOutcome {
+            destroy: if mob_griefing {
+                Some(Destroy::GrassBlockBelow)
+            } else {
+                None
+            },
+            ate: true,
+        }
+    } else {
+        EatOutcome {
+            destroy: None,
+            ate: false,
+        }
+    }
+}
+
 pub struct EatGrassGoal {
     goal_control: Controls,
     timer: i32,
@@ -83,21 +132,26 @@ impl Goal for EatGrassGoal {
                 let block_pos = entity.block_pos.load();
                 let world = entity.world.load_full();
 
-                let block_at_pos = world.get_block(&block_pos);
-                if block_at_pos.has_tag(&tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {
+                let below_pos = block_pos.down();
+                let outcome = eat_outcome(
+                    world.level_info.load().game_rules.mob_griefing,
                     world
-                        .set_block_state(
-                            &block_pos,
-                            Block::AIR.default_state.id,
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                    mob.on_eating_grass().await;
-                    emit_eat_game_event(&world, &block_pos).await;
-                } else {
-                    let below_pos = block_pos.down();
-                    let block_below = world.get_block(&below_pos);
-                    if block_below.id == Block::GRASS_BLOCK.id {
+                        .get_block(&block_pos)
+                        .has_tag(&tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP),
+                    world.get_block(&below_pos).id == Block::GRASS_BLOCK.id,
+                );
+
+                match outcome.destroy {
+                    Some(Destroy::EdibleBlock) => {
+                        world
+                            .set_block_state(
+                                &block_pos,
+                                Block::AIR.default_state.id,
+                                BlockFlags::NOTIFY_ALL,
+                            )
+                            .await;
+                    }
+                    Some(Destroy::GrassBlockBelow) => {
                         world
                             .set_block_state(
                                 &below_pos,
@@ -105,9 +159,13 @@ impl Goal for EatGrassGoal {
                                 BlockFlags::NOTIFY_ALL,
                             )
                             .await;
-                        mob.on_eating_grass().await;
-                        emit_eat_game_event(&world, &block_pos).await;
                     }
+                    None => {}
+                }
+
+                if outcome.ate {
+                    mob.on_eating_grass().await;
+                    emit_eat_game_event(&world, &block_pos).await;
                 }
             }
         })
@@ -144,4 +202,49 @@ async fn emit_eat_game_event(
         GameEventContext::none(),
     )
     .await;
+}
+
+#[cfg(test)]
+mod eat_outcome_tests {
+    use super::{Destroy, eat_outcome};
+
+    #[test]
+    fn edible_block_is_removed_only_with_mob_griefing() {
+        let on = eat_outcome(true, true, false);
+        assert_eq!(on.destroy, Some(Destroy::EdibleBlock));
+        assert!(on.ate);
+
+        let off = eat_outcome(false, true, false);
+        assert_eq!(off.destroy, None);
+        assert!(
+            off.ate,
+            "vanilla calls mob.ate() outside the mobGriefing check"
+        );
+    }
+
+    #[test]
+    fn grass_below_becomes_dirt_only_with_mob_griefing() {
+        let on = eat_outcome(true, false, true);
+        assert_eq!(on.destroy, Some(Destroy::GrassBlockBelow));
+        assert!(on.ate);
+
+        let off = eat_outcome(false, false, true);
+        assert_eq!(off.destroy, None);
+        assert!(off.ate);
+    }
+
+    #[test]
+    fn standing_in_edible_takes_precedence_over_grass_below() {
+        assert_eq!(
+            eat_outcome(true, true, true).destroy,
+            Some(Destroy::EdibleBlock)
+        );
+    }
+
+    #[test]
+    fn nothing_edible_means_no_edit_and_no_ate() {
+        let none = eat_outcome(true, false, false);
+        assert_eq!(none.destroy, None);
+        assert!(!none.ate);
+    }
 }

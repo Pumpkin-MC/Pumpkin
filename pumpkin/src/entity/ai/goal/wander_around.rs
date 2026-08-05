@@ -55,6 +55,13 @@ impl WanderAroundGoal {
         self
     }
 
+    /// Whether this is vanilla's `WaterAvoidingRandomStrollGoal` rather than the plain
+    /// `RandomStrollGoal`.
+    #[must_use]
+    pub const fn avoids_water(&self) -> bool {
+        self.avoid_water
+    }
+
     fn find_wander_target(mob: &dyn Mob) -> Vector3<f64> {
         let entity = &mob.get_mob_entity().living_entity.entity;
         let pos = entity.pos.load();
