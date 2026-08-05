@@ -19,6 +19,7 @@ pub mod camel_sit;
 pub mod chase_player;
 pub mod climb_on_top_of_powder_snow;
 pub mod creeper_ignite;
+pub mod defend_village_target;
 pub mod destroy_egg;
 pub mod dolphin_hurt_by_target;
 pub mod dolphin_jump;

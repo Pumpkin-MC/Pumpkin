@@ -100,6 +100,10 @@ impl BlockBehaviour for CarvedPumpkinBlock {
                             &EntityType::IRON_GOLEM,
                         );
                         let golem = IronGolemEntity::new(entity);
+                        // `CarvedPumpkinBlock.java:79`: `ironGolem.setPlayerCreated(true)`.
+                        golem
+                            .player_created
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
                         args.world.spawn_entity(golem).await;
                         return;
                     }
