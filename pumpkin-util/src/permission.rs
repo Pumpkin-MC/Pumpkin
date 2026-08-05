@@ -173,6 +173,11 @@ impl PermissionAttachment {
         self.permissions.remove(node);
     }
 
+    /// Clears all explicitly set permissions from this attachment.
+    pub fn clear_permissions(&mut self) {
+        self.permissions.clear();
+    }
+
     /// Checks if a permission is explicitly set.
     ///
     /// # Parameters
