@@ -116,6 +116,22 @@ impl PluginHostState {
             .clone())
     }
 
+    /// Resolves a biome for the plugin ABI, or fails.
+    ///
+    /// The WIT signature is `get-biome: func(pos: block-pos) -> biome` and lives in the
+    /// `pumpkin-plugin-wit` submodule (a separate repository), so there is no `option<biome>`
+    /// to return without an ABI break for every already-compiled plugin. Failing is therefore
+    /// the only way to avoid handing a plugin a biome the server does not actually have, and
+    /// it is already the established contract on this boundary: `get_wit_biome` traps on
+    /// `Unknown biome`, and the chunk-scoped `get_biome` traps on `Chunk unloaded`. A trap is
+    /// observable and guardable by the plugin author; a fabricated biome silently corrupts
+    /// whatever decision the plugin makes from it.
+    fn resolve_wit_biome(id: Option<u8>) -> wasmtime::Result<&'static pumpkin_data::biome::Biome> {
+        let id = id.ok_or_else(|| wasmtime::Error::msg("No biome data at that position"))?;
+        pumpkin_data::biome::Biome::from_id(id)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown biome id: {id}")))
+    }
+
     fn get_wit_biome(
         biome: &pumpkin_data::biome::Biome,
     ) -> wasmtime::Result<pumpkin::plugin::biomes::Biome> {
@@ -616,7 +632,10 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     ) -> wasmtime::Result<pumpkin::plugin::biomes::Biome> {
         let world_ref = self.get_world_res(&world)?;
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
-        let biome = world_ref.provider.get_biome(&internal_pos);
+        let biome = world_ref
+            .provider
+            .get_biome(&internal_pos)
+            .ok_or_else(|| wasmtime::Error::msg("No biome data at that position"))?;
 
         Self::get_wit_biome(biome)
     }
@@ -833,12 +852,11 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
         let Some(chunk_data) = chunk_data.upgrade() else {
             return Err(wasmtime::Error::msg("Chunk unloaded"));
         };
-        let id = chunk_data
-            .section
-            .get_rough_biome_absolute_y(pos.x as usize, pos.y, pos.z as usize)
-            .unwrap_or(0);
-        let biome = pumpkin_data::biome::Biome::from_id(id)
-            .unwrap_or(&pumpkin_data::biome::Biome::THE_VOID);
+        let id =
+            chunk_data
+                .section
+                .get_rough_biome_absolute_y(pos.x as usize, pos.y, pos.z as usize);
+        let biome = Self::resolve_wit_biome(id)?;
 
         Self::get_wit_biome(biome)
     }
@@ -1036,5 +1054,36 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
             .delete::<WorldBorderResource>(Resource::new_own(rep.rep()))
             .map_err(wasmtime::Error::from)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PluginHostState;
+
+    /// A biome lookup that failed must not be handed to a plugin as some real biome.
+    ///
+    /// Before this, the plugin ABI resolved a failed lookup through `.unwrap_or(0)`, and
+    /// `Biome::from_id(0)` is `badlands` (see `pumpkin-data/src/generated/biome.rs`, the
+    /// authoritative id table) - so a plugin querying an unloaded or biome-less position was
+    /// told "badlands", indistinguishable from a real answer. The chunk-scoped path then
+    /// layered a second invented answer on top, `Biome::THE_VOID`.
+    #[test]
+    fn failed_biome_lookup_is_not_reported_to_plugins_as_a_real_biome() {
+        // No biome entry for that y / chunk not loaded.
+        assert!(PluginHostState::resolve_wit_biome(None).is_err());
+        // Specifically: it must not come back as badlands, the value the old fallback produced.
+        assert_ne!(
+            PluginHostState::resolve_wit_biome(None).map_or("<error>", |b| b.registry_id),
+            "badlands"
+        );
+        // A resolvable id still resolves, so the check above is not passing vacuously, and
+        // id 0 really is badlands rather than a neutral placeholder.
+        assert_eq!(
+            PluginHostState::resolve_wit_biome(Some(0))
+                .map(|b| b.registry_id)
+                .ok(),
+            Some("badlands")
+        );
     }
 }

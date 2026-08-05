@@ -9,11 +9,23 @@ pub const BREEDING_FOOD_THRESHOLD: i32 = 12;
 /// Vanilla `VillagerType#byBiome` / `BY_BIOME`
 /// (`net/minecraft/world/entity/npc/villager/VillagerType.java`). Biomes absent from the
 /// table fall back to `VillagerData.DEFAULT_TYPE`, which is `plains`.
+///
+/// If the position's biome cannot be resolved at all, this also yields `Plains` - but that is
+/// a deliberate local default, not the vanilla rule above. Vanilla's `plains` default covers
+/// biomes *absent from* `BY_BIOME`, which presupposes a known biome; vanilla has no case for a
+/// position whose biome is unresolvable. The default is unavoidable rather than preferred:
+/// both callers (`villager/mod.rs`, `zombie_villager.rs`) call this once from
+/// `init_data_tracker`, which is never retried, and `VillagerData` has no "type unknown"
+/// representation to carry forward.
 #[must_use]
 pub fn villager_type_at(entity: &crate::entity::Entity) -> VillagerType {
-    villager_type_by_biome(entity.world.load().get_biome(
-        &pumpkin_util::math::position::BlockPos::floored_v(entity.pos.load()),
-    ))
+    entity
+        .world
+        .load()
+        .get_biome(&pumpkin_util::math::position::BlockPos::floored_v(
+            entity.pos.load(),
+        ))
+        .map_or(VillagerType::Plains, villager_type_by_biome)
 }
 
 #[must_use]

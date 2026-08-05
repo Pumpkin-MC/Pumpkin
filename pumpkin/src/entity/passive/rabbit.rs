@@ -65,20 +65,24 @@ impl From<u8> for RabbitVariant {
 }
 
 /// Vanilla `Rabbit.getRandomRabbitVariant`.
-fn get_random_rabbit_variant(
-    world: &crate::world::World,
-    pos: pumpkin_util::math::position::BlockPos,
-) -> RabbitVariant {
-    let biome = world.get_biome(&pos);
+///
+/// `biome` is `None` when the position's biome could not be resolved. Both gates are positive
+/// membership tests over fixed tags, so an unresolved biome is in neither and this falls to the
+/// roll-based Brown/Salt/Black branch - the branch vanilla uses for every biome carrying neither
+/// tag, not an invented biome. A default is unavoidable rather than preferred here:
+/// `init_data_tracker` runs exactly once at spawn and is never retried, so declining to pick
+/// would persist the `VARIANT_UNSET` sentinel as the rabbit's tracked variant.
+fn get_random_rabbit_variant(biome: Option<&'static pumpkin_data::biome::Biome>) -> RabbitVariant {
     let roll = rand::random_range(0..100);
+    let has = |t: &'static tag::Tag| biome.is_some_and(|b| b.has_tag(t));
 
-    if biome.has_tag(&tag::WorldgenBiome::MINECRAFT_SPAWNS_WHITE_RABBITS) {
+    if has(&tag::WorldgenBiome::MINECRAFT_SPAWNS_WHITE_RABBITS) {
         if roll < 80 {
             RabbitVariant::White
         } else {
             RabbitVariant::WhiteSplotched
         }
-    } else if biome.has_tag(&tag::WorldgenBiome::MINECRAFT_SPAWNS_GOLD_RABBITS) {
+    } else if has(&tag::WorldgenBiome::MINECRAFT_SPAWNS_GOLD_RABBITS) {
         RabbitVariant::Gold
     } else if roll < 50 {
         RabbitVariant::Brown
@@ -265,7 +269,7 @@ impl Mob for RabbitEntity {
             if self.variant.load(Ordering::Relaxed) == VARIANT_UNSET {
                 let world = entity.world.load();
                 let pos = entity.block_pos.load();
-                let variant = get_random_rabbit_variant(&world, pos);
+                let variant = get_random_rabbit_variant(world.get_biome(&pos));
                 self.set_variant(variant);
             } else {
                 self.set_variant(self.get_variant());
@@ -320,7 +324,7 @@ impl Mob for RabbitEntity {
                         mate_rabbit.map_or_else(|| self.get_variant(), Self::get_variant)
                     }
                 } else {
-                    get_random_rabbit_variant(world, entity.block_pos.load())
+                    get_random_rabbit_variant(world.get_biome(&entity.block_pos.load()))
                 };
                 kit.set_variant(variant);
             }

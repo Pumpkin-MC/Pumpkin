@@ -394,10 +394,13 @@ pub fn check_spawn_rules(
             return false;
         }
 
-        if world
-            .get_biome(pos)
-            .has_tag(&tag::WorldgenBiome::MINECRAFT_MORE_FREQUENT_DROWNED_SPAWNS)
-        {
+        // Positive membership test over a fixed tag: an unresolvable biome is not in it, so
+        // fall through to the ordinary (rarer) drowned chance rather than inventing a biome.
+        // This only selects between two spawn probabilities - the spawn is already gated by
+        // the water/monster checks above - so it cannot create a spawn vanilla would refuse.
+        if world.get_biome(pos).is_some_and(|biome| {
+            biome.has_tag(&tag::WorldgenBiome::MINECRAFT_MORE_FREQUENT_DROWNED_SPAWNS)
+        }) {
             return rand::random_range(0u8..15) == 0;
         }
 
