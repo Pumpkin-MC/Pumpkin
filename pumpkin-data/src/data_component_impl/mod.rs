@@ -623,6 +623,45 @@ mod tests {
         assert_eq!(MapIdImpl { id: 10 }.get_hash(), -919192125i32);
     }
 
+    #[test]
+    fn writable_book_content_round_trip() {
+        let value = WritableBookContentImpl {
+            pages: vec![
+                FilterableString::pass_through("first page".to_string()),
+                FilterableString {
+                    raw: "second".to_string(),
+                    filtered: Some("second*".to_string()),
+                },
+            ],
+        };
+        let read = WritableBookContentImpl::read_data(&value.write_data()).unwrap();
+        assert!(value.equal(&read));
+    }
+
+    #[test]
+    fn written_book_content_round_trip() {
+        let mut page_component = NbtCompound::new();
+        page_component.put_string("text", "hello".to_string());
+        let value = WrittenBookContentImpl {
+            title: FilterableString::pass_through("My Book".to_string()),
+            author: "Steve".to_string(),
+            generation: 1,
+            pages: vec![
+                FilterablePage {
+                    raw: NbtTag::String("plain page".into()),
+                    filtered: None,
+                },
+                FilterablePage {
+                    raw: NbtTag::Compound(page_component),
+                    filtered: None,
+                },
+            ],
+            resolved: true,
+        };
+        let read = WrittenBookContentImpl::read_data(&value.write_data()).unwrap();
+        assert!(value.equal(&read));
+    }
+
     fn assert_round_trip<T: DataComponentImpl + Clone + 'static>(
         value: T,
         read: impl Fn(&NbtTag) -> Option<T>,
