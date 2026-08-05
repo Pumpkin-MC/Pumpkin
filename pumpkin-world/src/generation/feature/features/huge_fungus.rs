@@ -336,3 +336,91 @@ impl HugeFungusFeature {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ProtoChunk;
+    use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_data::placed_feature::PlacedFeature;
+    use pumpkin_util::random::legacy_rand::LegacyRand;
+    use pumpkin_util::world_seed::Seed;
+
+    fn run(
+        feature: PlacedFeature,
+        base: &'static BlockState,
+    ) -> (bool, Vec<pumpkin_data::BlockId>) {
+        let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
+            Seed(7),
+            Dimension::THE_NETHER,
+        )));
+        let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(7));
+
+        let pos = BlockPos::new(8, 40, 8);
+        chunk.set_block_state(8, 39, 8, base);
+
+        let placed = HugeFungusFeature.generate(&mut chunk, 0, 128, feature, &mut random, pos);
+
+        let mut ids = Vec::new();
+        for x in 0..16 {
+            for z in 0..16 {
+                for y in 40..80 {
+                    let id = chunk
+                        .get_block_state(&pumpkin_util::math::vector3::Vector3::new(x, y, z))
+                        .to_block_id();
+                    if id != Block::AIR.id {
+                        ids.push(id);
+                    }
+                }
+            }
+        }
+        (placed, ids)
+    }
+
+    /// `HugeFungusFeature.place` bails unless the block below the origin is the
+    /// configured `validBaseState` (Mojang-named 1.21.4 decompile). Without this
+    /// gate every `count_on_every_layer(8)` candidate places.
+    #[test]
+    fn rejects_origin_that_is_not_on_the_configured_nylium() {
+        let (placed, ids) = run(PlacedFeature::CrimsonFungi, Block::NETHERRACK.default_state);
+        assert!(!placed, "a fungus must not generate off nylium");
+        assert!(ids.is_empty(), "a rejected fungus must place no blocks");
+
+        let (placed, _) = run(
+            PlacedFeature::CrimsonFungi,
+            Block::WARPED_NYLIUM.default_state,
+        );
+        assert!(
+            !placed,
+            "the crimson fungus must not accept warped nylium as its base"
+        );
+    }
+
+    /// The generated configured-feature table drops the `HugeFungusConfiguration`,
+    /// so the crimson/warped block set is recovered from the placed feature. Guard
+    /// both directions: the variant must follow the feature, not the RNG.
+    #[test]
+    fn block_set_follows_the_placed_feature_variant() {
+        let (placed, ids) = run(
+            PlacedFeature::CrimsonFungi,
+            Block::CRIMSON_NYLIUM.default_state,
+        );
+        assert!(placed);
+        assert!(ids.contains(&Block::CRIMSON_STEM.id));
+        assert!(ids.contains(&Block::NETHER_WART_BLOCK.id));
+        assert!(!ids.contains(&Block::WARPED_STEM.id));
+        assert!(!ids.contains(&Block::WARPED_WART_BLOCK.id));
+
+        let (placed, ids) = run(
+            PlacedFeature::WarpedFungi,
+            Block::WARPED_NYLIUM.default_state,
+        );
+        assert!(placed);
+        assert!(ids.contains(&Block::WARPED_STEM.id));
+        assert!(ids.contains(&Block::WARPED_WART_BLOCK.id));
+        assert!(!ids.contains(&Block::CRIMSON_STEM.id));
+        assert!(!ids.contains(&Block::NETHER_WART_BLOCK.id));
+    }
+}
