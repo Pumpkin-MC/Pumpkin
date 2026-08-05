@@ -39,7 +39,8 @@ pub fn stalactite_damage_per_distance(block_count: usize) -> f32 {
 }
 
 /// A downward-pointing pointed dripstone, i.e. part of a stalactite.
-fn is_stalactite(block: &Block, state_id: BlockStateId) -> bool {
+#[must_use]
+pub fn is_stalactite(block: &Block, state_id: BlockStateId) -> bool {
     block == &Block::POINTED_DRIPSTONE
         && PointedDripstoneLikeProperties::from_state_id(state_id, block).vertical_direction
             == VerticalDirection::Down

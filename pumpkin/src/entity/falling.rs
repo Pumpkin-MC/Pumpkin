@@ -235,17 +235,26 @@ impl FallingEntity {
         let would_continue_falling = FallingBlock::can_fall_through(below_state, below_block)
             && !(is_concrete && is_stuck_in_water);
         let placed_state = BlockState::from_id(falling_state_id);
-        let would_survive = world.block_registry.can_place_at(
-            Some(server),
-            Some(world),
-            &**world,
-            None,
-            falling_block,
-            placed_state,
-            pos,
-            Some(BlockDirection::Down),
-            None,
-        ) && !would_continue_falling;
+        // A falling stalactite can never survive landing: it fell down a column of passable
+        // blocks, so there is nothing above it to hang from, while a downward-pointing pointed
+        // dripstone requires support above. `can_place_at` would nevertheless accept it, because
+        // it is asked with `BlockDirection::Down` and would latch onto the floor below, placing a
+        // stalactite standing upside down on the ground. Force the break/drop branch instead.
+        let cannot_survive_landing =
+            crate::block::blocks::dripstone::is_stalactite(falling_block, falling_state_id);
+        let would_survive = !cannot_survive_landing
+            && world.block_registry.can_place_at(
+                Some(server),
+                Some(world),
+                &**world,
+                None,
+                falling_block,
+                placed_state,
+                pos,
+                Some(BlockDirection::Down),
+                None,
+            )
+            && !would_continue_falling;
 
         if may_replace && would_survive {
             let final_state_id = crate::block::blocks::falling::on_land_state(
