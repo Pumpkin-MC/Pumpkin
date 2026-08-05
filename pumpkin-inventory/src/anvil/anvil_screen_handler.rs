@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use pumpkin_data::{item_stack::ItemStack, screen::WindowType};
+use pumpkin_data::{item_stack::ItemStack, screen::WindowType, world::WorldEvent};
 use pumpkin_world::inventory::Inventory;
 
 use crate::{
@@ -205,6 +205,8 @@ impl ScreenHandler for AnvilScreenHandler {
                             // Consume inputs
                             self.inventory.set_stack(0, ItemStack::EMPTY.clone()).await;
                             self.get_behaviour().slots[0].mark_dirty().await;
+
+                            player.play_sound_event(WorldEvent::SoundAnvilUsed).await;
                         } else {
                             // Cancel click
                             self.send_content_updates().await;
