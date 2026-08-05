@@ -417,10 +417,10 @@ impl Navigator {
                 entity.entity.head_yaw.store(target_yaw);
                 entity.entity.body_yaw.store(target_yaw);
 
-                // Get movement speed from goal and mob attributes
-                entity
-                    .movement_input
-                    .store(Vector3::new(0.0, 0.0, goal.speed));
+                // Mob.setSpeed(speedModifier * MOVEMENT_SPEED), which also sets zza.
+                let speed = entity.speed_for_modifier(goal.speed);
+                entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+                entity.set_speed(speed);
 
                 let bbox = entity.entity.bounding_box.load();
                 let width = bbox.max.x - bbox.min.x;

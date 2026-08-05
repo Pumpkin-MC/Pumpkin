@@ -45,14 +45,14 @@ impl MoveControlTrait for MoveControl {
         let living_entity = &mob_entity.living_entity;
         let entity = &living_entity.entity;
         if self.operation == Operation::Strafe {
-            let input = normalized_strafe_input(
-                self.strafe_forwards,
-                self.strafe_right,
-                self.speed_modifier,
-            );
-            living_entity
-                .movement_input
-                .store(Vector3::new(input.0, 0.0, input.1));
+            // MoveControl STRAFE: setSpeed(speedModifier * MOVEMENT_SPEED), then the raw
+            // strafe components go into xxa/zza.
+            living_entity.set_speed(living_entity.speed_for_modifier(self.speed_modifier));
+            living_entity.movement_input.store(Vector3::new(
+                f64::from(self.strafe_right),
+                0.0,
+                f64::from(self.strafe_forwards),
+            ));
             self.operation = Operation::Wait;
         } else if self.operation == Operation::MoveTo {
             self.operation = Operation::Wait;
@@ -74,9 +74,7 @@ impl MoveControlTrait for MoveControl {
                 .yaw
                 .store(self.change_angle(entity.yaw.load(), y_rot_d, 90.0));
 
-            living_entity
-                .movement_input
-                .store(Vector3::new(0.0, 0.0, self.speed_modifier));
+            living_entity.set_speed(living_entity.speed_for_modifier(self.speed_modifier));
 
             let step_height = living_entity.get_attribute_value(&Attributes::STEP_HEIGHT);
             let horizontal_distance_sq = xd * xd + zd * zd;
@@ -92,9 +90,7 @@ impl MoveControlTrait for MoveControl {
                 self.operation = Operation::Jumping;
             }
         } else if self.operation == Operation::Jumping {
-            living_entity
-                .movement_input
-                .store(Vector3::new(0.0, 0.0, self.speed_modifier));
+            living_entity.set_speed(living_entity.speed_for_modifier(self.speed_modifier));
 
             if entity.on_ground.load(Ordering::Relaxed) {
                 living_entity.jumping.store(false, Ordering::SeqCst);
@@ -112,18 +108,6 @@ impl MoveControlTrait for MoveControl {
     fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed_modifier: f64) {
         Self::set_wanted_position(self, x, y, z, speed_modifier);
     }
-}
-
-fn normalized_strafe_input(forwards: f32, right: f32, speed_modifier: f64) -> (f64, f64) {
-    let length = f64::from(forwards).hypot(f64::from(right));
-    if length < f64::EPSILON {
-        return (0.0, 0.0);
-    }
-
-    (
-        f64::from(right) / length * speed_modifier,
-        f64::from(forwards) / length * speed_modifier,
-    )
 }
 
 fn should_jump(
@@ -184,10 +168,26 @@ mod tests {
         assert!(!should_jump(false, true, 1.0, 0.6, 2.0, 0.6));
     }
 
+    /// `MoveControl` feeds `speedModifier * MOVEMENT_SPEED` into both the mob's speed and
+    /// its forward input (`Mob.setSpeed` -> `setZza`), so the attribute enters the per-tick
+    /// velocity twice. `travel_in_air` on a normal block (slipperiness 0.6) contributes
+    /// `speed * 0.21600002 / 0.6^3 == speed`, and horizontal friction is `0.6 * 0.91`.
     #[test]
-    fn strafe_input_is_normalized_and_scaled() {
-        let (right, forwards) = super::normalized_strafe_input(1.0, 1.0, 0.5);
-        assert!((right - 0.3535533906).abs() < 1e-9);
-        assert!((forwards - 0.3535533906).abs() < 1e-9);
+    fn walking_mob_terminal_speed_matches_the_attribute_squared() {
+        // Terminal velocity of `v += input * factor; v *= friction`.
+        fn terminal(attribute: f64, speed_modifier: f64) -> f64 {
+            let speed = speed_modifier * attribute;
+            let per_tick = speed * (speed * 0.216_000_02 / 0.216);
+            per_tick / (1.0 - 0.6 * 0.91)
+        }
+
+        // Zombie MOVEMENT_SPEED is 0.23 and spider's is 0.3 in pumpkin-data's generated
+        // entity attributes. Chasing goals use a speed modifier of 1.0.
+        let zombie = terminal(0.23, 1.0) * 20.0;
+        let spider = terminal(0.3, 1.0) * 20.0;
+        assert!((zombie - 2.331).abs() < 0.01, "zombie {zombie} blocks/s");
+        assert!((spider - 3.965).abs() < 0.01, "spider {spider} blocks/s");
+        // Both must stay below a walking player (4.317 blocks/s).
+        assert!(zombie < 4.317 && spider < 4.317);
     }
 }

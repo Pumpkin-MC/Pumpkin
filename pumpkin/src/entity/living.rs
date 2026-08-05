@@ -146,6 +146,11 @@ pub struct LivingEntity {
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
     pub equipment_drop_chances: Arc<Mutex<HashMap<EquipmentSlot, f32>>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
+    /// `LivingEntity.speed` in vanilla: the per-tick movement factor consumed by
+    /// `travel`/`getFrictionInfluencedSpeed`. For players this is the raw
+    /// `MOVEMENT_SPEED` attribute (`Player.aiStep`), for mobs it is
+    /// `speedModifier * MOVEMENT_SPEED` as written by `MoveControl` via `Mob.setSpeed`.
+    pub speed: AtomicCell<f64>,
     pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
 
     pub jumping: AtomicBool,
@@ -237,6 +242,7 @@ impl LivingEntity {
             0.8
         };
         let mut max_health: f32 = 20.0; // Overridden by attribute base below
+        let mut base_movement_speed = Attributes::MOVEMENT_SPEED.default_value;
         Self {
             // Populate local attribute instances from the default registry and get initial vars
             attributes: {
@@ -245,6 +251,9 @@ impl LivingEntity {
                 for (attr, base) in entity.entity_type.attributes {
                     if attr.id == Attributes::MAX_HEALTH.id {
                         max_health = *base as f32;
+                    }
+                    if attr.id == Attributes::MOVEMENT_SPEED.id {
+                        base_movement_speed = *base;
                     }
                     m.insert(attr.id, AttributeInstance::new(*base));
                 }
@@ -276,6 +285,7 @@ impl LivingEntity {
             last_attack_time: AtomicI32::new(0),
             not_targetable_as_enemy: AtomicBool::new(false),
             movement_input: AtomicCell::new(Vector3::default()),
+            speed: AtomicCell::new(base_movement_speed),
             water_movement_speed_multiplier,
             raid_membership: AtomicCell::new(None),
             can_join_raid: AtomicBool::new(false),
@@ -542,6 +552,21 @@ impl LivingEntity {
         let map = self.attributes.read().unwrap();
         map.get(&attribute.id)
             .map_or(attribute.default_value, AttributeInstance::value)
+    }
+
+    /// `Mob.setSpeed`: stores the movement factor and mirrors it into the forward
+    /// movement input (`setZza`).
+    pub fn set_speed(&self, speed: f64) {
+        self.speed.store(speed);
+        let mut input = self.movement_input.load();
+        input.z = speed;
+        self.movement_input.store(input);
+    }
+
+    /// `speedModifier * MOVEMENT_SPEED`, the value `MoveControl` passes to `Mob.setSpeed`.
+    #[must_use]
+    pub fn speed_for_modifier(&self, speed_modifier: f64) -> f64 {
+        speed_modifier * self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
     }
 
     /// Returns the base attribute value for `attribute` for this entity's type.
@@ -962,6 +987,13 @@ impl LivingEntity {
 
         self.entity.check_zero_velo();
 
+        // Player.aiStep: players refresh `speed` from the attribute every tick. Mobs get
+        // theirs from MoveControl/navigation as `speedModifier * MOVEMENT_SPEED`.
+        if caller.get_player().is_some() {
+            self.speed
+                .store(self.get_attribute_value(&Attributes::MOVEMENT_SPEED));
+        }
+
         let mut movement_input = self.movement_input.load();
 
         movement_input.x *= 0.98;
@@ -1040,7 +1072,8 @@ impl LivingEntity {
     async fn travel_in_air<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
         // applyMovementInput
 
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+        // LivingEntity.getFrictionInfluencedSpeed uses `getSpeed()`, not the raw attribute.
+        let effective_speed = self.speed.load();
 
         let (speed, friction) = if self.entity.on_ground.load(SeqCst) {
             // getVelocityAffectingPos
@@ -1124,7 +1157,8 @@ impl LivingEntity {
         let old_y = self.entity.pos.load().y;
         let falling = self.entity.velocity.load().y <= 0.0;
         let gravity = self.get_effective_gravity(caller).await;
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+        // LivingEntity.travelInFluid also blends toward `getSpeed()`, not the raw attribute.
+        let effective_speed = self.speed.load();
 
         if water {
             let mut friction = if self.entity.sprinting.load(Relaxed) {
