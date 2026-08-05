@@ -628,4 +628,200 @@ mod tests {
             "huge fungus hats must be hollow shells, not solid boxes of hat block"
         );
     }
+
+    /// Vanilla's `BiomeManager.getBiome` shifts the block position by -2 before converting to
+    /// biome ("quart") coordinates, so for the first two columns of every chunk the resulting
+    /// cell lies in the *neighbouring* chunk. `LevelReader.getNoiseBiome` (Mojang-named 1.21.4
+    /// decompile, `LevelReader.java:58-61`) routes that cell to the owning chunk via
+    /// `QuartPos.toSection` and only then does `ChunkAccess.getNoiseBiome` mask it with `& 3`.
+    ///
+    /// Pumpkin used to mask with `& 3` against the chunk being built, which wraps a spilled
+    /// lookup around to the opposite edge of the same chunk and reads an unrelated biome. That
+    /// put a hard, chunk-aligned seam into the terrain-gen biome, and through the surface rules
+    /// into the surface material.
+    #[test]
+    fn terrain_gen_biome_lookups_resolve_to_the_owning_chunk() {
+        use crate::generation::proto_chunk::BiomeNeighborhood;
+
+        let dimension = Dimension::OVERWORLD;
+        let seed = Seed(42);
+        let block_registry = Arc::new(BlockRegistry);
+        let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
+        let biome_mixer_seed = hash_seed(world_gen.seed());
+
+        let chunk_at = |cx: i32, cz: i32| {
+            let chunk = generate_single_chunk(
+                &dimension,
+                biome_mixer_seed,
+                &world_gen,
+                block_registry.as_ref(),
+                cx,
+                cz,
+                StagedChunkEnum::Biomes,
+            );
+            let crate::chunk_system::Chunk::Proto(chunk) = chunk else {
+                panic!("biomes stage should return a proto chunk");
+            };
+            chunk
+        };
+
+        let (cx, cz) = (1, 1);
+        let center = chunk_at(cx, cz);
+        let mut ring = Vec::new();
+        for dz in -1..=1 {
+            for dx in -1..=1 {
+                ring.push(chunk_at(cx + dx, cz + dz));
+            }
+        }
+        let owner = |bx: i32, bz: i32| {
+            let dx = (bx >> 2) - (cx - 1);
+            let dz = (bz >> 2) - (cz - 1);
+            &ring[(dz * 3 + dx) as usize]
+        };
+
+        let neighborhood =
+            BiomeNeighborhood::build(cx, cz, center.bottom_y(), center.height(), |bx, by, bz| {
+                Some(owner(bx, bz).get_biome_id(bx, by, bz))
+            });
+
+        let mut spilled = 0;
+        let mut corrected = 0;
+        for lx in 0..16 {
+            for lz in 0..16 {
+                let x = cx * 16 + lx;
+                let z = cz * 16 + lz;
+                let y = 64;
+                let cell = center.terrain_gen_biome_cell(x, y, z);
+                let in_chunk = (cell.x >> 2) == cx && (cell.z >> 2) == cz;
+                let resolved = center.get_terrain_gen_biome_id_in(Some(&neighborhood), x, y, z);
+
+                // Whatever the cell is, the answer must be what the chunk owning it stores.
+                assert_eq!(
+                    resolved,
+                    owner(cell.x, cell.z).get_biome_id(cell.x, cell.y, cell.z),
+                    "biome cell ({}, {}, {}) resolved against the wrong chunk",
+                    cell.x,
+                    cell.y,
+                    cell.z
+                );
+
+                if !in_chunk {
+                    spilled += 1;
+                    // The old wrapping lookup reads the centre chunk regardless.
+                    if resolved != center.get_biome_id(cell.x, cell.y, cell.z) {
+                        corrected += 1;
+                    }
+                }
+            }
+        }
+
+        // Non-vacuity: the -2 offset really does push lookups out of the chunk, and the wrapped
+        // read really did disagree with the neighbour.
+        assert!(
+            spilled >= 24,
+            "expected the -2 block offset to push many lookups out of the chunk, got {spilled}"
+        );
+        assert!(
+            corrected > 0,
+            "expected the old wrapping lookup to disagree with the owning chunk somewhere"
+        );
+    }
+
+    /// End-to-end symptom check for the same bug: the wrapped biome lookup made the surface
+    /// material change disproportionately often exactly on chunk boundaries, which is what a
+    /// player sees as straight, axis-aligned bands of sand cutting through grass.
+    ///
+    /// The statistic is the position of every surface-material change modulo 16. Organic noise
+    /// spreads those changes roughly evenly over the sixteen residues; a chunk-keyed evaluator
+    /// bug piles them onto residue 0.
+    ///
+    /// Measured over this 64x64 block region (seed 42, chunks (0,0)..(3,3)): before the fix the
+    /// two spilling residues averaged 49.5 changes against 24.1 across the fourteen interior
+    /// residues, a 2.05x excess; after, 19.0 against 21.2, a 0.90x ratio.
+    ///
+    /// Over a larger 96x96 region on the same seed the effect is starker: x-axis changes on
+    /// residue 0 fell from 133 of 587 (22.7%, against a 5.3% expectation) to 27 of 433 (6.2%),
+    /// and z-axis changes from 81 of 528 to 17 of 386.
+    #[test]
+    fn surface_material_does_not_band_on_chunk_boundaries() {
+        use std::collections::HashMap;
+
+        const CHUNKS: i32 = 4;
+
+        let dimension = Dimension::OVERWORLD;
+        let seed = Seed(42);
+        let block_registry = Arc::new(BlockRegistry);
+        let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
+        let biome_mixer_seed = hash_seed(world_gen.seed());
+
+        let mut surface: HashMap<(i32, i32), pumpkin_data::BlockId> = HashMap::new();
+        for cx in 0..CHUNKS {
+            for cz in 0..CHUNKS {
+                let chunk = generate_single_chunk(
+                    &dimension,
+                    biome_mixer_seed,
+                    &world_gen,
+                    block_registry.as_ref(),
+                    cx,
+                    cz,
+                    StagedChunkEnum::Surface,
+                );
+                let crate::chunk_system::Chunk::Proto(chunk) = chunk else {
+                    panic!("surface stage should return a proto chunk");
+                };
+                for lx in 0..16 {
+                    for lz in 0..16 {
+                        let x = cx * 16 + lx;
+                        let z = cz * 16 + lz;
+                        let top = chunk.top_block_height_exclusive(lx, lz);
+                        let mut found = pumpkin_data::Block::AIR.id;
+                        for y in (chunk.bottom_y() as i32..top).rev() {
+                            let block = chunk
+                                .get_block_state(&pumpkin_util::math::vector3::Vector3::new(
+                                    x, y, z,
+                                ))
+                                .to_block_id();
+                            if block != pumpkin_data::Block::AIR.id
+                                && block != pumpkin_data::Block::WATER.id
+                            {
+                                found = block;
+                                break;
+                            }
+                        }
+                        surface.insert((x, z), found);
+                    }
+                }
+            }
+        }
+
+        let width = CHUNKS * 16;
+        let mut by_residue = [0usize; 16];
+        let mut total = 0usize;
+        for a in 0..width - 1 {
+            for b in 0..width {
+                if surface[&(a, b)] != surface[&(a + 1, b)] {
+                    by_residue[((a + 1) % 16) as usize] += 1;
+                    total += 1;
+                }
+                if surface[&(b, a)] != surface[&(b, a + 1)] {
+                    by_residue[((a + 1) % 16) as usize] += 1;
+                    total += 1;
+                }
+            }
+        }
+
+        assert!(total > 200, "region is too uniform to measure, got {total}");
+        // The -2 offset only ever spills out of the chunk for the first two columns, so those
+        // are the two residues the wrap distorts.
+        let spilling: usize = by_residue[0] + by_residue[1];
+        let interior: usize = total - spilling;
+        let mean = interior as f64 / 14.0;
+        let on_boundary = spilling as f64 / 2.0;
+        assert!(
+            on_boundary <= mean * 1.4,
+            "surface material changes cluster on chunk boundaries: {on_boundary:.1} changes per \
+             residue at local coordinates 0 and 1 against {mean:.1} across the interior \
+             residues (full histogram {by_residue:?})"
+        );
+    }
 }

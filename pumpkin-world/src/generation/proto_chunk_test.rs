@@ -59,14 +59,14 @@ mod test {
             "heightmap corrupted by save/load roundtrip (transposed or lost)"
         );
 
-        resumed.step_to_surface(generator);
+        resumed.step_to_surface(generator, None);
 
         let mut fresh = ProtoChunk::new(cx, cz, &world_gen);
         fresh.step_to_biomes(generator);
         fresh.set_structure_starts(generator);
         fresh.set_structure_references(generator);
         fresh.step_to_noise(generator);
-        fresh.step_to_surface(generator);
+        fresh.step_to_surface(generator, None);
 
         let bottom = fresh.bottom_y() as i32;
         let top = bottom + fresh.height() as i32;
@@ -168,7 +168,7 @@ mod test {
         chunk.step_to_biomes(generator);
         chunk.stage = StagedChunkEnum::StructureReferences;
         chunk.step_to_noise(generator);
-        chunk.step_to_surface(generator);
+        chunk.step_to_surface(generator, None);
 
         assert_eq!(chunk.flat_block_map.len(), expected_data.len());
         let min_y = chunk.bottom_y() as i32;

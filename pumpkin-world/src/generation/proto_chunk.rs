@@ -96,6 +96,80 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
 
 const AIR_BLOCK: Block = Block::AIR;
 
+/// The 6x6 block of biome cells covering one chunk plus a one-cell border, flattened out of the
+/// surrounding chunks' biome maps.
+///
+/// Vanilla resolves a biome-cell lookup to the chunk that owns it
+/// (`LevelReader.getNoiseBiome` -> `QuartPos.toSection`), so lookups that spill past a chunk edge
+/// -- which `BiomeManager.getBiome`'s -2 block offset makes routine for the first two columns of
+/// every chunk -- read the neighbour, not a wrapped-around cell of the same chunk.
+pub struct BiomeNeighborhood {
+    /// Biome-cell X of the border cell west of the chunk.
+    min_biome_x: i32,
+    /// Biome-cell Z of the border cell north of the chunk.
+    min_biome_z: i32,
+    /// Biome-cell Y of the bottom layer.
+    min_biome_y: i32,
+    y_cells: i32,
+    /// `[(dx * 6 + dz) * y_cells + dy]`, `u8::MAX` where no chunk was available.
+    data: Box<[u8]>,
+}
+
+impl BiomeNeighborhood {
+    pub const SIDE: i32 = 6;
+    const MISSING: u8 = u8::MAX;
+
+    /// Builds the neighbourhood for chunk (`chunk_x`, `chunk_z`). `biome_at` is called with
+    /// absolute biome-cell coordinates and returns `None` when that chunk is unavailable.
+    pub fn build(
+        chunk_x: i32,
+        chunk_z: i32,
+        bottom_y: i8,
+        height: u16,
+        mut biome_at: impl FnMut(i32, i32, i32) -> Option<u8>,
+    ) -> Self {
+        let min_biome_x = biome_coords::from_chunk(chunk_x) - 1;
+        let min_biome_z = biome_coords::from_chunk(chunk_z) - 1;
+        let min_biome_y = biome_coords::from_block(bottom_y as i32);
+        let y_cells = biome_coords::from_block(height as i32);
+
+        let mut data = vec![Self::MISSING; (Self::SIDE * Self::SIDE * y_cells) as usize];
+        for dx in 0..Self::SIDE {
+            for dz in 0..Self::SIDE {
+                for dy in 0..y_cells {
+                    if let Some(id) = biome_at(min_biome_x + dx, min_biome_y + dy, min_biome_z + dz)
+                    {
+                        data[((dx * Self::SIDE + dz) * y_cells + dy) as usize] = id;
+                    }
+                }
+            }
+        }
+
+        Self {
+            min_biome_x,
+            min_biome_z,
+            min_biome_y,
+            y_cells,
+            data: data.into_boxed_slice(),
+        }
+    }
+
+    /// Looks up an absolute biome-cell position. Returns `None` when the position is outside the
+    /// neighbourhood or the owning chunk was unavailable, so the caller can fall back.
+    #[must_use]
+    pub fn get(&self, biome_x: i32, biome_y: i32, biome_z: i32) -> Option<u8> {
+        let dx = biome_x - self.min_biome_x;
+        let dz = biome_z - self.min_biome_z;
+        if !(0..Self::SIDE).contains(&dx) || !(0..Self::SIDE).contains(&dz) {
+            return None;
+        }
+        // Matches vanilla `ChunkAccess.getNoiseBiome`, which clamps the quart Y into the chunk.
+        let dy = (biome_y - self.min_biome_y).clamp(0, self.y_cells - 1);
+        let id = self.data[((dx * Self::SIDE + dz) * self.y_cells + dy) as usize];
+        if id == Self::MISSING { None } else { Some(id) }
+    }
+}
+
 pub struct StandardChunkFluidLevelSampler {
     top_fluid: FluidLevel,
     bottom_fluid: FluidLevel,
@@ -573,9 +647,14 @@ impl ProtoChunk {
     #[inline]
     #[must_use]
     pub fn get_biome_id(&self, x: i32, y: i32, z: i32) -> u8 {
+        // Vanilla `ChunkAccess.getNoiseBiome` clamps the quart Y into the chunk before
+        // masking, so an out-of-range Y reads the top/bottom biome layer instead of
+        // indexing out of bounds.
+        let min_biome_y = biome_coords::from_block(self.bottom_y() as i32);
+        let max_biome_y = min_biome_y + biome_coords::from_block(self.height() as i32) - 1;
         let index = self.local_biome_pos_to_biome_index(
             x & 3,
-            y - biome_coords::from_block(self.bottom_y() as i32),
+            y.clamp(min_biome_y, max_biome_y) - min_biome_y,
             z & 3,
         );
         self.flat_biome_map[index]
@@ -770,7 +849,11 @@ impl ProtoChunk {
         self.stage = StagedChunkEnum::Noise;
     }
 
-    pub fn step_to_surface(&mut self, generator: &super::generator::VanillaGenerator) {
+    pub fn step_to_surface(
+        &mut self,
+        generator: &super::generator::VanillaGenerator,
+        neighborhood: Option<&BiomeNeighborhood>,
+    ) {
         debug_assert_eq!(self.stage, StagedChunkEnum::Noise);
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
@@ -793,7 +876,11 @@ impl ProtoChunk {
             &surface_config,
         );
 
-        self.build_surface(generator, &mut surface_height_estimate_sampler);
+        self.build_surface(
+            generator,
+            &mut surface_height_estimate_sampler,
+            neighborhood,
+        );
         self.stage = StagedChunkEnum::Surface;
     }
 
@@ -951,16 +1038,47 @@ impl ProtoChunk {
         cache.get_center_chunk_mut().stage = StagedChunkEnum::Spawn;
     }
 
+    /// The biome cell vanilla's `BiomeManager.getBiome` would resolve this block position to.
+    /// May lie in a neighbouring chunk.
     #[must_use]
-    pub fn get_terrain_gen_biome_id(&self, x: i32, y: i32, z: i32) -> u8 {
-        let seed_biome_pos = biome::get_biome_blend(
+    pub fn terrain_gen_biome_cell(&self, x: i32, y: i32, z: i32) -> Vector3<i32> {
+        biome::get_biome_blend(
             self.bottom_y(),
             self.height(),
             self.biome_mixer_seed,
             x,
             y,
             z,
-        );
+        )
+    }
+
+    #[must_use]
+    pub fn get_terrain_gen_biome_id(&self, x: i32, y: i32, z: i32) -> u8 {
+        self.get_terrain_gen_biome_id_in(None, x, y, z)
+    }
+
+    /// Vanilla's `BiomeManager::getBiome` offsets the block position by -2 and can land on a
+    /// biome cell belonging to a *neighbouring* chunk. `LevelReader.getNoiseBiome` then resolves
+    /// that quart position to the owning chunk (`QuartPos.toSection`) before that chunk masks
+    /// with `& 3`. Reading it out of this chunk's own 4x4 map instead wraps the lookup around to
+    /// the opposite edge of the same chunk, which puts a hard, chunk-aligned seam into the
+    /// terrain-gen biome. `neighborhood`, when present, resolves those spilled lookups against
+    /// the real neighbouring chunks.
+    #[must_use]
+    pub fn get_terrain_gen_biome_id_in(
+        &self,
+        neighborhood: Option<&BiomeNeighborhood>,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> u8 {
+        let seed_biome_pos = self.terrain_gen_biome_cell(x, y, z);
+
+        if let Some(neighborhood) = neighborhood
+            && let Some(id) = neighborhood.get(seed_biome_pos.x, seed_biome_pos.y, seed_biome_pos.z)
+        {
+            return id;
+        }
 
         self.get_biome_id(seed_biome_pos.x, seed_biome_pos.y, seed_biome_pos.z)
     }
@@ -970,11 +1088,23 @@ impl ProtoChunk {
         Biome::from_id(self.get_terrain_gen_biome_id(x, y, z)).unwrap()
     }
 
+    #[must_use]
+    pub fn get_terrain_gen_biome_in(
+        &self,
+        neighborhood: Option<&BiomeNeighborhood>,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> &'static Biome {
+        Biome::from_id(self.get_terrain_gen_biome_id_in(neighborhood, x, y, z)).unwrap()
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn build_surface(
         &mut self,
         generator: &super::generator::VanillaGenerator,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+        neighborhood: Option<&BiomeNeighborhood>,
     ) {
         let start_x = chunk_pos::start_block_x(self.x);
         let start_z = chunk_pos::start_block_z(self.z);
@@ -1007,7 +1137,7 @@ impl ProtoChunk {
                     top_block
                 };
 
-                let this_biome = self.get_terrain_gen_biome_id(x, biome_y, z);
+                let this_biome = self.get_terrain_gen_biome_id_in(neighborhood, x, biome_y, z);
                 if this_biome == Biome::ERODED_BADLANDS {
                     terrain_cache
                         .terrain_builder
@@ -1064,7 +1194,8 @@ impl ProtoChunk {
                     context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
 
                     if state.id == self.default_block.id {
-                        context.biome = self.get_terrain_gen_biome(
+                        context.biome = self.get_terrain_gen_biome_in(
+                            neighborhood,
                             context.block_pos_x,
                             context.block_pos_y,
                             context.block_pos_z,
