@@ -539,4 +539,93 @@ mod tests {
             "reference chunk contains no kelp columns to verify"
         );
     }
+
+    /// Regression test for `HugeFungusFeature`
+    /// (`generation::feature::features::huge_fungus`). The feature used to be a hand-rolled
+    /// approximation that ignored its configuration entirely: it coin-flipped crimson vs
+    /// warped per placement, never checked `validBaseState` (so every one of the
+    /// `count_on_every_layer(8)` candidates placed, overwriting terrain), and painted a
+    /// solid 5x5 box of wart block for the hat.
+    ///
+    /// Vanilla (`HugeFungusFeature` / `TreeFeatures.CRIMSON_FUNGUS`, Mojang-named 1.21.4
+    /// decompile) requires the block below the origin to be the configured nylium, takes its
+    /// stem/hat/decor states from the configuration rather than a coin flip, and builds a
+    /// mostly-hollow hat shell (interior columns get only a 0.2 chance of hat block).
+    #[test]
+    fn crimson_forest_huge_fungi_are_crimson_and_hollow_capped() {
+        let dimension = Dimension::THE_NETHER;
+        let seed = Seed(42);
+        let block_registry = Arc::new(BlockRegistry);
+        let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
+        let biome_mixer_seed = hash_seed(world_gen.seed());
+
+        // Chunk (5, 6) on this seed is solidly crimson forest: it carries crimson nylium and
+        // a large number of huge fungi (verified by direct probing).
+        let chunk = generate_single_chunk(
+            &dimension,
+            biome_mixer_seed,
+            &world_gen,
+            block_registry.as_ref(),
+            5,
+            6,
+            StagedChunkEnum::Features,
+        );
+        let crate::chunk_system::Chunk::Proto(chunk) = chunk else {
+            panic!("features stage should return a proto chunk");
+        };
+
+        let at = |x: i32, y: i32, z: i32| {
+            chunk
+                .get_block_state(&pumpkin_util::math::vector3::Vector3::new(x, y, z))
+                .to_block_id()
+        };
+
+        let mut crimson_hat = 0;
+        let mut warped_blocks = 0;
+        let mut hollow_interior = 0;
+        for x in 80..96 {
+            for z in 96..112 {
+                for y in 1..127 {
+                    let here = at(x, y, z);
+                    if here == pumpkin_data::Block::NETHER_WART_BLOCK.id {
+                        crimson_hat += 1;
+                    }
+                    if here == pumpkin_data::Block::WARPED_WART_BLOCK.id
+                        || here == pumpkin_data::Block::WARPED_STEM.id
+                        || here == pumpkin_data::Block::WARPED_NYLIUM.id
+                    {
+                        warped_blocks += 1;
+                    }
+                    // A hollow hat has air enclosed on all four horizontal sides by hat
+                    // blocks at the same height. A solid painted box never does.
+                    if here == pumpkin_data::Block::AIR.id
+                        && x > 80
+                        && x < 95
+                        && z > 96
+                        && z < 111
+                        && at(x - 1, y, z) == pumpkin_data::Block::NETHER_WART_BLOCK.id
+                        && at(x + 1, y, z) == pumpkin_data::Block::NETHER_WART_BLOCK.id
+                        && at(x, y, z - 1) == pumpkin_data::Block::NETHER_WART_BLOCK.id
+                        && at(x, y, z + 1) == pumpkin_data::Block::NETHER_WART_BLOCK.id
+                    {
+                        hollow_interior += 1;
+                    }
+                }
+            }
+        }
+
+        assert!(
+            crimson_hat > 0,
+            "reference chunk contains no huge fungus hat blocks to verify"
+        );
+        assert_eq!(
+            warped_blocks, 0,
+            "a crimson forest chunk must not contain warped fungus blocks: the configured \
+             feature selects the variant, it is not rolled per placement"
+        );
+        assert!(
+            hollow_interior > 0,
+            "huge fungus hats must be hollow shells, not solid boxes of hat block"
+        );
+    }
 }
