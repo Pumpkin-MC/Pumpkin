@@ -461,6 +461,7 @@ pub fn build() -> TokenStream {
     let mut structure_set_const_defs = TokenStream::new();
     let mut structure_set_lookup_arms = TokenStream::new();
     let mut all_structure_set_idents = Vec::new();
+    let mut all_structure_set_names = Vec::new();
 
     for (name, structure_set) in &structure_sets_json {
         let stripped_name = name.strip_prefix("minecraft:").unwrap_or(name);
@@ -476,6 +477,7 @@ pub fn build() -> TokenStream {
         ));
 
         all_structure_set_idents.push(const_name);
+        all_structure_set_names.push(stripped_name.to_string());
     }
 
     let structure_all_names_tokens: Vec<TokenStream> = structure_all_names
@@ -716,6 +718,11 @@ pub fn build() -> TokenStream {
 
             pub const ALL: &'static [StructureSet] = &[
                 #(Self::#all_structure_set_idents),*
+            ];
+
+            /// The registry names of all structure sets, in the same order as [`Self::ALL`].
+            pub const NAMES: &'static [&'static str] = &[
+                #(#all_structure_set_names),*
             ];
 
             #[must_use]
