@@ -7,9 +7,12 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::vector3::Vector3;
 
@@ -104,7 +107,7 @@ impl SulfurCubeEntity {
     pub fn set_size(&self, size: i32, update_health: bool) {
         let actual_size = size.clamp(1, 127);
         let entity = &self.entity.living_entity.entity;
-        entity.data.store(actual_size, Ordering::Relaxed);
+        let size_changed = entity.data.swap(actual_size, Ordering::Relaxed) != actual_size;
 
         let living_entity = &self.entity.living_entity;
         living_entity.set_attribute_base(
@@ -136,6 +139,26 @@ impl SulfurCubeEntity {
         if update_health && actual_size == 1 && !self.is_baby() {
             self.set_baby(true);
         }
+
+        // Vanilla `AbstractCubeMob.setSize` writes the size into synched entity data, which
+        // only broadcasts when the value actually changed. Without this the client keeps the
+        // default size of 1 and renders/collides at the wrong scale.
+        if size_changed {
+            self.send_size_meta_data(actual_size);
+        }
+    }
+
+    /// Broadcasts the cube-scoped size tracker. Split out so `mob_init_data_tracker` can
+    /// publish the size at spawn time, when `set_size` ran before the entity had any viewers.
+    fn send_size_meta_data(&self, size: i32) {
+        self.entity.living_entity.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::CUBE_SIZE,
+                MetaDataType::INTEGER,
+                VarInt(size),
+            )],
+            None,
+        );
     }
 
     pub fn get_size(&self) -> i32 {
@@ -365,6 +388,25 @@ impl NBTStorage for SulfurCubeEntity {
 impl Mob for SulfurCubeEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity
+    }
+
+    /// `set_size` runs from `new` and from NBT load, both before the entity has any viewers,
+    /// so its broadcast reaches nobody. This is the first point at which nearby players
+    /// exist. Chains the baby flag from `Mob`'s default so overriding does not drop it.
+    fn mob_init_data_tracker(&self) -> crate::entity::EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            self.send_size_meta_data(self.get_size());
+            if self.is_baby() {
+                self.entity.living_entity.entity.send_meta_data(
+                    &[Metadata::new(
+                        TrackedData::BABY_ID,
+                        MetaDataType::BOOLEAN,
+                        true,
+                    )],
+                    None,
+                );
+            }
+        })
     }
 
     fn mob_tick<'a>(

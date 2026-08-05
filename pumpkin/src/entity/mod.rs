@@ -4113,6 +4113,22 @@ mod tracked_data_bounds_tests {
                 ("PEEK_ID", TrackedData::PEEK_ID.v26_2),
             ],
         ),
+        // AbstractCubeMob extends AgeableMob on 26.2, so Size sits at 18 and slime/magma cube
+        // have 19 slots. Sulfur cube adds Max fuse (19) and From bucket (20), so 21.
+        ("slime", 19, &[("CUBE_SIZE", TrackedData::CUBE_SIZE.v26_2)]),
+        (
+            "magma_cube",
+            19,
+            &[("CUBE_SIZE", TrackedData::CUBE_SIZE.v26_2)],
+        ),
+        (
+            "sulfur_cube",
+            21,
+            &[
+                ("CUBE_SIZE", TrackedData::CUBE_SIZE.v26_2),
+                ("BABY_ID", TrackedData::BABY_ID.v26_2),
+            ],
+        ),
         (
             "guardian",
             18,
@@ -4202,5 +4218,18 @@ mod tracked_data_bounds_tests {
             TrackedData::SALMON_VARIANT.v26_2,
             TrackedData::VARIANT.v26_2
         );
+    }
+
+    /// The flattened 26.x dumps collapse slime's and phantom's `DATA_ID_SIZE` into one
+    /// `ID_SIZE` key. Per the 26.2 tables on
+    /// <https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata>, `AbstractCubeMob`
+    /// extends `AgeableMob` (16-17) so Size is 18, while `Phantom` extends `Mob` and keeps
+    /// Size at 16 with only 17 slots. `CUBE_SIZE` is the cube-scoped key; a phantom sender
+    /// must never reuse it.
+    #[test]
+    fn cube_size_is_the_ageable_scoped_index() {
+        assert_eq!(TrackedData::CUBE_SIZE.v26_2, 18);
+        assert_eq!(TrackedData::CUBE_SIZE.v26_1, 16);
+        assert_eq!(TrackedData::CUBE_SIZE.v1_21_4, 16);
     }
 }

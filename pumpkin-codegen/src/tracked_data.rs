@@ -60,6 +60,26 @@ pub(crate) fn build() -> TokenStream {
             parsed.insert("SALMON_VARIANT".to_string(), 17);
         }
 
+        // Third instance of the same flattening problem, this time for the size tracker.
+        // Pre-26 dumps carry two distinct keys, SLIME_SIZE and SIZE, both 16. In 26.x
+        // mappings both entity families renamed the field to DATA_ID_SIZE, so the flattened
+        // table keeps a single ID_SIZE entry - but on 26.2 the two indices differ. Per the
+        // 26.2 tables on <https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata>,
+        // AbstractCubeMob (slime, magma cube, sulfur cube) extends AgeableMob, whose 16-17
+        // push Size to 18, while Phantom still extends Mob directly and keeps Size at 16.
+        // The flattened ID_SIZE resolves to 18: correct for the cube family, one past the
+        // end of phantom's 17-slot data array. Publish a cube-scoped key so cube senders
+        // cannot pick up a phantom index or vice versa. A phantom size sender must NOT use
+        // ID_SIZE; it needs its own scoped key at 16.
+        let cube_size = match ver {
+            JavaMinecraftVersion::V_26_1 => Some(16),
+            JavaMinecraftVersion::V_26_2 => Some(18),
+            _ => parsed.get("SLIME_SIZE").copied(),
+        };
+        if let Some(id) = cube_size {
+            parsed.insert("CUBE_SIZE".to_owned(), id);
+        }
+
         versions.insert(ver, parsed);
     }
 
