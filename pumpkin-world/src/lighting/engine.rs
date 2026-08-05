@@ -115,10 +115,13 @@ impl<P: LightProvider> LightPropagator<P> {
 
                 let neighbor_pos = pos.offset(dir.to_offset());
 
-                // Skip if already visited (critical early-exit optimization)
-                if self.visited.contains(&neighbor_pos) {
-                    continue;
-                }
+                // Note: there is deliberately no `visited` check here. Gating on
+                // it before comparing levels froze every cell the seeding pass
+                // had enqueued at its seeded value, so a brighter neighbour
+                // could never raise it — visible as sky light failing to enter
+                // water at a shoreline, where cells sat at 1 next to open air at
+                // 15. The level comparison below is what keeps this terminating:
+                // light only ever increases, and it is bounded by 15.
 
                 // Skip neighbor if it's outside world bounds
                 if neighbor_pos.0.y < min_y || neighbor_pos.0.y >= max_y {
@@ -142,8 +145,11 @@ impl<P: LightProvider> LightPropagator<P> {
                 if new_level > neighbor_light {
                     P::set_light(cache, neighbor_pos, new_level);
 
-                    // Add to propagation queue if bright enough
-                    if new_level > 1 && self.visited.insert(neighbor_pos) {
+                    // Add to propagation queue if bright enough. Nothing reads
+                    // `visited` during propagation any more, so don't pay for
+                    // the insert; the seeding passes and the runtime path keep
+                    // using the set to avoid enqueuing the same origin twice.
+                    if new_level > 1 {
                         self.queue.push_back(PropagationEntry {
                             pos: neighbor_pos,
                             skip_direction: Some(dir.opposite()),
