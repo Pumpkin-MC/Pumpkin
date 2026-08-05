@@ -63,6 +63,14 @@ pub fn has_global_gpu() -> bool {
     GLOBAL_GPU.get().is_some()
 }
 
+/// Returns a reference to the global GPU context, if initialised.
+/// Used by other GPU-accelerated modules (surface, carver) that share the
+/// same wgpu device.
+#[must_use]
+pub fn get_global_gpu() -> Option<&'static GpuNoiseContext> {
+    GLOBAL_GPU.get()
+}
+
 /// GPU sky-light scan, using the global GPU context.
 ///
 /// Returns `Some(Vec<u8>)` with one u8 per block position (flattened

@@ -942,6 +942,18 @@ impl ProtoChunk {
             &terrain_cache.secondary_noise,
             settings.sea_level,
         );
+
+        // --- GPU fast path: pre-compute surface & secondary noise in batch ---
+        if let Some(gpu_fn) = crate::generation::surface::get_surface_noise_gpu()
+            && let Some(batch) = gpu_fn(
+                &terrain_cache.surface_noise,
+                &terrain_cache.secondary_noise,
+                start_x,
+                start_z,
+            )
+        {
+            context.set_noise_batch(batch.surface_noise, batch.secondary_noise, start_x, start_z);
+        }
         for local_x in 0..16 {
             for local_z in 0..16 {
                 let x = start_x + local_x;

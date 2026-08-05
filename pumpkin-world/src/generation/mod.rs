@@ -15,7 +15,7 @@ pub mod proto_chunk;
 pub mod proto_chunk_test;
 pub mod rule;
 pub mod structure;
-mod surface;
+pub mod surface;
 
 use generator::{GeneratorInit, VanillaGenerator};
 use pumpkin_data::dimension::Dimension;

@@ -32,6 +32,7 @@ pub struct SurfaceTerrainBuilder {
 }
 
 impl SurfaceTerrainBuilder {
+    #[must_use]
     pub fn new(random_deriver: &XoroshiroSplitter) -> Self {
         Self {
             terracotta_bands: Self::create_terracotta_bands(
@@ -276,6 +277,7 @@ impl SurfaceTerrainBuilder {
         }
     }
 
+    #[must_use]
     pub fn get_terracotta_block(&self, x: i32, y: i32, z: i32) -> &'static BlockState {
         let offset = (self
             .terracotta_bands_offset_noise

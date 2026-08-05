@@ -45,6 +45,7 @@ impl BadLandsMaterialRule {
 pub struct BlockMaterialRule;
 
 impl BlockMaterialRule {
+    #[must_use]
     pub const fn try_apply(state: &'static BlockState) -> &'static BlockState {
         state
     }

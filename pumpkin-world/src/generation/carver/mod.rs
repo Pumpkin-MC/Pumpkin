@@ -15,6 +15,11 @@ use crate::generation::surface::terrain::SurfaceTerrainBuilder;
 use crate::generation::surface::{MaterialRuleContext, steep_material_condition};
 use pumpkin_data::block_state::BlockState;
 use pumpkin_data::carver::{CANYON, CAVE, CAVE_EXTRA_UNDERGROUND, NETHER_CAVE};
+
+/// Pre-computed surface noise batch for the carving region.
+/// `(surface_noise, secondary_noise, start_x, start_z)` — indexed by world-space
+/// (x,z) coordinates relative to `start_x`/`start_z`.
+type CarverNoiseBatch = (std::sync::Arc<[f64]>, std::sync::Arc<[f64]>, i32, i32);
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_data::chunk_gen_settings::MaterialRule;
 use pumpkin_data::dimension::Dimension;
@@ -66,6 +71,10 @@ pub struct CarvingContext<'a> {
     pub surface_rule: &'a MaterialRule,
     pub surface_height_sampler: SurfaceHeightEstimateSampler<'a>,
     pub carver_aquifer: Option<CarverAquiferSampler<'a>>,
+    /// Pre-computed surface noise batch (GPU path), or `None` (CPU path).
+    /// Covers the carving region columns; indexed by world-space (x,z) relative
+    /// to the carving region start.
+    pub surface_noise_batch: Option<CarverNoiseBatch>,
 }
 
 pub struct CarveRun<'a, 'b> {
@@ -93,6 +102,17 @@ impl CarvingContext<'_> {
             self.secondary_noise,
             self.sea_level,
         );
+        // Feed pre-computed GPU noise batch into the context (O(1) Arc clone).
+        if let Some((ref surface_batch, ref secondary_batch, start_x, start_z)) =
+            self.surface_noise_batch
+        {
+            context.set_noise_batch(
+                std::sync::Arc::clone(surface_batch),
+                std::sync::Arc::clone(secondary_batch),
+                start_x,
+                start_z,
+            );
+        }
         context.init_horizontal(x, z);
         context.biome = chunk.get_terrain_gen_biome(x, y, z);
         context.set_steep_material_condition(steep);
@@ -104,6 +124,27 @@ impl CarvingContext<'_> {
             &mut context,
             &mut self.surface_height_sampler,
         )
+    }
+}
+
+/// Pre-compute surface noise values for the carving region via the GPU callback,
+/// storing them in the `CarvingContext` so `top_material` calls can skip CPU sampling.
+fn precompute_carver_noise_batch(
+    context: &mut CarvingContext<'_>,
+    generator: &VanillaGenerator,
+    start_x: i32,
+    start_z: i32,
+) {
+    if let Some(gpu_fn) = crate::generation::surface::get_surface_noise_gpu()
+        && let Some(batch) = gpu_fn(
+            &generator.terrain_cache.surface_noise,
+            &generator.terrain_cache.secondary_noise,
+            start_x,
+            start_z,
+        )
+    {
+        context.surface_noise_batch =
+            Some((batch.surface_noise, batch.secondary_noise, start_x, start_z));
     }
 }
 
@@ -167,9 +208,13 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
         terrain_builder: &generator.terrain_cache.terrain_builder,
         sea_level: generator.settings.sea_level,
         surface_rule: &generator.settings.surface_rule,
+        surface_noise_batch: None,
         surface_height_sampler,
         carver_aquifer,
     };
+
+    // --- GPU fast path: pre-compute surface noise for the center chunk columns ---
+    precompute_carver_noise_batch(&mut context, generator, start_x, start_z);
 
     let mut run = CarveRun {
         ctx: &mut context,
@@ -413,6 +458,7 @@ fn with_carve_run_options<F>(
         surface_rule: surface_rule.unwrap_or(&generator.settings.surface_rule),
         surface_height_sampler,
         carver_aquifer,
+        surface_noise_batch: None,
     };
     let mut run = CarveRun {
         ctx: &mut context,

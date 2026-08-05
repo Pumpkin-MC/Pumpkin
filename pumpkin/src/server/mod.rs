@@ -273,6 +273,13 @@ impl Server {
                             pumpkin_gpu::world::light::sky_light_gpu_callback,
                         );
                     }
+                    // Register the GPU surface-noise callback for batch column noise
+                    // pre-computation in the surface stage.
+                    if gpu_config.surface_acceleration {
+                        pumpkin_world::generation::surface::register_surface_noise_gpu(
+                            pumpkin_gpu::world::surface::surface_noise_gpu_fn(),
+                        );
+                    }
                     info!(
                         "GPU acceleration enabled: {} acceleration, {} acceleration",
                         if gpu_config.noise_acceleration {

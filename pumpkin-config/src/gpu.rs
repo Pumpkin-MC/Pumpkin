@@ -56,6 +56,16 @@ pub struct GpuConfig {
     /// Default: `true`
     pub light_acceleration: bool,
 
+    /// Accelerate surface-stage noise pre-computation on the GPU.
+    ///
+    /// The surface stage calls `DoublePerlinNoiseSampler` 512 times per chunk
+    /// (once for `run_depth` and once for `secondary_depth` per column).  This
+    /// flag enables batch dispatch of those calls to the GPU, eliminating
+    /// per-column CPU sampler overhead.
+    ///
+    /// Default: `true`
+    pub surface_acceleration: bool,
+
     /// Force a specific graphics backend rather than letting wgpu auto-detect.
     /// See [`GpuBackend`] for available choices.
     ///
@@ -70,6 +80,7 @@ impl Default for GpuConfig {
             device: GpuDeviceSelection::default(),
             noise_acceleration: true,
             light_acceleration: true,
+            surface_acceleration: true,
             backend: GpuBackend::default(),
         }
     }

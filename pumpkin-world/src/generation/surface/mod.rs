@@ -26,6 +26,58 @@ use super::{
     },
 };
 
+// ---------------------------------------------------------------------------
+// GPU acceleration hook — surface noise pre-computation
+// ---------------------------------------------------------------------------
+//
+// pumpkin-world does NOT depend on pumpkin-gpu. Instead it exposes a
+// function-pointer slot that the main server crate (pumpkin) can fill at
+// startup. When a GPU callback is registered, the surface stage pre-computes
+// per-column noise values in batch instead of calling CPU samplers.
+use std::sync::OnceLock;
+
+/// Pre-computed noise values for surface/material rule evaluation.
+///
+/// `surface_noise` values correspond to `surface_noise.sample(x, 0, z)` for each
+/// column and are used for `run_depth` computation. `secondary_noise` values
+/// correspond to `secondary_noise.sample(x, 0, z)` for `secondary_depth`.
+pub struct SurfaceNoiseBatch {
+    /// `surface_noise.sample(x, 0, z)` per column (256 entries, row-major over 16×16).
+    pub surface_noise: std::sync::Arc<[f64]>,
+    /// `secondary_noise.sample(x, 0, z)` per column (256 entries, row-major over 16×16).
+    pub secondary_noise: std::sync::Arc<[f64]>,
+}
+
+/// Signature for GPU-accelerated surface noise pre-computation.
+///
+/// Arguments:
+/// - `surface_sampler`: the `DoublePerlinNoiseSampler` used for `run_depth`
+/// - `secondary_sampler`: the `DoublePerlinNoiseSampler` used for `secondary_depth`
+/// - `start_x`, `start_z`: world-space coordinates of the chunk's (0,0) column
+///
+/// Returns `Some(SurfaceNoiseBatch)` with 256 entries per array, or `None` when
+/// the GPU path is unavailable (caller falls back to CPU per-column sampling).
+pub type SurfaceNoiseGpuFn = fn(
+    surface_sampler: &DoublePerlinNoiseSampler,
+    secondary_sampler: &DoublePerlinNoiseSampler,
+    start_x: i32,
+    start_z: i32,
+) -> Option<SurfaceNoiseBatch>;
+
+static SURFACE_NOISE_GPU: OnceLock<SurfaceNoiseGpuFn> = OnceLock::new();
+
+/// Register a GPU surface-noise pre-computation function. Call once at server startup.
+/// Subsequent calls are no-ops.
+pub fn register_surface_noise_gpu(f: SurfaceNoiseGpuFn) {
+    let _ = SURFACE_NOISE_GPU.set(f);
+}
+
+/// Returns the registered GPU surface-noise function, if any.
+#[must_use]
+pub fn get_surface_noise_gpu() -> Option<SurfaceNoiseGpuFn> {
+    SURFACE_NOISE_GPU.get().copied()
+}
+
 pub mod rule;
 pub mod terrain;
 
@@ -53,9 +105,19 @@ pub struct MaterialRuleContext<'a> {
     pub terrain_builder: &'a SurfaceTerrainBuilder,
     pub sea_level: i32,
     steep_material_condition: Option<bool>,
+    /// Pre-computed surface noise batch (GPU path), or `None` (CPU path).
+    /// Indexed by local column: `noise_batch[lz * 16 + lx]`.
+    surface_noise_batch: Option<std::sync::Arc<[f64]>>,
+    /// Pre-computed secondary noise batch (GPU path), or `None` (CPU path).
+    secondary_noise_batch: Option<std::sync::Arc<[f64]>>,
+    /// Chunk start X in world coordinates (used for GPU batch indexing).
+    chunk_start_x: i32,
+    /// Chunk start Z in world coordinates (used for GPU batch indexing).
+    chunk_start_z: i32,
 }
 
 impl<'a> MaterialRuleContext<'a> {
+    #[must_use]
     pub const fn new(
         min_y: i8,
         height: u16,
@@ -90,13 +152,45 @@ impl<'a> MaterialRuleContext<'a> {
             stone_depth_above: 0,
             sea_level,
             steep_material_condition: None,
+            surface_noise_batch: None,
+            secondary_noise_batch: None,
+            chunk_start_x: 0,
+            chunk_start_z: 0,
         }
     }
 
+    /// Set the pre-computed GPU noise batch for this chunk.
+    /// Must be called before `init_horizontal` for any column.
+    pub fn set_noise_batch(
+        &mut self,
+        surface_batch: std::sync::Arc<[f64]>,
+        secondary_batch: std::sync::Arc<[f64]>,
+        chunk_start_x: i32,
+        chunk_start_z: i32,
+    ) {
+        self.surface_noise_batch = Some(surface_batch);
+        self.secondary_noise_batch = Some(secondary_batch);
+        self.chunk_start_x = chunk_start_x;
+        self.chunk_start_z = chunk_start_z;
+    }
+
     fn sample_run_depth(&self) -> i32 {
-        let noise =
-            self.surface_noise
-                .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64);
+        let noise = self.surface_noise_batch.as_ref().map_or_else(
+            || {
+                self.surface_noise
+                    .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64)
+            },
+            |batch| {
+                let lx = (self.block_pos_x - self.chunk_start_x) as usize;
+                let lz = (self.block_pos_z - self.chunk_start_z) as usize;
+                if lx < 16 && lz < 16 {
+                    batch[lz * 16 + lx]
+                } else {
+                    self.surface_noise
+                        .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64)
+                }
+            },
+        );
         (noise * 2.75
             + 3.0
             + self
@@ -129,9 +223,22 @@ impl<'a> MaterialRuleContext<'a> {
     pub fn get_secondary_depth(&mut self) -> f64 {
         if self.last_unique_horizontal_pos_value != self.unique_horizontal_pos_value {
             self.last_unique_horizontal_pos_value = self.unique_horizontal_pos_value;
-            self.secondary_depth =
+            self.secondary_depth = if let Some(ref batch) = self.secondary_noise_batch {
+                let lx = (self.block_pos_x - self.chunk_start_x) as usize;
+                let lz = (self.block_pos_z - self.chunk_start_z) as usize;
+                if lx < 16 && lz < 16 {
+                    batch[lz * 16 + lx]
+                } else {
+                    self.secondary_noise.sample(
+                        self.block_pos_x as f64,
+                        0.0,
+                        self.block_pos_z as f64,
+                    )
+                }
+            } else {
                 self.secondary_noise
-                    .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64);
+                    .sample(self.block_pos_x as f64, 0.0, self.block_pos_z as f64)
+            };
         }
         self.secondary_depth
     }
@@ -207,11 +314,13 @@ pub fn steep_material_condition(chunk: &ProtoChunk, block_x: i32, block_z: i32) 
 pub struct HoleMaterialCondition;
 
 impl HoleMaterialCondition {
+    #[must_use]
     pub const fn test(context: &MaterialRuleContext) -> bool {
         context.run_depth <= 0
     }
 }
 
+#[must_use]
 pub const fn test_above_y_material(
     condition: &AboveYMaterialCondition,
     context: &MaterialRuleContext,
@@ -296,6 +405,7 @@ pub fn estimate_surface_height(
 pub struct BiomeMaterialCondition;
 
 impl BiomeMaterialCondition {
+    #[must_use]
     pub fn test(biome_is: &[&'static Biome], context: &MaterialRuleContext) -> bool {
         biome_is.contains(&context.biome)
     }
@@ -341,6 +451,7 @@ pub fn test_stone_depth(
     stone_depth <= 1 + condition.offset + depth + depth_range
 }
 
+#[must_use]
 pub const fn test_water_material(
     condition: &WaterMaterialCondition,
     context: &MaterialRuleContext,
@@ -359,6 +470,7 @@ pub const fn test_water_material(
 
 // random_deriver: ThreadLocal<RefCell<LruCache<usize, RandomDeriver>>>,
 
+#[must_use]
 pub fn test_vertical_gradient(
     condition: &VerticalGradientMaterialCondition,
     context: &MaterialRuleContext,

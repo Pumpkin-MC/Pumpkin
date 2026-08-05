@@ -11,3 +11,4 @@ pub mod chunk;
 pub mod gpu;
 pub mod graph;
 pub mod light;
+pub mod surface;
