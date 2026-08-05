@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
@@ -5,9 +6,10 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage, NbtFuture,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, nearest_hostile_target::NearestHostileTargetGoal,
-        offer_flower::OfferFlowerGoal, revenge::RevengeGoal, wander_around::WanderAroundGoal,
+        defend_village_target::DefendVillageTargetGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        nearest_hostile_target::NearestHostileTargetGoal, offer_flower::OfferFlowerGoal,
+        revenge::RevengeGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -18,12 +20,22 @@ use pumpkin_nbt::compound::NbtCompound;
 /// Wiki: <https://minecraft.wiki/w/Iron_Golem>
 pub struct IronGolemEntity {
     pub mob_entity: MobEntity,
+    /// Vanilla `IronGolem.DATA_PLAYER_CREATED_ID`/`isPlayerCreated` (`IronGolem.java:287-291`,
+    /// persisted as `"PlayerCreated"` at line 147/154). Set by `CarvedPumpkinBlock` when a
+    /// player assembles a golem out of iron blocks; village-spawned golems (e.g.
+    /// `Villager::spawnGolemIfNeeded`) leave it `false`. Gates `DefendVillageTargetGoal` and
+    /// `canAttack` (`IronGolem.java:136-141`): a player-created golem never attacks players,
+    /// regardless of reputation.
+    pub player_created: AtomicBool,
 }
 
 impl IronGolemEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let iron_golem = Self { mob_entity };
+        let iron_golem = Self {
+            mob_entity,
+            player_created: AtomicBool::new(false),
+        };
         let mob_arc = Arc::new(iron_golem);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -43,7 +55,12 @@ impl IronGolemEntity {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // Vanilla `targetSelector.addGoal(1, new DefendVillageTargetGoal(this))`
+            // (`IronGolem.java:75`): attack a player any nearby villager holds reputation
+            // -100 or lower against. See `defend_village_target.rs` for full citation.
+            target_selector.add_goal(1, DefendVillageTargetGoal::new());
+            // Vanilla priority 2: `HurtByTargetGoal(this)`.
+            target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
             // Vanilla targets players through `NearestAttackableTargetGoal<>(..., this::isAngryAt)`,
             // so a golem only goes after a player it already holds a grudge against. We have no
             // per player anger state yet, so we leave players to `RevengeGoal` instead of
@@ -62,11 +79,22 @@ impl IronGolemEntity {
 
 impl NBTStorage for IronGolemEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        self.mob_entity.living_entity.write_nbt(nbt)
+        Box::pin(async move {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            // `IronGolem.java:147`.
+            nbt.put_bool("PlayerCreated", self.player_created.load(Ordering::Relaxed));
+        })
     }
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        self.mob_entity.living_entity.read_nbt_non_mut(nbt)
+        Box::pin(async move {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            // `IronGolem.java:154`: `getBooleanOr("PlayerCreated", false)`.
+            self.player_created.store(
+                nbt.get_bool("PlayerCreated").unwrap_or(false),
+                Ordering::Relaxed,
+            );
+        })
     }
 }
 

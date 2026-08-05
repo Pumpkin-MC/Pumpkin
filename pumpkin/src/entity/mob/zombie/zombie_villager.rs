@@ -18,7 +18,9 @@ use uuid::Uuid;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::passive::villager::VillagerEntity;
-use crate::entity::passive::villager::data::{VillagerData, VillagerProfession, villager_type_at};
+use crate::entity::passive::villager::data::{
+    GossipType, VillagerData, VillagerProfession, villager_type_at,
+};
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture};
 
@@ -145,9 +147,13 @@ impl ZombieVillagerEntity {
     ///
     /// Not ported: `dropPreservedEquipment` (no equipment kept -- `keepEquipment` is
     /// `false` in vanilla's own call), gossip/trade-offer carryover (only ever populated
-    /// by the villager-to-zombie-villager infection path, out of scope here), `refreshBrain`,
-    /// and the `CriteriaTriggers.CURED_ZOMBIE_VILLAGER` / reputation-event grant (no
-    /// per-player conversion-credit infrastructure to hook into cheaply).
+    /// by the villager-to-zombie-villager infection path, out of scope here), and
+    /// `refreshBrain`.
+    ///
+    /// The `ZOMBIE_VILLAGER_CURED` reputation event (`ZombieVillager.java:262`,
+    /// `Villager::onReputationEventFrom` at `Villager.java:855-858`) *is* ported below --
+    /// `conversion_starter` already tracks the curing player's UUID for the advancement
+    /// trigger, so it doubles as the reputation-event source.
     async fn finish_conversion(&self) {
         let old_entity = self.get_entity();
         let world = old_entity.world.load().clone();
@@ -207,16 +213,18 @@ impl ZombieVillagerEntity {
             })
             .await;
 
-        world.spawn_entity(villager).await;
+        world.spawn_entity(villager.clone()).await;
         world.sync_world_event(
             WorldEvent::SoundZombieConverted, // ZombieVillager.java:268, levelEvent 1027
             self.get_entity().block_pos.load(),
             0,
         );
 
-        // ZombieVillager.java:259-262: the advancement fires here, when conversion actually
-        // completes, for whichever player started it (looked up by uuid, may no longer be
-        // online) -- not immediately on the golden-apple click.
+        // ZombieVillager.java:259-262: both the advancement trigger and the
+        // `ZOMBIE_VILLAGER_CURED` reputation event (`Villager::onReputationEventFrom`,
+        // `Villager.java:855-858`) only fire `if (player instanceof ServerPlayer)` -- i.e. the
+        // curing player must still be online, not merely have started the conversion. Neither
+        // fires immediately on the golden-apple click.
         if let Some(starter) = *self.conversion_starter.lock().await
             && let Some(player) = world.get_player_by_uuid(starter)
         {
@@ -225,6 +233,10 @@ impl ZombieVillagerEntity {
                     crate::entity::player::advancement::trigger::AdvancementTrigger::CuredZombieVillager,
                 )
                 .await;
+
+            let mut gossips = villager.gossips.lock().await;
+            gossips.add(starter, GossipType::MajorPositive, 20);
+            gossips.add(starter, GossipType::MinorPositive, 25);
         }
 
         old_entity.remove().await;
