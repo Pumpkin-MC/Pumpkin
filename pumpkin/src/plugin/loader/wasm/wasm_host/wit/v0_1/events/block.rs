@@ -15,7 +15,9 @@ use crate::plugin::{
             },
             pumpkin::plugin::event::{
                 BlockBreakEventData, BlockBurnEventData, BlockCanBuildEventData,
-                BlockGrowEventData, BlockPlaceEventData, BlockRedstoneEventData, Event,
+                BlockDamageEventData, BlockFadeEventData, BlockFormEventData, BlockFromToEventData,
+                BlockGrowEventData, BlockIgniteEventData, BlockPlaceEventData,
+                BlockRedstoneEventData, Event,
             },
         },
     },
@@ -192,6 +194,117 @@ impl ToFromWasmEvent for BlockPlaceEvent {
                 block_placed_against: from_wasm_block_name(&data.block_placed_against),
                 block_position: from_wasm_block_position(data.block_pos),
                 can_build: data.can_build,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for crate::plugin::api::events::block::block_damage::BlockDamageEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::BlockDamageEvent(BlockDamageEventData {
+            player,
+            block_pos: to_wasm_block_position(self.block_pos),
+            insta_break: self.insta_break,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockDamageEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                block: &pumpkin_data::Block::AIR,
+                block_pos: from_wasm_block_position(data.block_pos),
+                insta_break: data.insta_break,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for crate::plugin::api::events::block::block_ignite::BlockIgniteEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::BlockIgniteEvent(BlockIgniteEventData {
+            block_pos: to_wasm_block_position(self.block_pos),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockIgniteEvent(data) => Self {
+                block_pos: from_wasm_block_position(data.block_pos),
+                igniting_block: &pumpkin_data::Block::FIRE,
+                player: None,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for crate::plugin::api::events::block::block_from_to::BlockFromToEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::BlockFromToEvent(BlockFromToEventData {
+            from_pos: to_wasm_block_position(self.from_pos),
+            to_pos: to_wasm_block_position(self.to_pos),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockFromToEvent(data) => Self {
+                from_pos: from_wasm_block_position(data.from_pos),
+                to_pos: from_wasm_block_position(data.to_pos),
+                block: &pumpkin_data::Block::WATER,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for crate::plugin::api::events::block::block_form::BlockFormEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::BlockFormEvent(BlockFormEventData {
+            block_pos: to_wasm_block_position(self.block_pos),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockFormEvent(data) => Self {
+                block_pos: from_wasm_block_position(data.block_pos),
+                block: &pumpkin_data::Block::SNOW,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for crate::plugin::api::events::block::block_fade::BlockFadeEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::BlockFadeEvent(BlockFadeEventData {
+            block_pos: to_wasm_block_position(self.block_pos),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockFadeEvent(data) => Self {
+                block_pos: from_wasm_block_position(data.block_pos),
+                block: &pumpkin_data::Block::ICE,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

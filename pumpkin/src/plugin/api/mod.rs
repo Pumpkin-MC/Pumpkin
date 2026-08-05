@@ -1,11 +1,15 @@
 pub mod context;
 pub mod events;
 pub mod gui;
+pub mod tab_list;
+pub mod title;
 
 use std::{pin::Pin, sync::Arc};
 
 pub use context::*;
 pub use events::*;
+pub use tab_list::*;
+pub use title::*;
 
 /// Struct representing metadata for a plugin.
 ///

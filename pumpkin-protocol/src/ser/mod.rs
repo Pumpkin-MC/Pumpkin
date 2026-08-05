@@ -254,7 +254,7 @@ macro_rules! get_number_be {
         fn $name(&mut self) -> Result<$type, ReadingError> {
             let mut buf = [0u8; std::mem::size_of::<$type>()];
             self.read_exact(&mut buf)
-                .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
+                .map_err(|err| ReadingError::Incomplete(err.to_string().into()))?;
             Ok(<$type>::from_be_bytes(buf))
         }
     };
@@ -380,9 +380,7 @@ pub fn read_remaining_bytes(read: &mut impl Read, bound: usize) -> Result<Box<[u
         .map_err(|err| ReadingError::Incomplete(err.to_string()))?;
 
     if return_buf.len() > bound {
-        return Err(ReadingError::TooLarge(
-            "Read remaining too long".to_string(),
-        ));
+        return Err(ReadingError::TooLarge("Read remaining too long".into()));
     }
 
     Ok(return_buf.into_boxed_slice())
@@ -529,11 +527,20 @@ impl<W: Write> NetworkWriteExt for W {
         bit_set: FixedBitSet,
     ) -> Result<(), WritingError> {
         let new_length = bits.div_ceil(8);
-        let mut new_vec = vec![0u8; new_length];
         let bytes_to_copy = std::cmp::min(bit_set.len(), new_length);
 
-        new_vec[..bytes_to_copy].copy_from_slice(&bit_set[..bytes_to_copy]);
-        self.write_slice(&new_vec)?;
+        self.write_slice(&bit_set[..bytes_to_copy])?;
+
+        if new_length > bytes_to_copy {
+            const ZEROES: [u8; 64] = [0u8; 64];
+            let padding = new_length - bytes_to_copy;
+            let mut remaining = padding;
+            while remaining > 0 {
+                let chunk = remaining.min(ZEROES.len());
+                self.write_slice(&ZEROES[..chunk])?;
+                remaining -= chunk;
+            }
+        }
 
         Ok(())
     }
@@ -596,7 +603,7 @@ impl<W: Write> NetworkWriteExt for W {
         list: &[G],
         writer: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
     ) -> Result<(), WritingError> {
-        self.write_var_int(&(list.len() as i32).into())?;
+        self.write_var_int(&VarInt(list.len() as i32))?;
 
         for data in list {
             writer(self, data)?;

@@ -51,6 +51,17 @@ impl GoalSelector {
         }
     }
 
+    pub fn clear(&mut self) -> Vec<PrioritizedGoal> {
+        let mut running = Vec::new();
+        for goal in self.goals.drain(..) {
+            if goal.running {
+                running.push(goal);
+            }
+        }
+        self.goals_by_control = [usize::MAX; 4];
+        running
+    }
+
     fn uses_any(prioritized_goal: &PrioritizedGoal, controls: Controls) -> bool {
         let goal_controls = prioritized_goal.controls();
         for control in Controls::ITER {
