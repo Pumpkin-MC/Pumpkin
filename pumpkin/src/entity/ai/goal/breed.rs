@@ -101,6 +101,7 @@ impl BreedGoal {
             .store(6000, std::sync::atomic::Ordering::Relaxed);
 
         mate.set_breeding_cooldown(6000);
+        mob.on_bred(mate);
 
         let parent_pos = entity.pos.load();
         if let Some(baby) = mob.create_offspring(mate, &world).await {
