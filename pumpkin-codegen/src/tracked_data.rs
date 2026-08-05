@@ -49,6 +49,15 @@ pub(crate) fn build() -> TokenStream {
             JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2
         ) {
             parsed.insert("SPIDER_FLAGS".to_string(), 16);
+            // Same flattening problem for salmon. Mojang's salmon tracker is DATA_TYPE,
+            // but the generic DATA_VARIANT key resolves to 18 - the first index of the
+            // ageable-mob chain, correct for chicken/frog and one past the end of salmon's
+            // data array. Salmon extends AbstractFish (FROM_BUCKET = 16 in every dump), so
+            // salmon's own first field is 17 and its array has 18 slots; sending 18 is an
+            // ArrayIndexOutOfBoundsException in SynchedEntityData.assignValues. Older dumps
+            // carry no salmon-scoped key, so those versions resolve to 255 and the field is
+            // skipped rather than guessed.
+            parsed.insert("SALMON_VARIANT".to_string(), 17);
         }
 
         versions.insert(ver, parsed);

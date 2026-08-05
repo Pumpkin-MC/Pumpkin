@@ -3991,3 +3991,216 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod tracked_data_bounds_tests {
+    use pumpkin_data::tracked_data::TrackedData;
+
+    /// Every tracked-data index this server sends must be inside the receiving entity's
+    /// client-side data array, otherwise `SynchedEntityData.assignValues` throws
+    /// `ArrayIndexOutOfBoundsException` and the client hard-disconnects.
+    ///
+    /// Slot counts are the 26.2 tables on
+    /// <https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata>: Entity 0-7,
+    /// `LivingEntity` 8-14, `Mob` 15, `AgeableMob` 16-17, `AbstractFish` 16, plus each entity's
+    /// own fields. The count is "highest valid index + 1".
+    /// (entity name, client-side slot count, sent [(constant name, 26.2 index)]).
+    type EntitySlots = (&'static str, u8, &'static [(&'static str, u8)]);
+
+    const ENTITY_SLOT_COUNTS: &[EntitySlots] = &[
+        (
+            "salmon",
+            18,
+            &[("SALMON_VARIANT", TrackedData::SALMON_VARIANT.v26_2)],
+        ),
+        (
+            "pufferfish",
+            18,
+            &[("PUFF_STATE", TrackedData::PUFF_STATE.v26_2)],
+        ),
+        (
+            "tropical_fish",
+            18,
+            &[("ID_TYPE_VARIANT", TrackedData::ID_TYPE_VARIANT.v26_2)],
+        ),
+        (
+            "glow_squid",
+            19,
+            &[(
+                "DARK_TICKS_REMAINING",
+                TrackedData::DARK_TICKS_REMAINING.v26_2,
+            )],
+        ),
+        (
+            "dolphin",
+            20,
+            &[
+                ("GOT_FISH", TrackedData::GOT_FISH.v26_2),
+                ("MOISTNESS_LEVEL", TrackedData::MOISTNESS_LEVEL.v26_2),
+            ],
+        ),
+        ("sheep", 19, &[("WOOL_ID", TrackedData::WOOL_ID.v26_2)]),
+        ("fox", 22, &[("TYPE_ID", TrackedData::TYPE_ID.v26_2)]),
+        (
+            "turtle",
+            20,
+            &[
+                ("HAS_EGG", TrackedData::HAS_EGG.v26_2),
+                ("LAYING_EGG", TrackedData::LAYING_EGG.v26_2),
+            ],
+        ),
+        ("chicken", 20, &[("VARIANT", TrackedData::VARIANT.v26_2)]),
+        (
+            "frog",
+            20,
+            &[
+                ("VARIANT", TrackedData::VARIANT.v26_2),
+                ("TONGUE_TARGET_ID", TrackedData::TONGUE_TARGET_ID.v26_2),
+            ],
+        ),
+        ("camel", 21, &[("DASH", TrackedData::DASH.v26_2)]),
+        (
+            "llama",
+            22,
+            &[
+                ("STRENGTH_ID", TrackedData::STRENGTH_ID.v26_2),
+                ("VARIANT_ID", TrackedData::VARIANT_ID.v26_2),
+            ],
+        ),
+        (
+            "wolf",
+            25,
+            &[
+                ("INTERESTED_ID", TrackedData::INTERESTED_ID.v26_2),
+                ("COLLAR_COLOR", TrackedData::COLLAR_COLOR.v26_2),
+                ("WOLF_VARIANT_ID", TrackedData::WOLF_VARIANT_ID.v26_2),
+            ],
+        ),
+        (
+            "cat",
+            25,
+            &[("COLLAR_COLOR", TrackedData::COLLAR_COLOR.v26_2)],
+        ),
+        (
+            "horse",
+            19,
+            &[("ID_TYPE_VARIANT", TrackedData::ID_TYPE_VARIANT.v26_2)],
+        ),
+        (
+            "villager",
+            21,
+            &[("VILLAGER_DATA", TrackedData::VILLAGER_DATA.v26_2)],
+        ),
+        (
+            "creeper",
+            19,
+            &[("IS_IGNITED", TrackedData::IS_IGNITED.v26_2)],
+        ),
+        (
+            "enderman",
+            19,
+            &[
+                ("CARRY_STATE", TrackedData::CARRY_STATE.v26_2),
+                ("CREEPY", TrackedData::CREEPY.v26_2),
+                ("STARED_AT", TrackedData::STARED_AT.v26_2),
+            ],
+        ),
+        (
+            "shulker",
+            19,
+            &[
+                ("ATTACH_FACE_ID", TrackedData::ATTACH_FACE_ID.v26_2),
+                ("PEEK_ID", TrackedData::PEEK_ID.v26_2),
+            ],
+        ),
+        (
+            "guardian",
+            18,
+            &[("ID_ATTACK_TARGET", TrackedData::ID_ATTACK_TARGET.v26_2)],
+        ),
+        (
+            "pillager",
+            18,
+            &[(
+                "IS_CHARGING_CROSSBOW",
+                TrackedData::IS_CHARGING_CROSSBOW.v26_2,
+            )],
+        ),
+        ("bogged", 17, &[("SHEARED", TrackedData::SHEARED.v26_2)]),
+        (
+            "spider",
+            17,
+            &[("SPIDER_FLAGS", TrackedData::SPIDER_FLAGS.v26_2)],
+        ),
+        ("zoglin", 17, &[("BABY_ID", TrackedData::BABY_ID.v26_2)]),
+        (
+            "mob (base)",
+            16,
+            &[("MOB_FLAGS_ID", TrackedData::MOB_FLAGS_ID.v26_2)],
+        ),
+        (
+            "living entity (base)",
+            15,
+            &[
+                (
+                    "LIVING_ENTITY_FLAGS",
+                    TrackedData::LIVING_ENTITY_FLAGS.v26_2,
+                ),
+                ("HEALTH_ID", TrackedData::HEALTH_ID.v26_2),
+                ("SLEEPING_POS_ID", TrackedData::SLEEPING_POS_ID.v26_2),
+            ],
+        ),
+        (
+            "entity (base)",
+            8,
+            &[
+                ("SHARED_FLAGS_ID", TrackedData::SHARED_FLAGS_ID.v26_2),
+                ("AIR_SUPPLY_ID", TrackedData::AIR_SUPPLY_ID.v26_2),
+                ("CUSTOM_NAME", TrackedData::CUSTOM_NAME.v26_2),
+                (
+                    "CUSTOM_NAME_VISIBLE",
+                    TrackedData::CUSTOM_NAME_VISIBLE.v26_2,
+                ),
+                ("POSE", TrackedData::POSE.v26_2),
+                ("TICKS_FROZEN", TrackedData::TICKS_FROZEN.v26_2),
+            ],
+        ),
+    ];
+
+    /// 255 is the terminator byte and is treated as "field not present on this version"
+    /// by `Metadata::write`, which skips it; it is not an index.
+    const NOT_PRESENT: u8 = 255;
+
+    #[test]
+    fn sent_tracked_data_indices_are_within_entity_slot_counts() {
+        for (entity, slots, fields) in ENTITY_SLOT_COUNTS {
+            for (name, index) in *fields {
+                if *index == NOT_PRESENT {
+                    continue;
+                }
+                assert!(
+                    index < slots,
+                    "{entity}: TrackedData::{name} resolves to index {index} on 26.2 but the \
+                     client data array only has {slots} slots (valid 0..={})",
+                    slots - 1
+                );
+            }
+        }
+    }
+
+    /// Regression test for the 26.2 client crash
+    /// `ArrayIndexOutOfBoundsException: Index 18 out of bounds for length 18` in
+    /// `SynchedEntityData.assignValues`, triggered by salmon metadata. Salmon extends
+    /// `AbstractFish`, whose `FROM_BUCKET` is 16, so salmon's own tracker is 17 - not the
+    /// flattened `DATA_VARIANT` key's 18, which belongs to the ageable-mob chain.
+    #[test]
+    fn salmon_variant_is_the_fish_scoped_index() {
+        assert_eq!(TrackedData::SALMON_VARIANT.v26_2, 17);
+        assert_eq!(TrackedData::SALMON_VARIANT.v26_1, 17);
+        assert_eq!(TrackedData::FROM_BUCKET.v26_2, 16);
+        assert_ne!(
+            TrackedData::SALMON_VARIANT.v26_2,
+            TrackedData::VARIANT.v26_2
+        );
+    }
+}
