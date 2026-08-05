@@ -106,6 +106,23 @@ pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     let y = (pos.0.y & 15) as usize;
     let z = (pos.0.z & 15) as usize;
 
+    // The out-of-range answers below are deliberately asymmetric with
+    // `get_block_light`, which returns 0 in both directions. This is not an
+    // oversight:
+    //
+    // - Below the world (`get_section_y` returned `None`) there is no sky, so 0.
+    // - Above the stored sections there is nothing between the query and the
+    //   sky, so 15. That is the open-sky answer, not a "don't know" fallback.
+    //   For `Chunk::Level` the arrays span every section the chunk stores
+    //   (padded to the full dimension height by `upgrade_to_level_chunk`, and
+    //   sized from the saved section list on the disk path); for `Chunk::Proto`
+    //   they span only the generated height. In both cases anything past the
+    //   end is air that was never lit, i.e. open sky.
+    //
+    // Known limitation, deliberately left alone here: this is wrong in a
+    // dimension with no sky light (Nether/End), where the answer should be 0.
+    // `Cache` carries no dimension or `has_sky_light` flag, and the sky light
+    // engine is not gated on one either, so that is a separate change.
     match &cache.chunks[idx] {
         Chunk::Level(c) => {
             let light_engine = c.light_engine.lock().unwrap();

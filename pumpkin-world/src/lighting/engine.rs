@@ -491,3 +491,75 @@ impl Default for LightEngine {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod sky_light_heightmap_tests {
+    use super::*;
+    use crate::chunk::ChunkData;
+    use crate::chunk::format::chunk_codec_tests::encode_terrain_chunk_without_world_surface;
+    use crate::generation::get_world_gen;
+    use crate::generation::proto_chunk::ProtoChunk;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::world_seed::Seed;
+
+    /// A 3x3 cache of chunks all loaded from disk NBT that carries terrain but
+    /// no `WORLD_SURFACE` heightmap, centered on chunk (0, 0).
+    fn cache_from_heightmapless_disk_chunks() -> Cache {
+        let world_gen = get_world_gen(
+            Seed(42),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+
+        let mut chunks = Vec::new();
+        for dx in -1..=1 {
+            for dz in -1..=1 {
+                let bytes = encode_terrain_chunk_without_world_surface(dx, dz);
+                let chunk_data = ChunkData::internal_from_bytes(&bytes, Vector2::new(dx, dz))
+                    .expect("test chunk must parse");
+                chunks.push(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
+                    &chunk_data,
+                    &world_gen,
+                ))));
+            }
+        }
+
+        Cache {
+            x: -1,
+            z: -1,
+            size: 3,
+            chunks,
+        }
+    }
+
+    #[test]
+    fn deep_enclosed_block_stays_dark_without_a_world_surface_heightmap() {
+        let mut cache = cache_from_heightmapless_disk_chunks();
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default);
+
+        // Sections -4..=3 are solid stone, so y = 0 is buried under 64 blocks of
+        // it with no sky access. A missing `WORLD_SURFACE` heightmap used to
+        // make `get_top_y` answer `min_y - 1`, i.e. "this column is empty", and
+        // the producer then filled the whole column with 15 - straight through
+        // the stone and out into neighbouring chunks.
+        for pos in [
+            BlockPos(Vector3::new(8, 0, 8)),
+            BlockPos(Vector3::new(0, -60, 0)),
+            BlockPos(Vector3::new(15, 32, 15)),
+        ] {
+            assert_eq!(
+                get_sky_light(&cache, pos),
+                0,
+                "enclosed position {pos:?} must be dark"
+            );
+        }
+
+        // The same run must still light open sky above the terrain, so the
+        // assertions above are not just "everything is 0".
+        assert_eq!(get_sky_light(&cache, BlockPos(Vector3::new(8, 100, 8))), 15);
+    }
+}
