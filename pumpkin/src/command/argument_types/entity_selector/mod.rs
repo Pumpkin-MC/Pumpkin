@@ -584,3 +584,78 @@ impl EntitySelectorPredicate {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parser::EntitySelectorParser;
+    use super::{EntitySelector, EntitySelectorPredicate};
+    use crate::command::string_reader::StringReader;
+    use pumpkin_data::entity::EntityType;
+
+    fn parse(selector: &str) -> Result<EntitySelector, String> {
+        let mut reader = StringReader::new(selector);
+        EntitySelectorParser::new(&mut reader, true)
+            .parse_and_consume()
+            .map_err(|error| format!("{error:?}"))
+    }
+
+    fn asserted_type(selector: &str) -> (&'static EntityType, bool) {
+        let selector = parse(selector).expect("selector should parse");
+        selector
+            .predicates
+            .iter()
+            .find_map(|predicate| match predicate {
+                EntitySelectorPredicate::EntityType(entity_type, invert) => {
+                    Some((*entity_type, *invert))
+                }
+                _ => None,
+            })
+            .expect("an entity type predicate should have been added")
+    }
+
+    #[test]
+    fn type_option_accepts_bare_and_namespaced_ids() {
+        let zombie = EntityType::from_name("zombie").expect("zombie must exist");
+
+        let (bare, invert) = asserted_type("@e[type=zombie]");
+        assert_eq!(bare.id, zombie.id);
+        assert!(!invert);
+
+        let (namespaced, invert) = asserted_type("@e[type=minecraft:zombie]");
+        assert_eq!(namespaced.id, zombie.id);
+        assert!(!invert);
+
+        let (bare_negated, invert) = asserted_type("@e[type=!zombie]");
+        assert_eq!(bare_negated.id, zombie.id);
+        assert!(invert);
+
+        let (namespaced_negated, invert) = asserted_type("@e[type=!minecraft:zombie]");
+        assert_eq!(namespaced_negated.id, zombie.id);
+        assert!(invert);
+    }
+
+    #[test]
+    fn type_option_limits_selector_to_the_named_type() {
+        let zombie = EntityType::from_name("zombie").expect("zombie must exist");
+        let selector = parse("@e[type=minecraft:zombie]").expect("selector should parse");
+        assert_eq!(selector.entity_type.map(|t| t.id), Some(zombie.id));
+    }
+
+    #[test]
+    fn type_option_rejects_a_foreign_namespace() {
+        assert!(
+            parse("@e[type=foo:zombie]").is_err(),
+            "a non-minecraft namespace must not resolve to a vanilla entity type"
+        );
+        assert!(
+            parse("@e[type=!foo:zombie]").is_err(),
+            "a non-minecraft namespace must not resolve to a vanilla entity type"
+        );
+    }
+
+    #[test]
+    fn type_option_rejects_an_unknown_path() {
+        assert!(parse("@e[type=minecraft:not_an_entity]").is_err());
+        assert!(parse("@e[type=not_an_entity]").is_err());
+    }
+}

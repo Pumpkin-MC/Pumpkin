@@ -10,6 +10,7 @@ use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
 use pumpkin_util::GameMode;
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::text::TextComponent;
 use std::str::FromStr;
@@ -291,11 +292,10 @@ impl EntitySelectorOption {
                     parser.reader.set_cursor(start);
                     return Err(self.inapplicable_error(parser.reader));
                 }
-                let mut string = parser.reader.read_unquoted_string();
-                if let Some(stripped) = string.strip_prefix("minecraft:") {
-                    string = stripped.to_string();
-                }
-                if let Some(entity_type) = EntityType::from_name(&string) {
+                let identifier = Identifier::from_reader(parser.reader)?;
+                if let Some(entity_type) =
+                    identifier.is_vanilla_then().and_then(EntityType::from_name)
+                {
                     if entity_type.id == EntityType::PLAYER.id && !invert {
                         parser.limit_to_players();
                     }
@@ -308,7 +308,8 @@ impl EntitySelectorOption {
                     Ok(())
                 } else {
                     parser.reader.set_cursor(start);
-                    Err(TYPE_INVALID_ERROR_TYPE.create(parser.reader, TextComponent::text(string)))
+                    Err(TYPE_INVALID_ERROR_TYPE
+                        .create(parser.reader, TextComponent::text(identifier.to_string())))
                 }
             }
             Self::Name => {
