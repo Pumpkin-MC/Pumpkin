@@ -2468,6 +2468,14 @@ impl Entity {
         portal_world: Arc<World>,
         pos: BlockPos,
     ) {
+        // Matches vanilla `Entity.canUsePortal(false)` (Entity.java:3207-3209): `(ignorePassenger
+        // || !isPassenger()) && isAlive()`, gating `Portal.entityInside`'s call to
+        // `setAsInsidePortal` (e.g. NetherPortalBlock.java:115, EndPortalBlock.java:64). A dead
+        // entity must never enter the portal-crossing state machine.
+        if !self.is_alive() {
+            return;
+        }
+
         // Passengers don't teleport independently - they wait for their vehicle
         if self.has_vehicle().await {
             return;
