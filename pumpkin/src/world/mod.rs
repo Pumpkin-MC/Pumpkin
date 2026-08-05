@@ -76,7 +76,7 @@ use pumpkin_data::{
 use pumpkin_data::{BlockDirection, BlockState, HorizontalFacingExt, translation};
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
-use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertySyncData};
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::java::client::play::{
@@ -1747,6 +1747,17 @@ impl World {
     }
 
     pub async fn set_raining(&self, raining: bool) {
+        if let Some(server) = self.server.upgrade() {
+            let world_arc = server.get_world_from_dimension(&self.dimension);
+            let mut event =
+                crate::plugin::api::events::world::weather_change::WeatherChangeEvent::new(
+                    world_arc, raining,
+                );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return;
+            }
+        }
         let mut weather = self.weather.lock().await;
         if weather.raining != raining {
             let thunder = weather.thundering;
@@ -1759,6 +1770,17 @@ impl World {
     }
 
     pub async fn set_thundering(&self, thundering: bool) {
+        if let Some(server) = self.server.upgrade() {
+            let world_arc = server.get_world_from_dimension(&self.dimension);
+            let mut event =
+                crate::plugin::api::events::world::weather_change::ThunderChangeEvent::new(
+                    world_arc, thundering,
+                );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return;
+            }
+        }
         let mut weather = self.weather.lock().await;
         if weather.thundering != thundering {
             let raining = weather.raining;
@@ -1818,7 +1840,7 @@ impl World {
         &self,
         base_config: &BasicConfiguration,
         player: Arc<Player>,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         static CREATIVE_CONTENT: std::sync::OnceLock<(Vec<Group>, Vec<Entry>)> =
             std::sync::OnceLock::new();
@@ -2557,8 +2579,8 @@ impl World {
         )
         .color_named(NamedColor::Yellow);
 
-        let event = PlayerJoinEvent::new(player.clone(), msg_comp);
-        let event = server.plugin_manager.fire(event).await;
+        let mut event = PlayerJoinEvent::new(player.clone(), msg_comp);
+        server.plugin_manager.fire(server, &mut event).await;
 
         if !event.cancelled {
             self.broadcast_system_message(&event.join_message, false)
@@ -2688,6 +2710,14 @@ impl World {
             .level
             .get_or_fetch_chunk(center_chunk, std::clone::Clone::clone)
             .await;
+        if let Some(server) = self.server.upgrade() {
+            let mut event =
+                crate::plugin::world::chunk_send::ChunkSend::new(player.world(), chunk.clone());
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return;
+            }
+        }
         client.send_packet_now(&CChunkBatchStart).await;
         client.send_packet_now(&CChunkData(&chunk)).await;
         client.send_packet_now(&CChunkBatchEnd::new(1u16)).await;
@@ -3231,9 +3261,9 @@ impl World {
             [TextComponent::text(player.gameprofile.name.clone())],
         )
         .color_named(NamedColor::Yellow);
-        let event = PlayerJoinEvent::new(player.clone(), msg_comp);
+        let mut event = PlayerJoinEvent::new(player.clone(), msg_comp);
 
-        let event = server.plugin_manager.fire(event).await;
+        server.plugin_manager.fire(server, &mut event).await;
 
         if !event.cancelled {
             self.broadcast_system_message(&event.join_message, false)
@@ -3425,18 +3455,16 @@ impl World {
         // the non-cancellable PlayerRespawnEvent, which observes the resolved world.
         let (resolved_world, position, yaw, pitch) = if let Some(new_world) = candidate_world {
             if let Some(server) = self.server.upgrade() {
-                let event = server
-                    .plugin_manager
-                    .fire(PlayerChangeWorldEvent {
-                        player: player.clone(),
-                        previous_world: self.clone(),
-                        new_world: new_world.clone(),
-                        position,
-                        yaw,
-                        pitch,
-                        cancelled: false,
-                    })
-                    .await;
+                let mut event = PlayerChangeWorldEvent {
+                    player: player.clone(),
+                    previous_world: self.clone(),
+                    new_world: new_world.clone(),
+                    position,
+                    yaw,
+                    pitch,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire(&server, &mut event).await;
 
                 if event.cancelled {
                     (None, position, yaw, pitch)
@@ -3508,17 +3536,20 @@ impl World {
 
         // Notify plugins that the player has respawned (non-cancellable).
         if let Some(server) = self.server.upgrade() {
-            let _ = server
+            server
                 .plugin_manager
-                .fire(PlayerRespawnEvent::new(
-                    player.clone(),
-                    self.clone(),
-                    target_world.clone(),
-                    position,
-                    yaw,
-                    pitch,
-                    alive,
-                ))
+                .fire(
+                    &server,
+                    &mut PlayerRespawnEvent::new(
+                        player.clone(),
+                        self.clone(),
+                        target_world.clone(),
+                        position,
+                        yaw,
+                        pitch,
+                        alive,
+                    ),
+                )
                 .await;
         }
 
@@ -4167,21 +4198,17 @@ impl World {
                     [TextComponent::text(player.gameprofile.name.clone())],
                 )
                 .color_named(NamedColor::Yellow);
-                let event = PlayerLeaveEvent::new(player.clone(), msg_comp);
+                let mut event = PlayerLeaveEvent::new(player.clone(), msg_comp);
 
-                let event = self
-                    .server
-                    .upgrade()
-                    .unwrap()
-                    .plugin_manager
-                    .fire(event)
-                    .await;
+                if let Some(server) = self.server.upgrade() {
+                    server.plugin_manager.fire(&server, &mut event).await;
 
-                if !event.cancelled {
-                    for player in self.players.load().iter() {
-                        player.send_system_message(&event.leave_message).await;
+                    if !event.cancelled {
+                        for player in self.players.load().iter() {
+                            player.send_system_message(&event.leave_message).await;
+                        }
+                        info!("{}", event.leave_message.to_pretty_console());
                     }
-                    info!("{}", event.leave_message.to_pretty_console());
                 }
             }
         }
@@ -4571,7 +4598,7 @@ impl World {
         if is_air(broken_block_state) {
             return None;
         }
-        let event = BlockBreakEvent::new(
+        let mut event = BlockBreakEvent::new(
             cause.clone(),
             broken_block,
             *position,
@@ -4579,13 +4606,12 @@ impl World {
             !flags.contains(BlockFlags::SKIP_DROPS),
         );
 
-        let event = self
-            .server
-            .upgrade()
-            .unwrap()
-            .plugin_manager
-            .fire::<BlockBreakEvent>(event)
-            .await;
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire::<BlockBreakEvent>(&server, &mut event)
+                .await;
+        }
 
         if !event.cancelled {
             let mut flags = flags;
@@ -4701,6 +4727,18 @@ impl World {
         let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
         let item_entity = Arc::new(ItemEntity::new(entity, stack));
         self.spawn_entity(item_entity).await;
+    }
+
+    pub async fn strike_lightning(self: &Arc<Self>, pos: Vector3<f64>, _effect_only: bool) {
+        use pumpkin_data::entity::EntityType;
+        use uuid::Uuid;
+        let lightning = crate::entity::r#type::from_type(
+            &EntityType::LIGHTNING_BOLT,
+            pos,
+            self,
+            Uuid::new_v4(),
+        );
+        self.spawn_entity(lightning).await;
     }
 
     /* ItemScatterer.java */
@@ -5101,14 +5139,13 @@ impl World {
         let entity_id = block_entity.resource_location().to_string();
 
         if let Some(nbt) = &block_entity_nbt {
-            let mut bytes = Vec::new();
-            to_bytes_unnamed(nbt, &mut bytes).unwrap();
+            let bytes = pumpkin_nbt::Nbt::from(nbt.clone()).write_unnamed();
             self.broadcast_to_chunk(
                 chunk_pos,
                 &CBlockEntityData::new(
                     block_entity.get_position(),
                     VarInt(block_entity.get_id() as i32),
-                    bytes.into_boxed_slice(),
+                    bytes.as_ref().into(),
                 ),
             );
         }
@@ -5192,14 +5229,13 @@ impl World {
         let block_entity_nbt = block_entity.chunk_data_nbt();
 
         if let Some(nbt) = &block_entity_nbt {
-            let mut bytes = Vec::new();
-            to_bytes_unnamed(nbt, &mut bytes).unwrap();
+            let bytes = pumpkin_nbt::Nbt::from(nbt.clone()).write_unnamed();
             self.broadcast_to_chunk(
                 chunk_pos,
                 &CBlockEntityData::new(
                     block_entity.get_position(),
                     VarInt(block_entity.get_id() as i32),
-                    bytes.into_boxed_slice(),
+                    bytes.as_ref().into(),
                 ),
             );
             let mut full_nbt = nbt.clone();

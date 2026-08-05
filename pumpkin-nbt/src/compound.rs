@@ -1,6 +1,5 @@
 //! Storage and convenience methods for NBT compound tags.
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use uuid::Uuid;
@@ -113,13 +112,9 @@ impl NbtCompound {
         self.child_tags.is_empty()
     }
 
-    /// Inserts a tag when `name` is not already present.
-    ///
-    /// Existing entries are left unchanged.
+    /// Inserts or replaces a tag for `name`.
     pub fn put(&mut self, name: &str, value: impl Into<NbtTag>) {
-        if !self.child_tags.contains_key(name) {
-            self.child_tags.insert(name.into(), value.into());
-        }
+        self.child_tags.insert(name.into(), value.into());
     }
 
     /// Inserts a string tag when `name` is not already present.
@@ -341,44 +336,6 @@ impl Extend<(Box<str>, NbtTag)> for NbtCompound {
 impl AsRef<Self> for NbtCompound {
     fn as_ref(&self) -> &Self {
         self
-    }
-}
-
-impl Serialize for NbtCompound {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeMap;
-        let mut map = serializer.serialize_map(Some(self.child_tags.len()))?;
-        for (key, value) in &self.child_tags {
-            map.serialize_entry(key, &value)?;
-        }
-        map.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for NbtCompound {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct CompoundVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for CompoundVisitor {
-            type Value = NbtCompound;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("an NBT compound")
-            }
-
-            fn visit_map<A: serde::de::MapAccess<'de>>(
-                self,
-                mut map: A,
-            ) -> Result<Self::Value, A::Error> {
-                let mut compound = NbtCompound::new();
-                while let Some((key, value)) = map.next_entry::<Box<str>, NbtTag>()? {
-                    compound.child_tags.insert(key, value);
-                }
-                Ok(compound)
-            }
-        }
-
-        deserializer.deserialize_map(CompoundVisitor)
     }
 }
 

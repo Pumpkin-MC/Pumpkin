@@ -184,30 +184,24 @@ impl Level {
             && dim_settings.generator.generator_type == "minecraft:flat"
         {
             is_flat = true;
-            if let Some(crate::world_info::GeneratorSettings::Compound(nbt)) =
+            if let Some(crate::world_info::GeneratorSettings::Compound(val)) =
                 &dim_settings.generator.settings
             {
-                if let Some(pumpkin_nbt::tag::NbtTag::String(b)) = nbt.child_tags.get("biome") {
+                if let Some(b) = val.get("biome").and_then(|v| v.as_str()) {
                     flat_biome = b.to_string();
                 }
-                if let Some(pumpkin_nbt::tag::NbtTag::List(list)) = nbt.child_tags.get("layers") {
-                    for tag in list {
-                        if let pumpkin_nbt::tag::NbtTag::Compound(layer_compound) = tag {
-                            let mut block = "minecraft:air".to_string();
-                            let mut height = 1;
-                            if let Some(pumpkin_nbt::tag::NbtTag::String(bl)) =
-                                layer_compound.child_tags.get("block")
-                            {
-                                block = bl.to_string();
-                            }
-                            if let Some(pumpkin_nbt::tag::NbtTag::Int(h)) =
-                                layer_compound.child_tags.get("height")
-                            {
-                                height = *h;
-                            }
-                            flat_layers
-                                .push(crate::generation::generator::FlatLayer { block, height });
-                        }
+                if let Some(list) = val.get("layers").and_then(|v| v.as_array()) {
+                    for layer in list {
+                        let block = layer
+                            .get("block")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("minecraft:air")
+                            .to_string();
+                        let height = layer
+                            .get("height")
+                            .and_then(serde_json::Value::as_i64)
+                            .unwrap_or(1) as i32;
+                        flat_layers.push(crate::generation::generator::FlatLayer { block, height });
                     }
                 }
             }

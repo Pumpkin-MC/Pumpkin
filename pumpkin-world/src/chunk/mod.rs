@@ -7,10 +7,9 @@ use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
 use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::position::BlockPos;
 use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
+
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
@@ -187,23 +186,10 @@ impl ChunkHeightmapType {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-#[serde(rename_all = "UPPERCASE")]
+#[derive(Debug, Clone)]
 pub struct ChunkHeightmaps {
-    #[serde(
-        serialize_with = "nbt_long_array",
-        skip_serializing_if = "Option::is_none"
-    )]
     pub world_surface: Option<Box<[i64]>>,
-    #[serde(
-        serialize_with = "nbt_long_array",
-        skip_serializing_if = "Option::is_none"
-    )]
     pub motion_blocking: Option<Box<[i64]>>,
-    #[serde(
-        serialize_with = "nbt_long_array",
-        skip_serializing_if = "Option::is_none"
-    )]
     pub motion_blocking_no_leaves: Option<Box<[i64]>>,
 }
 

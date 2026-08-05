@@ -5,8 +5,6 @@ use pumpkin_util::{
     math::position::BlockPos,
     resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation},
 };
-use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod scheduler;
 
@@ -108,14 +106,12 @@ impl<T> Ord for OrderedTick<T> {
     }
 }
 
-impl<T> Serialize for ScheduledTick<T>
+impl<T> ScheduledTick<T>
 where
     T: ToResourceLocation,
 {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    #[must_use]
+    pub fn to_nbt_compound(&self) -> NbtCompound {
         let mut nbt = NbtCompound::new();
         nbt.put_int("x", self.position.0.x);
         nbt.put_int("y", self.position.0.y);
@@ -123,44 +119,26 @@ where
         nbt.put_int("t", self.delay as i32);
         nbt.put_int("p", self.priority as i32);
         nbt.put_string("i", self.value.to_resource_location());
-        nbt.serialize(serializer)
+        nbt
     }
 }
 
-impl<'de, T> Deserialize<'de> for ScheduledTick<T>
+impl<T> ScheduledTick<T>
 where
     T: FromResourceLocation,
 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let nbt = NbtCompound::deserialize(deserializer)?;
+    #[must_use]
+    pub fn from_nbt_compound(nbt: &NbtCompound) -> Option<Self> {
+        let x = nbt.get_int("x")?;
+        let y = nbt.get_int("y")?;
+        let z = nbt.get_int("z")?;
+        let delay = nbt.get_int("t")? as u8;
+        let priority = TickPriority::try_from(nbt.get_int("p")?).ok()?;
+        let res_loc_str = nbt.get_string("i")?;
+        let res_loc = ResourceLocation::from_str(res_loc_str).ok()?;
+        let value = T::from_resource_location(&res_loc)?;
 
-        let get_int = |key| nbt.get_int(key).ok_or_else(|| D::Error::missing_field(key));
-        let get_str = |key| {
-            nbt.get_string(key)
-                .ok_or_else(|| D::Error::missing_field(key))
-        };
-
-        let x = get_int("x")?;
-        let y = get_int("y")?;
-        let z = get_int("z")?;
-
-        let delay = get_int("t")? as u8;
-
-        let priority = TickPriority::try_from(get_int("p")?)
-            .map_err(|_| D::Error::custom("Invalid tick priority"))?;
-
-        let res_loc_str = get_str("i")?;
-        let res_loc = ResourceLocation::from_str(res_loc_str).map_err(|e| {
-            D::Error::custom(format!("Invalid ResourceLocation '{res_loc_str}': {e}"))
-        })?;
-
-        let value = T::from_resource_location(&res_loc)
-            .ok_or_else(|| D::Error::custom(format!("Unknown tick type: {res_loc_str}")))?;
-
-        Ok(Self {
+        Some(Self {
             delay,
             priority,
             position: BlockPos::new(x, y, z),

@@ -366,7 +366,7 @@ impl ToTokens for BlockPropertyStruct {
         };
 
         tokens.extend(quote! {
-            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+            #[derive(Clone, Copy, Eq, PartialEq)]
             pub struct #name {
                 #(#fields),*
             }
@@ -1456,7 +1456,8 @@ fn get_be_data_from_nbt<R: Read + Seek>(
     let data_end = reader.seek(SeekFrom::End(0)).unwrap();
     let _ = reader.seek(SeekFrom::Start(data_start));
 
-    let nbt_reader = &mut NbtReadHelperBedrock::new(pumpkin_nbt::deserializer::NbtStreamReader(&mut *reader));
+    let nbt_reader =
+        &mut NbtReadHelperBedrock::new(pumpkin_nbt::deserializer::NbtStreamReader(&mut *reader));
 
     loop {
         if nbt_reader.reader().0.stream_position().unwrap() >= data_end {

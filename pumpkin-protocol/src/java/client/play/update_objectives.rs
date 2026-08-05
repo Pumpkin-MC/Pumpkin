@@ -50,11 +50,12 @@ impl ClientPacket for CUpdateObjectives {
             write.write_option(&self.number_format, |p, v| {
                 match v {
                     NumberFormat::Blank => p.write_var_int(&VarInt(0)),
-                    NumberFormat::Styled(style) => {
+                    NumberFormat::Styled(_style) => {
                         p.write_var_int(&VarInt(1))?;
-                        // TODO
-                        pumpkin_nbt::serializer::to_bytes_unnamed(style, p)
-                            .map_err(|err| WritingError::Serde(err.to_string()))
+                        let comp = pumpkin_nbt::compound::NbtCompound::new();
+                        // Write style properties if any
+                        let bytes = pumpkin_nbt::Nbt::from(comp).write_unnamed();
+                        p.write_all(&bytes).map_err(WritingError::IoError)
                     }
                     NumberFormat::Fixed(text_component) => {
                         p.write_var_int(&VarInt(2))?;

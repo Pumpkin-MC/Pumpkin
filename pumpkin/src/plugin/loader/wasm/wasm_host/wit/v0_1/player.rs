@@ -868,6 +868,395 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn add_effect(
+        &mut self,
+        player: Resource<Player>,
+        effect: pumpkin::plugin::status_effect::StatusEffectInstance,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect.effect_type);
+        if let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+        {
+            let effect_obj = pumpkin_data::potion::Effect {
+                effect_type: status_effect,
+                duration: effect.duration as i32,
+                amplifier: effect.amplifier,
+                ambient: effect.ambient,
+                show_particles: effect.show_particles,
+                show_icon: effect.show_icon,
+                blend: false,
+            };
+            player.add_effect(effect_obj).await;
+        }
+        Ok(())
+    }
+
+    async fn remove_effect(
+        &mut self,
+        player: Resource<Player>,
+        effect: pumpkin::plugin::status_effect::StatusEffectType,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+        if let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+        {
+            player.remove_effect(status_effect).await;
+        }
+        Ok(())
+    }
+
+    async fn clear_effects(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.remove_all_effects().await;
+        Ok(())
+    }
+
+    async fn has_effect(
+        &mut self,
+        player: Resource<Player>,
+        effect: pumpkin::plugin::status_effect::StatusEffectType,
+    ) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+        if let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+        {
+            Ok(player.has_effect(status_effect).await)
+        } else {
+            Ok(false)
+        }
+    }
+
+    async fn get_effect(
+        &mut self,
+        player: Resource<Player>,
+        effect: pumpkin::plugin::status_effect::StatusEffectType,
+    ) -> wasmtime::Result<Option<pumpkin::plugin::status_effect::StatusEffectInstance>> {
+        let player = player_from_resource(self, &player)?;
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+        if let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+            && let Some(eff) = player.get_effect(status_effect).await
+        {
+            return Ok(super::status_effect::to_wasm_status_effect_instance(&eff));
+        }
+        Ok(None)
+    }
+
+    async fn get_active_effects(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Vec<pumpkin::plugin::status_effect::StatusEffectInstance>> {
+        let player = player_from_resource(self, &player)?;
+        let effects = player.get_active_effects().await;
+        let mut list = Vec::with_capacity(effects.len());
+        for eff in &effects {
+            if let Some(instance) = super::status_effect::to_wasm_status_effect_instance(eff) {
+                list.push(instance);
+            }
+        }
+        Ok(list)
+    }
+
+    async fn heal(&mut self, player: Resource<Player>, amount: f32) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.heal(amount).await;
+        Ok(())
+    }
+
+    async fn damage(&mut self, player: Resource<Player>, amount: f32) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.damage_generic(amount).await;
+        Ok(())
+    }
+
+    async fn kill(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.kill().await;
+        Ok(())
+    }
+
+    async fn start_cooldown(
+        &mut self,
+        player: Resource<Player>,
+        group: String,
+        duration_ticks: i32,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.start_cooldown(group, duration_ticks).await;
+        Ok(())
+    }
+
+    async fn get_cooldown(
+        &mut self,
+        player: Resource<Player>,
+        group: String,
+    ) -> wasmtime::Result<f32> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_cooldown(&group).await)
+    }
+
+    async fn is_on_cooldown(
+        &mut self,
+        player: Resource<Player>,
+        group: String,
+    ) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.is_on_cooldown(&group).await)
+    }
+
+    async fn set_allow_flight(
+        &mut self,
+        player: Resource<Player>,
+        allowed: bool,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.set_allow_flight(allowed).await;
+        Ok(())
+    }
+
+    async fn set_fly_speed(
+        &mut self,
+        player: Resource<Player>,
+        speed: f32,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.set_fly_speed(speed).await;
+        Ok(())
+    }
+
+    async fn set_walk_speed(
+        &mut self,
+        player: Resource<Player>,
+        speed: f32,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.set_walk_speed(speed).await;
+        Ok(())
+    }
+
+    async fn set_invulnerable(
+        &mut self,
+        player: Resource<Player>,
+        invulnerable: bool,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.set_invulnerable(invulnerable).await;
+        Ok(())
+    }
+
+    async fn set_player_time(
+        &mut self,
+        player: Resource<Player>,
+        time: u64,
+        relative: bool,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player
+            .set_player_time(
+                &player.living_entity.entity.world.load_full(),
+                time,
+                relative,
+            )
+            .await;
+        Ok(())
+    }
+
+    async fn reset_player_time(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player
+            .reset_player_time(&player.living_entity.entity.world.load_full())
+            .await;
+        Ok(())
+    }
+
+    async fn get_player_time(&mut self, player: Resource<Player>) -> wasmtime::Result<Option<u64>> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_player_time())
+    }
+
+    async fn is_player_time_relative(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.is_player_time_relative())
+    }
+
+    async fn set_player_weather(
+        &mut self,
+        player: Resource<Player>,
+        weather: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::PlayerWeather,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let w = match weather {
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::PlayerWeather::Clear => crate::entity::player::PlayerWeather::Clear,
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::PlayerWeather::Downfall => crate::entity::player::PlayerWeather::Downfall,
+        };
+        player.set_player_weather(w);
+        Ok(())
+    }
+
+    async fn reset_player_weather(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.reset_player_weather();
+        Ok(())
+    }
+
+    async fn get_player_weather(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Option<crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::PlayerWeather>>{
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_player_weather().map(|w| match w {
+            crate::entity::player::PlayerWeather::Clear => crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::PlayerWeather::Clear,
+            crate::entity::player::PlayerWeather::Downfall => crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::PlayerWeather::Downfall,
+        }))
+    }
+
+    async fn set_compass_target(
+        &mut self,
+        player: Resource<Player>,
+        pos: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::common::Position,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let pos_vec = from_wasm_position(pos);
+        let block_pos = pumpkin_util::math::position::BlockPos::new(
+            pos_vec.x as i32,
+            pos_vec.y as i32,
+            pos_vec.z as i32,
+        );
+        player.set_compass_target(block_pos).await;
+        Ok(())
+    }
+
+    async fn get_compass_target(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<
+        crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::common::Position,
+    > {
+        let player = player_from_resource(self, &player)?;
+        let target = player
+            .get_compass_target()
+            .unwrap_or(pumpkin_util::math::position::BlockPos::new(0, 0, 0));
+        let vec3 = pumpkin_util::math::vector3::Vector3::new(
+            f64::from(target.0.x),
+            f64::from(target.0.y),
+            f64::from(target.0.z),
+        );
+        Ok(to_wasm_position(vec3))
+    }
+
+    async fn set_respawn_location(
+        &mut self,
+        player: Resource<Player>,
+        pos: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::common::Position,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let pos_vec = from_wasm_position(pos);
+        let block_pos = pumpkin_util::math::position::BlockPos::new(
+            pos_vec.x as i32,
+            pos_vec.y as i32,
+            pos_vec.z as i32,
+        );
+        player.set_respawn_location(block_pos);
+        Ok(())
+    }
+
+    async fn get_respawn_location(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<
+        Option<
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::common::Position,
+        >,
+    > {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_respawn_location().map(|p| {
+            let vec3 = pumpkin_util::math::vector3::Vector3::new(
+                f64::from(p.0.x),
+                f64::from(p.0.y),
+                f64::from(p.0.z),
+            );
+            to_wasm_position(vec3)
+        }))
+    }
+
+    async fn hide_player(
+        &mut self,
+        player: Resource<Player>,
+        other: Resource<Player>,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let other = player_from_resource(self, &other)?;
+        player.hide_player(other.gameprofile.id).await;
+        Ok(())
+    }
+
+    async fn show_player(
+        &mut self,
+        player: Resource<Player>,
+        other: Resource<Player>,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let other = player_from_resource(self, &other)?;
+        player.show_player(other.gameprofile.id).await;
+        Ok(())
+    }
+
+    async fn can_see(
+        &mut self,
+        player: Resource<Player>,
+        other: Resource<Player>,
+    ) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        let other = player_from_resource(self, &other)?;
+        Ok(player.can_see(&other.gameprofile.id).await)
+    }
+
+    async fn get_target_block(
+        &mut self,
+        player: Resource<Player>,
+        max_distance: u32,
+    ) -> wasmtime::Result<
+        Option<
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::common::Position,
+        >,
+    > {
+        let player = player_from_resource(self, &player)?;
+        let res = player
+            .get_target_block(
+                &player.living_entity.entity.world.load_full(),
+                f64::from(max_distance),
+            )
+            .await;
+        Ok(res.map(|p| {
+            let vec3 = pumpkin_util::math::vector3::Vector3::new(
+                f64::from(p.0.x),
+                f64::from(p.0.y),
+                f64::from(p.0.z),
+            );
+            to_wasm_position(vec3)
+        }))
+    }
+
+    async fn launch_projectile(
+        &mut self,
+        _player: Resource<Player>,
+        _type_: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::ProjectileType,
+    ) -> wasmtime::Result<
+        Option<
+            Resource<
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::Entity,
+            >,
+        >,
+    > {
+        Ok(None)
+    }
+
     async fn set_tab_list_header_footer(
         &mut self,
         player: Resource<Player>,

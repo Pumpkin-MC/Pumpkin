@@ -174,9 +174,16 @@ impl Mob for ChickenEntity {
             if self.mob_entity.living_entity.dead.load(Relaxed) {
                 return;
             }
+            let entity = &self.mob_entity.living_entity.entity;
+            let current_velocity = entity.velocity.load();
+            let on_ground = entity.on_ground.load(Ordering::Relaxed);
+
+            // TODO: move velocity logic to physics tick when implemented
+            if (!on_ground) && current_velocity.y < 0.0 {
+                entity.set_velocity(current_velocity.multiply(1.0, 0.6, 1.0));
+            }
             if self.egg_lay_time.fetch_sub(1, Ordering::Relaxed) <= 1 {
                 let next_time = rand::rng().random_range(6000..12000);
-                let entity = &self.mob_entity.living_entity.entity;
                 let world = entity.world.load_full();
                 let pos = entity.block_pos.load();
                 world.drop_stack(&pos, ItemStack::new(1, &Item::EGG)).await;

@@ -172,11 +172,8 @@ pub enum PluginState {
 pub struct PluginManager {
     plugins: RwLock<Vec<LoadedPlugin>>,
     loaders: RwLock<Vec<Arc<dyn PluginLoader>>>,
-    server: RwLock<Option<Arc<Server>>>,
     handlers: Arc<RwLock<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
-    // Self-reference for sharing with contexts
-    self_ref: RwLock<Option<Arc<Self>>>,
     services: Arc<RwLock<HashMap<String, Arc<dyn Payload>>>>,
     // Plugin state tracking
     plugin_states: RwLock<HashMap<String, PluginState>>,
@@ -204,43 +201,19 @@ struct LoadedPlugin {
 /// Error types for plugin management
 #[derive(Error, Debug)]
 pub enum ManagerError {
-    #[error("Server not initialized")]
-    ServerNotInitialized,
-
     #[error("Plugin not found: {0}")]
     PluginNotFound(String),
-
     #[error("Loader error: {0}")]
     LoaderError(#[from] LoaderError),
-
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-
-    #[error("Plugin manager not initialized properly")]
-    ManagerNotInitialized,
-
     #[error("Dependency error: {0}")]
     DependencyError(String),
 }
 
 impl Default for PluginManager {
     fn default() -> Self {
-        Self {
-            plugins: RwLock::new(Vec::new()),
-            loaders: RwLock::new(vec![
-                Arc::new(NativePluginLoader),
-                Arc::new(WasmPluginLoader),
-            ]),
-            server: RwLock::new(None),
-            handlers: Arc::new(RwLock::new(HashMap::new())),
-            unloaded_files: RwLock::new(HashSet::new()),
-            self_ref: RwLock::new(None),
-            services: Arc::new(RwLock::new(HashMap::new())),
-            plugin_states: RwLock::new(HashMap::new()),
-            state_notify: Arc::new(Notify::new()),
-            hot_reload_task: RwLock::new(None),
-            hot_reload_enabled: AtomicBool::new(false),
-        }
+        Self::new()
     }
 }
 
@@ -248,7 +221,20 @@ impl PluginManager {
     /// Create a new plugin manager with default loaders
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            plugins: RwLock::new(Vec::new()),
+            loaders: RwLock::new(vec![
+                Arc::new(NativePluginLoader),
+                Arc::new(WasmPluginLoader),
+            ]),
+            handlers: Arc::new(RwLock::new(HashMap::new())),
+            unloaded_files: RwLock::new(HashSet::new()),
+            services: Arc::new(RwLock::new(HashMap::new())),
+            plugin_states: RwLock::new(HashMap::new()),
+            state_notify: Arc::new(Notify::new()),
+            hot_reload_task: RwLock::new(None),
+            hot_reload_enabled: AtomicBool::new(false),
+        }
     }
 
     /// Unload all loaded plugins
@@ -272,15 +258,15 @@ impl PluginManager {
     }
 
     /// Add a new plugin loader implementation
-    pub async fn add_loader(&self, loader: Arc<dyn PluginLoader>) {
+    pub async fn add_loader(self: &Arc<Self>, server: &Arc<Server>, loader: Arc<dyn PluginLoader>) {
         self.loaders.write().await.push(loader);
 
         // Try to load previously unloaded files with the new loader
-        self.retry_unloaded_files().await;
+        self.retry_unloaded_files(server).await;
     }
 
     /// Start watching the plugins directory for changes
-    pub async fn start_watcher(&self) -> Result<(), ManagerError> {
+    pub async fn start_watcher(self: &Arc<Self>, server: &Arc<Server>) -> Result<(), ManagerError> {
         if self.hot_reload_task.read().await.is_some() {
             return Ok(());
         }
@@ -302,19 +288,14 @@ impl PluginManager {
             .watch(plugin_dir, RecursiveMode::NonRecursive)
             .map_err(|e| ManagerError::IoError(std::io::Error::other(e)))?;
 
-        let self_ref = self
-            .self_ref
-            .read()
-            .await
-            .clone()
-            .ok_or(ManagerError::ManagerNotInitialized)?;
-
+        let manager = self.clone();
+        let server = server.clone();
         let task = tokio::spawn(async move {
             // Keep watcher alive by moving it into the task
             let _watcher = watcher;
 
             while let Some(event) = rx.recv().await {
-                if !self_ref
+                if !manager
                     .hot_reload_enabled
                     .load(std::sync::atomic::Ordering::Relaxed)
                 {
@@ -331,7 +312,7 @@ impl PluginManager {
 
                                 // We need to find if this plugin is already loaded to unload it first
                                 let plugin_name = {
-                                    let plugins = self_ref.plugins.read().await;
+                                    let plugins = manager.plugins.read().await;
                                     plugins
                                         .iter()
                                         .find(|p| p.path == path)
@@ -340,13 +321,13 @@ impl PluginManager {
 
                                 if let Some(name) = plugin_name {
                                     info!("Hot-reloading plugin: {}", name);
-                                    let _ = self_ref.unload_plugin(&name).await;
+                                    let _ = manager.unload_plugin(&name).await;
                                 }
 
                                 // For now, we just try to load it. If it's already loaded,
                                 // the loader might handle it or we might get a duplicate.
                                 // Most WASM loaders will just create a new instance.
-                                if let Err(e) = self_ref.start_loading_plugin(&path).await {
+                                if let Err(e) = manager.start_loading_plugin(&server, &path).await {
                                     error!("Failed to hot-reload plugin {:?}: {}", path, e);
                                 }
                             }
@@ -382,31 +363,19 @@ impl PluginManager {
     }
 
     /// Retry loading files that couldn't be loaded previously
-    async fn retry_unloaded_files(&self) {
+    async fn retry_unloaded_files(self: &Arc<Self>, server: &Arc<Server>) {
         let files_to_retry: Vec<PathBuf> =
             { self.unloaded_files.read().await.iter().cloned().collect() };
         let mut retry_tasks = Vec::new();
 
         for path in files_to_retry {
-            if let Ok(task) = self.start_loading_plugin(&path).await {
+            if let Ok(task) = self.start_loading_plugin(server, &path).await {
                 retry_tasks.push(task);
             }
         }
 
         // Wait for all retry tasks to complete
         join_all(retry_tasks).await;
-    }
-
-    /// Set server reference for plugin context
-    pub async fn set_server(&self, server: Arc<Server>) {
-        let mut srv = self.server.write().await;
-        srv.replace(server);
-    }
-
-    /// Set self reference for creating contexts
-    pub async fn set_self_ref(&self, self_ref: Arc<Self>) {
-        let mut sref = self.self_ref.write().await;
-        sref.replace(self_ref);
     }
 
     /// Get a clone of the loaders for context use
@@ -530,9 +499,10 @@ impl PluginManager {
     }
 
     /// Spawn initialization for a single plugin
-    #[expect(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines)]
     async fn spawn_plugin_initialization(
-        &self,
+        self: &Arc<Self>,
+        server: Arc<Server>,
         instance: Arc<dyn Plugin>,
         metadata: PluginMetadata,
         loader_data: Box<dyn Any + Send + Sync>,
@@ -545,25 +515,11 @@ impl PluginManager {
             .await
             .insert(metadata.name.clone(), PluginState::Loading);
 
-        let self_ref = self
-            .self_ref
-            .read()
-            .await
-            .clone()
-            .ok_or(ManagerError::ServerNotInitialized)?;
-
         let context = Arc::new(Context::new(
             metadata.clone(),
-            Arc::clone(
-                &self
-                    .server
-                    .read()
-                    .await
-                    .clone()
-                    .ok_or(ManagerError::ServerNotInitialized)?,
-            ),
+            server,
             Arc::clone(&self.handlers),
-            Arc::clone(&self_ref),
+            Arc::clone(self),
             Arc::clone(&LOGGER_IMPL),
         ));
 
@@ -585,7 +541,7 @@ impl PluginManager {
         };
 
         // Spawn async task for plugin initialization
-        let self_ref_clone = Arc::clone(&self_ref);
+        let self_ref_clone = Arc::clone(self);
         let state_notify = Arc::clone(&self.state_notify);
         let plugin_name = metadata.name.clone();
         let loader_clone = loader.clone();
@@ -662,7 +618,11 @@ impl PluginManager {
     }
 
     /// Load all plugins from the plugin directory
-    pub async fn load_plugins(&self) -> Result<std::time::Duration, ManagerError> {
+    #[allow(clippy::too_many_lines)]
+    pub async fn load_plugins(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+    ) -> Result<std::time::Duration, ManagerError> {
         let path = Path::new(PLUGIN_DIR);
 
         if !path.exists() {
@@ -748,6 +708,7 @@ impl PluginManager {
             if let Some((instance, metadata, loader_data, loader, path)) = plugins_map.remove(&name)
             {
                 let (allowed, wait_time) = self
+                    .clone()
                     .check_permissions_cached(&path, &metadata, &mut cache, &cache_path)
                     .await;
 
@@ -762,7 +723,14 @@ impl PluginManager {
                 }
 
                 match self
-                    .spawn_plugin_initialization(instance, metadata, loader_data, loader, path)
+                    .spawn_plugin_initialization(
+                        server.clone(),
+                        instance,
+                        metadata,
+                        loader_data,
+                        loader,
+                        path,
+                    )
                     .await
                 {
                     Ok(task) => {
@@ -812,7 +780,8 @@ impl PluginManager {
 
     /// Start loading a plugin asynchronously
     async fn start_loading_plugin(
-        &self,
+        self: &Arc<Self>,
+        server: &Arc<Server>,
         path: &Path,
     ) -> Result<tokio::task::JoinHandle<()>, ManagerError> {
         for loader in self.loaders.read().await.iter() {
@@ -838,6 +807,7 @@ impl PluginManager {
 
                 return self
                     .spawn_plugin_initialization(
+                        server.clone(),
                         instance,
                         metadata,
                         loader_data,
@@ -857,12 +827,19 @@ impl PluginManager {
     }
 
     /// Attempt to load a single plugin file
-    pub async fn try_load_plugin(&self, path: &Path) -> Result<(), ManagerError> {
-        self.start_loading_plugin(path).await?.await.map_err(|e| {
-            ManagerError::LoaderError(LoaderError::InitializationFailed(format!(
-                "Task join error: {e}"
-            )))
-        })
+    pub async fn try_load_plugin(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+        path: &Path,
+    ) -> Result<(), ManagerError> {
+        self.start_loading_plugin(server, path)
+            .await?
+            .await
+            .map_err(|e| {
+                ManagerError::LoaderError(LoaderError::InitializationFailed(format!(
+                    "Task join error: {e}"
+                )))
+            })
     }
 
     /// Wait for a plugin to finish loading
@@ -1022,28 +999,37 @@ impl PluginManager {
     }
 
     /// Fire an event to all registered handlers
-    pub async fn fire<E: Payload + Send + Sync + 'static>(&self, mut event: E) -> E {
-        if let Some(server) = self.server.read().await.as_ref() {
-            let handlers = self.handlers.read().await;
-            if let Some(handlers) = handlers.get(&E::get_name_static()) {
-                let (blocking, non_blocking): (Vec<_>, Vec<_>) =
-                    handlers.iter().partition(|h| h.is_blocking());
+    pub async fn fire<E: Payload + Send + Sync + 'static>(
+        &self,
+        server: &Arc<Server>,
+        event: &mut E,
+    ) {
+        let handlers_lock = self.handlers.read().await;
+        if handlers_lock.is_empty() {
+            return;
+        }
 
-                // Process blocking handlers first
-                for handler in blocking {
-                    handler.handle_blocking_dyn(server, &mut event).await;
-                }
+        let Some(handlers) = handlers_lock.get(&E::get_name_static()) else {
+            return;
+        };
 
-                // Process non-blocking handlers
-                join_all(
-                    non_blocking
-                        .into_iter()
-                        .map(|h| h.handle_dyn(server, &event)),
-                )
-                .await;
+        if handlers.is_empty() {
+            return;
+        }
+
+        // Process blocking handlers first
+        for handler in handlers {
+            if handler.is_blocking() {
+                handler.handle_blocking_dyn(server, event).await;
             }
         }
-        event
+
+        // Process non-blocking handlers
+        for handler in handlers {
+            if !handler.is_blocking() {
+                handler.handle_dyn(server, event).await;
+            }
+        }
     }
 }
 

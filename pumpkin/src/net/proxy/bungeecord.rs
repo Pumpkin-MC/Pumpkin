@@ -96,116 +96,60 @@ pub async fn bungeecord_login(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::IpAddr;
+    use pumpkin_protocol::ser::NetworkWriteExt;
+    use pumpkin_protocol::{
+        ServerPacket, codec::var_int::VarInt, java::server::handshake::SHandShake,
+    };
+    use pumpkin_util::version::JavaMinecraftVersion;
 
-    fn make_config(secret: &str) -> BungeeCordConfig {
-        BungeeCordConfig {
-            enabled: true,
-            secret: secret.to_string(),
-        }
-    }
-
-    fn make_address(ip: &str, port: u16) -> Mutex<SocketAddr> {
-        Mutex::new(SocketAddr::new(ip.parse().unwrap(), port))
-    }
-
-    /// Build a `BungeeCord` handshake string from parts joined by `\0`.
-    fn handshake(parts: &[&str]) -> String {
-        parts.join("\0")
-    }
-
-    /// Handshake with full `BungeeCord` data + matching `BungeeGuard` token.
+    /// Drives the whole path a proxied login takes: the handshake is encoded as
+    /// `BungeeCord` puts it on the wire, decoded by the real packet reader, and
+    /// the address it yields is handed to `bungeecord_login`. This is what fails
+    /// when the reader's bound on `server_address` is too small to hold the
+    /// forwarded profile properties.
     #[tokio::test]
-    async fn secret_set_token_matches() {
-        let config = make_config("mysecret");
-        let addr = make_address("127.0.0.1", 25565);
-        let hs = handshake(&[
-            "localhost",
-            "127.0.0.2",
-            "00000000-0000-0000-0000-000000000001",
-            "",
-            "mysecret",
-        ]);
+    async fn logs_in_from_a_handshake_decoded_off_the_wire() {
+        let textures = "e".repeat(432);
+        let signature = "s".repeat(684);
+        let address = format!(
+            "mc.example.com\0192.0.2.10\0d8f4a1e0-0f1b-4c3a-9f2e-1a2b3c4d5e6f\0\
+             [{{\"name\":\"textures\",\"value\":\"{textures}\",\"signature\":\"{signature}\"}}]"
+        );
 
-        let result = bungeecord_login(&config, &addr, &hs, "test".into()).await;
-        assert!(result.is_ok());
-        let (ip, profile) = result.unwrap();
-        assert_eq!(ip, "127.0.0.2".parse::<IpAddr>().unwrap());
-        assert_eq!(profile.name, "test");
-    }
+        let mut buf = Vec::new();
+        let protocol_version = JavaMinecraftVersion::V_1_21_11.protocol_version();
+        buf.write_var_int(&VarInt(protocol_version))
+            .expect("write protocol version");
+        buf.write_string(&address).expect("write server address");
+        buf.write_u16_be(25565).expect("write server port");
+        buf.write_var_int(&VarInt(2)).expect("write next state");
 
-    /// Handshake with `BungeeCord` data but no `BungeeGuard` token — should fail.
-    #[tokio::test]
-    async fn secret_set_no_token() {
-        let config = make_config("mysecret");
-        let addr = make_address("127.0.0.1", 25565);
-        let hs = handshake(&[
-            "localhost",
-            "127.0.0.2",
-            "00000000-0000-0000-0000-000000000001",
-            "",
-        ]);
+        let handshake = SHandShake::read(&mut &buf[..], &JavaMinecraftVersion::V_1_21_11)
+            .expect("a handshake sent by BungeeCord should be readable");
 
-        let result = bungeecord_login(&config, &addr, &hs, "test".into()).await;
-        assert!(matches!(
-            result,
-            Err(BungeeCordError::BungeeGuardFailedAuth)
-        ));
-    }
+        let client_address = Mutex::new(SocketAddr::from(([10, 0, 0, 1], 51234)));
+        let (ip, profile) = bungeecord_login(
+            &client_address,
+            &handshake.server_address,
+            "Steve".to_string(),
+        )
+        .await
+        .expect("the forwarded address should produce a game profile");
 
-    /// Handshake with wrong `BungeeGuard` token — should fail.
-    #[tokio::test]
-    async fn secret_set_wrong_token() {
-        let config = make_config("mysecret");
-        let addr = make_address("127.0.0.1", 25565);
-        let hs = handshake(&[
-            "localhost",
-            "127.0.0.2",
-            "00000000-0000-0000-0000-000000000001",
-            "",
-            "wrong",
-        ]);
+        // The forwarded IP and UUID are used, not the proxy's own socket address.
+        assert_eq!(ip, IpAddr::from([192, 0, 2, 10]));
+        assert_eq!(
+            profile.id,
+            "d8f4a1e0-0f1b-4c3a-9f2e-1a2b3c4d5e6f"
+                .parse::<uuid::Uuid>()
+                .expect("valid uuid")
+        );
 
-        let result = bungeecord_login(&config, &addr, &hs, "test".into()).await;
-        assert!(matches!(
-            result,
-            Err(BungeeCordError::BungeeGuardFailedAuth)
-        ));
-    }
-
-    /// Normal `BungeeCord` handshake without `BungeeGuard` — backward compatible.
-    #[tokio::test]
-    async fn secret_empty_no_token() {
-        let config = make_config("");
-        let addr = make_address("127.0.0.1", 25565);
-        let hs = handshake(&[
-            "localhost",
-            "127.0.0.2",
-            "00000000-0000-0000-0000-000000000001",
-            "",
-        ]);
-
-        let result = bungeecord_login(&config, &addr, &hs, "test".into()).await;
-        assert!(result.is_ok());
-    }
-
-    /// `BungeeGuard` token present but server not configured — misconfiguration.
-    #[tokio::test]
-    async fn secret_empty_has_token() {
-        let config = make_config("");
-        let addr = make_address("127.0.0.1", 25565);
-        let hs = handshake(&[
-            "localhost",
-            "127.0.0.2",
-            "00000000-0000-0000-0000-000000000001",
-            "",
-            "sometoken",
-        ]);
-
-        let result = bungeecord_login(&config, &addr, &hs, "test".into()).await;
-        assert!(matches!(
-            result,
-            Err(BungeeCordError::BungeeGuardFailedAuth)
-        ));
+        // The signed skin survives, so the player keeps their appearance.
+        let properties = profile.properties.load();
+        assert_eq!(properties.len(), 1);
+        assert_eq!(&*properties[0].name, "textures");
+        assert_eq!(&*properties[0].value, textures.as_str());
+        assert_eq!(properties[0].signature.as_deref(), Some(signature.as_str()));
     }
 }

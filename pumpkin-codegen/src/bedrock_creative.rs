@@ -45,67 +45,60 @@ pub fn build() -> TokenStream {
     let nbt_bytes = fs::read(nbt_path).expect("Failed to read bedrock/creative_items.nbt");
     let mut cursor = Cursor::new(nbt_bytes);
 
-    #[derive(serde::Deserialize)]
-    struct CreativeGroupEntry {
-        category: i32,
-        name: String,
-        icon: Option<CreativeItemEntry>,
-    }
-
-    #[derive(serde::Deserialize)]
-    struct CreativeItemEntry {
-        name: String,
-        meta: Option<i16>,
-        group_index: Option<i32>,
-    }
-
-    #[derive(serde::Deserialize)]
-    struct CreativeData {
-        groups: Vec<CreativeGroupEntry>,
-        items: Vec<CreativeItemEntry>,
-    }
-
-    let data: CreativeData = pumpkin_nbt::deserializer::from_bytes_bedrock(&mut cursor)
-        .expect("Failed to deserialize creative_items.nbt");
+    let mut reader = pumpkin_nbt::deserializer::NbtReadHelperBedrock::new(
+        pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+    );
+    let nbt = pumpkin_nbt::Nbt::read(&mut reader).expect("Failed to read creative_items.nbt");
 
     let mut group_tokens = Vec::new();
-    for g in &data.groups {
-        let category = g.category;
-        let name = &g.name;
-        let mut icon_item_id = 0i16;
-        let mut icon_item_aux_value = 0u32;
+    if let Some(pumpkin_nbt::tag::NbtTag::List(groups_list)) = nbt.get("groups") {
+        for g_tag in groups_list {
+            if let pumpkin_nbt::tag::NbtTag::Compound(g) = g_tag {
+                let category = g.get_int("category").unwrap_or(0);
+                let name = g.get_string("name").unwrap_or_default().to_string();
+                let mut icon_item_id = 0i16;
+                let mut icon_item_aux_value = 0u32;
 
-        if let Some(ref icon) = g.icon
-            && let Some(&id) = bedrock_items_map.get(icon.name.as_str())
-        {
-            icon_item_id = id;
-            icon_item_aux_value = icon.meta.unwrap_or(0) as u32;
-        }
+                if let Some(pumpkin_nbt::tag::NbtTag::Compound(icon)) = g.get("icon") {
+                    if let Some(icon_name) = icon.get_string("name") {
+                        if let Some(&id) = bedrock_items_map.get(icon_name) {
+                            icon_item_id = id;
+                            icon_item_aux_value = icon.get_short("meta").unwrap_or(0) as u32;
+                        }
+                    }
+                }
 
-        group_tokens.push(quote! {
-            CreativeGroup {
-                category: #category,
-                name: #name,
-                icon_item_id: #icon_item_id,
-                icon_item_aux_value: #icon_item_aux_value,
+                group_tokens.push(quote! {
+                    CreativeGroup {
+                        category: #category,
+                        name: #name,
+                        icon_item_id: #icon_item_id,
+                        icon_item_aux_value: #icon_item_aux_value,
+                    }
+                });
             }
-        });
+        }
     }
 
-    // 4. Build entry definitions TokenStream
     let mut entry_tokens = Vec::new();
-    for item in &data.items {
-        if let Some(&id) = bedrock_items_map.get(item.name.as_str()) {
-            let item_aux_value = item.meta.unwrap_or(0) as u32;
-            let group_index = item.group_index.unwrap_or(0) as u32;
+    if let Some(pumpkin_nbt::tag::NbtTag::List(items_list)) = nbt.get("items") {
+        for item_tag in items_list {
+            if let pumpkin_nbt::tag::NbtTag::Compound(item) = item_tag {
+                if let Some(item_name) = item.get_string("name") {
+                    if let Some(&id) = bedrock_items_map.get(item_name) {
+                        let item_aux_value = item.get_short("meta").unwrap_or(0) as u32;
+                        let group_index = item.get_int("group_index").unwrap_or(0) as u32;
 
-            entry_tokens.push(quote! {
-                CreativeEntry {
-                    item_id: #id,
-                    item_aux_value: #item_aux_value,
-                    group_index: #group_index,
+                        entry_tokens.push(quote! {
+                            CreativeEntry {
+                                item_id: #id,
+                                item_aux_value: #item_aux_value,
+                                group_index: #group_index,
+                            }
+                        });
+                    }
                 }
-            });
+            }
         }
     }
 
@@ -113,7 +106,7 @@ pub fn build() -> TokenStream {
     let entries_len = entry_tokens.len();
 
     quote! {
-        #[derive(Clone, Copy, Debug)]
+        #[derive(Clone, Copy)]
         pub struct CreativeGroup {
             pub category: i32,
             pub name: &'static str,
@@ -121,7 +114,7 @@ pub fn build() -> TokenStream {
             pub icon_item_aux_value: u32,
         }
 
-        #[derive(Clone, Copy, Debug)]
+        #[derive(Clone, Copy)]
         pub struct CreativeEntry {
             pub item_id: i16,
             pub item_aux_value: u32,
