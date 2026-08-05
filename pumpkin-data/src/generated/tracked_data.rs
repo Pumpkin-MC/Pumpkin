@@ -2832,6 +2832,18 @@ impl TrackedData {
         v26_1: 255u8,
         v26_2: 255u8,
     };
+    pub const SALMON_VARIANT: TrackedId = TrackedId {
+        v1_21: 255u8,
+        v1_21_2: 255u8,
+        v1_21_4: 255u8,
+        v1_21_5: 255u8,
+        v1_21_6: 255u8,
+        v1_21_7: 255u8,
+        v1_21_9: 255u8,
+        v1_21_11: 255u8,
+        v26_1: 17u8,
+        v26_2: 17u8,
+    };
     pub const SCALE: TrackedId = TrackedId {
         v1_21: 12u8,
         v1_21_2: 12u8,

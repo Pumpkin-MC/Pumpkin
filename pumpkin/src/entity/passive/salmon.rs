@@ -146,7 +146,7 @@ impl SalmonEntity {
         self.variant.store(variant as u8, Relaxed);
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::VARIANT,
+                TrackedData::SALMON_VARIANT,
                 MetaDataType::INT,
                 VarInt(i32::from(variant as u8)),
             )],
@@ -186,7 +186,7 @@ impl Mob for SalmonEntity {
         Box::pin(async move {
             self.mob_entity.living_entity.entity.send_meta_data(
                 &[Metadata::new(
-                    TrackedData::VARIANT,
+                    TrackedData::SALMON_VARIANT,
                     MetaDataType::INT,
                     VarInt(i32::from(self.variant.load(Relaxed))),
                 )],
