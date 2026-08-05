@@ -295,4 +295,38 @@ mod tests {
             cage_chunk.get_block_state(&pumpkin_util::math::vector3::Vector3::new(1183, 68, -1330));
         assert_eq!(state.to_block_id(), pumpkin_data::Block::GRASS_BLOCK.id);
     }
+
+    /// Regression test: `Chunk::build_level_sections` (in `chunk_state.rs`) previously sized
+    /// its section-count loop off `Dimension::THE_NETHER.height` (256) instead of the
+    /// `ProtoChunk`'s own generation height (128, from `GenerationSettings::NETHER.shape`),
+    /// the same class of bug `845326f` fixed in `ProtoChunk::new` but in a sibling call site
+    /// that fix didn't touch. This indexed 16 sections into a `flat_block_map` sized for only
+    /// 8, panicking with an out-of-bounds index on every Nether chunk finalized to `Full` -
+    /// exactly what live testing hit when a player entered the Nether. Only reachable by
+    /// driving generation all the way to `Full`/`Level`, which no other test in this file did
+    /// for a non-Overworld dimension.
+    #[test]
+    fn nether_full_generation_produces_a_level_chunk() {
+        let dimension = Dimension::THE_NETHER;
+        let seed = Seed(42);
+        let block_registry = Arc::new(BlockRegistry);
+        let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
+        let biome_mixer_seed = hash_seed(world_gen.seed());
+
+        let chunk = generate_single_chunk(
+            &dimension,
+            biome_mixer_seed,
+            &world_gen,
+            block_registry.as_ref(),
+            0,
+            0,
+            StagedChunkEnum::Full,
+        );
+        let Chunk::Level(chunk) = chunk else {
+            panic!("full generation must return a level chunk");
+        };
+        // Confirms the sections actually cover the Nether's real 128-block generation
+        // height (8 sections of 16), not the Dimension's 256-block height field.
+        assert_eq!(chunk.section.block_sections.read().unwrap().len(), 8);
+    }
 }

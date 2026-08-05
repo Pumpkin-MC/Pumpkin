@@ -204,9 +204,16 @@ impl Chunk {
         }
     }
 
-    fn build_level_sections(proto_chunk: &ProtoChunk, dimension: &Dimension) -> ChunkSections {
-        let total_sections = dimension.height as usize / BlockPalette::SIZE;
-        let biome_min_y = biome_coords::from_block(dimension.min_y);
+    fn build_level_sections(proto_chunk: &ProtoChunk) -> ChunkSections {
+        // Must use the ProtoChunk's own height/bottom_y, not the Dimension's: for Noise-
+        // generated worlds these differ from the noise settings' shape (e.g. Nether/End are
+        // height=128 in GenerationSettings.shape vs height=256 on Dimension::THE_NETHER/
+        // THE_END). Sizing off dimension.height here recreates the exact bug 845326f fixed in
+        // ProtoChunk::new, just one call site over: flat_block_map is allocated for
+        // proto_chunk.height() blocks, so iterating dimension.height/16 sections indexes past
+        // the end of that array as soon as y reaches the real (smaller) height.
+        let total_sections = proto_chunk.height() as usize / BlockPalette::SIZE;
+        let biome_min_y = biome_coords::from_block(proto_chunk.bottom_y() as i32);
         let block_sections = (0..total_sections)
             .map(|section_index| {
                 BlockPalette::from_fn(|x, y, z| {
@@ -226,7 +233,11 @@ impl Chunk {
             .collect::<Vec<_>>()
             .into_boxed_slice();
 
-        ChunkSections::from_palettes(block_sections, biome_sections, dimension.min_y)
+        ChunkSections::from_palettes(
+            block_sections,
+            biome_sections,
+            proto_chunk.bottom_y() as i32,
+        )
     }
 
     fn build_level_heightmaps(proto_chunk: &ProtoChunk, min_y: i32) -> ChunkHeightmaps {
@@ -291,7 +302,7 @@ impl Chunk {
 
         let proto_chunk = *proto_chunk_box;
 
-        let sections = Self::build_level_sections(&proto_chunk, dimension);
+        let sections = Self::build_level_sections(&proto_chunk);
         let heightmaps = Self::build_level_heightmaps(&proto_chunk, dimension.min_y);
 
         // Move the light data instead of cloning it
