@@ -379,8 +379,10 @@ impl ChunkData {
                 motion_blocking_no_leaves: h_compound
                     .get_long_array("MOTION_BLOCKING_NO_LEAVES")
                     .map(|a| a.to_vec().into_boxed_slice()),
-                // Absent on chunks saved before this heightmap was added; None is
-                // handled gracefully by `ChunkHeightmaps::get` (returns min_y - 1).
+                // Any of these can be absent: vanilla only serializes the
+                // heightmap types listed for the chunk's status. Absence is
+                // resolved by `prime_missing_heightmaps` below, before anything
+                // can mistake it for an empty column.
                 ocean_floor: h_compound
                     .get_long_array("OCEAN_FLOOR")
                     .map(|a| a.to_vec().into_boxed_slice()),
@@ -439,7 +441,7 @@ impl ChunkData {
             _ => ChunkStatus::Empty,
         };
 
-        Ok(Self {
+        let chunk = Self {
             section,
             heightmap: std::sync::Mutex::new(heightmaps),
             x: position.x,
@@ -455,7 +457,11 @@ impl ChunkData {
             blending_data: None,
             unknown_nbt,
             inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
-        })
+        };
+
+        chunk.prime_missing_heightmaps();
+
+        Ok(chunk)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -842,8 +848,9 @@ impl Default for LightContainer {
 }
 
 #[cfg(test)]
-mod chunk_codec_tests {
+pub(crate) mod chunk_codec_tests {
     use super::*;
+    use crate::chunk::ChunkHeightmapType;
     use pumpkin_nbt::tag::NbtTag;
 
     fn full_sky_light(value: u8) -> Box<[i8]> {
@@ -858,6 +865,63 @@ mod chunk_codec_tests {
             compound.put("SkyLight", NbtTag::ByteArray(full_sky_light(value)));
         }
         NbtTag::Compound(compound)
+    }
+
+    /// Encodes an overworld-shaped chunk whose lowest 8 sections are solid
+    /// stone and which carries a `Heightmaps` compound *without* a
+    /// `WORLD_SURFACE` entry - the shape vanilla writes for any chunk saved
+    /// below `minecraft:full` that already contains terrain.
+    pub fn encode_terrain_chunk_without_world_surface(chunk_x: i32, chunk_z: i32) -> Vec<u8> {
+        const MIN_SECTION: i8 = -4;
+        const MAX_SECTION: i8 = 19;
+        const TOP_STONE_SECTION: i8 = 3;
+
+        let stone = i32::from(Block::STONE.default_state.id.as_u16());
+
+        let mut sections = Vec::new();
+        for y in MIN_SECTION..=MAX_SECTION {
+            let mut compound = NbtCompound::new();
+            compound.put_byte("Y", y);
+            if y <= TOP_STONE_SECTION {
+                let mut block_states = NbtCompound::new();
+                // Single-entry palette and no `data`: a uniform section.
+                block_states.put("palette", NbtTag::IntArray(vec![stone]));
+                compound.put_compound("block_states", block_states);
+            }
+            sections.push(NbtTag::Compound(compound));
+        }
+
+        let mut root = NbtCompound::new();
+        root.put_int("xPos", chunk_x);
+        root.put_int("zPos", chunk_z);
+        root.put_int("yPos", i32::from(MIN_SECTION));
+        root.put_list("sections", sections);
+        root.put_string("Status", "minecraft:carvers".to_string());
+        // Present but empty, exactly as a pre-`full` vanilla chunk with no
+        // status-eligible heightmap types is written.
+        root.put_compound("Heightmaps", NbtCompound::new());
+
+        pumpkin_nbt::Nbt::from(root).write().to_vec()
+    }
+
+    #[test]
+    fn missing_world_surface_heightmap_is_recomputed_from_blocks() {
+        let bytes = encode_terrain_chunk_without_world_surface(0, 0);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let min_y = chunk.section.min_y;
+        let heightmap = chunk.heightmap.lock().unwrap();
+
+        // Stone fills sections -4..=3, so the topmost non-air block is y = 63.
+        // Without priming, `get` answers `min_y - 1` (-65), which reads as "this
+        // column has no terrain at all" and makes the sky light producer flood
+        // the entire column with 15.
+        for (x, z) in [(0, 0), (7, 9), (15, 15)] {
+            assert_eq!(
+                heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y),
+                63,
+                "column ({x}, {z}) must report its real surface, not the empty-column sentinel"
+            );
+        }
     }
 
     fn encode_chunk(min_y_section: i32, sections: Vec<NbtTag>) -> Vec<u8> {

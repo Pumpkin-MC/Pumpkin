@@ -842,6 +842,58 @@ impl ChunkData {
         }
     }
 
+    /// Recompute any heightmap that was absent from this chunk's on-disk NBT.
+    ///
+    /// `ChunkHeightmaps::get` answers a missing heightmap with `min_y - 1`, the
+    /// same sentinel it returns for a column that genuinely contains no opaque
+    /// block. That conflation is only safe if "absent" never reaches a reader,
+    /// so absence is resolved here, at the load boundary, where it is still
+    /// distinguishable from emptiness. After this runs, `min_y - 1` means
+    /// exactly one thing: the column really is empty.
+    ///
+    /// Vanilla worlds hit this constantly: only the heightmap types listed for
+    /// a chunk's status are serialized, so chunks saved below `minecraft:full`
+    /// carry `WORLD_SURFACE_WG`/`OCEAN_FLOOR_WG` (or no `Heightmaps` entries at
+    /// all) rather than `WORLD_SURFACE`, and some of those already hold terrain.
+    ///
+    /// A recomputed heightmap can still be `None` when the chunk holds no
+    /// opaque block anywhere; that is the empty-column case and is correct.
+    pub fn prime_missing_heightmaps(&self) {
+        let missing = {
+            let heightmap = self
+                .heightmap
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            heightmap.world_surface.is_none()
+                || heightmap.motion_blocking.is_none()
+                || heightmap.motion_blocking_no_leaves.is_none()
+                || heightmap.ocean_floor.is_none()
+        };
+        if !missing {
+            return;
+        }
+
+        // Only the absent maps are replaced; a heightmap that really was written
+        // stays exactly as written.
+        let computed = self.calculate_heightmap();
+        let mut heightmap = self
+            .heightmap
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if heightmap.world_surface.is_none() {
+            heightmap.world_surface = computed.world_surface;
+        }
+        if heightmap.motion_blocking.is_none() {
+            heightmap.motion_blocking = computed.motion_blocking;
+        }
+        if heightmap.motion_blocking_no_leaves.is_none() {
+            heightmap.motion_blocking_no_leaves = computed.motion_blocking_no_leaves;
+        }
+        if heightmap.ocean_floor.is_none() {
+            heightmap.ocean_floor = computed.ocean_floor;
+        }
+    }
+
     #[must_use]
     pub fn get_highest_non_empty_subchunk(&self) -> usize {
         self.section
