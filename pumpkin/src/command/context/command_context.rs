@@ -216,17 +216,26 @@ impl<'a> ContextChain<'a> {
     #[must_use]
     pub fn try_flatten(root: &CommandContext<'a>) -> Option<Self> {
         let mut modifiers = Vec::new();
-        let mut current = root;
+        let mut current = Arc::new(root.clone());
 
         loop {
-            if let Some(child) = current.get_child() {
-                modifiers.push(child.clone());
-                current = child;
-            } else {
-                return current
-                    .command
-                    .is_some()
-                    .then(|| Self::new(modifiers, Arc::new(current.clone())));
+            // A context holds the modifier of the node that redirected away from it,
+            // so it is the *parent* of each link that carries the modifier to run,
+            // never the child. Pushing the child here would skip the first modifier
+            // (dropping conditions such as `execute if block`) and would instead run
+            // the trailing executable context's own modifier.
+            let child = current.get_child().cloned();
+            match child {
+                Some(child) => {
+                    modifiers.push(current);
+                    current = child;
+                }
+                None => {
+                    return current
+                        .command
+                        .is_some()
+                        .then(|| Self::new(modifiers, current));
+                }
             }
         }
     }
