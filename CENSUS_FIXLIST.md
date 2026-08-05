@@ -296,3 +296,91 @@ Goal-based approximation following the precedent above.
    *some* periodic "two nearby villagers meet" tick, not necessarily a full brain port —
    candidate for folding into the existing 20-tick `mob_tick` cadence already used for
    gossip decay in `VillagerEntity`.
+
+## GameEvent emission audit (2026-08-04)
+
+PARITY.md does not exist in any worktree on this machine (`ls /home/eshanki/pumpkin-wt/*/PARITY.md`
+comes back empty; only a stray `PARITY.md.bak` with unrelated lighting/potions content is
+present in this worktree) — the campaign-state note describing a "section 6" flagging most
+GameEvent emission call sites as missing could not be found or cited. Direct inspection found
+the premise stale regardless: the engine (`pumpkin/src/world/game_event/`) plus **23** of
+vanilla's 46 non-`Resonate` `GameEvent` variants (from `pumpkin-data/src/generated/game_event.rs`)
+were already emitted somewhere in `pumpkin/src` before this session — BlockActivate, BlockAttach,
+BlockChange, BlockDeactivate, BlockDestroy, BlockDetach, BlockPlace, ContainerClose,
+ContainerOpen, Drink, Eat, EntityAction, EntityDie, EntityDismount, EntityPlace, FluidPickup,
+FluidPlace, JukeboxPlay, JukeboxStopPlay, NoteBlockPlay, ProjectileLand, Shear, Splash.
+(There's a 743-commits-stale local/fork branch `pr/gameevent-emissions` that landed most of
+this in an earlier session under different commit hashes; `git log --cherry-pick --right-only
+master...pr/gameevent-emissions` shows nothing genuinely dropped, just patch-id drift from two
+commits — no free re-land available.)
+
+This pass (branch `gameevent-audit-work`) added 4 more, each a one-line insertion at an
+existing state-change site with a precise vanilla citation:
+
+- **BlockOpen/BlockClose** — doors (`doors.rs`: `toggle_door` player-click, `on_neighbor_update`
+  redstone, `set_door_open` mob-AI path), trapdoors (`trapdoor.rs`: `toggle_trapdoor`,
+  `on_neighbor_update`), fence gates (`fence_gates.rs`: `toggle_fence_gate`,
+  `on_neighbor_update`). Cites `DoorBlock.java:208/220/233`, `TrapDoorBlock.java:122`,
+  `FenceGateBlock.java:161/198`.
+- **PrimeFuse** — `TNTBlock::prime` (`tnt.rs`, covers flint & steel/fire charge ignition,
+  initial and post-place redstone power, and fire spreading onto TNT via `fire.rs:201`) and
+  the creeper fuse-start tick (`creeper.rs::mob_tick`, the `fuse_speed > 0 && current == 0`
+  branch). Cites `TntBlock.java:92`, `Creeper.java:136`.
+- **Explode** — `Explosion::explode` (`explosion.rs`), placed as the very first statement in
+  the function to match `ServerExplosion.java:236`, which fires before block/entity
+  interaction so an explosion that destroys an occluding block is still heard by anything on
+  the far side (verified by reading `ServerExplosion.explode()` in full, not assumed from the
+  grep hit).
+
+None of the touched files had pre-existing tests exercising these call sites, and no `--lib`
+test anywhere in the crate constructs a `World`, so no regression test was added for the
+emissions themselves — `cargo test -p pumpkin --lib` (758 tests) still passes unchanged,
+confirming no behavior outside the new calls regressed.
+
+### Remaining missing emissions (not attempted this pass) — 19 of 46
+
+Ranked by what a sculk sensor/Warden would plausibly want to detect, each with the specific
+architectural blocker found, not just "not done yet":
+
+1. **Step / Swim / Flap / HitGround / Bounce** — the single highest-value gap (footsteps are
+   the main thing a sculk sensor listens for) and *not* a safe one-liner. Vanilla routes all
+   of these through `Entity.applyMovementEmissionAndPlaySound` → `vibrationAndSoundEffectsFromBlock`,
+   gated by a `MovementEmission` enum and a per-tick clipped-movement queue
+   (`Entity.java:795, 872-889, 991-1012, 1042-1049`) — pumpkin has no equivalent step-sound/
+   movement-emission accumulator at all. Also: the engine's listener registry is a flat
+   per-world `Vec` scanned on every `emit_game_event` call (documented in
+   `game_event/mod.rs`'s module comment), not chunk-sharded like vanilla's
+   `EuclideanGameEventListenerRegistry` — firing STEP on raw per-tick movement without that
+   sharding is a perf hazard on top of the missing gate. Needs its own dedicated pass, not a
+   guessed insertion.
+2. **Equip / Unequip** — `LivingEntity::send_equipment_changes` (`living.rs:286`) is the
+   correct single hook (~20 call sites across the crate, all already inside `async fn`s), but
+   it's currently synchronous, receives only the new stack (vanilla's
+   `LivingEntity.java:689-711` `onEquipItem` also needs the old stack to decide the sound, and
+   gates on `!ItemStack.isSameItemSameComponents`), and `LivingEntity` stores no self
+   `Arc<dyn EntityBase>`/`Weak` to build a `GameEventContext::of_entity(self)` from inside an
+   `&self` method. Fixable, but needs that self-reference added first, not a stretch to force
+   through this pass.
+3. **ProjectileShoot** — vanilla's single hook is `Projectile.tick()`'s `hasBeenShot` gate
+   (`Projectile.java:99-104`, fires exactly once on an entity's first tick after spawn).
+   Pumpkin has no equivalent: each projectile type (`arrow.rs`, `snowball.rs`, `trident.rs`,
+   etc.) reimplements `EntityBase::tick` from scratch, and `ArrowEntity::tick` never calls
+   the generic `impl EntityBase for Entity` tick (confirmed by reading `arrow.rs:309-324`) —
+   there is no shared first-tick hook to attach to. `Entity::age == 1` inside the generic
+   tick (age is incremented once per tick in `world/mod.rs:1148` right before `tick()` runs)
+   would reproduce vanilla's semantics exactly, but only once projectiles actually delegate to
+   it, which none currently do.
+4. **Shriek** — `pumpkin/src/block/entities/sculk_shrieker.rs` is a bare NBT-only stub (no
+   sound, no Warden-summoning, no sensor wiring at all). This needs the mechanic implemented,
+   not an emission added to it. Cites `SculkShriekerBlockEntity.java:124`.
+5. **SculkSensorTendrilsClicking** — cites `SculkSensorBlock.java:218`; not checked against
+   pumpkin's `sculk_sensor.rs` activation path this pass, so unknown whether it's a one-liner
+   or needs more — flagged rather than guessed.
+6. **Remaining, cited but not sized/attempted**: `EntityInteract` (`Entity.java:2318`,
+   `Mob.java:1132`/`1141`, `Player.java:849`), `EntityMount` (`Entity.java:2461`),
+   `EntityDamage` (`LivingEntity.java:1970`, `Player.java:768`, `VehicleEntity.java:48`,
+   `ArmorStand.java:332`/`393`, `ItemEntity.java:301`), `Teleport` (`EnderMan.java:291`,
+   `Shulker.java:404`, `TeleportRandomlyConsumeEffect.java:56`), `InstrumentPlay`
+   (`InstrumentItem.java:65`), `ElytraGlide` (`LivingEntity.java:3200`),
+   `ItemInteractStart`/`ItemInteractFinish` (`LivingEntity.java:3506`/`3621`,
+   `FishingRodItem.java:40`/`59`, `BoneMealItem.java:42`/`53`), `LightningStrike`.
