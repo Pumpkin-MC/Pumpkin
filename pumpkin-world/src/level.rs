@@ -708,6 +708,11 @@ impl Level {
         self.forced_chunks.lock().unwrap().iter().copied().collect()
     }
 
+    /// Allocation-free variant of `forced_chunks` for the per-tick active-chunk sweep.
+    pub fn extend_with_forced_chunks(&self, out: &mut FxHashSet<Vector2<i32>>) {
+        out.extend(self.forced_chunks.lock().unwrap().iter().copied());
+    }
+
     pub async fn get_or_fetch_chunk<R, F: Fn(&SyncChunk) -> R>(
         self: &Arc<Self>,
         pos: Vector2<i32>,
@@ -1210,11 +1215,40 @@ mod tests {
         .await
         .is_ok();
 
-        level.shutdown().await;
         assert!(
             loaded,
             "forceloaded chunk never reached the loaded state; /setblock would still report \
              argument.pos.unloaded"
+        );
+
+        // ...and stays loaded with nobody watching it. `clean_memory` is the periodic sweep run
+        // from `World::tick`; it only prunes `chunk_watchers`/`loaded_entity_chunks`, block chunks
+        // are added to and removed from `loaded_chunks` solely by the generation scheduler
+        // (`schedule.rs` `public_chunk_map`). A forced chunk has zero watchers, so this asserts the
+        // sweep does not take it away.
+        assert!(!level.is_chunk_watched(&pos));
+        let _ = level.clean_memory();
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(
+            level.is_chunk_loaded(&pos),
+            "forceloaded chunk must stay loaded while the ticket is held"
+        );
+
+        // Removing the forceload must actually release it, otherwise the assertion above could be
+        // passing on incidental retention rather than on the ticket.
+        assert!(level.set_chunk_forced(pos, false));
+        let unloaded = tokio::time::timeout(Duration::from_mins(1), async {
+            while level.is_chunk_loaded(&pos) {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .is_ok();
+
+        level.shutdown().await;
+        assert!(
+            unloaded,
+            "chunk must be released once the forceload ticket is dropped"
         );
     }
 }

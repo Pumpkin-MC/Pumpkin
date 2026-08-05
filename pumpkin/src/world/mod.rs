@@ -469,7 +469,7 @@ impl World {
                     });
             extend_active_chunks(&mut active_chunks, center, i32::from(simulation_distance));
         }
-        active_chunks.extend(self.level.forced_chunks());
+        self.level.extend_with_forced_chunks(&mut active_chunks);
 
         let mut spawnable_chunks = 0;
         for pos in &active_chunks {
