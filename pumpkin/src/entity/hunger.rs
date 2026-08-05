@@ -140,7 +140,10 @@ impl HungerManager {
     /// Add hunger manually
     pub fn add_hunger(&self, hunger: u8) {
         let current = self.level.load();
-        self.level.store((current + hunger).min(MAX_FOOD));
+        // Saturating, because the amount comes from an effect amplifier the
+        // player controls and the sum can leave `u8` before it is clamped.
+        self.level
+            .store(current.saturating_add(hunger).min(MAX_FOOD));
     }
 
     /// Add saturation manually
@@ -200,3 +203,45 @@ impl NBTStorage for HungerManager {
 }
 
 impl NBTStorageInit for HungerManager {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `/effect` accepts an amplifier up to 255, and the saturation branch of
+    /// `apply_effect_tick` passes `amplifier + 1` here every tick.
+    const HIGH_AMPLIFIER_HUNGER: u8 = 237;
+
+    #[test]
+    fn add_hunger_clamps_a_large_amount_instead_of_wrapping() {
+        let hunger = HungerManager::default();
+        assert_eq!(hunger.level.load(), MAX_FOOD);
+
+        hunger.add_hunger(HIGH_AMPLIFIER_HUNGER);
+
+        assert_eq!(hunger.level.load(), MAX_FOOD);
+    }
+
+    /// Saturation ticks every tick, so a wrapping add does not just produce one
+    /// wrong value: the bar oscillates between full and nearly empty 20 times a
+    /// second, which is what #2573 reports seeing.
+    #[test]
+    fn repeated_high_amplifier_saturation_keeps_the_bar_full() {
+        let hunger = HungerManager::default();
+
+        for _ in 0..5 {
+            hunger.add_hunger(HIGH_AMPLIFIER_HUNGER);
+            assert_eq!(hunger.level.load(), MAX_FOOD);
+        }
+    }
+
+    #[test]
+    fn add_hunger_still_adds_normally() {
+        let hunger = HungerManager::default();
+        hunger.set_level(7);
+
+        hunger.add_hunger(3);
+
+        assert_eq!(hunger.level.load(), 10);
+    }
+}
