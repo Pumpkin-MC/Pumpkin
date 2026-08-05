@@ -274,7 +274,6 @@ pub struct World {
     pub raids: Mutex<raid::RaidManager>,
     pub spawn_state: ArcSwap<SpawnState>,
     pub active_chunks: ArcSwap<FxHashSet<Vector2<i32>>>,
-    pub forced_chunks: std::sync::Mutex<FxHashSet<Vector2<i32>>>,
     /// Block entities indexed by chunk, so ticking only visits the currently
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
@@ -406,7 +405,6 @@ impl World {
             raids: Mutex::new(raid::RaidManager::new()),
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
             active_chunks: ArcSwap::new(Arc::new(FxHashSet::default())),
-            forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             server,
             block_entities: DashMap::new(),
             game_event_listeners: Mutex::new(Vec::new()),
@@ -471,9 +469,7 @@ impl World {
                     });
             extend_active_chunks(&mut active_chunks, center, i32::from(simulation_distance));
         }
-        if let Ok(forced) = self.forced_chunks.lock() {
-            active_chunks.extend(forced.iter().copied());
-        }
+        self.level.extend_with_forced_chunks(&mut active_chunks);
 
         let mut spawnable_chunks = 0;
         for pos in &active_chunks {

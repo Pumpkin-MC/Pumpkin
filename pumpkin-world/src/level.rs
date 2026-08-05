@@ -72,6 +72,11 @@ pub struct Level {
     pub chunks_with_scheduled_ticks: Arc<dashmap::DashSet<Vector2<i32>>>,
     pub chunk_loading: Mutex<ChunkLoading>,
 
+    /// Chunks kept loaded by `/forceload add`, independent of any player.
+    /// Mutated only through `set_chunk_forced` / `clear_forced_chunks`, which keep this set and
+    /// the `chunk_loading` ticket multiset in sync.
+    forced_chunks: Mutex<FxHashSet<Vector2<i32>>>,
+
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
     pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
@@ -266,6 +271,7 @@ impl Level {
             loaded_entity_chunks: Arc::new(DashMap::new()),
             chunks_with_scheduled_ticks: Arc::new(dashmap::DashSet::new()),
             chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
+            forced_chunks: Mutex::new(FxHashSet::default()),
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
             chunk_system_tasks: TaskTracker::new(),
@@ -640,6 +646,73 @@ impl Level {
         entity_chunks_to_remove
     }
 
+    /// Load level held by a `/forceload`ed chunk.
+    ///
+    /// Vanilla gives forced chunks a ticket with load level 31 (minecraft.wiki, Commands/forceload:
+    /// "Forced chunks get load ticket with load level of 31, the same level as the ticket caused by
+    /// a player, which means that the said chunks process all aspects of the game"). Vanilla's full
+    /// level is 33, so that is two levels below full, i.e. the entity-ticking level. Pumpkin's
+    /// scale is offset: `ChunkLoading::FULL_CHUNK_LEVEL` is 43, so the same "two below full" is
+    /// expressed here through Pumpkin's own helper rather than by copying the literal 31.
+    pub const FORCED_CHUNK_LEVEL: i8 = ChunkLoading::get_level_from_simulation_distance(2);
+
+    /// Adds or removes a `/forceload` ticket for `pos`.
+    ///
+    /// Returns `true` if the forced set actually changed. The ticket is only issued/dropped on a
+    /// real change, because `ChunkLoading::ticket` is a multiset: issuing two tickets for one
+    /// `forceload add` would leave the chunk pinned after `forceload remove`.
+    pub fn set_chunk_forced(&self, pos: Vector2<i32>, forced: bool) -> bool {
+        let changed = {
+            let mut set = self.forced_chunks.lock().unwrap();
+            if forced {
+                set.insert(pos)
+            } else {
+                set.remove(&pos)
+            }
+        };
+        if changed {
+            let mut lock = self.chunk_loading.lock().unwrap();
+            if forced {
+                lock.add_ticket(pos, Self::FORCED_CHUNK_LEVEL);
+            } else {
+                lock.remove_ticket(pos, Self::FORCED_CHUNK_LEVEL);
+            }
+            lock.send_change();
+        }
+        changed
+    }
+
+    /// Drops every `/forceload` ticket. Returns the number of chunks that were forced.
+    pub fn clear_forced_chunks(&self) -> usize {
+        let removed: Vec<_> = {
+            let mut set = self.forced_chunks.lock().unwrap();
+            set.drain().collect()
+        };
+        if !removed.is_empty() {
+            let mut lock = self.chunk_loading.lock().unwrap();
+            for pos in &removed {
+                lock.remove_ticket(*pos, Self::FORCED_CHUNK_LEVEL);
+            }
+            lock.send_change();
+        }
+        removed.len()
+    }
+
+    #[must_use]
+    pub fn is_chunk_forced(&self, pos: &Vector2<i32>) -> bool {
+        self.forced_chunks.lock().unwrap().contains(pos)
+    }
+
+    #[must_use]
+    pub fn forced_chunks(&self) -> Vec<Vector2<i32>> {
+        self.forced_chunks.lock().unwrap().iter().copied().collect()
+    }
+
+    /// Allocation-free variant of `forced_chunks` for the per-tick active-chunk sweep.
+    pub fn extend_with_forced_chunks(&self, out: &mut FxHashSet<Vector2<i32>>) {
+        out.extend(self.forced_chunks.lock().unwrap().iter().copied());
+    }
+
     pub async fn get_or_fetch_chunk<R, F: Fn(&SyncChunk) -> R>(
         self: &Arc<Self>,
         pos: Vector2<i32>,
@@ -1002,5 +1075,180 @@ mod tests {
     #[test]
     fn negative_random_tick_speed_disables_section_sampling() {
         assert_eq!(random_tick_samples_per_section(-1), 0);
+    }
+
+    use super::Level;
+    use crate::chunk_system::StagedChunkEnum;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::vector2::Vector2;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    /// Minimal `WorldPortalExt` so the generation workers can run without the `pumpkin` crate.
+    struct TestPortal;
+
+    impl crate::world::WorldPortalExt for TestPortal {
+        fn can_place_at(
+            &self,
+            _block: &pumpkin_data::Block,
+            _state: &pumpkin_data::BlockState,
+            _block_accessor: &dyn crate::world::BlockAccessor,
+            _block_pos: &pumpkin_util::math::position::BlockPos,
+        ) -> bool {
+            true
+        }
+
+        fn mirror(
+            &self,
+            block: &pumpkin_data::Block,
+            state_id: pumpkin_data::BlockStateId,
+            mirror: pumpkin_data::Mirror,
+        ) -> &'static pumpkin_data::BlockState {
+            block.mirror(state_id, mirror)
+        }
+
+        fn rotate(
+            &self,
+            block: &pumpkin_data::Block,
+            state_id: pumpkin_data::BlockStateId,
+            rotation: pumpkin_data::Rotation,
+        ) -> &'static pumpkin_data::BlockState {
+            block.rotate(state_id, rotation)
+        }
+
+        fn spawn_mobs_for_chunk_generation(
+            &self,
+            _cache: &mut dyn crate::generation::proto_chunk::GenerationCache,
+            _biome: &'static pumpkin_data::biome::Biome,
+            _chunk_x: i32,
+            _chunk_z: i32,
+        ) {
+        }
+    }
+
+    fn test_level(temp: &tempfile::TempDir) -> Arc<Level> {
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            temp.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+            None,
+        );
+        level.world_portal.store(Arc::new(Some(
+            Arc::new(TestPortal) as Arc<dyn crate::world::WorldPortalExt>
+        )));
+        level
+    }
+
+    /// The forced-chunk level must map to the fully-loaded chunk stage, otherwise a forceloaded
+    /// chunk would stop short of `Full` and still not be in `loaded_chunks`.
+    #[test]
+    fn forced_chunk_level_maps_to_full_stage() {
+        assert_eq!(
+            StagedChunkEnum::level_to_stage(Level::FORCED_CHUNK_LEVEL),
+            StagedChunkEnum::Full
+        );
+    }
+
+    /// `ChunkLoading::ticket` is a multiset, so a repeated `forceload add` must not stack tickets:
+    /// one `forceload remove` has to fully release the chunk.
+    #[tokio::test]
+    async fn forced_chunk_tickets_do_not_stack() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let level = test_level(&temp);
+        let pos = Vector2::new(4, 4);
+
+        assert!(level.set_chunk_forced(pos, true));
+        assert!(
+            !level.set_chunk_forced(pos, true),
+            "second add must be a no-op"
+        );
+        assert_eq!(
+            level.chunk_loading.lock().unwrap().ticket.get(&pos),
+            Some(&vec![Level::FORCED_CHUNK_LEVEL])
+        );
+
+        assert!(level.set_chunk_forced(pos, false));
+        assert!(!level.is_chunk_forced(&pos));
+        assert!(
+            !level
+                .chunk_loading
+                .lock()
+                .unwrap()
+                .ticket
+                .contains_key(&pos),
+            "a single remove must drop the ticket"
+        );
+
+        level.shutdown().await;
+    }
+
+    /// Regression test for `/forceload add` reporting success while the chunk never loads.
+    ///
+    /// This drives the real chunk scheduler with no players and no watchers, and asserts the
+    /// target chunk actually reaches `Level::loaded_chunks` - which is exactly what
+    /// `BlockPosArgumentType::get_loaded_block_pos` checks before running `/setblock`.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn forceload_ticket_loads_the_chunk_with_no_players() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let level = test_level(&temp);
+        let pos = Vector2::new(0, 0);
+
+        assert!(
+            !level.is_chunk_loaded(&pos),
+            "chunk must not be loaded before the forceload"
+        );
+
+        assert!(level.set_chunk_forced(pos, true));
+        assert_eq!(
+            level.chunk_loading.lock().unwrap().pos_level.get(&pos),
+            Some(&Level::FORCED_CHUNK_LEVEL),
+            "forceload must raise the chunk's load level"
+        );
+
+        let loaded = tokio::time::timeout(Duration::from_mins(3), async {
+            while !level.is_chunk_loaded(&pos) {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .is_ok();
+
+        assert!(
+            loaded,
+            "forceloaded chunk never reached the loaded state; /setblock would still report \
+             argument.pos.unloaded"
+        );
+
+        // ...and stays loaded with nobody watching it. `clean_memory` is the periodic sweep run
+        // from `World::tick`; it only prunes `chunk_watchers`/`loaded_entity_chunks`, block chunks
+        // are added to and removed from `loaded_chunks` solely by the generation scheduler
+        // (`schedule.rs` `public_chunk_map`). A forced chunk has zero watchers, so this asserts the
+        // sweep does not take it away.
+        assert!(!level.is_chunk_watched(&pos));
+        let _ = level.clean_memory();
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(
+            level.is_chunk_loaded(&pos),
+            "forceloaded chunk must stay loaded while the ticket is held"
+        );
+
+        // Removing the forceload must actually release it, otherwise the assertion above could be
+        // passing on incidental retention rather than on the ticket.
+        assert!(level.set_chunk_forced(pos, false));
+        let unloaded = tokio::time::timeout(Duration::from_mins(1), async {
+            while level.is_chunk_loaded(&pos) {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .is_ok();
+
+        level.shutdown().await;
+        assert!(
+            unloaded,
+            "chunk must be released once the forceload ticket is dropped"
+        );
     }
 }
