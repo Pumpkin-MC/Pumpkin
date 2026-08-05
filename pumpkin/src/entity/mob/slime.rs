@@ -476,7 +476,10 @@ impl MoveControlTrait for SlimeMoveControl {
         entity.head_yaw.store(new_yaw);
         entity.body_yaw.store(new_yaw);
 
+        // SlimeMoveControl calls setSpeed(speedModifier * MOVEMENT_SPEED) like the
+        // base MoveControl, so the forward input carries the attribute too.
         let speed_modifier = slime.speed_modifier.load();
+        let scaled_speed = living_entity.speed_for_modifier(speed_modifier);
         let mut movement_input = Vector3::new(0.0, 0.0, 0.0);
 
         let on_ground = entity.on_ground.load(Ordering::Relaxed);
@@ -502,7 +505,7 @@ impl MoveControlTrait for SlimeMoveControl {
                             slime.get_sound_pitch(),
                         );
                     }
-                    movement_input.z = speed_modifier;
+                    movement_input.z = scaled_speed;
                 } else {
                     slime.jump_delay.store(current_delay - 1, Ordering::Relaxed);
                     living_entity.jumping.store(false, Ordering::SeqCst);
@@ -513,10 +516,11 @@ impl MoveControlTrait for SlimeMoveControl {
         } else {
             // In air: move forward but don't "jump" again
             if speed_modifier > 0.0 {
-                movement_input.z = speed_modifier;
+                movement_input.z = scaled_speed;
             }
             living_entity.jumping.store(false, Ordering::SeqCst);
         }
+        living_entity.speed.store(movement_input.z);
         living_entity.movement_input.store(movement_input);
     }
 }

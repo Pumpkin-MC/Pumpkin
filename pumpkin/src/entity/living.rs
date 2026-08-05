@@ -146,6 +146,11 @@ pub struct LivingEntity {
     pub entity_equipment: Arc<Mutex<EntityEquipment>>,
     pub equipment_drop_chances: Arc<Mutex<HashMap<EquipmentSlot, f32>>>,
     pub movement_input: AtomicCell<Vector3<f64>>,
+    /// `LivingEntity.speed` in vanilla: the per-tick movement factor consumed by
+    /// `travel`/`getFrictionInfluencedSpeed`. For players this is the raw
+    /// `MOVEMENT_SPEED` attribute (`Player.aiStep`), for mobs it is
+    /// `speedModifier * MOVEMENT_SPEED` as written by `MoveControl` via `Mob.setSpeed`.
+    pub speed: AtomicCell<f64>,
     pub equipment_slots: Arc<HashMap<usize, EquipmentSlot>>,
 
     pub jumping: AtomicBool,
@@ -237,6 +242,7 @@ impl LivingEntity {
             0.8
         };
         let mut max_health: f32 = 20.0; // Overridden by attribute base below
+        let mut base_movement_speed = Attributes::MOVEMENT_SPEED.default_value;
         Self {
             // Populate local attribute instances from the default registry and get initial vars
             attributes: {
@@ -245,6 +251,9 @@ impl LivingEntity {
                 for (attr, base) in entity.entity_type.attributes {
                     if attr.id == Attributes::MAX_HEALTH.id {
                         max_health = *base as f32;
+                    }
+                    if attr.id == Attributes::MOVEMENT_SPEED.id {
+                        base_movement_speed = *base;
                     }
                     m.insert(attr.id, AttributeInstance::new(*base));
                 }
@@ -276,6 +285,7 @@ impl LivingEntity {
             last_attack_time: AtomicI32::new(0),
             not_targetable_as_enemy: AtomicBool::new(false),
             movement_input: AtomicCell::new(Vector3::default()),
+            speed: AtomicCell::new(base_movement_speed),
             water_movement_speed_multiplier,
             raid_membership: AtomicCell::new(None),
             can_join_raid: AtomicBool::new(false),
@@ -542,6 +552,21 @@ impl LivingEntity {
         let map = self.attributes.read().unwrap();
         map.get(&attribute.id)
             .map_or(attribute.default_value, AttributeInstance::value)
+    }
+
+    /// `Mob.setSpeed`: stores the movement factor and mirrors it into the forward
+    /// movement input (`setZza`).
+    pub fn set_speed(&self, speed: f64) {
+        self.speed.store(speed);
+        let mut input = self.movement_input.load();
+        input.z = speed;
+        self.movement_input.store(input);
+    }
+
+    /// `speedModifier * MOVEMENT_SPEED`, the value `MoveControl` passes to `Mob.setSpeed`.
+    #[must_use]
+    pub fn speed_for_modifier(&self, speed_modifier: f64) -> f64 {
+        speed_modifier * self.get_attribute_value(&Attributes::MOVEMENT_SPEED)
     }
 
     /// Returns the base attribute value for `attribute` for this entity's type.
@@ -962,6 +987,13 @@ impl LivingEntity {
 
         self.entity.check_zero_velo();
 
+        // Player.aiStep: players refresh `speed` from the attribute every tick. Mobs get
+        // theirs from MoveControl/navigation as `speedModifier * MOVEMENT_SPEED`.
+        if caller.get_player().is_some() {
+            self.speed
+                .store(self.get_attribute_value(&Attributes::MOVEMENT_SPEED));
+        }
+
         let mut movement_input = self.movement_input.load();
 
         movement_input.x *= 0.98;
@@ -1040,7 +1072,8 @@ impl LivingEntity {
     async fn travel_in_air<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
         // applyMovementInput
 
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+        // LivingEntity.getFrictionInfluencedSpeed uses `getSpeed()`, not the raw attribute.
+        let effective_speed = self.speed.load();
 
         let (speed, friction) = if self.entity.on_ground.load(SeqCst) {
             // getVelocityAffectingPos
@@ -1052,10 +1085,10 @@ impl LivingEntity {
                     .slipperiness,
             );
 
-            let speed =
-                effective_speed * 0.216_000_02 / (slipperiness * slipperiness * slipperiness);
-
-            (speed, slipperiness * 0.91)
+            (
+                friction_influenced_speed(effective_speed, slipperiness),
+                slipperiness * 0.91,
+            )
         } else {
             let speed = if let Some(player) = caller.get_player() {
                 player.get_off_ground_speed().await
@@ -1124,7 +1157,8 @@ impl LivingEntity {
         let old_y = self.entity.pos.load().y;
         let falling = self.entity.velocity.load().y <= 0.0;
         let gravity = self.get_effective_gravity(caller).await;
-        let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
+        // LivingEntity.travelInFluid also blends toward `getSpeed()`, not the raw attribute.
+        let effective_speed = self.speed.load();
 
         if water {
             let mut friction = if self.entity.sprinting.load(Relaxed) {
@@ -3527,9 +3561,49 @@ pub(crate) const fn bypasses_shield(damage_type: &DamageType) -> bool {
     )
 }
 
+/// `LivingEntity.getFrictionInfluencedSpeed`: the grounded per-tick factor
+/// `moveRelative` is called with.
+fn friction_influenced_speed(speed: f64, slipperiness: f64) -> f64 {
+    speed * 0.216_000_02 / (slipperiness * slipperiness * slipperiness)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Terminal horizontal speed, in blocks per second, of `velocity += input * factor`
+    /// followed by `velocity *= slipperiness * 0.91` as `travel_in_air` applies it on a
+    /// normal block (slipperiness 0.6). `tick_movement` decays the stored input by 0.98
+    /// each tick before travelling, so a continuously re-applied input settles at 0.98.
+    fn terminal_blocks_per_second(input: f64, speed: f64) -> f64 {
+        let per_tick = 0.98 * input * friction_influenced_speed(speed, 0.6);
+        per_tick / (1.0 - 0.6 * 0.91) * 20.0
+    }
+
+    /// A player's forward input is 1.0 and its `speed` is the raw `MOVEMENT_SPEED`
+    /// attribute (0.1), which reproduces the documented 4.317 blocks/s walk speed. This
+    /// pins the consumer side, so the mob case below can only be fixed on the producer side.
+    #[test]
+    fn player_walk_speed_matches_the_documented_value() {
+        let walk = terminal_blocks_per_second(1.0, 0.1);
+        assert!((walk - 4.317).abs() < 0.01, "player {walk} blocks/s");
+    }
+
+    /// `Mob.setSpeed` stores `speedModifier * MOVEMENT_SPEED` and mirrors it into `zza`,
+    /// so the attribute enters the per-tick velocity twice for mobs. Feeding the bare
+    /// speed modifier into the input instead (the bug) made a chasing zombie 10.1 and a
+    /// spider 12.9 blocks/s, both faster than a walking player.
+    #[test]
+    fn mob_input_and_speed_both_carry_the_movement_speed_attribute() {
+        for (attribute, expected) in [(0.23, 2.284), (0.3, 3.886)] {
+            let speed = 1.0 * attribute; // LivingEntity::speed_for_modifier
+            let got = terminal_blocks_per_second(speed, speed);
+            assert!((got - expected).abs() < 0.01, "{attribute} -> {got}");
+            assert!(got < 4.317);
+            // The old behaviour: input was the raw modifier.
+            assert!(terminal_blocks_per_second(1.0, speed) > 4.317);
+        }
+    }
 
     #[test]
     fn active_hand_maps_to_the_matching_equipment_slot() {
