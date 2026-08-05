@@ -421,7 +421,7 @@ pub fn check_spawn_rules(
             && world.get_block(pos) == &Block::WATER;
     }
 
-    if entity_type.category == &MobCategory::MONSTER {
+    if entity_type.category == &MobCategory::MONSTER && uses_generic_monster_spawn_rules(id) {
         return mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering);
     }
 
@@ -459,6 +459,14 @@ pub fn check_spawn_rules(
     true
 }
 
+/// `MobCategory::MONSTER` members whose registered `SpawnPlacements` predicate is not
+/// `Monster.checkMonsterSpawnRules`. Slime registers `Slime.checkSlimeSpawnRules`
+/// (`Slime.java`, 1.21.4), which applies the swamp-band and slime-chunk gates instead of
+/// the generic darkness gate, so the category-wide branch must not answer for it.
+const fn uses_generic_monster_spawn_rules(id: u16) -> bool {
+    id != EntityType::SLIME.id
+}
+
 /// `AgeableWaterCreature.checkSurfaceAgeableWaterCreatureSpawnRules`'s Y-range gate:
 /// `pos.getY() >= seaLevel - 13 && pos.getY() <= seaLevel`.
 const fn is_in_surface_squid_y_range(y: i32, sea_level: i32) -> bool {
@@ -468,6 +476,67 @@ const fn is_in_surface_squid_y_range(y: i32, sea_level: i32) -> bool {
 /// `GlowSquid.checkGlowSquidSpawnRules`'s Y gate: `pos.getY() <= level.getSeaLevel() - 33`.
 const fn is_below_glow_squid_y_threshold(y: i32, sea_level: i32) -> bool {
     y <= sea_level - 33
+}
+
+#[cfg(test)]
+mod slime_spawn_dispatch_tests {
+    use super::{EntityType, uses_generic_monster_spawn_rules};
+    use pumpkin_data::chunk::{Biome, NETHER_BIOME_SOURCE};
+
+    /// Slime is `MobCategory::MONSTER`, so the category-wide branch in `check_spawn_rules`
+    /// would otherwise return before the `EntityType::SLIME` branch is ever reached,
+    /// leaving `SlimeEntity::check_slime_spawn_rules` dead.
+    #[test]
+    fn slime_is_excluded_from_the_generic_monster_branch() {
+        assert!(!uses_generic_monster_spawn_rules(EntityType::SLIME.id));
+    }
+
+    #[test]
+    fn other_monsters_still_use_the_generic_monster_branch() {
+        assert!(uses_generic_monster_spawn_rules(EntityType::ZOMBIE.id));
+        assert!(uses_generic_monster_spawn_rules(EntityType::CREEPER.id));
+        assert!(uses_generic_monster_spawn_rules(EntityType::MAGMA_CUBE.id));
+    }
+
+    /// The reported Nether sighting cannot come from the biome spawn tables: no biome the
+    /// Nether biome source can produce lists slime in any spawn group.
+    #[test]
+    fn no_nether_biome_can_offer_a_slime_spawner() {
+        fn collect(tree: &pumpkin_data::chunk::BiomeTree, out: &mut Vec<&'static Biome>) {
+            match tree {
+                pumpkin_data::chunk::BiomeTree::Leaf { biome, .. } => out.push(biome),
+                pumpkin_data::chunk::BiomeTree::Branch { nodes, .. } => {
+                    for node in *nodes {
+                        collect(node, out);
+                    }
+                }
+            }
+        }
+
+        let mut biomes = Vec::new();
+        collect(&NETHER_BIOME_SOURCE, &mut biomes);
+        assert!(!biomes.is_empty());
+
+        for biome in biomes {
+            let groups = &biome.spawners;
+            for group in [
+                groups.monster,
+                groups.creature,
+                groups.ambient,
+                groups.axolotls,
+                groups.underground_water_creature,
+                groups.water_creature,
+                groups.water_ambient,
+                groups.misc,
+            ] {
+                assert!(
+                    !group.iter().any(|s| s.r#type == "minecraft:slime"),
+                    "{} lists a slime spawner",
+                    biome.registry_id
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]
