@@ -310,7 +310,9 @@ impl GenerationCache for Cache {
         // chunk, which is what put chunk-aligned seams into terrain-gen biomes.
         let mid = ((self.size * self.size) >> 1) as usize;
         let Chunk::Proto(center) = &self.chunks[mid] else {
-            return Biome::from_id(0).unwrap();
+            unreachable!(
+                "terrain-gen biome lookup on a cache whose centre is already a level chunk"
+            )
         };
         let cell = center.terrain_gen_biome_cell(x, y, z);
         let id = self
@@ -414,6 +416,12 @@ impl Cache {
     /// against the chunk that actually owns the cell instead of wrapping within the centre
     /// chunk. See `BiomeNeighborhood`.
     fn build_biome_neighborhood(&self, mid: usize) -> Option<BiomeNeighborhood> {
+        // Without the surrounding ring there is nothing to resolve edge lookups against and the
+        // surface builder would silently fall back to the wrapped read, so make that loud.
+        debug_assert!(
+            self.size >= 3,
+            "surface generation needs a one-chunk ring to resolve edge biome lookups"
+        );
         let Chunk::Proto(center) = &self.chunks[mid] else {
             return None;
         };

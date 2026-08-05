@@ -7,6 +7,19 @@ use pumpkin_config::lighting::LightingEngineConfig;
 
 use super::{Cache, Chunk, StagedChunkEnum};
 
+const GENERATION_STAGES: [StagedChunkEnum; 10] = [
+    StagedChunkEnum::Biomes,
+    StagedChunkEnum::StructureStart,
+    StagedChunkEnum::StructureReferences,
+    StagedChunkEnum::Noise,
+    StagedChunkEnum::Surface,
+    StagedChunkEnum::Carvers,
+    StagedChunkEnum::Features,
+    StagedChunkEnum::Lighting,
+    StagedChunkEnum::Spawn,
+    StagedChunkEnum::Full,
+];
+
 pub fn generate_single_chunk(
     dimension: &Dimension,
     biome_mixer_seed: i64,
@@ -16,6 +29,17 @@ pub fn generate_single_chunk(
     chunk_z: i32,
     target_stage: StagedChunkEnum,
 ) -> Chunk {
+    // Every stage up to the target runs inside this one cache, so it has to be wide enough for
+    // the widest of them, not just the target's own radius. Surface, for instance, needs a ring
+    // even when the caller asks for Carvers.
+    let mut radius = 0;
+    for stage in GENERATION_STAGES {
+        if (stage as u8) > (target_stage as u8) {
+            break;
+        }
+        radius = radius.max(stage.get_direct_radius());
+    }
+
     generate_single_chunk_with_radius(
         dimension,
         biome_mixer_seed,
@@ -24,7 +48,7 @@ pub fn generate_single_chunk(
         chunk_x,
         chunk_z,
         target_stage,
-        target_stage.get_direct_radius(),
+        radius,
     )
 }
 
@@ -52,20 +76,7 @@ pub fn generate_single_chunk_with_radius(
         }
     }
 
-    let stages = [
-        StagedChunkEnum::Biomes,
-        StagedChunkEnum::StructureStart,
-        StagedChunkEnum::StructureReferences,
-        StagedChunkEnum::Noise,
-        StagedChunkEnum::Surface,
-        StagedChunkEnum::Carvers,
-        StagedChunkEnum::Features,
-        StagedChunkEnum::Lighting,
-        StagedChunkEnum::Spawn,
-        StagedChunkEnum::Full,
-    ];
-
-    for &stage in &stages {
+    for &stage in &GENERATION_STAGES {
         if stage as u8 > target_stage as u8 {
             break;
         }

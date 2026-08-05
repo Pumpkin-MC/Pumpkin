@@ -147,7 +147,10 @@ impl StagedChunkEnum {
     pub const fn get_write_radius(self) -> i32 {
         // self exclude
         match self {
-            Self::Features | Self::Lighting | Self::Spawn => 1,
+            // Surface only writes the centre chunk, but the scheduler sizes the generation
+            // `Cache` from this, and the surface builder has to be able to read the ring's
+            // biomes. See `get_direct_radius`.
+            Self::Surface | Self::Features | Self::Lighting | Self::Spawn => 1,
             _ => 0,
         }
     }
