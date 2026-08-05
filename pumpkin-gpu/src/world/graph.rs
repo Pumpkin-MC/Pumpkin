@@ -1167,8 +1167,8 @@ fn end_islands_2d(pool: &SamplerPool, sampler_index: usize, x: i32, z: i32) -> f
     // f32 arithmetic, mirroring the shader: the exact i32 products wrap past
     // ±46340 (~±741k blocks in the End), which the old `(x * x + z * z) as f32`
     // form would silently wrap in release and panic in debug builds.
-    let mut f = (x as f32 * x as f32 + z as f32 * z as f32)
-        .sqrt()
+    let mut f = (x as f32)
+        .hypot(z as f32)
         .mul_add(-8.0, 100.0)
         .clamp(-100.0, 80.0);
 
@@ -1728,7 +1728,10 @@ pub(crate) mod test {
     };
     use pumpkin_util::{
         noise::simplex::SimplexNoiseSampler,
-        random::{RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro, xoroshiro128::XoroshiroSplitter},
+        random::{
+            RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
+            xoroshiro128::XoroshiroSplitter,
+        },
     };
     use pumpkin_world::generation::GlobalRandomConfig;
 
@@ -1963,7 +1966,10 @@ pub(crate) mod test {
             0.0,
             0.0,
         );
-        assert!(value.is_infinite() && value.is_sign_positive(), "got {value}");
+        assert!(
+            value.is_infinite() && value.is_sign_positive(),
+            "got {value}"
+        );
     }
 
     /// BinaryMul must short-circuit on a == 0 (0 * inf = 0, not NaN), matching
@@ -2016,13 +2022,7 @@ pub(crate) mod test {
             [-1_500_000.0, 64.0, -1_500_000.0],
         ];
         for [x, y, z] in points {
-            let value = evaluate_cpu(
-                &compiled,
-                &BeardifierData::default(),
-                x,
-                y,
-                z,
-            );
+            let value = evaluate_cpu(&compiled, &BeardifierData::default(), x, y, z);
             assert!(value.is_finite(), "got {value} at ({x}, {y}, {z})");
         }
     }

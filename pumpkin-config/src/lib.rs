@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::{fs, num::NonZeroU8, path::Path};
 use tracing::{debug, warn};
 pub mod fun;
+pub mod gpu;
 pub mod logging;
 pub mod networking;
 pub mod plugins;
@@ -145,6 +146,8 @@ pub struct AdvancedConfiguration {
     pub plugins: PluginsConfig,
     /// Advancement configuration
     pub advancement: AdvancementConfig,
+    /// GPU compute acceleration configuration
+    pub gpu: gpu::GpuConfig,
 }
 
 /// Basic configuration for core server settings.

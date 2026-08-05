@@ -124,6 +124,11 @@ tempfile.workspace = true
 
 [features]
 console-subscriber = ["dep:console-subscriber"]
+gpu = ["dep:pumpkin-gpu"]
+
+[dependencies.pumpkin-gpu]
+workspace = true
+optional = true
 
 [lints]
 workspace = true

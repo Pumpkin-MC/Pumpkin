@@ -254,6 +254,46 @@ impl Server {
                 .collect::<Vec<_>>()
         );
 
+        // --- GPU initialisation ---
+        #[cfg(feature = "gpu")]
+        {
+            let gpu_config = &advanced_config.gpu;
+            if gpu_config.enabled {
+                info!(
+                    "Initialising GPU acceleration (backend: {}, device: {:?})",
+                    gpu_config.backend.as_str(),
+                    gpu_config.device
+                );
+                pumpkin_gpu::world::light::init_global_gpu_with_config(gpu_config);
+                if pumpkin_gpu::world::light::has_global_gpu() {
+                    // Register the GPU sky-light callback so pumpkin-world's lighting
+                    // engine can use it transparently.
+                    if gpu_config.light_acceleration {
+                        pumpkin_world::lighting::register_sky_light_gpu(
+                            pumpkin_gpu::world::light::sky_light_gpu_callback,
+                        );
+                    }
+                    info!(
+                        "GPU acceleration enabled: {} acceleration, {} acceleration",
+                        if gpu_config.noise_acceleration {
+                            "noise"
+                        } else {
+                            "noise (disabled)"
+                        },
+                        if gpu_config.light_acceleration {
+                            "light"
+                        } else {
+                            "light (disabled)"
+                        },
+                    );
+                } else {
+                    warn!("No compatible GPU found — falling back to CPU-only path");
+                }
+            } else {
+                info!("GPU acceleration disabled by configuration");
+            }
+        }
+
         let server = Self {
             basic_config,
             advanced_config,

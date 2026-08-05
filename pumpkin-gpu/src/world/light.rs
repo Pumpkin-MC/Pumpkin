@@ -16,15 +16,44 @@ use std::sync::OnceLock;
 
 static GLOBAL_GPU: OnceLock<GpuNoiseContext> = OnceLock::new();
 
-/// Initialize the global GPU context. Safe to call multiple times; subsequent
-/// calls are no-ops. When no compatible GPU is available the global slot stays
-/// empty — every [`try_sky_light_gpu`] / [`sky_light_gpu_callback`] call will
-/// return `None` and the caller falls back to the CPU path.
+/// Backend/adapter selection hint shared between [`GpuNoiseContext`] and this
+/// module.  Not public API — used internally for config-driven adapter selection.
+#[derive(Debug, Clone, Copy)]
+pub enum AdapterSelector {
+    /// Let wgpu auto-detect the backend.
+    Auto,
+    /// Force a specific `wgpu::Backend`.
+    Specific(wgpu::Backend),
+}
+
+/// Initialize the global GPU context with auto-detected adapter.
+///
+/// Safe to call multiple times; subsequent calls are no-ops. When no
+/// compatible GPU is available the global slot stays empty — every
+/// [`try_sky_light_gpu`] / [`sky_light_gpu_callback`] call will return
+/// `None` and the caller falls back to the CPU path.
 pub fn init_global_gpu() {
-    if GLOBAL_GPU.get().is_none() {
-        if let Some(ctx) = GpuNoiseContext::try_new() {
-            let _ = GLOBAL_GPU.set(ctx);
-        }
+    if GLOBAL_GPU.get().is_none()
+        && let Some(ctx) = GpuNoiseContext::try_new()
+    {
+        let _ = GLOBAL_GPU.set(ctx);
+    }
+}
+
+/// Initialize the global GPU context with explicit device/backend selection.
+///
+/// Uses the user's configuration for adapter choice, backend forcing, and
+/// device filtering. Safe to call multiple times; subsequent calls are
+/// no-ops. When `config.enabled` is `false` this is a no-op.
+pub fn init_global_gpu_with_config(config: &pumpkin_config::gpu::GpuConfig) {
+    if !config.enabled {
+        return;
+    }
+    if GLOBAL_GPU.get().is_some() {
+        return;
+    }
+    if let Some(ctx) = GpuNoiseContext::try_new_with_config(config) {
+        let _ = GLOBAL_GPU.set(ctx);
     }
 }
 
@@ -99,7 +128,7 @@ pub struct SkyLightInput {
 impl SkyLightInput {
     /// Total number of block positions in the scan region.
     #[must_use]
-    pub fn total_positions(&self) -> usize {
+    pub const fn total_positions(&self) -> usize {
         self.num_columns as usize * self.height as usize
     }
 }
@@ -118,7 +147,7 @@ pub struct BlockLightInput {
 
 impl BlockLightInput {
     #[must_use]
-    pub fn total_positions(&self) -> usize {
+    pub const fn total_positions(&self) -> usize {
         self.num_columns as usize * self.height as usize
     }
 }

@@ -346,148 +346,237 @@ impl SkyLightPropagator {
         let mut surface_heights =
             FastHashMap::with_capacity_and_hasher(capacity, rustc_hash::FxBuildHasher);
 
-        // Process in Z-outer, X-inner order for better cache locality
-        for z in start_z..end_z {
-            let chunk_z = z >> 4;
-            let local_z = (z & 15) as usize;
+        // --- GPU fast path (if a callback has been registered) ---
+        let mut gpu_succeeded = false;
+        if let Some(gpu_fn) = crate::lighting::get_sky_light_gpu() {
+            let num_columns = ((end_x - start_x) * (end_z - start_z)) as u32;
+            let height = (max_y - bottom_y) as u32;
+            let total = (num_columns as usize) * (height as usize);
 
-            for x in start_x..end_x {
-                let chunk_x = x >> 4;
-                let local_x = (x & 15) as usize;
+            // Gather opacity + heightmap for all columns.
+            let mut opacity = Vec::with_capacity(total);
+            let mut heightmaps = Vec::with_capacity(num_columns as usize);
+            for z in start_z..end_z {
+                for x in start_x..end_x {
+                    let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
+                    heightmaps.push(top_y);
+                    surface_heights.insert((x, z), top_y);
 
-                let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
-                surface_heights.insert((x, z), top_y);
-
-                let rel_x = chunk_x - cache.x;
-                let rel_z = chunk_z - cache.z;
-
-                if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
-                    continue;
-                }
-
-                let chunk_idx = (rel_x * cache.size + rel_z) as usize;
-
-                // Pre-collect opacity so we can release the immutable cache
-                // borrow before matching the chunk type and (for Level chunks)
-                // acquiring the mutex just once per column, not per block.
-                let scan_count = (top_y - bottom_y + 1) as usize;
-                let mut scan_opacity = Vec::with_capacity(scan_count);
-                for y in (bottom_y..=top_y).rev() {
-                    let pos_vec = Vector3::new(x, y, z);
-                    scan_opacity.push(cache.get_block_state(&pos_vec).to_state().opacity);
-                }
-
-                // Lock once per column (not per block) for Level chunks.
-                match &mut cache.chunks[chunk_idx] {
-                    Chunk::Proto(c) => {
-                        for y in (top_y + 1)..max_y {
-                            let section_idx = ((y - bottom_y) >> 4) as usize;
-                            let local_y = (y & 15) as usize;
-                            if section_idx < c.light.sky_light.len() {
-                                c.light.sky_light[section_idx].set(local_x, local_y, local_z, 15);
-                            }
+                    for y in (bottom_y..max_y).rev() {
+                        if y <= top_y && y >= bottom_y {
+                            let pos_vec = Vector3::new(x, y, z);
+                            opacity.push(cache.get_block_state(&pos_vec).to_state().opacity);
+                        } else {
+                            opacity.push(0);
                         }
-
-                        let mut light: i32 = 15;
-                        for (step, &opacity) in scan_opacity.iter().enumerate() {
-                            let y = top_y - step as i32;
-                            let section_idx = ((y - bottom_y) >> 4) as usize;
-                            let local_y = (y & 15) as usize;
-
-                            light = light.saturating_sub(opacity as i32);
-                            let light_val = if light <= 0 { 0 } else { light as u8 };
-
-                            if section_idx < c.light.sky_light.len() {
-                                c.light.sky_light[section_idx]
-                                    .set(local_x, local_y, local_z, light_val);
-                            }
-                            if light <= 0 {
-                                break;
-                            }
-                        }
-                    }
-                    Chunk::Level(c) => {
-                        let mut light_engine = c
-                            .light_engine
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-                        for y in (top_y + 1)..max_y {
-                            let section_idx = ((y - bottom_y) >> 4) as usize;
-                            let local_y = (y & 15) as usize;
-                            if section_idx < light_engine.sky_light.len() {
-                                light_engine.sky_light[section_idx]
-                                    .set(local_x, local_y, local_z, 15);
-                            }
-                        }
-
-                        let mut light: i32 = 15;
-                        for (step, &opacity) in scan_opacity.iter().enumerate() {
-                            let y = top_y - step as i32;
-                            let section_idx = ((y - bottom_y) >> 4) as usize;
-                            let local_y = (y & 15) as usize;
-
-                            light = light.saturating_sub(opacity as i32);
-                            let light_val = if light <= 0 { 0 } else { light as u8 };
-
-                            if section_idx < light_engine.sky_light.len() {
-                                light_engine.sky_light[section_idx]
-                                    .set(local_x, local_y, local_z, light_val);
-                            }
-                            if light <= 0 {
-                                break;
-                            }
-                        }
-                        drop(light_engine);
                     }
                 }
             }
+            opacity.resize(total, 0);
+
+            if let Some(gpu_light) = gpu_fn(&opacity, &heightmaps, num_columns, height, bottom_y) {
+                // Write GPU results directly into chunks.
+                let mut col_idx = 0usize;
+                for z in start_z..end_z {
+                    for x in start_x..end_x {
+                        let chunk_x = x >> 4;
+                        let chunk_z = z >> 4;
+                        let local_x = (x & 15) as usize;
+                        let local_z = (z & 15) as usize;
+                        let rel_x = chunk_x - cache.x;
+                        let rel_z = chunk_z - cache.z;
+                        if rel_x >= 0 && rel_x < cache.size && rel_z >= 0 && rel_z < cache.size {
+                            let chunk_idx = (rel_x * cache.size + rel_z) as usize;
+                            let base = col_idx * height as usize;
+                            match &mut cache.chunks[chunk_idx] {
+                                Chunk::Proto(c) => {
+                                    for (yi, y) in (bottom_y..max_y).enumerate() {
+                                        let light_val = gpu_light[base + yi];
+                                        if light_val == 0 {
+                                            continue;
+                                        }
+                                        let section_idx = ((y - bottom_y) >> 4) as usize;
+                                        let local_y = (y & 15) as usize;
+                                        if section_idx < c.light.sky_light.len() {
+                                            c.light.sky_light[section_idx]
+                                                .set(local_x, local_y, local_z, light_val);
+                                        }
+                                    }
+                                }
+                                Chunk::Level(c) => {
+                                    let mut light_engine = c
+                                        .light_engine
+                                        .lock()
+                                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                                    for (yi, y) in (bottom_y..max_y).enumerate() {
+                                        let light_val = gpu_light[base + yi];
+                                        if light_val == 0 {
+                                            continue;
+                                        }
+                                        let section_idx = ((y - bottom_y) >> 4) as usize;
+                                        let local_y = (y & 15) as usize;
+                                        if section_idx < light_engine.sky_light.len() {
+                                            light_engine.sky_light[section_idx]
+                                                .set(local_x, local_y, local_z, light_val);
+                                        }
+                                    }
+                                    drop(light_engine);
+                                }
+                            }
+                        }
+                        col_idx += 1;
+                    }
+                }
+                gpu_succeeded = true;
+            }
         }
 
-        // Enqueue horizontal propagation
-        for z in start_z..end_z {
-            for x in start_x..end_x {
-                let top_y = surface_heights[&(x, z)];
+        if !gpu_succeeded {
+            // Process in Z-outer, X-inner order for better cache locality
+            surface_heights.clear();
+            for z in start_z..end_z {
+                let chunk_z = z >> 4;
+                let local_z = (z & 15) as usize;
 
-                let north_top = surface_heights.get(&(x, z - 1)).copied().unwrap_or(top_y);
-                let south_top = surface_heights.get(&(x, z + 1)).copied().unwrap_or(top_y);
-                let west_top = surface_heights.get(&(x - 1, z)).copied().unwrap_or(top_y);
-                let east_top = surface_heights.get(&(x + 1, z)).copied().unwrap_or(top_y);
+                for x in start_x..end_x {
+                    let chunk_x = x >> 4;
+                    let local_x = (x & 15) as usize;
 
-                // We must check up to the highest neighbor to catch the "air sources"
-                let max_check_y = top_y
-                    .max(north_top)
-                    .max(south_top)
-                    .max(west_top)
-                    .max(east_top);
+                    let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
+                    surface_heights.insert((x, z), top_y);
 
-                for y in (bottom_y..=max_check_y).rev() {
-                    let pos = BlockPos(Vector3::new(x, y, z));
-                    let light = get_sky_light(cache, pos);
+                    let rel_x = chunk_x - cache.x;
+                    let rel_z = chunk_z - cache.z;
 
-                    // Use continue, or only break if we are safely below all possible side-light
-                    if light == 0 {
-                        if y <= top_y {
-                            break;
-                        }
+                    if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
                         continue;
                     }
 
-                    let is_at_surface = y == top_y;
-                    let below_neighbor =
-                        y < north_top || y < south_top || y < west_top || y < east_top;
+                    let chunk_idx = (rel_x * cache.size + rel_z) as usize;
 
-                    if (is_at_surface || below_neighbor) && self.visited.insert(pos) {
-                        let skip_dir = (y >= top_y).then_some(BlockDirection::Up);
+                    // Pre-collect opacity so we can release the immutable cache
+                    // borrow before matching the chunk type and (for Level chunks)
+                    // acquiring the mutex just once per column, not per block.
+                    let scan_count = (top_y - bottom_y + 1) as usize;
+                    let mut scan_opacity = Vec::with_capacity(scan_count);
+                    for y in (bottom_y..=top_y).rev() {
+                        let pos_vec = Vector3::new(x, y, z);
+                        scan_opacity.push(cache.get_block_state(&pos_vec).to_state().opacity);
+                    }
 
-                        self.queue.push_back(PropagationEntry {
-                            pos,
-                            skip_direction: skip_dir,
-                        });
+                    // Lock once per column (not per block) for Level chunks.
+                    match &mut cache.chunks[chunk_idx] {
+                        Chunk::Proto(c) => {
+                            for y in (top_y + 1)..max_y {
+                                let section_idx = ((y - bottom_y) >> 4) as usize;
+                                let local_y = (y & 15) as usize;
+                                if section_idx < c.light.sky_light.len() {
+                                    c.light.sky_light[section_idx]
+                                        .set(local_x, local_y, local_z, 15);
+                                }
+                            }
+
+                            let mut light: i32 = 15;
+                            for (step, &opacity) in scan_opacity.iter().enumerate() {
+                                let y = top_y - step as i32;
+                                let section_idx = ((y - bottom_y) >> 4) as usize;
+                                let local_y = (y & 15) as usize;
+
+                                light = light.saturating_sub(opacity as i32);
+                                let light_val = if light <= 0 { 0 } else { light as u8 };
+
+                                if section_idx < c.light.sky_light.len() {
+                                    c.light.sky_light[section_idx]
+                                        .set(local_x, local_y, local_z, light_val);
+                                }
+                                if light <= 0 {
+                                    break;
+                                }
+                            }
+                        }
+                        Chunk::Level(c) => {
+                            let mut light_engine = c
+                                .light_engine
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+                            for y in (top_y + 1)..max_y {
+                                let section_idx = ((y - bottom_y) >> 4) as usize;
+                                let local_y = (y & 15) as usize;
+                                if section_idx < light_engine.sky_light.len() {
+                                    light_engine.sky_light[section_idx]
+                                        .set(local_x, local_y, local_z, 15);
+                                }
+                            }
+
+                            let mut light: i32 = 15;
+                            for (step, &opacity) in scan_opacity.iter().enumerate() {
+                                let y = top_y - step as i32;
+                                let section_idx = ((y - bottom_y) >> 4) as usize;
+                                let local_y = (y & 15) as usize;
+
+                                light = light.saturating_sub(opacity as i32);
+                                let light_val = if light <= 0 { 0 } else { light as u8 };
+
+                                if section_idx < light_engine.sky_light.len() {
+                                    light_engine.sky_light[section_idx]
+                                        .set(local_x, local_y, local_z, light_val);
+                                }
+                                if light <= 0 {
+                                    break;
+                                }
+                            }
+                            drop(light_engine);
+                        }
                     }
                 }
             }
-        }
+
+            // Enqueue horizontal propagation
+            for z in start_z..end_z {
+                for x in start_x..end_x {
+                    let top_y = surface_heights[&(x, z)];
+
+                    let north_top = surface_heights.get(&(x, z - 1)).copied().unwrap_or(top_y);
+                    let south_top = surface_heights.get(&(x, z + 1)).copied().unwrap_or(top_y);
+                    let west_top = surface_heights.get(&(x - 1, z)).copied().unwrap_or(top_y);
+                    let east_top = surface_heights.get(&(x + 1, z)).copied().unwrap_or(top_y);
+
+                    // We must check up to the highest neighbor to catch the "air sources"
+                    let max_check_y = top_y
+                        .max(north_top)
+                        .max(south_top)
+                        .max(west_top)
+                        .max(east_top);
+
+                    for y in (bottom_y..=max_check_y).rev() {
+                        let pos = BlockPos(Vector3::new(x, y, z));
+                        let light = get_sky_light(cache, pos);
+
+                        // Use continue, or only break if we are safely below all possible side-light
+                        if light == 0 {
+                            if y <= top_y {
+                                break;
+                            }
+                            continue;
+                        }
+
+                        let is_at_surface = y == top_y;
+                        let below_neighbor =
+                            y < north_top || y < south_top || y < west_top || y < east_top;
+
+                        if (is_at_surface || below_neighbor) && self.visited.insert(pos) {
+                            let skip_dir = (y >= top_y).then_some(BlockDirection::Up);
+
+                            self.queue.push_back(PropagationEntry {
+                                pos,
+                                skip_direction: skip_dir,
+                            });
+                        }
+                    }
+                }
+            }
+        } // if !gpu_succeeded
 
         //let propagate_start = Instant::now();
 

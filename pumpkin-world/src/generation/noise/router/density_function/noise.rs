@@ -124,6 +124,7 @@ pub struct ShiftedNoise {
 
 impl ShiftedNoise {
     #[inline]
+    #[must_use]
     pub fn sample_with_shifts(
         &self,
         pos: &Vector3<i32>,

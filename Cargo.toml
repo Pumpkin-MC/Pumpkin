@@ -217,10 +217,11 @@ wit-bindgen = { version = "0.60", default-features = false, features = ["macros"
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
 
-# GPU compute prototype (pumpkin-gpu only)
+# GPU compute
 # wgpu keeps its own default features (native Vulkan/Metal/DX12 backends) rather than
 # default-features = false like the rest of this list — its feature flags gate backend
 # support, not optional extras, so disabling them needs to be deliberate per-platform.
 wgpu = { version = "30.0.0" }
 bytemuck = { version = "1.25.2", default-features = false }
 pollster = { version = "1.0.1", default-features = false }
+pumpkin-gpu = { path = "pumpkin-gpu", default-features = false }

@@ -202,176 +202,85 @@ pub struct GpuNoiseContext {
 }
 
 impl GpuNoiseContext {
-    /// Tries to initialize a GPU compute context, blocking until adapter/device
-    /// request completes. Returns `None` if no compatible GPU is available.
+    /// Tries to initialize a GPU compute context with the default (auto-detect)
+    /// adapter selection.  Blocking; returns `None` if no compatible GPU is
+    /// available.
     #[must_use]
     pub fn try_new() -> Option<Self> {
-        pollster::block_on(Self::try_new_async())
+        let default_config = pumpkin_config::gpu::GpuConfig::default();
+        pollster::block_on(Self::try_new_async(&default_config))
     }
 
-    async fn try_new_async() -> Option<Self> {
-        let instance = wgpu::Instance::default();
+    /// Tries to initialise a GPU compute context using the supplied device-selection
+    /// and backend preferences.  Blocking; returns `None` when no compatible GPU
+    /// matches or the adapter/device request fails.
+    #[must_use]
+    pub fn try_new_with_config(config: &pumpkin_config::gpu::GpuConfig) -> Option<Self> {
+        pollster::block_on(Self::try_new_async(config))
+    }
 
+    /// Select a GPU adapter according to the user's configuration.
+    async fn select_adapter(
+        instance: &wgpu::Instance,
+        config: &pumpkin_config::gpu::GpuConfig,
+    ) -> Option<wgpu::Adapter> {
+        if let crate::world::light::AdapterSelector::Specific(backend) =
+            Self::backend_from_config(config)
+        {
+            // Forced backend: enumerate all adapters of that backend and pick the best.
+            let backends = wgpu::Backends::from(backend);
+            let mut adapters: Vec<_> = instance
+                .enumerate_adapters(backends)
+                .await
+                .into_iter()
+                .collect();
+            adapters.sort_by_key(|a| match a.get_info().device_type {
+                wgpu::DeviceType::DiscreteGpu => 0,
+                wgpu::DeviceType::IntegratedGpu => 1,
+                wgpu::DeviceType::Cpu => 2,
+                _ => 3,
+            });
+            return Self::pick_adapter(&adapters, config);
+        }
+
+        // Auto backend: use the high-level request_adapter API.
+        let power_pref = match &config.device {
+            pumpkin_config::gpu::GpuDeviceSelection::Integrated => wgpu::PowerPreference::LowPower,
+            _ => wgpu::PowerPreference::HighPerformance,
+        };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
+                power_preference: power_pref,
                 ..Default::default()
             })
             .await
             .ok()?;
+        // If a name/index filter is active, verify this adapter matches.
+        if let Some(forced) = Self::pick_adapter(&[adapter], config) {
+            return Some(forced);
+        }
+        // request_adapter gave us something that doesn't match — enumerate all.
+        let all: Vec<_> = instance
+            .enumerate_adapters(wgpu::Backends::all())
+            .await
+            .into_iter()
+            .collect();
+        Self::pick_adapter(&all, config)
+    }
 
+    async fn try_new_async(config: &pumpkin_config::gpu::GpuConfig) -> Option<Self> {
+        let instance = wgpu::Instance::default();
+        let adapter = Self::select_adapter(&instance, config).await?;
         let info = adapter.get_info();
         let adapter_name = info.name.clone();
         let adapter_is_discrete = info.device_type == wgpu::DeviceType::DiscreteGpu;
 
-        // The graph pipeline binds more storage buffers than wgpu's conservative
-        // defaults allow, so ask for what this adapter actually supports. An adapter
-        // too limited for the pipeline fails here and the caller falls back to the CPU.
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                label: Some("pumpkin-gpu noise device"),
-                required_limits: adapter.limits(),
-                ..Default::default()
-            })
-            .await
-            .ok()?;
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("octave_perlin"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("octave_perlin.wgsl").into()),
-        });
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("octave_perlin bind group layout"),
-            entries: &[
-                storage_entry(0, wgpu::BufferBindingType::Uniform),
-                storage_entry(1, wgpu::BufferBindingType::Storage { read_only: true }),
-                storage_entry(2, wgpu::BufferBindingType::Storage { read_only: true }),
-                storage_entry(3, wgpu::BufferBindingType::Storage { read_only: true }),
-                storage_entry(4, wgpu::BufferBindingType::Storage { read_only: false }),
-            ],
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("octave_perlin pipeline layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("octave_perlin pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("sample_octaves"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-
-        let graph_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("density_graph"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("graph.wgsl").into()),
-        });
-
-        let graph_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("density_graph bind group layout"),
-                entries: &[
-                    storage_entry(0, wgpu::BufferBindingType::Uniform),
-                    storage_entry(1, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(2, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(3, wgpu::BufferBindingType::Storage { read_only: false }),
-                    storage_entry(4, wgpu::BufferBindingType::Storage { read_only: false }),
-                    storage_entry(5, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(6, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(7, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(8, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(9, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(10, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(11, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(12, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(13, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(14, wgpu::BufferBindingType::Storage { read_only: true }),
-                ],
-            });
-
-        let graph_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("density_graph pipeline layout"),
-                bind_group_layouts: &[Some(&graph_bind_group_layout)],
-                immediate_size: 0,
-            });
-
-        let graph_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("density_graph pipeline"),
-            layout: Some(&graph_pipeline_layout),
-            module: &graph_shader,
-            entry_point: Some("evaluate_graph"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-
-        // ── Light-scan pipeline ─────────────────────────────────────────
-
-        let light_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("light_scan"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("light.wgsl").into()),
-        });
-
-        // Sky-light bind group: uniform + opacity (ro) + heightmap (ro) + output (rw)
-        let light_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("light_scan bind group layout"),
-                entries: &[
-                    storage_entry(0, wgpu::BufferBindingType::Uniform),
-                    storage_entry(1, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(2, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(3, wgpu::BufferBindingType::Storage { read_only: false }),
-                ],
-            });
-
-        let light_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("light_scan pipeline layout"),
-                bind_group_layouts: &[Some(&light_bind_group_layout)],
-                immediate_size: 0,
-            });
-
-        let light_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("light_scan pipeline"),
-            layout: Some(&light_pipeline_layout),
-            module: &light_shader,
-            entry_point: Some("scan_sky_light"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
-        });
-
-        // Block-light bind group: uniform + luminance (ro) + output (rw)
-        let block_light_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("block_light_scan bind group layout"),
-                entries: &[
-                    storage_entry(0, wgpu::BufferBindingType::Uniform),
-                    storage_entry(1, wgpu::BufferBindingType::Storage { read_only: true }),
-                    storage_entry(2, wgpu::BufferBindingType::Storage { read_only: false }),
-                ],
-            });
-
-        let block_light_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("block_light_scan pipeline layout"),
-                bind_group_layouts: &[Some(&block_light_bind_group_layout)],
-                immediate_size: 0,
-            });
-
-        let block_light_pipeline =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("block_light_scan pipeline"),
-                layout: Some(&block_light_pipeline_layout),
-                module: &light_shader,
-                entry_point: Some("scan_block_light"),
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: None,
-            });
+        let (device, queue) = Self::request_device(&adapter).await?;
+        let (pipeline, bind_group_layout) = Self::create_noise_pipeline(&device);
+        let (graph_pipeline, graph_bind_group_layout) = Self::create_graph_pipeline(&device);
+        let (light_pipeline, light_bind_group_layout) = Self::create_sky_light_pipeline(&device);
+        let (block_light_pipeline, block_light_bind_group_layout) =
+            Self::create_block_light_pipeline(&device);
 
         Some(Self {
             device,
@@ -387,6 +296,196 @@ impl GpuNoiseContext {
             adapter_name,
             adapter_is_discrete,
         })
+    }
+
+    async fn request_device(adapter: &wgpu::Adapter) -> Option<(wgpu::Device, wgpu::Queue)> {
+        adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("pumpkin-gpu noise device"),
+                required_limits: adapter.limits(),
+                ..Default::default()
+            })
+            .await
+            .ok()
+    }
+
+    fn create_noise_pipeline(
+        device: &wgpu::Device,
+    ) -> (wgpu::ComputePipeline, wgpu::BindGroupLayout) {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("octave_perlin"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("octave_perlin.wgsl").into()),
+        });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("octave_perlin bind group layout"),
+            entries: &[
+                storage_entry(0, wgpu::BufferBindingType::Uniform),
+                storage_entry(1, wgpu::BufferBindingType::Storage { read_only: true }),
+                storage_entry(2, wgpu::BufferBindingType::Storage { read_only: true }),
+                storage_entry(3, wgpu::BufferBindingType::Storage { read_only: true }),
+                storage_entry(4, wgpu::BufferBindingType::Storage { read_only: false }),
+            ],
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("octave_perlin pipeline layout"),
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 0,
+        });
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("octave_perlin pipeline"),
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("sample_octaves"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+        (pipeline, bind_group_layout)
+    }
+
+    fn create_graph_pipeline(
+        device: &wgpu::Device,
+    ) -> (wgpu::ComputePipeline, wgpu::BindGroupLayout) {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("density_graph"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("graph.wgsl").into()),
+        });
+        let entries: [wgpu::BindGroupLayoutEntry; 15] = std::array::from_fn(|i| {
+            let ty = match i {
+                // binding 0: uniform (graph dims header)
+                0 => wgpu::BufferBindingType::Uniform,
+                // bindings 3-4: read-write (stack / output)
+                3 | 4 => wgpu::BufferBindingType::Storage { read_only: false },
+                // bindings 1-2, 5-14: read-only storage
+                _ => wgpu::BufferBindingType::Storage { read_only: true },
+            };
+            storage_entry(i as u32, ty)
+        });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("density_graph bind group layout"),
+            entries: &entries,
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("density_graph pipeline layout"),
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 0,
+        });
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("density_graph pipeline"),
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("evaluate_graph"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+        (pipeline, bind_group_layout)
+    }
+
+    fn create_sky_light_pipeline(
+        device: &wgpu::Device,
+    ) -> (wgpu::ComputePipeline, wgpu::BindGroupLayout) {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("light_scan"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("light.wgsl").into()),
+        });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("light_scan bind group layout"),
+            entries: &[
+                storage_entry(0, wgpu::BufferBindingType::Uniform),
+                storage_entry(1, wgpu::BufferBindingType::Storage { read_only: true }),
+                storage_entry(2, wgpu::BufferBindingType::Storage { read_only: true }),
+                storage_entry(3, wgpu::BufferBindingType::Storage { read_only: false }),
+            ],
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("light_scan pipeline layout"),
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 0,
+        });
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("light_scan pipeline"),
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("scan_sky_light"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+        (pipeline, bind_group_layout)
+    }
+
+    fn create_block_light_pipeline(
+        device: &wgpu::Device,
+    ) -> (wgpu::ComputePipeline, wgpu::BindGroupLayout) {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("light_scan"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("light.wgsl").into()),
+        });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("block_light_scan bind group layout"),
+            entries: &[
+                storage_entry(0, wgpu::BufferBindingType::Uniform),
+                storage_entry(1, wgpu::BufferBindingType::Storage { read_only: true }),
+                storage_entry(2, wgpu::BufferBindingType::Storage { read_only: false }),
+            ],
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("block_light_scan pipeline layout"),
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 0,
+        });
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("block_light_scan pipeline"),
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("scan_block_light"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+        (pipeline, bind_group_layout)
+    }
+
+    /// Convert a [`GpuBackend`] to the corresponding [`wgpu::Backend`], or
+    /// [`AdapterSelector::Auto`] for `Auto`.
+    const fn backend_from_config(
+        config: &pumpkin_config::gpu::GpuConfig,
+    ) -> crate::world::light::AdapterSelector {
+        use crate::world::light::AdapterSelector;
+        use pumpkin_config::gpu::GpuBackend;
+        match config.backend {
+            GpuBackend::Auto => AdapterSelector::Auto,
+            GpuBackend::Vulkan => AdapterSelector::Specific(wgpu::Backend::Vulkan),
+            GpuBackend::Metal => AdapterSelector::Specific(wgpu::Backend::Metal),
+            GpuBackend::Dx12 => AdapterSelector::Specific(wgpu::Backend::Dx12),
+            GpuBackend::Gl => AdapterSelector::Specific(wgpu::Backend::Gl),
+        }
+    }
+
+    /// Pick the first adapter matching the user's device-selection config.
+    /// Returns `None` when `config.device` is `Auto` — the caller should use
+    /// wgpu's built-in `request_adapter` path instead.
+    fn pick_adapter(
+        adapters: &[wgpu::Adapter],
+        config: &pumpkin_config::gpu::GpuConfig,
+    ) -> Option<wgpu::Adapter> {
+        use pumpkin_config::gpu::GpuDeviceSelection;
+        match &config.device {
+            GpuDeviceSelection::Auto => {
+                // Auto — pick the first adapter (already sorted by wgpu).
+                adapters.first().cloned()
+            }
+            GpuDeviceSelection::Index { index } => adapters.get(*index as usize).cloned(),
+            GpuDeviceSelection::Name { name } => {
+                let lower = name.to_lowercase();
+                adapters
+                    .iter()
+                    .find(|a| a.get_info().name.to_lowercase().contains(&lower))
+                    .cloned()
+            }
+            GpuDeviceSelection::Integrated => adapters
+                .iter()
+                .find(|a| a.get_info().device_type == wgpu::DeviceType::IntegratedGpu)
+                .or_else(|| adapters.first())
+                .cloned(),
+        }
     }
 
     /// Evaluates a compiled density-function graph (see [`graph::compile`]) at every
@@ -797,8 +896,8 @@ impl GpuNoiseContext {
             })
     }
 
-    /// Allocates a STORAGE+COPY_SRC output buffer and a MAP_READ+COPY_DST
-    /// staging buffer, both `total` u32 elements wide.
+    /// Allocates a `STORAGE | COPY_SRC` output buffer and a `MAP_READ |
+    /// COPY_DST` staging buffer, both `total` `u32` elements wide.
     fn alloc_output_pair(&self, label: &str, total: usize) -> (wgpu::Buffer, wgpu::Buffer, u64) {
         let size = total as u64 * std::mem::size_of::<u32>() as u64;
         let output = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -831,15 +930,14 @@ impl GpuNoiseContext {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("light encoder"),
             });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("light pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(pipeline);
-            pass.set_bind_group(0, bind_group, &[]);
-            pass.dispatch_workgroups(workgroups, 1, 1);
-        }
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("light pass"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, bind_group, &[]);
+        pass.dispatch_workgroups(workgroups, 1, 1);
+        drop(pass);
         encoder.copy_buffer_to_buffer(output, 0, staging, 0, size);
         self.queue.submit(Some(encoder.finish()));
     }
