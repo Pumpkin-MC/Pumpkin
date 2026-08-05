@@ -1,42 +1,18 @@
-use pumpkin_util::{identifier::Identifier, version::MinecraftVersion};
+use pumpkin_util::identifier::Identifier;
 use thiserror::Error;
-
-use crate::mapping::NetworkId;
 
 #[derive(Debug, Error)]
 pub enum RegistryInsertError {
     #[error("registry entry `{0}` is already registered")]
     AlreadyRegistered(Identifier),
+    #[error("registry is immutable")]
+    Immutable,
 }
 
 #[derive(Debug, Error)]
-pub enum VersionMappingError {
-    #[error("cannot create version mapping for unknown registry entry `{0}`")]
-    UnknownEntry(Identifier),
-
-    #[error(
-        "registry entry `{identifier}` is already mapped to network ID \
-         {existing_network_id} for Minecraft version {version}, but mapping \
-         to network ID {requested_network_id} was requested"
-    )]
-    IdentifierAlreadyMapped {
-        version: MinecraftVersion,
-        identifier: Identifier,
-        existing_network_id: NetworkId,
-        requested_network_id: NetworkId,
-    },
-
-    #[error(
-        "network ID {network_id} is already mapped to registry entry \
-         `{existing_identifier}` for Minecraft version {version}, but mapping \
-         it to `{requested_identifier}` was requested"
-    )]
-    NetworkIdAlreadyMapped {
-        version: MinecraftVersion,
-        network_id: NetworkId,
-        existing_identifier: Identifier,
-        requested_identifier: Identifier,
-    },
+pub enum RegistryLockError {
+    #[error("registry locking was interrupted while the registry was being built")]
+    Interrupted,
 }
 
 #[derive(Debug, Error)]
@@ -54,5 +30,50 @@ pub enum RegistryGetError {
     TypeMismatch {
         identifier: Identifier,
         expected: &'static str,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DataKeyBuildError {
+    #[error("a data key must contain at least one identifier")]
+    Empty,
+
+    #[error("registry `{0}` does not exist")]
+    MissingRegistry(Identifier),
+
+    #[error("entry `{0}` is not a nested registry")]
+    NotARegistry(Identifier),
+
+    #[error("value `{0}` does not exist")]
+    MissingValue(Identifier),
+
+    #[error("registry entry type mismatch: expected `{expected}`, found `{actual}`")]
+    TypeMismatch {
+        expected: &'static str,
+        actual: &'static str,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DataKeyGetError {
+    #[error("the registry used to build this key was dropped")]
+    RegistryDropped,
+
+    #[error("this key belongs to a different registry tree")]
+    WrongRegistry,
+
+    #[error("the data key contains no IDs")]
+    InvalidKey,
+
+    #[error("nested registry with numeric ID {id} does not exist")]
+    MissingRegistry { id: usize },
+
+    #[error("value with numeric ID {id} does not exist")]
+    MissingValue { id: usize },
+
+    #[error("registry entry type mismatch: expected `{expected}`, found `{actual}`")]
+    TypeMismatch {
+        expected: &'static str,
+        actual: &'static str,
     },
 }
