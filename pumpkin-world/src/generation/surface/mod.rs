@@ -53,6 +53,12 @@ pub struct MaterialRuleContext<'a> {
     pub terrain_builder: &'a SurfaceTerrainBuilder,
     pub sea_level: i32,
     steep_material_condition: Option<bool>,
+    /// Noise samplers built by [`test_noise_threshold`], keyed by noise parameter id.
+    ///
+    /// Building one is expensive and only depends on `random_deriver`, so they are
+    /// reused for the lifetime of the context. Surface rules reference very few
+    /// distinct noises, so a linear scan beats hashing here.
+    noise_threshold_samplers: Vec<(usize, DoublePerlinNoiseSampler)>,
 }
 
 impl<'a> MaterialRuleContext<'a> {
@@ -90,6 +96,7 @@ impl<'a> MaterialRuleContext<'a> {
             stone_depth_above: 0,
             sea_level,
             steep_material_condition: None,
+            noise_threshold_samplers: Vec::new(),
         }
     }
 
@@ -305,12 +312,25 @@ pub fn test_noise_threshold(
     condition: &NoiseThresholdMaterialCondition,
     context: &mut MaterialRuleContext,
 ) -> bool {
-    // TODO: we want to cache these
-    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
-        context.random_deriver,
-        &condition.noise,
+    let cached = context
+        .noise_threshold_samplers
+        .iter()
+        .position(|(id, _)| *id == condition.noise.id);
+    let index = cached.unwrap_or_else(|| {
+        let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            context.random_deriver,
+            &condition.noise,
+        );
+        context
+            .noise_threshold_samplers
+            .push((condition.noise.id, sampler));
+        context.noise_threshold_samplers.len() - 1
+    });
+    let value = context.noise_threshold_samplers[index].1.sample(
+        context.block_pos_x as f64,
+        0.0,
+        context.block_pos_z as f64,
     );
-    let value = sampler.sample(context.block_pos_x as f64, 0.0, context.block_pos_z as f64);
     value >= condition.min_threshold && value <= condition.max_threshold
 }
 
