@@ -839,6 +839,12 @@ pub trait Mob: EntityBase + Send + Sync {
             ))
         })
     }
+
+    /// Called once a breed has been claimed (both parents' love ticks reset) and offspring is
+    /// about to be created. Override for side effects vanilla ties to a specific `BreedGoal`
+    /// subclass rather than the generic breed path, e.g. `Turtle.TurtleBreedGoal.breed` setting
+    /// `hasEgg = true` (`Turtle.java:300-326`).
+    fn on_bred(&self, _mate: &dyn EntityBase) {}
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {

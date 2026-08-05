@@ -9,8 +9,8 @@ use pumpkin_util::math::vector3::Vector3;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        squid_flee::SquidFleeGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -32,7 +32,8 @@ impl SquidEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Vanilla `Squid.registerGoals` has no float/swim goal at all: squids are always
+            // in water and don't need to surface.
             // NOTE: vanilla Squid has no WanderAroundGoal at all - locomotion instead comes
             // entirely from Squid.aiStep's jet-propulsion physics (a `movementVector` applied
             // directly to velocity, with `travel()` neutered to skip the generic AI-movement
@@ -42,6 +43,10 @@ impl SquidEntity {
             // either need that hook added first or would double-apply movement on top of the
             // goal-driven system. Kept as the existing placeholder rather than removed, since
             // removing it with no replacement would leave squids unable to move at all.
+            // Vanilla `Squid.registerGoals` puts `SquidFleeGoal` above `SquidRandomMovementGoal`
+            // (priorities 1 and 0 respectively); reversed here so fleeing can interrupt the
+            // `WanderAroundGoal` placeholder, which occupies priority 1 rather than 0.
+            goal_selector.add_goal(0, SquidFleeGoal::new());
             goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(
                 2,

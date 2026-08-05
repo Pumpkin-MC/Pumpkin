@@ -15,9 +15,10 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ageable::AgeableMob,
     ai::goal::{
-        breed::BreedGoal, escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        turtle_go_to_water::TurtleGoToWaterGoal, wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, look_at_entity::LookAtEntityGoal,
+        tempt::TemptGoal, turtle_go_home::TurtleGoHomeGoal,
+        turtle_go_to_water::TurtleGoToWaterGoal, turtle_lay_egg::TurtleLayEggGoal,
+        turtle_random_stroll::TurtleRandomStrollGoal, turtle_travel::TurtleTravelGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -50,6 +51,7 @@ pub struct TurtleEntity {
     /// tracker initializes (see `mob_init_data_tracker`) unless NBT already restored it.
     home_pos: AtomicCell<Option<BlockPos>>,
     going_home: AtomicBool,
+    laying_egg: AtomicBool,
 }
 
 impl TurtleEntity {
@@ -61,6 +63,7 @@ impl TurtleEntity {
             has_egg: AtomicBool::new(false),
             home_pos: AtomicCell::new(None),
             going_home: AtomicBool::new(false),
+            laying_egg: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(turtle);
         let turtle_weak = Arc::downgrade(&mob_arc);
@@ -72,17 +75,20 @@ impl TurtleEntity {
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            goal_selector.add_goal(1, Box::new(SwimGoal::default()));
+            // Priorities follow `Turtle.registerGoals` (`Turtle.java:151-160`). No float/swim
+            // goal: vanilla doesn't register one for Turtle either.
             goal_selector.add_goal(0, EscapeDangerGoal::new(1.2));
-            goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS, false)));
-            goal_selector.add_goal(4, TurtleGoToWaterGoal::new(turtle_weak, 1.0));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(1, BreedGoal::new(1.0));
+            goal_selector.add_goal(1, TurtleLayEggGoal::new(turtle_weak.clone(), 1.0));
+            goal_selector.add_goal(2, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS, false)));
+            goal_selector.add_goal(3, TurtleGoToWaterGoal::new(turtle_weak.clone(), 1.0));
+            goal_selector.add_goal(4, TurtleGoHomeGoal::new(turtle_weak.clone(), 1.0));
+            goal_selector.add_goal(7, TurtleTravelGoal::new(turtle_weak.clone(), 1.0));
             goal_selector.add_goal(
-                6,
+                8,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(9, TurtleRandomStrollGoal::new(turtle_weak, 1.0));
         };
 
         mob_arc
@@ -108,6 +114,27 @@ impl TurtleEntity {
     #[must_use]
     pub fn is_going_home(&self) -> bool {
         self.going_home.load(Relaxed)
+    }
+
+    pub fn set_going_home(&self, going_home: bool) {
+        self.going_home.store(going_home, Relaxed);
+    }
+
+    #[must_use]
+    pub fn is_laying_egg(&self) -> bool {
+        self.laying_egg.load(Relaxed)
+    }
+
+    pub fn set_laying_egg(&self, laying_egg: bool) {
+        self.laying_egg.store(laying_egg, Relaxed);
+        self.mob_entity.living_entity.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::LAYING_EGG,
+                MetaDataType::BOOLEAN,
+                laying_egg,
+            )],
+            None,
+        );
     }
 }
 
@@ -157,6 +184,12 @@ impl Mob for TurtleEntity {
 
     fn get_home(&self) -> Option<BlockPos> {
         self.home_pos.load()
+    }
+
+    /// Vanilla `Turtle.TurtleBreedGoal.breed` (`Turtle.java:300-326`): a successful breed
+    /// always leaves the turtle carrying an egg, on top of the generic `BreedGoal` effects.
+    fn on_bred(&self, _mate: &dyn EntityBase) {
+        self.set_has_egg(true);
     }
 
     fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
