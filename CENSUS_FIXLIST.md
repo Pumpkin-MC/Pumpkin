@@ -1082,3 +1082,59 @@ established from this repo. `JavaClient::handle_chunk_batch` (net/java/play.rs:2
 already logs it at `trace!`; an operator can confirm or eliminate the send path in one
 run by enabling trace logging for that module. Marked **UNVERIFIABLE** here rather than
 guessed.
+
+### Addendum: the generation pool is unbounded and oversubscribes the runtime
+
+Found on a second pass, and it revises the recommended first step above.
+
+`pumpkin-world/src/level.rs:287-291` deliberately reserves headroom:
+
+    let total_cores = available_parallelism() - 2;
+    let threads_per_dimension = (total_cores / 2).max(1);
+
+and passes that as `gen_thread_count` to `GenerationSchedule::create`. But
+`GenerationSchedule::create` only consumes `gen_thread_count` inside the
+`if gen_pool.is_none()` branch (schedule.rs:123-138). The normal startup path,
+`Server::new`'s `world_loader` closure, always passes `Some(pool)`
+(pumpkin/src/server/mod.rs:341), so on any real server that reservation is dead code.
+
+The pool it passes is built at server/mod.rs:310 with no `.num_threads(...)`, so rayon
+defaults to `available_parallelism()` — 20 CPU-bound worldgen threads on the reported
+box. `pumpkin/src/main.rs:46` is a bare `#[tokio::main]`, so the tokio runtime also
+defaults to `available_parallelism()` worker threads. Add the `Schedule` thread and the
+four `io_read` tasks and the process asks for roughly twice the machine's cores, all of
+it CPU-bound during a flight across ungenerated terrain.
+
+This reconciles what the measurements above otherwise leave unexplained: worldgen needs
+only ~8% of the machine's CPU to keep up, the wire has an order of magnitude of headroom,
+the ordering is correct, and the player still outruns generation. Generation does not
+have to be the throughput bottleneck to produce the symptom — it only has to starve the
+tokio runtime, and `Player::tick` is what calls `next_chunk()` and spawns `send_chunks`.
+It also matches "server often hangs on loading chunks" more directly than anything else
+found here.
+
+Related, same root: `Server::create_world` (server/mod.rs:447) passes `None` for the
+pool with a `TODO: gen_pool should be reused`, so every dynamically created world spawns
+its own `threads_per_dimension` dedicated OS threads on top of the shared 20-thread rayon
+pool.
+
+**Revised smallest useful first step**, replacing the one proposed above: bound the rayon
+pool with `.num_threads(...)` using the figure `level.rs` already computes, and re-test
+with the player. That is a one-line change in single-threaded setup code, touches no
+field written by a concurrent tick task, and needs no scheduler surgery. The sustained
+`GenerationSchedule` throughput bench remains the right follow-up, but it is no longer
+the cheapest thing to try first.
+
+### Addendum: the one mode where the send path does starve
+
+The (c) section above rules out the send path **on CPU cost**, which is what the
+`chunk_packet` bench measures. It does not rule out the ack window.
+`ChunkManager::can_send_chunk` (player.rs:368) requires
+`ack_window_open() || ack_fallback_ready()`, and once ten batches have gone out without
+an ack the fallback only reopens every `ACK_STALL_FALLBACK_DELAY = 250 ms`
+(player.rs:171). In that stalled regime the ceiling is 4 batches/s, so any
+client-reported `chunks_per_tick` below about 12 puts the server under the 47 chunks/s
+demand with no CPU cost involved at all. Whether the reported client was in that regime
+is the same **UNVERIFIABLE** noted below, and the same `trace!` at
+net/java/play.rs:2953 settles it. No claim is made here about how vanilla's own
+`PlayerChunkSender` paces itself; this is stated purely as a Pumpkin-side ceiling.
