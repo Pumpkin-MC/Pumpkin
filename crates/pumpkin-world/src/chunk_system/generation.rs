@@ -360,17 +360,21 @@ mod tests {
         let Chunk::Proto(chunk) = chunk else {
             panic!("features stage should return a proto chunk");
         };
+        let mut hash = 0xcbf29ce484222325u64;
         let mut non_air = 0;
         for y in 123..=146 {
             for x in -4896..=-4881 {
-                for z in -4405..=-4393 {
+                for z in -4400..=-4393 {
                     let state =
                         chunk.get_block_state(&pumpkin_util::math::vector3::Vector3::new(x, y, z));
+                    hash ^= u64::from(state.as_u16());
+                    hash = hash.wrapping_mul(0x100000001b3);
                     non_air += usize::from(!state.to_state().is_air());
                 }
             }
         }
         assert_eq!(non_air, 59);
+        assert_eq!(hash, 0x5af3_06b3_536d_8053);
         assert!(chunk.pending_block_entities.iter().any(|nbt| {
             nbt.get_string("id") == Some("minecraft:skull")
                 && nbt.get_int("x") == Some(-4888)
