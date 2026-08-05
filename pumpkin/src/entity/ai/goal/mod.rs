@@ -80,6 +80,7 @@ pub mod spear_use;
 pub mod spellcaster;
 pub mod squid_flee;
 pub mod step_and_destroy_block;
+pub mod strider_go_to_lava;
 pub mod swim;
 pub mod teleport_towards_player;
 pub mod tempt;

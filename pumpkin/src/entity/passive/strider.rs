@@ -10,7 +10,7 @@ use crate::entity::{
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
+        strider_go_to_lava::StriderGoToLavaGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     passive::animal::Animal,
@@ -49,17 +49,18 @@ impl StriderEntity {
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.65));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.4, STRIDER_TEMPT_ITEMS, false)));
-            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.0)));
+            goal_selector.add_goal(4, StriderGoToLavaGoal::new(1.0));
+            goal_selector.add_goal(5, Box::new(FollowParentGoal::new(1.0)));
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new_with_interval(1.0, 60)));
             goal_selector.add_goal(
                 8,
                 LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),
             );
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(
-                8,
+                9,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::STRIDER, 8.0),
             );
-            goal_selector.add_goal(9, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
