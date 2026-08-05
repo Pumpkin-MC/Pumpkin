@@ -167,27 +167,4 @@ mod tests {
         assert!(should_jump(false, true, 1.0, 0.6, 0.5, 0.6));
         assert!(!should_jump(false, true, 1.0, 0.6, 2.0, 0.6));
     }
-
-    /// `MoveControl` feeds `speedModifier * MOVEMENT_SPEED` into both the mob's speed and
-    /// its forward input (`Mob.setSpeed` -> `setZza`), so the attribute enters the per-tick
-    /// velocity twice. `travel_in_air` on a normal block (slipperiness 0.6) contributes
-    /// `speed * 0.21600002 / 0.6^3 == speed`, and horizontal friction is `0.6 * 0.91`.
-    #[test]
-    fn walking_mob_terminal_speed_matches_the_attribute_squared() {
-        // Terminal velocity of `v += input * factor; v *= friction`.
-        fn terminal(attribute: f64, speed_modifier: f64) -> f64 {
-            let speed = speed_modifier * attribute;
-            let per_tick = speed * (speed * 0.216_000_02 / 0.216);
-            per_tick / (1.0 - 0.6 * 0.91)
-        }
-
-        // Zombie MOVEMENT_SPEED is 0.23 and spider's is 0.3 in pumpkin-data's generated
-        // entity attributes. Chasing goals use a speed modifier of 1.0.
-        let zombie = terminal(0.23, 1.0) * 20.0;
-        let spider = terminal(0.3, 1.0) * 20.0;
-        assert!((zombie - 2.331).abs() < 0.01, "zombie {zombie} blocks/s");
-        assert!((spider - 3.965).abs() < 0.01, "spider {spider} blocks/s");
-        // Both must stay below a walking player (4.317 blocks/s).
-        assert!(zombie < 4.317 && spider < 4.317);
-    }
 }

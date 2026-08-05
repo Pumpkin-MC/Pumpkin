@@ -1085,10 +1085,10 @@ impl LivingEntity {
                     .slipperiness,
             );
 
-            let speed =
-                effective_speed * 0.216_000_02 / (slipperiness * slipperiness * slipperiness);
-
-            (speed, slipperiness * 0.91)
+            (
+                friction_influenced_speed(effective_speed, slipperiness),
+                slipperiness * 0.91,
+            )
         } else {
             let speed = if let Some(player) = caller.get_player() {
                 player.get_off_ground_speed().await
@@ -3561,9 +3561,49 @@ pub(crate) const fn bypasses_shield(damage_type: &DamageType) -> bool {
     )
 }
 
+/// `LivingEntity.getFrictionInfluencedSpeed`: the grounded per-tick factor
+/// `moveRelative` is called with.
+fn friction_influenced_speed(speed: f64, slipperiness: f64) -> f64 {
+    speed * 0.216_000_02 / (slipperiness * slipperiness * slipperiness)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Terminal horizontal speed, in blocks per second, of `velocity += input * factor`
+    /// followed by `velocity *= slipperiness * 0.91` as `travel_in_air` applies it on a
+    /// normal block (slipperiness 0.6). `tick_movement` decays the stored input by 0.98
+    /// each tick before travelling, so a continuously re-applied input settles at 0.98.
+    fn terminal_blocks_per_second(input: f64, speed: f64) -> f64 {
+        let per_tick = 0.98 * input * friction_influenced_speed(speed, 0.6);
+        per_tick / (1.0 - 0.6 * 0.91) * 20.0
+    }
+
+    /// A player's forward input is 1.0 and its `speed` is the raw `MOVEMENT_SPEED`
+    /// attribute (0.1), which reproduces the documented 4.317 blocks/s walk speed. This
+    /// pins the consumer side, so the mob case below can only be fixed on the producer side.
+    #[test]
+    fn player_walk_speed_matches_the_documented_value() {
+        let walk = terminal_blocks_per_second(1.0, 0.1);
+        assert!((walk - 4.317).abs() < 0.01, "player {walk} blocks/s");
+    }
+
+    /// `Mob.setSpeed` stores `speedModifier * MOVEMENT_SPEED` and mirrors it into `zza`,
+    /// so the attribute enters the per-tick velocity twice for mobs. Feeding the bare
+    /// speed modifier into the input instead (the bug) made a chasing zombie 10.1 and a
+    /// spider 12.9 blocks/s, both faster than a walking player.
+    #[test]
+    fn mob_input_and_speed_both_carry_the_movement_speed_attribute() {
+        for (attribute, expected) in [(0.23, 2.284), (0.3, 3.886)] {
+            let speed = 1.0 * attribute; // LivingEntity::speed_for_modifier
+            let got = terminal_blocks_per_second(speed, speed);
+            assert!((got - expected).abs() < 0.01, "{attribute} -> {got}");
+            assert!(got < 4.317);
+            // The old behaviour: input was the raw modifier.
+            assert!(terminal_blocks_per_second(1.0, speed) > 4.317);
+        }
+    }
 
     #[test]
     fn active_hand_maps_to_the_matching_equipment_slot() {
