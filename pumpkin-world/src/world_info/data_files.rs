@@ -5,11 +5,7 @@ use std::{
 };
 
 use pumpkin_data::game_rules::{GameRule, GameRuleRegistry, GameRuleValue};
-use pumpkin_nbt::{
-    compound::NbtCompound,
-    nbt_compress::{from_gzip_bytes, read_gzip_compound_tag, to_gzip_bytes},
-    tag::NbtTag,
-};
+use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
@@ -50,7 +46,7 @@ impl Default for WeatherData {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct WorldGenSettingsData {
     #[serde(flatten)]
     pub settings: WorldGenSettings,
@@ -134,8 +130,19 @@ pub fn read_weather(level_folder: &Path) -> WeatherData {
         return WeatherData::default();
     }
     match File::open(&path) {
-        Ok(f) => match from_gzip_bytes::<DataFileRoot<WeatherData>, _>(f) {
-            Ok(root) => root.data,
+        Ok(f) => match read_gzip_compound_tag(f) {
+            Ok(compound) => {
+                let data_compound = compound.get_compound("data");
+                let c = data_compound.as_ref().map_or(&compound, |v| v);
+                WeatherData {
+                    clear_weather_time: c.get_int("clear_weather_time").unwrap_or(0),
+                    rain_time: c.get_int("rain_time").unwrap_or(0),
+                    thunder_time: c.get_int("thunder_time").unwrap_or(0),
+                    raining: c.get_bool("raining").unwrap_or(false),
+                    thundering: c.get_bool("thundering").unwrap_or(false),
+                    data_version: c.get_int("DataVersion").unwrap_or(0),
+                }
+            }
             Err(e) => {
                 warn!("Failed to deserialize weather.dat, using defaults: {e}");
                 WeatherData::default()
@@ -152,8 +159,15 @@ pub fn write_weather(level_folder: &Path, data: &WeatherData) -> Result<(), Worl
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("weather.dat");
     let file = File::create(&path)?;
-    let root = DataFileRoot { data: data.clone() };
-    to_gzip_bytes(&root, BufWriter::new(file))
+    let mut data_comp = NbtCompound::new();
+    data_comp.put_int("clear_weather_time", data.clear_weather_time);
+    data_comp.put_int("rain_time", data.rain_time);
+    data_comp.put_int("thunder_time", data.thunder_time);
+    data_comp.put_bool("raining", data.raining);
+    data_comp.put_bool("thundering", data.thundering);
+    let mut root = NbtCompound::new();
+    root.put_compound("data", data_comp);
+    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
 
@@ -163,8 +177,17 @@ pub fn read_world_gen_settings(level_folder: &Path) -> Option<WorldGenSettings> 
         return None;
     }
     match File::open(&path) {
-        Ok(f) => match from_gzip_bytes::<DataFileRoot<WorldGenSettingsData>, _>(f) {
-            Ok(root) => Some(root.data.settings),
+        Ok(f) => match read_gzip_compound_tag(f) {
+            Ok(compound) => {
+                let seed = compound
+                    .get_compound("data")
+                    .and_then(|c| c.get_long("seed"))
+                    .unwrap_or(0);
+                Some(WorldGenSettings {
+                    seed,
+                    dimensions: std::collections::HashMap::new(),
+                })
+            }
             Err(e) => {
                 warn!("Failed to deserialize world_gen_settings.dat: {e}");
                 None
@@ -185,9 +208,13 @@ pub fn write_world_gen_settings(
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("world_gen_settings.dat");
     let file = File::create(&path)?;
-    let data = WorldGenSettingsData::new(settings.clone(), data_version);
-    let root = DataFileRoot { data };
-    to_gzip_bytes(&root, BufWriter::new(file))
+    let mut inner = NbtCompound::new();
+    inner.put_int("DataVersion", data_version);
+    inner.put_long("seed", settings.seed);
+
+    let mut root = NbtCompound::new();
+    root.put_compound("data", inner);
+    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
 
@@ -346,8 +373,16 @@ pub fn read_wandering_trader(level_folder: &Path) -> WanderingTraderData {
         return WanderingTraderData::default();
     }
     match File::open(&path) {
-        Ok(f) => match from_gzip_bytes::<DataFileRoot<WanderingTraderData>, _>(f) {
-            Ok(root) => root.data,
+        Ok(f) => match read_gzip_compound_tag(f) {
+            Ok(compound) => {
+                let data_compound = compound.get_compound("data");
+                let c = data_compound.as_ref().map_or(&compound, |v| v);
+                WanderingTraderData {
+                    spawn_delay: c.get_int("WanderingTraderSpawnDelay").unwrap_or(24_000),
+                    spawn_chance: c.get_int("WanderingTraderSpawnChance").unwrap_or(25),
+                    data_version: c.get_int("DataVersion").unwrap_or(0),
+                }
+            }
             Err(e) => {
                 warn!("Failed to deserialize wandering_trader.dat, using defaults: {e}");
                 WanderingTraderData::default()
@@ -367,8 +402,12 @@ pub fn write_wandering_trader(
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("wandering_trader.dat");
     let file = File::create(&path)?;
-    let root = DataFileRoot { data: data.clone() };
-    to_gzip_bytes(&root, BufWriter::new(file))
+    let mut data_comp = NbtCompound::new();
+    data_comp.put_int("WanderingTraderSpawnDelay", data.spawn_delay);
+    data_comp.put_int("WanderingTraderSpawnChance", data.spawn_chance);
+    let mut root = NbtCompound::new();
+    root.put_compound("data", data_comp);
+    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
 
@@ -529,14 +568,228 @@ pub struct SerializableTeam {
     pub players: Vec<String>,
 }
 
+/// Manual NBT codec for `scoreboard.dat`.
+///
+/// Upstream `7350fba3` removed the serde bridge from `pumpkin-nbt`, so the
+/// `DataFileRoot<ScoreboardData>` round-trip has to be spelled out. The key
+/// names below are unchanged from the serde attributes on the structs above.
+mod scoreboard_nbt {
+    use super::{ScoreboardData, SerializableObjective, SerializableScore, SerializableTeam};
+    use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+    use pumpkin_util::text::TextComponentBase;
+
+    fn text(compound: &NbtCompound, key: &str) -> Option<TextComponentBase> {
+        compound
+            .get_compound(key)
+            .map(TextComponentBase::from_nbt_compound)
+    }
+
+    fn compounds<'a>(compound: &'a NbtCompound, key: &str) -> Vec<&'a NbtCompound> {
+        compound.get_list(key).map_or_else(Vec::new, |list| {
+            list.iter()
+                .filter_map(|tag| match tag {
+                    NbtTag::Compound(c) => Some(c),
+                    _ => None,
+                })
+                .collect()
+        })
+    }
+
+    fn put_opt_string(compound: &mut NbtCompound, key: &str, value: Option<&String>) {
+        if let Some(value) = value {
+            compound.put_string(key, value.clone());
+        }
+    }
+
+    fn put_opt_text(compound: &mut NbtCompound, key: &str, value: Option<&TextComponentBase>) {
+        if let Some(value) = value {
+            compound.put_compound(key, value.to_nbt_compound());
+        }
+    }
+
+    fn objective_to_nbt(objective: &SerializableObjective) -> NbtCompound {
+        let mut compound = NbtCompound::new();
+        compound.put_string("Name", objective.name.clone());
+        compound.put_string("CriteriaName", objective.criteria_name.clone());
+        compound.put_compound("DisplayName", objective.display_name.to_nbt_compound());
+        compound.put_string("RenderType", objective.render_type.clone());
+        compound.put_bool("display_auto_update", objective.display_auto_update);
+        put_opt_string(&mut compound, "format", objective.number_format.as_ref());
+        compound
+    }
+
+    fn objective_from_nbt(compound: &NbtCompound) -> Option<SerializableObjective> {
+        Some(SerializableObjective {
+            name: compound.get_string("Name")?.to_string(),
+            criteria_name: compound
+                .get_string("CriteriaName")
+                .unwrap_or("dummy")
+                .to_string(),
+            display_name: text(compound, "DisplayName")?,
+            render_type: compound
+                .get_string("RenderType")
+                .unwrap_or("integer")
+                .to_string(),
+            display_auto_update: compound.get_bool("display_auto_update").unwrap_or_default(),
+            number_format: compound.get_string("format").map(ToString::to_string),
+        })
+    }
+
+    fn score_to_nbt(score: &SerializableScore) -> NbtCompound {
+        let mut compound = NbtCompound::new();
+        compound.put_string("Name", score.entity_name.clone());
+        compound.put_string("Objective", score.objective_name.clone());
+        compound.put_int("Score", score.value);
+        compound.put_bool("Locked", score.locked);
+        put_opt_text(&mut compound, "display", score.display.as_ref());
+        put_opt_string(&mut compound, "format", score.number_format.as_ref());
+        compound
+    }
+
+    fn score_from_nbt(compound: &NbtCompound) -> Option<SerializableScore> {
+        Some(SerializableScore {
+            entity_name: compound.get_string("Name")?.to_string(),
+            objective_name: compound.get_string("Objective")?.to_string(),
+            value: compound.get_int("Score").unwrap_or_default(),
+            locked: compound.get_bool("Locked").unwrap_or_default(),
+            display: text(compound, "display"),
+            number_format: compound.get_string("format").map(ToString::to_string),
+        })
+    }
+
+    fn team_to_nbt(team: &SerializableTeam) -> NbtCompound {
+        let mut compound = NbtCompound::new();
+        compound.put_string("Name", team.name.clone());
+        put_opt_text(&mut compound, "DisplayName", team.display_name.as_ref());
+        put_opt_string(&mut compound, "TeamColor", team.color.as_ref());
+        compound.put_bool("AllowFriendlyFire", team.friendly_fire);
+        compound.put_bool("SeeFriendlyInvisibles", team.see_friendly_invisibles);
+        compound.put_compound("MemberNamePrefix", team.player_prefix.to_nbt_compound());
+        compound.put_compound("MemberNameSuffix", team.player_suffix.to_nbt_compound());
+        compound.put_string("NameTagVisibility", team.nametag_visibility.clone());
+        compound.put_string(
+            "DeathMessageVisibility",
+            team.death_message_visibility.clone(),
+        );
+        compound.put_string("CollisionRule", team.collision_rule.clone());
+        compound.put_list(
+            "Players",
+            team.players
+                .iter()
+                .map(|p| NbtTag::String(p.clone().into_boxed_str()))
+                .collect(),
+        );
+        compound
+    }
+
+    fn team_from_nbt(compound: &NbtCompound) -> Option<SerializableTeam> {
+        Some(SerializableTeam {
+            name: compound.get_string("Name")?.to_string(),
+            display_name: text(compound, "DisplayName"),
+            color: compound.get_string("TeamColor").map(ToString::to_string),
+            friendly_fire: compound.get_bool("AllowFriendlyFire").unwrap_or(true),
+            see_friendly_invisibles: compound.get_bool("SeeFriendlyInvisibles").unwrap_or(true),
+            player_prefix: text(compound, "MemberNamePrefix")
+                .unwrap_or_else(|| pumpkin_util::text::TextComponent::text(String::new()).0),
+            player_suffix: text(compound, "MemberNameSuffix")
+                .unwrap_or_else(|| pumpkin_util::text::TextComponent::text(String::new()).0),
+            nametag_visibility: compound
+                .get_string("NameTagVisibility")
+                .unwrap_or("always")
+                .to_string(),
+            death_message_visibility: compound
+                .get_string("DeathMessageVisibility")
+                .unwrap_or("always")
+                .to_string(),
+            collision_rule: compound
+                .get_string("CollisionRule")
+                .unwrap_or("always")
+                .to_string(),
+            players: compound.get_list("Players").map_or_else(Vec::new, |list| {
+                list.iter()
+                    .filter_map(|tag| match tag {
+                        NbtTag::String(s) => Some(s.to_string()),
+                        _ => None,
+                    })
+                    .collect()
+            }),
+        })
+    }
+
+    pub fn to_nbt(data: &ScoreboardData) -> NbtCompound {
+        let mut compound = NbtCompound::new();
+        compound.put_list(
+            "Objectives",
+            data.objectives
+                .iter()
+                .map(|o| NbtTag::Compound(objective_to_nbt(o)))
+                .collect(),
+        );
+        compound.put_list(
+            "PlayerScores",
+            data.scores
+                .iter()
+                .map(|s| NbtTag::Compound(score_to_nbt(s)))
+                .collect(),
+        );
+        let mut display_slots = NbtCompound::new();
+        for (slot, objective) in &data.display_slots {
+            display_slots.put_string(slot, objective.clone());
+        }
+        compound.put_compound("DisplaySlots", display_slots);
+        compound.put_list(
+            "Teams",
+            data.teams
+                .iter()
+                .map(|t| NbtTag::Compound(team_to_nbt(t)))
+                .collect(),
+        );
+        compound
+    }
+
+    pub fn from_nbt(compound: &NbtCompound) -> ScoreboardData {
+        ScoreboardData {
+            objectives: compounds(compound, "Objectives")
+                .into_iter()
+                .filter_map(objective_from_nbt)
+                .collect(),
+            scores: compounds(compound, "PlayerScores")
+                .into_iter()
+                .filter_map(score_from_nbt)
+                .collect(),
+            display_slots: compound.get_compound("DisplaySlots").map_or_else(
+                Default::default,
+                |slots| {
+                    slots
+                        .child_tags
+                        .iter()
+                        .filter_map(|(slot, tag)| match tag {
+                            NbtTag::String(objective) => {
+                                Some((slot.to_string(), objective.to_string()))
+                            }
+                            _ => None,
+                        })
+                        .collect()
+                },
+            ),
+            teams: compounds(compound, "Teams")
+                .into_iter()
+                .filter_map(team_from_nbt)
+                .collect(),
+        }
+    }
+}
+
 pub fn read_scoreboard(level_folder: &Path) -> ScoreboardData {
     let path = minecraft_data_dir(level_folder).join("scoreboard.dat");
     if !path.exists() {
         return ScoreboardData::default();
     }
     match File::open(&path) {
-        Ok(f) => match from_gzip_bytes::<DataFileRoot<ScoreboardData>, _>(f) {
-            Ok(root) => root.data,
+        Ok(f) => match read_gzip_compound_tag(std::io::BufReader::new(f)) {
+            Ok(root) => root
+                .get_compound("data")
+                .map_or_else(ScoreboardData::default, scoreboard_nbt::from_nbt),
             Err(e) => {
                 warn!("Failed to deserialize scoreboard.dat, using defaults: {e}");
                 ScoreboardData::default()
@@ -553,8 +806,9 @@ pub fn write_scoreboard(level_folder: &Path, data: &ScoreboardData) -> Result<()
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("scoreboard.dat");
     let file = File::create(&path)?;
-    let root = DataFileRoot { data: data.clone() };
-    to_gzip_bytes(&root, BufWriter::new(file))
+    let mut root = NbtCompound::new();
+    root.put_compound("data", scoreboard_nbt::to_nbt(data));
+    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
 

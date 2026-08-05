@@ -3652,7 +3652,8 @@ mod tests {
         for dt in bypassing {
             assert!(
                 bypasses_armor_durability(dt),
-                "{dt:?} should bypass armor durability"
+                "{} should bypass armor durability",
+                dt.message_id
             );
         }
     }
@@ -3677,7 +3678,8 @@ mod tests {
         for dt in physical {
             assert!(
                 !bypasses_armor_durability(dt),
-                "{dt:?} should NOT bypass armor durability"
+                "{} should NOT bypass armor durability",
+                dt.message_id
             );
         }
     }

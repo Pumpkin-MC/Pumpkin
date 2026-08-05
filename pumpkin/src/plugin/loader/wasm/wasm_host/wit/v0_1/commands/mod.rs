@@ -259,7 +259,7 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                     pumpkin::plugin::command::SoundCategory::Voice
                 }
             }),
-            OwnedArg::DamageType(d) => Arg::DamageType(format!("{d:?}")),
+            OwnedArg::DamageType(d) => Arg::DamageType(d.message_id.to_string()),
             OwnedArg::Effect(e) => Arg::Effect(e.minecraft_name.to_string()),
             OwnedArg::Enchantment(e) => Arg::Enchantment(e.name.to_string()),
             OwnedArg::Advancement(a) => Arg::Advancement(a.to_string()),

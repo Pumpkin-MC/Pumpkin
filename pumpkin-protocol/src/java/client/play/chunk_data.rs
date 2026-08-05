@@ -40,11 +40,29 @@ impl ClientPacket for CChunkData<'_> {
         if version <= &JavaMinecraftVersion::V_1_21_4 {
             // Vanilla's Heightmap.Types marks OCEAN_FLOOR as Usage.LIVE_WORLD, not
             // Usage.CLIENT (unlike the other three types here) - it is never sent
-            // to the client, only persisted to disk. Strip it before serializing.
-            let mut network_heightmaps = heightmaps.clone();
-            network_heightmaps.ocean_floor = None;
-            pumpkin_nbt::serializer::to_bytes_unnamed(&network_heightmaps, &mut write)
-                .map_err(|err| WritingError::Serde(err.to_string()))?;
+            // to the client, only persisted to disk. It is deliberately absent from
+            // the compound built below.
+            let mut comp = pumpkin_nbt::compound::NbtCompound::new();
+            if let Some(ref ws) = heightmaps.world_surface {
+                comp.put(
+                    "WORLD_SURFACE",
+                    pumpkin_nbt::tag::NbtTag::LongArray(ws.to_vec()),
+                );
+            }
+            if let Some(ref mb) = heightmaps.motion_blocking {
+                comp.put(
+                    "MOTION_BLOCKING",
+                    pumpkin_nbt::tag::NbtTag::LongArray(mb.to_vec()),
+                );
+            }
+            if let Some(ref mbnl) = heightmaps.motion_blocking_no_leaves {
+                comp.put(
+                    "MOTION_BLOCKING_NO_LEAVES",
+                    pumpkin_nbt::tag::NbtTag::LongArray(mbnl.to_vec()),
+                );
+            }
+            let bytes = pumpkin_nbt::Nbt::from(comp).write_unnamed();
+            write.write_all(&bytes)?;
         } else {
             write.write_var_int(&VarInt(3))?; // Map size
 

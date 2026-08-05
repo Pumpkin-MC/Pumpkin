@@ -782,7 +782,10 @@ pub fn deserialize(
         DataComponent::BlockState => Ok(BlockStateImpl::deserialize(seq)?.to_dyn()),
         DataComponent::LodestoneTracker => Ok(LodestoneTrackerImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BaseColor => Ok(BaseColorImpl::deserialize(seq)?.to_dyn()),
-        _ => Err(ReadingError::Message(format!("{id:?} (TODO)"))),
+        _ => Err(ReadingError::Message(format!(
+            "component_id_{} (TODO)",
+            id.to_id()
+        ))),
     }
 }
 pub fn serialize(

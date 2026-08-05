@@ -175,6 +175,45 @@ impl MobEntity {
         (self.mob_flags.load(Relaxed) & Self::AI_DISABLED_FLAG) != 0
     }
 
+    pub async fn clear_ai_goals(&self, mob: &dyn Mob) {
+        let running_goals = self.goals_selector.lock().unwrap().clear();
+        for mut goal in running_goals {
+            goal.goal.stop(mob).await;
+        }
+
+        let running_target_goals = self.target_selector.lock().unwrap().clear();
+        for mut goal in running_target_goals {
+            goal.goal.stop(mob).await;
+        }
+    }
+
+    pub fn add_goal<G: crate::entity::ai::goal::Goal + 'static>(&self, priority: u8, goal: G) {
+        self.goals_selector
+            .lock()
+            .unwrap()
+            .add_goal(priority, Box::new(goal));
+    }
+
+    pub fn add_target_goal<G: crate::entity::ai::goal::Goal + 'static>(
+        &self,
+        priority: u8,
+        goal: G,
+    ) {
+        self.target_selector
+            .lock()
+            .unwrap()
+            .add_goal(priority, Box::new(goal));
+    }
+
+    pub async fn set_target(&self, target: Option<Arc<dyn EntityBase>>) {
+        let mut t = self.target.lock().await;
+        *t = target;
+    }
+
+    pub async fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
+        self.target.lock().await.clone()
+    }
+
     fn set_mob_flag(&self, flag: u8, value: bool) {
         let old_b = self.mob_flags.load(Ordering::Relaxed);
 

@@ -109,7 +109,7 @@ impl ToTokens for PropertyStruct {
         });
 
         tokens.extend(quote! {
-            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+            #[derive(Clone, Copy, Eq, PartialEq)]
             pub enum #name {
                 #(#ident_values),*
             }
@@ -208,7 +208,7 @@ impl ToTokens for FluidPropertyStruct {
         });
 
         tokens.extend(quote! {
-            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+            #[derive(Clone, Copy, Eq, PartialEq)]
             pub struct #name {
                 #(pub #values),*
             }
@@ -242,7 +242,7 @@ impl ToTokens for FluidPropertyStruct {
 
                 fn to_state_id(&self, fluid: &Fluid) -> BlockStateId {
                     if ![#(#fluid_names),*].contains(&fluid.name) {
-                        panic!("{} is not a valid fluid for {}", &fluid.name, #struct_name);
+                        panic!("{} is not a valid fluid for {}", fluid.name, #struct_name);
                     }
 
                     let prop_index = self.to_index();

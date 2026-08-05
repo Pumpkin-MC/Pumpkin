@@ -80,7 +80,7 @@ use pumpkin_data::{
 use pumpkin_data::{BlockDirection, BlockState, HorizontalFacingExt, translation};
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
-use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertySyncData};
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::java::client::play::{
@@ -5359,6 +5359,18 @@ impl World {
         self.spawn_entity(item_entity).await;
     }
 
+    pub async fn strike_lightning(self: &Arc<Self>, pos: Vector3<f64>, _effect_only: bool) {
+        use pumpkin_data::entity::EntityType;
+        use uuid::Uuid;
+        let lightning = crate::entity::r#type::from_type(
+            &EntityType::LIGHTNING_BOLT,
+            pos,
+            self,
+            Uuid::new_v4(),
+        );
+        self.spawn_entity(lightning).await;
+    }
+
     /* ItemScatterer.java */
     pub async fn scatter_inventory(
         self: &Arc<Self>,
@@ -5788,14 +5800,13 @@ impl World {
         let entity_id = block_entity.resource_location().to_string();
 
         if let Some(nbt) = &block_entity_nbt {
-            let mut bytes = Vec::new();
-            to_bytes_unnamed(nbt, &mut bytes).unwrap();
+            let bytes = pumpkin_nbt::Nbt::from(nbt.clone()).write_unnamed();
             self.broadcast_to_chunk(
                 chunk_pos,
                 &CBlockEntityData::new(
                     block_entity.get_position(),
                     VarInt(block_entity.get_id() as i32),
-                    bytes.into_boxed_slice(),
+                    bytes.as_ref().into(),
                 ),
             );
         }
@@ -5879,14 +5890,13 @@ impl World {
         let block_entity_nbt = block_entity.chunk_data_nbt();
 
         if let Some(nbt) = &block_entity_nbt {
-            let mut bytes = Vec::new();
-            to_bytes_unnamed(nbt, &mut bytes).unwrap();
+            let bytes = pumpkin_nbt::Nbt::from(nbt.clone()).write_unnamed();
             self.broadcast_to_chunk(
                 chunk_pos,
                 &CBlockEntityData::new(
                     block_entity.get_position(),
                     VarInt(block_entity.get_id() as i32),
-                    bytes.into_boxed_slice(),
+                    bytes.as_ref().into(),
                 ),
             );
             let mut full_nbt = nbt.clone();
