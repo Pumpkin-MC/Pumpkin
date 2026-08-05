@@ -76,6 +76,19 @@ pub(crate) fn build() -> TokenStream {
             // carry no salmon-scoped key, so those versions resolve to 255 and the field is
             // skipped rather than guessed.
             parsed.insert("SALMON_VARIANT".to_string(), 17);
+
+            // And again for the horse variant tracker. Mojang names both the tropical fish and
+            // the horse tracker DATA_ID_TYPE_VARIANT, so the flattened table keeps one
+            // ID_TYPE_VARIANT = 17 - the AbstractFish slot, correct for tropical fish only.
+            // Per the 26.2 tables on
+            // <https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata>, Horse extends
+            // Abstract Horse, which extends Animal/Ageable Mob (16-17) and adds its Byte bit
+            // mask at 18, so Horse's "Variant (Color & Style)" is 19 and horses have 20 slots.
+            // The 26.1 and 26.2 dumps confirm Abstract Horse ends at 18 positionally: Chested
+            // Horse's first field DATA_ID_CHEST = 19 and Llama's first field DATA_STRENGTH_ID
+            // = 20. Older dumps carry no horse-scoped key, so those versions resolve to 255 and
+            // the field is skipped - which is already what ID_TYPE_VARIANT does there.
+            parsed.insert("HORSE_VARIANT".to_string(), 19);
         }
 
         // Third instance of the same flattening problem, this time for the size tracker.

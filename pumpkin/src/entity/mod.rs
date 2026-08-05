@@ -4237,9 +4237,11 @@ mod tracked_data_bounds_tests {
             &[("CAT_COLLAR_COLOR", TrackedData::CAT_COLLAR_COLOR.v26_2)],
         ),
         (
+            // Abstract Horse extends Animal/Ageable Mob (16-17) and adds its Byte bit mask at
+            // 18, so Horse's own Variant is 19 and a horse has 20 slots.
             "horse",
-            19,
-            &[("ID_TYPE_VARIANT", TrackedData::ID_TYPE_VARIANT.v26_2)],
+            20,
+            &[("HORSE_VARIANT", TrackedData::HORSE_VARIANT.v26_2)],
         ),
         (
             "villager",
@@ -4455,6 +4457,25 @@ mod tracked_data_bounds_tests {
         assert_ne!(
             TrackedData::SALMON_VARIANT.v26_2,
             TrackedData::VARIANT.v26_2
+        );
+    }
+
+    /// Mojang names both the tropical fish and the horse tracker `DATA_ID_TYPE_VARIANT`, so
+    /// the flattened dumps keep a single `ID_TYPE_VARIANT` = 17 - the `AbstractFish` slot.
+    /// Per the 26.2 tables on
+    /// <https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata>, Horse extends
+    /// Abstract Horse, whose Byte bit mask sits at 18 after Ageable Mob's 16-17, so Horse's
+    /// Variant is 19. The dumps confirm Abstract Horse ends at 18 positionally: Chested
+    /// Horse's `DATA_ID_CHEST` = 19 and Llama's `DATA_STRENGTH_ID` = 20.
+    #[test]
+    fn horse_variant_is_the_horse_scoped_index() {
+        assert_eq!(TrackedData::HORSE_VARIANT.v26_2, 19);
+        assert_eq!(TrackedData::HORSE_VARIANT.v26_1, 19);
+        assert_eq!(TrackedData::ID_CHEST.v26_2, 19);
+        assert_eq!(TrackedData::STRENGTH_ID.v26_2, 20);
+        assert_ne!(
+            TrackedData::HORSE_VARIANT.v26_2,
+            TrackedData::ID_TYPE_VARIANT.v26_2
         );
     }
 

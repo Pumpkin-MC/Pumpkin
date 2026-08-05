@@ -110,17 +110,13 @@ impl HorseEntity {
     }
 
     fn sync_type_variant(&self) {
-        // PENDING-INDEX-FIX: wrong field. `ID_TYPE_VARIANT` = 17 on 26.2 is the
-        // `AbstractFish` variant slot (tropical fish), not horse's. On 26.2 Horse inherits
-        // Ageable Mob (16-17) then Abstract Horse's Byte bit mask (18), so "Variant
-        // (Color & Style)" is 19 - and the `horse` row in `ENTITY_SLOT_COUNTS` below must
-        // go from 19 to 20 slots when that is fixed. Left as `INTEGER` so it keeps being
-        // dropped rather than writing an int over the ageable-mob slot.
+        // Horse "Variant (Color & Style)" is index 19 on 26.x: Ageable Mob 16-17, Abstract
+        // Horse's Byte bit mask 18. The flattened `ID_TYPE_VARIANT` (17) is `AbstractFish`'s.
         // 26.2 tables: https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::ID_TYPE_VARIANT,
-                MetaDataType::INTEGER,
+                TrackedData::HORSE_VARIANT,
+                MetaDataType::INT,
                 VarInt(i32::from(self.variant_and_markings.load(Relaxed))),
             )],
             None,
