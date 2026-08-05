@@ -876,3 +876,41 @@ as a lead, not a finding. Worth noting either way: `Level::get_rough_biome` fall
 BADLANDS while `World::get_biome` (pumpkin/src/world/mod.rs) falls back to PLAINS for the same
 operation, and neither fallback is vanilla behaviour. Left unfixed here to keep the diff to one
 logical change.
+
+## RETRACTION (2026-08-05): "Pumpkin does not keep spawn chunks loaded" was WRONG
+
+The entry above claiming a parity gap because `setblock 0 100 0` worked on the vanilla oracle
+and failed on Pumpkin with no players online is RETRACTED. Do not act on it.
+
+Vanilla REMOVED spawn chunks and the `spawnChunkRadius` gamerule in 1.21.9 (snapshot 25w31a),
+naming `/forceload` as the replacement mechanism (minecraft.wiki, Spawn chunks, History).
+Pumpkin's supported range is entirely post-removal: `pumpkin-world/src/world_info/mod.rs` pins
+MINIMUM_SUPPORTED_WORLD_DATA_VERSION = 4435 (1.21.9) and MAXIMUM = 4903 (26.2). `assets/game_rules.json`,
+the extracted vanilla asset that generates GameRuleRegistry, has no spawn-chunk-radius key - that
+absence is the asset being CORRECT, not a gap.
+
+Why the original evidence was wrong: the vanilla oracle had leftover `/forceload` state on chunk
+[0,0] from an earlier test, so 0,100,0 and 8,70,8 were loaded for that reason and not because of
+spawn chunks. An unforced position 5000 blocks out is NOT loaded on the oracle either, exactly
+like Pumpkin. And vanilla 26.2 rejects `gamerule spawnChunkRadius` with the identical "Incorrect
+argument for command" that was cited as Pumpkin's failure.
+
+So Pumpkin's "nothing loaded with no players online" MATCHES vanilla 26.2. Implementing
+spawnChunkRadius would have been an anti-parity regression.
+
+Two traps recorded for whoever revisits this:
+- The Game_rule wiki page's `spawnRadius` / `respawn_radius` (default 10) is a DIFFERENT rule
+  (respawn scatter in blocks) and must not be mistaken for this one.
+- github.com/mil1dude/source-code is 1.21.4, i.e. PRE-removal, so consulting it would have
+  "confirmed" a feature that no longer exists. This is the concrete case the version caveat in
+  CLAUDE.md was written for.
+
+TEST-RIG HYGIENE: the vanilla oracle currently has stale forceloads on chunks [0,0], [56,56],
+[57,56], [58,56]. These silently contaminate any "is this position loaded" comparison. Clear them
+before running differential probes, or scratch coordinates inside them will read as loaded on
+vanilla and unloaded on Pumpkin for reasons unrelated to parity.
+
+METHOD NOTE: this is the second false finding today caused by testing against chunk-load state
+rather than behaviour (the first was a stalactite placement "bug" observed in a chunk that
+happened to be loaded during play). Both were caught only by re-deriving the premise from
+primary sources. Verify load state explicitly before concluding anything from a setblock probe.
