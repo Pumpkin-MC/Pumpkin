@@ -383,7 +383,11 @@ impl SpawnState {
         world: &Arc<World>,
     ) -> bool {
         // TODO get biome
-        let biome = world.level.get_rough_biome(pos);
+        // No resolvable biome means no spawn table applies here, so refuse the spawn
+        // rather than fall back to some other biome's rules.
+        let Some(biome) = world.level.get_rough_biome(pos) else {
+            return false;
+        };
         biome
             .spawn_costs
             .get(entity_type.resource_name)
@@ -418,10 +422,13 @@ impl SpawnState {
 
         let charge = charge.unwrap_or_else(|| {
             // TODO get biome
-            let biome = world.level.get_rough_biome(pos);
-            biome
-                .spawn_costs
-                .get(entity_type.resource_name)
+            // Charge 0.0 is the same value this path already yields when the biome has
+            // no spawn cost entry for this type, so it is not an invented biome; it is
+            // the "no cost known" case. The mob-cap accounting below still runs.
+            world
+                .level
+                .get_rough_biome(pos)
+                .and_then(|biome| biome.spawn_costs.get(entity_type.resource_name))
                 .map_or(0., |cost| cost.charge)
         });
 
@@ -767,7 +774,9 @@ pub fn get_random_spawn_mob_at(
     block_pos: &BlockPos,
 ) -> Option<&'static Spawner> {
     // TODO Holder<Biome> holder = level.getBiome(pos);
-    let biome = world.level.get_rough_biome(block_pos);
+    // Without a resolvable biome there is no spawn list to draw from; picking one
+    // would spawn that biome's mobs in a dimension that never lists them.
+    let biome = world.level.get_rough_biome(block_pos)?;
     if category == &MobCategory::WATER_AMBIENT
         && biome.has_tag(&MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS)
         && rng().random::<f32>() < 0.98f32

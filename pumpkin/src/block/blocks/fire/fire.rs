@@ -143,7 +143,12 @@ impl FireBlock {
 
         // Fire burnout increases in specific biomes
         // TODO: Use proper tag or bool for this when available
-        let biome_id = world.level.get_rough_biome(pos).id;
+        // This is a membership test against a fixed list of biomes. With no resolvable
+        // biome the position is not in that list, so `false` is the honest answer and
+        // fire keeps its ordinary burnout rate; it is not a substituted biome.
+        let Some(biome_id) = world.level.get_rough_biome(pos).map(|b| b.id) else {
+            return false;
+        };
         matches!(
             biome_id,
             id if id == Biome::BAMBOO_JUNGLE.id

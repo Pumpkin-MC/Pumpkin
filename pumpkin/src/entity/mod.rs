@@ -3975,9 +3975,13 @@ impl EntityBase for Entity {
             let block_pos = self.block_pos.load();
             if self.last_biome_update_pos.load() != block_pos {
                 let world = self.world.load();
-                let biome = world.level.get_rough_biome(&block_pos);
-                self.current_biome.store(Arc::new(biome));
-                self.last_biome_update_pos.store(block_pos);
+                // If the biome cannot be resolved (chunk not loaded yet), keep the last
+                // known value and leave `last_biome_update_pos` alone so the next tick
+                // retries, rather than caching a substituted biome for this position.
+                if let Some(biome) = world.level.get_rough_biome(&block_pos) {
+                    self.current_biome.store(Arc::new(biome));
+                    self.last_biome_update_pos.store(block_pos);
+                }
             }
 
             self.update_last_pos();
