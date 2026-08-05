@@ -37,8 +37,8 @@ fn ring_bell(position: BlockPos, world: &Arc<World>, hit_direction: Option<Horiz
         Sound::BlockBellUse,
         SoundCategory::Blocks,
         &position.to_centered_f64(),
-        1.0,
         2.0,
+        1.0,
     );
 
     //TODO Emit game event: BLOCK_CHANGE -> Send block update Packet

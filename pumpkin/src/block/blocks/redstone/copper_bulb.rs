@@ -1,5 +1,8 @@
 use crate::block::blocks::redstone::block_receives_redstone_power;
-use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, OnNeighborUpdateArgs, OnPlaceArgs};
+use crate::block::{
+    BlockBehaviour, BlockFuture, BlockMetadata, GetComparatorOutputArgs, OnNeighborUpdateArgs,
+    OnPlaceArgs,
+};
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
@@ -71,6 +74,16 @@ impl BlockBehaviour for CopperBulbBlock {
                     )
                     .await;
             }
+        })
+    }
+
+    fn get_comparator_output<'a>(
+        &'a self,
+        args: GetComparatorOutputArgs<'a>,
+    ) -> BlockFuture<'a, Option<u8>> {
+        Box::pin(async move {
+            let props = CopperBulbLikeProperties::from_state_id(args.state.id, args.block);
+            Some(if props.lit { 15 } else { 0 })
         })
     }
 }

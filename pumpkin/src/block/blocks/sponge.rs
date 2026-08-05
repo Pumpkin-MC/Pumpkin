@@ -4,10 +4,12 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
 use crate::block::{BlockBehaviour, BlockFuture, OnNeighborUpdateArgs, PlacedArgs};
+use crate::item::items::bucket::{is_waterlogged, set_waterlogged};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, BlockStateId};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockStateId, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
@@ -53,11 +55,13 @@ impl SpongeBlock {
                 }
 
                 visited.insert(next_pos);
-                let (block, _state) = world.get_block_and_state(&next_pos);
 
-                // Only add to queue if it's water.
-                // This prevents "jumping" through air or solid blocks.
-                if block.id == Block::WATER.id {
+                // Only add to queue if its fluid state is water. This also catches
+                // waterlogged blocks, unlike a direct block-id comparison.
+                if world
+                    .get_fluid(&next_pos)
+                    .has_tag(&tag::Fluid::MINECRAFT_WATER)
+                {
                     water_blocks.push(next_pos);
                     queue.push_back(next_pos);
                 }
@@ -68,8 +72,14 @@ impl SpongeBlock {
             false
         } else {
             for water_pos in &water_blocks {
+                let (block, state) = world.get_block_and_state_id(water_pos);
+                let new_state = if is_waterlogged(block, state) {
+                    set_waterlogged(block, state, false)
+                } else {
+                    BlockStateId::AIR
+                };
                 world
-                    .set_block_state(water_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
+                    .set_block_state(water_pos, new_state, BlockFlags::NOTIFY_ALL)
                     .await;
             }
             world
@@ -97,10 +107,10 @@ impl BlockBehaviour for SpongeBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            // If a neighboring block changed and it's water, attempt to absorb.
-            if args.source_block.id == Block::WATER.id {
-                Self::absorb_water(args.world, args.position).await;
-            }
+            // Vanilla's `neighborChanged` always retries the absorb BFS, since it's the
+            // traversal itself (now fluid-tag based) that determines whether there's
+            // water nearby, not the identity of whatever neighbor changed.
+            Self::absorb_water(args.world, args.position).await;
         })
     }
 }

@@ -9,7 +9,7 @@ use pumpkin_data::block_properties::{
     BlockProperties, CalibratedSculkSensorLikeProperties, SculkSensorLikeProperties,
     SculkSensorPhase,
 };
-use pumpkin_data::{Block, BlockId, BlockStateId};
+use pumpkin_data::{Block, BlockId, BlockStateId, HorizontalFacingExt};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
@@ -46,7 +46,8 @@ impl SculkSensorBlock {
                     .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
                     .await;
                 world.update_neighbors(pos, None).await;
-                world.schedule_block_tick(block, *pos, 30, TickPriority::Normal);
+                // CalibratedSculkSensorBlock overrides getActiveTicks() to 10.
+                world.schedule_block_tick(block, *pos, 10, TickPriority::Normal);
             }
         }
     }
@@ -88,7 +89,9 @@ impl BlockBehaviour for SculkSensorBlock {
             } else if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
                 let props =
                     CalibratedSculkSensorLikeProperties::from_state_id(args.state.id, args.block);
-                if props.sculk_sensor_phase == SculkSensorPhase::Active {
+                if props.sculk_sensor_phase == SculkSensorPhase::Active
+                    && args.direction != props.facing.to_block_direction()
+                {
                     props.power
                 } else {
                     0

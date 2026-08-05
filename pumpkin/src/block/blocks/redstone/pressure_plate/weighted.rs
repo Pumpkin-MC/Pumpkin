@@ -111,12 +111,7 @@ impl PressurePlate for WeightedPressurePlateBlock {
         };
         let aabb = detection_box_at(pos);
         let len = world.get_entities_at_box(&aabb).len() + world.get_players_at_box(&aabb).len();
-        let len = len.min(weight);
-        if len > 0 {
-            let f = (weight.min(len) / weight) as f32;
-            return (f * 15.0).ceil() as u8;
-        }
-        0
+        Self::signal_for_count(weight, len)
     }
 
     fn set_redstone_output(&self, block: &Block, state: &BlockState, output: u8) -> BlockStateId {
@@ -127,5 +122,41 @@ impl PressurePlate for WeightedPressurePlateBlock {
 
     fn tick_rate(&self) -> u8 {
         10
+    }
+}
+
+impl WeightedPressurePlateBlock {
+    fn signal_for_count(weight: usize, count: usize) -> u8 {
+        let count = count.min(weight);
+        if count > 0 {
+            let f = count as f32 / weight as f32;
+            return (f * 15.0).ceil() as u8;
+        }
+        0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WeightedPressurePlateBlock;
+
+    #[test]
+    fn fractional_load_produces_graded_nonzero_signal() {
+        // 50 entities on an Iron (heavy) plate with maxWeight 150 should give a
+        // partial, nonzero signal rather than truncating to 0 like integer
+        // division did before the fix.
+        let signal = WeightedPressurePlateBlock::signal_for_count(150, 50);
+        assert_eq!(signal, 5);
+        assert_ne!(signal, 0);
+    }
+
+    #[test]
+    fn zero_entities_produce_zero_signal() {
+        assert_eq!(WeightedPressurePlateBlock::signal_for_count(150, 0), 0);
+    }
+
+    #[test]
+    fn full_weight_produces_max_signal() {
+        assert_eq!(WeightedPressurePlateBlock::signal_for_count(150, 150), 15);
     }
 }

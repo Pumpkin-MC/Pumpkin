@@ -114,8 +114,8 @@ impl BlockBehaviour for FarmlandBlock {
 }
 
 fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    let state = world.get_block_state(&block_pos.up());
-    !state.is_solid() // TODO: add fence gate block
+    let (block, state) = world.get_block_and_state(&block_pos.up());
+    !state.is_solid() || block.has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
 }
 
 fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {

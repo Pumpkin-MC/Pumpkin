@@ -3,11 +3,16 @@ use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag;
+use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use std::any::Any;
 use std::pin::Pin;
 use std::sync::Arc;
+
+// BellBlockEntity.HEAR_BELL_RADIUS (BellBlockEntity.java).
+const HEAR_BELL_RADIUS: f64 = 32.0;
 
 pub struct BellBlockEntity {
     pub position: BlockPos,
@@ -39,10 +44,19 @@ impl BellBlockEntity {
             self.ringing.store(true);
         }
     }
-    pub const fn raiders_hear_bell(&self) -> bool {
-        //TODO
-
-        false
+    /// `BellBlockEntity.areRaidersNearby`: whether a living raider is within
+    /// `HEAR_BELL_RADIUS` of the bell.
+    pub fn raiders_hear_bell(&self, world: &World) -> bool {
+        world
+            .get_nearby_entities(self.position.to_centered_f64(), HEAR_BELL_RADIUS)
+            .values()
+            .any(|entity| {
+                entity.get_entity().is_alive()
+                    && entity
+                        .get_entity()
+                        .entity_type
+                        .has_tag(&tag::EntityType::MINECRAFT_RAIDERS)
+            })
     }
 }
 
@@ -72,7 +86,7 @@ impl BlockEntity for BellBlockEntity {
             }
             if self.ring_ticks.load() >= 5
                 && self.resonate_time.load() == 0
-                && self.raiders_hear_bell()
+                && self.raiders_hear_bell(world)
             {
                 self.resonating.store(true);
                 world.play_sound_fine(

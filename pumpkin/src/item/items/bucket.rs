@@ -68,7 +68,7 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     (start_pos, end_pos)
 }
 
-fn waterlogged_check(block: &Block, state: BlockStateId) -> Option<bool> {
+pub(crate) fn waterlogged_check(block: &Block, state: BlockStateId) -> Option<bool> {
     block.properties(state).and_then(|properties| {
         properties
             .to_props()
@@ -78,11 +78,15 @@ fn waterlogged_check(block: &Block, state: BlockStateId) -> Option<bool> {
     })
 }
 
-fn is_waterlogged(block: &Block, state: BlockStateId) -> bool {
+pub(crate) fn is_waterlogged(block: &Block, state: BlockStateId) -> bool {
     waterlogged_check(block, state).unwrap_or(false)
 }
 
-fn set_waterlogged(block: &Block, state: BlockStateId, waterlogged: bool) -> BlockStateId {
+pub(crate) fn set_waterlogged(
+    block: &Block,
+    state: BlockStateId,
+    waterlogged: bool,
+) -> BlockStateId {
     let original_props = &block.properties(state).unwrap().to_props();
     let waterlogged = waterlogged.to_string();
     let props: Vec<(&str, &str)> = original_props
