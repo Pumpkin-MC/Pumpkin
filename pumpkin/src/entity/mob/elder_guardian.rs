@@ -56,7 +56,9 @@ impl ElderGuardianEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(4, Box::new(GuardianAttackGoal::new()));
             goal_selector.add_goal(5, MoveTowardsRestrictionGoal::new(1.0));
-            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
+            // ElderGuardian's constructor overrides the inherited randomStrollGoal's
+            // interval from 80 to 400.
+            goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0).with_interval(400)));
             goal_selector.add_goal(
                 8,
                 LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),
@@ -67,10 +69,27 @@ impl ElderGuardianEntity {
             );
             goal_selector.add_goal(9, Box::new(RandomLookAroundGoal::default()));
 
+            // Guardian#registerGoals target selector (ElderGuardian inherits it unchanged):
+            // one `ActiveTargetGoal` per `GuardianAttackSelector` type (Player/Squid/Axolotl),
+            // matching the same pattern already used by `guardian.rs`. Not ported: the
+            // selector's `target.distanceToSqr(this.guardian) > 9.0` distance gate (Guardian.java
+            // GuardianAttackSelector#test), same as the existing guardian.rs implementation.
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
             target_selector.add_goal(
                 1,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+            );
+            target_selector.add_goal(
+                2,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SQUID, true),
+            );
+            target_selector.add_goal(
+                2,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::GLOW_SQUID, true),
+            );
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::AXOLOTL, true),
             );
         };
 

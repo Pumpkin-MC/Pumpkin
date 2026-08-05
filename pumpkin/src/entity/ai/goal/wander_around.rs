@@ -37,6 +37,14 @@ impl WanderAroundGoal {
         }
     }
 
+    /// Vanilla: `RandomStrollGoal#setInterval`, e.g. `ElderGuardian`'s constructor
+    /// overriding its inherited `randomStrollGoal` interval from 80 to 400.
+    #[must_use]
+    pub const fn with_interval(mut self, interval: i32) -> Self {
+        self.chance = to_goal_ticks(interval);
+        self
+    }
+
     fn find_wander_target(mob: &dyn Mob) -> Vector3<f64> {
         let entity = &mob.get_mob_entity().living_entity.entity;
         let pos = entity.pos.load();
@@ -111,5 +119,19 @@ impl Goal for WanderAroundGoal {
 
     fn controls(&self) -> Controls {
         self.goal_control
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WanderAroundGoal;
+
+    #[test]
+    fn with_interval_overrides_default_chance() {
+        let default_goal = WanderAroundGoal::new(1.0);
+        let overridden = WanderAroundGoal::new(1.0).with_interval(400);
+        assert_ne!(default_goal.chance, overridden.chance);
+        // Vanilla `ElderGuardian`'s override: `randomStrollGoal.setInterval(400)`.
+        assert_eq!(overridden.chance, 200);
     }
 }
