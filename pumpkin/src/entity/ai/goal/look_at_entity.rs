@@ -8,7 +8,6 @@ use pumpkin_data::entity::EntityType;
 use rand::RngExt;
 use std::sync::{Arc, Weak};
 
-#[expect(dead_code)]
 pub struct LookAtEntityGoal {
     goal_control: Controls,
     target: Option<Arc<dyn EntityBase>>,
@@ -93,16 +92,28 @@ impl Goal for LookAtEntityGoal {
             }
 
             let world = mob_entity.living_entity.entity.world.load();
-            let mob_pos = mob_entity.living_entity.entity.pos.load();
 
-            if *self.target_type == EntityType::PLAYER {
-                self.target = world
-                    .get_closest_player(mob_pos, self.range.into())
-                    .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+            // Vanilla searches from `mob.getX(), mob.getEyeY(), mob.getZ()`
+            let mut search_pos = mob_entity.living_entity.entity.pos.load();
+            search_pos.y = mob_entity.living_entity.entity.get_eye_y();
+
+            let candidate = if *self.target_type == EntityType::PLAYER {
+                world
+                    .get_closest_player(search_pos, self.range.into())
+                    .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
             } else {
-                self.target =
-                    world.get_closest_entity(mob_pos, self.range.into(), Some(&[self.target_type]));
-            }
+                world.get_closest_entity(search_pos, self.range.into(), Some(&[self.target_type]))
+            };
+
+            // Vanilla runs candidates through the goal's `TargetingConditions`, which rejects
+            // entities that are not part of the game (spectators) or out of range
+            let target = candidate.filter(|candidate| {
+                candidate.get_living_entity().is_some_and(|living| {
+                    self.target_predicate
+                        .test(&world, Some(&mob_entity.living_entity), living)
+                })
+            });
+            self.target = target;
 
             self.target.is_some()
         })

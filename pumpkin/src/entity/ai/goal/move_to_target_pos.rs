@@ -161,9 +161,10 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
         Box::pin(async {
             Self::start_moving_to_target(mob);
             self.trying_time = 0;
-            let random = mob.get_random().random_range(0..MIN_WAITING_TIME);
-            self.safe_waiting_time =
-                mob.get_random().random_range(random..MIN_WAITING_TIME) + MIN_WAITING_TIME;
+            // Vanilla: `nextInt(nextInt(1200) + 1200) + 1200`, so the bound is itself drawn
+            // from [1200, 2400) and the result lands in [1200, 3600).
+            let bound = mob.get_random().random_range(0..MIN_WAITING_TIME) + MIN_WAITING_TIME;
+            self.safe_waiting_time = mob.get_random().random_range(0..bound) + MIN_WAITING_TIME;
         })
     }
 
