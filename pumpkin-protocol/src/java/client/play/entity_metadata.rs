@@ -162,6 +162,21 @@ impl<T> Metadata<T> {
     }
 }
 
+/// An already-serialized metadata value.
+///
+/// `MetadataSerializer::write_metadata` output is protocol-version independent:
+/// the version-dependent index resolution and the block-state / item / particle
+/// remapping all happen in `Metadata::write`, which operates on exactly these
+/// bytes. Storing the raw payload therefore lets a value published once be
+/// re-written later for any client version.
+pub struct RawMetadataValue(pub Box<[u8]>);
+
+impl MetadataSerializer for RawMetadataValue {
+    fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
+        writer.write_all(&self.0).map_err(WritingError::IoError)
+    }
+}
+
 impl MetadataSerializer for bool {
     fn write_metadata(&self, writer: &mut impl std::io::Write) -> Result<(), WritingError> {
         writer.write_bool(*self)
