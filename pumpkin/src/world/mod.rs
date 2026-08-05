@@ -1197,26 +1197,29 @@ impl World {
         let active_chunks = self.active_chunks.load();
         let tick_data = self.level.get_tick_data(&active_chunks);
 
-        // ONE JoinSet for all chunk operations
-        let mut chunk_tasks = tokio::task::JoinSet::new();
-
-        // 1. Spawn Block Ticks
-        for scheduled_tick in tick_data.block_ticks {
-            let world = self.clone();
-            let pos = scheduled_tick.position; // Clone for the move closure
-            chunk_tasks.spawn(async move {
-                let block = world.get_block(&pos);
-                if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(block.id) {
-                    pumpkin_block
-                        .on_scheduled_tick(OnScheduledTickArgs {
-                            world: &world,
-                            block,
-                            position: &pos,
-                        })
-                        .await;
-                }
-            });
+        // Block ticks must execute sequentially and in sorted priority/sub-tick order.
+        // Redstone components (repeaters, observers, torches, wire) depend on strict
+        // update ordering; concurrent execution via JoinSet breaks that contract.
+        for scheduled_tick in &tick_data.block_ticks {
+            let block = self.get_block(&scheduled_tick.position);
+            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {
+                pumpkin_block
+                    .on_scheduled_tick(OnScheduledTickArgs {
+                        world: self,
+                        block,
+                        position: &scheduled_tick.position,
+                    })
+                    .await;
+            }
         }
+
+        // Mark block ticks as complete so is_block_tick_scheduled returns accurate
+        // results after execution, matching the invariant from PR #861.
+        self.level.clear_block_tick_inflight(&active_chunks);
+
+        // Fluid ticks and random ticks can run concurrently — they don't need strict
+        // ordering guarantees like redstone does.
+        let mut chunk_tasks = tokio::task::JoinSet::new();
 
         // 2. Spawn Fluid Ticks
         for scheduled_tick in tick_data.fluid_ticks {

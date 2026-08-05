@@ -16,6 +16,7 @@ pub struct ChunkTickScheduler<T> {
 struct ChunkTickSchedulerInner<T> {
     tick_queue: [Vec<OrderedTick<T>>; MAX_TICK_DELAY],
     queued_ticks: FxHashSet<(BlockPos, T)>,
+    inflight_ticks: FxHashSet<(BlockPos, T)>,
 }
 
 impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
@@ -40,9 +41,9 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
                 inner
                     .queued_ticks
                     .remove(&(next_tick.position, next_tick.value));
-            }
-            if inner.queued_ticks.is_empty() {
-                *inner_guard = None;
+                inner
+                    .inflight_ticks
+                    .insert((next_tick.position, next_tick.value));
             }
         }
         res
@@ -57,6 +58,7 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             Box::new(ChunkTickSchedulerInner {
                 tick_queue: std::array::from_fn(|_| Vec::new()),
                 queued_ticks: FxHashSet::default(),
+                inflight_ticks: FxHashSet::default(),
             })
         });
 
@@ -78,7 +80,10 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
-            .is_some_and(|inner| inner.queued_ticks.contains(&(pos, value)))
+            .is_some_and(|inner| {
+                inner.queued_ticks.contains(&(pos, value))
+                    || inner.inflight_ticks.contains(&(pos, value))
+            })
     }
 
     pub fn has_ticks(&self) -> bool {
@@ -86,7 +91,20 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
-            .is_some_and(|inner| !inner.queued_ticks.is_empty())
+            .is_some_and(|inner| !inner.queued_ticks.is_empty() || !inner.inflight_ticks.is_empty())
+    }
+
+    pub fn clear_inflight(&self) {
+        let mut inner_guard = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(inner) = inner_guard.as_mut() {
+            inner.inflight_ticks.clear();
+            if inner.queued_ticks.is_empty() && inner.inflight_ticks.is_empty() {
+                *inner_guard = None;
+            }
+        }
     }
 
     #[must_use]
@@ -132,6 +150,7 @@ impl<'a, T: std::hash::Hash + Eq + 'static> FromIterator<ScheduledTick<&'a T>>
                 Box::new(ChunkTickSchedulerInner {
                     tick_queue: std::array::from_fn(|_| Vec::new()),
                     queued_ticks: FxHashSet::default(),
+                    inflight_ticks: FxHashSet::default(),
                 })
             });
             inner.queued_ticks.reserve(lower);
@@ -150,5 +169,86 @@ impl<T> Default for ChunkTickScheduler<T> {
             inner: Mutex::new(None),
             offset: AtomicUsize::new(0),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tick::TickPriority;
+    use pumpkin_util::math::position::BlockPos;
+
+    static VALUE: u8 = 0;
+
+    #[test]
+    fn inflight_tick_still_appears_scheduled() {
+        let scheduler: ChunkTickScheduler<&'static u8> = ChunkTickScheduler::default();
+        let pos = BlockPos::new(0, 0, 0);
+
+        scheduler.schedule_tick(
+            &ScheduledTick {
+                delay: 0,
+                priority: TickPriority::Normal,
+                position: pos,
+                value: &VALUE,
+            },
+            0,
+        );
+
+        assert!(scheduler.is_scheduled(pos, &VALUE));
+
+        let ticks = scheduler.step_tick();
+        assert_eq!(ticks.len(), 1);
+        assert_eq!(ticks[0].position, pos);
+
+        // Tick is in-flight — is_scheduled must still return true
+        assert!(scheduler.is_scheduled(pos, &VALUE));
+
+        // Scheduling a fresh tick for the same position must succeed
+        // while the old one is in-flight
+        scheduler.schedule_tick(
+            &ScheduledTick {
+                delay: 5,
+                priority: TickPriority::Normal,
+                position: pos,
+                value: &VALUE,
+            },
+            1,
+        );
+
+        scheduler.clear_inflight();
+
+        // After clear, in-flight is gone but the fresh queued tick remains
+        assert!(scheduler.is_scheduled(pos, &VALUE));
+        assert!(scheduler.has_ticks());
+
+        // Step again to retrieve the fresh tick
+        for _ in 0..5 {
+            scheduler.step_tick();
+        }
+        let ticks = scheduler.step_tick();
+        assert_eq!(ticks.len(), 1);
+        assert_eq!(ticks[0].position, pos);
+    }
+
+    #[test]
+    fn clear_inflight_drops_inner_when_empty() {
+        let scheduler: ChunkTickScheduler<&'static u8> = ChunkTickScheduler::default();
+        let pos = BlockPos::new(0, 0, 0);
+
+        scheduler.schedule_tick(
+            &ScheduledTick {
+                delay: 0,
+                priority: TickPriority::Normal,
+                position: pos,
+                value: &VALUE,
+            },
+            0,
+        );
+
+        let _ticks = scheduler.step_tick();
+        scheduler.clear_inflight();
+
+        assert!(!scheduler.has_ticks());
     }
 }
