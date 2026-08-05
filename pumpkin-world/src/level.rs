@@ -255,7 +255,8 @@ impl Level {
         let pending_entity_generations = Arc::new(DashMap::new());
         let level_channel = Arc::new(LevelChannel::new());
         let thread_tracker = Mutex::new(Vec::new());
-        let listener = Arc::new(ChunkListener::new());
+        let chunks_with_scheduled_ticks = Arc::new(dashmap::DashSet::new());
+        let listener = Arc::new(ChunkListener::new(chunks_with_scheduled_ticks.clone()));
 
         let level_ref = Arc::new(Self {
             seed,
@@ -269,7 +270,7 @@ impl Level {
             schedule_tick_counts: AtomicU64::new(0),
             loaded_chunks: Arc::new(DashMap::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
-            chunks_with_scheduled_ticks: Arc::new(dashmap::DashSet::new()),
+            chunks_with_scheduled_ticks,
             chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
             forced_chunks: Mutex::new(FxHashSet::default()),
             chunk_watchers: Arc::new(DashMap::new()),
