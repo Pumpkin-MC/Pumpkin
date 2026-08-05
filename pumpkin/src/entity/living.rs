@@ -2618,8 +2618,21 @@ impl EntityBase for LivingEntity {
             // Current active item
             {
                 let item_in_use = self.item_in_use.lock().await.clone();
+                if let Some(item) = item_in_use.as_ref() {
+                    let ticks_remaining = self.item_use_time.load(Ordering::Relaxed);
+                    if ticks_remaining > 0
+                        && let Some(player) = caller.get_player()
+                    {
+                        server
+                            .item_registry
+                            .on_use_tick(item, player, ticks_remaining)
+                            .await;
+                    }
+                }
+
                 if let Some(item) = item_in_use.as_ref()
-                    && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
+                    && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 1
+                    && item.get_data_component::<ConsumableImpl>().is_some()
                 {
                     // Consume item
                     let mut is_potion = false;
@@ -2724,7 +2737,9 @@ impl EntityBase for LivingEntity {
                                 .await;
                         }
                     }
+                }
 
+                if item_in_use.is_some() && self.item_use_time.load(Ordering::Relaxed) <= 0 {
                     self.clear_active_hand().await;
                 }
             }

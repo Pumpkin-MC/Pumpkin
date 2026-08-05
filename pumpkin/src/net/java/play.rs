@@ -2922,6 +2922,13 @@ impl JavaClient {
             "Bundle item selected: Slot ID {}, Selected Item Index {}",
             packet.slot_id.0, selected_item_index
         );
+
+        let screen_handler = player.current_screen_handler.lock().await.clone();
+        screen_handler
+            .lock()
+            .await
+            .set_selected_bundle_item_index(packet.slot_id.0, selected_item_index)
+            .await;
     }
 
     pub async fn handle_teleport_to_entity(

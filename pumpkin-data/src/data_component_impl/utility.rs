@@ -1,6 +1,8 @@
 use crate::data_component_impl::{
     DataComponentImpl, default_impl, get_f32_hash, get_i32_hash, get_str_hash,
 };
+use crate::tag;
+use crate::tag::Taggable;
 use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
@@ -96,13 +98,21 @@ impl DataComponentImpl for ChargedProjectilesImpl {
     default_impl!(ChargedProjectiles);
 }
 
+const BUNDLE_IN_BUNDLE_WEIGHT: u32 = 4;
+
 #[derive(Clone)]
 pub struct BundleContentsImpl {
     pub items: Vec<crate::item_stack::ItemStack>,
+    pub selected_item_index: i32,
 }
 impl PartialEq for BundleContentsImpl {
-    fn eq(&self, _other: &Self) -> bool {
-        false
+    fn eq(&self, other: &Self) -> bool {
+        self.items.len() == other.items.len()
+            && self
+                .items
+                .iter()
+                .zip(&other.items)
+                .all(|(item, other)| item.are_equal(other))
     }
 }
 impl Eq for BundleContentsImpl {}
@@ -112,6 +122,15 @@ impl std::fmt::Debug for BundleContentsImpl {
     }
 }
 impl BundleContentsImpl {
+    fn get_item_weight(stack: &crate::item_stack::ItemStack) -> u32 {
+        stack
+            .get_data_component::<BundleContentsImpl>()
+            .map_or_else(
+                || (64 / stack.get_max_stack_size() as u32).max(1),
+                |contents| contents.get_weight() + BUNDLE_IN_BUNDLE_WEIGHT,
+            )
+    }
+
     pub fn read_data(tag: &NbtTag) -> Option<Self> {
         let mut items = Vec::new();
         if let NbtTag::List(l) = tag {
@@ -123,46 +142,188 @@ impl BundleContentsImpl {
                 }
             }
         }
-        Some(Self { items })
+        Some(Self {
+            items,
+            selected_item_index: -1,
+        })
     }
     pub fn get_weight(&self) -> u32 {
         self.items
             .iter()
-            .map(|item| item.item_count as u32 * (64 / item.get_max_stack_size() as u32).max(1))
+            .map(|item| item.item_count as u32 * Self::get_item_weight(item))
             .sum()
     }
     pub fn try_insert(&mut self, stack: &mut crate::item_stack::ItemStack) -> bool {
-        if stack.is_empty() || stack.get_data_component::<BundleContentsImpl>().is_some() {
+        if stack.is_empty() || stack.item.has_tag(&tag::Item::MINECRAFT_SHULKER_BOXES) {
             return false;
         }
-        let weight_per_item = (64 / stack.get_max_stack_size() as u32).max(1);
-        let mut inserted_anything = false;
-        while stack.item_count > 0 && self.get_weight() + weight_per_item <= 64 {
-            if let Some(top) = self.items.first_mut()
-                && crate::item_stack::ItemStack::are_items_and_components_equal(top, stack)
-                && top.item_count < top.get_max_stack_size()
-            {
-                top.item_count += 1;
-                stack.item_count -= 1;
-                inserted_anything = true;
-                continue;
-            }
-            self.items.insert(0, stack.copy_with_count(1));
-            stack.item_count -= 1;
-            inserted_anything = true;
+        let weight_per_item = Self::get_item_weight(stack);
+        let available = 64u32.saturating_sub(self.get_weight()) / weight_per_item;
+        let amount_to_add = stack.item_count.min(available as u8);
+        if amount_to_add == 0 {
+            return false;
         }
-        inserted_anything
+
+        let matching_index = if stack.is_stackable() {
+            self.items
+                .iter()
+                .position(|item| item.are_items_and_components_equal(stack))
+        } else {
+            None
+        };
+
+        if let Some(index) = matching_index {
+            let mut merged_stack = self.items.remove(index);
+            merged_stack.increment(amount_to_add);
+            stack.decrement(amount_to_add);
+            self.items.insert(0, merged_stack);
+        } else {
+            self.items.insert(0, stack.split(amount_to_add));
+        }
+
+        true
+    }
+    pub fn toggle_selected_item(&mut self, selected_item_index: i32) {
+        self.selected_item_index = if self.selected_item_index != selected_item_index
+            && selected_item_index >= 0
+            && (selected_item_index as usize) < self.items.len()
+        {
+            selected_item_index
+        } else {
+            -1
+        };
     }
     pub fn try_extract(&mut self) -> Option<crate::item_stack::ItemStack> {
         if self.items.is_empty() {
             None
         } else {
-            Some(self.items.remove(0))
+            let remove_index = if self.selected_item_index >= 0
+                && (self.selected_item_index as usize) < self.items.len()
+            {
+                self.selected_item_index as usize
+            } else {
+                0
+            };
+            let extracted = self.items.remove(remove_index);
+            self.toggle_selected_item(-1);
+            Some(extracted)
         }
     }
 }
 impl DataComponentImpl for BundleContentsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut items = Vec::new();
+        for item in &self.items {
+            let mut compound = NbtCompound::new();
+            item.write_item_stack(&mut compound);
+            items.push(NbtTag::Compound(compound));
+        }
+        NbtTag::List(items)
+    }
+
     default_impl!(BundleContents);
+}
+
+#[cfg(test)]
+mod bundle_tests {
+    use super::{BUNDLE_IN_BUNDLE_WEIGHT, BundleContentsImpl};
+    use crate::{item::Item, item_stack::ItemStack};
+    use pumpkin_nbt::compound::NbtCompound;
+
+    #[test]
+    fn extracts_selected_item_and_clears_selection() {
+        let mut contents = BundleContentsImpl {
+            items: vec![
+                ItemStack::new(1, &Item::STONE),
+                ItemStack::new(1, &Item::APPLE),
+            ],
+            selected_item_index: -1,
+        };
+
+        contents.toggle_selected_item(1);
+        let extracted = contents.try_extract().expect("bundle should not be empty");
+
+        assert_eq!(extracted.item.id, Item::APPLE.id);
+        assert_eq!(contents.items[0].item.id, Item::STONE.id);
+        assert_eq!(contents.selected_item_index, -1);
+    }
+
+    #[test]
+    fn invalid_or_repeated_selection_clears_selection() {
+        let mut contents = BundleContentsImpl {
+            items: vec![ItemStack::new(1, &Item::STONE)],
+            selected_item_index: -1,
+        };
+
+        contents.toggle_selected_item(0);
+        assert_eq!(contents.selected_item_index, 0);
+
+        contents.toggle_selected_item(0);
+        assert_eq!(contents.selected_item_index, -1);
+
+        contents.toggle_selected_item(1);
+        assert_eq!(contents.selected_item_index, -1);
+    }
+
+    #[test]
+    fn insertion_merges_matching_stack_and_moves_it_to_front() {
+        let mut contents = BundleContentsImpl {
+            items: vec![
+                ItemStack::new(2, &Item::DIAMOND),
+                ItemStack::new(3, &Item::APPLE),
+            ],
+            selected_item_index: -1,
+        };
+        let mut apples = ItemStack::new(4, &Item::APPLE);
+
+        assert!(contents.try_insert(&mut apples));
+
+        assert!(apples.is_empty());
+        assert_eq!(contents.items.len(), 2);
+        assert_eq!(contents.items[0].item.id, Item::APPLE.id);
+        assert_eq!(contents.items[0].item_count, 7);
+        assert_eq!(contents.items[1].item.id, Item::DIAMOND.id);
+    }
+
+    #[test]
+    fn inserts_nested_bundle_with_contents_and_overhead() {
+        let mut contents = BundleContentsImpl {
+            items: Vec::new(),
+            selected_item_index: -1,
+        };
+        let mut bundle = ItemStack::new(1, &Item::BUNDLE);
+        bundle
+            .get_data_component_mut::<BundleContentsImpl>()
+            .expect("bundle should have contents")
+            .items
+            .push(ItemStack::new(8, &Item::APPLE));
+
+        assert!(contents.try_insert(&mut bundle));
+
+        assert!(bundle.is_empty());
+        assert_eq!(contents.get_weight(), 8 + BUNDLE_IN_BUNDLE_WEIGHT);
+    }
+
+    #[test]
+    fn bundle_contents_survive_item_stack_nbt_roundtrip() {
+        let mut bundle = ItemStack::new(1, &Item::BUNDLE);
+        bundle
+            .get_data_component_mut::<BundleContentsImpl>()
+            .expect("bundle should have contents")
+            .items
+            .push(ItemStack::new(3, &Item::APPLE));
+
+        let mut nbt = NbtCompound::new();
+        bundle.write_item_stack(&mut nbt);
+        let restored = ItemStack::read_item_stack(&nbt).expect("bundle should deserialize");
+        let contents = restored
+            .get_data_component::<BundleContentsImpl>()
+            .expect("restored bundle should have contents");
+
+        assert_eq!(contents.items.len(), 1);
+        assert_eq!(contents.items[0].item.id, Item::APPLE.id);
+        assert_eq!(contents.items[0].item_count, 3);
+    }
 }
 
 /// The dimension and block position a lodestone compass points to.

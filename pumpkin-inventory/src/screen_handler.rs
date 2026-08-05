@@ -679,6 +679,30 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Sets the selected item index for a bundle in a screen handler slot.
+    fn set_selected_bundle_item_index(
+        &self,
+        slot_index: i32,
+        selected_item_index: i32,
+    ) -> ScreenHandlerFuture<'_, ()> {
+        Box::pin(async move {
+            let Ok(slot_index) = usize::try_from(slot_index) else {
+                return;
+            };
+            let Some(slot) = self.get_behaviour().slots.get(slot_index).cloned() else {
+                return;
+            };
+
+            let stack = slot.get_stack().await;
+            let mut stack = stack.lock().await;
+            if let Some(bundle) = stack
+                .get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
+            {
+                bundle.toggle_selected_item(selected_item_index);
+            }
+        })
+    }
+
     /// Performs a quick move (shift-click) from a slot.
     ///
     /// Must be implemented by concrete screen handlers to define
@@ -1060,31 +1084,29 @@ pub trait ScreenHandler: Send + Sync {
                     let slot_stack = slot.get_cloned_stack().await;
                     let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
 
-                    if click_type == MouseClick::Right {
-                        let mut intercepted = false;
-
-                        if !cursor_stack.is_empty() {
+                    let mut intercepted = false;
+                    if click_type == MouseClick::Left {
+                        if !slot_stack.is_empty()
+                            && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
                             let stack_guard = slot.get_stack().await;
                             let mut inner_slot_stack = stack_guard.lock().await;
-                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
-                                && bundle.try_insert(&mut cursor_stack) {
-                                    intercepted = true;
-                                }
+                            bundle.try_insert(&mut inner_slot_stack);
+                            if inner_slot_stack.item_count == 0 {
+                                *inner_slot_stack = ItemStack::EMPTY.clone();
+                            }
+                            intercepted = true;
                         }
 
-                        if !intercepted && !slot_stack.is_empty()
-                            && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
-                                let stack_guard = slot.get_stack().await;
-                                let mut inner_slot_stack = stack_guard.lock().await;
-                                if bundle.try_insert(&mut inner_slot_stack) {
-                                    if inner_slot_stack.item_count == 0 {
-                                        *inner_slot_stack = ItemStack::EMPTY.clone();
-                                    }
-                                    intercepted = true;
-                                }
+                        if !intercepted && !cursor_stack.is_empty() {
+                            let stack_guard = slot.get_stack().await;
+                            let mut inner_slot_stack = stack_guard.lock().await;
+                            if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
+                                bundle.try_insert(&mut cursor_stack);
+                                intercepted = true;
                             }
-
-                        if !intercepted && cursor_stack.is_empty() {
+                        }
+                    } else {
+                        if cursor_stack.is_empty() {
                             let stack_guard = slot.get_stack().await;
                             let mut inner_slot_stack = stack_guard.lock().await;
                             if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
@@ -1097,17 +1119,17 @@ pub trait ScreenHandler: Send + Sync {
                         if !intercepted && slot_stack.is_empty()
                             && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
                                 && let Some(extracted) = bundle.try_extract() {
-                                    slot.set_stack(extracted).await;
-                                    intercepted = true;
-                                }
-
-                        if intercepted {
-                            if cursor_stack.item_count == 0 {
-                                *cursor_stack = ItemStack::EMPTY.clone();
+                                slot.set_stack(extracted).await;
+                                intercepted = true;
                             }
-                            slot.mark_dirty().await;
-                            return;
+                    }
+
+                    if intercepted {
+                        if cursor_stack.item_count == 0 {
+                            *cursor_stack = ItemStack::EMPTY.clone();
                         }
+                        slot.mark_dirty().await;
+                        return;
                     }
 
                     let equipment_slot = cursor_stack
