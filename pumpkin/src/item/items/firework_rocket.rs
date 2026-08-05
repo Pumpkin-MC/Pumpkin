@@ -16,6 +16,10 @@ use pumpkin_util::math::vector3::Vector3;
 
 pub struct FireworkRocketItem;
 
+const fn should_consume_rocket(is_creative: bool) -> bool {
+    !is_creative
+}
+
 impl ItemMetadata for FireworkRocketItem {
     fn ids() -> Box<[u16]> {
         [Item::FIREWORK_ROCKET.id].into()
@@ -64,11 +68,39 @@ impl ItemBehaviour for FireworkRocketItem {
                 );
                 let entity = FireworkRocketEntity::new_shot(entity, player.get_entity());
                 world.spawn_entity(Arc::new(entity)).await;
+
+                // Vanilla `FireworkRocketItem::use` consumes the hand that launched
+                // the attached rocket, except in Creative mode.
+                if should_consume_rocket(player.is_creative()) {
+                    let held_item = player.inventory.held_item();
+                    let mut held_item = held_item.lock().await;
+                    if held_item.item == &Item::FIREWORK_ROCKET {
+                        held_item.decrement(1);
+                    } else {
+                        drop(held_item);
+                        let off_hand_item = player.inventory.off_hand_item().await;
+                        let mut off_hand_item = off_hand_item.lock().await;
+                        if off_hand_item.item == &Item::FIREWORK_ROCKET {
+                            off_hand_item.decrement(1);
+                        }
+                    }
+                }
             }
         })
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_consume_rocket;
+
+    #[test]
+    fn rockets_are_consumed_outside_creative() {
+        assert!(should_consume_rocket(false));
+        assert!(!should_consume_rocket(true));
     }
 }
