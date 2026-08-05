@@ -44,6 +44,24 @@ pub(crate) fn build() -> TokenStream {
             parsed.insert("WOLF_VARIANT_ID".to_owned(), id);
         }
 
+        // Same flattening problem for the collar-colour tracker. Both wolf and cat name it
+        // DATA_COLLAR_COLOR, so the flattened table keeps a single COLLAR_COLOR entry - 21 on
+        // 26.x, which is wolf's. Per the 26.2 tables on
+        // <https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata>, Cat extends
+        // Tameable Animal (18-19) and owns Cat Variant 20, Is lying 21, Is relaxed 22, Collar
+        // colour 23, Sound variant 24. The 26.1 and 26.2 dumps confirm that layout positionally
+        // (IS_LYING = 21, RELAX_STATE_ONE = 22, DATA_SOUND_VARIANT_ID = 24), so cat's collar is
+        // 23. Index 21 on a cat is the Boolean "Is lying". Publish a cat-scoped key; wolf keeps
+        // COLLAR_COLOR. Older versions fall back to the flattened value, which is what cat
+        // senders already used there.
+        let cat_collar_color = match ver {
+            JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2 => Some(23),
+            _ => parsed.get("COLLAR_COLOR").copied(),
+        };
+        if let Some(id) = cat_collar_color {
+            parsed.insert("CAT_COLLAR_COLOR".to_owned(), id);
+        }
+
         if matches!(
             ver,
             JavaMinecraftVersion::V_26_1 | JavaMinecraftVersion::V_26_2

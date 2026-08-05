@@ -552,6 +552,18 @@ impl TrackedData {
         v26_1: 16u8,
         v26_2: 16u8,
     };
+    pub const CAT_COLLAR_COLOR: TrackedId = TrackedId {
+        v1_21: 20u8,
+        v1_21_2: 20u8,
+        v1_21_4: 20u8,
+        v1_21_5: 20u8,
+        v1_21_6: 20u8,
+        v1_21_7: 20u8,
+        v1_21_9: 20u8,
+        v1_21_11: 20u8,
+        v26_1: 23u8,
+        v26_2: 23u8,
+    };
     pub const CAT_VARIANT: TrackedId = TrackedId {
         v1_21: 19u8,
         v1_21_2: 19u8,

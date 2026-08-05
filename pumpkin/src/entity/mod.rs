@@ -4234,7 +4234,7 @@ mod tracked_data_bounds_tests {
         (
             "cat",
             25,
-            &[("COLLAR_COLOR", TrackedData::COLLAR_COLOR.v26_2)],
+            &[("CAT_COLLAR_COLOR", TrackedData::CAT_COLLAR_COLOR.v26_2)],
         ),
         (
             "horse",
@@ -4455,6 +4455,22 @@ mod tracked_data_bounds_tests {
         assert_ne!(
             TrackedData::SALMON_VARIANT.v26_2,
             TrackedData::VARIANT.v26_2
+        );
+    }
+
+    /// The flattened 26.x dumps collapse wolf's and cat's `DATA_COLLAR_COLOR` into one
+    /// `COLLAR_COLOR` key = 21, which is wolf's. Per the 26.2 tables on
+    /// <https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata>, Cat extends Tameable
+    /// Animal (18-19) and owns 20-24, putting its collar colour at 23; index 21 on a cat is
+    /// the Boolean "Is lying" (the dumps' own `IS_LYING`).
+    #[test]
+    fn cat_collar_color_is_the_cat_scoped_index() {
+        assert_eq!(TrackedData::CAT_COLLAR_COLOR.v26_2, 23);
+        assert_eq!(TrackedData::CAT_COLLAR_COLOR.v26_1, 23);
+        assert_eq!(TrackedData::IS_LYING.v26_2, 21);
+        assert_ne!(
+            TrackedData::CAT_COLLAR_COLOR.v26_2,
+            TrackedData::COLLAR_COLOR.v26_2
         );
     }
 
