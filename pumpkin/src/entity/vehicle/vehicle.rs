@@ -68,12 +68,12 @@ impl VehicleEntity {
             &[
                 Metadata::new(
                     TrackedData::ID_HURT,
-                    MetaDataType::INTEGER,
+                    MetaDataType::INT,
                     self.get_hurt_time(),
                 ),
                 Metadata::new(
                     TrackedData::ID_HURTDIR,
-                    MetaDataType::INTEGER,
+                    MetaDataType::INT,
                     self.get_hurt_dir(),
                 ),
             ],

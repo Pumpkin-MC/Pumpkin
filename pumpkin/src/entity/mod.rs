@@ -1307,7 +1307,7 @@ impl Entity {
         self.send_meta_data(
             &[Metadata::new(
                 TrackedData::CUSTOM_NAME,
-                MetaDataType::OPTIONAL_TEXT_COMPONENT,
+                MetaDataType::OPTIONAL_COMPONENT,
                 Some(name),
             )],
             Some(&bedrock_meta),
@@ -2753,7 +2753,7 @@ impl Entity {
             self.send_meta_data(
                 &[Metadata::new(
                     TrackedData::TICKS_FROZEN,
-                    MetaDataType::INTEGER,
+                    MetaDataType::INT,
                     VarInt(new_frozen_ticks),
                 )],
                 Some(&bedrock_meta),
@@ -2783,7 +2783,7 @@ impl Entity {
         self.send_meta_data(
             &[Metadata::new(
                 TrackedData::TICKS_FROZEN,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 VarInt(0),
             )],
             Some(&bedrock_meta),
@@ -3211,7 +3211,7 @@ impl Entity {
             self.send_meta_data(
                 &[Metadata::new(
                     TrackedData::POSE,
-                    MetaDataType::ENTITY_POSE,
+                    MetaDataType::POSE,
                     VarInt(pose),
                 )],
                 Some(&bedrock_meta),
@@ -4289,6 +4289,86 @@ mod tracked_data_bounds_tests {
             18,
             &[("ID_ATTACK_TARGET", TrackedData::ID_ATTACK_TARGET.v26_2)],
         ),
+        // Primed TNT extends Entity (0-7) and adds Fuse time (8) + exploding block state (9).
+        ("primed_tnt", 10, &[("FUSE_ID", TrackedData::FUSE_ID.v26_2)]),
+        // Abstract Vehicle extends Entity and adds Shaking power (8), Shaking direction (9),
+        // Shaking multiplier (10). Boat adds two paddles + splash timer (11-13); Abstract
+        // Minecart adds custom block state + custom block Y (11-12). Both share 8/9.
+        (
+            "boat",
+            14,
+            &[
+                ("ID_HURT", TrackedData::ID_HURT.v26_2),
+                ("ID_HURTDIR", TrackedData::ID_HURTDIR.v26_2),
+            ],
+        ),
+        (
+            "minecart",
+            13,
+            &[
+                ("ID_HURT", TrackedData::ID_HURT.v26_2),
+                ("ID_HURTDIR", TrackedData::ID_HURTDIR.v26_2),
+            ],
+        ),
+        // Display extends Entity and owns 8-22: interpolation delay (8), transformation
+        // interpolation duration (9), pos/rot interpolation duration (10), translation (11),
+        // scale (12), rotation left/right (13/14), billboard (15), brightness override (16),
+        // view/shadow/culling fields (17-21), glow colour override (22).
+        (
+            "display",
+            23,
+            &[
+                (
+                    "TRANSFORMATION_INTERPOLATION_START_DELTA_TICKS_ID",
+                    TrackedData::TRANSFORMATION_INTERPOLATION_START_DELTA_TICKS_ID.v26_2,
+                ),
+                (
+                    "TRANSFORMATION_INTERPOLATION_DURATION_ID",
+                    TrackedData::TRANSFORMATION_INTERPOLATION_DURATION_ID.v26_2,
+                ),
+                (
+                    "POS_ROT_INTERPOLATION_DURATION_ID",
+                    TrackedData::POS_ROT_INTERPOLATION_DURATION_ID.v26_2,
+                ),
+                (
+                    "BRIGHTNESS_OVERRIDE_ID",
+                    TrackedData::BRIGHTNESS_OVERRIDE_ID.v26_2,
+                ),
+                (
+                    "GLOW_COLOR_OVERRIDE_ID",
+                    TrackedData::GLOW_COLOR_OVERRIDE_ID.v26_2,
+                ),
+                // Pre-26.x aliases; these resolve to 255 on 26.2 and are skipped.
+                (
+                    "START_INTERPOLATION",
+                    TrackedData::START_INTERPOLATION.v26_2,
+                ),
+                (
+                    "INTERPOLATION_DURATION",
+                    TrackedData::INTERPOLATION_DURATION.v26_2,
+                ),
+                ("BRIGHTNESS", TrackedData::BRIGHTNESS.v26_2),
+                (
+                    "GLOW_COLOR_OVERRIDE",
+                    TrackedData::GLOW_COLOR_OVERRIDE.v26_2,
+                ),
+            ],
+        ),
+        // Text Display extends Display and adds text (23), line width (24), background
+        // colour (25), text opacity (26), style flags (27).
+        (
+            "text_display",
+            28,
+            &[
+                ("LINE_WIDTH_ID", TrackedData::LINE_WIDTH_ID.v26_2),
+                (
+                    "BACKGROUND_COLOR_ID",
+                    TrackedData::BACKGROUND_COLOR_ID.v26_2,
+                ),
+                ("LINE_WIDTH", TrackedData::LINE_WIDTH.v26_2),
+                ("BACKGROUND", TrackedData::BACKGROUND.v26_2),
+            ],
+        ),
         (
             "pillager",
             18,
@@ -4386,6 +4466,197 @@ mod tracked_data_bounds_tests {
         assert_eq!(TrackedData::CUBE_SIZE.v26_2, 18);
         assert_eq!(TrackedData::CUBE_SIZE.v26_1, 16);
         assert_eq!(TrackedData::CUBE_SIZE.v1_21_4, 16);
+    }
+}
+
+/// Guard against silently-dropped entity metadata.
+///
+/// `Metadata::write` returns `Ok(())` without emitting a single byte when the metadata
+/// type constant resolves to a negative id on the wire version
+/// (`pumpkin-protocol/src/java/client/play/entity_metadata.rs`). That makes a wrong type
+/// constant a no-op rather than an error, which is how 28 call sites came to use
+/// `MetaDataType::INTEGER` - id 1 on every 1.21.x but -1 on `v26_1`/`v26_2`, where the int
+/// type moved to `MetaDataType::INT`. Every one of those fields had never reached a 26.x
+/// client.
+///
+/// This walks the crate's own sources and fails the build if any `MetaDataType::NAME`
+/// mentioned in `pumpkin/src` resolves negative on 26.2, so the next such constant is a
+/// test failure instead of an invisible no-op.
+///
+/// A site that is knowingly left silent must carry a `PENDING-INDEX-FIX` marker comment
+/// within the preceding few lines, explaining why. Exemptions are per-site and greppable
+/// on purpose: allowlisting a constant *name* would reopen the exact hole for every
+/// future use of that name.
+#[cfg(test)]
+mod metadata_type_resolves_on_target_version_tests {
+    use pumpkin_data::meta_data_type::MetaDataType;
+    use pumpkin_util::version::JavaMinecraftVersion;
+    use std::path::{Path, PathBuf};
+
+    const MARKER: &str = "PENDING-INDEX-FIX";
+    /// How many preceding lines a `PENDING-INDEX-FIX` comment may sit above its site.
+    const MARKER_LOOKBACK: usize = 12;
+
+    fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("readable source directory") {
+            let path = entry.expect("readable directory entry").path();
+            if path.is_dir() {
+                rust_sources(&path, out);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                out.push(path);
+            }
+        }
+    }
+
+    fn constant_name_at(line: &str) -> Option<&str> {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("//") || trimmed.starts_with('*') {
+            return None;
+        }
+        let rest = line.split_once("MetaDataType::")?.1;
+        let end = rest
+            .find(|c: char| !c.is_ascii_uppercase() && !c.is_ascii_digit() && c != '_')
+            .unwrap_or(rest.len());
+        let name = &rest[..end];
+        if name.is_empty() { None } else { Some(name) }
+    }
+
+    /// Kept in sync by hand with `MetaDataType`'s associated constants: the generated type
+    /// has no reflection, so a name is mapped to its value here. An unknown name fails the
+    /// test rather than being skipped.
+    fn resolve(name: &str) -> Option<MetaDataType> {
+        Some(match name {
+            "ARM" => MetaDataType::ARM,
+            "ARMADILLO_STATE" => MetaDataType::ARMADILLO_STATE,
+            "BLOCK_POS" => MetaDataType::BLOCK_POS,
+            "BLOCK_STATE" => MetaDataType::BLOCK_STATE,
+            "BOOLEAN" => MetaDataType::BOOLEAN,
+            "BYTE" => MetaDataType::BYTE,
+            "CAT_SOUND_VARIANT" => MetaDataType::CAT_SOUND_VARIANT,
+            "CAT_VARIANT" => MetaDataType::CAT_VARIANT,
+            "CHICKEN_SOUND_VARIANT" => MetaDataType::CHICKEN_SOUND_VARIANT,
+            "CHICKEN_VARIANT" => MetaDataType::CHICKEN_VARIANT,
+            "COMPONENT" => MetaDataType::COMPONENT,
+            "COPPER_GOLEM_STATE" => MetaDataType::COPPER_GOLEM_STATE,
+            "COW_SOUND_VARIANT" => MetaDataType::COW_SOUND_VARIANT,
+            "COW_VARIANT" => MetaDataType::COW_VARIANT,
+            "DIRECTION" => MetaDataType::DIRECTION,
+            "ENTITY_POSE" => MetaDataType::ENTITY_POSE,
+            "FACING" => MetaDataType::FACING,
+            "FLOAT" => MetaDataType::FLOAT,
+            "FROG_VARIANT" => MetaDataType::FROG_VARIANT,
+            "HUMANOID_ARM" => MetaDataType::HUMANOID_ARM,
+            "INT" => MetaDataType::INT,
+            "INTEGER" => MetaDataType::INTEGER,
+            "ITEM_STACK" => MetaDataType::ITEM_STACK,
+            "LAZY_ENTITY_REFERENCE" => MetaDataType::LAZY_ENTITY_REFERENCE,
+            "LONG" => MetaDataType::LONG,
+            "NBT_COMPOUND" => MetaDataType::NBT_COMPOUND,
+            "OPTIONAL_BLOCK_POS" => MetaDataType::OPTIONAL_BLOCK_POS,
+            "OPTIONAL_BLOCK_STATE" => MetaDataType::OPTIONAL_BLOCK_STATE,
+            "OPTIONAL_COMPONENT" => MetaDataType::OPTIONAL_COMPONENT,
+            "OPTIONAL_GLOBAL_POS" => MetaDataType::OPTIONAL_GLOBAL_POS,
+            "OPTIONAL_INT" => MetaDataType::OPTIONAL_INT,
+            "OPTIONAL_LIVING_ENTITY_REFERENCE" => MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
+            "OPTIONAL_TEXT_COMPONENT" => MetaDataType::OPTIONAL_TEXT_COMPONENT,
+            "OPTIONAL_UNSIGNED_INT" => MetaDataType::OPTIONAL_UNSIGNED_INT,
+            "OPTIONAL_UUID" => MetaDataType::OPTIONAL_UUID,
+            "OXIDATION_LEVEL" => MetaDataType::OXIDATION_LEVEL,
+            "PAINTING_VARIANT" => MetaDataType::PAINTING_VARIANT,
+            "PARTICLE" => MetaDataType::PARTICLE,
+            "PARTICLE_LIST" => MetaDataType::PARTICLE_LIST,
+            "PARTICLES" => MetaDataType::PARTICLES,
+            "PIG_SOUND_VARIANT" => MetaDataType::PIG_SOUND_VARIANT,
+            "PIG_VARIANT" => MetaDataType::PIG_VARIANT,
+            "POSE" => MetaDataType::POSE,
+            "PROFILE" => MetaDataType::PROFILE,
+            "QUATERNION" => MetaDataType::QUATERNION,
+            "QUATERNION_F" => MetaDataType::QUATERNION_F,
+            "RESOLVABLE_PROFILE" => MetaDataType::RESOLVABLE_PROFILE,
+            "ROTATION" => MetaDataType::ROTATION,
+            "ROTATIONS" => MetaDataType::ROTATIONS,
+            "SNIFFER_STATE" => MetaDataType::SNIFFER_STATE,
+            "STRING" => MetaDataType::STRING,
+            "TEXT_COMPONENT" => MetaDataType::TEXT_COMPONENT,
+            "VECTOR3" => MetaDataType::VECTOR3,
+            "VECTOR_3F" => MetaDataType::VECTOR_3F,
+            "VILLAGER_DATA" => MetaDataType::VILLAGER_DATA,
+            "WEATHERING_COPPER_STATE" => MetaDataType::WEATHERING_COPPER_STATE,
+            "WOLF_SOUND_VARIANT" => MetaDataType::WOLF_SOUND_VARIANT,
+            "WOLF_VARIANT" => MetaDataType::WOLF_VARIANT,
+            "ZOMBIE_NAUTILUS_VARIANT" => MetaDataType::ZOMBIE_NAUTILUS_VARIANT,
+            _ => return None,
+        })
+    }
+
+    #[test]
+    fn no_metadata_type_used_in_this_crate_is_dropped_on_26_2() {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        rust_sources(&src, &mut files);
+        assert!(!files.is_empty(), "no Rust sources found under {src:?}");
+
+        let mut checked = 0usize;
+        let mut unresolved = Vec::new();
+        let mut dropped = Vec::new();
+
+        for file in &files {
+            let text = std::fs::read_to_string(file).expect("readable Rust source");
+            let lines: Vec<&str> = text.lines().collect();
+            for (number, line) in lines.iter().enumerate() {
+                let Some(name) = constant_name_at(line) else {
+                    continue;
+                };
+                // Skip this test's own mapping table.
+                if line.contains("=> MetaDataType::") {
+                    continue;
+                }
+                let Some(constant) = resolve(name) else {
+                    unresolved.push(format!("{}:{}: {name}", file.display(), number + 1));
+                    continue;
+                };
+                checked += 1;
+                if constant.id(JavaMinecraftVersion::V_26_2) >= 0 {
+                    continue;
+                }
+                let start = number.saturating_sub(MARKER_LOOKBACK);
+                if lines[start..number].iter().any(|l| l.contains(MARKER)) {
+                    continue;
+                }
+                dropped.push(format!("{}:{}: {name}", file.display(), number + 1));
+            }
+        }
+
+        assert!(
+            unresolved.is_empty(),
+            "MetaDataType constants used in this crate are missing from this test's mapping \
+             table, so they were never checked. Add them to `resolve`:\n  {}",
+            unresolved.join("\n  ")
+        );
+        assert!(
+            checked > 0,
+            "found no MetaDataType uses to check; the scanner is broken"
+        );
+        assert!(
+            dropped.is_empty(),
+            "these metadata sends resolve to a negative type id on 26.2, so \
+             `Metadata::write` silently emits nothing and the client keeps its default. \
+             Use the 26.2-valid constant (for integers: `MetaDataType::INT`, not \
+             `INTEGER`), or annotate the site with a `{MARKER}` comment explaining why it \
+             must stay silent:\n  {}",
+            dropped.join("\n  ")
+        );
+    }
+
+    /// The concrete swap this guard exists for.
+    #[test]
+    fn int_and_integer_swapped_between_1_21_and_26_x() {
+        // PENDING-INDEX-FIX: not a send site - this asserts the swap itself, so the
+        // scanner above must not treat these two lines as dropped metadata.
+        assert_eq!(MetaDataType::INTEGER.id(JavaMinecraftVersion::V_1_21_11), 1);
+        assert_eq!(MetaDataType::INTEGER.id(JavaMinecraftVersion::V_26_2), -1);
+        assert_eq!(MetaDataType::INT.id(JavaMinecraftVersion::V_1_21_11), -1);
+        assert_eq!(MetaDataType::INT.id(JavaMinecraftVersion::V_26_2), 1);
     }
 }
 

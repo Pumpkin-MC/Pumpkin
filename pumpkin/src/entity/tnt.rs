@@ -89,7 +89,7 @@ impl EntityBase for TNTEntity {
                 &[
                     Metadata::new(
                         TrackedData::FUSE_ID,
-                        MetaDataType::INTEGER,
+                        MetaDataType::INT,
                         VarInt(self.fuse.load(Relaxed) as i32),
                     ),
                     Metadata::new(

@@ -71,7 +71,7 @@ impl GuardianAttackGoal {
         mob.get_entity().send_meta_data(
             &[Metadata::new(
                 TrackedData::ID_ATTACK_TARGET,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 VarInt(entity_id),
             )],
             None,

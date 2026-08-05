@@ -40,7 +40,7 @@ fn sync_tongue_pose(entity: &Entity, pose: EntityPose) {
     entity.send_meta_data(
         &[Metadata::new(
             TrackedData::POSE,
-            MetaDataType::ENTITY_POSE,
+            MetaDataType::POSE,
             VarInt(pose as i32),
         )],
         None,

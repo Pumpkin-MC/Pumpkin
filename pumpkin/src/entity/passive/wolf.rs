@@ -187,7 +187,7 @@ impl WolfEntity {
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
                 TrackedData::COLLAR_COLOR,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 VarInt(i32::from(color)),
             )],
             None,
@@ -481,7 +481,7 @@ impl Mob for WolfEntity {
             entity.send_meta_data(
                 &[Metadata::new(
                     TrackedData::COLLAR_COLOR,
-                    MetaDataType::INTEGER,
+                    MetaDataType::INT,
                     VarInt(i32::from(self.collar_color.load(Ordering::Relaxed))),
                 )],
                 None,

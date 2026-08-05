@@ -137,7 +137,7 @@ impl EntityBase for TextDisplayEntity {
                 &[
                     Metadata::new(
                         TrackedData::TEXT,
-                        MetaDataType::TEXT_COMPONENT,
+                        MetaDataType::COMPONENT,
                         (**self.text.load()).clone(),
                     ),
                     Metadata::new(
@@ -152,22 +152,22 @@ impl EntityBase for TextDisplayEntity {
             let ints = [
                 Metadata::new(
                     TrackedData::LINE_WIDTH,
-                    MetaDataType::INTEGER,
+                    MetaDataType::INT,
                     self.line_width.load(Ordering::Relaxed),
                 ),
                 Metadata::new(
                     TrackedData::LINE_WIDTH_ID,
-                    MetaDataType::INTEGER,
+                    MetaDataType::INT,
                     self.line_width.load(Ordering::Relaxed),
                 ),
                 Metadata::new(
                     TrackedData::BACKGROUND,
-                    MetaDataType::INTEGER,
+                    MetaDataType::INT,
                     self.background_color.load(Ordering::Relaxed),
                 ),
                 Metadata::new(
                     TrackedData::BACKGROUND_COLOR_ID,
-                    MetaDataType::INTEGER,
+                    MetaDataType::INT,
                     self.background_color.load(Ordering::Relaxed),
                 ),
             ];

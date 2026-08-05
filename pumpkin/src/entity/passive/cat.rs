@@ -177,6 +177,13 @@ impl CatEntity {
 
     pub fn set_collar_color(&self, color: u8) {
         self.collar_color.store(color, Ordering::Relaxed);
+        // PENDING-INDEX-FIX: wrong field. The flattened 26.x dumps give one `COLLAR_COLOR`
+        // key = 21, which is Wolf's collar colour. Cat's own collar colour is 23; index 21
+        // on a cat is "Is lying" (Boolean). There is no cat-scoped constant today
+        // (`WOLF_VARIANT_ID` already owns 23), so the fix needs regenerated tracked data.
+        // Left as `INTEGER` so `Metadata::write` keeps dropping it on 26.x rather than
+        // making a wrong-slot write newly visible.
+        // 26.2 tables: https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
                 TrackedData::COLLAR_COLOR,
