@@ -296,15 +296,21 @@ mod tests {
         assert_eq!(state.to_block_id(), pumpkin_data::Block::GRASS_BLOCK.id);
     }
 
-    /// Regression test: `Chunk::build_level_sections` (in `chunk_state.rs`) previously sized
-    /// its section-count loop off `Dimension::THE_NETHER.height` (256) instead of the
-    /// `ProtoChunk`'s own generation height (128, from `GenerationSettings::NETHER.shape`),
-    /// the same class of bug `845326f` fixed in `ProtoChunk::new` but in a sibling call site
-    /// that fix didn't touch. This indexed 16 sections into a `flat_block_map` sized for only
-    /// 8, panicking with an out-of-bounds index on every Nether chunk finalized to `Full` -
-    /// exactly what live testing hit when a player entered the Nether. Only reachable by
-    /// driving generation all the way to `Full`/`Level`, which no other test in this file did
-    /// for a non-Overworld dimension.
+    /// Regression test: `Chunk::build_level_sections` (in `chunk_state.rs`) originally sized its
+    /// section-count loop off `Dimension::THE_NETHER.height` (256) while `ProtoChunk`'s internal
+    /// storage was sized off `GenerationSettings::NETHER.shape.height` (128) - indexing 16
+    /// sections into a `flat_block_map` sized for only 8 panicked with an out-of-bounds index on
+    /// every Nether chunk finalized to `Full`, exactly what live testing hit entering the Nether.
+    /// The first fix for that (shrinking the section loop to 8, matching the generated height)
+    /// stopped the panic but under-sized the *network-facing* chunk: the client derives the
+    /// section count it reads from the dimension registry's height (256 - real vanilla data,
+    /// confirmed via `Dimension::THE_NETHER.height` in `pumpkin-data/src/generated/dimension.rs`,
+    /// which is auto-generated from the game's own registry), not from how much of that space
+    /// worldgen populated. Sending only 8 sections' worth of bytes while the client reads for 16
+    /// desyncs the chunk-data/light packets, which live testing then hit as a "Network Protocol
+    /// Error" disconnect on every Nether entry. The real fix keeps the full 16-section,
+    /// dimension-height chunk, with the ungenerated upper 8 sections as air - matching vanilla's
+    /// actual buildable-but-ungenerated space above the Nether's terrain ceiling.
     #[test]
     fn nether_full_generation_produces_a_level_chunk() {
         let dimension = Dimension::THE_NETHER;
@@ -325,9 +331,31 @@ mod tests {
         let Chunk::Level(chunk) = chunk else {
             panic!("full generation must return a level chunk");
         };
-        // Confirms the sections actually cover the Nether's real 128-block generation
-        // height (8 sections of 16), not the Dimension's 256-block height field.
-        assert_eq!(chunk.section.block_sections.read().unwrap().len(), 8);
+
+        // Full dimension height (256 / 16 = 16 sections), not just the 128-block generation
+        // height (8 sections) - this is what the client actually expects from the registry.
+        let block_sections = chunk.section.block_sections.read().unwrap();
+        assert_eq!(block_sections.len(), 16);
+        // The light engine must be padded out to the same section count, or the light portion
+        // of the chunk-data packet desyncs from the block portion even though each is
+        // individually self-consistent.
+        assert_eq!(
+            chunk.light_engine.lock().unwrap().sky_light.len(),
+            16,
+            "light section count must match block section count for network serialization"
+        );
+
+        // Sections above the generated height (index 8 and up) must be air: worldgen never
+        // populates them, and they must not leak stale/garbage data from the generation buffer.
+        for section in block_sections.iter().skip(8) {
+            for block_id in section {
+                assert_eq!(
+                    block_id,
+                    pumpkin_data::Block::AIR.default_state.id,
+                    "ungenerated section above the Nether's terrain ceiling must be air"
+                );
+            }
+        }
     }
 
     /// Regression test for the `KelpFeature` head-cap bug

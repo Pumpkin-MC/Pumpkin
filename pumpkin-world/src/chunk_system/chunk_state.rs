@@ -1,5 +1,6 @@
 use crate::chunk::{
     ChunkData, ChunkHeightmapType, ChunkHeightmaps, ChunkLight, ChunkSections,
+    format::LightContainer,
     palette::{BiomePalette, BlockPalette},
 };
 use crate::generation::biome_coords;
@@ -204,39 +205,49 @@ impl Chunk {
         }
     }
 
-    fn build_level_sections(proto_chunk: &ProtoChunk) -> ChunkSections {
-        // Must use the ProtoChunk's own height/bottom_y, not the Dimension's: for Noise-
-        // generated worlds these differ from the noise settings' shape (e.g. Nether/End are
-        // height=128 in GenerationSettings.shape vs height=256 on Dimension::THE_NETHER/
-        // THE_END). Sizing off dimension.height here recreates the exact bug 845326f fixed in
-        // ProtoChunk::new, just one call site over: flat_block_map is allocated for
-        // proto_chunk.height() blocks, so iterating dimension.height/16 sections indexes past
-        // the end of that array as soon as y reaches the real (smaller) height.
-        let total_sections = proto_chunk.height() as usize / BlockPalette::SIZE;
+    fn build_level_sections(proto_chunk: &ProtoChunk, dimension: &Dimension) -> ChunkSections {
+        // The chunk-data network packet has no explicit section-count field: the client derives
+        // how many sections to read from the *dimension's* registered height (e.g. 256 blocks /
+        // 16 sections for Nether/End, from `Dimension::THE_NETHER`/`THE_END`), not from how much
+        // of that space worldgen actually populated. `GenerationSettings.shape.height` (128 for
+        // Nether/End) only bounds the noise generator's own output - flat_block_map/
+        // flat_biome_map are sized to that smaller value, so indexing them past
+        // `proto_chunk.height()` is still out of bounds (the bug 845326f and this function's
+        // former version guarded against). The fix is to build the *full* dimension-height
+        // section array, sampling from the proto chunk only within its generated range and
+        // padding the rest with air, matching vanilla's real behavior above the noise
+        // generator's ceiling (e.g. buildable-but-never-generated space from y=128 to y=256 in
+        // the Nether) instead of truncating the chunk to the generated height.
+        let total_sections = dimension.height as usize / BlockPalette::SIZE;
+        let generated_sections = proto_chunk.height() as usize / BlockPalette::SIZE;
         let biome_min_y = biome_coords::from_block(proto_chunk.bottom_y() as i32);
-        let block_sections = (0..total_sections)
-            .map(|section_index| {
-                BlockPalette::from_fn(|x, y, z| {
+
+        let mut block_sections = Vec::with_capacity(total_sections);
+        let mut biome_sections = Vec::with_capacity(total_sections);
+        for section_index in 0..total_sections {
+            if section_index < generated_sections {
+                block_sections.push(BlockPalette::from_fn(|x, y, z| {
                     let y = section_index * BlockPalette::SIZE + y;
                     proto_chunk.get_block_state_raw(x as i32, y as i32, z as i32)
-                })
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-        let biome_sections = (0..total_sections)
-            .map(|section_index| {
-                BiomePalette::from_fn(|x, y, z| {
+                }));
+                biome_sections.push(BiomePalette::from_fn(|x, y, z| {
                     let y = section_index * BiomePalette::SIZE + y;
                     proto_chunk.get_biome_id(x as i32, biome_min_y + y as i32, z as i32)
-                })
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
+                }));
+            } else {
+                // Above the noise generator's populated range: air, same as unbuilt space above
+                // generated terrain anywhere else. Biome has no meaning up here since nothing
+                // ever samples it naturally, so just repeat the topmost generated column.
+                block_sections.push(BlockPalette::default());
+                let repeated_biome = biome_sections.last().cloned().unwrap_or_default();
+                biome_sections.push(repeated_biome);
+            }
+        }
 
         ChunkSections::from_palettes(
-            block_sections,
-            biome_sections,
-            proto_chunk.bottom_y() as i32,
+            block_sections.into_boxed_slice(),
+            biome_sections.into_boxed_slice(),
+            dimension.min_y,
         )
     }
 
@@ -302,13 +313,33 @@ impl Chunk {
 
         let proto_chunk = *proto_chunk_box;
 
-        let sections = Self::build_level_sections(&proto_chunk);
+        let sections = Self::build_level_sections(&proto_chunk, dimension);
         let heightmaps = Self::build_level_heightmaps(&proto_chunk, dimension.min_y);
 
         // Move the light data instead of cloning it
         // By taking ownership of proto_chunk, we can move the light data directly
         // This prevents keeping duplicate lighting data in memory
-        let light_data = proto_chunk.light;
+        //
+        // The light engine only ever ran across the proto chunk's generated height (matching
+        // flat_block_map), same reasoning as build_level_sections above. `CChunkData`/
+        // `CLightUpdate` derive their section count directly from these arrays' length
+        // (`light_engine.sky_light.len()`), so if we don't pad them out to the full dimension
+        // height here too, the light portion of the packet ends up shorter than the block
+        // portion the client just computed from the dimension registry - the same network
+        // desync, just moved from the block data to the light data. Padding sections are
+        // unlit/empty, matching real never-generated space above the world.
+        let mut light_data = proto_chunk.light;
+        let total_sections = dimension.height as usize / BlockPalette::SIZE;
+        if light_data.sky_light.len() < total_sections {
+            let mut sky_light = light_data.sky_light.into_vec();
+            let mut block_light = light_data.block_light.into_vec();
+            sky_light.resize(total_sections, LightContainer::new_empty(0));
+            block_light.resize(total_sections, LightContainer::new_empty(0));
+            light_data = ChunkLight {
+                sky_light: sky_light.into_boxed_slice(),
+                block_light: block_light.into_boxed_slice(),
+            };
+        }
 
         // Only mark lit if past the lighting stage, and the lighting config is "default" ("full" and "dark" modes skip proper lighting)
         let is_lit = proto_chunk.stage >= StagedChunkEnum::Lighting
