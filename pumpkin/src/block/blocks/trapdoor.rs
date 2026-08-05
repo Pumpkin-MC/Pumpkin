@@ -7,9 +7,11 @@ use crate::block::{
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, Half};
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -20,7 +22,7 @@ use std::sync::Arc;
 
 type TrapDoorProperties = pumpkin_data::block_properties::OakTrapdoorLikeProperties;
 
-async fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
+async fn toggle_trapdoor(player: &Arc<Player>, world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_state_id(block_pos);
     let mut trapdoor_props = TrapDoorProperties::from_state_id(block_state, block);
     trapdoor_props.open = !trapdoor_props.open;
@@ -31,6 +33,20 @@ async fn toggle_trapdoor(player: &Player, world: &Arc<World>, block_pos: &BlockP
         SoundCategory::Blocks,
         *block_pos,
     );
+
+    // TrapDoorBlock.java:122 (`playSound`, called from the click-triggered `toggle`): fires
+    // BLOCK_OPEN/BLOCK_CLOSE with the player as source entity.
+    emit_game_event(
+        world,
+        if trapdoor_props.open {
+            GameEvent::BlockOpen
+        } else {
+            GameEvent::BlockClose
+        },
+        block_pos.to_centered_f64(),
+        GameEventContext::of_entity(player.clone()),
+    )
+    .await;
 
     world
         .set_block_state(
@@ -132,6 +148,20 @@ impl BlockBehaviour for TrapDoorBlock {
                         SoundCategory::Blocks,
                         *args.position,
                     );
+
+                    // TrapDoorBlock.java's redstone-triggered path also routes through
+                    // `playSound`, so this fires BLOCK_OPEN/BLOCK_CLOSE with no source entity.
+                    emit_game_event(
+                        args.world,
+                        if powered {
+                            GameEvent::BlockOpen
+                        } else {
+                            GameEvent::BlockClose
+                        },
+                        args.position.to_centered_f64(),
+                        GameEventContext::none(),
+                    )
+                    .await;
                 }
             }
 

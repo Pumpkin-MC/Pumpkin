@@ -1,4 +1,5 @@
 use crate::entity::EntityBase;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::Axis;
@@ -6,6 +7,7 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::DoorHinge;
 use pumpkin_data::block_properties::DoubleBlockHalf;
 use pumpkin_data::block_properties::HorizontalFacing;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
@@ -63,6 +65,21 @@ pub async fn set_door_open(world: &Arc<World>, block_pos: &BlockPos, open: bool)
 
     world.play_block_sound(get_sound(block, open), SoundCategory::Blocks, *block_pos);
 
+    // DoorBlock.java:220 (`setOpen`): fires BLOCK_OPEN/BLOCK_CLOSE with the caller's source
+    // entity; simplified to none() since this entry point isn't passed one (matches the
+    // documented simplification other emission sites in this codebase already use).
+    emit_game_event(
+        world,
+        if open {
+            GameEvent::BlockOpen
+        } else {
+            GameEvent::BlockClose
+        },
+        block_pos.to_centered_f64(),
+        GameEventContext::none(),
+    )
+    .await;
+
     world
         .set_block_state(
             block_pos,
@@ -79,7 +96,7 @@ pub async fn set_door_open(world: &Arc<World>, block_pos: &BlockPos, open: bool)
         .await;
 }
 
-async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) {
+async fn toggle_door(player: &Arc<Player>, world: &Arc<World>, block_pos: &BlockPos) {
     let (block, block_state) = world.get_block_and_state_id(block_pos);
     let mut door_props = DoorProperties::from_state_id(block_state, block);
     let new_open_state = !door_props.open;
@@ -101,6 +118,20 @@ async fn toggle_door(player: &Player, world: &Arc<World>, block_pos: &BlockPos) 
         SoundCategory::Blocks,
         *block_pos,
     );
+
+    // DoorBlock.java:208 (`useWithoutItem`): fires BLOCK_OPEN/BLOCK_CLOSE with the player as
+    // source entity on every manual toggle.
+    emit_game_event(
+        world,
+        if new_open_state {
+            GameEvent::BlockOpen
+        } else {
+            GameEvent::BlockClose
+        },
+        block_pos.to_centered_f64(),
+        GameEventContext::of_entity(player.clone()),
+    )
+    .await;
 
     world
         .set_block_state(
@@ -316,6 +347,20 @@ impl BlockBehaviour for DoorBlock {
                         SoundCategory::Blocks,
                         *args.position,
                     );
+
+                    // DoorBlock.java:233 (`neighborChanged`): fires BLOCK_OPEN/BLOCK_CLOSE
+                    // with no source entity when a redstone signal flips the door.
+                    emit_game_event(
+                        args.world,
+                        if powered {
+                            GameEvent::BlockOpen
+                        } else {
+                            GameEvent::BlockClose
+                        },
+                        args.position.to_centered_f64(),
+                        GameEventContext::none(),
+                    )
+                    .await;
                 }
 
                 args.world
