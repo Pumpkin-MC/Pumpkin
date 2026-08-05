@@ -38,6 +38,13 @@ use crate::block::entities::sign::DyeColor;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
+/// Vanilla `Sheep.registerGoals` (1.21.4, `Sheep.java:83-94`) registers
+/// `new WaterAvoidingRandomStrollGoal(this, 1.0)` at priority 6, not the plain
+/// `RandomStrollGoal`: candidate stroll targets inside a liquid are rejected.
+const fn stroll_goal() -> WanderAroundGoal {
+    WanderAroundGoal::new_water_avoiding(1.0)
+}
+
 /// Sentinel meaning "no color rolled yet" -- `mob_init_data_tracker` rolls a biome-based color
 /// the first time it sees this; NBT restore always writes an in-range color first, so a
 /// freshly-loaded sheep never observes this value.
@@ -157,7 +164,7 @@ impl SheepEntity {
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.1, TEMPT_ITEMS, false)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(5, Box::new(EatGrassGoal::default()));
-            goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(6, Box::new(stroll_goal()));
             goal_selector.add_goal(
                 7,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
@@ -557,5 +564,17 @@ mod drop_spawn_pos_tests {
         assert!((drop_pos.x - pos.x).abs() < 1e-12);
         assert!((drop_pos.y - (pos.y + 1.0)).abs() < 1e-12);
         assert!((drop_pos.z - pos.z).abs() < 1e-12);
+    }
+}
+
+#[cfg(test)]
+mod stroll_goal_tests {
+    use super::stroll_goal;
+
+    #[test]
+    fn sheep_stroll_avoids_water_like_vanilla() {
+        // Vanilla `Sheep.registerGoals` (1.21.4, Sheep.java:91):
+        // `this.goalSelector.addGoal(6, new WaterAvoidingRandomStrollGoal(this, 1.0));`
+        assert!(stroll_goal().avoids_water());
     }
 }
