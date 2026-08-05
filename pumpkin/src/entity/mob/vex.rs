@@ -14,10 +14,9 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::control::vex_move_control::VexMoveControl,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, revenge::RevengeGoal, swim::SwimGoal,
-        vex_charge_attack::VexChargeAttackGoal, vex_copy_owner_target::VexCopyOwnerTargetGoal,
-        vex_random_move::VexRandomMoveGoal,
+        active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal, revenge::RevengeGoal,
+        swim::SwimGoal, vex_charge_attack::VexChargeAttackGoal,
+        vex_copy_owner_target::VexCopyOwnerTargetGoal, vex_random_move::VexRandomMoveGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -72,14 +71,27 @@ impl VexEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(4, Box::new(VexChargeAttackGoal::new(vex_weak.clone())));
             goal_selector.add_goal(8, Box::new(VexRandomMoveGoal::new(vex_weak.clone())));
+            // Vex.java:91: `LookAtPlayerGoal(this, Player.class, 3.0F, 1.0F)` -- range 3.0,
+            // probability 1.0 (always looks), not the crate default range/chance.
             goal_selector.add_goal(
                 9,
-                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),
+                Box::new(LookAtEntityGoal::new(
+                    mob_weak.clone(),
+                    &EntityType::PLAYER,
+                    3.0,
+                    1.0,
+                    false,
+                )),
             );
-            goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
+            // Vex.java:92: `LookAtPlayerGoal(this, Mob.class, 8.0F)`.
+            goal_selector.add_goal(
+                10,
+                LookAtEntityGoal::with_default_any_mob(mob_weak.clone(), 8.0),
+            );
 
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // Vex.java:93: `HurtByTargetGoal(this, Raider.class).setAlertOthers()`.
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true).exclude_raiders()));
             target_selector.add_goal(2, Box::new(VexCopyOwnerTargetGoal::new(vex_weak)));
             target_selector.add_goal(
                 3,
