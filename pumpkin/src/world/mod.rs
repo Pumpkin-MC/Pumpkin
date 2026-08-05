@@ -1595,7 +1595,12 @@ impl World {
         let surface_y = self.get_heightmap_height(MotionBlocking, x, z);
         let top = BlockPos::new(x, surface_y + 1, z);
         let below = top.down();
-        let biome = self.level.get_rough_biome(&top);
+        // Whether it snows/freezes here is a property of the biome. With no resolvable
+        // biome there is nothing to decide from, so skip this chunk's precipitation tick
+        // instead of applying some other biome's weather.
+        let Some(biome) = self.level.get_rough_biome(&top) else {
+            return;
+        };
         let below_state_id = self.get_block_state_id(&below);
         let below_fluid = Fluid::from_state_id(below_state_id).unwrap_or(&Fluid::EMPTY);
 

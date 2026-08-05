@@ -954,7 +954,22 @@ impl Level {
             .map(|x| f(x.value()))
     }
 
-    pub fn get_rough_biome(&self, position: &BlockPos) -> &'static Biome {
+    /// Resolves an optional biome id into a biome. The id is missing when the chunk is
+    /// not loaded or when the chunk carries no biome entry for that y; either way this
+    /// returns `None` rather than substituting an id.
+    ///
+    /// Substituting id 0 is not neutral: `Biome::from_id(0)` is `BADLANDS`, a real
+    /// Overworld biome whose monster spawn table includes `minecraft:slime`
+    /// (see `Biome::BADLANDS` in `pumpkin-data/src/generated/biome.rs`), so a failed
+    /// lookup used to make Overworld mobs legal spawns anywhere, the Nether included.
+    fn resolve_rough_biome(id: Option<u8>) -> Option<&'static Biome> {
+        Biome::from_id(id?)
+    }
+
+    /// Returns the biome at `position`, or `None` if it cannot be resolved (chunk not
+    /// loaded, or no biome data for that y). Callers decide what a failed lookup means
+    /// for them; there is no vanilla-correct "default biome" to fall back to.
+    pub fn get_rough_biome(&self, position: &BlockPos) -> Option<&'static Biome> {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let id = self.read_chunk_sync(&chunk_coordinate, |chunk| {
             chunk.section.get_rough_biome_absolute_y(
@@ -963,7 +978,7 @@ impl Level {
                 relative.z as usize,
             )
         });
-        Biome::from_id(id.flatten().unwrap_or(0)).unwrap_or(&Biome::THE_VOID)
+        Self::resolve_rough_biome(id.flatten())
     }
 
     pub fn get_entity_chunk_sync(&self, pos: &Vector2<i32>) -> Option<SyncEntityChunk> {
@@ -1076,6 +1091,42 @@ mod tests {
     #[test]
     fn negative_random_tick_speed_disables_section_sampling() {
         assert_eq!(random_tick_samples_per_section(-1), 0);
+    }
+
+    /// A biome lookup that fails must not resolve to a real, spawnable biome.
+    ///
+    /// The previous `unwrap_or(0)` turned both failure modes (chunk not loaded, and
+    /// chunk loaded but no biome entry for that y) into `Biome::from_id(0)` ==
+    /// `BADLANDS`, whose generated `spawners.monster` table lists `minecraft:slime`
+    /// (`pumpkin-data/src/generated/biome.rs`). Natural spawning then treated an
+    /// unresolvable position as badlands and let Overworld monsters spawn there.
+    #[test]
+    fn failed_biome_lookup_does_not_resolve_to_a_spawnable_biome() {
+        use pumpkin_data::biome::Biome;
+
+        // Guard the premise: id 0 really is BADLANDS and it really lists slime.
+        let zero = Biome::from_id(0).expect("biome id 0 exists");
+        assert_eq!(zero.registry_id, "badlands");
+        assert!(
+            zero.spawners
+                .monster
+                .iter()
+                .any(|s| s.r#type == "minecraft:slime"),
+            "premise changed: badlands no longer lists slime"
+        );
+
+        // Both failure modes reach the resolver as a missing id: the chunk not being
+        // loaded (outer `None` from `read_chunk_sync`) and the chunk carrying no biome
+        // entry for that y (inner `None`), which `get_rough_biome` flattens together.
+        let chunk_not_loaded: Option<Option<u8>> = None;
+        let no_biome_entry: Option<Option<u8>> = Some(None);
+        assert!(Level::resolve_rough_biome(chunk_not_loaded.flatten()).is_none());
+        assert!(Level::resolve_rough_biome(no_biome_entry.flatten()).is_none());
+        // A resolvable id still resolves.
+        assert_eq!(
+            Level::resolve_rough_biome(Some(0)).map(|b| b.registry_id),
+            Some("badlands")
+        );
     }
 
     use super::Level;

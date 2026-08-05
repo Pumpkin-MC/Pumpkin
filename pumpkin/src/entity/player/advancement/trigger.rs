@@ -412,9 +412,12 @@ impl Player {
                 if !self
                     .has_advancement(Advancement::NETHER_EXPLORE_NETHER)
                     .await
+                    // An unresolvable biome must not grant an advancement.
+                    && let Some(biome) = self
+                        .world()
+                        .level
+                        .get_rough_biome(&self.position().to_block_pos())
                 {
-                    let pos = self.position().to_block_pos();
-                    let biome = self.world().level.get_rough_biome(&pos);
                     let biome_resource = format!("minecraft:{}", biome.registry_id);
                     let nether_biomes = [
                         "minecraft:basalt_deltas",
@@ -435,9 +438,14 @@ impl Player {
                 if !self
                     .has_advancement(Advancement::ADVENTURE_ADVENTURING_TIME)
                     .await
+                    // An unresolvable biome must not grant an advancement. This list
+                    // literally contains "minecraft:badlands", which is exactly what the
+                    // old id-0 fallback produced, so a failed lookup could grant it.
+                    && let Some(biome) = self
+                        .world()
+                        .level
+                        .get_rough_biome(&self.position().to_block_pos())
                 {
-                    let pos = self.position().to_block_pos();
-                    let biome = self.world().level.get_rough_biome(&pos);
                     let biome_resource = format!("minecraft:{}", biome.registry_id);
                     let overworld_biomes = [
                         "minecraft:badlands",
