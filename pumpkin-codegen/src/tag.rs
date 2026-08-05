@@ -263,7 +263,7 @@ pub(crate) fn build() -> TokenStream {
         let dict_name = format_ident!("{}_TAGS", key.to_shouty_snake_case());
 
         let mut tag_entries = Vec::new();
-        let mut phf_map = phf_codegen::Map::<&'static str>::new();
+        let mut phf_map = phf_codegen::Map::<String>::new();
 
         for (tag_name, values) in tag_map {
             if values.is_empty() {
@@ -281,7 +281,7 @@ pub(crate) fn build() -> TokenStream {
             let tag = diff_tag.compute(&values, &id_mapper, quote! { crate::tag });
 
             tag_entries.push(tag);
-            phf_map.entry(Box::leak(tag_name.clone().into_boxed_str()), quote! {#key_pascal::#tag_const_name}.to_string());
+            phf_map.entry(tag_name.clone(), quote! {#key_pascal::#tag_const_name}.to_string());
 
             diff_tags
                 .entry(key.clone())
@@ -332,7 +332,7 @@ pub(crate) fn build() -> TokenStream {
             let dict_name = format_ident!("{}_TAGS", key.to_pascal_case().to_uppercase());
 
             let mut tag_entries = Vec::new();
-            let mut phf_map = phf_codegen::Map::<&'static str>::new();
+            let mut phf_map = phf_codegen::Map::<String>::new();
 
             for (tag_name, values) in tag_map {
                 if values.is_empty() {
@@ -354,7 +354,7 @@ pub(crate) fn build() -> TokenStream {
 
                 tag_entries.push(tag_entry);
 
-                phf_map.entry(Box::leak(tag_name.into_boxed_str()), quote! { #key_pascal::#tag_const_name }.to_string());
+                phf_map.entry(tag_name, quote! { #key_pascal::#tag_const_name }.to_string());
             }
 
             let phf_map = phf_map.build();
