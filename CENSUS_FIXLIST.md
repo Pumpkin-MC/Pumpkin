@@ -566,3 +566,36 @@ New reports from the same session, all in/around the Nether, none yet triaged:
 
 Item 4's timing correlation with the section-padding change makes it the highest priority
 to investigate - a fix that trades a crash for broken lighting is not a good trade.
+
+### Additional live reports 2026-08-05 (later session)
+
+- **Spider and zombie movement far too fast.** Movement speed attribute or per-tick movement
+  scaling likely wrong. Note vanilla speeds: zombie generic.movement_speed 0.23, spider 0.3
+  (confirm against pumpkin-data before fixing - do not assert from memory). Check whether
+  this is entity-specific or a global movement-scaling bug, since "too fast" was reported for
+  two unrelated mobs at once.
+- **Network protocol error on almost any action in creative/survival; spectator is stable.**
+  Root-caused to an entity-metadata index overflow (set_entity_data, index 18 of length 18).
+  Spectator suppresses mob targeting/tracking, hence far fewer metadata updates - which
+  points at a MOB entity type's tracked-data indices rather than the player's. Fix agent
+  dispatched.
+- **Water not flowing** (screenshot: static water surface where flow is expected).
+- **Server hangs / stalls while loading chunks**, and chunk loading is visibly slow.
+
+### Fork divergence vs upstream (measured 2026-08-05)
+
+`git rev-list --left-right --count upstream/master...master` = 14 behind, 756 ahead
+(627 non-merge). 621 files, +78970/-4027 vs upstream/master.
+
+Upstream commits worth pulling: End City structures (150eff58), fix(ai) respect target
+visibility (f0da5f33, relevant to open mob-AI reports), chicken gliding (30ece357), lectern
+redstone (bff591e4). Mineshaft generation (09d23bd1) was added then reverted twice upstream
+(0050576b, a748aae0) - do not cherry-pick it.
+
+MERGE HAZARD: upstream 7350fba3 "chunk loading/saving move from serde to manual" rewrites
+exactly the code this session's section-padding fixes touch (chunk/format/mod.rs,
+chunk/mod.rs). Expect real conflicts and re-verify the padding invariants after merging it.
+
+NOT MEASURED: nobody has run conformance/parity scoring against upstream HEAD, so there is
+no defensible "we are N points better than upstream" claim. Build upstream and run
+pumpkin-local/score.py against it if that number is ever needed.
