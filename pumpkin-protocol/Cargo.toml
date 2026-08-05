@@ -39,6 +39,12 @@ bitflags.workspace = true
 
 [dev-dependencies]
 # Validate correctness
+criterion.workspace = true
+pumpkin-util.workspace = true
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "chunk_packet"
+harness = false

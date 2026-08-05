@@ -914,3 +914,171 @@ METHOD NOTE: this is the second false finding today caused by testing against ch
 rather than behaviour (the first was a stalactite placement "bug" observed in a chunk that
 happened to be loaded during play). Both were caught only by re-deriving the premise from
 primary sources. Verify load state explicitly before concluding anything from a setblock probe.
+
+## Chunk generation / send throughput investigation (2026-08-05)
+
+Live report, raised three times by the same player at `view_distance 16`,
+`simulation_distance 10`, creative flight: "you need to speed up chunk gen to match
+with render distance", "i can sometimes fly into unloaded chunks", "get stuck here for
+a while", "server often hangs on loading chunks".
+
+Outcome: **diagnosis only, no code fix.** Candidates (a) generation throughput and
+(c) the send path are both ruled out by measurement. (b), the scheduler/pipeline, is
+the remaining candidate and no benchmark in the tree measures it. (d), priority
+ordering, is ruled out by inspection.
+
+### Demand: how many chunks per second are actually required
+
+Creative flight speed, minecraft.wiki "Flying", verbatim: "Flying makes the player move
+at around 10.92 meters/second (39.312 km/h)" and "This is increased further when holding
+the sprint key to 21.6 meters/second (77.76 km/h)". One meter is one block, so sprint
+flight is 21.6 blocks/s = **1.35 chunks/s**.
+
+`ChunkManager::update_center_and_view_distance` (pumpkin/src/entity/player.rs:248) adds
+a one-chunk margin, so the served radius is 17. The frontier column is `2*17+1 = 35`
+chunks per chunk-width travelled. Straight-line sprint flight therefore demands
+**~47 chunks/s**; axis-diagonal flight advances two frontiers, so **~94 chunks/s**.
+
+### (a) Generation throughput: NOT the bottleneck. Measured.
+
+`cargo bench -p pumpkin-world --bench chunk_gen`, 20-core machine, overworld, seed 42:
+
+| stage | mean |
+| --- | --- |
+| `full_chunk_generation` | 35.47 ms |
+| lighting | 12.16 ms |
+| noise | 10.07 ms |
+| surface | 2.32 ms |
+| carvers | 1.42 ms |
+| biomes | 0.76 ms |
+| features | 0.688 ms |
+| level_chunk_conversion | 0.188 ms |
+| structure_references | 0.066 ms |
+| structure_starts | 0.049 ms |
+
+`cargo bench -p pumpkin-world --bench chunk_gen_concurrent`:
+`concurrent_full_pipeline_16_chunks_4_threads` = **147.71 ms** for 16 chunks on 4
+threads = 108 chunks/s = 27.1 chunks/s/thread, versus 28.2 chunks/s/thread
+single-threaded. Scaling is essentially linear at that width.
+
+At 35.47 ms/chunk the frontier costs `35 * 35.47 ms = 1.24 CPU-seconds` per chunk-width,
+and sprint flight consumes 1.35 chunk-widths/s, so sustained straight-line demand is
+**1.68 CPU-seconds of worldgen per wall-second** (3.4 diagonal). On the reported
+hardware that is under 10% of available CPU. Raw worldgen cost is not what the player is
+hitting.
+
+Caveat, stated deliberately: `chunk_gen_concurrent` calls `generate_single_chunk`, which
+bypasses `GenerationSchedule` entirely and regenerates each chunk's neighbour stages
+per chunk. It measures neither real per-chunk cost under the scheduler nor the
+`write_radius`-1 exclusion described below. **No bench in the tree measures sustained
+pipeline throughput.** That gap is the finding, not an aside.
+
+### (c) The send path: NOT the bottleneck on CPU cost. Measured.
+
+The relevant control loop is client-side. Vanilla 1.21.4
+(`net/minecraft/client/multiplayer/ChunkBatchSizeCalculator.java`, Mojang-named source
+at github.com/mil1dude/source-code; **1.21.4, not 26.2**) records nanos between
+`ClientboundChunkBatchStartPacket` and `ClientboundChunkBatchFinishedPacket`, divides by
+the chunk count the server reported, and returns
+`getDesiredChunksPerTick() = 7000000.0 / aggregatedNanosPerChunk`. Pumpkin feeds that
+value straight into `ChunkManager::handle_acknowledge` (player.rs:347) and drains at most
+that many per tick, so the server-side ceiling is `20 * (7e6 / T)` chunks/s where `T` is
+the observed per-chunk nanos inside a batch. `T = 3 ms` is exactly the 47 chunks/s
+break-even; `T = 1 ms` gives 140 chunks/s.
+
+New bench added by this investigation, `pumpkin-protocol/benches/chunk_packet.rs`:
+
+- uncompressed full overworld chunk packet: **71867 bytes**
+- zlib level 4 (the default in `CompressionConfig`, threshold 256): **5217 bytes**
+- `chunk_packet_serialize`: **14.88 us**
+- `chunk_packet_serialize_and_compress`: **214.57 us**
+
+So the server's CPU cost per chunk inside a batch is ~0.215 ms, giving a ceiling around
+**650 chunks/s** before task-scheduling and socket costs, an order of magnitude above
+demand. The send path is not CPU-starved.
+
+Two send-path warts found but **not** fixed, because neither is supported by a
+measurement and both sit in the concurrency-sensitive path CLAUDE.md restricts:
+
+1. `JavaClient::send_packet_now_data` (pumpkin/src/net/java/mod.rs:533) awaits a
+   per-packet `oneshot` completion that the writer task only fires after
+   `writer.flush()`. `send_chunks` (mod.rs:342) therefore never has more than one chunk
+   packet in flight, which defeats the writer task's own `MAX_BATCH_SIZE` coalescing
+   loop (mod.rs:709) for chunk batches specifically. Measured cost says this is not
+   currently the limiter, but it converts every chunk into a separate flush syscall plus
+   two task wakeups, and it is the thing that would bite first on a loaded runtime.
+2. `Player::tick` spawns `send_chunks` in a detached `tokio::spawn` every tick
+   (player.rs:2132) with no ordering guarantee between ticks, so two batches can
+   interleave their `CChunkBatchStart`/`CChunkBatchEnd` on the wire. The vanilla client's
+   `chunkBatchStartTime` is a single volatile field, so an interleave corrupts its
+   sample; the `Mth.clamp(d1, agg/3, agg*3)` guard in `onBatchFinished` bounds the damage
+   to +/-3x per sample, which is why this is listed as a wart rather than a cause.
+
+### (d) Priority ordering: ruled out by inspection
+
+`ChunkManager` sends from a `BinaryHeap<HeapNode>` keyed on Chebyshev distance from the
+player's centre chunk (player.rs:149-153, 231, 375), re-keyed on every centre change
+(player.rs:287). The scheduler side is also distance-ordered, via
+`GenerationSchedule::calc_priority` (schedule.rs:208) over `ChunkLoading` ticket levels
+with a -100 boost for `last_high_priority` positions. Chunks are not generated or sent
+in an order unrelated to the player.
+
+Also checked and cleared: `pull_new_chunks` (player.rs:222) discards published chunks
+beyond `view_distance`, but a chunk approaching the player must cross the
+`Cylindrical::changed_chunks` delta ring, and `update_center_and_view_distance`
+re-enqueues from `level.loaded_chunks` for every position in that ring
+(player.rs:297-307). No permanent drop.
+
+### (b) The scheduler/pipeline: the remaining candidate, UNMEASURED
+
+Everything above says the machine has ample CPU and ample wire budget, and that the
+ordering is right, yet the player outruns generation. That leaves the pipeline. Two
+specific structural limiters, neither measured:
+
+- `StagedChunkEnum::get_write_radius` (chunk_state.rs:144) returns 1 for `Features`,
+  `Lighting` and `Spawn`. The dispatch loop swaps chunk data out of all `(2r+1)^2 = 9`
+  holders for the duration of the task (schedule.rs:1247-1266), so no two of those tasks
+  can run within three chunks of each other. `Lighting` is the single most expensive
+  stage at 12.16 ms, i.e. 34% of `full_chunk_generation`, and it is one of the three that
+  takes the 3x3 exclusive lock. In a compact frontier this caps effective concurrency far
+  below the `max_in_flight = available_parallelism * 4` the scheduler thinks it has
+  (schedule.rs:140).
+- All dispatch, all `recv_chunk` draining, all DAG edge surgery and all `sort_queue`
+  passes run on the single `Schedule` thread (schedule.rs:148). `sort_queue`
+  (schedule.rs:229) drains and rebuilds the whole heap, calling `calc_priority` — itself
+  a linear scan of `last_high_priority` — per task. At radius 17 the ticket field is
+  35x35 = 1225 chunks to `Full` plus six further rings of partial stages out to
+  `MAX_LEVEL = 49`, across up to 11 stages each, so that heap is in the ten-thousands of
+  nodes and is rebuilt whenever `queue_dirty` is set.
+
+**Smallest useful first step:** add a sustained-throughput benchmark that drives
+`GenerationSchedule` itself — `pumpkin-world/src/chunk_system/tests.rs` already has the
+scaffolding to stand one up — and report chunks/s reaching `ChunkListener` for a moving
+ticket centre at radius 17. Without that number, any change to the scheduler is a
+speculative rewrite of concurrent code, which CLAUDE.md forbids. Only after that number
+exists is it worth deciding between relaxing the `write_radius`-1 exclusion and moving
+work off the `Schedule` thread.
+
+### Negative findings on this session's recent changes
+
+- `ChunkSections::section_count()` (pumpkin-world/src/chunk/mod.rs:134) does take a read
+  lock, but it has exactly three call sites: `Level` chunk save (level.rs:545), NBT
+  serialization (chunk/format/mod.rs:527) and the Bedrock `level_chunk` packet. None is a
+  hot loop. **Does not matter.**
+- `ChunkData::pad_sections_to` (chunk/mod.rs:647) is only called from
+  `GenerationSchedule::receive_chunk` on the `RecvChunk::IO` arm (schedule.rs:802), i.e.
+  disk loads only, never freshly generated chunks, and it early-returns after a single
+  uncontended write-lock acquisition when `block_sections.len() >= total_sections` —
+  which is always true for the overworld. **Does not matter.**
+- `ChunkManager::next_entity` and `ChunkManager::push_entity` (player.rs:362, 390) have
+  no callers anywhere in the tree. `entity_chunk_queue` is dead. Not a bug (nothing
+  enqueues either), but `next_entity` increments `batches_sent_since_ack`, so it would be
+  wrong if revived.
+
+### Unverifiable
+
+Whether the player's client was reporting a low `chunks_per_tick` at the time cannot be
+established from this repo. `JavaClient::handle_chunk_batch` (net/java/play.rs:2953)
+already logs it at `trace!`; an operator can confirm or eliminate the send path in one
+run by enabling trace logging for that module. Marked **UNVERIFIABLE** here rather than
+guessed.
