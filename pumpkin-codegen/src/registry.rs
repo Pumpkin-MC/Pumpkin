@@ -69,8 +69,47 @@ pub(crate) fn build() -> TokenStream {
                 let entry_tokens: Vec<TokenStream> = entries
                     .iter()
                     .map(|(entry_name, entry_data)| {
-                        let mut bytes = Vec::new();
-                        pumpkin_nbt::serializer::to_bytes_unnamed(entry_data, &mut bytes).unwrap();
+                        fn json_to_nbt_tag(v: &Value) -> pumpkin_nbt::tag::NbtTag {
+                            match v {
+                                Value::Null => pumpkin_nbt::tag::NbtTag::End,
+                                Value::Bool(b) => {
+                                    pumpkin_nbt::tag::NbtTag::Byte(if *b { 1 } else { 0 })
+                                }
+                                Value::Number(num) => {
+                                    if let Some(i) = num.as_i64() {
+                                        if i >= i32::MIN as i64 && i <= i32::MAX as i64 {
+                                            pumpkin_nbt::tag::NbtTag::Int(i as i32)
+                                        } else {
+                                            pumpkin_nbt::tag::NbtTag::Long(i)
+                                        }
+                                    } else if let Some(f) = num.as_f64() {
+                                        pumpkin_nbt::tag::NbtTag::Double(f)
+                                    } else {
+                                        pumpkin_nbt::tag::NbtTag::Int(0)
+                                    }
+                                }
+                                Value::String(s) => {
+                                    pumpkin_nbt::tag::NbtTag::String(s.clone().into())
+                                }
+                                Value::Array(arr) => pumpkin_nbt::tag::NbtTag::List(
+                                    arr.iter().map(json_to_nbt_tag).collect(),
+                                ),
+                                Value::Object(obj) => {
+                                    let mut compound = pumpkin_nbt::compound::NbtCompound::new();
+                                    for (k, val) in obj {
+                                        compound.put(k, json_to_nbt_tag(val));
+                                    }
+                                    pumpkin_nbt::tag::NbtTag::Compound(compound)
+                                }
+                            }
+                        }
+
+                        let nbt_tag = json_to_nbt_tag(entry_data);
+                        let bytes = if let pumpkin_nbt::tag::NbtTag::Compound(compound) = nbt_tag {
+                            pumpkin_nbt::Nbt::from(compound).write_unnamed()
+                        } else {
+                            Vec::new().into()
+                        };
                         let byte_literal = Literal::byte_string(&bytes);
 
                         quote! {

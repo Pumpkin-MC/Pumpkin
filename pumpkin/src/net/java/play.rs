@@ -1356,6 +1356,18 @@ impl JavaClient {
             return;
         };
 
+        let mut anim_event = crate::plugin::api::events::player::player_animation::PlayerAnimationEvent::new(
+            player.clone(),
+            match hand {
+                Hand::Left => crate::plugin::api::events::player::player_animation::PlayerAnimationType::ArmSwingOff,
+                Hand::Right => crate::plugin::api::events::player::player_animation::PlayerAnimationType::ArmSwingMain,
+            },
+        );
+        server.plugin_manager.fire(server, &mut anim_event).await;
+        if anim_event.cancelled {
+            return;
+        }
+
         let (yaw, pitch) = player.rotation();
         let hit_result = player
             .world()

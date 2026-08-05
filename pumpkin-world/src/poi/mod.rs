@@ -176,10 +176,29 @@ impl PoiRegion {
 
     /// Compress chunk data to bytes
     fn compress_chunk_data(chunk_data: &PoiChunkData) -> std::io::Result<Vec<u8>> {
-        let mut uncompressed = Vec::new();
-        pumpkin_nbt::to_bytes(chunk_data, &mut uncompressed)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+        let mut root = pumpkin_nbt::compound::NbtCompound::new();
+        root.put_int("DataVersion", chunk_data.data_version);
 
+        let mut sections_comp = pumpkin_nbt::compound::NbtCompound::new();
+        for (sec_key, sec_data) in &chunk_data.sections {
+            let mut sec_comp = pumpkin_nbt::compound::NbtCompound::new();
+            sec_comp.put_byte("Valid", sec_data.valid);
+            let mut rec_list = Vec::new();
+            for rec in &sec_data.records {
+                let mut rec_comp = pumpkin_nbt::compound::NbtCompound::new();
+                rec_comp.put_int("x", rec.x);
+                rec_comp.put_int("y", rec.y);
+                rec_comp.put_int("z", rec.z);
+                rec_comp.put_string("type", rec.poi_type.clone());
+                rec_comp.put_int("free_tickets", rec.free_tickets);
+                rec_list.push(pumpkin_nbt::tag::NbtTag::Compound(rec_comp));
+            }
+            sec_comp.put_list("Records", rec_list);
+            sections_comp.put_compound(sec_key, sec_comp);
+        }
+        root.put_compound("Sections", sections_comp);
+
+        let uncompressed = pumpkin_nbt::Nbt::from(root).write();
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(&uncompressed)?;
         encoder.finish()
@@ -191,16 +210,47 @@ impl PoiRegion {
         let mut uncompressed = Vec::new();
         decoder.read_to_end(&mut uncompressed)?;
 
-        let is_named = uncompressed.len() >= 3
-            && uncompressed[0] == 0x0a
-            && uncompressed[1] == 0x00
-            && uncompressed[2] == 0x00;
-        if is_named {
-            pumpkin_nbt::from_bytes(Cursor::new(uncompressed))
-        } else {
-            pumpkin_nbt::from_bytes_unnamed(Cursor::new(uncompressed))
+        let mut cursor = Cursor::new(uncompressed);
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+            pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+        );
+        let nbt = pumpkin_nbt::Nbt::read(&mut reader)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+
+        let data_version = nbt.get_int("DataVersion").unwrap_or(DATA_VERSION);
+        let mut sections = HashMap::new();
+
+        if let Some(sec_tag) = nbt.get_compound("Sections") {
+            for (sec_key, tag) in &sec_tag.child_tags {
+                if let pumpkin_nbt::tag::NbtTag::Compound(sec_comp) = tag {
+                    let valid = sec_comp.get_byte("Valid").unwrap_or(1);
+                    let mut records = Vec::new();
+                    if let Some(pumpkin_nbt::tag::NbtTag::List(rec_list)) = sec_comp.get("Records")
+                    {
+                        for rec_t in rec_list {
+                            if let pumpkin_nbt::tag::NbtTag::Compound(rc) = rec_t {
+                                records.push(PoiEntry {
+                                    x: rc.get_int("x").unwrap_or(0),
+                                    y: rc.get_int("y").unwrap_or(0),
+                                    z: rc.get_int("z").unwrap_or(0),
+                                    poi_type: rc
+                                        .get_string("type")
+                                        .unwrap_or(POI_TYPE_NETHER_PORTAL)
+                                        .to_string(),
+                                    free_tickets: rc.get_int("free_tickets").unwrap_or(0),
+                                });
+                            }
+                        }
+                    }
+                    sections.insert(sec_key.to_string(), PoiSectionData { valid, records });
+                }
+            }
         }
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
+
+        Ok(PoiChunkData {
+            data_version,
+            sections,
+        })
     }
 
     pub fn save(&mut self, path: &Path) -> std::io::Result<()> {

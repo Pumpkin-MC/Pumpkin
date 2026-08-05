@@ -418,6 +418,12 @@ pub struct ItemCooldown {
     pub duration: i32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlayerWeather {
+    Clear,
+    Downfall,
+}
+
 pub struct Player {
     /// The underlying living entity object that represents the player.
     pub living_entity: LivingEntity,
@@ -520,6 +526,11 @@ pub struct Player {
     pub tab_list_order: AtomicI32,
     pub tab_list_latency: AtomicI32,
     pub tab_list_listed: AtomicBool,
+    pub per_player_time: AtomicCell<Option<(u64, bool)>>,
+    pub per_player_weather: AtomicCell<Option<PlayerWeather>>,
+    pub compass_target: AtomicCell<Option<pumpkin_util::math::position::BlockPos>>,
+    pub respawn_location: AtomicCell<Option<pumpkin_util::math::position::BlockPos>>,
+    pub hidden_players: Mutex<std::collections::HashSet<uuid::Uuid>>,
     pub advancements: Arc<Mutex<PlayerAdvancement>>,
     pub enchantment_seed: AtomicI32,
     pub fishing_bobber: AtomicI32,
@@ -753,9 +764,24 @@ impl Player {
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
             tab_list_listed: AtomicBool::new(true),
+            per_player_time: AtomicCell::new(None),
+            per_player_weather: AtomicCell::new(None),
+            compass_target: AtomicCell::new(None),
+            respawn_location: AtomicCell::new(None),
+            hidden_players: Mutex::new(std::collections::HashSet::new()),
             fishing_bobber: AtomicI32::new(-1),
             bedrock_skin: ArcSwap::new(Arc::new(bedrock_skin)),
         }
+    }
+
+    /// Sets the tab list header and footer for Java Edition clients.
+    ///
+    /// Note: Tab list header and footer formatting is a Java Edition-specific protocol feature
+    /// and is safely ignored on Bedrock Edition clients.
+    pub async fn set_tab_list(&self, tab_list: impl Into<crate::plugin::api::tab_list::TabList>) {
+        let list = tab_list.into();
+        self.set_tab_list_header_footer(list.header, list.footer)
+            .await;
     }
 
     pub async fn set_tab_list_header_footer(&self, header: TextComponent, footer: TextComponent) {
@@ -1279,6 +1305,15 @@ impl Player {
             // Send the break status before clearing the slot so the client can
             // use the item texture for break particles.
             if result == pumpkin_data::item_stack::DamageResult::Broken {
+                if let Some(server) = self.world().server.upgrade()
+                    && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+                {
+                    let mut event = crate::plugin::api::events::player::player_item_break::PlayerItemBreakEvent::new(
+                        player_arc,
+                        updated_stack.item.registry_key.to_string(),
+                    );
+                    server.plugin_manager.fire(&server, &mut event).await;
+                }
                 self.increment_stat(
                     statistics::StatisticCategory::Broken,
                     updated_stack.item.id as i32,
@@ -2513,6 +2548,23 @@ impl Player {
 
     /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
+        if let Some((custom_time, relative)) = self.per_player_time.load() {
+            let time_of_day = if relative {
+                let l_world = world.level_time.lock().await;
+                (l_world.time_of_day as u64 + custom_time) as i64
+            } else {
+                custom_time as i64
+            };
+            let l_world = world.level_time.lock().await;
+            self.client
+                .enqueue_packet_editioned(
+                    &CUpdateTime::new(l_world.world_age, time_of_day, true),
+                    &CSetTime::new(time_of_day as _),
+                )
+                .await;
+            return;
+        }
+
         let l_world = world.level_time.lock().await;
         self.client
             .enqueue_packet_editioned(
@@ -2520,6 +2572,94 @@ impl Player {
                 &CSetTime::new(l_world.query_daytime() as _),
             )
             .await;
+    }
+
+    pub async fn set_player_time(&self, world: &World, time: u64, relative: bool) {
+        self.per_player_time.store(Some((time, relative)));
+        self.send_time(world).await;
+    }
+
+    pub async fn reset_player_time(&self, world: &World) {
+        self.per_player_time.store(None);
+        self.send_time(world).await;
+    }
+
+    pub fn get_player_time(&self) -> Option<u64> {
+        self.per_player_time.load().map(|(t, _)| t)
+    }
+
+    pub fn is_player_time_relative(&self) -> bool {
+        self.per_player_time.load().is_none_or(|(_, r)| r)
+    }
+
+    pub fn set_player_weather(&self, weather: PlayerWeather) {
+        self.per_player_weather.store(Some(weather));
+    }
+
+    pub fn reset_player_weather(&self) {
+        self.per_player_weather.store(None);
+    }
+
+    pub fn get_player_weather(&self) -> Option<PlayerWeather> {
+        self.per_player_weather.load()
+    }
+
+    pub async fn set_compass_target(&self, pos: pumpkin_util::math::position::BlockPos) {
+        use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
+        self.compass_target.store(Some(pos));
+        self.client
+            .enqueue_packet(&CPlayerSpawnPosition::new(pos, 0.0, 0.0, String::new()))
+            .await;
+    }
+
+    pub fn get_compass_target(&self) -> Option<pumpkin_util::math::position::BlockPos> {
+        self.compass_target.load()
+    }
+
+    pub fn set_respawn_location(&self, pos: pumpkin_util::math::position::BlockPos) {
+        self.respawn_location.store(Some(pos));
+    }
+
+    pub fn get_respawn_location(&self) -> Option<pumpkin_util::math::position::BlockPos> {
+        self.respawn_location.load()
+    }
+
+    pub async fn hide_player(&self, other_id: uuid::Uuid) {
+        self.hidden_players.lock().await.insert(other_id);
+    }
+
+    pub async fn show_player(&self, other_id: uuid::Uuid) {
+        self.hidden_players.lock().await.remove(&other_id);
+    }
+
+    pub async fn can_see(&self, other_id: &uuid::Uuid) -> bool {
+        !self.hidden_players.lock().await.contains(other_id)
+    }
+
+    pub async fn get_target_block(
+        &self,
+        world: &Arc<World>,
+        max_distance: f64,
+    ) -> Option<pumpkin_util::math::position::BlockPos> {
+        let (yaw, pitch) = (
+            self.living_entity.entity.yaw.load(),
+            self.living_entity.entity.pitch.load(),
+        );
+        let eye_pos = self.living_entity.entity.get_eye_pos();
+        let yaw_rad = f64::from(yaw + 90.0).to_radians();
+        let pitch_rad = f64::from(-pitch).to_radians();
+        let dir = pumpkin_util::math::vector3::Vector3::new(
+            pitch_rad.cos() * yaw_rad.cos(),
+            pitch_rad.sin(),
+            pitch_rad.cos() * yaw_rad.sin(),
+        );
+        let end_pos = eye_pos + dir * max_distance;
+        let res = world
+            .raycast(eye_pos, end_pos, async |pos, w| {
+                !w.get_block_state(pos).is_air()
+            })
+            .await;
+        res.map(|(pos, _)| pos)
     }
 
     pub async fn unload_watched_chunks(&self, world: &World) {
@@ -2723,6 +2863,18 @@ impl Player {
     }
 
     pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
+        if let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+        {
+            let mut event = crate::plugin::api::events::player::player_kick::PlayerKickEvent::new(
+                player_arc,
+                message.clone().to_pretty_console(),
+            );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return;
+            }
+        }
         self.client.kick(reason, message).await;
     }
 
@@ -2747,6 +2899,30 @@ impl Player {
     pub async fn heal(&self, additional_health: f32) {
         self.living_entity.heal(additional_health);
         self.send_health().await;
+    }
+
+    pub async fn damage(
+        &self,
+        caller: &dyn crate::entity::EntityBase,
+        amount: f32,
+        damage_type: pumpkin_data::damage::DamageType,
+    ) -> bool {
+        self.living_entity.damage(caller, amount, damage_type).await
+    }
+
+    pub async fn damage_generic(&self, amount: f32) -> bool {
+        use pumpkin_data::damage::DamageType;
+        self.living_entity
+            .damage(self, amount, DamageType::GENERIC)
+            .await
+    }
+
+    pub async fn kill(&self) {
+        use pumpkin_data::damage::DamageType;
+        let health = self.living_entity.health.load();
+        self.living_entity
+            .damage(self, health + 10.0, DamageType::OUT_OF_WORLD)
+            .await;
     }
 
     pub async fn send_health(&self) {
@@ -2800,14 +2976,47 @@ impl Player {
         self.send_health().await;
     }
 
+    pub fn get_food_level(&self) -> u8 {
+        self.hunger_manager.level.load()
+    }
+
     pub async fn set_food_level(&self, food_level: u8) {
         self.hunger_manager.set_level(food_level);
         self.send_health().await;
     }
 
+    pub fn get_saturation(&self) -> f32 {
+        self.hunger_manager.saturation.load()
+    }
+
     pub async fn set_saturation(&self, saturation: f32) {
         self.hunger_manager.set_saturation(saturation);
         self.send_health().await;
+    }
+
+    pub async fn set_allow_flight(&self, allow: bool) {
+        self.abilities.lock().await.allow_flying = allow;
+        self.send_abilities_update().await;
+    }
+
+    pub async fn set_flying(&self, flying: bool) {
+        self.abilities.lock().await.flying = flying;
+        self.send_abilities_update().await;
+    }
+
+    pub async fn set_fly_speed(&self, speed: f32) {
+        self.abilities.lock().await.fly_speed = speed;
+        self.send_abilities_update().await;
+    }
+
+    pub async fn set_walk_speed(&self, speed: f32) {
+        self.abilities.lock().await.walk_speed = speed;
+        self.send_abilities_update().await;
+    }
+
+    pub async fn set_invulnerable(&self, invulnerable: bool) {
+        self.abilities.lock().await.invulnerable = invulnerable;
+        self.send_abilities_update().await;
     }
 
     pub fn get_exhaustion(&self) -> f32 {
@@ -3258,6 +3467,15 @@ impl Player {
     }
 
     pub async fn swap_item(&self) {
+        if let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+        {
+            let mut event = crate::plugin::api::events::player::player_swap_hands::PlayerSwapHandItemsEvent::new(player_arc);
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
+                return;
+            }
+        }
         let (main_hand_item, off_hand_item) = self.inventory.swap_item().await;
         let equipment = &[
             (EquipmentSlot::MAIN_HAND, main_hand_item),
@@ -3386,6 +3604,18 @@ impl Player {
 
     /// Sets the player's experience level and notifies the client.
     pub async fn set_experience(&self, level: i32, progress: f32, points: i32) {
+        let old_level = self.experience_level.load(Ordering::Relaxed);
+        if old_level != level
+            && let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+        {
+            let mut event = crate::plugin::api::events::player::player_level_change::PlayerLevelChangeEvent::new(
+                player_arc,
+                old_level,
+                level,
+            );
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
         // TODO: These should be atomic together, not isolated; make a struct containing these. can cause ABA issues
         self.experience_level.store(level, Ordering::Relaxed);
         self.experience_progress.store(progress.clamp(0.0, 1.0));
@@ -3427,6 +3657,19 @@ impl Player {
 
     pub async fn add_effect(&self, effect: Effect) {
         self.living_entity.add_effect(effect).await;
+    }
+
+    pub async fn has_effect(&self, effect_type: &'static StatusEffect) -> bool {
+        self.living_entity.has_effect(effect_type).await
+    }
+
+    pub async fn get_effect(&self, effect_type: &'static StatusEffect) -> Option<Effect> {
+        self.living_entity.get_effect(effect_type).await
+    }
+
+    pub async fn get_active_effects(&self) -> Vec<Effect> {
+        let effects = self.living_entity.active_effects.lock().await;
+        effects.values().cloned().collect()
     }
 
     pub async fn send_active_effects(&self) {

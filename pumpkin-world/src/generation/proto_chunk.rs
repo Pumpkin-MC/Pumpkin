@@ -1,3 +1,4 @@
+use crate::generation::structure::placement::GlobalStructureCache;
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::is_air;
@@ -1260,6 +1261,7 @@ impl ProtoChunk {
             if set.structures.len() == 1 {
                 if let Some(entry) = set.structures.first() {
                     self.try_set_structure_start(
+                        global_cache,
                         settings.sea_level,
                         entry,
                         random_config,
@@ -1291,6 +1293,7 @@ impl ProtoChunk {
                 let selected_entry = &candidates[selected_idx];
 
                 if self.try_set_structure_start(
+                    global_cache,
                     settings.sea_level,
                     selected_entry,
                     random_config,
@@ -1308,19 +1311,29 @@ impl ProtoChunk {
 
     fn try_set_structure_start(
         &mut self,
+        global_cache: &GlobalStructureCache,
         sea_level: i32,
         entry: &WeightedEntry,
         random_config: &GlobalRandomConfig,
         height_sampler: &mut dyn crate::generation::structure::structures::HeightSampler,
     ) -> bool {
-        let structure = Structure::get(&entry.structure);
-        let position = try_generate_structure(
-            &entry.structure,
-            structure,
-            random_config.seed as i64,
-            self,
-            sea_level,
-            Some(height_sampler),
+        let chunk_x = self.x;
+        let chunk_z = self.z;
+        let position = global_cache.get_or_compute_structure_start(
+            entry.structure,
+            chunk_x,
+            chunk_z,
+            || {
+                let structure = Structure::get(&entry.structure);
+                try_generate_structure(
+                    &entry.structure,
+                    structure,
+                    random_config.seed as i64,
+                    self,
+                    sea_level,
+                    Some(height_sampler),
+                )
+            },
         );
 
         if let Some(pos) = position {

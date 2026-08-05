@@ -366,7 +366,7 @@ impl ToTokens for BlockPropertyStruct {
         };
 
         tokens.extend(quote! {
-            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+            #[derive(Clone, Copy, Eq, PartialEq)]
             pub struct #name {
                 #(#fields),*
             }

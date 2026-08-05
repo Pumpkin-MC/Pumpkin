@@ -1077,12 +1077,6 @@ pub enum Operation {
     AddMultipliedTotal,
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
-struct BedrockItemComponents {
-    components: Option<NbtCompound>,
-}
-
 #[derive(Deserialize_repr, Debug)]
 #[repr(i32)]
 enum BedrockItemVersion {
@@ -1156,12 +1150,21 @@ pub fn build() -> TokenStream {
     .into_keys()
     .collect::<HashSet<_>>();
 
-    let be_item_components: BTreeMap<String, BedrockItemComponents> = {
+    let be_item_components: BTreeMap<String, Option<NbtCompound>> = {
         let data = fs::read("../assets/bedrock/item_components.nbt").unwrap();
-
         let mut cursor = Cursor::new(data);
-        pumpkin_nbt::nbt_compress::from_gzip_bytes(&mut cursor)
-            .expect("Failed to parse bedrock/item_components.nbt")
+        let nbt = pumpkin_nbt::nbt_compress::read_gzip_compound_tag(&mut cursor)
+            .expect("Failed to parse bedrock/item_components.nbt");
+        nbt.child_tags
+            .into_iter()
+            .map(|(k, v)| {
+                let comp = match v {
+                    pumpkin_nbt::tag::NbtTag::Compound(c) => Some(c),
+                    _ => None,
+                };
+                (k.into_string(), comp)
+            })
+            .collect()
     };
 
     let be_runtime_item_states: Vec<BedrockRuntimeItemState> = serde_json::from_str(
@@ -1349,7 +1352,7 @@ pub fn build() -> TokenStream {
 
     let mut bedrock_item_definitions = Vec::new();
     for item in be_runtime_item_states {
-        let components = &be_item_components.get(&item.name).unwrap().components;
+        let components = be_item_components.get(&item.name).cloned().flatten();
 
         bedrock_item_definitions.push(BedrockItem {
             id: item.id,

@@ -165,6 +165,49 @@ impl wit::Guest for Component {
         let mut handlers = TASK_HANDLERS.lock().unwrap();
         handlers.handle(handler_id, server);
     }
+
+    fn handle_ai_goal_can_start(goal_id: u32, server: Server, entity: entity::Entity) -> bool {
+        let mut handlers = crate::ai::AI_GOAL_HANDLERS.lock().unwrap();
+        if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
+            goal.can_start(server, entity)
+        } else {
+            false
+        }
+    }
+
+    fn handle_ai_goal_should_continue(
+        goal_id: u32,
+        server: Server,
+        entity: entity::Entity,
+    ) -> bool {
+        let mut handlers = crate::ai::AI_GOAL_HANDLERS.lock().unwrap();
+        if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
+            goal.should_continue(server, entity)
+        } else {
+            false
+        }
+    }
+
+    fn handle_ai_goal_start(goal_id: u32, server: Server, entity: entity::Entity) {
+        let mut handlers = crate::ai::AI_GOAL_HANDLERS.lock().unwrap();
+        if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
+            goal.start(server, entity);
+        }
+    }
+
+    fn handle_ai_goal_tick(goal_id: u32, server: Server, entity: entity::Entity) {
+        let mut handlers = crate::ai::AI_GOAL_HANDLERS.lock().unwrap();
+        if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
+            goal.tick(server, entity);
+        }
+    }
+
+    fn handle_ai_goal_stop(goal_id: u32, server: Server, entity: entity::Entity) {
+        let mut handlers = crate::ai::AI_GOAL_HANDLERS.lock().unwrap();
+        if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
+            goal.stop(server, entity);
+        }
+    }
 }
 
 /// Convenience alias for `core::result::Result<T, String>` used throughout the plugin API.
@@ -237,3 +280,4 @@ macro_rules! register_plugin {
         }
     };
 }
+pub mod ai;

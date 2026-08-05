@@ -34,7 +34,7 @@ impl TrackTargetGoal {
             check_can_navigate_cooldown: AtomicI32::new(0),
             time_without_visibility: AtomicI32::new(0),
             max_time_without_visibility: 60,
-            target_predicate: TargetPredicate::create_attackable(),
+            target_predicate: TargetPredicate::create_attackable().ignore_visibility(),
         }
     }
 
@@ -55,8 +55,18 @@ impl TrackTargetGoal {
         false
     }
 
+    fn remembers_visible_target(&self, has_line_of_sight: bool) -> bool {
+        if has_line_of_sight {
+            self.time_without_visibility.store(0, Ordering::Relaxed);
+            true
+        } else {
+            let unseen_ticks = self.time_without_visibility.fetch_add(1, Ordering::Relaxed) + 1;
+            unseen_ticks <= to_goal_ticks(self.max_time_without_visibility)
+        }
+    }
+
     /// Equivalent to Vanilla's `canAttack` check inside `TargetGoal`
-    pub fn can_track(
+    pub async fn can_track(
         &self,
         mob: &dyn Mob,
         target: Option<&LivingEntity>,
@@ -69,7 +79,10 @@ impl TrackTargetGoal {
         let mob_entity = mob.get_mob_entity();
         let world = mob_entity.living_entity.entity.world.load();
 
-        if !target_predicate.test(&world, Some(&mob_entity.living_entity), target) {
+        if !target_predicate
+            .test(&world, Some(&mob_entity.living_entity), target)
+            .await
+        {
             return false;
         }
 
@@ -119,7 +132,10 @@ impl Goal for TrackTargetGoal {
                 return false;
             }
 
-            if !self.can_track(mob, Some(target), &self.target_predicate) {
+            if !self
+                .can_track(mob, Some(target), &self.target_predicate)
+                .await
+            {
                 return false;
             }
 
@@ -142,17 +158,18 @@ impl Goal for TrackTargetGoal {
             }
 
             if self.check_visibility {
-                // TODO: mob.getSensing().hasLineOfSight(target)
-                let has_line_of_sight = true;
+                let world = mob_entity.living_entity.entity.world.load();
+                let has_line_of_sight = world
+                    .raycast(
+                        mob_entity.living_entity.entity.get_eye_pos(),
+                        target.entity.get_eye_pos(),
+                        async |block_pos, world| world.get_block_state(block_pos).is_solid(),
+                    )
+                    .await
+                    .is_none();
 
-                if has_line_of_sight {
-                    self.time_without_visibility.store(0, Ordering::Relaxed);
-                } else {
-                    let unseen_ticks =
-                        self.time_without_visibility.fetch_add(1, Ordering::Relaxed) + 1;
-                    if unseen_ticks > to_goal_ticks(self.max_time_without_visibility) {
-                        return false;
-                    }
+                if !self.remembers_visible_target(has_line_of_sight) {
+                    return false;
                 }
             }
 
@@ -177,5 +194,30 @@ impl Goal for TrackTargetGoal {
 
     fn controls(&self) -> Controls {
         self.goal_control
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TrackTargetGoal, to_goal_ticks};
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn forgets_unseen_target_after_vanilla_memory_window() {
+        let goal = TrackTargetGoal::with_default(true);
+        let memory_ticks = to_goal_ticks(goal.max_time_without_visibility);
+
+        for _ in 0..memory_ticks {
+            assert!(goal.remembers_visible_target(false));
+        }
+        assert!(!goal.remembers_visible_target(false));
+    }
+
+    #[test]
+    fn seeing_target_resets_unseen_memory() {
+        let goal = TrackTargetGoal::with_default(true);
+        assert!(goal.remembers_visible_target(false));
+        assert!(goal.remembers_visible_target(true));
+        assert_eq!(goal.time_without_visibility.load(Ordering::Relaxed), 0);
     }
 }

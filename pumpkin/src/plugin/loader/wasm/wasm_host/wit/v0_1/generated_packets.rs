@@ -206,9 +206,9 @@ pub fn serialize_java_packet(
             Some(buf.into())
         }
         ClientboundPacket::CDebugSample(data) => {
-            let sample_vec: Vec<i64> = data.sample.iter().map(|v| *v as i64).collect();
+            let vec_sample: Vec<_> = data.sample.iter().map(|v| *v as _).collect();
             let p = pumpkin_protocol::java::client::play::CDebugSample {
-                sample: &sample_vec,
+                sample: &vec_sample,
                 sample_type: VarInt(data.sample_type),
             };
             let mut buf = Vec::new();

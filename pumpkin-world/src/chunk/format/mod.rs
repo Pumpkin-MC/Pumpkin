@@ -10,7 +10,7 @@ use std::{
 
 use bytes::Bytes;
 use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
-use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
@@ -27,7 +27,6 @@ use crate::{
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
-use serde::{Deserialize, Serialize};
 
 use super::{
     ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections,
@@ -47,7 +46,7 @@ impl SingleChunkDataSerializer for ChunkData {
     fn to_bytes(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { self.internal_to_bytes() })
+        Box::pin(async move { Ok(self.internal_to_bytes()) })
     }
 
     #[inline]
@@ -386,7 +385,7 @@ impl ChunkData {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+    fn internal_to_bytes(&self) -> Bytes {
         use pumpkin_nbt::tag::NbtTag;
 
         fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
@@ -534,11 +533,8 @@ impl ChunkData {
             self.inhabited_time.load(Ordering::Relaxed) as i64,
         );
 
-        let mut result = Vec::new();
-        pumpkin_nbt::serializer::to_bytes(&root_compound, &mut result)
-            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
-
-        Ok(result.into())
+        let nbt = pumpkin_nbt::Nbt::from(root_compound);
+        nbt.write()
     }
 }
 
@@ -589,89 +585,89 @@ impl ChunkEntityData {
             && chunk_data[0] == 0x0a
             && chunk_data[1] == 0x00
             && chunk_data[2] == 0x00;
-        let chunk_entity_data = if is_named {
-            pumpkin_nbt::from_bytes::<EntityNbt>(std::io::Cursor::new(chunk_data))
+        let mut cursor = std::io::Cursor::new(chunk_data);
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+            pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+        );
+        let nbt = if is_named {
+            pumpkin_nbt::Nbt::read(&mut reader)
         } else {
-            pumpkin_nbt::from_bytes_unnamed::<EntityNbt>(std::io::Cursor::new(chunk_data))
+            pumpkin_nbt::Nbt::read_unnamed(&mut reader)
         }
         .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
-        if chunk_entity_data.position[0] != position.x
-            || chunk_entity_data.position[1] != position.y
-        {
+        let pos_array = match (nbt.get_int("Position-X"), nbt.get_int("Position-Z")) {
+            (Some(x), Some(z)) => [x, z],
+            _ => {
+                if let Some(pumpkin_nbt::tag::NbtTag::IntArray(pos)) = nbt.get("Position") {
+                    if pos.len() >= 2 {
+                        [pos[0], pos[1]]
+                    } else {
+                        [0, 0]
+                    }
+                } else {
+                    [0, 0]
+                }
+            }
+        };
+
+        if pos_array[0] != position.x || pos_array[1] != position.y {
             return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
                 "Expected data for entity chunk {},{} but got it for {},{}!",
-                position.x,
-                position.y,
-                chunk_entity_data.position[0],
-                chunk_entity_data.position[1],
+                position.x, position.y, pos_array[0], pos_array[1],
             )));
         }
+
+        let entities = match nbt.get("Entities") {
+            Some(pumpkin_nbt::tag::NbtTag::List(list)) => list
+                .iter()
+                .filter_map(|t| match t {
+                    pumpkin_nbt::tag::NbtTag::Compound(c) => Some(c.clone()),
+                    _ => None,
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
 
         Ok(Self {
             x: position.x,
             z: position.y,
-            data: Mutex::new(chunk_entity_data.entities),
+            data: Mutex::new(entities),
             dirty: AtomicBool::new(false),
         })
     }
 
     async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
-        let nbt = EntityNbt {
-            data_version: WORLD_DATA_VERSION,
-            position: [self.x, self.z],
-            entities: self.data.lock().await.clone(),
-        };
+        let mut root = NbtCompound::new();
+        root.put_int("DataVersion", WORLD_DATA_VERSION);
+        root.put(
+            "Position",
+            pumpkin_nbt::tag::NbtTag::IntArray(vec![self.x, self.z]),
+        );
+        let entities_tag: Vec<pumpkin_nbt::tag::NbtTag> = self
+            .data
+            .lock()
+            .await
+            .iter()
+            .map(|c| pumpkin_nbt::tag::NbtTag::Compound(c.clone()))
+            .collect();
+        root.put_list("Entities", entities_tag);
 
-        let mut result = Vec::new();
-        pumpkin_nbt::to_bytes(&nbt, &mut result)
-            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
-        Ok(result.into())
+        let nbt = pumpkin_nbt::Nbt::from(root);
+        Ok(nbt.write())
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Clone)]
 pub struct ChunkSectionBiomes {
-    #[serde(
-        serialize_with = "nbt_long_array",
-        skip_serializing_if = "Option::is_none"
-    )]
     pub(crate) data: Option<Box<[i64]>>,
     pub(crate) palette: Box<[u8]>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub struct ChunkSectionBlockStates {
-    #[serde(
-        serialize_with = "nbt_long_array",
-        skip_serializing_if = "Option::is_none"
-    )]
     pub(crate) data: Option<Box<[i64]>>,
-    #[serde(with = "block_state_checked")]
     pub(crate) palette: Box<[BlockStateId]>,
-}
-
-mod block_state_checked {
-    use pumpkin_data::BlockStateId;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    pub fn serialize<S: Serializer>(
-        value: &[BlockStateId],
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        value
-            .iter()
-            .map(|v| BlockStateId::as_u16(*v))
-            .collect::<Vec<u16>>()
-            .serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Box<[BlockStateId]>, D::Error> {
-        let raw = <Box<[u16]> as Deserialize>::deserialize(deserializer)?;
-        Ok(raw.iter().map(|v| BlockStateId::new_or_air(*v)).collect())
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -753,12 +749,4 @@ impl Default for LightContainer {
     fn default() -> Self {
         Self::new_empty(15)
     }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-struct EntityNbt {
-    data_version: i32,
-    position: [i32; 2],
-    entities: Vec<NbtCompound>,
 }

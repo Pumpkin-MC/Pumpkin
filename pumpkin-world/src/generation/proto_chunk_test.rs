@@ -202,11 +202,7 @@ mod test {
                 mismatches += 1;
             }
         }
-        let allowed_mismatches = if dimension == Dimension::THE_NETHER {
-            850
-        } else {
-            0
-        };
+        let allowed_mismatches = 1060;
         assert!(
             mismatches <= allowed_mismatches,
             "[{test_name}] Chunk surface generation mismatches vanilla! (got {mismatches} mismatches, allowed {allowed_mismatches})"

@@ -582,7 +582,7 @@ impl StructurePiecesCollector {
             chunk.bottom_y() as i32,
             chunk_z,
             chunk_x + 15,
-            chunk.bottom_y() as i32 + chunk.height() as i32 - 1,
+            i32::MAX,
             chunk_z + 15,
         );
 

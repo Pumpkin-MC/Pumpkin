@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-#[doc = r" The maximum supported view distance."]
+#[doc = r" The maximum supported view distance"]
 pub const MAX_VIEW_DISTANCE: u8 = 32u8;
 #[doc = r" Static precomputed lookup table for relative chunk offsets by view distance (0..=32)."]
 pub static CHUNK_VIEW_LUT: [&[(i8, i8)]; 33usize] = [

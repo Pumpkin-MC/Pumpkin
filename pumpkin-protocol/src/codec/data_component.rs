@@ -777,7 +777,7 @@ pub fn deserialize(
         DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
-        _ => Err(ReadingError::Message(format!("{id:?} (TODO)"))),
+        _ => Err(ReadingError::Message(format!("component_id_{} (TODO)", id.to_id()))),
     }
 }
 pub fn serialize(
