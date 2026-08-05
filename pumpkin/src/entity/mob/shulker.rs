@@ -16,14 +16,20 @@ use pumpkin_util::math::vector3::Vector3;
 
 use rand::RngExt;
 
+use pumpkin_data::attributes::Attributes;
+use pumpkin_data::entity::MobCategory;
+
 use crate::entity::ai::goal::active_target::ActiveTargetGoal;
 use crate::entity::ai::goal::look_around::RandomLookAroundGoal;
 use crate::entity::ai::goal::look_at_entity::LookAtEntityGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
-use crate::entity::ai::goal::{Controls, Goal, GoalFuture};
+use crate::entity::ai::goal::track_target::TrackTargetGoal;
+use crate::entity::ai::goal::{Controls, Goal, GoalFuture, to_goal_ticks};
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture};
+use crate::world::scoreboard::entity_scoreboard_name;
 
 const DEFAULT_ATTACH_FACE: BlockDirection = BlockDirection::Down;
 const NO_COLOR: u8 = 16;
@@ -84,9 +90,18 @@ impl ShulkerEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
+            // Shulker.java:96: `LookAtPlayerGoal(this, Player.class, 8.0F, 0.02F, true)` --
+            // `onlyHorizontal=true` (Rust: `look_forward`), not the crate's `with_default`
+            // (which passes `false`).
             goal_selector.add_goal(
                 1,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
+                Box::new(LookAtEntityGoal::new(
+                    mob_weak,
+                    &EntityType::PLAYER,
+                    8.0,
+                    0.02,
+                    true,
+                )),
             );
             goal_selector.add_goal(4, Box::new(ShulkerAttackGoal::new(mob_arc.clone())));
             goal_selector.add_goal(7, Box::new(ShulkerPeekGoal::new(mob_arc.clone())));
@@ -97,6 +112,11 @@ impl ShulkerEntity {
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
+            // Shulker.java:101-102 / :653-666: `ShulkerDefenseAttackGoal`, a
+            // `NearestAttackableTargetGoal<LivingEntity>` gated on the shulker having a
+            // scoreboard team, targeting the nearest `Enemy` mob. See doc comment on
+            // `ShulkerDefenseAttackGoal` for the scoped simplifications.
+            target_selector.add_goal(3, Box::new(ShulkerDefenseAttackGoal::new()));
         };
 
         mob_arc
@@ -582,6 +602,130 @@ impl Goal for ShulkerPeekGoal {
         Box::pin(async move {
             self.peek_time.fetch_sub(1, Ordering::Relaxed);
         })
+    }
+}
+
+/// Vanilla `Shulker.ShulkerDefenseAttackGoal` (`Shulker.java:653-666`): a
+/// `NearestAttackableTargetGoal<LivingEntity>` that only activates while the shulker is on a
+/// scoreboard team, targeting the nearest `Enemy` mob (`MobCategory::MONSTER` stands in for
+/// vanilla's `Enemy` marker interface, following the same precedent as
+/// `nearest_hostile_target.rs`/`armadillo_curl_up.rs`; unlike `NearestHostileTargetGoal` this
+/// does **not** exclude Creeper, matching vanilla's plain `instanceof Enemy` predicate here).
+///
+/// Scope reduction: vanilla replaces the search area with an attach-face-flattened box
+/// (`getTargetSearchArea`, inflating only 4 blocks along the shulker's attach axis instead of
+/// the full follow range); that flattening is not ported, the search below is a plain
+/// follow-range radius.
+struct ShulkerDefenseAttackGoal {
+    track_target_goal: TrackTargetGoal,
+    target: Option<Arc<dyn EntityBase>>,
+    target_predicate: TargetPredicate,
+    reciprocal_chance: i32,
+}
+
+impl ShulkerDefenseAttackGoal {
+    fn new() -> Self {
+        Self {
+            // Vanilla: `NearestAttackableTargetGoal(mob, LivingEntity.class, 10, true, false,
+            // selector)` -- `mustSee=true`, `mustReach=false`.
+            track_target_goal: TrackTargetGoal::new(true, false),
+            target: None,
+            target_predicate: TargetPredicate::create_attackable(),
+            // Vanilla's `randomInterval=10` constructor arg (`reducedTickDelay(10)`), same
+            // shape as `nearest_hostile_target.rs`'s `RECIPROCAL_CHANCE`.
+            reciprocal_chance: to_goal_ticks(10),
+        }
+    }
+}
+
+impl Goal for ShulkerDefenseAttackGoal {
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async move {
+            if self.reciprocal_chance > 0
+                && mob.get_random().random_range(0..self.reciprocal_chance) != 0
+            {
+                return false;
+            }
+
+            let mob_entity = mob.get_mob_entity();
+            let entity = &mob_entity.living_entity.entity;
+            let world = entity.world.load();
+
+            let scoreboard = world.scoreboard.lock().await;
+            if scoreboard.get_teams().is_empty() {
+                return false;
+            }
+            let scoreboard_name = entity_scoreboard_name(mob.get_entity());
+            if scoreboard
+                .get_team_for_scoreboard_name(&scoreboard_name)
+                .is_none()
+            {
+                return false;
+            }
+            drop(scoreboard);
+
+            let follow_range = mob_entity
+                .living_entity
+                .get_attribute_value(&Attributes::FOLLOW_RANGE);
+            self.target_predicate.base_max_distance = follow_range;
+
+            let mut search_pos = entity.pos.load();
+            search_pos.y += entity.get_eye_height();
+
+            let mut candidates: Vec<Arc<dyn EntityBase>> = world
+                .get_nearby_entities(search_pos, follow_range)
+                .into_values()
+                .filter(|candidate| {
+                    candidate.get_entity().entity_type.category == &MobCategory::MONSTER
+                })
+                .collect();
+            candidates.sort_by(|a, b| {
+                let sq_dist = |e: &Arc<dyn EntityBase>| {
+                    e.get_entity()
+                        .pos
+                        .load()
+                        .squared_distance_to_vec(&search_pos)
+                };
+                sq_dist(a).partial_cmp(&sq_dist(b)).unwrap()
+            });
+
+            self.target = None;
+            for candidate in candidates {
+                if let Some(living) = candidate.get_living_entity()
+                    && self
+                        .target_predicate
+                        .test(&world, Some(&mob_entity.living_entity), living)
+                        .await
+                {
+                    self.target = Some(candidate);
+                    break;
+                }
+            }
+
+            self.target.is_some()
+        })
+    }
+
+    fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async { self.track_target_goal.should_continue(mob).await })
+    }
+
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            mob.set_mob_target(self.target.clone()).await;
+            self.track_target_goal.start(mob).await;
+        })
+    }
+
+    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            self.target = None;
+            self.track_target_goal.stop(mob).await;
+        })
+    }
+
+    fn controls(&self) -> Controls {
+        self.track_target_goal.controls()
     }
 }
 
