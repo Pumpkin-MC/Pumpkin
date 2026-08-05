@@ -1,3 +1,4 @@
+use crate::generation::structure::placement::GlobalStructureCache;
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::is_air;
@@ -179,8 +180,16 @@ impl TerrainCache {
 impl ProtoChunk {
     #[must_use]
     pub fn new(x: i32, z: i32, generator: &super::generator::WorldGenerator) -> Self {
-        let dimension = generator.dimension();
-        let height = dimension.logical_height as u16;
+        let (height, bottom_y) = match generator {
+            super::generator::WorldGenerator::Noise(noise_gen) => (
+                noise_gen.settings.shape.height,
+                noise_gen.settings.shape.min_y,
+            ),
+            super::generator::WorldGenerator::Flat(flat_gen) => (
+                flat_gen.dimension.logical_height as u16,
+                flat_gen.dimension.min_y as i8,
+            ),
+        };
         let section_count = (height as usize) / 16;
 
         let default_block = match generator {
@@ -215,7 +224,7 @@ impl ProtoChunk {
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
             structure_starts: FxHashMap::default(),
             height,
-            bottom_y: dimension.min_y as i8,
+            bottom_y,
             stage: StagedChunkEnum::Empty,
             light: ChunkLight {
                 sky_light: (0..section_count)
@@ -227,7 +236,7 @@ impl ProtoChunk {
             },
             carving_mask: crate::generation::carver::mask::CarvingMask::new(
                 height as i32,
-                dimension.min_y,
+                bottom_y as i32,
             ),
             blending_data: None,
             pending_block_entities: Vec::new(),
@@ -513,9 +522,9 @@ impl ProtoChunk {
     #[must_use]
     pub fn get_biome_id(&self, x: i32, y: i32, z: i32) -> u8 {
         let index = self.local_biome_pos_to_biome_index(
-            x & biome_coords::from_block(15),
+            x & 3,
             y - biome_coords::from_block(self.bottom_y() as i32),
-            z & biome_coords::from_block(15),
+            z & 3,
         );
         self.flat_biome_map[index]
     }
@@ -1252,6 +1261,7 @@ impl ProtoChunk {
             if set.structures.len() == 1 {
                 if let Some(entry) = set.structures.first() {
                     self.try_set_structure_start(
+                        global_cache,
                         settings.sea_level,
                         entry,
                         random_config,
@@ -1283,6 +1293,7 @@ impl ProtoChunk {
                 let selected_entry = &candidates[selected_idx];
 
                 if self.try_set_structure_start(
+                    global_cache,
                     settings.sea_level,
                     selected_entry,
                     random_config,
@@ -1300,20 +1311,26 @@ impl ProtoChunk {
 
     fn try_set_structure_start(
         &mut self,
+        global_cache: &GlobalStructureCache,
         sea_level: i32,
         entry: &WeightedEntry,
         random_config: &GlobalRandomConfig,
         height_sampler: &mut dyn crate::generation::structure::structures::HeightSampler,
     ) -> bool {
-        let structure = Structure::get(&entry.structure);
-        let position = try_generate_structure(
-            &entry.structure,
-            structure,
-            random_config.seed as i64,
-            self,
-            sea_level,
-            Some(height_sampler),
-        );
+        let chunk_x = self.x;
+        let chunk_z = self.z;
+        let position =
+            global_cache.get_or_compute_structure_start(entry.structure, chunk_x, chunk_z, || {
+                let structure = Structure::get(&entry.structure);
+                try_generate_structure(
+                    &entry.structure,
+                    structure,
+                    random_config.seed as i64,
+                    self,
+                    sea_level,
+                    Some(height_sampler),
+                )
+            });
 
         if let Some(pos) = position {
             self.structure_starts

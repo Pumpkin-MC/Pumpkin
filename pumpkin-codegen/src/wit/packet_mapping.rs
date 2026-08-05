@@ -421,6 +421,12 @@ fn convert_value(
                         } else {
                             format!("vec_{}", tmp)
                         }
+                    } else if is_ref {
+                        prep.push_str(&format!(
+                            "{}let vec_{}: Vec<_> = {}.iter().map(|v| *v as _).collect();\n",
+                            prep_prefix, tmp, src
+                        ));
+                        format!("&vec_{}", tmp)
                     } else {
                         format!("{}.iter().map(|v| *v as _).collect()", src)
                     }

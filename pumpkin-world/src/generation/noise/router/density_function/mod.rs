@@ -1,11 +1,7 @@
-use enum_dispatch::enum_dispatch;
 use pumpkin_data::noise_router::WrapperType;
 use pumpkin_util::math::vector3::Vector3;
 
-// These are for enum_dispatch
-use super::chunk_density_function::{
-    ChunkNoiseFunctionSampleOptions, ChunkSpecificNoiseFunctionComponent,
-};
+use super::chunk_density_function::ChunkNoiseFunctionSampleOptions;
 
 pub(crate) mod beardifier;
 pub(crate) mod math;
@@ -27,13 +23,11 @@ pub trait IndexToNoisePos {
     ) -> Vector3<i32>;
 }
 
-#[enum_dispatch]
 pub trait NoiseFunctionComponentRange {
     fn min(&self) -> f64;
     fn max(&self) -> f64;
 }
 
-#[enum_dispatch]
 pub trait StaticIndependentChunkNoiseFunctionComponentImpl: NoiseFunctionComponentRange {
     fn sample(&self, pos: &Vector3<i32>) -> f64;
     fn fill(&self, array: &mut [f64], mapper: &impl IndexToNoisePos) {

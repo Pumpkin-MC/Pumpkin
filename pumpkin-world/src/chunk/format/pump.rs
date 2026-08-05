@@ -51,23 +51,45 @@ where
     }
 
     async fn write(&self, backend: &Self::WriteBackend) -> Result<(), std::io::Error> {
-        let mut bytes = Vec::new();
-        pumpkin_nbt::to_bytes_unnamed(&self.data, &mut bytes)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let mut root = pumpkin_nbt::compound::NbtCompound::new();
+        root.put_int("x", self.data.x);
+        root.put_int("z", self.data.z);
+        let mut chunks_comp = pumpkin_nbt::compound::NbtCompound::new();
+        for (k, v) in &self.data.chunks {
+            let i8_vec: Vec<i8> = v.iter().map(|&b| b as i8).collect();
+            chunks_comp.put(k, pumpkin_nbt::tag::NbtTag::ByteArray(i8_vec.into()));
+        }
+        root.put_compound("chunks", chunks_comp);
 
+        let bytes = pumpkin_nbt::Nbt::from(root).write_unnamed();
         tokio::fs::write(backend, bytes).await
     }
 
     fn read(r: Bytes) -> Result<Self, ChunkReadingError> {
-        let data: PumpData =
-            pumpkin_nbt::from_bytes_unnamed(std::io::Cursor::new(r)).map_err(|e| {
-                ChunkReadingError::ParsingError(
-                    crate::chunk::ChunkParsingError::ErrorDeserializingChunk(e.to_string()),
-                )
-            })?;
+        let mut cursor = std::io::Cursor::new(r);
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+            pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+        );
+        let nbt = pumpkin_nbt::Nbt::read_unnamed(&mut reader).map_err(|e| {
+            ChunkReadingError::ParsingError(
+                crate::chunk::ChunkParsingError::ErrorDeserializingChunk(e.to_string()),
+            )
+        })?;
+
+        let x = nbt.get_int("x").unwrap_or(0);
+        let z = nbt.get_int("z").unwrap_or(0);
+        let mut chunks = BTreeMap::new();
+        if let Some(chunks_tag) = nbt.get_compound("chunks") {
+            for (k, v) in &chunks_tag.child_tags {
+                if let pumpkin_nbt::tag::NbtTag::ByteArray(arr) = v {
+                    let u8_vec: Vec<u8> = arr.iter().map(|&b| b as u8).collect();
+                    chunks.insert(k.to_string(), u8_vec);
+                }
+            }
+        }
 
         Ok(Self {
-            data,
+            data: PumpData { x, z, chunks },
             _phantom: PhantomData,
         })
     }
@@ -177,21 +199,35 @@ mod tests {
             &self,
         ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>>
         {
-            let mut buf = Vec::new();
-            pumpkin_nbt::to_bytes_unnamed(self, &mut buf).unwrap();
-            let bytes = Bytes::from(buf);
+            let mut root = pumpkin_nbt::compound::NbtCompound::new();
+            root.put_int("x", self.x);
+            root.put_int("z", self.z);
+            let i8_vec: Vec<i8> = self.data.iter().map(|&b| b as i8).collect();
+            root.put("data", pumpkin_nbt::tag::NbtTag::ByteArray(i8_vec.into()));
+            let bytes = pumpkin_nbt::Nbt::from(root).write_unnamed();
             Box::pin(async move { Ok(bytes) })
         }
         fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
-            let mut mock: Self = pumpkin_nbt::from_bytes_unnamed(std::io::Cursor::new(bytes))
-                .map_err(|e| {
-                    ChunkReadingError::ParsingError(
-                        crate::chunk::ChunkParsingError::ErrorDeserializingChunk(e.to_string()),
-                    )
-                })?;
-            mock.x = pos.x;
-            mock.z = pos.y;
-            Ok(mock)
+            let mut cursor = std::io::Cursor::new(bytes);
+            let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+                pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+            );
+            let nbt = pumpkin_nbt::Nbt::read_unnamed(&mut reader).map_err(|e| {
+                ChunkReadingError::ParsingError(
+                    crate::chunk::ChunkParsingError::ErrorDeserializingChunk(e.to_string()),
+                )
+            })?;
+            let data = match nbt.get("data") {
+                Some(pumpkin_nbt::tag::NbtTag::ByteArray(arr)) => {
+                    arr.iter().map(|&b| b as u8).collect()
+                }
+                _ => Vec::new(),
+            };
+            Ok(Self {
+                x: pos.x,
+                z: pos.y,
+                data,
+            })
         }
         fn position(&self) -> (i32, i32) {
             (self.x, self.z)

@@ -338,6 +338,63 @@ impl GenerationCache for Cache {
 }
 
 impl Cache {
+    pub fn advance_all(
+        &mut self,
+        stage: StagedChunkEnum,
+        generator: &generator::WorldGenerator,
+        block_registry: &dyn WorldPortalExt,
+        lighting_config: &LightingEngineConfig,
+    ) {
+        for index in 0..self.chunks.len() {
+            self.advance_index(index, stage, generator, block_registry, lighting_config);
+        }
+    }
+
+    pub fn advance_index(
+        &mut self,
+        index: usize,
+        stage: StagedChunkEnum,
+        generator: &generator::WorldGenerator,
+        _block_registry: &dyn WorldPortalExt,
+        _lighting_config: &LightingEngineConfig,
+    ) {
+        match &self.chunks[index] {
+            Chunk::Level(_) => return,
+            Chunk::Proto(chunk) if chunk.stage >= stage => return,
+            Chunk::Proto(_) => {}
+        }
+        match stage {
+            StagedChunkEnum::Empty => panic!("empty stage"),
+            StagedChunkEnum::StructureStart => match generator {
+                generator::WorldGenerator::Noise(noise_gen) => {
+                    self.chunks[index]
+                        .get_proto_chunk_mut()
+                        .set_structure_starts(noise_gen);
+                }
+                generator::WorldGenerator::Flat(_) => {}
+            },
+            StagedChunkEnum::StructureReferences => match generator {
+                generator::WorldGenerator::Noise(noise_gen) => {
+                    self.chunks[index]
+                        .get_proto_chunk_mut()
+                        .set_structure_references(noise_gen);
+                }
+                generator::WorldGenerator::Flat(_) => {}
+            },
+            StagedChunkEnum::Biomes => match generator {
+                generator::WorldGenerator::Noise(noise_gen) => {
+                    self.chunks[index]
+                        .get_proto_chunk_mut()
+                        .step_to_biomes(noise_gen);
+                }
+                generator::WorldGenerator::Flat(flat_gen) => {
+                    flat_gen.step_to_biomes(self.chunks[index].get_proto_chunk_mut());
+                }
+            },
+            _ => {}
+        }
+    }
+
     #[must_use]
     pub fn new(x: i32, z: i32, size: i32) -> Self {
         Self {

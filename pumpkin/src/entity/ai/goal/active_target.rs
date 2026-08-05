@@ -79,7 +79,7 @@ impl ActiveTargetGoal {
         self.target = target;
     }
 
-    fn find_closest_target(&mut self, mob: &MobEntity) {
+    async fn find_closest_target(&mut self, mob: &MobEntity) {
         let follow_range = mob
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
@@ -103,6 +103,7 @@ impl ActiveTargetGoal {
                 && self
                     .target_predicate
                     .test(&world, Some(&mob.living_entity), living)
+                    .await
             {
                 self.target = Some(potential_entity);
                 return;
@@ -116,6 +117,7 @@ impl ActiveTargetGoal {
                 && self
                     .target_predicate
                     .test(&world, Some(&mob.living_entity), living)
+                    .await
             {
                 self.target = Some(potential_entity);
                 return;
@@ -133,7 +135,7 @@ impl Goal for ActiveTargetGoal {
             {
                 return false;
             }
-            self.find_closest_target(mob.get_mob_entity());
+            self.find_closest_target(mob.get_mob_entity()).await;
             self.target.is_some()
         })
     }

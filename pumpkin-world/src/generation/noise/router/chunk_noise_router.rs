@@ -1,4 +1,5 @@
-use enum_dispatch::enum_dispatch;
+use std::cell::RefCell;
+
 use pumpkin_data::noise_router::WrapperType;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -20,7 +21,6 @@ use super::{
     },
 };
 
-#[enum_dispatch]
 pub trait StaticChunkNoiseFunctionComponentImpl {
     fn sample(
         &self,
@@ -43,7 +43,6 @@ pub trait StaticChunkNoiseFunctionComponentImpl {
     }
 }
 
-#[enum_dispatch]
 pub trait MutableChunkNoiseFunctionComponentImpl {
     fn sample(
         &mut self,
@@ -241,13 +240,25 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
     }
 }
 
+thread_local! {
+    static TOPO_FILL_BUFFERS: RefCell<Vec<Vec<f64>>> = const { RefCell::new(Vec::new()) };
+}
+
 impl ChunkNoiseFunctionComponent<'_> {
+    #[inline]
     pub fn sample_from_stack(
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
         let (top_component, component_stack) = component_stack.split_last_mut().unwrap();
+        if !sample_options.populating_caches
+            && let ChunkNoiseFunctionComponent::Chunk(
+                ChunkSpecificNoiseFunctionComponent::DensityInterpolator(interp),
+            ) = top_component
+        {
+            return interp.result;
+        }
         top_component.sample(component_stack, pos, sample_options)
     }
 

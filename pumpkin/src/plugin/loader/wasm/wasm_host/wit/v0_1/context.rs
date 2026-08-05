@@ -46,12 +46,15 @@ async fn register_player_event(
     event_type: EventType,
 ) {
     use crate::plugin::player::{
-        changed_main_hand::PlayerChangedMainHandEvent, egg_throw::PlayerEggThrowEvent,
-        exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent, item_held::PlayerItemHeldEvent,
-        player_change_world::PlayerChangeWorldEvent, player_chat::PlayerChatEvent,
-        player_command_send::PlayerCommandSendEvent,
+        bedrock_form_response::BedrockFormResponseEvent,
+        changed_main_hand::PlayerChangedMainHandEvent, custom_click_action::CustomClickActionEvent,
+        egg_throw::PlayerEggThrowEvent, exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent,
+        inventory_close::InventoryCloseEvent, inventory_interact::InventoryClickEvent,
+        item_held::PlayerItemHeldEvent, player_change_world::PlayerChangeWorldEvent,
+        player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
+        player_interact_entity_event::PlayerInteractEntityEvent,
         player_interact_event::PlayerInteractEvent,
         player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
         player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
@@ -136,6 +139,12 @@ async fn register_player_event(
             )
             .await;
         }
+        EventType::PlayerInteractEntityEvent => {
+            register_typed_event::<PlayerInteractEntityEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
         EventType::PlayerInteractEvent => {
             register_typed_event::<PlayerInteractEvent>(resource, handler, priority, blocking)
                 .await;
@@ -151,6 +160,64 @@ async fn register_player_event(
         EventType::PlayerToggleSprintEvent => {
             register_typed_event::<PlayerToggleSprintEvent>(resource, handler, priority, blocking)
                 .await;
+        }
+        EventType::InventoryClickEvent => {
+            register_typed_event::<InventoryClickEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::InventoryCloseEvent => {
+            register_typed_event::<InventoryCloseEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::BedrockFormResponseEvent => {
+            register_typed_event::<BedrockFormResponseEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::CustomClickActionEvent => {
+            register_typed_event::<CustomClickActionEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerItemConsumeEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::player::player_item_consume::PlayerItemConsumeEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::PlayerItemDamageEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::player::player_item_damage::PlayerItemDamageEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::PlayerDropItemEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::player::player_drop_item::PlayerDropItemEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::PlayerBedEnterEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::player::player_bed::PlayerBedEnterEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::PlayerBedLeaveEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::player::player_bed::PlayerBedLeaveEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::PlayerBucketEmptyEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::player::player_bucket::PlayerBucketEmptyEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::PlayerBucketFillEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::player::player_bucket::PlayerBucketFillEvent,
+            >(resource, handler, priority, blocking)
+            .await;
         }
         _ => {
             tracing::error!("non-player event should not be routed to register_player_event");
@@ -173,6 +240,78 @@ impl PluginHostState {
     }
 }
 
+async fn register_entity_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginEventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::entity::{
+        entity_combust::EntityCombustEvent,
+        entity_damage::EntityDamageEvent,
+        entity_death::{EntityDeathEvent, PlayerDeathEvent},
+        entity_regain_health::EntityRegainHealthEvent,
+        entity_spawn::EntitySpawnEvent,
+    };
+
+    match event_type {
+        EventType::EntityDamageEvent => {
+            register_typed_event::<EntityDamageEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::EntityDeathEvent => {
+            register_typed_event::<EntityDeathEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerDeathEvent => {
+            register_typed_event::<PlayerDeathEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::EntitySpawnEvent => {
+            register_typed_event::<EntitySpawnEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::EntityCombustEvent => {
+            register_typed_event::<EntityCombustEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::EntityRegainHealthEvent => {
+            register_typed_event::<EntityRegainHealthEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        _ => {
+            tracing::error!("non-entity event should not be routed to register_entity_event");
+        }
+    }
+}
+
+async fn register_inventory_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginEventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::inventory::{
+        craft_item::CraftItemEvent, furnace_smelt::FurnaceSmeltEvent,
+        inventory_drag::InventoryDragEvent, inventory_open::InventoryOpenEvent,
+    };
+
+    match event_type {
+        EventType::InventoryOpenEvent => {
+            register_typed_event::<InventoryOpenEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::InventoryDragEvent => {
+            register_typed_event::<InventoryDragEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::CraftItemEvent => {
+            register_typed_event::<CraftItemEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::FurnaceSmeltEvent => {
+            register_typed_event::<FurnaceSmeltEvent>(resource, handler, priority, blocking).await;
+        }
+        _ => {
+            tracing::error!("non-inventory event should not be routed to register_inventory_event");
+        }
+    }
+}
+
 async fn register_world_event(
     resource: &ContextResource,
     handler: &Arc<WasmPluginEventHandler>,
@@ -180,11 +319,47 @@ async fn register_world_event(
     blocking: bool,
     event_type: EventType,
 ) {
-    use crate::plugin::world::spawn_change::SpawnChangeEvent;
+    use crate::plugin::world::{
+        chunk_load::ChunkLoad, chunk_save::ChunkSave, chunk_send::ChunkSend,
+        spawn_change::SpawnChangeEvent,
+    };
 
     match event_type {
         EventType::SpawnChangeEvent => {
             register_typed_event::<SpawnChangeEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::ChunkLoadEvent => {
+            register_typed_event::<ChunkLoad>(resource, handler, priority, blocking).await;
+        }
+        EventType::ChunkSaveEvent => {
+            register_typed_event::<ChunkSave>(resource, handler, priority, blocking).await;
+        }
+        EventType::ChunkSendEvent => {
+            register_typed_event::<ChunkSend>(resource, handler, priority, blocking).await;
+        }
+        EventType::WeatherChangeEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::world::weather_change::WeatherChangeEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::ThunderChangeEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::world::weather_change::ThunderChangeEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::WorldLoadEvent => {
+            register_typed_event::<crate::plugin::api::events::world::world_load::WorldLoadEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
+        EventType::WorldUnloadEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::world::world_load::WorldUnloadEvent,
+            >(resource, handler, priority, blocking)
+            .await;
         }
         _ => {
             tracing::error!("non-world event should not be routed to register_world_event");
@@ -224,6 +399,37 @@ async fn register_block_event(
         EventType::BlockPlaceEvent => {
             register_typed_event::<BlockPlaceEvent>(resource, handler, priority, blocking).await;
         }
+        EventType::BlockDamageEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::block::block_damage::BlockDamageEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::BlockIgniteEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::block::block_ignite::BlockIgniteEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::BlockFromToEvent => {
+            register_typed_event::<
+                crate::plugin::api::events::block::block_from_to::BlockFromToEvent,
+            >(resource, handler, priority, blocking)
+            .await;
+        }
+        EventType::BlockFormEvent => {
+            register_typed_event::<crate::plugin::api::events::block::block_form::BlockFormEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
+        EventType::BlockFadeEvent => {
+            register_typed_event::<crate::plugin::api::events::block::block_fade::BlockFadeEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
+
         _ => {
             tracing::error!("non-block event should not be routed to register_block_event");
         }
@@ -344,16 +550,42 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::ServerTickStartEvent) => {
                 register_server_event(resource, &handler, priority, blocking, event_type).await;
             }
-            event_type @ EventType::SpawnChangeEvent => {
+            event_type @ (EventType::SpawnChangeEvent
+            | EventType::ChunkLoadEvent
+            | EventType::ChunkSaveEvent
+            | EventType::ChunkSendEvent
+            | EventType::WeatherChangeEvent
+            | EventType::ThunderChangeEvent
+            | EventType::WorldLoadEvent
+            | EventType::WorldUnloadEvent) => {
                 register_world_event(resource, &handler, priority, blocking, event_type).await;
+            }
+            event_type @ (EventType::EntityDamageEvent
+            | EventType::EntityDeathEvent
+            | EventType::PlayerDeathEvent
+            | EventType::EntitySpawnEvent
+            | EventType::EntityCombustEvent
+            | EventType::EntityRegainHealthEvent) => {
+                register_entity_event(resource, &handler, priority, blocking, event_type).await;
             }
             event_type @ (EventType::BlockRedstoneEvent
             | EventType::BlockBreakEvent
             | EventType::BlockBurnEvent
             | EventType::BlockCanBuildEvent
             | EventType::BlockGrowEvent
-            | EventType::BlockPlaceEvent) => {
+            | EventType::BlockPlaceEvent
+            | EventType::BlockDamageEvent
+            | EventType::BlockIgniteEvent
+            | EventType::BlockFromToEvent
+            | EventType::BlockFormEvent
+            | EventType::BlockFadeEvent) => {
                 register_block_event(resource, &handler, priority, blocking, event_type).await;
+            }
+            event_type @ (EventType::InventoryOpenEvent
+            | EventType::InventoryDragEvent
+            | EventType::CraftItemEvent
+            | EventType::FurnaceSmeltEvent) => {
+                register_inventory_event(resource, &handler, priority, blocking, event_type).await;
             }
             event_type => {
                 register_player_event(resource, &handler, priority, blocking, event_type).await;

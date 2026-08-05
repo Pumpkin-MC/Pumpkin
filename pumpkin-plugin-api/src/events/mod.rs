@@ -15,14 +15,20 @@ pub use crate::wit::pumpkin::plugin::event::{
 use crate::{Context, Result, Server, wit::pumpkin::plugin::event::EventType};
 
 pub mod block;
+pub mod entity;
+pub mod inventory;
 pub mod packet;
 pub mod player;
 pub mod server;
+pub mod world;
 
 pub use block::*;
+pub use entity::*;
+pub use inventory::*;
 pub use packet::*;
 pub use player::*;
 pub use server::*;
+pub use world::*;
 
 pub(crate) static NEXT_HANDLER_ID: AtomicU32 = AtomicU32::new(0);
 pub(crate) static EVENT_HANDLERS: Mutex<BTreeMap<u32, Box<dyn ErasedEventHandler>>> =

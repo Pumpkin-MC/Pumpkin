@@ -15,13 +15,31 @@ pub type VarLongType = i64;
 /**
  * A variable-length long type used by the Minecraft network protocol.
  */
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct VarLong(pub VarLongType);
 
 impl VarLong {
     /// The maximum number of bytes a `VarLong` can occupy.
-    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
+    pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
 
+    #[must_use]
+    #[inline]
+    pub const fn new(value: VarLongType) -> Self {
+        Self(value)
+    }
+
+    /// Returns the exact number of bytes this `VarLong` will write when
+    /// [`Encode::encode`] is called, assuming no error occurs.
+    #[must_use]
+    #[inline]
+    pub const fn written_size(&self) -> usize {
+        match self.0 as u64 {
+            0 => 1,
+            n => (63 - n.leading_zeros() as usize) / 7 + 1,
+        }
+    }
+
+    #[inline]
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut val = self.0 as u64;
 
@@ -35,6 +53,7 @@ impl VarLong {
     }
 
     // TODO: Validate that the first byte will not overflow a i64
+    #[inline]
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {

@@ -8,6 +8,28 @@ use pumpkin_config::lighting::LightingEngineConfig;
 use super::{Cache, Chunk, StagedChunkEnum};
 
 pub fn generate_single_chunk(
+    dimension: &Dimension,
+    biome_mixer_seed: i64,
+    generator: &WorldGenerator,
+    block_registry: &dyn WorldPortalExt,
+    chunk_x: i32,
+    chunk_z: i32,
+    target_stage: StagedChunkEnum,
+) -> Chunk {
+    generate_single_chunk_with_radius(
+        dimension,
+        biome_mixer_seed,
+        generator,
+        block_registry,
+        chunk_x,
+        chunk_z,
+        target_stage,
+        target_stage.get_direct_radius(),
+    )
+}
+
+#[expect(clippy::too_many_arguments)]
+pub fn generate_single_chunk_with_radius(
     _dimension: &Dimension,
     _biome_mixer_seed: i64,
     generator: &WorldGenerator,
@@ -15,9 +37,8 @@ pub fn generate_single_chunk(
     chunk_x: i32,
     chunk_z: i32,
     target_stage: StagedChunkEnum,
+    radius: i32,
 ) -> Chunk {
-    let radius = target_stage.get_direct_radius();
-
     let mut cache = Cache::new(chunk_x - radius, chunk_z - radius, radius * 2 + 1);
 
     for dx in -radius..=radius {
@@ -49,12 +70,26 @@ pub fn generate_single_chunk(
             break;
         }
 
-        cache.advance(
+        if matches!(
             stage,
-            generator,
-            block_registry,
-            &LightingEngineConfig::Default,
-        );
+            StagedChunkEnum::Biomes
+                | StagedChunkEnum::StructureStart
+                | StagedChunkEnum::StructureReferences
+        ) {
+            cache.advance_all(
+                stage,
+                generator,
+                block_registry,
+                &LightingEngineConfig::Default,
+            );
+        } else {
+            cache.advance(
+                stage,
+                generator,
+                block_registry,
+                &LightingEngineConfig::Default,
+            );
+        }
     }
 
     let mid = ((cache.size * cache.size) >> 1) as usize;
@@ -66,7 +101,9 @@ mod tests {
     use crate::biome::hash_seed;
     use crate::chunk::ChunkHeightmapType;
     use crate::chunk_system::Chunk;
-    use crate::chunk_system::{StagedChunkEnum, generate_single_chunk};
+    use crate::chunk_system::{
+        StagedChunkEnum, generate_single_chunk, generation::generate_single_chunk_with_radius,
+    };
     use crate::generation::get_world_gen;
     use crate::world::WorldPortalExt;
     use pumpkin_data::BlockStateId;
@@ -214,7 +251,7 @@ mod tests {
         let biome_mixer_seed = hash_seed(world_gen.seed());
 
         // Vanilla 26.2 locates seed 0's nearest outpost at block 576, 1648.
-        let chunk = generate_single_chunk(
+        let chunk = generate_single_chunk_with_radius(
             &dimension,
             biome_mixer_seed,
             &world_gen,
@@ -222,6 +259,7 @@ mod tests {
             35,
             103,
             StagedChunkEnum::Spawn,
+            16,
         );
         let super::Chunk::Proto(chunk) = chunk else {
             panic!("spawn stage should return a proto chunk");
@@ -255,6 +293,60 @@ mod tests {
             "reference chunk contains no outpost blocks"
         );
         assert_eq!(jigsaw_blocks, 0, "jigsaw blocks were not replaced");
+    }
+
+    #[test]
+    fn fixed_seed_generates_vanilla_end_ship_chunk() {
+        // Vanilla 26.2 places this seed's ship in chunk (-306, -275).
+        let dimension = Dimension::THE_END;
+        let seed = Seed(12_345);
+        let block_registry = Arc::new(BlockRegistry);
+        let world_gen = get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
+        let biome_mixer_seed = hash_seed(world_gen.seed());
+        let chunk = generate_single_chunk_with_radius(
+            &dimension,
+            biome_mixer_seed,
+            &world_gen,
+            block_registry.as_ref(),
+            -306,
+            -275,
+            StagedChunkEnum::Features,
+            16,
+        );
+        let Chunk::Proto(chunk) = chunk else {
+            panic!("features stage should return a proto chunk");
+        };
+        let mut hash = 0xcbf29ce484222325u64;
+        let mut non_air = 0;
+        for y in 123..=146 {
+            for x in -4896..=-4881 {
+                for z in -4405..=-4393 {
+                    let state =
+                        chunk.get_block_state(&pumpkin_util::math::vector3::Vector3::new(x, y, z));
+                    hash ^= u64::from(state.as_u16());
+                    hash = hash.wrapping_mul(0x100000001b3);
+                    non_air += usize::from(!state.to_state().is_air());
+                }
+            }
+        }
+        assert_eq!(non_air, 59);
+        assert_eq!(hash, 0x7db9_af53_56af_6917);
+        assert!(chunk.pending_block_entities.iter().any(|nbt| {
+            nbt.get_string("id") == Some("minecraft:skull")
+                && nbt.get_int("x") == Some(-4888)
+                && nbt.get_int("y") == Some(131)
+                && nbt.get_int("z") == Some(-4399)
+        }));
+        assert_eq!(
+            chunk
+                .pending_block_entities
+                .iter()
+                .filter(
+                    |nbt| nbt.get_string("LootTable") == Some("minecraft:chests/end_city_treasure")
+                )
+                .count(),
+            2
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
 /* This file is generated. Do not edit manually. */
 use crate::data_component_impl::*;
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
 #[repr(u8)]
 pub enum DataComponent {
     CustomData = 0u8,

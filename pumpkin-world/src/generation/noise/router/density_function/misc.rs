@@ -213,13 +213,26 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for ClampedYGradient {
             self.data.to_value,
         )
     }
+
+    fn fill(&self, array: &mut [f64], mapper: &impl IndexToNoisePos) {
+        array.iter_mut().enumerate().for_each(|(index, value)| {
+            let pos = mapper.at(index, None);
+            *value = clamped_map(
+                pos.y as f64,
+                self.data.from_y,
+                self.data.to_y,
+                self.data.from_value,
+                self.data.to_value,
+            );
+        });
+    }
 }
 
 pub struct RangeChoice {
-    input_index: usize,
+    pub(crate) input_index: usize,
     pub(crate) when_in_index: usize,
     pub(crate) when_out_index: usize,
-    data: &'static RangeChoiceData,
+    pub(crate) data: &'static RangeChoiceData,
     min_value: f64,
     max_value: f64,
 }

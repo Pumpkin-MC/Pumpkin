@@ -216,6 +216,22 @@ impl EndermanEntity {
             world.play_sound(Sound::EntityEndermanTeleport, SoundCategory::Hostile, pos);
         }
 
+        if let Some(server) = world.server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_teleport::EntityTeleportEvent::new(
+                    entity.entity_id,
+                    origin,
+                    new_pos,
+                );
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current()
+                    .block_on(server.plugin_manager.fire(&server, &mut event));
+            });
+            if event.cancelled {
+                return false;
+            }
+        }
+
         entity.set_pos(new_pos);
         let chunk_pos = entity.chunk_pos.load();
         world.broadcast_to_chunk(
