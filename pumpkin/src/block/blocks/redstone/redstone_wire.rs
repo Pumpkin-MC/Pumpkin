@@ -199,13 +199,18 @@ impl BlockBehaviour for RedstoneWireBlock {
     ) -> BlockFuture<'a, u8> {
         Box::pin(async move {
             let wire = RedstoneWireProperties::from_state_id(args.state.id, args.block);
-            if args.direction == BlockDirection::Up
-                || wire.is_side_connected(args.direction.opposite().to_horizontal_facing().unwrap())
-            {
-                wire.power
-            } else {
-                0
+
+            if args.direction == BlockDirection::Up {
+                return wire.power;
             }
+
+            if let Some(facing) = args.direction.opposite().to_horizontal_facing()
+                && wire.is_side_connected(facing)
+            {
+                return wire.power;
+            }
+
+            0
         })
     }
 
