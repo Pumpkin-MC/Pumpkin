@@ -536,10 +536,14 @@ impl Mob for FoxEntity {
                 let entity = &self.mob_entity.living_entity.entity;
                 let world = entity.world.load();
                 let pos = entity.block_pos.load();
-                let variant = if world
-                    .get_biome(&pos)
-                    .has_tag(&tag::WorldgenBiome::MINECRAFT_SPAWNS_SNOW_FOXES)
-                {
+                // Positive membership test over a fixed tag, so an unresolvable biome is
+                // not in it and the fox is Red. A default is unavoidable here rather than
+                // preferred: `init_data_tracker` runs exactly once at spawn and is never
+                // retried, so leaving `VARIANT_UNSET` in place would persist the 0xFF
+                // sentinel as the entity's tracked variant instead of deferring the roll.
+                let variant = if world.get_biome(&pos).is_some_and(|biome| {
+                    biome.has_tag(&tag::WorldgenBiome::MINECRAFT_SPAWNS_SNOW_FOXES)
+                }) {
                     FoxVariant::Snow
                 } else {
                     FoxVariant::Red

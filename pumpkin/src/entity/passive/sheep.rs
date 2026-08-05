@@ -47,11 +47,18 @@ const COLOR_UNSET: u8 = 0xFF;
 /// natural spawn time. Each configuration is a weighted pick over 5 entries (weights out of
 /// 100); the last entry (weight 82) is itself a nested weighted pick, 499:1 in favor of that
 /// configuration's dominant color over `PINK`.
-fn get_random_sheep_color(world: &World, pos: pumpkin_util::math::position::BlockPos) -> u8 {
-    let biome = world.get_biome(&pos);
+///
+/// `biome` is `None` when the position's biome could not be resolved. Both gates are positive
+/// membership tests over fixed tags, so an unresolved biome is in neither and the temperate
+/// table is used - that is the table vanilla itself uses for every biome carrying neither tag,
+/// not an invented biome. A default is unavoidable here rather than preferred:
+/// `init_data_tracker` runs exactly once at spawn and is never retried, so declining to pick
+/// would persist the `COLOR_UNSET` (0xFF) sentinel as the sheep's tracked color.
+fn get_random_sheep_color(biome: Option<&'static pumpkin_data::biome::Biome>) -> u8 {
     let mut r = rng();
+    let has = |t: &'static tag::Tag| biome.is_some_and(|b| b.has_tag(t));
 
-    if biome.has_tag(&tag::WorldgenBiome::MINECRAFT_SPAWNS_WARM_VARIANT_FARM_ANIMALS) {
+    if has(&tag::WorldgenBiome::MINECRAFT_SPAWNS_WARM_VARIANT_FARM_ANIMALS) {
         weighted_sheep_color(
             &mut r,
             DyeColor::Gray,
@@ -60,7 +67,7 @@ fn get_random_sheep_color(world: &World, pos: pumpkin_util::math::position::Bloc
             DyeColor::Black,
             DyeColor::Brown,
         )
-    } else if biome.has_tag(&tag::WorldgenBiome::MINECRAFT_SPAWNS_COLD_VARIANT_FARM_ANIMALS) {
+    } else if has(&tag::WorldgenBiome::MINECRAFT_SPAWNS_COLD_VARIANT_FARM_ANIMALS) {
         weighted_sheep_color(
             &mut r,
             DyeColor::LightGray,
@@ -354,7 +361,7 @@ impl Mob for SheepEntity {
             if self.color_and_sheared.load(Ordering::Relaxed) == COLOR_UNSET {
                 let world = entity.world.load();
                 let pos = entity.block_pos.load();
-                let color = get_random_sheep_color(&world, pos);
+                let color = get_random_sheep_color(world.get_biome(&pos));
                 self.set_packed_and_sync(color & 0x0F);
             } else {
                 // NBT restore already loaded a valid color; just resend it so the client has

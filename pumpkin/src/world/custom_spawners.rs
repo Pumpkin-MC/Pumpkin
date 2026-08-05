@@ -246,10 +246,14 @@ async fn try_spawn_wandering_trader(world: &Arc<World>) -> bool {
     if !has_enough_space(world, &spawn_pos) {
         return false;
     }
-    if world
-        .get_biome(&spawn_pos)
-        .has_tag(&MINECRAFT_WITHOUT_WANDERING_TRADER_SPAWNS)
-    {
+    // This biome gate is negated: "tag absent" permits the spawn. Treating an unresolvable
+    // biome as "tag absent" would therefore *allow* a wandering trader at a position whose
+    // biome is unknown, so abort the attempt instead - the same choice the earlier fallback
+    // fix made in `natural_spawner::can_spawn`.
+    let Some(spawn_biome) = world.get_biome(&spawn_pos) else {
+        return false;
+    };
+    if spawn_biome.has_tag(&MINECRAFT_WITHOUT_WANDERING_TRADER_SPAWNS) {
         return false;
     }
 

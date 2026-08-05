@@ -214,10 +214,12 @@ impl SlimeEntity {
         // TODO: check spawn reason. if it's spawner, we should return true if block below is valid
         // For now, we assume natural spawning as that's what we are implementing.
 
-        if world
-            .get_biome(pos)
-            .has_tag(&tag::WorldgenBiome::MINECRAFT_ALLOWS_SURFACE_SLIME_SPAWNS)
-            && (51..70).contains(&pos.0.y)
+        // Positive membership test over a fixed tag (swamp and mangrove_swamp): an
+        // unresolvable biome is not in it, so the surface-slime path is skipped and this
+        // falls through to the slime-chunk path below, which never consults the biome.
+        if world.get_biome(pos).is_some_and(|biome| {
+            biome.has_tag(&tag::WorldgenBiome::MINECRAFT_ALLOWS_SURFACE_SLIME_SPAWNS)
+        }) && (51..70).contains(&pos.0.y)
         {
             let time = world
                 .level_time

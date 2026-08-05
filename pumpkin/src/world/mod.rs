@@ -2114,9 +2114,15 @@ impl World {
         if !self.can_see_sky(pos) {
             return false;
         }
-        self.get_biome(pos)
-            .weather
-            .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
+        // An unresolvable biome means "not raining here". Rain/snow is a biome property,
+        // so with no biome there is nothing to evaluate; this matches the prior fix's
+        // `tick_precipitation_chunk` skipping on the same failure. (Note: CLAUDE.md already
+        // tracks `isRainingAt` as separately known-broken; this is not a fix for that row.)
+        self.get_biome(pos).is_some_and(|biome| {
+            biome
+                .weather
+                .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
+        })
     }
 
     /// Gets the y position of the first non air block from the top down
@@ -5112,21 +5118,16 @@ impl World {
             .set_sky_light_level(&self.level, position, light_level);
     }
 
-    pub fn get_biome(&self, position: &BlockPos) -> &'static Biome {
-        let chunk_pos = position.chunk_position();
-        if let Some(chunk) = self.level.loaded_chunks.get(&chunk_pos) {
-            let id = chunk
-                .section
-                .get_rough_biome_absolute_y(
-                    (position.0.x & 15) as usize,
-                    position.0.y,
-                    (position.0.z & 15) as usize,
-                )
-                .unwrap_or(0);
-            Biome::from_id(id).unwrap_or(&Biome::PLAINS)
-        } else {
-            &Biome::PLAINS
-        }
+    /// Returns the biome at `position`, or `None` if it cannot be resolved (chunk not
+    /// loaded, or no biome data for that y). There is no vanilla-correct "default biome"
+    /// to fall back to - vanilla does not invent one - so each caller decides.
+    ///
+    /// This is the exact operation `Level::get_rough_biome` performs (the old inline body
+    /// masked x/z with `& 15`, which agrees with `chunk_relative_position`'s `rem_euclid(16)`,
+    /// and passed absolute `y`, which is what `chunk_relative_position` also carries through),
+    /// so it delegates rather than duplicating the fallback semantics a second time.
+    pub fn get_biome(&self, position: &BlockPos) -> Option<&'static Biome> {
+        self.level.get_rough_biome(position)
     }
 
     pub fn schedule_block_tick(
