@@ -16,6 +16,10 @@ use pumpkin_util::math::vector3::Vector3;
 
 pub struct FireworkRocketItem;
 
+const fn should_consume_rocket(is_creative: bool) -> bool {
+    !is_creative
+}
+
 impl ItemMetadata for FireworkRocketItem {
     fn ids() -> Box<[u16]> {
         [Item::FIREWORK_ROCKET.id].into()
@@ -25,7 +29,7 @@ impl ItemMetadata for FireworkRocketItem {
 impl ItemBehaviour for FireworkRocketItem {
     fn use_on_block<'a>(
         &'a self,
-        _item: &'a mut ItemStack,
+        item: &'a mut ItemStack,
         player: &'a Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -46,6 +50,9 @@ impl ItemBehaviour for FireworkRocketItem {
             );
             let entity = FireworkRocketEntity::new(entity);
             world.spawn_entity(Arc::new(entity)).await;
+            if should_consume_rocket(player.is_creative()) {
+                item.decrement(1);
+            }
         })
     }
 
@@ -70,5 +77,16 @@ impl ItemBehaviour for FireworkRocketItem {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_consume_rocket;
+
+    #[test]
+    fn rockets_are_consumed_outside_creative() {
+        assert!(should_consume_rocket(false));
+        assert!(!should_consume_rocket(true));
     }
 }
