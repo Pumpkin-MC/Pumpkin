@@ -56,6 +56,7 @@ use pumpkin_protocol::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
         CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata, MetadataSerializer,
     },
+    ser::NetworkWriteExt,
 };
 use pumpkin_util::math::vector3::Axis;
 use pumpkin_util::math::{
@@ -68,7 +69,8 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use std::collections::{BTreeMap, HashSet};
+use pumpkin_util::version::JavaMinecraftVersion;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::pin::Pin;
 use std::sync::{
     Arc,
@@ -2486,7 +2488,6 @@ impl Entity {
         let can_freeze = self.can_freeze(caller).await;
         let in_powder_snow = self.is_in_powder_snow();
         let old_frozen_ticks = self.frozen_ticks.load(Ordering::Relaxed);
-
         let new_frozen_ticks = if in_powder_snow && can_freeze {
             // Increase frozen ticks when in powder snow
             (old_frozen_ticks + 1).min(Self::MAX_FROZEN_TICKS)
@@ -2498,19 +2499,58 @@ impl Entity {
         // Only update and send metadata if the value changed
         if new_frozen_ticks != old_frozen_ticks {
             self.frozen_ticks.store(new_frozen_ticks, Ordering::Relaxed);
+            let freeze_strength = (new_frozen_ticks as f32) / (Self::MAX_FROZEN_TICKS as f32);
             let mut bedrock_meta = EntityMetadata::new();
             bedrock_meta.set(
                 entity_data_key::FREEZING_EFFECT_STRENGTH,
-                MetadataValue::Float(new_frozen_ticks as f32),
+                MetadataValue::Float(freeze_strength),
             );
-            self.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::TICKS_FROZEN,
-                    MetaDataType::INTEGER,
-                    VarInt(new_frozen_ticks),
-                )],
-                Some(&bedrock_meta),
-            );
+            let world = self.world.load();
+            let chunk_pos = self.chunk_pos.load();
+            let value = VarInt(new_frozen_ticks);
+
+            for player in world.players.load().iter() {
+                let center = player.get_entity().chunk_pos.load();
+                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+                if !is_within_view_distance(chunk_pos, center, view_distance) {
+                    continue;
+                }
+                match player.client.as_ref() {
+                    ClientPlatform::Java(client) => {
+                        let version = client.version.load();
+                        let (tracked_id, meta_type) = if version >= JavaMinecraftVersion::V_26_1 {
+                            (TrackedData::TICKS_FROZEN, MetaDataType::INT)
+                        } else {
+                            (TrackedData::FROZEN_TICKS, MetaDataType::INTEGER)
+                        };
+                        let index = tracked_id.get(&version);
+                        let type_id = meta_type.id(version);
+                        if index == 255 || type_id < 0 {
+                            continue;
+                        }
+                        let mut buf = Vec::new();
+                        buf.put_u8(index);
+                        buf.write_var_int(&VarInt(type_id)).unwrap();
+                        value.write_metadata(&mut buf).unwrap();
+                        buf.put_u8(255);
+                        player.client.try_enqueue_packet(&CSetEntityMetadata::new(
+                            self.entity_id.into(),
+                            buf.into(),
+                        ));
+                    }
+                    ClientPlatform::Bedrock(client) => {
+                        client.try_enqueue_packet(&CSetActorData {
+                            actor_runtime_id: VarULong(self.entity_id as u64),
+                            metadata: EntityMetadata(bedrock_meta.0.clone()),
+                            synced_properties: PropertySyncData {
+                                int_properties: HashMap::new(),
+                                float_properties: HashMap::new(),
+                            },
+                            tick: VarULong(0),
+                        });
+                    }
+                }
+            }
         }
 
         // Vanilla parity: full-freeze damage is tick-phase based.
