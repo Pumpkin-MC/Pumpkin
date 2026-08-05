@@ -653,9 +653,16 @@ impl ChunkData {
     /// written while the first bug was live reloads just as short as it was saved. Padding
     /// here fixes both, and is a no-op when the chunk is already the right size.
     ///
-    /// Padding sections are air with unlit light, which is what never-generated space above
-    /// the terrain ceiling is anyway.
-    pub fn pad_sections_to(&self, total_sections: usize) {
+    /// Padding sections are air. Their sky light is `sky_light` - which must be 15 in a
+    /// dimension that has sky light, and 0 in one that does not.
+    ///
+    /// Getting that wrong is not cosmetic. Padded sections sit above every section the chunk
+    /// actually stored, and the on-disk reader documents the same invariant: sections above
+    /// the highest one carrying a `SkyLight` tag see open sky and are 15. Padding them at 0
+    /// instead caps the column with a lid of artificial darkness, and sky light stops
+    /// propagating down - which shows up as black caves that snap to full brightness the
+    /// moment a block update forces a relight.
+    pub fn pad_sections_to(&self, total_sections: usize, sky_light: u8) {
         let mut block_sections = self.section.block_sections.write().unwrap();
         if block_sections.len() >= total_sections {
             return;
@@ -688,7 +695,8 @@ impl ChunkData {
         if light.sky_light.len() < total_sections {
             let mut sky = std::mem::take(&mut light.sky_light).into_vec();
             let mut block = std::mem::take(&mut light.block_light).into_vec();
-            sky.resize_with(total_sections, || LightContainer::new_empty(0));
+            sky.resize_with(total_sections, || LightContainer::new_empty(sky_light));
+            // Block light genuinely is 0 up there: nothing emits light in never-generated space.
             block.resize_with(total_sections, || LightContainer::new_empty(0));
             light.sky_light = sky.into_boxed_slice();
             light.block_light = block.into_boxed_slice();
@@ -1041,7 +1049,8 @@ mod tests {
         };
         assert_eq!(chunk.section.section_count(), 8);
 
-        chunk.pad_sections_to(16);
+        // Overworld-like: has sky light, so padded sections must be 15, not 0.
+        chunk.pad_sections_to(16, 15);
 
         assert_eq!(chunk.section.section_count(), 16);
         assert_eq!(chunk.section.biome_sections.read().unwrap().len(), 16);
@@ -1050,6 +1059,18 @@ mod tests {
         let light = chunk.light_engine.lock().unwrap();
         assert_eq!(light.sky_light.len(), 16);
         assert_eq!(light.block_light.len(), 16);
+        // Padded sections sit above everything the chunk stored, so they see open sky. Padding
+        // them dark caps the column and stops sky light propagating down into caves - which is
+        // exactly the black-caves-until-a-block-update regression this guards against. Block
+        // light is genuinely 0 up there since nothing emits light in never-generated space.
+        for i in 8..16 {
+            assert!(
+                matches!(light.sky_light[i], LightContainer::Empty(15)),
+                "padded sky light section {i} must be full, got {:?}",
+                light.sky_light[i]
+            );
+            assert!(matches!(light.block_light[i], LightContainer::Empty(0)));
+        }
         drop(light);
 
         // Padding sections are air.
@@ -1060,7 +1081,7 @@ mod tests {
         }
 
         // Idempotent: an already-correct chunk is untouched.
-        chunk.pad_sections_to(16);
+        chunk.pad_sections_to(16, 15);
         assert_eq!(chunk.section.section_count(), 16);
     }
 }
