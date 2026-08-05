@@ -4234,12 +4234,14 @@ mod tracked_data_bounds_tests {
         (
             "cat",
             25,
-            &[("COLLAR_COLOR", TrackedData::COLLAR_COLOR.v26_2)],
+            &[("CAT_COLLAR_COLOR", TrackedData::CAT_COLLAR_COLOR.v26_2)],
         ),
         (
+            // Abstract Horse extends Animal/Ageable Mob (16-17) and adds its Byte bit mask at
+            // 18, so Horse's own Variant is 19 and a horse has 20 slots.
             "horse",
-            19,
-            &[("ID_TYPE_VARIANT", TrackedData::ID_TYPE_VARIANT.v26_2)],
+            20,
+            &[("HORSE_VARIANT", TrackedData::HORSE_VARIANT.v26_2)],
         ),
         (
             "villager",
@@ -4249,7 +4251,10 @@ mod tracked_data_bounds_tests {
         (
             "creeper",
             19,
-            &[("IS_IGNITED", TrackedData::IS_IGNITED.v26_2)],
+            &[
+                ("SWELL_DIR", TrackedData::SWELL_DIR.v26_2),
+                ("IS_IGNITED", TrackedData::IS_IGNITED.v26_2),
+            ],
         ),
         (
             "enderman",
@@ -4453,6 +4458,51 @@ mod tracked_data_bounds_tests {
             TrackedData::SALMON_VARIANT.v26_2,
             TrackedData::VARIANT.v26_2
         );
+    }
+
+    /// Mojang names both the tropical fish and the horse tracker `DATA_ID_TYPE_VARIANT`, so
+    /// the flattened dumps keep a single `ID_TYPE_VARIANT` = 17 - the `AbstractFish` slot.
+    /// Per the 26.2 tables on
+    /// <https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata>, Horse extends
+    /// Abstract Horse, whose Byte bit mask sits at 18 after Ageable Mob's 16-17, so Horse's
+    /// Variant is 19. The dumps confirm Abstract Horse ends at 18 positionally: Chested
+    /// Horse's `DATA_ID_CHEST` = 19 and Llama's `DATA_STRENGTH_ID` = 20.
+    #[test]
+    fn horse_variant_is_the_horse_scoped_index() {
+        assert_eq!(TrackedData::HORSE_VARIANT.v26_2, 19);
+        assert_eq!(TrackedData::HORSE_VARIANT.v26_1, 19);
+        assert_eq!(TrackedData::ID_CHEST.v26_2, 19);
+        assert_eq!(TrackedData::STRENGTH_ID.v26_2, 20);
+        assert_ne!(
+            TrackedData::HORSE_VARIANT.v26_2,
+            TrackedData::ID_TYPE_VARIANT.v26_2
+        );
+    }
+
+    /// The flattened 26.x dumps collapse wolf's and cat's `DATA_COLLAR_COLOR` into one
+    /// `COLLAR_COLOR` key = 21, which is wolf's. Per the 26.2 tables on
+    /// <https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata>, Cat extends Tameable
+    /// Animal (18-19) and owns 20-24, putting its collar colour at 23; index 21 on a cat is
+    /// the Boolean "Is lying" (the dumps' own `IS_LYING`).
+    #[test]
+    fn cat_collar_color_is_the_cat_scoped_index() {
+        assert_eq!(TrackedData::CAT_COLLAR_COLOR.v26_2, 23);
+        assert_eq!(TrackedData::CAT_COLLAR_COLOR.v26_1, 23);
+        assert_eq!(TrackedData::IS_LYING.v26_2, 21);
+        assert_ne!(
+            TrackedData::CAT_COLLAR_COLOR.v26_2,
+            TrackedData::COLLAR_COLOR.v26_2
+        );
+    }
+
+    /// Creeper's swell state is its own index 16 (`DATA_SWELL_DIR`), not Primed TNT's
+    /// "Fuse time" (`DATA_FUSE_ID` = 8), which on a creeper is `LivingEntity` "Hand states".
+    #[test]
+    fn creeper_swell_dir_is_not_the_tnt_fuse_index() {
+        assert_eq!(TrackedData::SWELL_DIR.v26_2, 16);
+        assert_eq!(TrackedData::SWELL_DIR.v26_1, 16);
+        assert_eq!(TrackedData::FUSE_ID.v26_2, 8);
+        assert_ne!(TrackedData::SWELL_DIR.v26_2, TrackedData::FUSE_ID.v26_2);
     }
 
     /// The flattened 26.x dumps collapse slime's and phantom's `DATA_ID_SIZE` into one
