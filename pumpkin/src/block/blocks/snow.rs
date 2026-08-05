@@ -116,10 +116,10 @@ fn can_place_at(block_accessor: &dyn BlockAccessor, position: &BlockPos) -> bool
     let below_pos = position.down();
     let (below_block, state) = block_accessor.get_block_and_state(&below_pos);
 
-    if below_block.has_tag(&tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER) {
+    if below_block.has_tag(tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER) {
         return false;
     }
-    if below_block.has_tag(&tag::Block::MINECRAFT_SUPPORT_OVERRIDE_SNOW_LAYER) {
+    if below_block.has_tag(tag::Block::MINECRAFT_SUPPORT_OVERRIDE_SNOW_LAYER) {
         return true;
     }
 

@@ -93,7 +93,7 @@ impl BeaconBlockEntity {
                 for lz in (z - step)..=(z + step) {
                     let pos = BlockPos::new(lx, ly, lz);
                     let block = world.get_block(&pos);
-                    if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEACON_BASE_BLOCKS) {
+                    if !block.has_tag(pumpkin_data::tag::Block::MINECRAFT_BEACON_BASE_BLOCKS) {
                         is_ok = false;
                         break;
                     }

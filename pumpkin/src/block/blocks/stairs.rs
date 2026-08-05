@@ -131,6 +131,6 @@ fn compute_stair_shape(
 fn get_stair_properties_if_exists(world: &World, block_pos: &BlockPos) -> Option<StairsProperties> {
     let (block, block_state) = world.get_block_and_state_id(block_pos);
     block
-        .has_tag(&tag::Block::MINECRAFT_STAIRS)
+        .has_tag(tag::Block::MINECRAFT_STAIRS)
         .then(|| StairsProperties::from_state_id(block_state, block))
 }

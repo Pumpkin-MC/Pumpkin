@@ -16,7 +16,7 @@ pub async fn scan_for_water(world: &Arc<World>, pos: &BlockPos) -> bool {
     for direction in BlockDirection::all() {
         let neighbor_pos = pos.offset(direction.to_offset());
         let block = world.get_fluid(&neighbor_pos);
-        if block.has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER) {
+        if block.has_tag(pumpkin_data::tag::Fluid::MINECRAFT_WATER) {
             return true;
         }
     }

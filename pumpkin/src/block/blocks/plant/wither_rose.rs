@@ -68,6 +68,6 @@ impl PlantBlockBase for WitherRoseBlock {
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
         let support_block = block_accessor.get_block(pos);
-        support_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_WITHER_ROSE)
+        support_block.has_tag(tag::Block::MINECRAFT_SUPPORTS_WITHER_ROSE)
     }
 }

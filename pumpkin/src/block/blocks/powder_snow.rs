@@ -23,7 +23,7 @@ pub(crate) async fn can_entity_walk_on_powder_snow(entity: &dyn EntityBase) -> b
     let base = entity.get_entity();
     if base
         .entity_type
-        .has_tag(&tag::EntityType::MINECRAFT_POWDER_SNOW_WALKABLE_MOBS)
+        .has_tag(tag::EntityType::MINECRAFT_POWDER_SNOW_WALKABLE_MOBS)
     {
         return true;
     }

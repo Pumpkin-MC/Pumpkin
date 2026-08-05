@@ -25,9 +25,9 @@ type PressurePlateProps = pumpkin_data::block_properties::StonePressurePlateLike
 impl BlockMetadata for PressurePlateBlock {
     fn ids() -> Box<[BlockId]> {
         let mut combined = Vec::new();
-        combined.extend_from_slice(tag::Block::MINECRAFT_WOODEN_PRESSURE_PLATES.1);
-        combined.extend_from_slice(tag::Block::MINECRAFT_STONE_PRESSURE_PLATES.1);
-        combined.iter().map(|v| BlockId::new_or_air(*v)).collect()
+        combined.extend_from_slice(tag::Block::MINECRAFT_WOODEN_PRESSURE_PLATES);
+        combined.extend_from_slice(tag::Block::MINECRAFT_STONE_PRESSURE_PLATES);
+        combined.into_iter().map(BlockId::new_or_air).collect()
     }
 }
 

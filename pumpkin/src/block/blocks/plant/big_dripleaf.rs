@@ -250,5 +250,5 @@ pub fn can_plant_dripleaf_on_top(support_block: &Block) -> bool {
         return true;
     }
 
-    support_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_BIG_DRIPLEAF)
+    support_block.has_tag(tag::Block::MINECRAFT_SUPPORTS_BIG_DRIPLEAF)
 }

@@ -7,7 +7,7 @@ pub struct SwordItem;
 
 impl ItemMetadata for SwordItem {
     fn ids() -> Box<[u16]> {
-        tag::Item::MINECRAFT_SWORDS.1.into()
+        tag::Item::MINECRAFT_SWORDS.into()
     }
 }
 

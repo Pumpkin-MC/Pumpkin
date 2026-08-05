@@ -26,6 +26,8 @@ syn = { version = "3.0", features = ["full", "extra-traits"] }
 
 pumpkin-util = { path = "../pumpkin-util", features = ["codegen"] }
 pumpkin-nbt = { path = "../pumpkin-nbt" }
+phf_codegen = { version = "0.14.0", features = ["quote"] }
+phf = { version = "0.14.0", default-features = false }
 
 # [lints]
 # all = { level = "deny", priority = -1 }

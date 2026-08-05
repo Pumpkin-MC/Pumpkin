@@ -62,7 +62,7 @@ pub fn compute_wall_state(
         let shape = if connected {
             let raise = if block_above_state.is_full_cube() {
                 true
-            } else if block_above.has_tag(&tag::Block::MINECRAFT_WALLS) {
+            } else if block_above.has_tag(tag::Block::MINECRAFT_WALLS) {
                 let other_props = WallProperties::from_state_id(block_above_state.id, block_above);
                 match direction {
                     HorizontalFacing::North => other_props.north != NorthWall::None,
@@ -70,8 +70,8 @@ pub fn compute_wall_state(
                     HorizontalFacing::East => other_props.east != EastWall::None,
                     HorizontalFacing::West => other_props.west != WestWall::None,
                 }
-            } else if block_above.has_tag(&tag::Block::C_GLASS_PANES)
-                || block_above.has_tag(&tag::Block::MINECRAFT_FENCES)
+            } else if block_above.has_tag(tag::Block::C_GLASS_PANES)
+                || block_above.has_tag(tag::Block::MINECRAFT_FENCES)
                 || block_above == &Block::IRON_BARS
             {
                 let other_props =
@@ -82,7 +82,7 @@ pub fn compute_wall_state(
                     HorizontalFacing::East => other_props.east,
                     HorizontalFacing::West => other_props.west,
                 }
-            } else if block_above.has_tag(&tag::Block::MINECRAFT_FENCE_GATES) {
+            } else if block_above.has_tag(tag::Block::MINECRAFT_FENCE_GATES) {
                 let other_props =
                     FenceGateProperties::from_state_id(block_above_state.id, block_above);
                 // gate is perp to connected direction
@@ -125,10 +125,10 @@ pub fn compute_wall_state(
 
     wall_props.up = if !(cross || connected_north_south || connected_east_west) {
         true
-    } else if block_above.has_tag(&tag::Block::MINECRAFT_WALLS) {
+    } else if block_above.has_tag(tag::Block::MINECRAFT_WALLS) {
         let other_props = WallProperties::from_state_id(block_above_state.id, block_above);
         other_props.up
-    } else if block_above.has_tag(&tag::Block::MINECRAFT_FENCE_GATES) {
+    } else if block_above.has_tag(tag::Block::MINECRAFT_FENCE_GATES) {
         let other_props = FenceGateProperties::from_state_id(block_above_state.id, block_above);
         if other_props.open {
             false
@@ -155,12 +155,12 @@ fn is_connected(
         || other_block_state.is_side_solid(BlockDirection::from_cardinal_direction(
             direction.opposite(),
         ))
-        || other_block.has_tag(&tag::Block::MINECRAFT_WALLS)
+        || other_block.has_tag(tag::Block::MINECRAFT_WALLS)
         || other_block == &Block::IRON_BARS
-        || other_block.has_tag(&tag::Block::C_GLASS_PANES);
+        || other_block.has_tag(tag::Block::C_GLASS_PANES);
 
     // fence gates do not pass is_side_solid check
-    if !connected && other_block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES) {
+    if !connected && other_block.has_tag(tag::Block::MINECRAFT_FENCE_GATES) {
         let fence_props = FenceGateProperties::from_state_id(other_block_state.id, other_block);
         if fence_props.facing == direction.rotate_clockwise()
             || fence_props.facing == direction.rotate_counter_clockwise()

@@ -108,6 +108,6 @@ impl PlantBlockBase for BambooSaplingBlock {
 
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos);
-        block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_BAMBOO)
+        block.has_tag(pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_BAMBOO)
     }
 }

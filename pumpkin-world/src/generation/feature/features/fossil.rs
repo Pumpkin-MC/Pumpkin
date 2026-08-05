@@ -178,9 +178,9 @@ fn place_fossil_template<T: GenerationCache>(
         }
 
         let current_state = GenerationCache::get_block_state(chunk, &world_pos);
-        if tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE
-            .1
-            .contains(&current_state.to_block_id().as_u16())
+        if current_state
+            .to_block_id()
+            .has_tag(tag::Block::MINECRAFT_FEATURES_CANNOT_REPLACE)
         {
             continue;
         }

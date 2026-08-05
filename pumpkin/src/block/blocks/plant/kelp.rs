@@ -103,7 +103,7 @@ impl PlantBlockBase for KelpBlock {
         if support_block == &Block::KELP || support_block == &Block::KELP_PLANT {
             return true;
         }
-        if support_block.has_tag(&tag::Block::MINECRAFT_CANNOT_SUPPORT_KELP) {
+        if support_block.has_tag(tag::Block::MINECRAFT_CANNOT_SUPPORT_KELP) {
             return false;
         }
         if support_block_state.is_side_solid(pumpkin_data::BlockDirection::Up)

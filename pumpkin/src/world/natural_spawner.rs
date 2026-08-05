@@ -756,7 +756,7 @@ pub fn get_random_spawn_mob_at(
     // TODO Holder<Biome> holder = level.getBiome(pos);
     let biome = world.level.get_rough_biome(block_pos);
     if category == &MobCategory::WATER_AMBIENT
-        && biome.has_tag(&MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS)
+        && biome.has_tag(MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS)
         && rng().random::<f32>() < 0.98f32
     {
         None
@@ -830,11 +830,11 @@ pub fn is_spawn_position_ok(
     entity_type: &'static EntityType,
 ) -> bool {
     match entity_type.spawn_restriction.location {
-        SpawnLocation::InLava => world.get_fluid(block_pos).has_tag(&MINECRAFT_LAVA),
+        SpawnLocation::InLava => world.get_fluid(block_pos).has_tag(MINECRAFT_LAVA),
         SpawnLocation::InWater => {
             // TODO !level.getBlockState(blockPos).isRedstoneConductor(level, blockPos)
             let above_state = world.get_block_state(&block_pos.up());
-            world.get_fluid(block_pos).has_tag(&MINECRAFT_WATER) && !above_state.is_full_cube()
+            world.get_fluid(block_pos).has_tag(MINECRAFT_WATER) && !above_state.is_full_cube()
         }
         SpawnLocation::OnGround => {
             let down = world.get_block_state(&block_pos.down());
@@ -866,14 +866,14 @@ pub fn is_spawn_position_ok_cache(
     match entity_type.spawn_restriction.location {
         SpawnLocation::InLava => {
             // During generation, we check the block state's liquid property and tag
-            state.is_liquid() && Block::from_state_id(state.id).has_tag(&MINECRAFT_LAVA)
+            state.is_liquid() && Block::from_state_id(state.id).has_tag(MINECRAFT_LAVA)
         }
         SpawnLocation::InWater => {
             let above_pos = block_pos.up().0;
             let above_state = GenerationCache::get_block_state(cache, &above_pos).to_state();
 
             state.is_liquid()
-                && Block::from_state_id(state.id).has_tag(&MINECRAFT_WATER)
+                && Block::from_state_id(state.id).has_tag(MINECRAFT_WATER)
                 && !above_state.is_full_cube()
         }
         SpawnLocation::OnGround => {
@@ -947,7 +947,7 @@ pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
     if state.is_liquid() {
         return false;
     }
-    if Block::from_state_id(state.id).has_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE) {
+    if Block::from_state_id(state.id).has_tag(MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE) {
         return false;
     }
 

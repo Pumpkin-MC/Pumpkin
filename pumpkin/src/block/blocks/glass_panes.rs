@@ -52,9 +52,9 @@ pub fn compute_pane_state(
 
         let connected = other_block == block
             || other_block_state.is_side_solid(direction.opposite().to_block_direction())
-            || other_block.has_tag(&tag::Block::C_GLASS_PANES)
+            || other_block.has_tag(tag::Block::C_GLASS_PANES)
             || other_block == &Block::IRON_BARS
-            || other_block.has_tag(&tag::Block::MINECRAFT_WALLS);
+            || other_block.has_tag(tag::Block::MINECRAFT_WALLS);
 
         match direction {
             HorizontalFacing::North => pane_props.north = connected,

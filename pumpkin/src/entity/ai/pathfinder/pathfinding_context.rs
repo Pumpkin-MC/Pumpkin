@@ -80,7 +80,7 @@ impl PathfindingContext {
             return PathType::Open;
         }
 
-        if block.has_tag(&tag::Block::MINECRAFT_TRAPDOORS)
+        if block.has_tag(tag::Block::MINECRAFT_TRAPDOORS)
             || block.id == Block::LILY_PAD.id
             || block.id == Block::BIG_DRIPLEAF.id
         {
@@ -108,7 +108,7 @@ impl PathfindingContext {
         }
 
         let fluid = Fluid::from_state_id(state_id);
-        if fluid.is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_LAVA)) {
+        if fluid.is_some_and(|f| f.has_tag(tag::Fluid::MINECRAFT_LAVA)) {
             return PathType::Lava;
         }
 
@@ -122,7 +122,7 @@ impl PathfindingContext {
             return PathType::DamageFire;
         }
 
-        if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
+        if block.has_tag(tag::Block::MINECRAFT_DOORS) {
             if state.collision_shapes.is_empty() {
                 return PathType::DoorOpen;
             }
@@ -134,21 +134,20 @@ impl PathfindingContext {
             };
         }
 
-        if block.has_tag(&tag::Block::MINECRAFT_RAILS) {
+        if block.has_tag(tag::Block::MINECRAFT_RAILS) {
             return PathType::Rail;
         }
 
-        if block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
+        if block.has_tag(tag::Block::MINECRAFT_LEAVES) {
             return PathType::Leaves;
         }
 
-        if block.has_tag(&tag::Block::MINECRAFT_FENCES)
-            || block.has_tag(&tag::Block::MINECRAFT_WALLS)
+        if block.has_tag(tag::Block::MINECRAFT_FENCES) || block.has_tag(tag::Block::MINECRAFT_WALLS)
         {
             return PathType::Fence;
         }
 
-        if block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES) && !state.collision_shapes.is_empty() {
+        if block.has_tag(tag::Block::MINECRAFT_FENCE_GATES) && !state.collision_shapes.is_empty() {
             return PathType::Fence;
         }
 
@@ -156,7 +155,7 @@ impl PathfindingContext {
             return PathType::Blocked;
         }
 
-        if fluid.is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER)) {
+        if fluid.is_some_and(|f| f.has_tag(tag::Fluid::MINECRAFT_WATER)) {
             return PathType::Water;
         }
 

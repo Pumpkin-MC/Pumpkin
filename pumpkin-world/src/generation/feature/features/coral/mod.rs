@@ -109,8 +109,7 @@ impl CoralFeature {
         tag: tag::Tag,
         random: &mut RandomGenerator,
     ) -> &'static Block {
-        let values = tag.1;
-        let value = values[random.next_bounded_i32(values.len() as i32) as usize];
+        let value = tag[random.next_bounded_i32(tag.len() as i32) as usize];
         let id = BlockId::new(value).expect("Invalid block id in tag");
         id.to_block()
     }

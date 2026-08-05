@@ -235,7 +235,7 @@ impl BlockId {
     #[inline]
     #[must_use]
     pub fn has_tag(self, tag: Tag) -> bool {
-        tag.1.contains(&self.0)
+        tag.contains(&self.0)
     }
 }
 

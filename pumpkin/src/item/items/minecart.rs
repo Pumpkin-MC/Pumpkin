@@ -65,7 +65,7 @@ impl ItemBehaviour for MinecartItem {
         Box::pin(async move {
             let world = player.world();
 
-            if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
+            if !block.has_tag(tag::Block::MINECRAFT_RAILS) {
                 return;
             }
             let state_id = world.get_block_state_id(&location);

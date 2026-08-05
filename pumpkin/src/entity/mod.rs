@@ -2441,7 +2441,7 @@ impl Entity {
     /// Check if this entity type is immune to freezing
     pub fn is_freeze_immune(&self) -> bool {
         self.entity_type
-            .has_tag(&tag::EntityType::MINECRAFT_FREEZE_IMMUNE_ENTITY_TYPES)
+            .has_tag(tag::EntityType::MINECRAFT_FREEZE_IMMUNE_ENTITY_TYPES)
     }
 
     /// Mirrors vanilla `LivingEntity#canFreeze`: spectators and entities wearing
@@ -2469,7 +2469,7 @@ impl Entity {
             let stack = stack.lock().await;
             if stack
                 .get_item()
-                .has_tag(&tag::Item::MINECRAFT_FREEZE_IMMUNE_WEARABLES)
+                .has_tag(tag::Item::MINECRAFT_FREEZE_IMMUNE_WEARABLES)
             {
                 return false;
             }

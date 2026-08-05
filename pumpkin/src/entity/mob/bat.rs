@@ -56,7 +56,7 @@ impl BatEntity {
         }
         if world
             .get_block(pos)
-            .has_tag(&tag::Block::MINECRAFT_BATS_SPAWNABLE_ON)
+            .has_tag(tag::Block::MINECRAFT_BATS_SPAWNABLE_ON)
         {
             return false;
         }

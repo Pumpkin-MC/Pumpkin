@@ -43,5 +43,5 @@ impl PlantBlockBase for SporeBlossomBlock {
     }
 }
 fn supports_spore_blossom(block: &Block) -> bool {
-    !block.has_tag(&tag::Block::MINECRAFT_LEAVES) && block.is_solid()
+    !block.has_tag(tag::Block::MINECRAFT_LEAVES) && block.is_solid()
 }

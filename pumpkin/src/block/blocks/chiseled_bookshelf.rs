@@ -84,7 +84,7 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
                 .lock()
                 .await
                 .get_item()
-                .has_tag(&tag::Item::MINECRAFT_BOOKSHELF_BOOKS)
+                .has_tag(tag::Item::MINECRAFT_BOOKSHELF_BOOKS)
             {
                 return BlockActionResult::PassToDefaultBlockAction;
             }

@@ -459,7 +459,7 @@ impl NetherPortal {
 
     fn valid_state_inside_portal(block: &Block, state: &BlockState) -> bool {
         state.is_air()
-            || block.has_tag(&tag::Block::MINECRAFT_FIRE)
+            || block.has_tag(tag::Block::MINECRAFT_FIRE)
             || block == &Block::NETHER_PORTAL
     }
 

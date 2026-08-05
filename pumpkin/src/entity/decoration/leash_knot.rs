@@ -103,7 +103,7 @@ impl EntityBase for LeashKnotEntity {
         Box::pin(async move {
             let world = self.entity.world.load();
             let block = world.get_block(&self.pos);
-            if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES) {
+            if !block.has_tag(pumpkin_data::tag::Block::MINECRAFT_FENCES) {
                 let knot_id = self.entity.entity_id;
                 let search_dim = EntityDimensions {
                     width: 32.0,

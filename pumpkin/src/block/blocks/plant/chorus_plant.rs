@@ -47,7 +47,7 @@ impl BlockBehaviour for ChorusPlantBlock {
             let connect = neighbor_block == &Block::CHORUS_PLANT
                 || neighbor_block == &Block::CHORUS_FLOWER
                 || (args.direction == BlockDirection::Down
-                    && neighbor_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT));
+                    && neighbor_block.has_tag(tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT));
 
             let mut props =
                 BrownMushroomBlockLikeProperties::from_state_id(args.state_id, args.block);
@@ -125,7 +125,7 @@ fn can_survive(block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
             }
             let neighbor_below = block_accessor.get_block(&neighbor_pos.down());
             if neighbor_below == &Block::CHORUS_PLANT
-                || neighbor_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT)
+                || neighbor_below.has_tag(tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT)
             {
                 return true;
             }
@@ -133,5 +133,5 @@ fn can_survive(block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
     }
 
     block_below == &Block::CHORUS_PLANT
-        || block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT)
+        || block_below.has_tag(tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT)
 }

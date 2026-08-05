@@ -36,7 +36,7 @@ impl ItemBehaviour for LeadItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES) {
+            if !block.has_tag(pumpkin_data::tag::Block::MINECRAFT_FENCES) {
                 return;
             }
 

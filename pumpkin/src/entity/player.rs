@@ -1541,7 +1541,7 @@ impl Player {
         }
 
         // Handle bed respawn
-        if block.has_tag(&tag::Block::MINECRAFT_BEDS) {
+        if block.has_tag(tag::Block::MINECRAFT_BEDS) {
             let bed_props = BedProperties::from_state_id(state_id, block);
             let facing = bed_props.facing;
 
@@ -1711,13 +1711,13 @@ impl Player {
 
         // Check if block at position is invalid for spawn (e.g., inside solid block)
         let block = world.get_block(pos);
-        if block.has_tag(&tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
+        if block.has_tag(tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
             return None;
         }
 
         // Check if block above is also invalid
         let above_block = world.get_block(&pos.up());
-        if above_block.has_tag(&tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
+        if above_block.has_tag(tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
             return None;
         }
 
@@ -2544,7 +2544,7 @@ impl Player {
         let pos = entity.block_pos.load();
         let world = entity.world.load_full();
         let block = world.get_block(&pos);
-        if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_CLIMBABLE) {
+        if block.has_tag(pumpkin_data::tag::Block::MINECRAFT_CLIMBABLE) {
             return statistics::CustomStatistic::ClimbOneCm;
         }
 

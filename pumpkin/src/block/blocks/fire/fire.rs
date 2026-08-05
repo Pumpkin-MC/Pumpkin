@@ -299,13 +299,13 @@ impl BlockBehaviour for FireBlock {
             // Check for infiniburn blocks (depending on dimension)
             let infiniburn = match world.dimension.id {
                 id if id == Dimension::OVERWORLD.id => {
-                    block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_OVERWORLD)
+                    block_below.has_tag(tag::Block::MINECRAFT_INFINIBURN_OVERWORLD)
                 }
                 id if id == Dimension::THE_NETHER.id => {
-                    block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_NETHER)
+                    block_below.has_tag(tag::Block::MINECRAFT_INFINIBURN_NETHER)
                 }
                 id if id == Dimension::THE_END.id => {
-                    block_below.has_tag(&tag::Block::MINECRAFT_INFINIBURN_END)
+                    block_below.has_tag(tag::Block::MINECRAFT_INFINIBURN_END)
                 }
                 _ => false,
             };

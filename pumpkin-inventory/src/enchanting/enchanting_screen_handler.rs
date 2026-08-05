@@ -191,7 +191,7 @@ impl EnchantingTableScreenHandler {
 
         let mut available = Vec::new();
         for enchant in Enchantment::all() {
-            if enchant.has_tag(&EnchantmentTag::MINECRAFT_IN_ENCHANTING_TABLE)
+            if enchant.has_tag(EnchantmentTag::MINECRAFT_IN_ENCHANTING_TABLE)
                 && enchant.can_enchant(item.item)
             {
                 for l in (1..=enchant.max_level).rev() {

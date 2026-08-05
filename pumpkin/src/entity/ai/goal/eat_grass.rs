@@ -40,7 +40,7 @@ impl Goal for EatGrassGoal {
             let world = entity.world.load();
 
             let block_at_pos = world.get_block(&block_pos);
-            if block_at_pos.has_tag(&tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {
+            if block_at_pos.has_tag(tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {
                 return true;
             }
 
@@ -71,7 +71,7 @@ impl Goal for EatGrassGoal {
                 let world = entity.world.load_full();
 
                 let block_at_pos = world.get_block(&block_pos);
-                if block_at_pos.has_tag(&tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {
+                if block_at_pos.has_tag(tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {
                     world
                         .set_block_state(
                             &block_pos,
