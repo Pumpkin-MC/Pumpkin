@@ -460,7 +460,7 @@ impl BlockRegistry {
         &self,
         player: &Arc<Player>,
         placed_block: &'static Block,
-        server: &Server,
+        server: &Arc<Server>,
         use_item_on: &SUseItemOn,
         location: BlockPos,
         face: BlockDirection,
@@ -597,24 +597,44 @@ impl BlockRegistry {
         // Mirror vanilla obstruction checks: only entities that block building should prevent
         // placement. (e.g. arrows/xp orbs/displays/markers should not)
         let state = BlockState::from_id(new_state);
+        let mut buildable = true;
         for shape in state.get_block_collision_shapes() {
             let placed_box = shape.at_pos(final_block_pos);
 
             if Self::has_blocking_entity_in_box(world.as_ref(), &placed_box) {
-                return Ok(None);
+                buildable = false;
+                break;
             }
         }
 
-        let event = crate::plugin::block::block_place::BlockPlaceEvent::new(
+        let mut can_build_event = crate::plugin::block::block_can_build::BlockCanBuildEvent {
+            block_to_build: placed_block,
+            buildable,
+            player: player.clone(),
+            block: clicked_block,
+            cancelled: false,
+        };
+        server
+            .plugin_manager
+            .fire::<crate::plugin::block::block_can_build::BlockCanBuildEvent>(
+                server,
+                &mut can_build_event,
+            )
+            .await;
+        if can_build_event.cancelled || !can_build_event.buildable {
+            return Ok(None);
+        }
+
+        let mut event = crate::plugin::block::block_place::BlockPlaceEvent::new(
             player.clone(),
             placed_block,
             clicked_block,
             final_block_pos,
             true,
         );
-        let event = server
+        server
             .plugin_manager
-            .fire::<crate::plugin::block::block_place::BlockPlaceEvent>(event)
+            .fire::<crate::plugin::block::block_place::BlockPlaceEvent>(server, &mut event)
             .await;
         if event.cancelled {
             return Ok(None);

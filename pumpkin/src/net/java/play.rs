@@ -51,7 +51,6 @@ use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
-use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::bedrock::client::CMovePlayer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_ulong::VarULong;
@@ -986,7 +985,7 @@ impl JavaClient {
         &self,
         player: &Arc<Player>,
         command: SPlayerCommand,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         if command.entity_id != player.entity_id().into() {
             return;
@@ -1049,7 +1048,7 @@ impl JavaClient {
         &self,
         player: &Arc<Player>,
         input: SPlayerInput,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         player.last_input.store(input.input, Ordering::Relaxed);
 
@@ -1345,12 +1344,29 @@ impl JavaClient {
         screen_handler_arc.lock().await.send_content_updates().await;
     }
 
-    pub async fn handle_swing_arm(&self, player: &Arc<Player>, swing_arm: SSwingArm) {
+    pub async fn handle_swing_arm(
+        &self,
+        server: &Arc<Server>,
+        player: &Arc<Player>,
+        swing_arm: SSwingArm,
+    ) {
         player.update_last_action_time();
         let Ok(hand) = Hand::try_from(swing_arm.hand.0) else {
             self.kick(TextComponent::text("Invalid hand")).await;
             return;
         };
+
+        let mut anim_event = crate::plugin::api::events::player::player_animation::PlayerAnimationEvent::new(
+            player.clone(),
+            match hand {
+                Hand::Left => crate::plugin::api::events::player::player_animation::PlayerAnimationType::ArmSwingOff,
+                Hand::Right => crate::plugin::api::events::player::player_animation::PlayerAnimationType::ArmSwingMain,
+            },
+        );
+        server.plugin_manager.fire(server, &mut anim_event).await;
+        if anim_event.cancelled {
+            return;
+        }
 
         let (yaw, pitch) = player.rotation();
         let hit_result = player
@@ -1378,12 +1394,8 @@ impl JavaClient {
             PlayerInteractEvent::new(player, InteractAction::LeftClickAir, &Block::AIR, None)
         };
 
-        let Some(server) = player.world().server.upgrade() else {
-            return;
-        };
-
         send_cancellable! {{
-            server;
+            &server;
             event;
             'after: {
                 player.swing_hand(hand, false).await;
@@ -1393,7 +1405,7 @@ impl JavaClient {
 
     pub async fn handle_chat_message(
         &self,
-        server: &Server,
+        server: &Arc<Server>,
         player: &Arc<Player>,
         chat_message: SChatMessage<'_>,
     ) {
@@ -1609,6 +1621,7 @@ impl JavaClient {
 
     pub async fn handle_client_information(
         &self,
+        server: &Arc<Server>,
         player: &Arc<Player>,
         client_information: SClientInformationPlay<'_>,
     ) {
@@ -1673,9 +1686,9 @@ impl JavaClient {
                 chunker::update_position(player).await;
             }
 
-            if main_hand_changed && let Some(server) = player.world().server.upgrade() {
-                let event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
-                let _ = server.plugin_manager.fire(event).await;
+            if main_hand_changed {
+                let mut event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
+                server.plugin_manager.fire(server, &mut event).await;
             }
 
             if update_settings {
@@ -1932,6 +1945,24 @@ impl JavaClient {
                     let world = entity.world.load_full();
                     let (block, state) = world.get_block_and_state(&position);
 
+                    if let Some(server_arc) = world.server.upgrade() {
+                        let mut event =
+                            crate::plugin::api::events::block::block_damage::BlockDamageEvent::new(
+                                player.clone(),
+                                block,
+                                position,
+                                false,
+                            );
+                        server_arc
+                            .plugin_manager
+                            .fire(&server_arc, &mut event)
+                            .await;
+                        if event.cancelled {
+                            self.update_sequence(player, player_action.sequence.0);
+                            return;
+                        }
+                    }
+
                     if block == &pumpkin_data::Block::NOTE_BLOCK {
                         let props =
                             pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
@@ -2178,7 +2209,7 @@ impl JavaClient {
         &self,
         player: &Arc<Player>,
         player_abilities: SPlayerAbilities,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         let (flying, allow_flying) = {
             let abilities = player.abilities.lock().await;
@@ -2467,7 +2498,7 @@ impl JavaClient {
         &self,
         player: &Arc<Player>,
         use_item: &SUseItem,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         if !player.has_client_loaded() {
             return;
@@ -2619,7 +2650,7 @@ impl JavaClient {
 
     async fn should_continue_use_after_fish_event(
         &self,
-        server: &Server,
+        server: &Arc<Server>,
         player: &Arc<Player>,
         hand: Hand,
         item_for_use: &Item,
@@ -2629,7 +2660,7 @@ impl JavaClient {
         }
 
         // TODO: Apply fishing rod durability on retrieval based on catch type.
-        let fish_event = PlayerFishEvent::new(
+        let mut fish_event = PlayerFishEvent::new(
             player.clone(),
             None,
             uuid::Uuid::nil(),
@@ -2638,11 +2669,17 @@ impl JavaClient {
             hand,
             0,
         );
-        let fish_event = server.plugin_manager.fire(fish_event).await;
+        server.plugin_manager.fire(server, &mut fish_event).await;
         !fish_event.cancelled
     }
 
-    pub async fn handle_set_held_item(&self, player: &Player, held: SSetHeldItem) {
+    pub async fn handle_set_held_item(
+        &self,
+        server: &Arc<Server>,
+
+        player: &Player,
+        held: SSetHeldItem,
+    ) {
         player.update_last_action_time();
         let slot = held.slot;
         if !(0..=8).contains(&slot) {
@@ -2651,19 +2688,17 @@ impl JavaClient {
         }
         let slot = slot as u8;
         let previous_slot = player.inventory.get_selected_slot();
-        if let Some(server) = player.world().server.upgrade() {
-            let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id) else {
-                return;
-            };
-            let event = PlayerItemHeldEvent::new(player_arc, previous_slot, slot);
-            let event = server.plugin_manager.fire(event).await;
-            if event.cancelled {
-                player
-                    .client
-                    .enqueue_packet(&CSetSelectedSlot::new(previous_slot as i8))
-                    .await;
-                return;
-            }
+        let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id) else {
+            return;
+        };
+        let mut event = PlayerItemHeldEvent::new(player_arc, previous_slot, slot);
+        server.plugin_manager.fire(server, &mut event).await;
+        if event.cancelled {
+            player
+                .client
+                .enqueue_packet(&CSetSelectedSlot::new(previous_slot as i8))
+                .await;
+            return;
         }
 
         let inv = player.inventory();
@@ -2805,7 +2840,7 @@ impl JavaClient {
         &self,
         player: &Arc<Player>,
         block: &'static Block,
-        server: &Server,
+        server: &Arc<Server>,
         use_item_on: SUseItemOn,
         location: BlockPos,
         face: BlockDirection,

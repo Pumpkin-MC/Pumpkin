@@ -56,7 +56,7 @@ trait CropBlockBase: PlantBlockBase {
             if rand::rng().random_range(0..=(25.0 / f).floor() as i64) == 0 {
                 let mut new_state_id = self.state_with_age(block, state, age + 1);
                 if let Some(server) = world.server.upgrade() {
-                    let event = BlockGrowEvent::new(
+                    let mut event = BlockGrowEvent::new(
                         world.clone(),
                         block,
                         state,
@@ -64,7 +64,7 @@ trait CropBlockBase: PlantBlockBase {
                         new_state_id,
                         *pos,
                     );
-                    let event = server.plugin_manager.fire(event).await;
+                    server.plugin_manager.fire(&server, &mut event).await;
                     if event.cancelled {
                         return;
                     }

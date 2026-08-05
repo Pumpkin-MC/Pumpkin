@@ -3,6 +3,9 @@ use wasmtime::component::Resource;
 
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::ai::goal::{Goal, GoalFuture};
+use crate::entity::mob::Mob;
+use crate::plugin::loader::wasm::wasm_host::{PluginInstance, WasmPlugin};
 use crate::plugin::loader::wasm::wasm_host::{
     state::{EntityResource, PluginHostState},
     wit::v0_1::events::to_wasm_position,
@@ -501,6 +504,32 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
+    async fn is_silent(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity.get_entity().is_silent())
+    }
+
+    async fn set_silent(&mut self, entity: Resource<Entity>, silent: bool) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity.get_entity().set_silent(silent);
+        Ok(())
+    }
+
+    async fn has_gravity(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(!entity.get_entity().has_no_gravity())
+    }
+
+    async fn set_has_gravity(
+        &mut self,
+        entity: Resource<Entity>,
+        gravity: bool,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity.get_entity().set_has_no_gravity(!gravity);
+        Ok(())
+    }
+
     async fn get_eye_height(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
         let entity = entity_from_resource(self, &entity)?;
         Ok(entity.get_entity().entity_dimension.load().eye_height)
@@ -804,6 +833,118 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
+    async fn add_ai_goal(
+        &mut self,
+        entity: Resource<Entity>,
+        priority: u8,
+        goal: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(mob) = entity.get_mob() {
+            let mob_entity = mob.get_mob_entity();
+            match goal {
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::Swim => {
+                    mob_entity.add_goal(priority, crate::entity::ai::goal::swim::SwimGoal::default());
+                }
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::WanderAround(speed) => {
+                    mob_entity.add_goal(priority, crate::entity::ai::goal::wander_around::WanderAroundGoal::new(f64::from(speed)));
+                }
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::MeleeAttack(speed) => {
+                    mob_entity.add_goal(priority, crate::entity::ai::goal::melee_attack::MeleeAttackGoal::new(f64::from(speed), false));
+                }
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::LookAtPlayer(range) => {
+                    mob_entity.add_goal(priority, crate::entity::ai::goal::look_at_entity::LookAtEntityGoal::new(
+                        std::sync::Weak::<crate::entity::mob::zombie::zombie::ZombieEntity>::new() as std::sync::Weak<dyn crate::entity::mob::Mob>,
+                        &pumpkin_data::entity::EntityType::PLAYER,
+                        range,
+                        0.02,
+                        false,
+                    ));
+                }
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::LookAround => {
+                    mob_entity.add_goal(priority, crate::entity::ai::goal::look_around::RandomLookAroundGoal::default());
+                }
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::EscapeDanger(speed) => {
+                    mob_entity.add_goal(priority, *crate::entity::ai::goal::escape_danger::EscapeDangerGoal::new(f64::from(speed)));
+                }
+                _ => {} // Remaining goals
+            }
+        }
+        Ok(())
+    }
+
+    async fn add_custom_ai_goal(
+        &mut self,
+        entity: Resource<Entity>,
+        priority: u8,
+        goal_id: u32,
+    ) -> wasmtime::Result<()> {
+        let plugin = self.plugin.as_ref().unwrap().upgrade().unwrap();
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(mob) = entity.get_mob() {
+            let mob_entity = mob.get_mob_entity();
+            mob_entity.add_goal(priority, CustomWasmGoal { plugin, goal_id });
+        }
+        Ok(())
+    }
+
+    async fn clear_ai_goals(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity().clear_ai_goals(mob).await;
+        }
+        Ok(())
+    }
+
+    async fn set_ai_disabled(
+        &mut self,
+        entity: Resource<Entity>,
+        disabled: bool,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity().set_no_ai(disabled);
+        }
+        Ok(())
+    }
+
+    async fn is_ai_disabled(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_mob()
+            .is_none_or(|mob| mob.get_mob_entity().is_no_ai()))
+    }
+
+    async fn set_target(
+        &mut self,
+        entity: Resource<Entity>,
+        target: Option<Resource<Entity>>,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        let target_entity = if let Some(t) = target {
+            Some(entity_from_resource(self, &t)?)
+        } else {
+            None
+        };
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity().set_target(target_entity).await;
+        }
+        Ok(())
+    }
+
+    async fn get_target(
+        &mut self,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<Entity>>> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(mob) = entity.get_mob()
+            && let Some(target) = mob.get_mob_entity().get_target().await
+        {
+            return Ok(Some(self.add_entity(target)?));
+        }
+        Ok(None)
+    }
+
     async fn raycast(
         &mut self,
         entity: Resource<Entity>,
@@ -846,5 +987,158 @@ impl HostEntity for PluginHostState {
             .resource_table
             .delete::<EntityResource>(Resource::new_own(rep.rep()));
         Ok(())
+    }
+}
+
+pub struct CustomWasmGoal {
+    pub plugin: Arc<WasmPlugin>,
+    pub goal_id: u32,
+}
+
+impl Goal for CustomWasmGoal {
+    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async {
+            let mut store = self.plugin.store.lock().await;
+            if let Some(entity_arc) = mob
+                .get_entity()
+                .world
+                .load()
+                .get_entity_by_id(mob.get_entity().entity_id)
+            {
+                match self.plugin.plugin_instance {
+                    PluginInstance::V0_1(ref plugin) => {
+                        let server = store.data_mut().server.clone().unwrap();
+                        let server_res = store.data_mut().add_server(server).unwrap();
+                        let entity_res = store.data_mut().add_entity(entity_arc).unwrap();
+                        plugin
+                            .call_handle_ai_goal_can_start(
+                                &mut *store,
+                                self.goal_id,
+                                server_res,
+                                entity_res,
+                            )
+                            .await
+                            .unwrap_or(false)
+                    }
+                }
+            } else {
+                false
+            }
+        })
+    }
+
+    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async {
+            let mut store = self.plugin.store.lock().await;
+            if let Some(entity_arc) = mob
+                .get_entity()
+                .world
+                .load()
+                .get_entity_by_id(mob.get_entity().entity_id)
+            {
+                match self.plugin.plugin_instance {
+                    PluginInstance::V0_1(ref plugin) => {
+                        let server = store.data_mut().server.clone().unwrap();
+                        let server_res = store.data_mut().add_server(server).unwrap();
+                        let entity_res = store.data_mut().add_entity(entity_arc).unwrap();
+                        plugin
+                            .call_handle_ai_goal_should_continue(
+                                &mut *store,
+                                self.goal_id,
+                                server_res,
+                                entity_res,
+                            )
+                            .await
+                            .unwrap_or(false)
+                    }
+                }
+            } else {
+                false
+            }
+        })
+    }
+
+    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            let mut store = self.plugin.store.lock().await;
+            if let Some(entity_arc) = mob
+                .get_entity()
+                .world
+                .load()
+                .get_entity_by_id(mob.get_entity().entity_id)
+            {
+                match self.plugin.plugin_instance {
+                    PluginInstance::V0_1(ref plugin) => {
+                        let server = store.data_mut().server.clone().unwrap();
+                        let server_res = store.data_mut().add_server(server).unwrap();
+                        let entity_res = store.data_mut().add_entity(entity_arc).unwrap();
+                        let _ = plugin
+                            .call_handle_ai_goal_start(
+                                &mut *store,
+                                self.goal_id,
+                                server_res,
+                                entity_res,
+                            )
+                            .await;
+                    }
+                }
+            }
+        })
+    }
+
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            let mut store = self.plugin.store.lock().await;
+            if let Some(entity_arc) = mob
+                .get_entity()
+                .world
+                .load()
+                .get_entity_by_id(mob.get_entity().entity_id)
+            {
+                match self.plugin.plugin_instance {
+                    PluginInstance::V0_1(ref plugin) => {
+                        let server = store.data_mut().server.clone().unwrap();
+                        let server_res = store.data_mut().add_server(server).unwrap();
+                        let entity_res = store.data_mut().add_entity(entity_arc).unwrap();
+                        let _ = plugin
+                            .call_handle_ai_goal_tick(
+                                &mut *store,
+                                self.goal_id,
+                                server_res,
+                                entity_res,
+                            )
+                            .await;
+                    }
+                }
+            }
+        })
+    }
+
+    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {
+            let mut store = self.plugin.store.lock().await;
+            if let Some(entity_arc) = mob
+                .get_entity()
+                .world
+                .load()
+                .get_entity_by_id(mob.get_entity().entity_id)
+            {
+                match self.plugin.plugin_instance {
+                    PluginInstance::V0_1(ref plugin) => {
+                        let server = store.data_mut().server.clone().unwrap();
+                        let server_res = store.data_mut().add_server(server).unwrap();
+                        let entity_res = store.data_mut().add_entity(entity_arc).unwrap();
+                        let _ = plugin
+                            .call_handle_ai_goal_stop(
+                                &mut *store,
+                                self.goal_id,
+                                server_res,
+                                entity_res,
+                            )
+                            .await;
+                    }
+                }
+            }
+        })
     }
 }

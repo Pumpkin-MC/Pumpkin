@@ -48,7 +48,7 @@ pub fn build() -> TokenStream {
     quote! {
         use crate::data_component_impl::*;
 
-        #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+        #[derive(Copy, Clone, Hash, PartialEq, Eq)]
         #[repr(u8)]
         pub enum DataComponent {
             #enum_variants

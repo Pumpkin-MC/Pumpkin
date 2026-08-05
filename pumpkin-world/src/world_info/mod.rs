@@ -141,7 +141,7 @@ const fn default_level_version() -> i32 {
     MAXIMUM_SUPPORTED_LEVEL_VERSION
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct WorldGenSettings {
     // the numerical seed of the world
     pub seed: i64,
@@ -156,14 +156,14 @@ impl Default for WorldGenSettings {
 }
 
 pub type Dimensions = HashMap<String, Dimension>;
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Dimension {
     pub generator: Generator,
     #[serde(rename = "type")]
     pub dimension_type: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Generator {
     #[serde(default)]
     pub settings: Option<GeneratorSettings>,
@@ -173,48 +173,11 @@ pub struct Generator {
     pub generator_type: String,
 }
 
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum GeneratorSettings {
     Reference(String),
-    Compound(pumpkin_nbt::compound::NbtCompound),
-}
-
-impl<'de> Deserialize<'de> for GeneratorSettings {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct SettingsVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for SettingsVisitor {
-            type Value = GeneratorSettings;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a string or compound")
-            }
-
-            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
-                Ok(GeneratorSettings::Reference(v.to_string()))
-            }
-
-            fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
-                Ok(GeneratorSettings::Reference(v))
-            }
-
-            fn visit_map<A: serde::de::MapAccess<'de>>(
-                self,
-                mut map: A,
-            ) -> Result<Self::Value, A::Error> {
-                let mut compound = pumpkin_nbt::compound::NbtCompound::new();
-                while let Some((key, value)) =
-                    map.next_entry::<String, pumpkin_nbt::tag::NbtTag>()?
-                {
-                    compound.put(&key, value);
-                }
-                Ok(GeneratorSettings::Compound(compound))
-            }
-        }
-
-        deserializer.deserialize_any(SettingsVisitor)
-    }
+    Compound(serde_json::Value),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

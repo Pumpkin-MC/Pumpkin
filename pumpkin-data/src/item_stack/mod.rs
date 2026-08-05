@@ -547,7 +547,6 @@ impl ItemStack {
     }
 
     pub fn enchant(&mut self, enchantment: &'static Enchantment, level: i32) {
-        // TODO itemstack may not send update packet to client
         if level <= 0 {
             return;
         }

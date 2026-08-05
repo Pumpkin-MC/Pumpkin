@@ -58,6 +58,7 @@ impl Goal for RevengeGoal {
             if !self
                 .target_predicate
                 .test(&world, Some(&mob_entity.living_entity), attacker_living)
+                .await
             {
                 return false;
             }

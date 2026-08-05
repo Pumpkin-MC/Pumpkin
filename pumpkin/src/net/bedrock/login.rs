@@ -309,7 +309,7 @@ impl BedrockClient {
     pub async fn handle_resource_pack_response(
         &self,
         packet: SResourcePackResponse,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         // TODO: warn & ignore if the player is already spawned in
 

@@ -201,22 +201,21 @@ impl StructureTemplate {
                 .ok_or(TemplateError::MissingField("palette.Name"))?
                 .to_string();
 
-            let properties =
-                entry_compound
-                    .get_compound("Properties")
-                    .map_or_else(Vec::new, |props_compound| {
-                        props_compound
-                            .child_tags
-                            .iter()
-                            .filter_map(|(key, value)| {
-                                if let NbtTag::String(v) = value {
-                                    Some((key.to_string(), v.to_string()))
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect()
-                    });
+            let properties: Vec<(String, String)> = entry_compound
+                .get_compound("Properties")
+                .map_or_else(Vec::new, |props_compound| {
+                    props_compound
+                        .child_tags
+                        .iter()
+                        .filter_map(|(key, value)| {
+                            if let NbtTag::String(v) = value {
+                                Some((key.to_string(), v.to_string()))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                });
 
             palette.push(PaletteEntry { name, properties });
         }

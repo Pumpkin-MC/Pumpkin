@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{EntityBase, NBTStorage, NBTStorageInit, player::Player};
+use super::{NBTStorage, NBTStorageInit, player::Player};
 use crate::entity::NbtFuture;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;

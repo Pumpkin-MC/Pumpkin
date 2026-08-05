@@ -283,6 +283,20 @@ pub(crate) fn get_block_entity_id(block_name: &str) -> Option<&'static str> {
         "minecraft:smoker" => Some("minecraft:smoker"),
         "minecraft:shulker_box" => Some("minecraft:shulker_box"),
         "minecraft:bed" => Some("minecraft:bed"),
+        "minecraft:dragon_head"
+        | "minecraft:dragon_wall_head"
+        | "minecraft:skeleton_skull"
+        | "minecraft:skeleton_wall_skull"
+        | "minecraft:wither_skeleton_skull"
+        | "minecraft:wither_skeleton_wall_skull"
+        | "minecraft:zombie_head"
+        | "minecraft:zombie_wall_head"
+        | "minecraft:player_head"
+        | "minecraft:player_wall_head"
+        | "minecraft:creeper_head"
+        | "minecraft:creeper_wall_head"
+        | "minecraft:piglin_head"
+        | "minecraft:piglin_wall_head" => Some("minecraft:skull"),
         "minecraft:sign"
         | "minecraft:oak_sign"
         | "minecraft:spruce_sign"

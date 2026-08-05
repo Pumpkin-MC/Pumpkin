@@ -309,7 +309,5 @@ fn build_dimension_nbt(dim: &pumpkin_data::dimension::Dimension) -> Vec<u8> {
     monster_spawn.put_compound("value", value);
     compound.put_compound("monster_spawn_light_level", monster_spawn);
 
-    let mut bytes = Vec::new();
-    let _ = pumpkin_nbt::serializer::to_bytes(&compound, &mut bytes);
-    bytes
+    pumpkin_nbt::Nbt::from(compound).write().to_vec()
 }

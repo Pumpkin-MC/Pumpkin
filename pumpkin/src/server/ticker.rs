@@ -25,9 +25,9 @@ impl Ticker {
             manager.tick();
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
-            let _ = server
+            server
                 .plugin_manager
-                .fire(ServerTickStartEvent::new(tick_number))
+                .fire(server, &mut ServerTickStartEvent::new(tick_number))
                 .await;
 
             if manager.is_sprinting() {
@@ -44,9 +44,12 @@ impl Ticker {
             let tick_duration_nanos = tick_start_time.elapsed().as_nanos() as i64;
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
-            let _ = server
+            server
                 .plugin_manager
-                .fire(ServerTickEndEvent::new(tick_number, tick_duration_nanos))
+                .fire(
+                    server,
+                    &mut ServerTickEndEvent::new(tick_number, tick_duration_nanos),
+                )
                 .await;
 
             server.update_tick_times(tick_duration_nanos).await;

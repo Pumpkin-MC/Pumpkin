@@ -58,11 +58,15 @@ impl TeleportTowardsPlayerGoal {
         }
 
         let living = player.get_living_entity()?;
-        if !self.target_predicate.test(
-            &world,
-            Some(&self.enderman.mob_entity.living_entity),
-            living,
-        ) {
+        if !self
+            .target_predicate
+            .test(
+                &world,
+                Some(&self.enderman.mob_entity.living_entity),
+                living,
+            )
+            .await
+        {
             return None;
         }
 

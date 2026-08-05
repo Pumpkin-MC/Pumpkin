@@ -5,11 +5,7 @@ use std::{
 };
 
 use pumpkin_data::game_rules::{GameRule, GameRuleRegistry, GameRuleValue};
-use pumpkin_nbt::{
-    compound::NbtCompound,
-    nbt_compress::{from_gzip_bytes, read_gzip_compound_tag, to_gzip_bytes},
-    tag::NbtTag,
-};
+use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
@@ -50,7 +46,7 @@ impl Default for WeatherData {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct WorldGenSettingsData {
     #[serde(flatten)]
     pub settings: WorldGenSettings,
@@ -134,8 +130,19 @@ pub fn read_weather(level_folder: &Path) -> WeatherData {
         return WeatherData::default();
     }
     match File::open(&path) {
-        Ok(f) => match from_gzip_bytes::<DataFileRoot<WeatherData>, _>(f) {
-            Ok(root) => root.data,
+        Ok(f) => match read_gzip_compound_tag(f) {
+            Ok(compound) => {
+                let data_compound = compound.get_compound("data");
+                let c = data_compound.as_ref().map_or(&compound, |v| v);
+                WeatherData {
+                    clear_weather_time: c.get_int("clear_weather_time").unwrap_or(0),
+                    rain_time: c.get_int("rain_time").unwrap_or(0),
+                    thunder_time: c.get_int("thunder_time").unwrap_or(0),
+                    raining: c.get_bool("raining").unwrap_or(false),
+                    thundering: c.get_bool("thundering").unwrap_or(false),
+                    data_version: c.get_int("DataVersion").unwrap_or(0),
+                }
+            }
             Err(e) => {
                 warn!("Failed to deserialize weather.dat, using defaults: {e}");
                 WeatherData::default()
@@ -152,8 +159,15 @@ pub fn write_weather(level_folder: &Path, data: &WeatherData) -> Result<(), Worl
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("weather.dat");
     let file = File::create(&path)?;
-    let root = DataFileRoot { data: data.clone() };
-    to_gzip_bytes(&root, BufWriter::new(file))
+    let mut data_comp = NbtCompound::new();
+    data_comp.put_int("clear_weather_time", data.clear_weather_time);
+    data_comp.put_int("rain_time", data.rain_time);
+    data_comp.put_int("thunder_time", data.thunder_time);
+    data_comp.put_bool("raining", data.raining);
+    data_comp.put_bool("thundering", data.thundering);
+    let mut root = NbtCompound::new();
+    root.put_compound("data", data_comp);
+    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
 
@@ -163,8 +177,17 @@ pub fn read_world_gen_settings(level_folder: &Path) -> Option<WorldGenSettings> 
         return None;
     }
     match File::open(&path) {
-        Ok(f) => match from_gzip_bytes::<DataFileRoot<WorldGenSettingsData>, _>(f) {
-            Ok(root) => Some(root.data.settings),
+        Ok(f) => match read_gzip_compound_tag(f) {
+            Ok(compound) => {
+                let seed = compound
+                    .get_compound("data")
+                    .and_then(|c| c.get_long("seed"))
+                    .unwrap_or(0);
+                Some(WorldGenSettings {
+                    seed,
+                    dimensions: std::collections::HashMap::new(),
+                })
+            }
             Err(e) => {
                 warn!("Failed to deserialize world_gen_settings.dat: {e}");
                 None
@@ -185,9 +208,13 @@ pub fn write_world_gen_settings(
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("world_gen_settings.dat");
     let file = File::create(&path)?;
-    let data = WorldGenSettingsData::new(settings.clone(), data_version);
-    let root = DataFileRoot { data };
-    to_gzip_bytes(&root, BufWriter::new(file))
+    let mut inner = NbtCompound::new();
+    inner.put_int("DataVersion", data_version);
+    inner.put_long("seed", settings.seed);
+
+    let mut root = NbtCompound::new();
+    root.put_compound("data", inner);
+    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
 
@@ -346,8 +373,16 @@ pub fn read_wandering_trader(level_folder: &Path) -> WanderingTraderData {
         return WanderingTraderData::default();
     }
     match File::open(&path) {
-        Ok(f) => match from_gzip_bytes::<DataFileRoot<WanderingTraderData>, _>(f) {
-            Ok(root) => root.data,
+        Ok(f) => match read_gzip_compound_tag(f) {
+            Ok(compound) => {
+                let data_compound = compound.get_compound("data");
+                let c = data_compound.as_ref().map_or(&compound, |v| v);
+                WanderingTraderData {
+                    spawn_delay: c.get_int("WanderingTraderSpawnDelay").unwrap_or(24_000),
+                    spawn_chance: c.get_int("WanderingTraderSpawnChance").unwrap_or(25),
+                    data_version: c.get_int("DataVersion").unwrap_or(0),
+                }
+            }
             Err(e) => {
                 warn!("Failed to deserialize wandering_trader.dat, using defaults: {e}");
                 WanderingTraderData::default()
@@ -367,8 +402,12 @@ pub fn write_wandering_trader(
     let dir = ensure_minecraft_data_dir(level_folder)?;
     let path = dir.join("wandering_trader.dat");
     let file = File::create(&path)?;
-    let root = DataFileRoot { data: data.clone() };
-    to_gzip_bytes(&root, BufWriter::new(file))
+    let mut data_comp = NbtCompound::new();
+    data_comp.put_int("WanderingTraderSpawnDelay", data.spawn_delay);
+    data_comp.put_int("WanderingTraderSpawnChance", data.spawn_chance);
+    let mut root = NbtCompound::new();
+    root.put_compound("data", data_comp);
+    pumpkin_nbt::nbt_compress::write_gzip_compound_tag(root, BufWriter::new(file))
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
 
