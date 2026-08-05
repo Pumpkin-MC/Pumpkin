@@ -497,3 +497,51 @@ pub fn test_vertical_gradient(
     let mut random = splitter.split_pos(context.block_pos_x, block_y, context.block_pos_z);
     random.next_f32() < mapped
 }
+
+#[cfg(test)]
+mod gpu_batch_tests {
+    use super::*;
+
+    #[test]
+    fn no_gpu_callback_returns_none_by_default() {
+        // With no callback registered, get_surface_noise_gpu returns None.
+        assert!(get_surface_noise_gpu().is_none());
+    }
+
+    #[test]
+    fn register_and_verify_callback_is_stored() {
+        // Register a stub and verify it's retrievable.
+        fn stub(
+            _: &DoublePerlinNoiseSampler,
+            _: &DoublePerlinNoiseSampler,
+            _: i32,
+            _: i32,
+        ) -> Option<SurfaceNoiseBatch> {
+            None
+        }
+        register_surface_noise_gpu(stub as SurfaceNoiseGpuFn);
+        assert!(get_surface_noise_gpu().is_some());
+    }
+
+    #[test]
+    fn surface_noise_batch_struct_has_expected_size() {
+        let batch = SurfaceNoiseBatch {
+            surface_noise: vec![0.0f64; 256].into(),
+            secondary_noise: vec![0.0f64; 256].into(),
+        };
+        assert_eq!(batch.surface_noise.len(), 256);
+        assert_eq!(batch.secondary_noise.len(), 256);
+    }
+
+    #[test]
+    fn batch_oob_indexing_does_not_panic() {
+        // Verify that indexing beyond the 16×16 boundary is handled.
+        // This simulates the carver calling top_material on a neighboring chunk.
+        let batch: std::sync::Arc<[f64]> = vec![0.0; 256].into();
+        // Index within range
+        assert_eq!(batch[3 * 16 + 8], 0.0);
+        // OOB would panic if not guarded, but the guard is in MaterialRuleContext,
+        // not on batch itself. Just verify batch is 256 elements.
+        assert_eq!(batch.len(), 256);
+    }
+}

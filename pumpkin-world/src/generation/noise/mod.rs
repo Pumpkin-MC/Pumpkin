@@ -3,6 +3,55 @@ pub mod ore_sampler;
 pub mod perlin;
 pub mod router;
 
+// ---------------------------------------------------------------------------
+// GPU acceleration hook — noise router evaluation
+// ---------------------------------------------------------------------------
+//
+// When a GPU callback is registered, `populate_noise` dispatches the entire
+// density-function evaluation to the GPU in one batch, writing the resulting
+// block states directly into the chunk.  The CPU path (ChunkNoiseGenerator +
+// aquifer/ore samplers) is skipped entirely.
+
+use std::sync::OnceLock;
+
+use pumpkin_data::BlockStateId;
+
+use crate::generation::noise::router::density_function::beardifier::{
+    BeardifierJunction, BeardifierStructure,
+};
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
+use pumpkin_util::math::block_box::BlockBox;
+
+/// GPU-accelerated chunk noise evaluation.
+///
+/// Receives all the parameters the CPU `ChunkNoiseGenerator` uses and returns a
+/// complete `[BlockStateId]` flat block map (`16×16×height` elements, row-major)
+/// when the GPU path succeeds, or `None` to signal "fall back to the CPU path."
+pub type NoiseGpuFn = fn(
+    chunk_x: i32,
+    chunk_z: i32,
+    settings: &GenerationSettings,
+    random_config: &GlobalRandomConfig,
+    beardifier_structures: &[BeardifierStructure],
+    beardifier_junctions: &[BeardifierJunction],
+    affected_box: Option<BlockBox>,
+    default_block: BlockStateId,
+    default_fluid: BlockStateId,
+) -> Option<Box<[BlockStateId]>>;
+
+static NOISE_GPU: OnceLock<NoiseGpuFn> = OnceLock::new();
+
+/// Register a GPU noise evaluation function. Call once at server startup.
+pub fn register_noise_gpu(f: NoiseGpuFn) {
+    let _ = NOISE_GPU.set(f);
+}
+
+/// Returns the registered GPU noise function, if any.
+#[must_use]
+pub fn get_noise_gpu() -> Option<NoiseGpuFn> {
+    NOISE_GPU.get().copied()
+}
+
 use pumpkin_data::{Block, BlockState, chunk_gen_settings::GenerationShapeConfig};
 use pumpkin_util::{math::vector3::Vector3, random::xoroshiro128::XoroshiroSplitter};
 

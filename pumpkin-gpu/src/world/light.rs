@@ -32,6 +32,11 @@ pub enum AdapterSelector {
 /// compatible GPU is available the global slot stays empty — every
 /// [`try_sky_light_gpu`] / [`sky_light_gpu_callback`] call will return
 /// `None` and the caller falls back to the CPU path.
+///
+/// The check-then-set pattern has a benign race: two concurrent callers may
+/// both construct a context, but `OnceLock::set` guarantees only one wins.
+/// The losing context is dropped immediately. Since initialisation happens
+/// once at startup from the main thread, this race is theoretical.
 pub fn init_global_gpu() {
     if GLOBAL_GPU.get().is_none()
         && let Some(ctx) = GpuNoiseContext::try_new()

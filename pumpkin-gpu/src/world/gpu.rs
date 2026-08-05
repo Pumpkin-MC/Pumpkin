@@ -199,6 +199,10 @@ pub struct GpuNoiseContext {
     block_light_bind_group_layout: wgpu::BindGroupLayout,
     pub adapter_name: String,
     pub adapter_is_discrete: bool,
+    /// Cache of pre-uploaded octave/permutations buffers keyed by content hash.
+    /// Eliminates repeated GPU uploads when the same sampler is dispatched many
+    /// times (e.g. the surface stage calls the same noise sampler per chunk).
+    octave_buffer_cache: dashmap::DashMap<u64, (wgpu::Buffer, wgpu::Buffer)>,
 }
 
 impl GpuNoiseContext {
@@ -295,6 +299,7 @@ impl GpuNoiseContext {
             block_light_bind_group_layout,
             adapter_name,
             adapter_is_discrete,
+            octave_buffer_cache: dashmap::DashMap::new(),
         })
     }
 
@@ -568,38 +573,6 @@ impl GpuNoiseContext {
         })
     }
 
-    /// Bind group used only to initialize the field before the real one is built.
-    fn placeholder_bind_group(&self) -> wgpu::BindGroup {
-        let dummy = self.empty_storage::<f32>("placeholder", 16);
-        let uniform = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("placeholder uniform"),
-            size: std::mem::size_of::<GraphDims>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM,
-            mapped_at_creation: false,
-        });
-        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("placeholder bind group"),
-            layout: &self.graph_bind_group_layout,
-            entries: &[
-                bind_entry(0, &uniform),
-                bind_entry(1, &dummy),
-                bind_entry(2, &dummy),
-                bind_entry(3, &dummy),
-                bind_entry(4, &dummy),
-                bind_entry(5, &dummy),
-                bind_entry(6, &dummy),
-                bind_entry(7, &dummy),
-                bind_entry(8, &dummy),
-                bind_entry(9, &dummy),
-                bind_entry(10, &dummy),
-                bind_entry(11, &dummy),
-                bind_entry(12, &dummy),
-                bind_entry(13, &dummy),
-                bind_entry(14, &dummy),
-            ],
-        })
-    }
-
     /// Uploads `data` as a read-only storage buffer, substituting one zeroed element
     /// when it is empty: WGSL rejects zero-sized storage bindings, and the placeholder
     /// has to be a full element wide or validation rejects the size mismatch instead.
@@ -619,29 +592,103 @@ impl GpuNoiseContext {
             })
     }
 
-    fn read_back_range(&self, staging: &wgpu::Buffer, size: u64) -> Vec<f32> {
-        let slice = staging.slice(..size);
+    /// Map `slice` for reading and return the mapped range. Uses
+    /// `wait_indefinitely` because `PollType::Poll` does not reliably drive
+    /// pending GPU work to completion on all backends. Returns `None` only on
+    /// device loss (the caller gets an empty result and should fall back to CPU).
+    fn poll_map_sync(&self, slice: &wgpu::BufferSlice<'_>) -> Option<wgpu::BufferView> {
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {
             let _ = tx.send(result);
         });
-        self.device
+        if self
+            .device
             .poll(wgpu::PollType::wait_indefinitely())
-            .expect("device poll failed while waiting for GPU readback");
-        rx.recv()
-            .expect("map_async callback dropped without sending a result")
-            .expect("failed to map GPU output buffer for readback");
+            .is_err()
+        {
+            return None; // device lost
+        }
+        match rx.recv() {
+            Ok(Ok(())) => Some(
+                slice
+                    .get_mapped_range()
+                    .expect("buffer was mapped but get_mapped_range failed"),
+            ),
+            _ => None,
+        }
+    }
 
-        let data = slice
-            .get_mapped_range()
-            .expect("buffer was mapped but get_mapped_range failed");
-        let result = bytemuck::cast_slice(&data).to_vec();
+    /// Generic read-back from a staging buffer. The `extract` closure converts
+    /// the mapped byte slice into the desired output type.
+    fn read_back<T, F>(&self, staging: &wgpu::Buffer, size: u64, extract: F) -> Vec<T>
+    where
+        F: FnOnce(&[u8]) -> Vec<T>,
+    {
+        let slice = staging.slice(..size);
+        let Some(data) = self.poll_map_sync(&slice) else {
+            return Vec::new();
+        };
+        let result = extract(&data);
         drop(data);
         result
     }
 
+    /// Hash the content of an `OctaveBatch` for cache keying.
+    fn hash_octave_batch(batch: &OctaveBatch) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::hash::DefaultHasher::new();
+        batch.params.len().hash(&mut h);
+        batch.permutations.len().hash(&mut h);
+        for p in &batch.params {
+            p.amplitude.to_bits().hash(&mut h);
+            p.persistence.to_bits().hash(&mut h);
+            p.lacunarity.to_bits().hash(&mut h);
+            p.x_origin.to_bits().hash(&mut h);
+            p.y_origin.to_bits().hash(&mut h);
+            p.z_origin.to_bits().hash(&mut h);
+        }
+        for &p in &batch.permutations {
+            p.hash(&mut h);
+        }
+        h.finish()
+    }
+
+    /// Return cached octave+permutation buffers for `batch`, uploading them once
+    /// on first access. The cache is keyed by a content hash so the same sampler
+    /// doesn't re-upload identical data on every dispatch.
+    fn get_or_upload_octave_buffers(&self, batch: &OctaveBatch) -> (wgpu::Buffer, wgpu::Buffer) {
+        let hash = Self::hash_octave_batch(batch);
+        // DashMap::entry().or_insert_with would need &self.0 / &self.1 borrows
+        // that outlive the entry guard. Use a get-or-insert pattern instead.
+        if let Some(entry) = self.octave_buffer_cache.get(&hash) {
+            // Clone wgpu::Buffer handles (cheap — just Arcs internally).
+            return (entry.0.clone(), entry.1.clone());
+        }
+        let o = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("octaves_cached"),
+                contents: bytemuck::cast_slice(&batch.params),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        let p = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("permutations_cached"),
+                contents: bytemuck::cast_slice(&batch.permutations),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+        // Insert may race on the same hash — that's benign (losing entry drops its buffers).
+        self.octave_buffer_cache
+            .insert(hash, (o.clone(), p.clone()));
+        (o, p)
+    }
+
     /// Samples `batch` at every point in `points`, returning one density value per
     /// point in the same order.
+    ///
+    /// Octave and permutation buffers are cached keyed by content hash so repeated
+    /// dispatches with the same sampler skip GPU uploads.
     #[must_use]
     pub fn sample_batch(&self, batch: &OctaveBatch, points: &[[f32; 3]]) -> Vec<f32> {
         if points.is_empty() || batch.num_octaves() == 0 {
@@ -653,6 +700,8 @@ impl GpuNoiseContext {
             num_octaves: batch.num_octaves() as u32,
         };
 
+        let (octaves_buffer, permutations_buffer) = self.get_or_upload_octave_buffers(batch);
+
         let dims_buffer = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -660,20 +709,6 @@ impl GpuNoiseContext {
                 contents: bytemuck::bytes_of(&dims),
                 usage: wgpu::BufferUsages::UNIFORM,
             });
-        let octaves_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("octaves"),
-                contents: bytemuck::cast_slice(&batch.params),
-                usage: wgpu::BufferUsages::STORAGE,
-            });
-        let permutations_buffer =
-            self.device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("permutations"),
-                    contents: bytemuck::cast_slice(&batch.permutations),
-                    usage: wgpu::BufferUsages::STORAGE,
-                });
         let flat_points: Vec<f32> = points.iter().flat_map(|p| p.iter().copied()).collect();
         let points_buffer = self
             .device
@@ -727,25 +762,10 @@ impl GpuNoiseContext {
         encoder.copy_buffer_to_buffer(&output_buffer, 0, &staging_buffer, 0, output_size);
         self.queue.submit(Some(encoder.finish()));
 
-        let slice = staging_buffer.slice(..);
-        let (tx, rx) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |result| {
-            let _ = tx.send(result);
+        let result = self.read_back(&staging_buffer, output_size, |data| {
+            bytemuck::cast_slice(data).to_vec()
         });
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .expect("device poll failed while waiting for GPU readback");
-        rx.recv()
-            .expect("map_async callback dropped without sending a result")
-            .expect("failed to map GPU output buffer for readback");
-
-        let data = slice
-            .get_mapped_range()
-            .expect("buffer was mapped but get_mapped_range failed");
-        let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
-        drop(data);
         staging_buffer.unmap();
-
         result
     }
 }
@@ -942,29 +962,13 @@ impl GpuNoiseContext {
         self.queue.submit(Some(encoder.finish()));
     }
 
-    /// Like [`Self::read_back_range`] but for `u32`-per-element storage buffers
-    /// where each `u32` holds one `u8` value in its least-significant byte.
+    /// Like `read_back` but for `u32`-per-element storage buffers where each
+    /// `u32` holds one `u8` value in its least-significant byte.
     fn read_back_u8_range(&self, staging: &wgpu::Buffer, size: u64) -> Vec<u8> {
-        let slice = staging.slice(..size);
-        let (tx, rx) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |result| {
-            let _ = tx.send(result);
-        });
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .expect("device poll failed while waiting for GPU u8 readback");
-        rx.recv()
-            .expect("map_async callback dropped without sending a result")
-            .expect("failed to map GPU u8 output buffer for readback");
-
-        let data = slice
-            .get_mapped_range()
-            .expect("buffer was mapped but get_mapped_range failed");
-        // Each u8 is stored as one u32 in the storage buffer; extract the LSB.
-        let u32s: &[u32] = bytemuck::cast_slice(&data);
-        let result: Vec<u8> = u32s.iter().map(|&v| v as u8).collect();
-        drop(data);
-        result
+        self.read_back(staging, size, |data| {
+            let u32s: &[u32] = bytemuck::cast_slice(data);
+            u32s.iter().map(|&v| v as u8).collect()
+        })
     }
 }
 
@@ -1038,7 +1042,9 @@ impl<'a> PreparedGraph<'a> {
             &compiled.samplers.simplex_permutations,
         );
 
-        let point_capacity = 1;
+        // Start with a typical chunk-column batch (16×16) to avoid an
+        // immediate reallocation on the first evaluate() call.
+        let point_capacity = 256;
         let (points, scratch, output, staging) = context.allocate_point_buffers(
             point_capacity,
             num_instructions as usize,
@@ -1049,7 +1055,32 @@ impl<'a> PreparedGraph<'a> {
         let junctions =
             context.empty_storage::<super::graph::GpuBeardJunction>("beard junctions", 1);
 
-        let mut prepared = Self {
+        // Build the real bind group directly — no placeholder allocation needed.
+        let bind_group = context
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("density_graph bind group"),
+                layout: &context.graph_bind_group_layout,
+                entries: &[
+                    bind_entry(0, &dims),
+                    bind_entry(1, &instructions),
+                    bind_entry(2, &points),
+                    bind_entry(3, &scratch),
+                    bind_entry(4, &output),
+                    bind_entry(5, &samplers),
+                    bind_entry(6, &octaves),
+                    bind_entry(7, &permutations),
+                    bind_entry(8, &spline_points),
+                    bind_entry(9, &interpolated),
+                    bind_entry(10, &structures),
+                    bind_entry(11, &junctions),
+                    bind_entry(12, &interval_entries),
+                    bind_entry(13, &outputs),
+                    bind_entry(14, &simplex_permutations),
+                ],
+            });
+
+        Self {
             context,
             num_instructions,
             dims,
@@ -1069,14 +1100,12 @@ impl<'a> PreparedGraph<'a> {
             staging,
             structures,
             junctions,
-            bind_group: context.placeholder_bind_group(),
+            bind_group,
             point_capacity,
             structure_capacity: 1,
             junction_capacity: 1,
             flat_points: Vec::new(),
-        };
-        prepared.rebuild_bind_group();
-        prepared
+        }
     }
 
     /// Values returned per point: the emitted outputs, or one when none are declared.
@@ -1213,7 +1242,9 @@ impl<'a> PreparedGraph<'a> {
         encoder.copy_buffer_to_buffer(&self.output, 0, &self.staging, 0, output_size);
         queue.submit(Some(encoder.finish()));
 
-        let result = self.context.read_back_range(&self.staging, output_size);
+        let result = self.context.read_back(&self.staging, output_size, |data| {
+            bytemuck::cast_slice(data).to_vec()
+        });
         self.staging.unmap();
         result
     }

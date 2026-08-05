@@ -3079,6 +3079,7 @@ version = "0.1.0-dev+26.2"
 dependencies = [
  "bytemuck",
  "criterion",
+ "dashmap",
  "pollster",
  "pumpkin-config",
  "pumpkin-data",

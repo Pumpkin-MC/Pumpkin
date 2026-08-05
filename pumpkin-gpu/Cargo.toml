@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 bytemuck = { workspace = true, features = ["derive"] }
+dashmap.workspace = true
 pollster.workspace = true
 pumpkin-config.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }

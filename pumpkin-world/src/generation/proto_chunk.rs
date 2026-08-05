@@ -677,6 +677,40 @@ impl ProtoChunk {
 
         let affected_box = any_piece_bounding_box.map(|b| b.expand(24, 24, 24));
 
+        // --- GPU fast path: evaluate entire chunk density in one GPU dispatch ---
+        let gpu_block_map = crate::generation::noise::get_noise_gpu().and_then(|gpu_fn| {
+            gpu_fn(
+                self.x,
+                self.z,
+                generator.settings,
+                &generator.random_config,
+                &beardifier_structures,
+                &beardifier_junctions,
+                affected_box,
+                self.default_block.id,
+                generator.settings.default_fluid.id,
+            )
+        });
+        if let Some(block_map) = gpu_block_map {
+            let min_y = self.bottom_y() as i32;
+            let height = self.height() as i32;
+            for y in 0..height {
+                for z in 0..16i32 {
+                    for x in 0..16i32 {
+                        let idx = (y * 256 + z * 16 + x) as usize;
+                        self.set_block_state(
+                            self.start_block_x() + x,
+                            min_y + y,
+                            self.start_block_z() + z,
+                            block_map[idx].to_state(),
+                        );
+                    }
+                }
+            }
+            self.stage = StagedChunkEnum::Noise;
+            return;
+        }
+
         // Passed the newly mapped beardifier structures & junctions arrays independently!
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &generator.base_router.noise,
@@ -708,6 +742,7 @@ impl ProtoChunk {
             &generator.base_router.surface_estimator,
             &surface_config,
         );
+
         self.populate_noise(
             generator,
             &mut noise_sampler,

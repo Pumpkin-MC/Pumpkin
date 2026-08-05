@@ -280,17 +280,28 @@ impl Server {
                             pumpkin_gpu::world::surface::surface_noise_gpu_fn(),
                         );
                     }
+                    // Register the GPU noise callback for chunk density evaluation.
+                    if gpu_config.noise_acceleration {
+                        pumpkin_world::generation::noise::register_noise_gpu(
+                            pumpkin_gpu::world::noise::noise_gpu_fn(),
+                        );
+                    }
                     info!(
-                        "GPU acceleration enabled: {} acceleration, {} acceleration",
+                        "GPU acceleration: noise={}, light={}, surface={}",
                         if gpu_config.noise_acceleration {
-                            "noise"
+                            "on"
                         } else {
-                            "noise (disabled)"
+                            "off"
                         },
                         if gpu_config.light_acceleration {
-                            "light"
+                            "on"
                         } else {
-                            "light (disabled)"
+                            "off"
+                        },
+                        if gpu_config.surface_acceleration {
+                            "on"
+                        } else {
+                            "off"
                         },
                     );
                 } else {
