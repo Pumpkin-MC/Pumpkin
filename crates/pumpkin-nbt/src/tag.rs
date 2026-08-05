@@ -350,12 +350,7 @@ impl NbtTag {
                 if len > crate::MAX_ARRAY_LENGTH {
                     return Err(Error::LargeLength(len));
                 }
-                let mut byte_array = Vec::with_capacity(len.min(4096));
-                for _ in 0..len {
-                    let byte = reader.get_i8()?;
-                    byte_array.push(byte);
-                }
-                Ok(Self::ByteArray(byte_array.into()))
+                Ok(Self::ByteArray(reader.get_byte_array(len)?.into()))
             }
             STRING_ID => Ok(Self::String(reader.get_string()?.into_owned().into())),
             LIST_ID => {
