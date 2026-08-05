@@ -193,8 +193,9 @@ pub(crate) fn build() -> TokenStream {
                 let tag_const_name =
                     format_ident!("{}", tag_name.replace([':', '/'], "_").to_uppercase());
 
+                let name_lit = syn::LitStr::new(&tag_name, proc_macro2::Span::call_site());
                 tag_entries.push(quote! {
-                    pub const #tag_const_name: #tag_type_path = (&[#(#values),*], &[#(#ids),*]);
+                    pub const #tag_const_name: #tag_type_path = (&[#(#values),*], &[#(#ids),*], #name_lit);
                 });
                 tag_map_entries.push(quote! { #tag_name => &#key_pascal::#tag_const_name });
             }
@@ -249,10 +250,17 @@ pub(crate) fn build() -> TokenStream {
     }
     .to_token_stream();
 
+    let bridge = quote! { crate::dynamic_tag_bridge };
+
     quote! {
         use pumpkin_util::version::JavaMinecraftVersion;
 
-        pub type Tag = (&'static [&'static str], &'static [u16]);
+        /// A compiled-in tag constant.
+        /// Tuple: (names, ids, name).
+        /// `names`: element identifiers (e.g. `["minecraft:stone"]`).
+        /// `ids`: numeric element IDs.
+        /// `name`: the tag identifier (e.g. `"minecraft:stone_ore_replaceables"`).
+        pub type Tag = (&'static [&'static str], &'static [u16], &'static str);
 
         #registry_key_enum
 
@@ -285,16 +293,35 @@ pub(crate) fn build() -> TokenStream {
             fn registry_key(&self) -> &str;
             fn registry_id(&self) -> u16;
 
-           #[must_use]
-           fn is_tagged_with(&self, tag: &str) -> Option<bool> {
+            #[must_use]
+            fn is_tagged_with(&self, tag: &str) -> Option<bool> {
                 let tag = tag.strip_prefix("#").unwrap_or(tag);
-                let items = get_tag_ids(Self::tag_key(), tag)?;
-                Some(items.contains(&self.registry_id()))
+                if let Some(ids) = get_tag_ids(Self::tag_key(), tag)
+                    && ids.contains(&self.registry_id())
+                {
+                    return Some(true);
+                }
+                if let Some(true) = #bridge::check_dynamic_tag(
+                    Self::tag_key().identifier_string(),
+                    self.registry_key(),
+                    tag,
+                ) {
+                    return Some(true);
+                }
+                Some(false)
             }
 
             #[must_use]
             fn has_tag(&self, tag: &'static Tag) -> bool {
-                tag.1.contains(&self.registry_id())
+                if tag.1.contains(&self.registry_id()) {
+                    return true;
+                }
+                #bridge::check_dynamic_tag(
+                    Self::tag_key().identifier_string(),
+                    self.registry_key(),
+                    tag.2,
+                )
+                .unwrap_or(false)
             }
 
             #[must_use]

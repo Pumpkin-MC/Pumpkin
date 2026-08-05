@@ -1,3 +1,5 @@
+// TODO(datapack parity): Load biome definitions from data/minecraft/worldgen/biome/
+// for datapack-provided custom biomes.
 use heck::ToPascalCase;
 use std::{collections::BTreeMap, fs};
 
@@ -602,3 +604,4 @@ pub fn build() -> TokenStream {
         pub const NETHER_BIOME_SOURCE: BiomeTree = #nether_tree;
     }
 }
+

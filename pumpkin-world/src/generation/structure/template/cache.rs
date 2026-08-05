@@ -2,10 +2,14 @@
 //!
 //! This module provides a lazy-loading cache for structure templates that are
 //! embedded in the binary at compile time using `include_bytes!`.
+//! Datapack structures in `data/<namespace>/structure/*.nbt` are loaded on
+//! demand from the filesystem when not found in the embedded data.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use dashmap::DashMap;
+use std::sync::RwLock;
 
 use super::{StructureTemplate, structure_template::TemplateError};
 
@@ -15,6 +19,8 @@ use super::{StructureTemplate, structure_template::TemplateError};
 /// The cache is thread-safe and can be accessed from multiple threads.
 pub struct TemplateCache {
     cache: DashMap<String, Arc<StructureTemplate>>,
+    /// Optional paths to search for datapack structure .nbt files.
+    datapack_search_paths: RwLock<Vec<PathBuf>>,
 }
 
 impl Default for TemplateCache {
@@ -29,10 +35,48 @@ impl TemplateCache {
     pub fn new() -> Self {
         Self {
             cache: DashMap::new(),
+            datapack_search_paths: RwLock::new(Vec::new()),
         }
     }
 
-    /// Gets a template by `name`, loading it from embedded resources if not cached.
+    /// Set search paths for datapack structure files.
+    pub fn set_datapack_paths(&self, paths: Vec<PathBuf>) {
+        *self.datapack_search_paths.write().unwrap() = paths;
+    }
+
+    /// Try to load a structure .nbt file from datapack search paths.
+    fn load_datapack_bytes(&self, name: &str) -> Option<Vec<u8>> {
+        let paths = self.datapack_search_paths.read().unwrap();
+        for base in paths.iter() {
+            // Try: <base>/data/<namespace>/structure/<name>.nbt
+            // Handle both "namespace:path" and bare "path" forms
+            let (namespace, rel_path) = name.split_once(':').unwrap_or(("minecraft", name));
+            let rel_path = rel_path.trim_start_matches('/');
+            let namespaces = vec![
+                format!("{namespace}/structures/{rel_path}"),
+                format!("{namespace}/structure/{rel_path}"),
+            ];
+            for ns_path in &namespaces {
+                let file_path = base.join("data").join(ns_path);
+                let with_ext = if file_path.extension().is_none() {
+                    file_path.with_extension("nbt")
+                } else {
+                    file_path
+                };
+                if let Ok(data) = std::fs::read(&with_ext) {
+                    return Some(data);
+                }
+                // Also try with .nbt extension appended
+                let alt = format!("{}.nbt", with_ext.display());
+                if let Ok(data) = std::fs::read(&alt) {
+                    return Some(data);
+                }
+            }
+        }
+        None
+    }
+
+    /// Gets a template by `name`, loading from embedded resources or datapack files.
     ///
     /// Returns the loaded template wrapped in an `Arc`, or `None` if the template
     /// doesn't exist or failed to load.
@@ -44,20 +88,25 @@ impl TemplateCache {
             return Some(Arc::clone(&template));
         }
 
-        // Try to load the template
-        let bytes = Self::load_template_bytes(name)?;
-
-        match StructureTemplate::from_nbt_bytes(bytes) {
-            Ok(template) => {
-                let arc = Arc::new(template);
-                self.cache.insert(name.to_owned(), Arc::clone(&arc));
-                Some(arc)
-            }
-            Err(e) => {
-                tracing::error!("Failed to load template '{}': {}", name, e);
-                None
-            }
+        // Try embedded bytes first
+        if let Some(bytes) = Self::load_template_bytes(name)
+            && let Ok(template) = StructureTemplate::from_nbt_bytes(bytes)
+        {
+            let arc = Arc::new(template);
+            self.cache.insert(name.to_owned(), Arc::clone(&arc));
+            return Some(arc);
         }
+
+        // Fall back to datapack filesystem paths
+        if let Some(bytes) = self.load_datapack_bytes(name)
+            && let Ok(template) = StructureTemplate::from_nbt_bytes(&bytes)
+        {
+            let arc = Arc::new(template);
+            self.cache.insert(name.to_owned(), Arc::clone(&arc));
+            return Some(arc);
+        }
+
+        None
     }
 
     /// Gets a template by name, returning an error if loading fails.
@@ -73,14 +122,23 @@ impl TemplateCache {
             return Ok(Arc::clone(&template));
         }
 
-        // Try to load the template
-        let bytes = Self::load_template_bytes(name)
-            .ok_or(TemplateError::MissingField("template file not found"))?;
+        // Try embedded bytes first
+        if let Some(bytes) = Self::load_template_bytes(name) {
+            let template = StructureTemplate::from_nbt_bytes(bytes)?;
+            let arc = Arc::new(template);
+            self.cache.insert(name.to_owned(), Arc::clone(&arc));
+            return Ok(arc);
+        }
 
-        let template = StructureTemplate::from_nbt_bytes(bytes)?;
-        let arc = Arc::new(template);
-        self.cache.insert(name.to_owned(), Arc::clone(&arc));
-        Ok(arc)
+        // Fall back to datapack filesystem paths
+        if let Some(bytes) = self.load_datapack_bytes(name) {
+            let template = StructureTemplate::from_nbt_bytes(&bytes)?;
+            let arc = Arc::new(template);
+            self.cache.insert(name.to_owned(), Arc::clone(&arc));
+            return Ok(arc);
+        }
+
+        Err(TemplateError::MissingField("template file not found"))
     }
 
     /// Preloads a list of templates into the cache.

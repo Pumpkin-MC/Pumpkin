@@ -26,6 +26,7 @@ mod damage_type;
 mod data_component;
 mod dimension;
 mod effect;
+mod embedded_vanilla_datapack;
 mod enchantments;
 mod entity_pose;
 mod entity_status;
@@ -139,6 +140,10 @@ pub fn main() {
         ),
         (carver::build, "carver.rs"),
         (chest_loot::build, "chest_loot.rs"),
+        (
+            embedded_vanilla_datapack::build,
+            "embedded_vanilla_datapack.rs",
+        ),
     ];
     build_functions.extend(remap::build());
 
