@@ -246,6 +246,7 @@ impl InterpolatedNoiseSampler {
     ///
     /// Exposed read-only so a GPU-side reimplementation can mirror this exact instance
     /// instead of re-deriving it from the seed.
+    #[cfg(feature = "gpu")]
     #[must_use]
     pub const fn octave_samplers(
         &self,
@@ -257,11 +258,13 @@ impl InterpolatedNoiseSampler {
         (&self.lower_noise, &self.upper_noise, &self.noise)
     }
 
+    #[cfg(feature = "gpu")]
     #[must_use]
     pub const fn data(&self) -> &'static InterpolatedNoiseSamplerData {
         self.data
     }
 
+    #[cfg(feature = "gpu")]
     #[must_use]
     pub const fn y_multiplier(&self) -> f64 {
         self.y_multiplier

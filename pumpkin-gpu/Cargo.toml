@@ -11,7 +11,7 @@ pollster.workspace = true
 pumpkin-config.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }
 pumpkin-util.workspace = true
-pumpkin-world.workspace = true
+pumpkin-world = { workspace = true, features = ["gpu"] }
 wgpu.workspace = true
 
 [dev-dependencies]

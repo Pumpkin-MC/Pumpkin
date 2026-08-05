@@ -84,6 +84,9 @@ name = "noise_router"
 harness = false
 
 
+[features]
+gpu = []
+
 [lints]
 workspace = true
 
