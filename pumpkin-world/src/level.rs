@@ -541,7 +541,7 @@ impl Level {
                 let chunk = chunk.value();
                 let chunk_x_base = chunk.x * 16;
                 let chunk_z_base = chunk.z * 16;
-                let section_count = chunk.section.count;
+                let section_count = chunk.section.section_count();
 
                 // Use the bitmask to skip sections
                 let mask = chunk.section.randomly_ticking_mask.load(Ordering::Relaxed);

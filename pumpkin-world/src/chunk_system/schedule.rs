@@ -784,9 +784,17 @@ impl GenerationSchedule {
     }
 
     #[expect(clippy::too_many_lines)]
-    fn receive_chunk(&mut self, pos: ChunkPos, data: RecvChunk) {
+    /// `dim_sections` is the dimension's full section count (`dimension.height / 16`), which is
+    /// what the client reads from the chunk-data packet. Chunks arriving here can be shorter than
+    /// that - notably any Nether/End chunk saved while worldgen was sizing sections off the noise
+    /// generator's 128-block `shape.height` - and a short chunk serializes short, disconnecting the
+    /// client with a protocol error. Pad on the way in so nothing downstream has to care.
+    fn receive_chunk(&mut self, pos: ChunkPos, data: RecvChunk, dim_sections: usize) {
         match data {
             RecvChunk::IO(chunk) => {
+                if let Chunk::Level(data) = &chunk {
+                    data.pad_sections_to(dim_sections);
+                }
                 let mut holder = self.chunk_map.remove(&pos).unwrap();
                 if holder.chunk.is_some() {
                     warn!(
@@ -1040,6 +1048,8 @@ impl GenerationSchedule {
 
     #[expect(clippy::too_many_lines)]
     fn work(mut self, level: &Arc<Level>) {
+        // Full dimension height in sections - what the client expects in every chunk packet.
+        let dim_sections = level.world_gen.dimension().height as usize / 16;
         debug!(
             "schedule thread start id: {:?} name: {}",
             thread::current().id(),
@@ -1076,7 +1086,7 @@ impl GenerationSchedule {
 
             // 2. Process all pending chunk results from workers
             while let Ok((pos, data)) = self.recv_chunk.try_recv() {
-                self.receive_chunk(pos, data);
+                self.receive_chunk(pos, data, dim_sections);
             }
 
             // 3. Re-sort if world state changed or new tasks added
@@ -1102,7 +1112,7 @@ impl GenerationSchedule {
 
                 // Briefly check for high-priority results or world changes to avoid stalling
                 while let Ok((pos, data)) = self.recv_chunk.try_recv() {
-                    self.receive_chunk(pos, data);
+                    self.receive_chunk(pos, data, dim_sections);
                     if self.resort_work(self.send_level.get()) {
                         // If world state changed, we MUST re-sort before continuing
                         self.queue.push(task);
@@ -1313,7 +1323,7 @@ impl GenerationSchedule {
                 if self.running_task_count > 0 || !self.waiting_for_chunks.is_empty() {
                     match self.recv_chunk.recv_timeout(Duration::from_millis(5)) {
                         Ok((pos, data)) => {
-                            self.receive_chunk(pos, data);
+                            self.receive_chunk(pos, data, dim_sections);
                             self.resort_work(self.send_level.get());
                         }
                         Err(crossfire::compat::RecvTimeoutError::Timeout) => {
@@ -1354,7 +1364,7 @@ impl GenerationSchedule {
         let max_wait_iterations = 100; // 5 seconds max wait
         while self.running_task_count > 0 && wait_iterations < max_wait_iterations {
             if let Ok((pos, data)) = self.recv_chunk.try_recv() {
-                self.receive_chunk(pos, data);
+                self.receive_chunk(pos, data, dim_sections);
                 wait_iterations = 0;
             } else {
                 wait_iterations += 1;

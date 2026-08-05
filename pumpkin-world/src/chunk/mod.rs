@@ -103,7 +103,6 @@ pub struct ChunkEntityData {
 /// A chunk can be:
 /// - Subchunks: 24 separate subchunks are stored.
 pub struct ChunkSections {
-    pub count: usize,
     pub block_sections: RwLock<Box<[BlockPalette]>>,
     pub random_tick_sections: RwLock<Option<Box<[RandomTickSectionCache]>>>,
     pub randomly_ticking_mask: std::sync::atomic::AtomicU32,
@@ -128,6 +127,15 @@ impl RandomTickSectionCache {
 }
 
 impl ChunkSections {
+    /// Number of 16-block sections this chunk currently holds.
+    ///
+    /// Derived from the live section array rather than stored, so it cannot go stale after
+    /// [`ChunkData::pad_sections_to`] grows the chunk.
+    #[must_use]
+    pub fn section_count(&self) -> usize {
+        self.block_sections.read().unwrap().len()
+    }
+
     #[cfg(test)]
     #[must_use]
     pub fn dump_blocks(&self) -> Vec<BlockStateId> {
@@ -380,7 +388,6 @@ impl ChunkSections {
         let unknown_nbt = vec![NbtCompound::new(); num_sections].into_boxed_slice();
 
         Self {
-            count: num_sections,
             block_sections: RwLock::new(block_sections),
             random_tick_sections: RwLock::new(random_tick_sections),
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
@@ -401,13 +408,11 @@ impl ChunkSections {
             biome_sections.len(),
             "block and biome section counts must match"
         );
-        let count = block_sections.len();
         let (random_tick_sections, randomly_ticking_mask) =
             Self::build_random_tick_sections_cache(&block_sections);
-        let unknown_nbt = vec![NbtCompound::new(); count].into_boxed_slice();
+        let unknown_nbt = vec![NbtCompound::new(); block_sections.len()].into_boxed_slice();
 
         Self {
-            count,
             block_sections: RwLock::new(block_sections),
             random_tick_sections: RwLock::new(random_tick_sections),
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
@@ -532,8 +537,10 @@ impl ChunkSections {
             if (has_random_ticks(block_state_id) || has_random_ticking_fluid(block_state_id))
                 && random_tick_sections_guard.is_none()
             {
+                // `sections` is already held here; use its length rather than
+                // `section_count()`, which would re-lock the same RwLock and deadlock.
                 let new_cache =
-                    vec![RandomTickSectionCache::default(); self.count].into_boxed_slice();
+                    vec![RandomTickSectionCache::default(); sections.len()].into_boxed_slice();
                 *random_tick_sections_guard = Some(new_cache);
             }
 
@@ -632,6 +639,62 @@ impl ChunkSections {
 }
 
 impl ChunkData {
+    /// Grow this chunk to `total_sections` 16-block sections, padding with air / empty light.
+    ///
+    /// The chunk-data packet carries no explicit section count: the client reads exactly
+    /// `dimension.height / 16` sections, taken from the dimension registry it received at
+    /// login. A chunk holding fewer sections than that serializes short, so the client runs
+    /// past the end of the buffer and drops the connection with a protocol error.
+    ///
+    /// Chunks can end up short from two directions: worldgen sizing sections off the noise
+    /// generator's `shape.height` (128 for Nether/End) instead of the dimension height (256),
+    /// and loading a saved chunk whose file simply does not contain the upper sections - the
+    /// on-disk reader derives its section count from the highest `Y` tag present, so any file
+    /// written while the first bug was live reloads just as short as it was saved. Padding
+    /// here fixes both, and is a no-op when the chunk is already the right size.
+    ///
+    /// Padding sections are air with unlit light, which is what never-generated space above
+    /// the terrain ceiling is anyway.
+    pub fn pad_sections_to(&self, total_sections: usize) {
+        let mut block_sections = self.section.block_sections.write().unwrap();
+        if block_sections.len() >= total_sections {
+            return;
+        }
+
+        let mut biome_sections = self.section.biome_sections.write().unwrap();
+        let mut unknown_nbt = self.section.unknown_nbt.write().unwrap();
+
+        let mut blocks = std::mem::take(&mut *block_sections).into_vec();
+        let mut biomes = std::mem::take(&mut *biome_sections).into_vec();
+        let mut unknown = std::mem::take(&mut *unknown_nbt).into_vec();
+
+        blocks.resize_with(total_sections, BlockPalette::default);
+        // Biomes have no meaning above the generated range since nothing samples them there;
+        // repeat the topmost real section rather than inventing a value.
+        let pad_biome = biomes.last().cloned().unwrap_or_default();
+        biomes.resize(total_sections, pad_biome);
+        unknown.resize_with(total_sections, NbtCompound::new);
+
+        *block_sections = blocks.into_boxed_slice();
+        *biome_sections = biomes.into_boxed_slice();
+        *unknown_nbt = unknown.into_boxed_slice();
+        drop(block_sections);
+        drop(biome_sections);
+        drop(unknown_nbt);
+
+        // The light arrays derive their own section count independently during serialization,
+        // so they must grow in lockstep or the light block desyncs from the block block.
+        let mut light = self.light_engine.lock().unwrap();
+        if light.sky_light.len() < total_sections {
+            let mut sky = std::mem::take(&mut light.sky_light).into_vec();
+            let mut block = std::mem::take(&mut light.block_light).into_vec();
+            sky.resize_with(total_sections, || LightContainer::new_empty(0));
+            block.resize_with(total_sections, || LightContainer::new_empty(0));
+            light.sky_light = sky.into_boxed_slice();
+            light.block_light = block.into_boxed_slice();
+        }
+    }
+
     /// Returns the replaced block state ID
     pub fn set_block_absolute_y(
         &self,
@@ -821,9 +884,13 @@ pub enum ChunkSerializingError {
 
 #[cfg(test)]
 mod tests {
-    use super::ChunkSections;
+    use super::{ChunkData, ChunkLight, ChunkSections, LightContainer};
     use crate::chunk::palette::BlockPalette;
+    use crate::tick::scheduler::ChunkTickScheduler;
+    use pumpkin_data::chunk::ChunkStatus;
     use pumpkin_data::{Block, block_properties::has_random_ticks};
+    use pumpkin_nbt::compound::NbtCompound;
+    use std::sync::atomic::{AtomicBool, AtomicU64};
 
     #[test]
     fn random_tick_cache_initializes_from_palette_contents() {
@@ -936,5 +1003,64 @@ mod tests {
             heightmaps.get(ChunkHeightmapType::OceanFloor, 0, 0, min_y),
             min_y - 1
         );
+    }
+
+    /// Regression test for the live "Network Protocol Error" disconnect on Nether entry.
+    ///
+    /// The chunk-data packet carries no section count - the client reads exactly
+    /// `dimension.height / 16` sections from the dimension registry. A chunk holding fewer
+    /// than that serializes short and the client reads off the end of the buffer, which is
+    /// what players actually hit (`IndexOutOfBoundsException` in `LevelChunkSection.read`).
+    ///
+    /// Worldgen was fixed to build full-height chunks, but that alone was not enough: chunks
+    /// already written to disk while the bug was live still reload short, because the on-disk
+    /// reader derives its section count from the highest `Y` tag present in the file. Every
+    /// one of those chunks re-crashed the client on every visit until padded here.
+    #[test]
+    fn padding_grows_short_chunks_to_the_full_dimension_height() {
+        // A Nether chunk as saved by the buggy code: 8 sections (the noise generator's
+        // 128-block `shape.height`) instead of the dimension's 16 (256 blocks).
+        let chunk = ChunkData {
+            section: ChunkSections::new(8, 0),
+            heightmap: std::sync::Mutex::default(),
+            x: 0,
+            z: 0,
+            block_ticks: ChunkTickScheduler::default(),
+            fluid_ticks: ChunkTickScheduler::default(),
+            pending_block_entities: std::sync::Mutex::default(),
+            light_engine: std::sync::Mutex::new(ChunkLight {
+                sky_light: vec![LightContainer::new_empty(0); 8].into_boxed_slice(),
+                block_light: vec![LightContainer::new_empty(0); 8].into_boxed_slice(),
+            }),
+            light_populated: AtomicBool::new(false),
+            status: ChunkStatus::Full,
+            blending_data: None,
+            unknown_nbt: NbtCompound::new(),
+            dirty: AtomicBool::new(false),
+            inhabited_time: AtomicU64::new(0),
+        };
+        assert_eq!(chunk.section.section_count(), 8);
+
+        chunk.pad_sections_to(16);
+
+        assert_eq!(chunk.section.section_count(), 16);
+        assert_eq!(chunk.section.biome_sections.read().unwrap().len(), 16);
+        // Light must grow in lockstep: it derives its own count during serialization, so a
+        // padded block array with a short light array just moves the desync, not fixes it.
+        let light = chunk.light_engine.lock().unwrap();
+        assert_eq!(light.sky_light.len(), 16);
+        assert_eq!(light.block_light.len(), 16);
+        drop(light);
+
+        // Padding sections are air.
+        for section in chunk.section.block_sections.read().unwrap().iter().skip(8) {
+            for id in section {
+                assert_eq!(id, Block::AIR.default_state.id);
+            }
+        }
+
+        // Idempotent: an already-correct chunk is untouched.
+        chunk.pad_sections_to(16);
+        assert_eq!(chunk.section.section_count(), 16);
     }
 }

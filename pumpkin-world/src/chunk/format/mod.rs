@@ -355,7 +355,6 @@ impl ChunkData {
         let (random_tick_sections, randomly_ticking_mask) =
             ChunkSections::build_random_tick_sections_cache(&block_palettes);
         let section = ChunkSections {
-            count: block_palettes.len(),
             block_sections: RwLock::new(block_palettes.into_boxed_slice()),
             random_tick_sections: RwLock::new(random_tick_sections),
             randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
@@ -526,7 +525,7 @@ impl ChunkData {
         root_compound.put_compound("Heightmaps", heightmaps_compound);
 
         let mut sections_list = Vec::new();
-        for i in 0..self.section.count {
+        for i in 0..self.section.section_count() {
             let mut section_comp = unknown_sections_lock.get(i).cloned().unwrap_or_default();
             let y_val = i as i8 + min_section_y;
             section_comp.put_byte("Y", y_val);
