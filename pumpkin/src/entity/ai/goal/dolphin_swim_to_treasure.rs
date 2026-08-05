@@ -56,10 +56,12 @@ impl Goal for DolphinSwimToTreasureGoal {
             if !dolphin.got_fish() {
                 return false;
             }
-            // Vanilla also requires air supply >= 100 here; this codebase's `air_supply`
-            // tracking (`pumpkin/src/entity/breath.rs`) is currently player-only, with no
-            // generic per-mob air-supply field to read, so that gate is dropped rather than
-            // guessed at.
+            // `Dolphin.DolphinSwimToTreasureGoal.canUse` (`Dolphin.java:394`): also requires
+            // `getAirSupply() >= 100`. Dolphin now tracks its own air supply (see
+            // `passive/dolphin.rs`), so this gate is wired in.
+            if dolphin.get_air_supply() < 100 {
+                return false;
+            }
 
             let Some(pos) = Self::find_treasure(mob) else {
                 return false;
@@ -74,6 +76,15 @@ impl Goal for DolphinSwimToTreasureGoal {
             let Some(pos) = self.treasure_pos else {
                 return false;
             };
+            // `Dolphin.DolphinSwimToTreasureGoal.canContinueToUse` (`Dolphin.java:404`): also
+            // requires `getAirSupply() >= 100`.
+            if mob
+                .cast_any()
+                .downcast_ref::<DolphinEntity>()
+                .is_some_and(|d| d.get_air_supply() < 100)
+            {
+                return false;
+            }
             let my_pos = mob.get_entity().pos.load();
             my_pos.squared_distance_to_vec(&pos.to_f64()) > ARRIVAL_DISTANCE_SQ
         })
