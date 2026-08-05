@@ -47,26 +47,25 @@ impl PortalSearchResult {
 
     /// Calculates the yaw adjustment when teleporting between portals with different axes.
     /// Returns the new yaw value for the entity.
+    ///
+    /// Matches `NetherPortalBlock.getDimensionTransitionFromExit`/`createDimensionTransition`
+    /// (NetherPortalBlock.java:191-236): the source axis defaults to `Direction.Axis.X` when the
+    /// entry block has no `HORIZONTAL_AXIS` property (line 201), and `outputRotation` is always
+    /// `portalAxis == axis ? 0 : 90` (line 222) -- a fixed +90 delta, never -90, applied through
+    /// `Relative.ROTATION` (line 234), which `PositionMoveRotation.calculateAbsolute` (in
+    /// `net/minecraft/world/entity/PositionMoveRotation.java`) adds to the entity's current yaw
+    /// rather than treating it as a direction-dependent rotation.
     #[must_use]
     pub fn calculate_teleport_yaw(
         &self,
         current_yaw: f32,
         source_axis: Option<HorizontalAxis>,
     ) -> f32 {
-        let Some(src_axis) = source_axis else {
-            return current_yaw;
-        };
-
+        let src_axis = source_axis.unwrap_or(HorizontalAxis::X);
         if src_axis == self.axis {
-            return current_yaw;
-        }
-
-        // Axis changed, rotate yaw by 90 degrees
-        // X axis portal faces East/West, Z axis portal faces North/South
-        match (src_axis, self.axis) {
-            (HorizontalAxis::X, HorizontalAxis::Z) => current_yaw + 90.0,
-            (HorizontalAxis::Z, HorizontalAxis::X) => current_yaw - 90.0,
-            _ => current_yaw,
+            current_yaw
+        } else {
+            current_yaw + 90.0
         }
     }
 
@@ -347,7 +346,9 @@ impl NetherPortal {
         direction: BlockDirection,
         pos: &BlockPos,
     ) -> Option<BlockPos> {
-        let limit_y = pos.0.y - Self::MAX_HEIGHT as i32;
+        // PortalShape.java:86: `int minY = Math.max(level.getMinY(), pos.getY() - 21);` -- clamp
+        // to the world floor so this doesn't walk below it near the bottom of the world.
+        let limit_y = (pos.0.y - Self::MAX_HEIGHT as i32).max(world.min_y);
         let mut pos = *pos;
         while pos.0.y > limit_y {
             let (block, state) = world.get_block_and_state(&pos.down());
@@ -481,8 +482,6 @@ impl NetherPortal {
             world.dimension.minecraft_name,
             target_pos
         );
-        let min_y = world.min_y;
-        let max_y = min_y + world.dimension.height - 1;
         let worldborder = world.worldborder.lock().await;
 
         let search_radius =
@@ -492,12 +491,6 @@ impl NetherPortal {
                 SEARCH_RADIUS_OVERWORLD
             };
 
-        let search_max_y = if world.dimension.has_ceiling {
-            (min_y + world.dimension.logical_height - 1).min(max_y)
-        } else {
-            max_y
-        };
-
         let mut poi_storage = world.portal_poi.lock().await;
         let portal_positions =
             poi_storage.get_in_square(target_pos, search_radius, Some(poi::POI_TYPE_NETHER_PORTAL));
@@ -505,11 +498,15 @@ impl NetherPortal {
 
         let mut best: Option<(PortalSearchResult, f64, i32)> = None;
 
+        // Vanilla `PortalForcer.findClosestPortalPosition` (PortalForcer.java:41-50) filters POI
+        // candidates only by `worldBorder::isWithinBounds` and the `HORIZONTAL_AXIS` property --
+        // there is no Y-coordinate bound anywhere in `PoiManager.getInSquare` either
+        // (PoiManager.java:87-95, X/Z only). A `has_ceiling`-based upper-Y cutoff here (as used
+        // correctly for *creating* a new portal in `find_safe_location`'s `top_y_limit`, mirroring
+        // `PortalForcer.java:59`) would make an existing portal built above the Nether's logical
+        // height invisible to this search, causing a duplicate portal to be created instead of
+        // linking to it.
         for pos in portal_positions {
-            if pos.0.y < min_y || pos.0.y > search_max_y {
-                continue;
-            }
-
             if !worldborder.contains_block(pos.0.x, pos.0.z) {
                 continue;
             }
@@ -833,5 +830,67 @@ impl NetherPortal {
                 poi_storage.add_portal(pos);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HorizontalAxis, PortalSearchResult};
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector3::Vector3;
+
+    fn result_with_axis(axis: HorizontalAxis) -> PortalSearchResult {
+        PortalSearchResult {
+            lower_corner: BlockPos(Vector3::new(0, 64, 0)),
+            axis,
+            width: 2,
+            height: 3,
+        }
+    }
+
+    // NetherPortalBlock.java:222: `int outputRotation = portalAxis == axis ? 0 : 90;` applied via
+    // `Relative.ROTATION` (line 234), which `PositionMoveRotation.calculateAbsolute` adds to the
+    // entity's current yaw. Same axis on both ends -> no rotation.
+    #[test]
+    fn same_axis_yaw_is_unchanged() {
+        let dest = result_with_axis(HorizontalAxis::X);
+        assert_eq!(
+            dest.calculate_teleport_yaw(123.0, Some(HorizontalAxis::X)),
+            123.0
+        );
+        let dest = result_with_axis(HorizontalAxis::Z);
+        assert_eq!(
+            dest.calculate_teleport_yaw(45.0, Some(HorizontalAxis::Z)),
+            45.0
+        );
+    }
+
+    // Vanilla's delta is a fixed +90 regardless of *which* axis changed to which -- there is no
+    // direction-dependent sign, since it's added as a relative rotation, not computed as an
+    // absolute compass direction.
+    #[test]
+    fn differing_axis_always_adds_positive_90() {
+        let dest = result_with_axis(HorizontalAxis::Z);
+        assert_eq!(
+            dest.calculate_teleport_yaw(0.0, Some(HorizontalAxis::X)),
+            90.0
+        );
+
+        let dest = result_with_axis(HorizontalAxis::X);
+        assert_eq!(
+            dest.calculate_teleport_yaw(0.0, Some(HorizontalAxis::Z)),
+            90.0
+        );
+    }
+
+    // NetherPortalBlock.java:194-202: an entry block missing `HORIZONTAL_AXIS` defaults the
+    // source axis to `Direction.Axis.X` -- it does not skip the rotation adjustment.
+    #[test]
+    fn missing_source_axis_defaults_to_x() {
+        let dest = result_with_axis(HorizontalAxis::Z);
+        assert_eq!(dest.calculate_teleport_yaw(10.0, None), 100.0);
+
+        let dest = result_with_axis(HorizontalAxis::X);
+        assert_eq!(dest.calculate_teleport_yaw(10.0, None), 10.0);
     }
 }
