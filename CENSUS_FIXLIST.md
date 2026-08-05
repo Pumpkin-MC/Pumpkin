@@ -835,3 +835,44 @@ The "VERIFIED LIVE BUG: stalactites cannot be placed hanging from a dripstone bl
 above is NOT confirmed. It was observed at coordinates that happened to be loaded during live
 play, but the probe re-run could not reproduce it under controlled conditions, and the code
 path reads as correct. Treat it as UNCONFIRMED pending a retest with a player in range.
+
+### FIXED: Slime's spawn predicate was dead code (shadowed by the generic monster branch)
+
+`pumpkin/src/entity/type.rs` `check_spawn_rules` dispatched
+`if entity_type.category == &MobCategory::MONSTER { return check_monster_spawn_rules(..) }`
+*before* the `id == EntityType::SLIME.id` branch below it. `pumpkin-data`'s generated
+`EntityType::SLIME` has `category: &MobCategory::MONSTER`, so the catch-all always returned
+first and `SlimeEntity::check_slime_spawn_rules` never ran. MAGMA_CUBE, HUSK and DROWNED sit
+*above* the catch-all, which is what makes the ordering read as a mistake rather than a design.
+
+Effect: slimes were gated only by `Monster.checkMonsterSpawnRules`' darkness test, so in any
+biome whose spawn table lists slime they could spawn at any Y, in any chunk, ignoring both
+vanilla rules - the swamp surface band (Y 51-69, moon-brightness/light roll) and the
+slime-chunk rule (Y < 40, seeded per-chunk RNG).
+
+Citation: `Slime.checkSlimeSpawnRules`, github.com/mil1dude/source-code (Mojang-named,
+**1.21.4**), `src/game/java/net/minecraft/world/entity/monster/Slime.java:285-314`. Both
+success branches return `checkMobSpawnRules(...)` (`Mob.java:826-831`: spawner reason, else
+`isValidSpawn` of the block below) - *not* `checkMonsterSpawnRules`. Pumpkin models
+`checkMobSpawnRules` as an explicit TODO in `MobEntity::check_monster_spawn_rules` and covers
+the `isValidSpawn` part separately in `natural_spawner::is_spawn_position_ok`, so
+`check_slime_spawn_rules`' existing `return true` leaves are consistent with the surrounding
+convention and were left alone.
+
+### NOT REPRODUCED FROM CODE: the reported green slime in a Nether cave
+
+The fix above cannot by itself produce a Nether slime, and no Nether slime path was found.
+Entity selection in `natural_spawner::get_random_spawn_mob_at` is gated upstream by the biome
+spawn table, and `pumpkin-data/src/generated/biome.rs` (authoritative, generated from real game
+data) lists no slime spawner in any of the five biomes reachable from `NETHER_BIOME_SOURCE`
+(nether_wastes, crimson_forest, warped_forest, soul_sand_valley, basalt_deltas). A regression
+test in `entity::type::slime_spawn_dispatch_tests` now asserts this.
+
+The only remaining route by which slime could be offered at a Nether position is the silent
+biome fallback in `pumpkin-world/src/level.rs` `Level::get_rough_biome`, which returns
+`Biome::from_id(0)` - biome id 0 is BADLANDS, whose monster table *does* list slime - whenever
+the chunk read or the biome-section lookup returns `None`. Not demonstrated to fire; recorded
+as a lead, not a finding. Worth noting either way: `Level::get_rough_biome` falls back to
+BADLANDS while `World::get_biome` (pumpkin/src/world/mod.rs) falls back to PLAINS for the same
+operation, and neither fallback is vanilla behaviour. Left unfixed here to keep the diff to one
+logical change.
