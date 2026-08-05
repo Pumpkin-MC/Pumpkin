@@ -85,36 +85,4 @@ mod test {
             assert_eq!(point.weirdness, wei);
         }
     }
-
-    // #[test]
-    // fn sample_multinoise_biome() {
-    //     use crate::generation::generator::{GeneratorInit, VanillaGenerator};
-    //     use pumpkin_util::world_seed::Seed;
-
-    //     let expected_data: Vec<(i32, i32, i32, u8)> =
-    //         read_data_from_file!("../../../assets/multi_noise_biome_source_test.json");
-
-    //     let seed = 0;
-    //     let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
-
-    //     let mut sampler = MultiNoiseSampler::generate(
-    //         &generator.base_router.multi_noise,
-    //         &MultiNoiseSamplerBuilderOptions::new(0, 0, 4),
-    //     );
-
-    //     for (x, y, z, biome_id) in expected_data {
-    //         let calculated_biome = MultiNoiseBiomeSupplier::OVERWORLD.biome(x, y, z, &mut sampler);
-
-    //         assert_eq!(
-    //             biome_id,
-    //             calculated_biome.id,
-    //             "Expected {:?} was {:?} at {},{},{}",
-    //             Biome::from_id(biome_id),
-    //             calculated_biome,
-    //             x,
-    //             y,
-    //             z
-    //         );
-    //     }
-    // }
 }

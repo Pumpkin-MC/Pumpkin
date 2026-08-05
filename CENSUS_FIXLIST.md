@@ -599,3 +599,135 @@ chunk/mod.rs). Expect real conflicts and re-verify the padding invariants after 
 NOT MEASURED: nobody has run conformance/parity scoring against upstream HEAD, so there is
 no defensible "we are N points better than upstream" claim. Build upstream and run
 pumpkin-local/score.py against it if that number is ever needed.
+---
+
+## Biome placement audit (2026-08-05)
+
+### Hypothesis tested
+
+Owner hypothesis from live play: ocean biomes are being assigned where RIVER biomes should
+be, and that single root cause explains "magma blocks in rivers", "overwhelmingly ocean",
+a huge flat sand beach, no villages, and shipwrecks on dry land.
+
+### Verdict: DISCONFIRMED
+
+The overworld multi-noise biome search reproduces vanilla essentially bit-exactly. There is
+no ocean/river confusion.
+
+### Evidence
+
+`assets/tests/multi_noise_biome_source_test.json` is a vanilla-derived fixture of 724271
+biome cells at seed 0 (biome coords x/z -50..=50, y -20..=50, i.e. blocks +-200 horizontally
+and -80..200 vertically). The test that consumed it was commented out in
+`pumpkin-world/src/biome/multi_noise.rs` and was invalid as written: it built a single
+`MultiNoiseSampler` with `MultiNoiseSamplerBuilderOptions::new(0, 0, 4)` and then sampled
+across the whole +-50 range. That window is load bearing - `MultiNoiseSampler::generate`
+pre-fills a `FlatCache` over exactly `start_biome_x..=start_biome_x + horizontal_biome_end`
+on both axes (see `pumpkin-world/src/generation/noise/router/multi_noise_sampler.rs`), so
+samples outside the window read stale cache entries. Rewritten to use one sampler window per
+chunk, and to iterate in the same section-major x/y/z order as
+`ProtoChunk::populate_biomes`, it now passes.
+
+Histogram, vanilla fixture vs pumpkin, identical 724271 coordinates:
+
+| biome        | vanilla | pumpkin |
+|--------------|---------|---------|
+| forest       | 534479  | 535340  |
+| plains       |  75899  |  75899  |
+| river        |  43239  |  43239  |
+| birch_forest |  40530  |  40541  |
+| beach        |  18815  |  18815  |
+| savanna      |  10437  |  10437  |
+| sulfur_caves |    872  |      0  |
+
+River is an exact match. There is no ocean at all in this region, in vanilla or in pumpkin.
+943 of 724271 cells (0.13%) differ, and all 943 have the same root cause (below).
+
+Separately, sampling pumpkin's own overworld at y=64 over 589824 biome cells (seed 0, chunks
+-96..96, i.e. +-1536 blocks) gives ocean 42.46%, river 5.02%, land 52.52%, spread over 27
+distinct biomes. That is not an "overwhelmingly ocean" world and rivers are present at a
+normal share. (Vanilla's exact figure for this window is UNVERIFIABLE here - no decompiled
+source and no fixture at that radius - but the fixture comparison above already establishes
+the search is correct, so the distribution is whatever the noise router produces, and the
+noise router is separately covered by `sample_value` and `wide_area_surface`.)
+
+Conclusions on the three suspected locations:
+* The multi-noise search (`pumpkin-world/src/biome/mod.rs`, `BiomeTree::get`/`search` in the
+  generated `pumpkin-data/src/generated/biome.rs`) is correct - CLEARED.
+* The continentalness/erosion/depth/weirdness sampling and its parameter order are correct -
+  CLEARED. `NoiseValuePoint::convert_to_list` order matches what the tree expects, and the
+  fixture would not match to 6 significant figures if any parameter were transposed or
+  rescaled.
+* The biome parameter table is where the (small) real defect lives - see below.
+
+### Real defect found (audit only, NOT fixed): stale `assets/multi_noise_biome_tree.json`
+
+`assets/biome.json` has 66 biomes including `sulfur_caves` (id 53, present as
+`Biome::SULFUR_CAVES` in `pumpkin-data/src/generated/biome.rs`), but
+`assets/multi_noise_biome_tree.json` contains only 54 distinct overworld leaves and has no
+`sulfur_caves` leaf at all. The two assets were extracted from different game versions. As a
+result `OVERWORLD_BIOME_SOURCE` can never return `sulfur_caves`; those 872 cells resolve to
+`forest` (790) or `birch_forest` (82) instead.
+
+The remaining 71 differing cells are one biome column, (x=-49, z=-24), whose noise point
+(temperature 632, humidity 1000, continentalness 418, erosion -169, depth 10023, weirdness
+-2310) is at distance exactly 23 from both a `forest` leaf and a `birch_forest` leaf.
+This is not a single-y artifact: the two leaves are exactly tied at every one of the 71 y
+values in the column (distance 23 at y=-20..-16 and y=16, growing identically for both leaves
+elsewhere). `BiomeTree::search` prunes with `dist >= best_dist`, so a tie is resolved
+first-leaf-wins and the answer depends entirely on leaf ordering in the tree asset.
+
+UNVERIFIABLE: *why* pumpkin's order yields `forest` where vanilla yielded `birch_forest`.
+Established as fact: the two leaves are exactly equidistant under this metric, and pumpkin's
+traversal reaches `forest` first. Candidate explanations - stale leaf ordering in the tree
+asset, or a different vanilla tie-break rule - cannot be distinguished without the 26.2
+source. Do not report these 71 cells as "same cause as sulfur_caves" without that evidence.
+
+Ruled out as an explanation for either bucket: a broken `depth` parameter. Depth was checked
+directly and varies with y as vanilla does. At (biome x=0, z=0) pumpkin produces
+9118, 8806, 7243, ... , -11506 over biome y -20..50, matching
+`assets/multi_noise_sample_no_blend_no_beard_0_0_0.json` (which records 9118 at block y -64
+and the same downward gradient, saturating at 9118 below block y -12 and at -20881 above
+block y 80). Constant depth over the first few y values of a column is that same vanilla
+saturation, not a stuck sampler. `sample_value` already covers 24576 vanilla noise points
+including depth-vs-y, and passes.
+
+NOT FIXED because fixing it requires re-extracting the biome parameter tree from the 26.2
+client/server jar; inventing parameter ranges for `sulfur_caves` by hand would be fabrication.
+This is a data-pipeline task for whoever owns the asset extraction.
+
+UNVERIFIABLE, noted but not acted on: `BiomeTree::get_squared_distance` sums
+`ParameterRange::calc_distance` linearly rather than summing squares, despite its name. The
+same linear accumulation is used at `pumpkin-world/src/biome/position_finder.rs:64`, so if
+this is ever changed, both call sites need it.
+Whether vanilla's `Climate.RTree.Node.distance` squares each term cannot be cited here (no
+decompiled 26.2, no official mappings, and `reference/vanilla/worldgen.md` does not cover it).
+Empirically it makes zero difference: patching the metric to sum squares and re-running the
+724271-sample fixture produced a byte-identical histogram and an identical mismatch set. Left
+alone.
+
+### Where the reported symptom cluster is NOT coming from
+
+Since biome assignment is correct, "magma blocks in rivers" is confirmed as the prior audit
+concluded (`underwater_magma` is legitimately registered for RIVER) and the biome is not
+misassigned. The remaining symptoms - a massive perfectly flat sand beach, no villages,
+shipwrecks on dry land - must be investigated downstream of biome selection: surface rules,
+sea level / aquifer handling, and structure placement and height anchoring. Structure
+placement in particular would explain both "shipwrecks on dry land" and "no villages" as one
+bug, and it is untouched by anything in this audit. Recommended next audit target.
+
+### Scope limits
+
+All evidence here is seed 0. The owner's live world seed and generator settings were not
+obtained, so an ocean-heavy seed or a non-default generator config is not excluded as the
+source of the "overwhelmingly ocean" impression. Also unexplained and not investigated: the
+y=64 sweep places small amounts of `dripstone_caves` (0.32%) and `lush_caves` (0.06%) at sea
+level. That is plausible where terrain is high, but it was not checked against vanilla.
+
+### Change made
+
+Promoted the dead commented-out `sample_multinoise_biome` test into a working regression test
+`multi_noise_wide_area_test::multi_noise_biome_source_wide_area` in
+`pumpkin-world/src/biome/mod.rs`, with the sampler window and iteration order corrected. It
+asserts an exact match on all 724271 cells except the two documented stale-data buckets,
+whose counts it pins so that a re-extraction of the tree asset trips the test.

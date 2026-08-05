@@ -163,3 +163,119 @@ mod test {
         );
     }
 }
+
+/// Regression coverage for the overworld multi-noise biome search against a
+/// vanilla-derived fixture of 724271 biome cells (biome coords -50..=50 on x/z,
+/// -20..=50 on y, seed 0), sampled with one `MultiNoiseSampler` window per chunk
+/// and in the same iteration order `ProtoChunk::populate_biomes` uses.
+///
+/// Every sample matches vanilla exactly except for 943 that are all attributable
+/// to `assets/multi_noise_biome_tree.json` having been extracted from an older
+/// game version than `assets/biome.json`:
+///
+/// * 872 cells whose vanilla biome is `sulfur_caves`, which has a registry entry
+///   (`Biome::SULFUR_CAVES`, id 53) but no leaf in the extracted tree, so the
+///   search can never return it.
+/// * 71 cells in the single biome column (x=-49, z=-24) where the noise point is
+///   exactly equidistant from a `forest` leaf and a `birch_forest` leaf at every
+///   y, so the winner is decided purely by leaf order.
+///
+/// See `CENSUS_FIXLIST.md`.
+#[cfg(test)]
+mod multi_noise_wide_area_test {
+    use pumpkin_data::{chunk::Biome, dimension::Dimension};
+    use pumpkin_util::read_data_from_file;
+    use std::collections::{BTreeMap, HashMap};
+
+    use crate::generation::noise::router::multi_noise_sampler::{
+        MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
+    };
+
+    use super::{BiomeSupplier, MultiNoiseBiomeSupplier};
+
+    const SULFUR_CAVES_ID: u8 = 53;
+    /// The one biome column where the search hits an exact distance tie.
+    const KNOWN_TIE_COLUMN: (i32, i32) = (-49, -24);
+
+    type ChunkExpectations = HashMap<(i32, i32, i32), u8>;
+
+    #[test]
+    fn multi_noise_biome_source_wide_area() {
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+        use pumpkin_util::world_seed::Seed;
+
+        let expected_data: Vec<(i32, i32, i32, u8)> =
+            read_data_from_file!("../../../assets/tests/multi_noise_biome_source_test.json");
+
+        let generator = VanillaGenerator::new(Seed(0), Dimension::OVERWORLD);
+
+        let mut by_chunk: BTreeMap<(i32, i32), ChunkExpectations> = BTreeMap::new();
+        for entry in expected_data {
+            by_chunk
+                .entry((entry.0.div_euclid(4), entry.2.div_euclid(4)))
+                .or_default()
+                .insert((entry.0, entry.1, entry.2), entry.3);
+        }
+
+        let mut total = 0usize;
+        let mut missing_sulfur_caves = 0usize;
+        let mut tie_column_diffs = 0usize;
+        let mut unexplained: Vec<String> = Vec::new();
+
+        for ((chunk_x, chunk_z), entries) in &by_chunk {
+            let options = MultiNoiseSamplerBuilderOptions::new(chunk_x * 4, chunk_z * 4, 4);
+            let mut sampler =
+                MultiNoiseSampler::generate(&generator.base_router.multi_noise, &options);
+
+            // Match `populate_biomes`: section-major, then x, y, z. The search keeps a
+            // thread-local "last result node" shortcut, so iteration order is load bearing.
+            for section in -6i32..=13 {
+                for x in 0..4 {
+                    for y in 0..4 {
+                        for z in 0..4 {
+                            let biome_x = chunk_x * 4 + x;
+                            let biome_y = section * 4 + y;
+                            let biome_z = chunk_z * 4 + z;
+                            let Some(&expected) = entries.get(&(biome_x, biome_y, biome_z)) else {
+                                continue;
+                            };
+                            total += 1;
+                            let actual = MultiNoiseBiomeSupplier::OVERWORLD.biome(
+                                biome_x,
+                                biome_y,
+                                biome_z,
+                                &mut sampler,
+                            );
+                            if actual.id == expected {
+                                continue;
+                            }
+                            if expected == SULFUR_CAVES_ID {
+                                missing_sulfur_caves += 1;
+                            } else if (biome_x, biome_z) == KNOWN_TIE_COLUMN {
+                                tie_column_diffs += 1;
+                            } else if unexplained.len() < 20 {
+                                unexplained.push(format!(
+                                    "at biome({biome_x},{biome_y},{biome_z}) expected {:?} got {:?}",
+                                    Biome::from_id(expected).map(|b| b.registry_id),
+                                    actual.registry_id
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert_eq!(total, 724271, "fixture coverage changed");
+        assert!(
+            unexplained.is_empty(),
+            "unexplained biome mismatches vs vanilla: {unexplained:#?}"
+        );
+        assert_eq!(
+            missing_sulfur_caves, 872,
+            "sulfur_caves coverage changed; if this dropped to 0 the biome tree asset was \
+             re-extracted and this test should assert an exact match instead"
+        );
+        assert_eq!(tie_column_diffs, 71, "tie-break column coverage changed");
+    }
+}
