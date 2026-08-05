@@ -731,3 +731,46 @@ Promoted the dead commented-out `sample_multinoise_biome` test into a working re
 `pumpkin-world/src/biome/mod.rs`, with the sampler window and iteration order corrected. It
 asserts an exact match on all 724271 cells except the two documented stale-data buckets,
 whose counts it pins so that a re-extraction of the tree asset trips the test.
+
+## In-game RCON behavioral testing (2026-08-05) - harness now works
+
+RCON primitives re-verified against the live server on build 465d2e6. IMPORTANT CORRECTION to
+earlier notes: `setblock` now DOES accept and honor blockstate properties (previously recorded
+as "blockstates are rejected in setblock"). Verified by a discriminating test: placing
+`pointed_dripstone[vertical_direction=down]` with support only BELOW was correctly rejected,
+which is only possible if the state was applied. `clone <a> <b> <dst> filtered <block>` gives
+exact counts and is the reliable read-back primitive. `data get block` is NOT implemented
+("Incorrect argument for command").
+
+This makes real in-game behavioral verification possible for any block whose behavior can be
+driven by setblock plus neighbor updates.
+
+### VERIFIED LIVE BUG: stalactites cannot be placed hanging from a dripstone block
+
+Reproduction (build 465d2e6, twice at independent coordinates z=5081 and z=5083):
+  setblock -200 75 <z> minecraft:dripstone_block
+  setblock -200 74 <z> minecraft:pointed_dripstone[vertical_direction=down,thickness=tip]
+  clone -200 74 <z> -200 74 <z> <dst> filtered minecraft:pointed_dripstone   -> "No blocks cloned"
+Control: the dripstone_block support at y=75 IS present (filtered clone returns 1), so the
+support was not the problem. The stalagmite case succeeds under the same harness:
+  setblock -200 73 5077 minecraft:stone
+  setblock -200 74 5077 minecraft:pointed_dripstone[vertical_direction=up,thickness=tip]  -> survives
+
+So stalagmites place correctly and stalactites do not, with valid support in both cases.
+Vanilla allows a stalactite to hang from a dripstone block - that is how they generate.
+
+Static reading of `pumpkin/src/block/blocks/dripstone.rs` does NOT explain this: for the
+no-placing-direction path, `get_support_block_vertical_direction` reads the block's own
+`vertical_direction` and flips it, so a `down` stalactite should look UP, find the
+dripstone_block, and pass `can_support_dripstone` (full cube + solid). Root cause therefore
+still UNKNOWN - candidates to check are `flip_dir`, whether `can_place_at` is evaluated before
+the new state is written (in which case the position still reads AIR and the function returns
+None), and whether setblock's validation path passes a placing_direction at all.
+
+NOTE: this is a DIFFERENT bug from the one fixed on `dripstone-fall-work` (which made
+unsupported stalactites fall instead of vanishing). This one is about placement being rejected
+outright. Retest after build 8952694 deploys, since the falling fix touched adjacent code.
+
+Method note worth keeping: static code review passed this file as correct during the
+features/structures audit. In-game testing found the bug in three commands. Prefer live
+verification over reading for anything reachable by setblock.
