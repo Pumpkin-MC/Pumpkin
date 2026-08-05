@@ -307,8 +307,23 @@ impl Server {
         };
         let server = Arc::new(server);
 
+        // Bound the generation pool. Without a thread count rayon defaults to one worker per
+        // core, so on an N-core box N CPU-bound worldgen threads compete with the tokio
+        // runtime's N workers. Generation does not have to be the throughput bottleneck to
+        // hurt - it only has to starve the runtime that Player::tick and send_chunks run on,
+        // which is what a player outrunning chunk loading actually experiences.
+        //
+        // Measured: full chunk generation is ~35 ms and scales near-linearly, so sprint
+        // creative flight's ~47 chunk/s frontier costs under 2 CPU-seconds per wall-second -
+        // well inside this reservation. Reserving 2 cores mirrors the figure
+        // Level::from_root_folder already computes for the no-pool path.
+        let gen_threads = std::thread::available_parallelism()
+            .map_or(1, std::num::NonZero::get)
+            .saturating_sub(2)
+            .max(1);
         let gen_pool = Arc::new(
             rayon::ThreadPoolBuilder::new()
+                .num_threads(gen_threads)
                 .thread_name(|i| format!("Gen-Pool-{i}"))
                 .build()
                 .expect("Failed to build generation thread pool"),
