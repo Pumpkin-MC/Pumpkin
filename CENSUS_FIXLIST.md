@@ -534,3 +534,35 @@ blocked on the latter.
 - Oversized beaches / "overwhelmingly ocean" worldgen: this is a noise-router/
   continentalness issue, not a feature or structure file - already flagged above in
   this same document under the 2026-08-04 live-testing section. Not re-litigated here.
+
+## Live-testing reports 2026-08-05 (post Nether-crash fix, build 465d2e6)
+
+Nether entry CONFIRMED WORKING by the player after 465d2e6 deployed. The chunk-section
+desync (short chunks on generation AND on disk load) is closed.
+
+New reports from the same session, all in/around the Nether, none yet triaged:
+
+1. **Slimes spawning in the Nether.** Screenshot shows a green slime in a Nether cave.
+   Vanilla spawns magma cubes in the Nether; slimes are Overworld-only (swamps at night
+   in a light/height band, plus slime chunks below y=40). Suspect the slime spawn rule is
+   not dimension-gated, or the slime-chunk check ignores dimension.
+2. **Slimes and magma cubes float / do not fall.** Screenshots show a slime embedded in a
+   cave ceiling and a magma cube hanging in mid-air. NOTE: an earlier report this same
+   session ("floating entities") may be the same underlying gravity/physics bug rather
+   than a slime-family-specific one - check whether gravity is applied to these mob types
+   at all before assuming it is slime-specific.
+3. **Nether fungus tree generation is wrong.** Screenshot of a crimson forest shows caps
+   generating as large flat single-layer plates scattered across the terrain, with sparse
+   thin stems, instead of vanilla's huge-fungus shape (stem with a wrapped cap and
+   shroomlight inclusions). Affects both crimson and warped variants. Likely the
+   huge-fungus feature's cap placement, related in kind to the already-fixed huge mushroom
+   bug.
+4. **Lighting broken crossing Nether -> Overworld into a cave.** Large unlit/black regions
+   with hard seams. May be an instance of the already-tracked lighting gaps (CLightUpdate
+   mask/nibble order, get_sky_light_level sign bug, vanilla-import relight suppression -
+   see PARITY.md), or fallout from the new section-padding on load: padded sections are
+   created unlit, so if a cross-dimension load path relies on them being lit, seams would
+   appear. WORTH CHECKING FIRST given the timing.
+
+Item 4's timing correlation with the section-padding change makes it the highest priority
+to investigate - a fix that trades a crash for broken lighting is not a good trade.
