@@ -23,7 +23,7 @@ use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
@@ -55,6 +55,7 @@ use pumpkin_protocol::{
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
         CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata, MetadataSerializer,
+        RawMetadataValue,
     },
 };
 use pumpkin_util::math::vector3::Axis;
@@ -68,6 +69,7 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::collections::{BTreeMap, HashSet};
 use std::pin::Pin;
 use std::sync::{
@@ -959,6 +961,117 @@ pub struct Entity {
     pub last_sent_pos: AtomicCell<Vector3<f64>>,
     /// Cache for the last sent head yaw byte
     pub last_sent_head_yaw: AtomicU8,
+    /// Every tracked-data value ever published for this entity through
+    /// [`Entity::send_meta_data`], in publish order, one entry per tracked id.
+    ///
+    /// Vanilla's `DataTracker` keeps the full set of tracked entries on the
+    /// entity and its `ServerEntity` sends the non-default entries to each
+    /// player as the entity enters that player's tracking range, right after
+    /// the spawn packet. Pumpkin previously only ever broadcast a value at the
+    /// moment it changed, so a player who started tracking an already-spawned
+    /// entity saw the client-side default for every field until it next
+    /// changed. This snapshot is what gets replayed to such a player; see
+    /// [`Entity::send_tracked_data_to`].
+    pub tracked_data_snapshot: std::sync::Mutex<Vec<TrackedDataEntry>>,
+}
+
+/// Adds the given tracked-data values to a snapshot, replacing any earlier value
+/// for the same tracked id so a replay never ships a stale duplicate.
+fn record_tracked_data_into<T: MetadataSerializer>(
+    snapshot: &mut Vec<TrackedDataEntry>,
+    meta: &[Metadata<T>],
+) {
+    for m in meta {
+        let mut value = Vec::new();
+        if m.value.write_metadata(&mut value).is_err() {
+            continue;
+        }
+        let key = TrackedDataEntry::key(&m.index);
+        let entry = TrackedDataEntry {
+            index: copy_tracked_id(&m.index),
+            r#type: m.r#type,
+            value: value.into_boxed_slice(),
+        };
+        if let Some(existing) = snapshot
+            .iter_mut()
+            .find(|e| TrackedDataEntry::key(&e.index) == key)
+        {
+            *existing = entry;
+        } else {
+            snapshot.push(entry);
+        }
+    }
+}
+
+/// Writes a snapshot as an entity-metadata body (without the 0xFF terminator)
+/// for one client's protocol version.
+///
+/// Returns `None` when nothing would be written, which includes the case where
+/// every stored field is absent in that version (resolved index 255).
+fn serialize_tracked_data(
+    snapshot: &[TrackedDataEntry],
+    version: JavaMinecraftVersion,
+) -> Option<Vec<u8>> {
+    let mut buf = Vec::new();
+    for entry in snapshot {
+        let meta = Metadata::new(
+            copy_tracked_id(&entry.index),
+            entry.r#type,
+            RawMetadataValue(entry.value.clone()),
+        );
+        if meta.write(&mut buf, &version).is_err() {
+            return None;
+        }
+    }
+    if buf.is_empty() { None } else { Some(buf) }
+}
+
+/// `TrackedId` is a generated struct with no `Clone` derive, so copy it by hand.
+const fn copy_tracked_id(id: &TrackedId) -> TrackedId {
+    TrackedId {
+        v1_21: id.v1_21,
+        v1_21_2: id.v1_21_2,
+        v1_21_4: id.v1_21_4,
+        v1_21_5: id.v1_21_5,
+        v1_21_6: id.v1_21_6,
+        v1_21_7: id.v1_21_7,
+        v1_21_9: id.v1_21_9,
+        v1_21_11: id.v1_21_11,
+        v26_1: id.v26_1,
+        v26_2: id.v26_2,
+    }
+}
+
+/// One serialized tracked-data value, retained so it can be re-sent to a player
+/// who only later starts seeing the entity.
+pub struct TrackedDataEntry {
+    pub index: TrackedId,
+    pub r#type: MetaDataType,
+    /// The value as produced by `MetadataSerializer::write_metadata`, which is
+    /// protocol-version independent.
+    pub value: Box<[u8]>,
+}
+
+impl TrackedDataEntry {
+    /// Identity of the tracked field across every supported protocol version.
+    ///
+    /// `TrackedId` derives no `PartialEq`, and a single version's resolved slot
+    /// is not a valid identity (fields absent in that version all resolve to
+    /// 255), so all versions are compared.
+    const fn key(id: &TrackedId) -> [u8; 10] {
+        [
+            id.v1_21,
+            id.v1_21_2,
+            id.v1_21_4,
+            id.v1_21_5,
+            id.v1_21_6,
+            id.v1_21_7,
+            id.v1_21_9,
+            id.v1_21_11,
+            id.v26_1,
+            id.v26_2,
+        ]
+    }
 }
 
 impl Entity {
@@ -1079,6 +1192,7 @@ impl Entity {
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
             last_sent_pos: AtomicCell::new(position),
+            tracked_data_snapshot: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -2990,11 +3104,52 @@ impl Entity {
             .play_sound(sound, SoundCategory::Neutral, &self.pos.load());
     }
 
+    /// Stores the given tracked-data values so they can be replayed to a player
+    /// who only starts seeing this entity later.
+    fn record_tracked_data<T: MetadataSerializer>(&self, meta: &[Metadata<T>]) {
+        let mut snapshot = match self.tracked_data_snapshot.lock() {
+            Ok(snapshot) => snapshot,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        record_tracked_data_into(&mut snapshot, meta);
+    }
+
+    /// Sends every tracked-data value published so far for this entity to a
+    /// single player, without touching any other viewer.
+    ///
+    /// Call this right after the spawn packet on the path where the entity
+    /// enters that one player's view.
+    pub fn send_tracked_data_to(&self, client: &ClientPlatform) {
+        let ClientPlatform::Java(java) = client else {
+            // Bedrock gets its full actor state from `bedrock_metadata()` on the
+            // paths that spawn actors; nothing to replay here.
+            return;
+        };
+
+        let version = java.version.load();
+        let buf = {
+            let snapshot = match self.tracked_data_snapshot.lock() {
+                Ok(snapshot) => snapshot,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            serialize_tracked_data(&snapshot, version)
+        };
+        let Some(mut buf) = buf else {
+            // Nothing published yet, or every stored field is absent in this
+            // client's protocol version.
+            return;
+        };
+        buf.put_u8(255);
+        java.try_enqueue_packet(&CSetEntityMetadata::new(self.entity_id.into(), buf.into()));
+    }
+
     pub fn send_meta_data<T: MetadataSerializer>(
         &self,
         meta: &[Metadata<T>],
         bedrock_meta: Option<&EntityMetadata>,
     ) {
+        self.record_tracked_data(meta);
+
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
 
@@ -4231,5 +4386,142 @@ mod tracked_data_bounds_tests {
         assert_eq!(TrackedData::CUBE_SIZE.v26_2, 18);
         assert_eq!(TrackedData::CUBE_SIZE.v26_1, 16);
         assert_eq!(TrackedData::CUBE_SIZE.v1_21_4, 16);
+    }
+}
+
+#[cfg(test)]
+mod tracked_data_replay_tests {
+    use pumpkin_data::meta_data_type::MetaDataType;
+    use pumpkin_data::tracked_data::TrackedData;
+    use pumpkin_protocol::codec::var_int::VarInt;
+    use pumpkin_protocol::java::client::play::Metadata;
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    use super::{TrackedDataEntry, record_tracked_data_into, serialize_tracked_data};
+
+    /// A value published once must stay retrievable so it can be replayed to a
+    /// player who only later starts seeing the entity. Before this change nothing
+    /// retained the value at all: `send_meta_data` broadcast it and dropped it,
+    /// so the enters-view path had nothing to send and the client kept its
+    /// default (slime size 1, sheep white, creeper not ignited, ...).
+    #[test]
+    fn published_values_are_retained_and_replayable() {
+        let mut snapshot = Vec::new();
+        record_tracked_data_into(
+            &mut snapshot,
+            &[Metadata::new(
+                TrackedData::CUBE_SIZE,
+                MetaDataType::INT,
+                VarInt(4),
+            )],
+        );
+
+        assert_eq!(snapshot.len(), 1);
+
+        let buf = serialize_tracked_data(&snapshot, JavaMinecraftVersion::V_26_2)
+            .expect("a retained value must serialize for the client");
+        // Index byte, then the type id, then the payload.
+        assert_eq!(buf[0], TrackedData::CUBE_SIZE.v26_2);
+        assert_eq!(buf[0], 18);
+        assert!(buf.len() > 2, "payload must not be empty: {buf:?}");
+        // VarInt(4) is a single byte at the end.
+        assert_eq!(*buf.last().unwrap(), 4);
+    }
+
+    /// The snapshot is keyed by tracked id, so republishing a field replaces the
+    /// old value instead of shipping both on replay.
+    #[test]
+    fn republishing_a_field_replaces_the_stored_value() {
+        let mut snapshot = Vec::new();
+        for size in [1i32, 4] {
+            record_tracked_data_into(
+                &mut snapshot,
+                &[Metadata::new(
+                    TrackedData::CUBE_SIZE,
+                    MetaDataType::INT,
+                    VarInt(size),
+                )],
+            );
+        }
+        assert_eq!(snapshot.len(), 1);
+        let buf = serialize_tracked_data(&snapshot, JavaMinecraftVersion::V_26_2).unwrap();
+        assert_eq!(*buf.last().unwrap(), 4);
+    }
+
+    /// Distinct fields accumulate, and each keeps its own slot.
+    #[test]
+    fn distinct_fields_accumulate() {
+        let mut snapshot = Vec::new();
+        record_tracked_data_into(
+            &mut snapshot,
+            &[Metadata::new(
+                TrackedData::CUBE_SIZE,
+                MetaDataType::INT,
+                VarInt(4),
+            )],
+        );
+        record_tracked_data_into(
+            &mut snapshot,
+            &[Metadata::new(
+                TrackedData::IS_IGNITED,
+                MetaDataType::BOOLEAN,
+                true,
+            )],
+        );
+        assert_eq!(snapshot.len(), 2);
+        let buf = serialize_tracked_data(&snapshot, JavaMinecraftVersion::V_26_2).unwrap();
+        assert!(buf.contains(&TrackedData::CUBE_SIZE.v26_2));
+        assert!(buf.contains(&TrackedData::IS_IGNITED.v26_2));
+    }
+
+    /// The stored payload is protocol-version independent; only the index
+    /// resolution differs per version. Ocelot `TRUSTING` is slot 18 on 26.2 and
+    /// slot 17 on 1.21.4 (`pumpkin-data/src/generated/tracked_data.rs`).
+    #[test]
+    fn replay_resolves_the_index_per_client_version() {
+        let mut snapshot = Vec::new();
+        record_tracked_data_into(
+            &mut snapshot,
+            &[Metadata::new(
+                TrackedData::TRUSTING,
+                MetaDataType::BOOLEAN,
+                true,
+            )],
+        );
+        let modern = serialize_tracked_data(&snapshot, JavaMinecraftVersion::V_26_2).unwrap();
+        let legacy = serialize_tracked_data(&snapshot, JavaMinecraftVersion::V_1_21_4).unwrap();
+        assert_eq!(modern[0], TrackedData::TRUSTING.v26_2);
+        assert_eq!(legacy[0], TrackedData::TRUSTING.v1_21_4);
+        assert_ne!(modern[0], legacy[0]);
+        assert_eq!(modern.last(), legacy.last());
+    }
+
+    /// A field that does not exist in the target version resolves to 255 and must
+    /// be skipped entirely rather than written as slot 255, which the client
+    /// would reject.
+    #[test]
+    fn fields_absent_in_the_target_version_are_skipped() {
+        let mut snapshot = Vec::new();
+        record_tracked_data_into(
+            &mut snapshot,
+            &[Metadata::new(
+                TrackedData::ACTIVE,
+                MetaDataType::BOOLEAN,
+                true,
+            )],
+        );
+        assert_eq!(TrackedData::ACTIVE.v26_2, 255);
+        assert!(serialize_tracked_data(&snapshot, JavaMinecraftVersion::V_26_2).is_none());
+        assert!(serialize_tracked_data(&snapshot, JavaMinecraftVersion::V_1_21_4).is_some());
+    }
+
+    /// Tracked ids are compared across every supported version: two fields that
+    /// both resolve to 255 on 26.2 are still distinct entries.
+    #[test]
+    fn tracked_id_identity_uses_all_versions() {
+        assert_ne!(
+            TrackedDataEntry::key(&TrackedData::PLAYER_MODE_CUSTOMISATION),
+            TrackedDataEntry::key(&TrackedData::PLAYER_MODE_CUSTOMIZATION_ID),
+        );
     }
 }

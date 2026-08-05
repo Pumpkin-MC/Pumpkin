@@ -4139,6 +4139,11 @@ impl World {
                             .client
                             .enqueue_packet(&base_entity.create_spawn_packet())
                             .await;
+                        // Vanilla's ServerEntity follows the spawn packet with the
+                        // entity's tracked data as it enters this player's range;
+                        // without it the client keeps its defaults for every field.
+                        // Only this player is targeted, never the other viewers.
+                        base_entity.send_tracked_data_to(&player.client);
                         entities_to_add.push(entity);
                     }
 
@@ -4160,6 +4165,7 @@ impl World {
                                 .client
                                 .enqueue_packet(&base_entity.create_spawn_packet())
                                 .await;
+                            base_entity.send_tracked_data_to(&player.client);
                         }
                     }
                 }
@@ -4658,6 +4664,11 @@ impl World {
 
             if is_within_view_distance(chunk_pos, center, view_distance) {
                 player.client.try_enqueue_spawn_packet(entity);
+                // Covers respawn/redimension and `spawn_entity_non_save`, which
+                // never runs `init_data_tracker`. On the plain `spawn_entity`
+                // path the snapshot is still empty here and this is a no-op;
+                // `init_data_tracker` broadcasts the values immediately after.
+                base_entity.send_tracked_data_to(&player.client);
             }
         }
     }
