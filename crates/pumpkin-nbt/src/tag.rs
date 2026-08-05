@@ -141,9 +141,11 @@ impl NbtTag {
                 }
 
                 w.write_i32(len as i32)?;
-                for int in byte_array {
-                    w.write_i8(int)?;
-                }
+                // SAFETY: `i8` and `u8` have identical layouts, and the slice is only read.
+                let bytes = unsafe {
+                    std::slice::from_raw_parts(byte_array.as_ptr().cast::<u8>(), byte_array.len())
+                };
+                w.write_slice(bytes)?;
             }
             Self::String(string) => {
                 w.write_string(&string)?;
