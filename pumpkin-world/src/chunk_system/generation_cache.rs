@@ -1,9 +1,10 @@
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use crate::ProtoChunk;
 use crate::chunk::ChunkHeightmapType;
+use crate::generation::biome_coords;
 use crate::generation::generator;
 use crate::generation::height_limit::HeightLimitView;
-use crate::generation::proto_chunk::GenerationCache;
+use crate::generation::proto_chunk::{BiomeNeighborhood, GenerationCache};
 use crate::world::{BlockAccessor, WorldPortalExt};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::biome::Biome;
@@ -303,27 +304,21 @@ impl GenerationCache for Cache {
     }
 
     fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome {
-        let dx = (x >> 4) - self.x;
-        let dy = (z >> 4) - self.z;
-        let (dx, dy) = if dx < 0 || dy < 0 || dx >= self.size || dy >= self.size {
-            // Position is outside the cache — fall back to the centre chunk's biome
-            let mid = self.size / 2;
-            (mid, mid)
-        } else {
-            (dx, dy)
+        // Apply vanilla's `BiomeManager.getBiome` offset once, then resolve the resulting biome
+        // cell in the chunk that owns it. Routing the *pre*-offset position to a chunk and
+        // letting that chunk offset and mask with `& 3` wraps edge lookups back into the same
+        // chunk, which is what put chunk-aligned seams into terrain-gen biomes.
+        let mid = ((self.size * self.size) >> 1) as usize;
+        let Chunk::Proto(center) = &self.chunks[mid] else {
+            unreachable!(
+                "terrain-gen biome lookup on a cache whose centre is already a level chunk"
+            )
         };
-        match &self.chunks[(dx * self.size + dy) as usize] {
-            Chunk::Level(data) => {
-                // Could this happen?
-                Biome::from_id(
-                    data.section
-                        .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
-                        .unwrap_or(0),
-                )
-                .unwrap()
-            }
-            Chunk::Proto(data) => data.get_terrain_gen_biome(x, y, z),
-        }
+        let cell = center.terrain_gen_biome_cell(x, y, z);
+        let id = self
+            .biome_id_at_cell(cell.x, cell.y, cell.z)
+            .unwrap_or_else(|| center.get_biome_id(cell.x, cell.y, cell.z));
+        Biome::from_id(id).unwrap()
     }
 
     fn get_blending_data(
@@ -416,6 +411,51 @@ impl Cache {
             chunks: Vec::with_capacity((size * size) as usize),
         }
     }
+    /// Collects the biome cells covering the centre chunk plus a one-cell border out of the
+    /// surrounding chunks, so that the surface builder's terrain-gen biome lookups resolve
+    /// against the chunk that actually owns the cell instead of wrapping within the centre
+    /// chunk. See `BiomeNeighborhood`.
+    fn build_biome_neighborhood(&self, mid: usize) -> Option<BiomeNeighborhood> {
+        // Without the surrounding ring there is nothing to resolve edge lookups against and the
+        // surface builder would silently fall back to the wrapped read, so make that loud.
+        debug_assert!(
+            self.size >= 3,
+            "surface generation needs a one-chunk ring to resolve edge biome lookups"
+        );
+        let Chunk::Proto(center) = &self.chunks[mid] else {
+            return None;
+        };
+        let (chunk_x, chunk_z) = (center.x, center.z);
+        let (bottom_y, height) = (center.bottom_y(), center.height());
+
+        Some(BiomeNeighborhood::build(
+            chunk_x,
+            chunk_z,
+            bottom_y,
+            height,
+            |biome_x, biome_y, biome_z| self.biome_id_at_cell(biome_x, biome_y, biome_z),
+        ))
+    }
+
+    /// Reads a single biome cell from the chunk that owns it, the way vanilla's
+    /// `LevelReader.getNoiseBiome` routes through `QuartPos.toSection`. `None` when that chunk is
+    /// not in the cache.
+    fn biome_id_at_cell(&self, biome_x: i32, biome_y: i32, biome_z: i32) -> Option<u8> {
+        let dx = biome_coords::to_chunk(biome_x) - self.x;
+        let dz = biome_coords::to_chunk(biome_z) - self.z;
+        if dx < 0 || dz < 0 || dx >= self.size || dz >= self.size {
+            return None;
+        }
+        match &self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Proto(data) => Some(data.get_biome_id(biome_x, biome_y, biome_z)),
+            Chunk::Level(data) => data.section.get_rough_biome_absolute_y(
+                (biome_coords::to_block(biome_x) & 15) as usize,
+                biome_coords::to_block(biome_y),
+                (biome_coords::to_block(biome_z) & 15) as usize,
+            ),
+        }
+    }
+
     pub fn advance(
         &mut self,
         stage: StagedChunkEnum,
@@ -469,9 +509,10 @@ impl Cache {
             },
             StagedChunkEnum::Surface => match generator {
                 generator::WorldGenerator::Noise(noise_gen) => {
+                    let neighborhood = self.build_biome_neighborhood(mid);
                     self.chunks[mid]
                         .get_proto_chunk_mut()
-                        .step_to_surface(noise_gen);
+                        .step_to_surface(noise_gen, neighborhood.as_ref());
                 }
                 generator::WorldGenerator::Flat(flat_gen) => {
                     flat_gen.step_to_surface(self.chunks[mid].get_proto_chunk_mut());

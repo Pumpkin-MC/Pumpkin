@@ -270,5 +270,5 @@ pub fn bench_create_and_populate_noise_with_surface(
         &generator.random_config.ore_random_deriver,
         &mut surface_height_estimate_sampler,
     );
-    chunk.build_surface(generator, &mut surface_height_estimate_sampler);
+    chunk.build_surface(generator, &mut surface_height_estimate_sampler, None);
 }

@@ -136,7 +136,10 @@ impl StagedChunkEnum {
     pub const fn get_direct_radius(self) -> i32 {
         // self exclude
         match self {
-            Self::Features | Self::Lighting | Self::Spawn | Self::Full => 1,
+            // Surface needs a one-chunk ring at BIOMES so that terrain-gen biome lookups which
+            // spill past the chunk edge resolve against the real neighbour, matching vanilla's
+            // `LevelReader.getNoiseBiome` -> `QuartPos.toSection` routing.
+            Self::Surface | Self::Features | Self::Lighting | Self::Spawn | Self::Full => 1,
             _ => 0,
         }
     }
@@ -144,7 +147,10 @@ impl StagedChunkEnum {
     pub const fn get_write_radius(self) -> i32 {
         // self exclude
         match self {
-            Self::Features | Self::Lighting | Self::Spawn => 1,
+            // Surface only writes the centre chunk, but the scheduler sizes the generation
+            // `Cache` from this, and the surface builder has to be able to read the ring's
+            // biomes. See `get_direct_radius`.
+            Self::Surface | Self::Features | Self::Lighting | Self::Spawn => 1,
             _ => 0,
         }
     }
@@ -167,7 +173,7 @@ impl StagedChunkEnum {
                 Self::StructureStart,
             ],
             Self::Noise => &[Self::StructureReferences],
-            Self::Surface => &[Self::Noise],
+            Self::Surface => &[Self::Noise, Self::Biomes],
             Self::Carvers => &[Self::Surface],
             Self::Features => &[Self::Carvers, Self::Carvers],
             Self::Lighting => &[Self::Features, Self::Features],
