@@ -187,7 +187,7 @@ impl SlimeEntity {
         self.entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
                 TrackedData::CUBE_SIZE,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 VarInt(size),
             )],
             None,

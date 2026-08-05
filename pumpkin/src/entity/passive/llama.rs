@@ -233,12 +233,12 @@ pub trait LlamaMob: AbstractChestedHorse {
             &[
                 Metadata::new(
                     TrackedData::STRENGTH_ID,
-                    MetaDataType::INTEGER,
+                    MetaDataType::INT,
                     VarInt(i32::from(data.strength.load(Relaxed))),
                 ),
                 Metadata::new(
                     TrackedData::VARIANT_ID,
-                    MetaDataType::INTEGER,
+                    MetaDataType::INT,
                     VarInt(i32::from(data.variant.load(Relaxed))),
                 ),
             ],

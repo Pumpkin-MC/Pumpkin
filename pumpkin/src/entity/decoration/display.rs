@@ -230,51 +230,51 @@ impl DisplayEntity {
         let ints = [
             Metadata::new(
                 TrackedData::START_INTERPOLATION,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 self.transformation_interpolation_start_delta_ticks
                     .load(Ordering::Relaxed),
             ),
             Metadata::new(
                 TrackedData::TRANSFORMATION_INTERPOLATION_START_DELTA_TICKS_ID,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 self.transformation_interpolation_start_delta_ticks
                     .load(Ordering::Relaxed),
             ),
             Metadata::new(
                 TrackedData::INTERPOLATION_DURATION,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 self.transformation_interpolation_duration
                     .load(Ordering::Relaxed),
             ),
             Metadata::new(
                 TrackedData::TRANSFORMATION_INTERPOLATION_DURATION_ID,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 self.transformation_interpolation_duration
                     .load(Ordering::Relaxed),
             ),
             Metadata::new(
                 TrackedData::POS_ROT_INTERPOLATION_DURATION_ID,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 self.pos_rot_interpolation_duration.load(Ordering::Relaxed),
             ),
             Metadata::new(
                 TrackedData::BRIGHTNESS,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 self.brightness_override.load(Ordering::Relaxed),
             ),
             Metadata::new(
                 TrackedData::BRIGHTNESS_OVERRIDE_ID,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 self.brightness_override.load(Ordering::Relaxed),
             ),
             Metadata::new(
                 TrackedData::GLOW_COLOR_OVERRIDE,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 self.glow_color_override.load(Ordering::Relaxed),
             ),
             Metadata::new(
                 TrackedData::GLOW_COLOR_OVERRIDE_ID,
-                MetaDataType::INTEGER,
+                MetaDataType::INT,
                 self.glow_color_override.load(Ordering::Relaxed),
             ),
         ];
@@ -285,18 +285,14 @@ impl DisplayEntity {
         let translation = self.translation.load();
         let scale = self.scale.load();
         let vectors = [
-            Metadata::new(
-                TrackedData::TRANSLATION,
-                MetaDataType::VECTOR_3F,
-                translation,
-            ),
+            Metadata::new(TrackedData::TRANSLATION, MetaDataType::VECTOR3, translation),
             Metadata::new(
                 TrackedData::TRANSLATION_ID,
-                MetaDataType::VECTOR_3F,
+                MetaDataType::VECTOR3,
                 translation,
             ),
-            Metadata::new(TrackedData::SCALE, MetaDataType::VECTOR_3F, scale),
-            Metadata::new(TrackedData::SCALE_ID, MetaDataType::VECTOR_3F, scale),
+            Metadata::new(TrackedData::SCALE, MetaDataType::VECTOR3, scale),
+            Metadata::new(TrackedData::SCALE_ID, MetaDataType::VECTOR3, scale),
         ];
         self.entity.send_meta_data(&vectors, None);
 
@@ -305,22 +301,22 @@ impl DisplayEntity {
         let quaternions = [
             Metadata::new(
                 TrackedData::LEFT_ROTATION,
-                MetaDataType::QUATERNION_F,
+                MetaDataType::QUATERNION,
                 left_rotation,
             ),
             Metadata::new(
                 TrackedData::LEFT_ROTATION_ID,
-                MetaDataType::QUATERNION_F,
+                MetaDataType::QUATERNION,
                 left_rotation,
             ),
             Metadata::new(
                 TrackedData::RIGHT_ROTATION,
-                MetaDataType::QUATERNION_F,
+                MetaDataType::QUATERNION,
                 right_rotation,
             ),
             Metadata::new(
                 TrackedData::RIGHT_ROTATION_ID,
-                MetaDataType::QUATERNION_F,
+                MetaDataType::QUATERNION,
                 right_rotation,
             ),
         ];
