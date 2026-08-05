@@ -2631,7 +2631,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "arc-swap",
  "base64 0.23.1",
@@ -2694,7 +2694,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-api-macros"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -2704,7 +2704,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-codecs"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "serde_json",
  "tracing",
@@ -2712,7 +2712,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-config"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "pumpkin-util",
  "serde",
@@ -2723,7 +2723,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-data"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "crc-fast",
  "criterion",
@@ -2736,7 +2736,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-inventory"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "pumpkin-data",
  "pumpkin-protocol",
@@ -2750,7 +2750,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-macros"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "heck",
  "proc-macro-error2",
@@ -2761,7 +2761,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-nbt"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "bytes",
  "cesu8",
@@ -2787,7 +2787,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-protocol"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "aes",
  "async-compression",
@@ -2826,7 +2826,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-util"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -2854,7 +2854,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-world"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "arc-swap",
  "ash",

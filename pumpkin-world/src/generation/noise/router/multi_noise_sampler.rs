@@ -13,7 +13,9 @@ use super::{
     },
     chunk_noise_router::ChunkNoiseFunctionComponent,
     density_function::{NoiseFunctionComponentRange, PassThrough},
-    proto_noise_router::{ProtoMultiNoiseRouter, ProtoNoiseFunctionComponent},
+    proto_noise_router::{
+        BEARDIFIER_ZERO_CONSTANT, ProtoMultiNoiseRouter, ProtoNoiseFunctionComponent,
+    },
 };
 
 pub struct MultiNoiseSamplerBuilderOptions {
@@ -136,13 +138,9 @@ impl<'a> MultiNoiseSampler<'a> {
                 ProtoNoiseFunctionComponent::PassThrough(pass_through) => {
                     ChunkNoiseFunctionComponent::PassThrough(pass_through.clone())
                 }
-                ProtoNoiseFunctionComponent::Beardifier(_) => ChunkNoiseFunctionComponent::Independent(
-                    Box::leak(Box::new(
-                        crate::generation::noise::router::proto_noise_router::IndependentProtoNoiseFunctionComponent::Constant(
-                            crate::generation::noise::router::density_function::math::Constant::new(0.0),
-                        ),
-                    )),
-                ),
+                ProtoNoiseFunctionComponent::Beardifier(_) => {
+                    ChunkNoiseFunctionComponent::Independent(&BEARDIFIER_ZERO_CONSTANT)
+                }
                 ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
                     //NOTE: Due to our previous invariant with the proto-function, it is guaranteed
                     // that the wrapped function is already on the stack

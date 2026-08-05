@@ -87,18 +87,54 @@ pub enum NotInBounds {
 impl From<NotInBounds> for CommandError {
     fn from(value: NotInBounds) -> Self {
         match value {
-            NotInBounds::LowerBound(val, min) => Self::CommandFailed(TextComponent::text(format!(
-                "{} must not be less than {}, found {}",
-                val.qualifier(),
-                min,
-                val
-            ))),
-            NotInBounds::UpperBound(val, max) => Self::CommandFailed(TextComponent::text(format!(
-                "{} must not be more than {}, found {}",
-                val.qualifier(),
-                max,
-                val
-            ))),
+            NotInBounds::LowerBound(val, min) => {
+                let (key, min_text, val_text) = match val {
+                    Number::F64(_) | Number::F32(_) => (
+                        pumpkin_data::translation::java::ARGUMENT_DOUBLE_LOW,
+                        min.to_string(),
+                        val.to_string(),
+                    ),
+                    Number::I32(_) => (
+                        pumpkin_data::translation::java::ARGUMENT_INTEGER_LOW,
+                        min.to_string(),
+                        val.to_string(),
+                    ),
+                    Number::I64(_) => (
+                        pumpkin_data::translation::java::ARGUMENT_LONG_LOW,
+                        min.to_string(),
+                        val.to_string(),
+                    ),
+                };
+                Self::CommandFailed(TextComponent::translate_cross(
+                    key,
+                    key,
+                    [TextComponent::text(min_text), TextComponent::text(val_text)],
+                ))
+            }
+            NotInBounds::UpperBound(val, max) => {
+                let (key, max_text, val_text) = match val {
+                    Number::F64(_) | Number::F32(_) => (
+                        pumpkin_data::translation::java::ARGUMENT_DOUBLE_BIG,
+                        max.to_string(),
+                        val.to_string(),
+                    ),
+                    Number::I32(_) => (
+                        pumpkin_data::translation::java::ARGUMENT_INTEGER_BIG,
+                        max.to_string(),
+                        val.to_string(),
+                    ),
+                    Number::I64(_) => (
+                        pumpkin_data::translation::java::ARGUMENT_LONG_BIG,
+                        max.to_string(),
+                        val.to_string(),
+                    ),
+                };
+                Self::CommandFailed(TextComponent::translate_cross(
+                    key,
+                    key,
+                    [TextComponent::text(max_text), TextComponent::text(val_text)],
+                ))
+            }
         }
     }
 }
@@ -124,8 +160,8 @@ impl Number {
 impl Display for Number {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::F64(v) => write!(f, "{v:.2}"),
-            Self::F32(v) => write!(f, "{v:.2}"),
+            Self::F64(v) => write!(f, "{v}"),
+            Self::F32(v) => write!(f, "{v}"),
             Self::I32(v) => write!(f, "{v}"),
             Self::I64(v) => write!(f, "{v}"),
         }

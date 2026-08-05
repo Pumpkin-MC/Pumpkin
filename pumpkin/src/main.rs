@@ -5,6 +5,7 @@
 compile_error!("Compiling for WASI targets is not supported!");
 
 use pumpkin_data::packet::CURRENT_MC_VERSION;
+use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use std::{
     backtrace::{Backtrace, BacktraceStatus},
     io::{self},
@@ -66,7 +67,7 @@ async fn main() {
     info!(
         "{}",
         TextComponent::text(format!(
-            "Starting {} {} Minecraft (Protocol {})",
+            "Starting {} {} Java Minecraft (Protocol {}) | {} Bedrock (Protocol {})",
             TextComponent::text("Pumpkin")
                 .color_named(NamedColor::Gold)
                 .to_pretty_console(),
@@ -74,6 +75,12 @@ async fn main() {
                 .color_named(NamedColor::Green)
                 .to_pretty_console(),
             TextComponent::text(CURRENT_MC_VERSION.protocol_version().to_string())
+                .color_named(NamedColor::DarkBlue)
+                .to_pretty_console(),
+            TextComponent::text(CURRENT_BEDROCK_MC_VERSION)
+                .color_named(NamedColor::Gold)
+                .to_pretty_console(),
+            TextComponent::text(CURRENT_BEDROCK_MC_PROTOCOL.to_string())
                 .color_named(NamedColor::DarkBlue)
                 .to_pretty_console()
         ))
@@ -182,6 +189,15 @@ fn print_support_links_and_warning() {
             .to_pretty_console(),
         TextComponent::text("https://discord.gg/wT8XjrjKkf")
             .color_named(NamedColor::Aqua)
+            .to_pretty_console()
+    );
+    info!(
+        "Consider {} to {}",
+        TextComponent::text("Donating")
+            .color_named(NamedColor::DarkPurple)
+            .to_pretty_console(),
+        TextComponent::text("https://pumpkinmc.org/donate/")
+            .color_named(NamedColor::Gold)
             .to_pretty_console()
     );
 }
