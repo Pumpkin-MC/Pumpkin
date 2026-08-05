@@ -384,3 +384,153 @@ architectural blocker found, not just "not done yet":
    (`InstrumentItem.java:65`), `ElytraGlide` (`LivingEntity.java:3200`),
    `ItemInteractStart`/`ItemInteractFinish` (`LivingEntity.java:3506`/`3621`,
    `FishingRodItem.java:40`/`59`, `BoneMealItem.java:42`/`53`), `LightningStrike`.
+
+## Features/structures audit (2026-08-05)
+
+Branched from master @ `b0c0651`. Task was to turn the earlier "102 Rust files vs 177
+vanilla feature classes" and "45 vs 32 structure files" counts into a real per-item gap
+analysis, then chase this session's live-testing reports (magma in rivers, oversized
+beaches, wrong ocean monument shape, shipwreck on land, kelp floating, ruined portal
+fully intact underwater).
+
+### Premise correction: there is no 58%-style feature/structure count gap
+
+`reference/vanilla/worldgen.md` (committed 2026-08-03, same campaign) already
+established this and it still holds: `pumpkin-world/src/generation/feature/configured_features.rs`
+has ~58-59 match arms against vanilla's 63 registered `Feature<C>` types, with foliage
+placers, trunk placers, tree decorators, root placers, and feature-size types all at
+full parity, and only 3 real vanilla carver classes (all covered). The 102-vs-177 and
+45-vs-32 file counts compare Rust `.rs` files against vanilla **source files**, which
+include `configurations/`, `foliageplacers/`, `trunkplacers/` etc. as separate files per
+class on the vanilla side, and (on the structure side) miss that village/outpost/bastion/
+trail-ruins/ancient-city all arrive through the shared jigsaw system and NBT templates
+and never get their own structure `.rs` file. **Do not re-litigate this as a category
+gap** - the real remaining work is individual feature/structure fidelity bugs, not
+missing registrations.
+
+### Decompiled vanilla source is currently unavailable - infra note for future sessions
+
+`/tmp/pumpkin-vanilla-26.2/decompiled` (the path `CONFORMANCE.md`/`JAR_QUIRKS_26_2.md`
+assume exists) is gone - `/tmp` does not persist across sessions and there is no
+committed script to rebuild it. Checked whether it's cheap to regenerate:
+`/home/eshanki/Downloads/server.jar` is a genuine 26.2 server jar (`version.json` id
+"26.2", matches this campaign's target), but Mojang's version manifest for 26.2
+(`https://piston-meta.mojang.com/v1/packages/4b74f58f68a2baae3547d5a20274079f29cafc06/26.2.json`)
+has no `client_mappings`/`server_mappings` entry in `downloads` at all - only `client`
+and `server` jar URLs. Without official mappings the jar decompiles to obfuscated names
+only, useless for citation. Rebuilding this pipeline is out of scope for a single
+session; if someone does rebuild it, please commit a script under `conformance/` so it
+isn't lost again. Per CLAUDE.md, the wiki is an acceptable citation for placement-condition
+questions ("does X require Y nearby") but not for algorithm-structure questions ("what
+order are the RNG calls", "how are the pieces assembled") - several items below are
+blocked on the latter.
+
+### Fixed this session
+
+- **Kelp head-cap bug** (`pumpkin-world/src/generation/feature/features/kelp.rs`): when
+  a growing kelp column hit the water surface or an obstruction before its randomly
+  rolled height, the code tried to cap the last-placed body segment with a proper aged
+  `KELP` head by checking whether the block *below* the failing position was still
+  `WATER` - but that position had just been overwritten with `KELP_PLANT` on the
+  previous loop iteration, so the check could never pass. Net effect: any column cut
+  short by the surface/an obstruction was left as a bare, uncapped `KELP_PLANT` stalk
+  instead of ending in a head. This is a self-contained logic bug in Pumpkin's own
+  algorithm (the code's own intent, provable by tracing state transitions, not a claim
+  about vanilla's algorithm), so it didn't need decompiled-source access to fix safely.
+  Extracted the decision into a pure `can_cap_with_head(below_id, below_below_id)`
+  helper (now also accepts `KELP_PLANT`, alongside virgin `WATER`, as a valid support to
+  cap) with unit tests, plus an integration regression test
+  (`chunk_system::generation::tests::generated_kelp_columns_are_supported_and_capped`,
+  seed 42 chunk (2,4), verified by direct probing to contain kelp) that generates a real
+  chunk through the Features stage and asserts every kelp column both rests on solid
+  ground/more kelp (not air/water) and ends in a `KELP` head, not a bare `KELP_PLANT`.
+  Confirmed this test fails on the pre-fix code with exactly the predicted symptom
+  (`kelp column ... ends at y=61 without a KELP head cap`).
+  **Caveat**: this is a real, reproducible, now-fixed bug, but I could not conclusively
+  connect it to this session's specific live-testing report of kelp "floating in open
+  water with no supporting block underneath" - that symptom implies the column's *base*
+  has nothing solid below it, which is a different failure mode from the one this fix
+  addresses (a column that rests on real ground but lacks its head cap). The base-anchor
+  logic (`ocean_floor_height_exclusive` plus the incremental/downgrade heightmap
+  maintenance in `proto_chunk.rs` lines ~392-432) was audited and looks deliberately
+  correct (has an explicit comment citing the exact aquifer/carver-replaces-solid-with-
+  fluid scenario it guards against), so the true root cause of the "floating with zero
+  support" report, if it's a distinct bug, is still open. Recommend a follow-up
+  live-testing pass on a fixed seed to check whether this fix already resolved the
+  visible symptom before spending more time on it.
+
+### Investigated, concluded not a bug (re-classify, don't re-dispatch)
+
+- **"Magma in rivers"**: `underwater_magma.rs`'s own placement predicate (solid floor
+  required, no open water/air on any horizontal face) already prevents floating/exposed
+  placement. Cross-checked `pumpkin-data/src/generated/biome.rs` (auto-generated from
+  real game data, not hand-authored) and confirmed `UnderwaterMagma` sits in the shared
+  `underground_ores` decoration step (alongside `OreCopper`, `DiskSand`, `DiskClay`,
+  `DiskGravel`) for the `RIVER` biome specifically, not just ocean biomes - this is a
+  data-driven registration, not a Pumpkin-authored bug. The wiki
+  (`https://minecraft.wiki/w/Magma_Block`, Natural Generation section) describes magma
+  generating "at the bottom of water aquifers" generically across the Overworld, not as
+  an ocean-exclusive mechanic, which is consistent with rivers legitimately getting
+  occasional magma clusters wherever a water column meets a qualifying solid floor.
+  Recommend re-verifying the original live-testing observation (biome may have been
+  misidentified) rather than treating this as a confirmed parity bug.
+
+### Investigated, root-caused but blocked on source access (scoped follow-up)
+
+- **Ruined Portal never decayed** (`pumpkin-world/src/generation/structure/structures/ruined_portal.rs`):
+  confirmed - `RuinedPortalPiece::place` calls `place_template` directly on the raw
+  `ruined_portal/portal_N`/`giant_portal_N` templates with no post-processing pass at
+  all. Contrast with `shipwreck.rs`, whose `TEMPLATES` list includes explicit
+  `_degraded` NBT variants (damage baked into the template data itself, no runtime pass
+  needed) - ruined portal has no such variants, meaning vanilla's decay must be a
+  runtime pass applied after placement, and Pumpkin has never implemented it. This
+  fully explains the live-testing report of a "fully intact, undamaged" underwater
+  portal. **Why not fixed this session**: vanilla's actual decay pass (mossiness-based
+  stone/mossy-stone block substitution, cold-biome netherrack-for-lava/magma swaps,
+  obsidian→crying-obsidian chance, air-pocket carving, vine placement) needs exact
+  per-block percentages and RNG call order from `RuinedPortalPiece.java`/
+  `RuinedPortalStructure.java`, which the wiki only paraphrases approximately (e.g. "15%
+  ...20%" for crying obsidian - not a citable exact number) and decompiled source is
+  currently unavailable (see infra note above). Attempting this from memory/wiki-
+  paraphrase would risk exactly the kind of unverifiable claim CLAUDE.md's verification
+  discipline rules out. **Scoped as its own follow-up**: port
+  `RuinedPortalPiece.postProcess`'s decay pass once decompiled source is available
+  again; standalone, no interdependency with other items here.
+
+### Audited, confirmed real but far too large for this session
+
+- **Ocean Monument shape** (`pumpkin-world/src/generation/structure/structures/ocean_monument.rs`):
+  confirmed - `OceanMonumentPiece::place` is a hand-rolled symmetric stepped-pyramid
+  shell (a nested-square loop over 15 layers, prismarine/prismarine-bricks/dark-
+  prismarine by simple modulo), not vanilla's actual room-based monument (a fixed,
+  asymmetric layout of named rooms - entry, core, treasure room, wing corridors - each
+  with guardian/elder-guardian placement and its own internal geometry). Confirmed
+  `pumpkin-world/assets/structures/` has no monument NBT templates at all, meaning
+  vanilla's `OceanMonumentPieces` is not template-driven either - it's a from-scratch
+  procedural room-grid algorithm across many small piece classes. This is a multi-file,
+  multi-week port, not a placement-condition bug like the ones already fixed this
+  session (glow lichen, huge mushroom, kelp). **Explicitly not attempted** per this
+  task's own scoping guidance; recorded here as a confirmed, well-understood gap for
+  whoever picks up structures next.
+
+### Cross-referenced, likely a downstream symptom rather than its own bug
+
+- **Shipwreck on dry land**: audited `shipwreck.rs` end to end - biome-tag gating
+  (`structure.biomes` checked against `#minecraft:has_structure/shipwreck` /
+  `..._beached` at the structure's `start_pos`), rotation/template selection, and
+  height-map sampling (`OceanFloorWg` for open-ocean, `WorldSurfaceWg` for the beached
+  variant, with distinct vertical offsets) all look structurally sound and correctly
+  wired - no bug found in the structure's own logic. The most parsimonious explanation
+  given this session's *other* live-testing report of "an oddly massive, perfectly flat
+  sand beach" (already tracked above under the continentalness/erosion investigation,
+  out of scope for this feature/structure pass) is that the beached shipwreck variant is
+  legitimately placed inside a real (oversized) beach biome, but the beach is so much
+  wider than vanilla that no water ends up anywhere near it. Recommend re-testing
+  shipwreck placement only after the oversized-beach/continentalness bug is fixed,
+  rather than treating this as its own structure bug.
+
+### Out of scope, already tracked elsewhere
+
+- Oversized beaches / "overwhelmingly ocean" worldgen: this is a noise-router/
+  continentalness issue, not a feature or structure file - already flagged above in
+  this same document under the 2026-08-04 live-testing section. Not re-litigated here.
