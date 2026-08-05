@@ -3,9 +3,9 @@ use std::sync::Arc;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-        OnPlaceArgs, PlacedArgs,
+        OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
     },
-    entity::player::Player,
+    entity::{falling::FallingEntity, player::Player},
     world::World,
 };
 use pumpkin_data::{
@@ -16,7 +16,77 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
+
+/// Ticks between a stalactite losing its support and starting to fall. This matches the delay
+/// this repository already uses for every other falling block (`FallingBlock` and
+/// `ConcretePowderBlock` both schedule 2 ticks); vanilla's own constant could not be verified
+/// from an available source, and the wiki does not state one.
+const DELAY_BEFORE_FALLING: u8 = 2;
+
+/// Cap on the damage a falling stalactite can deal. minecraft.wiki, "Pointed Dripstone":
+/// the damage is capped no matter how far the stalactite falls.
+const STALACTITE_MAX_DAMAGE: i32 = 40;
+
+/// Damage per block of fall distance for a falling stalactite.
+///
+/// minecraft.wiki, "Pointed Dripstone" (Java Edition): "the amount of damage is 1HP per pointed
+/// dripstone falling (less than 6 will be counted as 6) per each block of falling distance".
+#[must_use]
+pub fn stalactite_damage_per_distance(block_count: usize) -> f32 {
+    block_count.max(6) as f32
+}
+
+/// A downward-pointing pointed dripstone, i.e. part of a stalactite.
+#[must_use]
+pub fn is_stalactite(block: &Block, state_id: BlockStateId) -> bool {
+    block == &Block::POINTED_DRIPSTONE
+        && PointedDripstoneLikeProperties::from_state_id(state_id, block).vertical_direction
+            == VerticalDirection::Down
+}
+
+/// The lowest block of a stalactite, including the merged-tip form.
+const fn is_tip_thickness(thickness: SpeleothemThickness) -> bool {
+    matches!(
+        thickness,
+        SpeleothemThickness::Tip | SpeleothemThickness::TipMerge
+    )
+}
+
+/// Turns the unsupported stalactite starting at `position` into falling block entities.
+///
+/// minecraft.wiki, "Pointed Dripstone": "If the block supporting a stalactite or any block of
+/// the stalactite is broken, all of the unsupported pointed dripstone below the broken block
+/// drops, causing damage to any player and mobs standing beneath it, similar to a falling
+/// anvil." Only the tip segment hurts entities; the damage scales with the number of blocks
+/// in the falling stalactite (see [`stalactite_damage_per_distance`]).
+async fn spawn_falling_stalactite(world: &Arc<World>, position: &BlockPos) {
+    let mut segments = Vec::new();
+    let mut current = *position;
+    let mut has_tip = false;
+    loop {
+        let (block, state) = world.get_block_and_state(&current);
+        if !is_stalactite(block, state.id) {
+            break;
+        }
+        segments.push((current, state.id));
+        let props = PointedDripstoneLikeProperties::from_state_id(state.id, block);
+        if is_tip_thickness(props.thickness) {
+            has_tip = true;
+            break;
+        }
+        current = current.down();
+    }
+
+    let last_index = segments.len().saturating_sub(1);
+    let damage_per_distance = stalactite_damage_per_distance(segments.len());
+    for (index, (pos, state_id)) in segments.into_iter().enumerate() {
+        let hurts = (has_tip && index == last_index)
+            .then_some((damage_per_distance, STALACTITE_MAX_DAMAGE));
+        FallingEntity::replace_spawn_hurting(world, pos, state_id, hurts).await;
+    }
+}
 
 #[pumpkin_block("minecraft:pointed_dripstone")]
 pub struct DripstoneBlock;
@@ -89,12 +159,38 @@ impl BlockBehaviour for DripstoneBlock {
             }
         })
     }
+    /// Fires `DELAY_BEFORE_FALLING` ticks after a stalactite lost its support. The guard is
+    /// required: turning each segment into a falling entity replaces it with air and notifies
+    /// its neighbors, which schedules further ticks for segments this call already consumed.
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let (block, state) = args.world.get_block_and_state(args.position);
+            if !is_stalactite(block, state.id)
+                || can_place_at_pos(&**args.world, args.position, None, None)
+            {
+                return;
+            }
+            spawn_falling_stalactite(args.world, args.position).await;
+        })
+    }
+
     fn get_state_for_neighbor_update<'a>(
         &'a self,
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             if !can_place_at_pos(args.world, args.position, None, None) {
+                // An unsupported stalactite does not vanish: it falls (see
+                // `spawn_falling_stalactite`). Stalagmites keep breaking immediately.
+                if is_stalactite(args.block, args.state_id) {
+                    args.world.schedule_block_tick(
+                        args.block,
+                        *args.position,
+                        DELAY_BEFORE_FALLING,
+                        TickPriority::Normal,
+                    );
+                    return args.state_id;
+                }
                 return Block::AIR.default_state.id;
             }
             let mut dripstone_props =
@@ -425,4 +521,63 @@ fn flip_dir(dir: VerticalDirection) -> VerticalDirection {
         return VerticalDirection::Down;
     }
     VerticalDirection::Up
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stalactite_damage_clamps_to_six() {
+        assert!((stalactite_damage_per_distance(1) - 6.0).abs() < f32::EPSILON);
+        assert!((stalactite_damage_per_distance(5) - 6.0).abs() < f32::EPSILON);
+        assert!((stalactite_damage_per_distance(6) - 6.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn stalactite_damage_scales_past_six() {
+        assert!((stalactite_damage_per_distance(7) - 7.0).abs() < f32::EPSILON);
+        assert!((stalactite_damage_per_distance(20) - 20.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn stalactite_damage_feeds_the_shared_fall_damage_formula() {
+        // A 6-block stalactite falling 10 blocks: 6 * 10 = 60, capped at 40.
+        let per_distance = stalactite_damage_per_distance(6);
+        let damage = crate::block::blocks::falling::fall_damage_amount(
+            10,
+            per_distance,
+            STALACTITE_MAX_DAMAGE,
+        );
+        assert!((damage - 40.0).abs() < f32::EPSILON);
+        // The same stalactite falling 3 blocks: 6 * 3 = 18, under the cap.
+        let damage = crate::block::blocks::falling::fall_damage_amount(
+            3,
+            per_distance,
+            STALACTITE_MAX_DAMAGE,
+        );
+        assert!((damage - 18.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn tip_thickness_covers_merged_tips() {
+        assert!(is_tip_thickness(SpeleothemThickness::Tip));
+        assert!(is_tip_thickness(SpeleothemThickness::TipMerge));
+        assert!(!is_tip_thickness(SpeleothemThickness::Frustum));
+        assert!(!is_tip_thickness(SpeleothemThickness::Middle));
+        assert!(!is_tip_thickness(SpeleothemThickness::Base));
+    }
+
+    #[test]
+    fn is_stalactite_only_matches_downward_dripstone() {
+        let mut props = PointedDripstoneLikeProperties::default(&Block::POINTED_DRIPSTONE);
+        props.vertical_direction = VerticalDirection::Down;
+        let down = props.to_state_id(&Block::POINTED_DRIPSTONE);
+        props.vertical_direction = VerticalDirection::Up;
+        let up = props.to_state_id(&Block::POINTED_DRIPSTONE);
+
+        assert!(is_stalactite(&Block::POINTED_DRIPSTONE, down));
+        assert!(!is_stalactite(&Block::POINTED_DRIPSTONE, up));
+        assert!(!is_stalactite(&Block::STONE, Block::STONE.default_state.id));
+    }
 }

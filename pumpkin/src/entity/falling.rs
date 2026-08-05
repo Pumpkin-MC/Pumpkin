@@ -79,6 +79,18 @@ impl FallingEntity {
 
     /// Replaced the current Block and Spawns a new Falling one
     pub async fn replace_spawn(world: &Arc<World>, position: BlockPos, block_state: BlockStateId) {
+        Self::replace_spawn_hurting(world, position, block_state, None).await;
+    }
+
+    /// Same as [`Self::replace_spawn`], but optionally opts the spawned instance into crushing
+    /// living entities (`setHurtsEntities`) *before* it is handed to the world, so the tick loop
+    /// can never observe the entity without its damage parameters set.
+    pub async fn replace_spawn_hurting(
+        world: &Arc<World>,
+        position: BlockPos,
+        block_state: BlockStateId,
+        hurts_entities: Option<(f32, i32)>,
+    ) {
         // Replace the original block, TODO: use fluid state
         world
             .set_block_state(
@@ -94,6 +106,9 @@ impl FallingEntity {
             .data
             .store(i32::from(block_state.as_u16()), Ordering::Relaxed);
         let entity = Arc::new(Self::new(entity, block_state));
+        if let Some((damage_per_distance, damage_max)) = hurts_entities {
+            entity.set_hurts_entities(damage_per_distance, damage_max);
+        }
         world.spawn_entity(entity).await;
     }
 
@@ -137,6 +152,10 @@ impl FallingEntity {
         let is_anvil = falling_block.has_tag(&tag::Block::MINECRAFT_ANVIL);
         let damage_type = if is_anvil {
             DamageType::FALLING_ANVIL
+        } else if falling_block == &Block::POINTED_DRIPSTONE {
+            // A falling stalactite kills with the "fallingStalactite" death message
+            // (`minecraft:falling_stalactite` damage type), not the generic falling-block one.
+            DamageType::FALLING_STALACTITE
         } else {
             DamageType::FALLING_BLOCK
         };
@@ -216,17 +235,26 @@ impl FallingEntity {
         let would_continue_falling = FallingBlock::can_fall_through(below_state, below_block)
             && !(is_concrete && is_stuck_in_water);
         let placed_state = BlockState::from_id(falling_state_id);
-        let would_survive = world.block_registry.can_place_at(
-            Some(server),
-            Some(world),
-            &**world,
-            None,
-            falling_block,
-            placed_state,
-            pos,
-            Some(BlockDirection::Down),
-            None,
-        ) && !would_continue_falling;
+        // A falling stalactite can never survive landing: it fell down a column of passable
+        // blocks, so there is nothing above it to hang from, while a downward-pointing pointed
+        // dripstone requires support above. `can_place_at` would nevertheless accept it, because
+        // it is asked with `BlockDirection::Down` and would latch onto the floor below, placing a
+        // stalactite standing upside down on the ground. Force the break/drop branch instead.
+        let cannot_survive_landing =
+            crate::block::blocks::dripstone::is_stalactite(falling_block, falling_state_id);
+        let would_survive = !cannot_survive_landing
+            && world.block_registry.can_place_at(
+                Some(server),
+                Some(world),
+                &**world,
+                None,
+                falling_block,
+                placed_state,
+                pos,
+                Some(BlockDirection::Down),
+                None,
+            )
+            && !would_continue_falling;
 
         if may_replace && would_survive {
             let final_state_id = crate::block::blocks::falling::on_land_state(
