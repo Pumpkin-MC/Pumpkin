@@ -1319,11 +1319,8 @@ impl ProtoChunk {
     ) -> bool {
         let chunk_x = self.x;
         let chunk_z = self.z;
-        let position = global_cache.get_or_compute_structure_start(
-            entry.structure,
-            chunk_x,
-            chunk_z,
-            || {
+        let position =
+            global_cache.get_or_compute_structure_start(entry.structure, chunk_x, chunk_z, || {
                 let structure = Structure::get(&entry.structure);
                 try_generate_structure(
                     &entry.structure,
@@ -1333,8 +1330,7 @@ impl ProtoChunk {
                     sea_level,
                     Some(height_sampler),
                 )
-            },
-        );
+            });
 
         if let Some(pos) = position {
             self.structure_starts

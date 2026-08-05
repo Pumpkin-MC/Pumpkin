@@ -28,6 +28,7 @@ pub fn generate_single_chunk(
     )
 }
 
+#[expect(clippy::too_many_arguments)]
 pub fn generate_single_chunk_with_radius(
     _dimension: &Dimension,
     _biome_mixer_seed: i64,
