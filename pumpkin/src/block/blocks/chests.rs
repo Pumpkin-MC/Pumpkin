@@ -23,6 +23,7 @@ use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
 
+use crate::block::blocks::copper_weathering;
 use crate::block::{
     BlockFuture, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs, GetRedstonePowerArgs,
     NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs, RandomTickArgs,
@@ -371,25 +372,6 @@ const COPPER_CHEST_OXIDATION: &[(&Block, &Block, u8)] = &[
     ),
 ];
 
-/// Get the oxidation level ordinal for a block (None if not oxidizable copper chest)
-fn get_oxidation_level(block: &Block) -> Option<u8> {
-    // Check non-waxed variants
-    if block == &Block::COPPER_CHEST {
-        return Some(0);
-    }
-    if block == &Block::EXPOSED_COPPER_CHEST {
-        return Some(1);
-    }
-    if block == &Block::WEATHERED_COPPER_CHEST {
-        return Some(2);
-    }
-    if block == &Block::OXIDIZED_COPPER_CHEST {
-        return Some(3);
-    }
-    // Waxed variants don't oxidize
-    None
-}
-
 /// Try to oxidize a copper chest to its next oxidation level.
 /// Uses vanilla's degradation algorithm with neighbor checking.
 async fn try_oxidize_copper_chest(
@@ -418,11 +400,12 @@ async fn try_oxidize_copper_chest(
     };
 
     // Scan neighbors in 4-block Manhattan distance to calculate oxidation chance
-    let (same_level_count, higher_level_count) =
-        count_neighbor_oxidation_levels(world, position, current_level);
-
-    // If we found any neighbors at a LOWER level, oxidation is blocked
-    // (This is handled in count_neighbor_oxidation_levels by returning early)
+    // `None` means a lower-level copper neighbour was found, which blocks oxidation.
+    let Some((same_level_count, higher_level_count)) =
+        copper_weathering::count_neighbor_oxidation_levels(world, position, current_level)
+    else {
+        return;
+    };
 
     // Calculate weighted probability: ((higher + 1) / (higher + same + 1))^2 * multiplier
     let ratio =
@@ -440,56 +423,6 @@ async fn try_oxidize_copper_chest(
     world
         .set_block_state(position, new_state_id, BlockFlags::NOTIFY_LISTENERS)
         .await;
-}
-
-/// Count copper blocks at same and higher oxidation levels within 4-block Manhattan distance.
-/// Returns (same, higher) counts, or (0, 0) if a lower-level neighbor was found (blocking oxidation).
-fn count_neighbor_oxidation_levels(
-    world: &Arc<World>,
-    center: &BlockPos,
-    current_level: u8,
-) -> (i32, i32) {
-    use std::cmp::Ordering;
-
-    let mut same_level_count = 0i32;
-    let mut higher_level_count = 0i32;
-
-    // Iterate in a 4-block Manhattan distance (9x9x9 cube checked with distance filter)
-    for dx in -4i32..=4 {
-        for dy in -4i32..=4 {
-            for dz in -4i32..=4 {
-                let manhattan_dist = dx.abs() + dy.abs() + dz.abs();
-                if manhattan_dist > 4 || manhattan_dist == 0 {
-                    continue;
-                }
-
-                let neighbor_pos = BlockPos(pumpkin_util::math::vector3::Vector3::new(
-                    center.0.x + dx,
-                    center.0.y + dy,
-                    center.0.z + dz,
-                ));
-
-                let neighbor_block = world.get_block(&neighbor_pos);
-
-                if let Some(neighbor_level) = get_oxidation_level(neighbor_block) {
-                    match neighbor_level.cmp(&current_level) {
-                        Ordering::Less => {
-                            // Found a neighbor at lower oxidation level - block oxidation entirely
-                            return (0, 0);
-                        }
-                        Ordering::Greater => {
-                            higher_level_count += 1;
-                        }
-                        Ordering::Equal => {
-                            same_level_count += 1;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    (same_level_count, higher_level_count)
 }
 
 /// Trapped chests have the same behavior as wooden chests but also emit redstone power based on viewer count.
