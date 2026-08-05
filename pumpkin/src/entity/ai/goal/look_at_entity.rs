@@ -15,7 +15,9 @@ pub struct LookAtEntityGoal {
     look_time: i32,
     chance: f32,
     look_forward: bool,
-    target_type: &'static EntityType,
+    /// `None` means vanilla's `Mob.class` lookAtType: any mob (excluding players), used by
+    /// e.g. `Vex.java:92`'s `LookAtPlayerGoal(this, Mob.class, 8.0F)`.
+    target_type: Option<&'static EntityType>,
     target_predicate: TargetPredicate,
 }
 
@@ -28,7 +30,7 @@ impl LookAtEntityGoal {
         chance: f32,
         look_forward: bool,
     ) -> Self {
-        let target_predicate = Self::create_target_predicate(mob_weak, target_type, range);
+        let target_predicate = Self::create_target_predicate(mob_weak, Some(target_type), range);
         Self {
             goal_control: Controls::LOOK,
             target: None,
@@ -36,7 +38,7 @@ impl LookAtEntityGoal {
             look_time: 0,
             chance,
             look_forward,
-            target_type,
+            target_type: Some(target_type),
             target_predicate,
         }
     }
@@ -50,14 +52,42 @@ impl LookAtEntityGoal {
         Box::new(Self::new(mob_weak, target_type, range, 0.02, false))
     }
 
+    /// Vanilla `LookAtPlayerGoal(this, Mob.class, lookDistance, probability, onlyHorizontal)`:
+    /// looks at the nearest mob of any type (not just players).
+    #[must_use]
+    pub fn new_any_mob(
+        mob_weak: Weak<dyn Mob>,
+        range: f32,
+        chance: f32,
+        look_forward: bool,
+    ) -> Self {
+        let target_predicate = Self::create_target_predicate(mob_weak, None, range);
+        Self {
+            goal_control: Controls::LOOK,
+            target: None,
+            range,
+            look_time: 0,
+            chance,
+            look_forward,
+            target_type: None,
+            target_predicate,
+        }
+    }
+
+    /// Vanilla default probability (`LookAtPlayerGoal.DEFAULT_PROBABILITY`).
+    #[must_use]
+    pub fn with_default_any_mob(mob_weak: Weak<dyn Mob>, range: f32) -> Box<Self> {
+        Box::new(Self::new_any_mob(mob_weak, range, 0.02, false))
+    }
+
     fn create_target_predicate(
         mob_weak: Weak<dyn Mob>,
-        target_type: &'static EntityType,
+        target_type: Option<&'static EntityType>,
         range: f32,
     ) -> TargetPredicate {
         let mut target_predicate = TargetPredicate::create_non_attackable();
         target_predicate.base_max_distance = range as f64; // TODO
-        if target_type == &EntityType::PLAYER {
+        if target_type == Some(&EntityType::PLAYER) {
             target_predicate.set_predicate(move |living_entity, _world| {
                 let mob_weak = mob_weak.clone();
                 async move {
@@ -95,12 +125,24 @@ impl Goal for LookAtEntityGoal {
             let mut mob_pos = mob_entity.living_entity.entity.pos.load();
             mob_pos.y += mob_entity.living_entity.entity.get_eye_height();
 
-            let candidate = if *self.target_type == EntityType::PLAYER {
-                world
+            let candidate = match self.target_type {
+                Some(target_type) if *target_type == EntityType::PLAYER => world
                     .get_closest_player(mob_pos, self.range.into())
-                    .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
-            } else {
-                world.get_closest_entity(mob_pos, self.range.into(), Some(&[self.target_type]))
+                    .map(|p: Arc<Player>| p as Arc<dyn EntityBase>),
+                Some(target_type) => {
+                    world.get_closest_entity(mob_pos, self.range.into(), Some(&[target_type]))
+                }
+                // Vanilla `Mob.class`: any mob, players excluded (Player is not a Mob subclass).
+                // The self-exclusion must happen here, inside the search: `get_closest_entity_where`
+                // returns a single nearest match, and this mob itself (at ~0 distance) would
+                // otherwise always win over any other candidate, leaving `target_predicate.test`'s
+                // later `ptr::eq` self-check to reject the only candidate found every time.
+                None => {
+                    let own_id = mob_entity.living_entity.entity.entity_id;
+                    world.get_closest_entity_where(mob_pos, self.range.into(), None, |e| {
+                        e.get_entity().entity_id != own_id && e.get_mob().is_some()
+                    })
+                }
             };
 
             // Vanilla runs candidates through the goal's `TargetingConditions`, which rejects

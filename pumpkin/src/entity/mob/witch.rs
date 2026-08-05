@@ -74,7 +74,8 @@ impl WitchEntity {
             );
             goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
 
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            // Witch.java:72: `HurtByTargetGoal(this, Raider.class)`.
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true).exclude_raiders()));
             target_selector.add_goal(2, Box::new(NearestHealableRaiderTargetGoal::new()));
             target_selector.add_goal(
                 3,

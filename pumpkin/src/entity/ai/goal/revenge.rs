@@ -8,12 +8,25 @@ use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::entity::EntityType;
+use pumpkin_data::tag::{self, Taggable};
+
+/// Vanilla `Raider.class` membership check, approximated via the `#minecraft:raiders` tag
+/// (Witch, Pillager, Vindicator, Evoker, Illusioner, Ravager, Ravager rider Pillager, etc.).
+#[must_use]
+pub fn is_raider(entity_type: &EntityType) -> bool {
+    entity_type.has_tag(&tag::EntityType::MINECRAFT_RAIDERS)
+}
 
 pub struct RevengeGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
     last_attacked_time: i32,
     target_predicate: TargetPredicate,
+    /// Vanilla `HurtByTargetGoal(this, Raider.class)`'s `toIgnoreDamage`: an attacker of this
+    /// class is ignored entirely, so raid-mates don't retaliate against friendly fire from
+    /// other raiders. Used by Vex (`Vex.java:93`) and Witch (`Witch.java:72`).
+    exclude_raiders: bool,
 }
 
 impl RevengeGoal {
@@ -27,7 +40,14 @@ impl RevengeGoal {
             target: None,
             last_attacked_time: 0,
             target_predicate,
+            exclude_raiders: false,
         }
+    }
+
+    #[must_use]
+    pub const fn exclude_raiders(mut self) -> Self {
+        self.exclude_raiders = true;
+        self
     }
 }
 
@@ -55,6 +75,10 @@ impl Goal for RevengeGoal {
             let Some(attacker_living) = attacker.get_living_entity() else {
                 return false;
             };
+
+            if self.exclude_raiders && is_raider(attacker.get_entity().entity_type) {
+                return false;
+            }
 
             // Vanilla `TamableAnimal::canAttack` unconditionally excludes the mob's own owner
             // from any attack target, regardless of which targeting goal found them; for
@@ -130,5 +154,30 @@ impl Goal for RevengeGoal {
 
     fn controls(&self) -> Controls {
         self.track_target_goal.controls()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_raider;
+    use pumpkin_data::entity::EntityType;
+
+    #[test]
+    fn raid_mates_are_raiders() {
+        assert!(is_raider(&EntityType::WITCH));
+        assert!(is_raider(&EntityType::PILLAGER));
+        assert!(is_raider(&EntityType::EVOKER));
+        assert!(is_raider(&EntityType::RAVAGER));
+        assert!(is_raider(&EntityType::VINDICATOR));
+        assert!(is_raider(&EntityType::ILLUSIONER));
+    }
+
+    #[test]
+    fn non_raiders_are_not_raiders() {
+        // Vex is a raid participant but not tagged `#minecraft:raiders` in vanilla data,
+        // matching `Vex` not extending `Raider` (it implements `OwnableEntity` instead).
+        assert!(!is_raider(&EntityType::VEX));
+        assert!(!is_raider(&EntityType::ZOMBIE));
+        assert!(!is_raider(&EntityType::PLAYER));
     }
 }
