@@ -774,3 +774,64 @@ outright. Retest after build 8952694 deploys, since the falling fix touched adja
 Method note worth keeping: static code review passed this file as correct during the
 features/structures audit. In-game testing found the bug in three commands. Prefer live
 verification over reading for anything reachable by setblock.
+
+## Parity harness expanded, and two new parity gaps found (2026-08-05)
+
+### Head-to-head: PumpkinPie vs upstream HEAD
+
+Built upstream/master (4eaa6ace) and scored it with pumpkin-local/score.py against the same
+vanilla 26.2 oracle. Result: upstream 46.58/100, PumpkinPie 46.58/100 - IDENTICAL, component
+for component (commands 12/19, probes 2/4, backlog 0/43). Verified genuine (94 RCON exchanges
+in the upstream server's log), not a fallback to cached numbers.
+
+Conclusion: the harness cannot distinguish the two. It samples command registration, 4 probes
+and a markdown checklist; this fork's ~756 commits are mob AI, worldgen, block behaviour,
+chunk serialization and entity metadata, none of which those components touch. Registering
+/locate would move the score more than every parity fix in the fork combined. Do NOT cite this
+score as evidence about relative parity in either direction.
+
+### The setblock probe was vacuous - false OK
+
+`p_setblock_roundtrip` (pre-existing) and the new block probe both write to SCRATCH
+(900,100,900), which is NOT loaded on either server. Every case returned GONE on both sides,
+the comparison reported "matching", and the harness advertised parity it had never measured.
+Both servers failing identically is not agreement. Added an explicit unloaded-chunk guard that
+returns UNMEASURABLE instead, so this class of false OK cannot recur.
+
+### NEW PARITY GAP: Pumpkin does not keep spawn chunks loaded
+
+Evidence (RCON, both servers, 0 players online):
+  vanilla: setblock 0 100 0 -> "Changed the block at 0, 100, 0"   (also 0,64,0 and 8,70,8)
+  pumpkin: setblock 0 100 0 -> "That position is not loaded"      (same for all three)
+Vanilla keeps a radius of spawn chunks permanently loaded; Pumpkin keeps nothing loaded with no
+players. This also blocks any RCON block-behaviour testing without a player online.
+
+### NEW PARITY GAP: forceload reports success but does not load the chunk
+
+  forceload add 0 0    -> "Marked chunk 0 in 0 to be force loaded"
+  forceload query      -> "Chunk at 0 in 0 is marked for force loading"
+  setblock 0 100 0     -> "That position is not loaded"     <-- still not loaded
+So forceload registers the ticket and lies about the outcome. Previously recorded as "forceload
+does not actually load chunks"; this is that claim with direct evidence attached. Fixing this
+would unblock automated block-behaviour probing, so it is high leverage beyond its own parity
+value.
+
+Related: `gamerule spawnChunkRadius` is not implemented ("Incorrect argument for command"),
+which is the vanilla knob controlling the spawn-chunk radius.
+
+### Probes added (oracle/probe_gate.py)
+
+- `block_support_rules`: 12 support/survival cases (dripstone stalactite+stalagmite, torch,
+  lantern, redstone dust, flower, cactus, rail) including negative cases that MUST NOT survive.
+  Currently UNMEASURABLE pending the forceload/spawn-chunk fix above.
+- `mob_attributes`: base movement_speed and max_health for zombie/spider/pig/creeper. Reads
+  base values so it does not require entities to tick. NOTE: depends on such an entity existing
+  in a loaded chunk, so it currently reports NO_ENTITY on Pumpkin - it needs a reliable summon
+  or a loaded world to be meaningful.
+
+### CORRECTION to an earlier claim in this document
+
+The "VERIFIED LIVE BUG: stalactites cannot be placed hanging from a dripstone block" entry
+above is NOT confirmed. It was observed at coordinates that happened to be loaded during live
+play, but the probe re-run could not reproduce it under controlled conditions, and the code
+path reads as correct. Treat it as UNCONFIRMED pending a retest with a player in range.
