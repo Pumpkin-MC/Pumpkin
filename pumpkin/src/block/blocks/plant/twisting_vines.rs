@@ -79,7 +79,9 @@ impl PlantBlockBase for TwistingVinesBlock {
         {
             return true;
         }
-        if support_block_state.is_side_solid(pumpkin_data::BlockDirection::Down)
+        // Twisting vines grow upwards, so the sturdy face we need is the top face of the
+        // block below. Weeping vines are the mirrored case and check the bottom face.
+        if support_block_state.is_side_solid(pumpkin_data::BlockDirection::Up)
             && support_block.is_solid()
         {
             return true;

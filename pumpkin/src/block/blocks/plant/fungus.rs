@@ -1,5 +1,6 @@
-use crate::block::{BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs};
-use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
+use crate::block::{
+    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+};
 use pumpkin_data::BlockStateId;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockId, tag};
@@ -13,39 +14,31 @@ impl BlockMetadata for FungusBlock {
     }
 }
 
+/// Vanilla gives every fungus its own support tag, chosen from the fungus being placed
+/// and not from the block it is standing on.
+fn has_support(block_accessor: &dyn BlockAccessor, fungus: &Block, position: &BlockPos) -> bool {
+    let ground = block_accessor.get_block(&position.down());
+    if fungus == &Block::WARPED_FUNGUS {
+        ground.has_tag(&tag::Block::MINECRAFT_SUPPORTS_WARPED_FUNGUS)
+    } else {
+        ground.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CRIMSON_FUNGUS)
+    }
+}
+
 impl BlockBehaviour for FungusBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
+        has_support(args.block_accessor, args.block, args.position)
     }
     fn get_state_for_neighbor_update<'a>(
         &'a self,
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            <Self as PlantBlockBase>::get_state_for_neighbor_update(
-                self,
-                args.world,
-                args.position,
-                args.state_id,
-            )
-            .await
+            if has_support(args.world, args.block, args.position) {
+                args.state_id
+            } else {
+                Block::AIR.default_state.id
+            }
         })
-    }
-}
-impl PlantBlockBase for FungusBlock {
-    fn can_plant_on_top(
-        &self,
-        block_accessor: &dyn pumpkin_world::world::BlockAccessor,
-        pos: &pumpkin_util::math::position::BlockPos,
-    ) -> bool {
-        let block = block_accessor.get_block(pos);
-
-        if block == &Block::WARPED_FUNGUS {
-            return block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_WARPED_FUNGUS);
-        }
-        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CRIMSON_FUNGUS)
-    }
-    fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down())
     }
 }
