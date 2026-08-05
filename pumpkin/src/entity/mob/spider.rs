@@ -7,7 +7,7 @@ use rand::RngExt;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        Controls, Goal, GoalFuture, active_target::ActiveTargetGoal,
+        Controls, Goal, GoalFuture, active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
@@ -182,8 +182,20 @@ impl SpiderEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, Box::new(SpiderLeapGoal));
-            goal_selector.add_goal(3, Box::new(SpiderAttackGoal::new()));
+            // Spider.java:59: `AvoidEntityGoal<>(this, Armadillo.class, 6.0F, 1.0, 1.2,
+            // entity -> !((Armadillo)entity).isScared())`. Also covers CaveSpider, which
+            // shares this goal selector via `SpiderEntity::new`. The `!isScared()` predicate
+            // is not ported: Pumpkin's ArmadilloEntity does not expose curl/scare state
+            // outside `ArmadilloCurlUpGoal`'s own private field, so it is deferred.
+            // Priorities 3/4 below (leap/attack) are bumped by one from their prior 2/3 to
+            // keep vanilla's exact ordering (Float=1, Avoid=2, Leap=3, Attack=4) now that
+            // priority 2 is taken by this goal.
+            goal_selector.add_goal(
+                2,
+                Box::new(AvoidEntityGoal::new(&EntityType::ARMADILLO, 6.0, 1.0, 1.2)),
+            );
+            goal_selector.add_goal(3, Box::new(SpiderLeapGoal));
+            goal_selector.add_goal(4, Box::new(SpiderAttackGoal::new()));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
                 6,
