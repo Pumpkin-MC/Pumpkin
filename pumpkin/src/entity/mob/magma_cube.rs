@@ -35,6 +35,10 @@ impl Mob for MagmaCubeEntity {
         self.slime.get_mob_entity()
     }
 
+    fn mob_init_data_tracker(&self) -> crate::entity::EntityBaseFuture<'_, ()> {
+        self.slime.mob_init_data_tracker()
+    }
+
     fn mob_tick<'a>(
         &'a self,
         caller: &'a Arc<dyn crate::entity::EntityBase>,

@@ -792,6 +792,18 @@ impl TrackedData {
         v26_1: 255u8,
         v26_2: 255u8,
     };
+    pub const CUBE_SIZE: TrackedId = TrackedId {
+        v1_21: 16u8,
+        v1_21_2: 16u8,
+        v1_21_4: 16u8,
+        v1_21_5: 16u8,
+        v1_21_6: 16u8,
+        v1_21_7: 16u8,
+        v1_21_9: 16u8,
+        v1_21_11: 16u8,
+        v26_1: 16u8,
+        v26_2: 18u8,
+    };
     pub const CUSTOM_BLOCK_ID: TrackedId = TrackedId {
         v1_21: 11u8,
         v1_21_2: 11u8,
