@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     entity::EntityType,
@@ -25,6 +26,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     player::Player,
 };
+use crate::world::game_event::{GameEventContext, emit_game_event};
 
 const DEFAULT_FUSE_TIME: i32 = 30;
 const DEFAULT_EXPLOSION_RADIUS: i32 = 3;
@@ -202,7 +204,7 @@ impl Mob for CreeperEntity {
         &self.mob_entity
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.mob_entity.living_entity.entity;
             if !entity.is_alive() {
@@ -230,6 +232,15 @@ impl Mob for CreeperEntity {
                     1.0,
                     0.5,
                 );
+                // Creeper.java:136 (`tick`, `swellDir > 0 && this.swell == 0`): fires
+                // PRIME_FUSE with itself as source entity the tick the fuse starts.
+                emit_game_event(
+                    &world,
+                    GameEvent::PrimeFuse,
+                    entity.pos.load(),
+                    GameEventContext::of_entity(caller.clone()),
+                )
+                .await;
             }
 
             let fuse_time = self.fuse_time.load(Ordering::Relaxed);

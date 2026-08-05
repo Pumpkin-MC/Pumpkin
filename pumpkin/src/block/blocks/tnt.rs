@@ -8,8 +8,10 @@ use crate::block::{
 use crate::entity::Entity;
 use crate::entity::tnt::TNTEntity;
 use crate::world::World;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::BlockStateId;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -33,6 +35,11 @@ impl TNTBlock {
             SoundCategory::Blocks,
             &pos,
         );
+        // TntBlock.java:92 (`prime`): fires PRIME_FUSE with no source entity for every
+        // priming path pumpkin routes through this function (flint & steel/fire charge,
+        // initial redstone power, post-place redstone power, and fire spreading onto the
+        // block in fire.rs).
+        emit_game_event(world, GameEvent::PrimeFuse, pos, GameEventContext::none()).await;
         world
             .set_block_state(location, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
             .await;

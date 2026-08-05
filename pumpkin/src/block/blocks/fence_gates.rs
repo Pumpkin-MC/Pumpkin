@@ -9,9 +9,11 @@ use crate::block::{
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
@@ -41,7 +43,7 @@ fn get_sound(block: &Block, open: bool) -> Sound {
 pub async fn toggle_fence_gate(
     world: &Arc<World>,
     block_pos: &BlockPos,
-    player: &Player,
+    player: &Arc<Player>,
 ) -> BlockStateId {
     let (block, state) = world.get_block_and_state_id(block_pos);
 
@@ -67,6 +69,20 @@ pub async fn toggle_fence_gate(
         SoundCategory::Blocks,
         *block_pos,
     );
+
+    // FenceGateBlock.java:161 (`useWithoutItem`): fires BLOCK_OPEN/BLOCK_CLOSE with the
+    // player as source entity on every manual toggle.
+    emit_game_event(
+        world,
+        if fence_gate_props.open {
+            GameEvent::BlockOpen
+        } else {
+            GameEvent::BlockClose
+        },
+        block_pos.to_centered_f64(),
+        GameEventContext::of_entity(player.clone()),
+    )
+    .await;
 
     world
         .set_block_state(
@@ -134,6 +150,20 @@ impl BlockBehaviour for FenceGateBlock {
                     SoundCategory::Blocks,
                     *args.position,
                 );
+
+                // FenceGateBlock.java:198 (`neighborChanged`): fires BLOCK_OPEN/BLOCK_CLOSE
+                // with no source entity when a redstone signal flips the gate.
+                emit_game_event(
+                    args.world,
+                    if powered {
+                        GameEvent::BlockOpen
+                    } else {
+                        GameEvent::BlockClose
+                    },
+                    args.position.to_centered_f64(),
+                    GameEventContext::none(),
+                )
+                .await;
             }
 
             args.world

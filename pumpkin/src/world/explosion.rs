@@ -3,7 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId, damage::DamageType, entity::EntityType,
-    fluid::Fluid,
+    fluid::Fluid, game_event::GameEvent,
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_world::chunk::ChunkData;
@@ -13,6 +13,7 @@ use crate::{
     block::blocks::fire::fire::FireBlock,
     block::{ExplodeArgs, drop_loot},
     entity::{Entity, EntityBase},
+    world::game_event::{GameEventContext, emit_game_event},
     world::loot::LootContextParameters,
 };
 
@@ -335,6 +336,17 @@ impl Explosion {
 
     /// Returns the removed block count
     pub async fn explode(&self, world: &Arc<World>) -> u32 {
+        // ServerExplosion.java:236 (`explode`): fires EXPLODE at the explosion's center.
+        // Vanilla threads the triggering entity through as the source; `Explosion` here
+        // carries no such field, so this uses none() as a documented simplification.
+        emit_game_event(
+            world,
+            GameEvent::Explode,
+            self.pos,
+            GameEventContext::none(),
+        )
+        .await;
+
         let blocks = if self.destroys_blocks {
             self.get_blocks_to_destroy(world)
         } else {
