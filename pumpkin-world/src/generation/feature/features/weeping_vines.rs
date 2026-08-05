@@ -113,7 +113,7 @@ impl WeepingVinesFeature {
     }
 
     // WeepingVinesFeature#placeWeepingVinesColumn (grows downward from the ceiling)
-    fn place_weeping_vines_column<T: GenerationCache>(
+    pub(crate) fn place_weeping_vines_column<T: GenerationCache>(
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: BlockPos,

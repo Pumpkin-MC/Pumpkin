@@ -1,56 +1,338 @@
-use pumpkin_data::Block;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator, random::RandomImpl};
 
+use super::weeping_vines::WeepingVinesFeature;
 use crate::generation::proto_chunk::GenerationCache;
+
+/// `HugeFungusConfiguration.replaceableBlocks` as registered by
+/// `TreeFeatures` (Mojang-named 1.21.4 decompile,
+/// `net/minecraft/data/worldgen/features/TreeFeatures.java`): the shared
+/// `BlockPredicate.matchesBlocks(...)` list handed to every fungus config.
+const REPLACEABLE_BLOCKS: &[pumpkin_data::BlockId] = &[
+    Block::OAK_SAPLING.id,
+    Block::SPRUCE_SAPLING.id,
+    Block::BIRCH_SAPLING.id,
+    Block::JUNGLE_SAPLING.id,
+    Block::ACACIA_SAPLING.id,
+    Block::CHERRY_SAPLING.id,
+    Block::DARK_OAK_SAPLING.id,
+    Block::PALE_OAK_SAPLING.id,
+    Block::MANGROVE_PROPAGULE.id,
+    Block::DANDELION.id,
+    Block::TORCHFLOWER.id,
+    Block::POPPY.id,
+    Block::BLUE_ORCHID.id,
+    Block::ALLIUM.id,
+    Block::AZURE_BLUET.id,
+    Block::RED_TULIP.id,
+    Block::ORANGE_TULIP.id,
+    Block::WHITE_TULIP.id,
+    Block::PINK_TULIP.id,
+    Block::OXEYE_DAISY.id,
+    Block::CORNFLOWER.id,
+    Block::WITHER_ROSE.id,
+    Block::LILY_OF_THE_VALLEY.id,
+    Block::BROWN_MUSHROOM.id,
+    Block::RED_MUSHROOM.id,
+    Block::WHEAT.id,
+    Block::SUGAR_CANE.id,
+    Block::ATTACHED_PUMPKIN_STEM.id,
+    Block::ATTACHED_MELON_STEM.id,
+    Block::PUMPKIN_STEM.id,
+    Block::MELON_STEM.id,
+    Block::LILY_PAD.id,
+    Block::NETHER_WART.id,
+    Block::COCOA.id,
+    Block::CARROTS.id,
+    Block::POTATOES.id,
+    Block::CHORUS_PLANT.id,
+    Block::CHORUS_FLOWER.id,
+    Block::TORCHFLOWER_CROP.id,
+    Block::PITCHER_CROP.id,
+    Block::BEETROOTS.id,
+    Block::SWEET_BERRY_BUSH.id,
+    Block::WARPED_FUNGUS.id,
+    Block::CRIMSON_FUNGUS.id,
+    Block::WEEPING_VINES.id,
+    Block::WEEPING_VINES_PLANT.id,
+    Block::TWISTING_VINES.id,
+    Block::TWISTING_VINES_PLANT.id,
+    Block::CAVE_VINES.id,
+    Block::CAVE_VINES_PLANT.id,
+    Block::SPORE_BLOSSOM.id,
+    Block::AZALEA.id,
+    Block::FLOWERING_AZALEA.id,
+    Block::MOSS_CARPET.id,
+    Block::PINK_PETALS.id,
+    Block::BIG_DRIPLEAF.id,
+    Block::BIG_DRIPLEAF_STEM.id,
+    Block::SMALL_DRIPLEAF.id,
+];
+
+/// The `HugeFungusConfiguration` values the configured feature table drops on
+/// the floor. Sourced from `TreeFeatures.CRIMSON_FUNGUS` / `WARPED_FUNGUS`
+/// (Mojang-named 1.21.4 decompile).
+struct FungusConfig {
+    valid_base: pumpkin_data::BlockId,
+    stem: &'static BlockState,
+    hat: &'static BlockState,
+    decor: &'static BlockState,
+    /// Always false for the worldgen configured features; the `_planted`
+    /// variants are only reachable through bone meal, which does not route
+    /// through a `PlacedFeature` in this codebase.
+    planted: bool,
+}
+
+impl FungusConfig {
+    fn crimson() -> Self {
+        Self {
+            valid_base: Block::CRIMSON_NYLIUM.id,
+            stem: Block::CRIMSON_STEM.default_state,
+            hat: Block::NETHER_WART_BLOCK.default_state,
+            decor: Block::SHROOMLIGHT.default_state,
+            planted: false,
+        }
+    }
+
+    fn warped() -> Self {
+        Self {
+            valid_base: Block::WARPED_NYLIUM.id,
+            stem: Block::WARPED_STEM.default_state,
+            hat: Block::WARPED_WART_BLOCK.default_state,
+            decor: Block::SHROOMLIGHT.default_state,
+            planted: false,
+        }
+    }
+}
 
 pub struct HugeFungusFeature;
 
 impl HugeFungusFeature {
+    fn is_replaceable<T: GenerationCache>(
+        chunk: &T,
+        pos: &BlockPos,
+        use_config_predicate: bool,
+    ) -> bool {
+        let state_id = GenerationCache::get_block_state(chunk, &pos.0);
+        if state_id.to_state().replaceable() {
+            return true;
+        }
+        use_config_predicate && REPLACEABLE_BLOCKS.contains(&state_id.to_block_id())
+    }
+
+    /// `HugeFungusFeature.placeStem`
+    fn place_stem<T: GenerationCache>(
+        chunk: &mut T,
+        random: &mut RandomGenerator,
+        config: &FungusConfig,
+        origin: BlockPos,
+        stem_height: i32,
+        huge: bool,
+    ) {
+        let radius = i32::from(huge);
+
+        for j in -radius..=radius {
+            for k in -radius..=radius {
+                let corner = huge && j.abs() == radius && k.abs() == radius;
+
+                for l in 0..stem_height {
+                    let pos = BlockPos::new(origin.0.x + j, origin.0.y + l, origin.0.z + k);
+                    if !Self::is_replaceable(chunk, &pos, true) {
+                        continue;
+                    }
+                    if config.planted {
+                        chunk.set_block_state(&pos.0, config.stem);
+                    } else if corner {
+                        if random.next_f32() < 0.1 {
+                            chunk.set_block_state(&pos.0, config.stem);
+                        }
+                    } else {
+                        chunk.set_block_state(&pos.0, config.stem);
+                    }
+                }
+            }
+        }
+    }
+
+    /// `HugeFungusFeature.placeHat`
+    fn place_hat<T: GenerationCache>(
+        chunk: &mut T,
+        random: &mut RandomGenerator,
+        config: &FungusConfig,
+        origin: BlockPos,
+        stem_height: i32,
+        huge: bool,
+    ) {
+        let nether_wart_hat = config.hat.id.to_block_id() == Block::NETHER_WART_BLOCK.id;
+        let hat_height = (random.next_bounded_i32(1 + stem_height / 3) + 5).min(stem_height);
+        let hat_bottom = stem_height - hat_height;
+
+        for k in hat_bottom..=stem_height {
+            // Vanilla draws this taper roll unconditionally, before the `hat_height > 8`
+            // override can discard it; keep it out front so the RNG stream matches.
+            let taper = random.next_bounded_i32(3);
+            let mut radius = if hat_height > 8 && k < hat_bottom + 4 {
+                3
+            } else if k < stem_height - taper {
+                2
+            } else {
+                1
+            };
+            if huge {
+                radius += 1;
+            }
+
+            for i1 in -radius..=radius {
+                for j1 in -radius..=radius {
+                    let on_x_edge = i1 == -radius || i1 == radius;
+                    let on_z_edge = j1 == -radius || j1 == radius;
+                    let interior = !on_x_edge && !on_z_edge && k != stem_height;
+                    let corner = on_x_edge && on_z_edge;
+                    let skirt = k < hat_bottom + 3;
+                    let pos = BlockPos::new(origin.0.x + i1, origin.0.y + k, origin.0.z + j1);
+                    if !Self::is_replaceable(chunk, &pos, false) {
+                        continue;
+                    }
+
+                    if skirt {
+                        if !interior {
+                            Self::place_hat_drop_block(
+                                chunk,
+                                random,
+                                pos,
+                                config.hat,
+                                nether_wart_hat,
+                            );
+                        }
+                    } else if interior {
+                        Self::place_hat_block(
+                            chunk,
+                            random,
+                            config,
+                            pos,
+                            0.1,
+                            0.2,
+                            if nether_wart_hat { 0.1 } else { 0.0 },
+                        );
+                    } else if corner {
+                        Self::place_hat_block(
+                            chunk,
+                            random,
+                            config,
+                            pos,
+                            0.01,
+                            0.7,
+                            if nether_wart_hat { 0.083 } else { 0.0 },
+                        );
+                    } else {
+                        Self::place_hat_block(
+                            chunk,
+                            random,
+                            config,
+                            pos,
+                            5.0e-4,
+                            0.98,
+                            if nether_wart_hat { 0.07 } else { 0.0 },
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// `HugeFungusFeature.placeHatBlock`
+    fn place_hat_block<T: GenerationCache>(
+        chunk: &mut T,
+        random: &mut RandomGenerator,
+        config: &FungusConfig,
+        pos: BlockPos,
+        decor_chance: f32,
+        hat_chance: f32,
+        vine_chance: f32,
+    ) {
+        if random.next_f32() < decor_chance {
+            chunk.set_block_state(&pos.0, config.decor);
+        } else if random.next_f32() < hat_chance {
+            chunk.set_block_state(&pos.0, config.hat);
+            if random.next_f32() < vine_chance {
+                Self::try_place_weeping_vines(chunk, random, pos);
+            }
+        }
+    }
+
+    /// `HugeFungusFeature.placeHatDropBlock`
+    fn place_hat_drop_block<T: GenerationCache>(
+        chunk: &mut T,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+        hat: &'static BlockState,
+        nether_wart_hat: bool,
+    ) {
+        let below = GenerationCache::get_block_state(chunk, &pos.down().0).to_block_id();
+        if below == hat.id.to_block_id() {
+            chunk.set_block_state(&pos.0, hat);
+        } else if random.next_f32() < 0.15 {
+            chunk.set_block_state(&pos.0, hat);
+            if nether_wart_hat && random.next_bounded_i32(11) == 0 {
+                Self::try_place_weeping_vines(chunk, random, pos);
+            }
+        }
+    }
+
+    /// `HugeFungusFeature.tryPlaceWeepingVines`
+    fn try_place_weeping_vines<T: GenerationCache>(
+        chunk: &mut T,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) {
+        let below = pos.down();
+        if !chunk.is_air(&below.0) {
+            return;
+        }
+        let mut vine_height = random.next_inbetween_i32(1, 5);
+        if random.next_bounded_i32(7) == 0 {
+            vine_height *= 2;
+        }
+        WeepingVinesFeature::place_weeping_vines_column(chunk, random, below, vine_height, 23, 25);
+    }
+
+    /// `HugeFungusFeature.place`
     #[allow(clippy::unused_self)]
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
         _min_y: i8,
-        _height: u16,
-        _feature: pumpkin_data::placed_feature::PlacedFeature,
+        height: u16,
+        feature: pumpkin_data::placed_feature::PlacedFeature,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        let height = random.next_bounded_i32(4) + 6;
-        let is_warped = random.next_bool();
-
-        let stem_state = if is_warped {
-            Block::WARPED_STEM.default_state
-        } else {
-            Block::CRIMSON_STEM.default_state
-        };
-        let wart_state = if is_warped {
-            Block::WARPED_WART_BLOCK.default_state
-        } else {
-            Block::NETHER_WART_BLOCK.default_state
+        // The generated configured-feature table constructs this feature with
+        // no configuration at all, so the crimson/warped variant is recovered
+        // from the placed feature that referenced it.
+        let config = match feature {
+            pumpkin_data::placed_feature::PlacedFeature::WarpedFungi => FungusConfig::warped(),
+            _ => FungusConfig::crimson(),
         };
 
-        for i in 0..height {
-            let stem_pos = BlockPos::new(pos.0.x, pos.0.y + i, pos.0.z);
-            chunk.set_block_state(&stem_pos.0, stem_state);
+        let below = GenerationCache::get_block_state(chunk, &pos.down().0).to_block_id();
+        if below != config.valid_base {
+            return false;
         }
 
-        let cap_y = pos.0.y + height - 2;
-        for dy in 0..=3 {
-            let radius = if dy == 0 || dy == 3 { 1 } else { 2 };
-            for dx in -radius..=radius {
-                for dz in -radius..=radius {
-                    let cap_pos = BlockPos::new(pos.0.x + dx, cap_y + dy, pos.0.z + dz);
-                    let block_state = if (dx == 0 || dz == 0) && dy == 1 && random.next_f32() < 0.3
-                    {
-                        Block::SHROOMLIGHT.default_state
-                    } else {
-                        wart_state
-                    };
-                    chunk.set_block_state(&cap_pos.0, block_state);
-                }
-            }
+        let mut stem_height = random.next_inbetween_i32(4, 13);
+        if random.next_bounded_i32(12) == 0 {
+            stem_height *= 2;
         }
+
+        if !config.planted && pos.0.y + stem_height + 1 >= i32::from(height) {
+            return false;
+        }
+
+        let huge = !config.planted && random.next_f32() < 0.06;
+        chunk.set_block_state(&pos.0, Block::AIR.default_state);
+        Self::place_stem(chunk, random, &config, pos, stem_height, huge);
+        Self::place_hat(chunk, random, &config, pos, stem_height, huge);
         true
     }
 }
