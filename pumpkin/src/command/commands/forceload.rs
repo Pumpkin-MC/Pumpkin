@@ -73,12 +73,9 @@ impl CommandExecutor for ForceloadAddExecutor {
                 ));
             }
 
-            {
-                let mut forced = world.forced_chunks.lock().unwrap();
-                for x in min_x..=max_x {
-                    for z in min_z..=max_z {
-                        forced.insert(Vector2::new(x, z));
-                    }
+            for x in min_x..=max_x {
+                for z in min_z..=max_z {
+                    world.level.set_chunk_forced(Vector2::new(x, z), true);
                 }
             }
 
@@ -157,12 +154,9 @@ impl CommandExecutor for ForceloadRemoveExecutor {
                 ));
             }
 
-            {
-                let mut forced = world.forced_chunks.lock().unwrap();
-                for x in min_x..=max_x {
-                    for z in min_z..=max_z {
-                        forced.remove(&Vector2::new(x, z));
-                    }
+            for x in min_x..=max_x {
+                for z in min_z..=max_z {
+                    world.level.set_chunk_forced(Vector2::new(x, z), false);
                 }
             }
 
@@ -211,12 +205,7 @@ impl CommandExecutor for ForceloadRemoveAllExecutor {
                 .as_ref()
                 .ok_or_else(|| ERROR_FAILED_REMOVE.create_without_context())?;
 
-            let removed_count = {
-                let mut forced = world.forced_chunks.lock().unwrap();
-                let count = forced.len();
-                forced.clear();
-                count
-            };
+            let removed_count = world.level.clear_forced_chunks();
 
             world.update_active_chunks();
 
@@ -255,10 +244,7 @@ impl CommandExecutor for ForceloadQueryExecutor {
                 Vector2::new(block_x >> 4, block_z >> 4)
             };
 
-            let is_forced = {
-                let forced = world.forced_chunks.lock().unwrap();
-                forced.contains(&chunk_pos)
-            };
+            let is_forced = world.level.is_chunk_forced(&chunk_pos);
 
             if is_forced {
                 let text = TextComponent::translate_cross(
@@ -288,13 +274,12 @@ impl CommandExecutor for ForceloadQueryExecutor {
                     .await;
             }
 
-            let all_forced = {
-                let forced = world.forced_chunks.lock().unwrap();
-                forced
-                    .iter()
-                    .map(|pos| format!("[{}, {}]", pos.x, pos.y))
-                    .collect::<Vec<_>>()
-            };
+            let all_forced = world
+                .level
+                .forced_chunks()
+                .iter()
+                .map(|pos| format!("[{}, {}]", pos.x, pos.y))
+                .collect::<Vec<_>>();
 
             if all_forced.is_empty() {
                 let text = TextComponent::translate_cross(
