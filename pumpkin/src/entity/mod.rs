@@ -4249,7 +4249,10 @@ mod tracked_data_bounds_tests {
         (
             "creeper",
             19,
-            &[("IS_IGNITED", TrackedData::IS_IGNITED.v26_2)],
+            &[
+                ("SWELL_DIR", TrackedData::SWELL_DIR.v26_2),
+                ("IS_IGNITED", TrackedData::IS_IGNITED.v26_2),
+            ],
         ),
         (
             "enderman",
@@ -4453,6 +4456,16 @@ mod tracked_data_bounds_tests {
             TrackedData::SALMON_VARIANT.v26_2,
             TrackedData::VARIANT.v26_2
         );
+    }
+
+    /// Creeper's swell state is its own index 16 (`DATA_SWELL_DIR`), not Primed TNT's
+    /// "Fuse time" (`DATA_FUSE_ID` = 8), which on a creeper is `LivingEntity` "Hand states".
+    #[test]
+    fn creeper_swell_dir_is_not_the_tnt_fuse_index() {
+        assert_eq!(TrackedData::SWELL_DIR.v26_2, 16);
+        assert_eq!(TrackedData::SWELL_DIR.v26_1, 16);
+        assert_eq!(TrackedData::FUSE_ID.v26_2, 8);
+        assert_ne!(TrackedData::SWELL_DIR.v26_2, TrackedData::FUSE_ID.v26_2);
     }
 
     /// The flattened 26.x dumps collapse slime's and phantom's `DATA_ID_SIZE` into one

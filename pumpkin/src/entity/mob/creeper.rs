@@ -102,16 +102,12 @@ impl CreeperEntity {
         if self.fuse_speed.swap(speed, Ordering::Relaxed) == speed {
             return;
         }
-        // PENDING-INDEX-FIX: wrong field. `FUSE_ID` is Primed TNT's "Fuse time" and resolves
-        // to 8 on 26.2; on a creeper index 8 is `LivingEntity` "Hand states" (Byte). Creeper's
-        // own "State (idle = -1, fuse = 1)" is index 16, the `SWELL_DIR` key. Left as
-        // `INTEGER` on purpose so `Metadata::write` keeps dropping it on 26.x - un-silencing
-        // an int at a Byte-typed slot is worse than sending nothing. Fix the index first.
+        // Creeper "State (idle = -1, fuse = 1)" is index 16 on 26.x (`SWELL_DIR`), a VarInt.
         // 26.2 tables: https://minecraft.wiki/w/Java_Edition_protocol/Entity_metadata
         self.mob_entity.living_entity.entity.send_meta_data(
             &[Metadata::new(
-                TrackedData::FUSE_ID,
-                MetaDataType::INTEGER,
+                TrackedData::SWELL_DIR,
+                MetaDataType::INT,
                 VarInt(speed),
             )],
             None,
