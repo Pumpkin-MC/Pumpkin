@@ -20,15 +20,26 @@ pub struct VarUInt(pub VarUIntType);
 
 impl VarUInt {
     /// The maximum number of bytes a `VarUInt` can occupy.
-    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
+    pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
+
+    #[must_use]
+    #[inline]
+    pub const fn new(value: VarUIntType) -> Self {
+        Self(value)
+    }
 
     /// Returns the exact number of bytes this `VarUInt` will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
     #[must_use]
-    pub fn written_size(&self) -> usize {
-        (32 - self.0.leading_zeros() as usize).max(1).div_ceil(7)
+    #[inline]
+    pub const fn written_size(&self) -> usize {
+        match self.0 {
+            0 => 1,
+            n => (31 - n.leading_zeros() as usize) / 7 + 1,
+        }
     }
 
+    #[inline]
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut val = self.0;
         loop {
@@ -46,6 +57,7 @@ impl VarUInt {
     }
 
     // TODO: Validate that the first byte will not overflow a i32
+    #[inline]
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
@@ -65,7 +77,7 @@ impl VarUInt {
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.read_u8().await.map_err(|err| {
                 if i == 0 && matches!(err.kind(), ErrorKind::UnexpectedEof) {
-                    ReadingError::CleanEOF("VarInt".to_string())
+                    ReadingError::CleanEOF("VarUInt".to_string())
                 } else {
                     ReadingError::Incomplete(err.to_string())
                 }

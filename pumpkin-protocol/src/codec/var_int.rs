@@ -21,18 +21,26 @@ pub struct VarInt(pub VarIntType);
 
 impl VarInt {
     /// The maximum number of bytes a `VarInt` can occupy.
-    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
+    pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
+
+    #[must_use]
+    #[inline]
+    pub const fn new(value: VarIntType) -> Self {
+        Self(value)
+    }
 
     /// Returns the exact number of bytes this `VarInt` will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
     #[must_use]
+    #[inline]
     pub const fn written_size(&self) -> usize {
-        match self.0 {
+        match self.0 as u32 {
             0 => 1,
             n => (31 - n.leading_zeros() as usize) / 7 + 1,
         }
     }
 
+    #[inline]
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         // Must cast to u32 to prevent infinite loops on negative i32s
         let mut val = self.0 as u32;
@@ -47,6 +55,7 @@ impl VarInt {
     }
 
     // TODO: Validate that the first byte will not overflow a i32
+    #[inline]
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {

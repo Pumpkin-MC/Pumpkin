@@ -20,18 +20,26 @@ pub struct VarULong(pub VarULongType);
 
 impl VarULong {
     /// The maximum number of bytes a `VarULong` can occupy.
-    const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
+    pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
 
-    /// Returns the exact number of bytes this `VarLong` will write when
+    #[must_use]
+    #[inline]
+    pub const fn new(value: VarULongType) -> Self {
+        Self(value)
+    }
+
+    /// Returns the exact number of bytes this `VarULong` will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
     #[must_use]
+    #[inline]
     pub const fn written_size(&self) -> usize {
         match self.0 {
             0 => 1,
-            n => (31 - n.leading_zeros() as usize) / 7 + 1,
+            n => (63 - n.leading_zeros() as usize) / 7 + 1,
         }
     }
 
+    #[inline]
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         let mut x = self.0;
         loop {
@@ -48,6 +56,7 @@ impl VarULong {
     }
 
     // TODO: Validate that the first byte will not overflow a i64
+    #[inline]
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
@@ -57,7 +66,7 @@ impl VarULong {
                 return Ok(Self(val));
             }
         }
-        Err(ReadingError::TooLarge("VarLong".to_string()))
+        Err(ReadingError::TooLarge("VarULong".to_string()))
     }
 }
 macro_rules! gen_from {

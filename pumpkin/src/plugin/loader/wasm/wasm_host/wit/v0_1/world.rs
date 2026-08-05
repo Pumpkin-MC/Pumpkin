@@ -13,6 +13,7 @@ use crate::block::entities::command_block::CommandBlockEntity as InternalCommand
 use crate::block::entities::jukebox::JukeboxBlockEntity as InternalJukeboxBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpawnerBlockEntity;
 use crate::block::entities::sign::SignBlockEntity as InternalSignBlockEntity;
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::common::Position as WitPosition;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
     BlockPos as WitBlockPos, BlockState as WitBlockState, BoundingBox as WitBoundingBox,
@@ -675,6 +676,43 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         }
 
         Ok(entities)
+    }
+
+    async fn strike_lightning(
+        &mut self,
+        world: Resource<World>,
+        pos: WitPosition,
+        effect_only: bool,
+    ) -> wasmtime::Result<()> {
+        let world_provider = self.get_world_res(&world)?.provider.clone();
+        let internal_pos = super::events::from_wasm_position(pos);
+        world_provider
+            .strike_lightning(internal_pos, effect_only)
+            .await;
+        Ok(())
+    }
+
+    async fn ray_trace_blocks(
+        &mut self,
+        world: Resource<World>,
+        start: WitPosition,
+        end: WitPosition,
+    ) -> wasmtime::Result<Option<WitPosition>> {
+        let world_provider = self.get_world_res(&world)?.provider.clone();
+        let start_pos = super::events::from_wasm_position(start);
+        let end_pos = super::events::from_wasm_position(end);
+        let res = world_provider
+            .raycast(start_pos, end_pos, async |pos, w| {
+                !w.get_block_state(pos).is_air()
+            })
+            .await;
+        Ok(res.map(|(p, _)| {
+            super::events::to_wasm_position(pumpkin_util::math::vector3::Vector3::new(
+                f64::from(p.0.x),
+                f64::from(p.0.y),
+                f64::from(p.0.z),
+            ))
+        }))
     }
 
     async fn get_block_entity(

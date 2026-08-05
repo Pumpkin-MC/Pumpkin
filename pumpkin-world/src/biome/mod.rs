@@ -1,7 +1,6 @@
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 
-use enum_dispatch::enum_dispatch;
 use pumpkin_data::chunk::{Biome, BiomeTree, NETHER_BIOME_SOURCE, OVERWORLD_BIOME_SOURCE};
 
 use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
@@ -14,7 +13,6 @@ thread_local! {
     static LAST_RESULT_NODE: RefCell<Option<&'static BiomeTree>> = const {RefCell::new(None) };
 }
 
-#[enum_dispatch]
 pub trait BiomeSupplier {
     fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome;
 }

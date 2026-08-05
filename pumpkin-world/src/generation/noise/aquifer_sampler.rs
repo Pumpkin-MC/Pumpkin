@@ -1,4 +1,3 @@
-use enum_dispatch::enum_dispatch;
 use pumpkin_data::{Block, BlockState, chunk_gen_settings::GenerationSettings};
 use pumpkin_util::{
     math::{clamped_map, floor_div, vector3::Vector3},
@@ -53,7 +52,6 @@ pub trait FluidLevelSamplerImpl {
     fn get_fluid_level(&self, x: i32, y: i32, z: i32) -> &FluidLevel;
 }
 
-#[enum_dispatch(AquiferSamplerImpl)]
 pub enum AquiferSampler {
     SeaLevel(SeaLevelAquiferSampler),
     Aquifer(WorldAquiferSampler),
@@ -785,7 +783,6 @@ impl AquiferSamplerImpl for SeaLevelAquiferSampler {
     }
 }
 
-#[enum_dispatch]
 pub trait AquiferSamplerImpl {
     fn apply(
         &mut self,
@@ -794,6 +791,22 @@ pub trait AquiferSamplerImpl {
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> (Option<&'static BlockState>, bool);
+}
+
+impl AquiferSamplerImpl for AquiferSampler {
+    #[inline]
+    fn apply(
+        &mut self,
+        router: &mut ChunkNoiseRouter,
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+        height_estimator: &mut SurfaceHeightEstimateSampler,
+    ) -> (Option<&'static BlockState>, bool) {
+        match self {
+            Self::SeaLevel(s) => s.apply(router, pos, sample_options, height_estimator),
+            Self::Aquifer(a) => a.apply(router, pos, sample_options, height_estimator),
+        }
+    }
 }
 
 #[cfg(test)]
