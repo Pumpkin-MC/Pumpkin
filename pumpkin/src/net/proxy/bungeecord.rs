@@ -1,4 +1,5 @@
 use arc_swap::ArcSwap;
+use pumpkin_config::networking::proxy::BungeeCordConfig;
 use std::sync::Arc;
 use std::{net::IpAddr, net::SocketAddr};
 use thiserror::Error;
@@ -16,6 +17,8 @@ pub enum BungeeCordError {
     FailedParseProperties,
     #[error("Failed to make offline UUID")]
     FailedMakeOfflineUUID,
+    #[error("BungeeGuard authentication failed: invalid or missing token")]
+    BungeeGuardFailedAuth,
 }
 
 /// Attempts to login a player via `BungeeCord`.
@@ -30,7 +33,13 @@ pub enum BungeeCordError {
 ///
 /// If any of the optional data is missing, the function will attempt to
 /// determine the player's information locally.
+///
+/// When `config.secret` is set, the handshake must include a matching
+/// `BungeeGuard` token. When `config.secret` is empty, no `BungeeGuard`
+/// token should be present — connections with an unexpected token
+/// are rejected to prevent proxy/server misconfiguration.
 pub async fn bungeecord_login(
+    config: &BungeeCordConfig,
     client_address: &Mutex<SocketAddr>,
     server_address: &str,
     name: String,
@@ -60,6 +69,18 @@ pub async fn bungeecord_login(
         }
         _ => Vec::new(),
     };
+
+    // BungeeGuard: verify the authentication token
+    // - When a secret is configured, the token must be present and match.
+    // - When no secret is configured, no token should be present
+    //   (prevents misconfiguration where the proxy uses BungeeGuard
+    //   but the server does not).
+    let token = parts.next();
+    match (config.secret.is_empty(), token) {
+        (false, Some(t)) if t == config.secret => {}
+        (true, None) => {}
+        _ => return Err(BungeeCordError::BungeeGuardFailedAuth),
+    }
 
     Ok((
         ip,

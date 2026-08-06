@@ -60,6 +60,7 @@ impl JavaClient {
                 velocity::velocity_login(self).await;
             } else if proxy.bungeecord.enabled {
                 match bungeecord::bungeecord_login(
+                    &proxy.bungeecord,
                     &self.address,
                     &self.server_address.lock().await,
                     login_start.name.into_string(),

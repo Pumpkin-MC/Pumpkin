@@ -20,6 +20,10 @@ pub struct ProxyConfig {
 pub struct BungeeCordConfig {
     /// Whether `BungeeCord` support is enabled.
     pub enabled: bool,
+    /// Shared secret for `BungeeGuard` authentication.
+    /// When set, incoming handshake data from `BungeeCord` must include a
+    /// matching token. Leave empty if you are not using `BungeeGuard`.
+    pub secret: String,
 }
 
 /// Configuration for Velocity proxy integration.
