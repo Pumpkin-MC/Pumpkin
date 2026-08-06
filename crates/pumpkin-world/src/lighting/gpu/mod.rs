@@ -172,12 +172,22 @@ struct Descriptors {
 }
 
 fn device_name(props: &vk::PhysicalDeviceProperties) -> String {
+    // SAFETY: `device_name` is a `[c_char; VK_MAX_PHYSICAL_DEVICE_NAME_SIZE]` that the
+    // driver fills with a NUL-terminated string, so a terminator exists inside the array
+    // and `CStr::from_ptr` cannot read past it. `props` is borrowed for the whole call, so
+    // the pointer stays valid, and `into_owned` copies the bytes before the borrow ends.
     unsafe { CStr::from_ptr(props.device_name.as_ptr()) }
         .to_string_lossy()
         .into_owned()
 }
 
 pub fn list_devices() -> Result<Vec<(String, vk::PhysicalDeviceType)>, GpuLightError> {
+    // SAFETY: `entry` is a freshly loaded Vulkan loader and stays alive for the whole
+    // block. The `InstanceCreateInfo` and the `ApplicationInfo` it borrows are temporaries
+    // that live until `create_instance` returns. Every physical device queried comes from
+    // this instance and is only read before `destroy_instance`, which runs exactly once
+    // and after the last use of any handle. The returned `Vec` holds only owned `String`s
+    // and plain enum values, so nothing that outlives the instance refers to it.
     unsafe {
         let entry = ash::Entry::load()?;
         let instance = entry.create_instance(
@@ -219,6 +229,17 @@ pub struct GpuLightEngine {
 impl GpuLightEngine {
     #[expect(clippy::too_many_lines)]
     pub fn new(selector: AdapterSelector) -> Result<Self, GpuLightError> {
+        // SAFETY: every handle passed to a Vulkan call here was produced by the matching
+        // create call earlier in this same block and is still live: `physical` comes from
+        // this `instance`, `device` from this `physical`, and the descriptor layout,
+        // pipeline layout, shader modules and command pool from this `device`. Each
+        // `*CreateInfo` borrows locals (`priorities`, `queue_info`, `bindings`,
+        // `set_layouts`, and inside `build` the SPIR-V word vector and `info`) that outlive
+        // the call reading them. The `build` closure destroys each shader module only after
+        // `create_compute_pipelines` has consumed it, which the spec permits, and is run
+        // four times against the four checked-in SPIR-V blobs. On both early-return paths
+        // the instance is destroyed exactly once and no handle derived from it is used
+        // afterwards.
         unsafe {
             let entry = ash::Entry::load()?;
             let instance = entry.create_instance(
@@ -363,6 +384,15 @@ impl GpuLightEngine {
         required: vk::MemoryPropertyFlags,
         preferred: vk::MemoryPropertyFlags,
     ) -> Result<Buffer, GpuLightError> {
+        // SAFETY: `self.device` is the logical device created in `new` and destroyed only
+        // in `Drop`, so it is live for all of `&self`. `buffer` is created here and is
+        // still alive when its memory requirements are queried and when memory is bound;
+        // nothing destroys it in between. The memory type index comes from
+        // `find_memory_type` over this same device's `memory_props` filtered by
+        // `reqs.memory_type_bits`, so it is a valid index for this device and compatible
+        // with the buffer, and the allocation is `reqs.size`, the driver-reported minimum.
+        // The buffer is freshly created with no memory bound, so `bind_buffer_memory` is
+        // called exactly once on it as Vulkan requires.
         unsafe {
             let buffer = self.device.create_buffer(
                 &vk::BufferCreateInfo::default()
@@ -395,6 +425,14 @@ impl GpuLightEngine {
     }
 
     fn destroy_buffer(&self, buffer: &Buffer) {
+        // SAFETY: `buffer` was produced by `create_buffer` on this same `self.device` and
+        // is destroyed exactly once. Every caller has already retired the GPU work that
+        // referenced it: `propagate` and `upload_props` run this after `submit_blocking`
+        // has waited on the fence of the last submission touching these buffers (or, on
+        // the descriptor-creation failure path, before anything was ever submitted), and
+        // `ResidentVolume::drop` runs it after `device_wait_idle`. The `Buffer` is never
+        // used again afterwards. The buffer handle is destroyed before the memory backing
+        // it is freed, which is the order Vulkan requires.
         unsafe {
             self.device.destroy_buffer(buffer.handle, None);
             self.device.free_memory(buffer.memory, None);
@@ -402,6 +440,15 @@ impl GpuLightEngine {
     }
 
     fn submit_blocking(&self, f: impl FnOnce(vk::CommandBuffer)) -> Result<(), GpuLightError> {
+        // SAFETY: the command buffer is allocated from `self.command_pool`, recorded
+        // between a matched `begin`/`end` pair, submitted to `self.queue` (which belongs
+        // to the same queue family the pool was created for), and freed only after
+        // `wait_for_fences` reports the submission complete, so it is never freed or
+        // re-recorded while pending. The fence is created here and destroyed after that
+        // same wait. `buffers` and the `SubmitInfo` array outlive `queue_submit`.
+        // Caller requirement: Vulkan requires external synchronisation of a command pool
+        // and of a queue, and this type derives `Sync` automatically, so callers must not
+        // drive one engine from two threads concurrently.
         unsafe {
             let cmd = self.device.allocate_command_buffers(
                 &vk::CommandBufferAllocateInfo::default()
@@ -505,6 +552,17 @@ impl GpuLightEngine {
                 ([0, 0, 0], [0, 0, 0]),
             );
 
+            // SAFETY: `staging` is HOST_VISIBLE | HOST_COHERENT and has not been mapped
+            // yet, so mapping its whole range is legal and needs no explicit flush. It was
+            // created with `DIMS_BYTES + byte_len * 2` bytes and the three copies fill
+            // exactly that: `[0, DIMS_BYTES)` from the `dims` array of `DIMS_WORDS` u32s,
+            // `[DIMS_BYTES, +byte_len)` from `volume.props`, and
+            // `[DIMS_BYTES + byte_len, +byte_len)` from `seed`. `volume.props` is a
+            // `Vec<u32>` of `volume.voxel_count() == total` elements and `seed` is built
+            // with one u32 per `volume.light` entry, also `total`, so each source really
+            // holds `byte_len == total * size_of::<u32>()` bytes. The destinations are
+            // disjoint sub-ranges of a device allocation distinct from every source, so no
+            // copy overlaps. The range is unmapped before the block ends.
             unsafe {
                 let base = self
                     .device
@@ -529,6 +587,14 @@ impl GpuLightEngine {
                 self.device.unmap_memory(staging.memory);
             };
 
+            // SAFETY: `submit_blocking` invokes this closure with a command buffer in the
+            // recording state. Each copy reads the sub-range of `staging` that was just
+            // written above and writes a destination created with at least that many
+            // bytes: `DIMS_BYTES` into `dims_buf` (created with `DIMS_BYTES`), and
+            // `byte_len` from offsets `DIMS_BYTES` and `DIMS_BYTES + byte_len` into
+            // `props_buf` and `buf_a` (both created with `byte_len`). All four buffers were
+            // created with the matching TRANSFER_SRC/TRANSFER_DST usage and stay alive
+            // until after the fence wait inside `submit_blocking`.
             self.submit_blocking(|cmd| unsafe {
                 self.device.cmd_copy_buffer(
                     cmd,
@@ -558,6 +624,16 @@ impl GpuLightEngine {
 
             let (gx, gy) = dispatch_dims(total as u64);
             let (pgx, pgy) = dispatch_dims((total as u64).div_ceil(4));
+            // SAFETY: `submit_blocking` invokes this closure with a command buffer in the
+            // recording state. The leading barrier makes the uploads visible to the
+            // compute stage before the first dispatch. Every descriptor set indexed here
+            // (`sets[i % 2]` and `sets[3]`) exists: `build_descriptors` always allocates
+            // `SETS == 4` of them, and each was allocated from `self.descriptor_layout`,
+            // the only set layout in `self.pipeline_layout`, which both pipelines bound
+            // here were created with. `dispatch_dims` clamps every group count to
+            // `MAX_WORKGROUPS_PER_DIM`, within `maxComputeWorkGroupCount`.
+            // `compute_barrier` separates consecutive relaxation passes so each reads what
+            // the previous wrote. All handles outlive the fence wait in `submit_blocking`.
             self.submit_blocking(|cmd| unsafe {
                 self.device.cmd_pipeline_barrier(
                     cmd,
@@ -605,6 +681,12 @@ impl GpuLightEngine {
             timings.compute = mark.elapsed();
             mark = Instant::now();
 
+            // SAFETY: `submit_blocking` invokes this closure with a command buffer in the
+            // recording state. The barrier makes the pack shader's stores to `packed_buf`
+            // visible to the following transfer read. The copy moves `packed_len` bytes,
+            // exactly the size both `packed_buf` (TRANSFER_SRC) and `readback`
+            // (TRANSFER_DST) were created with, so it is in bounds at both ends, and both
+            // buffers outlive the fence wait inside `submit_blocking`.
             self.submit_blocking(|cmd| unsafe {
                 self.device.cmd_pipeline_barrier(
                     cmd,
@@ -625,6 +707,15 @@ impl GpuLightEngine {
                 );
             })?;
 
+            // SAFETY: `readback` is HOST_VISIBLE | HOST_COHERENT and has not been mapped
+            // yet, and the `submit_blocking` above already waited on the fence for the
+            // copy into it, so the transfer has completed and coherent memory makes the
+            // result visible without an explicit invalidate. The mapping covers
+            // `readback.size == packed_len`, which is `total` rounded up to 4, so reading
+            // `total` bytes is in bounds; `volume.light` is a `Vec<u8>` of
+            // `volume.voxel_count() == total` elements, so the write is in bounds too.
+            // Source and destination are distinct allocations, and the range is unmapped
+            // before the block ends.
             unsafe {
                 let base = self
                     .device
@@ -642,6 +733,14 @@ impl GpuLightEngine {
             Ok(())
         })();
 
+        // SAFETY: `descriptors.pool` was created by `build_descriptors` from `self.device`
+        // and is destroyed exactly once here. Its four sets are only ever bound in command
+        // buffers recorded by `submit_blocking`, which does not return `Ok` until
+        // `wait_for_fences` reports that submission complete, so on the success path
+        // nothing pending references them. On the error paths the closure aborts either
+        // before any set was bound or because the submit itself failed, so again no
+        // queued work holds them. Destroying the pool implicitly frees its sets, and
+        // `descriptors` is not used again.
         unsafe {
             self.device.destroy_descriptor_pool(descriptors.pool, None);
         };
@@ -663,6 +762,16 @@ impl GpuLightEngine {
         packed: &Buffer,
         deltas: &Buffer,
     ) -> Result<Descriptors, GpuLightError> {
+        // SAFETY: the pool is created with `max_sets(SETS)` and `BINDINGS * SETS`
+        // STORAGE_BUFFER descriptors, exactly what allocating `SETS` copies of
+        // `self.descriptor_layout` (which declares `BINDINGS` storage-buffer bindings)
+        // consumes, so the allocation cannot exhaust the pool and `sets` comes back with
+        // `SETS == 4` entries, making the `sets[0..=3]` indexing in bounds.
+        // Load-bearing: `infos` is created with `with_capacity(count)` and receives exactly
+        // `count` pushes (four pairs times `BINDINGS` buffers), so it never reallocates
+        // while `writes` holds pointers into it, and both outlive
+        // `update_descriptor_sets`. Every buffer named is owned by the caller and alive,
+        // and the sets are not yet bound in any pending command buffer.
         unsafe {
             let count = (BINDINGS * SETS) as u32;
             let sizes = [vk::DescriptorPoolSize::default()
@@ -785,6 +894,17 @@ impl<'e> ResidentVolume<'e> {
             &deltas_buf,
         )?;
 
+        // SAFETY: `dims_staging`, `deltas_buf` and `readback` were all just created from
+        // HOST_VISIBLE | HOST_COHERENT memory types and none has been mapped yet, so
+        // mapping each whole range once is legal; Vulkan guarantees a mapping is aligned
+        // to at least `minMemoryMapAlignment` (>= 4), so the `u32` casts are aligned.
+        // These three mappings deliberately persist: the buffers and their memory are
+        // moved into the returned `ResidentVolume`, which owns them for its whole
+        // lifetime, and `ResidentVolume::drop` unmaps each exactly once (after
+        // `device_wait_idle`) before freeing them, so the stored pointers never dangle
+        // while the struct is alive. `cmd` is allocated from `engine.command_pool` and
+        // `fence` from `engine.device`; the `'e` lifetime keeps `engine` alive for longer
+        // than the `ResidentVolume` that frees them in `drop`.
         let (dims_ptr, deltas_ptr, readback_ptr, cmd, fence) = unsafe {
             let dims_ptr = engine
                 .device
@@ -867,6 +987,14 @@ impl<'e> ResidentVolume<'e> {
             vk::MemoryPropertyFlags::empty(),
         )?;
         let result = (|| -> Result<(), GpuLightError> {
+            // SAFETY: `staging` was created immediately above from a HOST_VISIBLE |
+            // HOST_COHERENT memory type with exactly `byte_len` bytes and has not been
+            // mapped yet, so mapping its whole range is legal and needs no explicit flush.
+            // `volume.props` is a `Vec<u32>` of `self.total` elements, so it holds exactly
+            // `byte_len == self.total * size_of::<u32>()` bytes and the copy is in bounds
+            // at both ends. The source is a heap allocation distinct from the mapped
+            // device memory, so the ranges cannot overlap, and the range is unmapped
+            // before the block ends.
             unsafe {
                 let base = self
                     .engine
@@ -880,6 +1008,15 @@ impl<'e> ResidentVolume<'e> {
                 );
                 self.engine.device.unmap_memory(staging.memory);
             };
+            // SAFETY: `submit_blocking` invokes this closure with a command buffer in the
+            // recording state. The copy moves `byte_len` bytes from `staging`, which was
+            // created with exactly that size and TRANSFER_SRC usage, into `props_buf`,
+            // created with the same size and TRANSFER_DST. `buf_a` and `buf_b` were also
+            // created with `byte_len` bytes, so zero-filling `[0, byte_len)` covers each
+            // exactly, and `byte_len` is `total * size_of::<u32>()`, hence the multiple of
+            // four that `cmd_fill_buffer` requires for its offset and size. `staging`
+            // outlives the fence wait inside `submit_blocking` because it is destroyed
+            // only after this closure's call returns.
             self.engine.submit_blocking(|cmd| unsafe {
                 let device = &self.engine.device;
                 device.cmd_copy_buffer(
@@ -912,6 +1049,16 @@ impl<'e> ResidentVolume<'e> {
             delta_count,
             bounds,
         );
+        // SAFETY: `self.dims_ptr` is the persistent mapping of `dims_staging`, valid for
+        // the whole lifetime of this `ResidentVolume` (see `new`), suitably aligned for
+        // `u32`, and covers `DIMS_BYTES == DIMS_WORDS * size_of::<u32>()` bytes, so
+        // writing `DIMS_WORDS` u32s is in bounds. `words` is a fresh stack array of that
+        // exact length living in host memory distinct from the mapping, so the ranges do
+        // not overlap. `ResidentVolume` holds raw pointers and is therefore neither `Send`
+        // nor `Sync`, so no other thread can be writing this staging buffer, and the GPU
+        // is not reading it: the previous `solve` ended with `wait_for_fences`, and the
+        // copy into `dims_buf` is recorded below in the submission this write feeds. The
+        // memory is HOST_COHERENT, so no explicit flush is needed.
         unsafe { std::ptr::copy_nonoverlapping(words.as_ptr(), self.dims_ptr, DIMS_WORDS) };
 
         let (gx, gy) = dispatch_dims(u64::from(count));
@@ -920,6 +1067,20 @@ impl<'e> ResidentVolume<'e> {
         let device = &self.engine.device;
         let layout = self.engine.pipeline_layout;
 
+        // SAFETY: `self.cmd` is owned by this `ResidentVolume` and is not pending when it
+        // is reset: it was freshly allocated in `new`, and every later `solve` ends with
+        // `wait_for_fences(&[self.fence])`. `ResidentVolume` holds raw pointers so it is
+        // neither `Send` nor `Sync`, which rules out a second thread re-recording the same
+        // command buffer through `&self`. Recording sits between a matched
+        // `begin`/`end_command_buffer` pair, `reset_fences` precedes the resubmission of
+        // `self.fence`, and every pipeline and descriptor set belongs to `self.engine` and
+        // to `self.descriptors` (which always has `SETS == 4` entries, so `sets[0]`,
+        // `sets[2]` and `sets[i % 2]` are in bounds); all were created against `layout`.
+        // `dispatch_dims` clamps every group count to `MAX_WORKGROUPS_PER_DIM`, and the
+        // patch dispatch is skipped entirely when `delta_count` is zero. The final copy
+        // uses `copy_len = count.min(self.total - base)`, so `base + copy_len <= total <=
+        // packed_len`, keeping it inside both `packed_buf` and `readback`. Barriers order
+        // each stage's writes before the next stage's reads.
         unsafe {
             device.reset_command_buffer(self.cmd, vk::CommandBufferResetFlags::empty())?;
             device.begin_command_buffer(
@@ -1049,6 +1210,16 @@ impl<'e> ResidentVolume<'e> {
     }
 
     const fn copy_back(&self, volume: &mut LightVolume, base: usize, len: usize) {
+        // SAFETY: `self.readback_ptr` is the persistent mapping of `readback`, valid for
+        // the whole lifetime of this `ResidentVolume` (see `new`) and covering
+        // `packed_len` bytes. Every caller clamps the range: `new` and `download` pass
+        // `base == 0, len == self.total`, and `apply_deltas` passes `copy_len =
+        // count.min(self.total - base)`, so `base + len <= self.total <= packed_len` and
+        // the read is in bounds. `volume.light` is a `Vec<u8>` with `voxel_count() ==
+        // self.total` elements, so the write is in bounds too, and it is a heap allocation
+        // distinct from the mapping. Each caller runs after a `solve` or `submit_blocking`
+        // that waited on its fence, so the device transfer into `readback` has completed,
+        // and the memory is HOST_COHERENT so no invalidate is needed to see it.
         unsafe {
             std::ptr::copy_nonoverlapping(
                 self.readback_ptr.add(base),
@@ -1084,6 +1255,16 @@ impl<'e> ResidentVolume<'e> {
         let end = raw_end.div_ceil(4) * 4;
         let count = end - base;
 
+        // SAFETY: `self.deltas_ptr` is the persistent mapping of `deltas_buf`, valid for
+        // the whole lifetime of this `ResidentVolume` (see `new`) and aligned for `u32`.
+        // `deltas.len() <= self.max_deltas` was checked above, and `deltas_buf` was created
+        // with `max_deltas.max(1) * 2 * size_of::<u32>()` bytes, so the largest offset
+        // written, `i * 2 + 1` for `i < deltas.len()`, stays below the buffer's u32 count.
+        // `ResidentVolume` is neither `Send` nor `Sync`, so no other thread is writing the
+        // same mapping, and the GPU is not reading it: the previous `solve` was awaited on
+        // its fence and the patch dispatch that consumes these words is only submitted by
+        // the `solve` call below. The memory is HOST_COHERENT, so no explicit flush is
+        // needed for the shader to observe the writes.
         unsafe {
             for (i, &(idx, p)) in deltas.iter().enumerate() {
                 let packed = u32::from(p.opacity.min(15)) | (u32::from(p.luminance.min(15)) << 4);
@@ -1123,10 +1304,28 @@ impl<'e> ResidentVolume<'e> {
             0,
             ([0, 0, 0], [0, 0, 0]),
         );
+        // SAFETY: same mapping as in `solve` - `self.dims_ptr` is the persistent, u32
+        // aligned mapping of `dims_staging`, which covers exactly `DIMS_WORDS` u32s and
+        // stays valid for this `ResidentVolume`'s lifetime, and `words` is a distinct
+        // stack array of that length, so the copy is in bounds and non-overlapping. No
+        // GPU work is reading `dims_staging` here either: the last `solve` waited on its
+        // fence, and the copy into `dims_buf` is recorded in the submission below.
+        // HOST_COHERENT memory needs no explicit flush.
         unsafe { std::ptr::copy_nonoverlapping(words.as_ptr(), self.dims_ptr, DIMS_WORDS) };
         let (pgx, pgy) = dispatch_dims((self.total as u64).div_ceil(4));
         let device = &self.engine.device;
         let layout = self.engine.pipeline_layout;
+        // SAFETY: `submit_blocking` invokes this closure with a command buffer in the
+        // recording state, and it is a different command buffer from `self.cmd`, so this
+        // does not disturb the resident one. Every handle belongs to this volume or to
+        // `self.engine`: `dims_staging` and `dims_buf` were both created with `DIMS_BYTES`
+        // bytes and the matching TRANSFER usage; `self.descriptors.sets[2]` exists because
+        // `build_descriptors` always allocates `SETS == 4` sets from
+        // `engine.descriptor_layout`, the only set layout in `layout`, which
+        // `pack_pipeline` was created with. `dispatch_dims` clamps the group counts. The
+        // barriers order the dims upload before the pack shader reads it and the pack
+        // shader's stores before the readback transfer. The final copy is `packed_buf.size`
+        // bytes into `readback`, which was created with the same `packed_len`.
         self.engine.submit_blocking(|cmd| unsafe {
             device.cmd_copy_buffer(
                 cmd,
@@ -1190,6 +1389,15 @@ impl<'e> ResidentVolume<'e> {
 impl Drop for ResidentVolume<'_> {
     fn drop(&mut self) {
         let device = &self.engine.device;
+        // SAFETY: `device_wait_idle` runs first, so no submission still references the
+        // command buffer, fence, descriptor sets or buffers below. Each of the three
+        // memories was mapped exactly once in `new` and has stayed mapped since, so a
+        // single `unmap_memory` each is correct, and the raw pointers into them are not
+        // used again. `fence`, `cmd` and the descriptor pool were all created in `new`
+        // from this `engine`, whose `'e` lifetime outlives `self`, and are destroyed
+        // exactly once here; freeing the pool implicitly frees its sets. All of this
+        // precedes the `destroy_buffer` loop, so every memory is unmapped before it is
+        // freed. `&mut self` rules out concurrent use.
         unsafe {
             let _ = device.device_wait_idle();
             device.unmap_memory(self.dims_staging.memory);
@@ -1215,6 +1423,11 @@ impl Drop for ResidentVolume<'_> {
 }
 
 fn compute_barrier(device: &ash::Device, cmd: vk::CommandBuffer) {
+    // SAFETY: every caller passes a command buffer that is currently recording, inside a
+    // `begin_command_buffer`/`end_command_buffer` pair, and that was allocated from a pool
+    // on `device`; a pipeline barrier is legal outside a render pass in a compute-only
+    // command buffer. The `MemoryBarrier` array is a temporary that lives until
+    // `cmd_pipeline_barrier` returns, and the empty slices are valid zero-length slices.
     unsafe {
         device.cmd_pipeline_barrier(
             cmd,
@@ -1260,6 +1473,15 @@ fn resolve_memory_flags(
 
 impl Drop for GpuLightEngine {
     fn drop(&mut self) {
+        // SAFETY: `device_wait_idle` first, so no submission still references any of these
+        // objects. Each handle was created once in `new`, has not been destroyed since,
+        // and is destroyed exactly once here; `&mut self` guarantees no concurrent use.
+        // Children are destroyed before their parents: all four compute pipelines
+        // (propagate, pack, patch, clear), the pipeline layout, the descriptor set layout
+        // and the command pool belong to `device` and go first, then the device, then the
+        // instance that owns it. Any `ResidentVolume` borrowing this engine has already
+        // been dropped, since it holds a `&'e GpuLightEngine`. Nothing is used after its
+        // destroy call.
         unsafe {
             let _ = self.device.device_wait_idle();
             self.device.destroy_pipeline(self.propagate_pipeline, None);

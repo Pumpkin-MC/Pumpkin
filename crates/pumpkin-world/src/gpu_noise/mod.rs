@@ -231,6 +231,17 @@ pub struct GpuNoiseEngine {
 impl GpuNoiseEngine {
     #[expect(clippy::too_many_lines)]
     pub fn new(selector: NoiseAdapter) -> Result<Self, GpuNoiseError> {
+        // SAFETY: every handle passed to a Vulkan call here was produced by the matching
+        // create call earlier in this same block and is still live: `physical` comes from
+        // this `instance`, `device` from this `physical`, and the descriptor layout,
+        // pipeline layout, shader module and command pool from this `device`. Each
+        // `*CreateInfo` borrows locals (`priorities`, `queue_info`, `bindings`,
+        // `set_layouts`, `words`, `stage_info`) that outlive the call that reads them.
+        // `CStr::from_ptr` reads `props.device_name`, which the loader fills with a
+        // NUL-terminated string inside a VK_MAX_PHYSICAL_DEVICE_NAME_SIZE array, and the
+        // borrow ends at `into_owned`. The shader module is destroyed only after the
+        // pipeline that consumed it is built, and on both early-return paths the instance
+        // is destroyed exactly once and no handle derived from it is used afterwards.
         unsafe {
             let entry = ash::Entry::load()?;
             let instance = entry.create_instance(
@@ -360,6 +371,15 @@ impl GpuNoiseEngine {
         required: vk::MemoryPropertyFlags,
         preferred: vk::MemoryPropertyFlags,
     ) -> Result<Buffer, GpuNoiseError> {
+        // SAFETY: `self.device` is the logical device created in `new` and destroyed only
+        // in `Drop`, so it is live for all of `&self`. `buffer` is created here and is
+        // still alive when its memory requirements are queried and when memory is bound;
+        // nothing destroys it in between. The memory type index comes from
+        // `find_memory_type` over this same device's `memory_props` filtered by
+        // `reqs.memory_type_bits`, so it is a valid index for this device and compatible
+        // with the buffer, and the allocation is `reqs.size`, the driver-reported minimum.
+        // The buffer is freshly created with no memory bound, so `bind_buffer_memory` is
+        // called exactly once on it as Vulkan requires.
         unsafe {
             let buffer = self.device.create_buffer(
                 &vk::BufferCreateInfo::default()
@@ -392,6 +412,12 @@ impl GpuNoiseEngine {
     }
 
     fn destroy_buffer(&self, buffer: &Buffer) {
+        // SAFETY: `buffer` was produced by `create_buffer` on this same `self.device` and
+        // is destroyed exactly once: the only caller is `density_field`, which runs this
+        // after `submit_blocking` has already waited on the fence for every submission
+        // that referenced these buffers, so no queue operation is still using them, and
+        // the `Buffer` is never touched again afterwards. The buffer handle is destroyed
+        // before the memory backing it is freed, which is the order Vulkan requires.
         unsafe {
             self.device.destroy_buffer(buffer.handle, None);
             self.device.free_memory(buffer.memory, None);
@@ -434,6 +460,15 @@ impl GpuNoiseEngine {
 
         let result = (|| -> Result<NoiseTimings, GpuNoiseError> {
             let mut timings = NoiseTimings::default();
+            // SAFETY: `params_buf` was allocated from a HOST_VISIBLE | HOST_COHERENT
+            // memory type and has not been mapped yet, so mapping its whole range is
+            // legal. The returned pointer is valid for `params_buf.size` == `PARAMS_BYTES`
+            // == `PARAMS_WORDS * 4` bytes, and Vulkan guarantees a mapping is aligned to
+            // at least `minMemoryMapAlignment` (>= 4), so the `u32` cast is aligned. The
+            // source is a fresh stack array of exactly `PARAMS_WORDS` u32s and the
+            // destination is a separate device allocation, so the ranges cannot overlap.
+            // Coherent memory needs no explicit flush, and the range is unmapped before
+            // the block ends so it is never mapped twice.
             unsafe {
                 let base = self
                     .device
@@ -451,6 +486,15 @@ impl GpuNoiseEngine {
             let sizes = [vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(2)];
+            // SAFETY: the pool is created with `max_sets(1)` and two STORAGE_BUFFER
+            // descriptors, exactly what the single allocation from `self.descriptor_layout`
+            // (which declares two storage-buffer bindings) consumes, so the allocation
+            // cannot exhaust the pool. `sizes` and `layouts` outlive the calls that read
+            // them, and each `WriteDescriptorSet` borrows an element of `infos`, which is
+            // a fixed-size array that stays alive until `update_descriptor_sets` returns.
+            // The buffers named in those infos are alive for the whole function, and the
+            // set is not yet bound in any recorded or pending command buffer, so updating
+            // it is not racing any in-flight use.
             let (pool, set) = unsafe {
                 let pool = self.device.create_descriptor_pool(
                     &vk::DescriptorPoolCreateInfo::default()
@@ -489,6 +533,16 @@ impl GpuNoiseEngine {
 
             let gpu_start = Instant::now();
             let (gx, gy) = dispatch_dims((total as u64).div_ceil(4));
+            // SAFETY: `submit_blocking` invokes this closure with a command buffer that is
+            // in the recording state, and the recorded handles are all compatible: `set`
+            // was allocated from `self.descriptor_layout`, which is the only set layout in
+            // `self.pipeline_layout`, which is the layout `self.pipeline` was created with.
+            // `dispatch_dims` clamps both group counts to `MAX_WORKGROUPS_PER_DIM`, within
+            // `maxComputeWorkGroupCount`. The barrier makes the shader's stores to
+            // `out_buf` visible to the following transfer read. The copy moves
+            // `packed_len` bytes, which is exactly the size both `out_buf` and `readback`
+            // were created with, so it is in bounds at both ends. Every handle used here
+            // outlives the fence wait inside `submit_blocking`.
             self.submit_blocking(|cmd| unsafe {
                 self.device
                     .cmd_bind_pipeline(cmd, vk::PipelineBindPoint::COMPUTE, self.pipeline);
@@ -522,6 +576,14 @@ impl GpuNoiseEngine {
             timings.gpu = gpu_start.elapsed();
 
             let read_start = Instant::now();
+            // SAFETY: `readback` is HOST_VISIBLE | HOST_COHERENT and has not been mapped
+            // yet, and `submit_blocking` above already waited on the fence for the copy
+            // into it, so the transfer has completed and coherent memory makes the result
+            // visible without an explicit invalidate. The mapping covers `readback.size`
+            // == `packed_len` == `total` rounded up to 4, so reading `total` bytes from it
+            // is in bounds, and `out.len() == total` was asserted at the top of the
+            // function, so the write is in bounds too. Source and destination are distinct
+            // allocations. The range is unmapped before the block ends.
             unsafe {
                 let base = self
                     .device
@@ -537,6 +599,12 @@ impl GpuNoiseEngine {
             };
             timings.readback = read_start.elapsed();
 
+            // SAFETY: `pool` was created from `self.device` a few statements above and is
+            // destroyed exactly once here. The only set allocated from it is `set`, whose
+            // last use was the dispatch submitted by `submit_blocking`, and that
+            // submission's fence has already been waited on, so no command buffer that
+            // references the set is still pending. Destroying the pool implicitly frees
+            // its sets, and neither `pool` nor `set` is used afterwards.
             unsafe {
                 self.device.destroy_descriptor_pool(pool, None);
             };
@@ -552,6 +620,15 @@ impl GpuNoiseEngine {
     }
 
     fn submit_blocking(&self, f: impl FnOnce(vk::CommandBuffer)) -> Result<(), GpuNoiseError> {
+        // SAFETY: the command buffer is allocated from `self.command_pool`, recorded
+        // between a matched `begin`/`end` pair, submitted to `self.queue` (which belongs
+        // to the same queue family the pool was created for), and freed only after
+        // `wait_for_fences` reports the submission complete, so it is never freed or
+        // re-recorded while pending. The fence is created here and destroyed after that
+        // same wait. `buffers` and the `SubmitInfo` array outlive `queue_submit`.
+        // Caller requirement: Vulkan requires external synchronisation of a command pool
+        // and of a queue, and this type derives `Sync` automatically, so callers must not
+        // drive one engine from two threads concurrently.
         unsafe {
             let cmd = self.device.allocate_command_buffers(
                 &vk::CommandBufferAllocateInfo::default()
@@ -602,6 +679,13 @@ fn find_memory_type(
 
 impl Drop for GpuNoiseEngine {
     fn drop(&mut self) {
+        // SAFETY: `device_wait_idle` first, so no submission still references any of these
+        // objects. Each handle was created once in `new`, has not been destroyed since,
+        // and is destroyed exactly once here; `&mut self` guarantees no concurrent use.
+        // Children are destroyed before their parents: the compute pipeline, its pipeline
+        // layout, the descriptor set layout and the command pool all belong to `device`
+        // and go first, then the device, then the instance that owns it. Nothing is used
+        // after its destroy call.
         unsafe {
             let _ = self.device.device_wait_idle();
             self.device.destroy_pipeline(self.pipeline, None);
