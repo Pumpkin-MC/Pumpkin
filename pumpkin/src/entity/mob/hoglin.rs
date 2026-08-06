@@ -1,9 +1,13 @@
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
+use pumpkin_nbt::compound::NbtCompound;
 
+use super::piglin::convert_to_zombified;
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
@@ -14,12 +18,16 @@ use crate::entity::{
 
 pub struct HoglinEntity {
     pub mob_entity: MobEntity,
+    pub time_in_overworld: AtomicI32,
 }
 
 impl HoglinEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let hoglin = Self { mob_entity };
+        let hoglin = Self {
+            mob_entity,
+            time_in_overworld: AtomicI32::new(0),
+        };
         let mob_arc = Arc::new(hoglin);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -49,10 +57,53 @@ impl HoglinEntity {
     }
 }
 
-impl NBTStorage for HoglinEntity {}
+impl NBTStorage for HoglinEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            nbt.put_int(
+                "TimeInOverworld",
+                self.time_in_overworld.load(Ordering::Relaxed),
+            );
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.time_in_overworld.store(
+                nbt.get_int("TimeInOverworld").unwrap_or(0),
+                Ordering::Relaxed,
+            );
+        })
+    }
+}
 
 impl Mob for HoglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let entity = caller.get_entity();
+            let overworld_time = self.time_in_overworld.load(Ordering::Relaxed);
+            let world = entity.world.load_full();
+
+            if world.dimension == Dimension::THE_NETHER {
+                if overworld_time > 0 {
+                    self.time_in_overworld
+                        .store(overworld_time - 1, Ordering::Relaxed);
+                }
+                return;
+            }
+
+            let new_time = overworld_time + 1;
+            self.time_in_overworld.store(new_time, Ordering::Relaxed);
+
+            if new_time >= 300 {
+                convert_to_zombified(caller, &EntityType::ZOGLIN).await;
+            }
+        })
     }
 }
