@@ -154,3 +154,7 @@ version_history.json
 world_nether/
 world_the_end/
 patchbukkit/
+
+# Mechanically transliterated vanilla skeletons (tools/transpile_vanilla.py).
+# Local scaffold only: Mojang proprietary structure, does not compile, never committed.
+reference/transpiled
