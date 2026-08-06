@@ -69,11 +69,9 @@ pub fn noise_gpu_callback(
     let density_values = ctx.evaluate_graph_with(&compiled, &points, &beardifier);
 
     // Density → block state mapping (vanilla default behaviour)
-    let water_state = pumpkin_data::Block::WATER.default_state.id;
     let stone_state = pumpkin_data::Block::STONE.default_state.id;
     let air_state = pumpkin_data::Block::AIR.default_state.id;
 
-    #[expect(clippy::cast_lossless)]
     let block_map: Box<[BlockStateId]> = density_values
         .iter()
         .enumerate()
@@ -91,8 +89,8 @@ pub fn noise_gpu_callback(
                     default_block
                 }
             } else if y < sea_level {
-                // Below sea level with negative density: water
-                water_state
+                // Below sea level with negative density: default fluid
+                default_fluid
             } else {
                 // Above sea level with negative density: air
                 air_state
