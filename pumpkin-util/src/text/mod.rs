@@ -238,30 +238,26 @@ impl TextComponentBase {
                 }
                 HoverEvent::ShowItem { id, count } => {
                     hover_tag.put_string("action", "show_item".to_string());
-                    let mut item_tag = pumpkin_nbt::NbtCompound::new();
-                    item_tag.put_string("id", id.to_string());
+                    hover_tag.put_string("id", id.to_string());
                     if let Some(cnt) = count {
-                        item_tag.put_int("count", *cnt);
+                        hover_tag.put_int("count", *cnt);
                     }
-                    hover_tag.put_compound("item", item_tag);
                 }
                 HoverEvent::ShowEntity { id, uuid, name } => {
                     hover_tag.put_string("action", "show_entity".to_string());
-                    let mut entity_tag = pumpkin_nbt::NbtCompound::new();
-                    entity_tag.put_string("id", id.to_string());
-                    entity_tag.put_string("uuid", uuid.to_string());
+                    hover_tag.put_string("id", id.to_string());
+                    hover_tag.put_string("uuid", uuid.to_string());
                     if let Some(n) = name {
                         if n.len() == 1 {
-                            entity_tag.put_compound("name", n[0].to_nbt_compound());
+                            hover_tag.put_compound("name", n[0].to_nbt_compound());
                         } else {
                             let list = n
                                 .iter()
                                 .map(|e| pumpkin_nbt::tag::NbtTag::Compound(e.to_nbt_compound()))
                                 .collect();
-                            entity_tag.put_list("name", list);
+                            hover_tag.put_list("name", list);
                         }
                     }
-                    hover_tag.put_compound("entity", entity_tag);
                 }
             }
             compound.put_compound("hover_event", hover_tag);
@@ -1332,5 +1328,90 @@ mod test {
         );
         let decoded = pumpkin_nbt::Nbt::read_unnamed(&mut reader).unwrap();
         assert_eq!(decoded, expected_compound.into());
+    }
+
+    /// The advancement announcement (`pumpkin/src/entity/player/advancement.rs`)
+    /// broadcasts `chat.type.advancement.*` with the player's display name, which
+    /// `Player::get_display_name` (`pumpkin/src/entity/player.rs`) decorates with a
+    /// `show_entity` hover and a `suggest_command` click. Nesting the `show_entity`
+    /// fields under an `entity` sub-compound left `hover_event` with only `action`,
+    /// so the 26.2 client failed with
+    /// `Failed to decode packet 'clientbound/minecraft:system_chat'`.
+    ///
+    /// Per <https://minecraft.wiki/w/Text_component_format>, `id`, `uuid` and `name`
+    /// sit directly next to `action` inside `hover_event`.
+    #[test]
+    fn show_entity_hover_fields_are_inline() {
+        use crate::text::click::ClickEvent;
+        use crate::text::hover::HoverEvent;
+
+        let display_name = TextComponent::text("Steve")
+            .click_event(ClickEvent::SuggestCommand {
+                command: "/tell Steve ".into(),
+            })
+            .hover_event(HoverEvent::show_entity(
+                "8d1a9b6e-0000-4000-8000-000000000000",
+                "player",
+                Some(TextComponent::text("Steve")),
+            ));
+
+        let message = TextComponent::translate(
+            "chat.type.advancement.task",
+            [display_name, TextComponent::text("[We Need to Go Deeper]")],
+        );
+
+        let compound = message.0.clone().to_translated().to_nbt_compound();
+        let with = compound.get_list("with").expect("with list");
+        let name_tag = with[0].extract_compound().expect("first substitution");
+        let hover = name_tag.get_compound("hover_event").expect("hover_event");
+
+        assert_eq!(hover.get_string("action"), Some("show_entity"));
+        assert_eq!(hover.get_string("id"), Some("player"));
+        assert_eq!(
+            hover.get_string("uuid"),
+            Some("8d1a9b6e-0000-4000-8000-000000000000")
+        );
+        assert!(
+            hover.get_compound("name").is_some(),
+            "name must be a component"
+        );
+        assert!(
+            hover.get_compound("entity").is_none(),
+            "hover_event must not nest fields under an `entity` sub-compound"
+        );
+
+        let click = name_tag.get_compound("click_event").expect("click_event");
+        assert_eq!(click.get_string("action"), Some("suggest_command"));
+
+        // The component must still survive a full encode/decode round trip.
+        let bytes = message.encode();
+        let mut cursor = std::io::Cursor::new(&bytes[..]);
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+            pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+        );
+        pumpkin_nbt::Nbt::read_unnamed(&mut reader).unwrap();
+    }
+
+    /// Non-advancement path sharing the same serializer: an item display name
+    /// carrying a `show_item` hover (see `pumpkin/src/command/commands/give.rs`).
+    #[test]
+    fn show_item_hover_fields_are_inline() {
+        use crate::text::hover::HoverEvent;
+
+        let item_name = TextComponent::text("Flint and Steel").hover_event(HoverEvent::ShowItem {
+            id: "minecraft:flint_and_steel".into(),
+            count: Some(1),
+        });
+
+        let compound = item_name.0.to_translated().to_nbt_compound();
+        let hover = compound.get_compound("hover_event").expect("hover_event");
+
+        assert_eq!(hover.get_string("action"), Some("show_item"));
+        assert_eq!(hover.get_string("id"), Some("minecraft:flint_and_steel"));
+        assert_eq!(hover.get_int("count"), Some(1));
+        assert!(
+            hover.get_compound("item").is_none(),
+            "hover_event must not nest fields under an `item` sub-compound"
+        );
     }
 }

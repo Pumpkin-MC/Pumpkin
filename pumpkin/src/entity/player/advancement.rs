@@ -800,4 +800,85 @@ mod tests {
             "The advancement shouldn't have been loaded"
         );
     }
+
+    /// The Nether-entry announcement broadcast by [`Advancements::award`] is
+    /// `chat.type.advancement.task` with the player's display name and
+    /// [`Advancement::name`]. `name()` attaches a `show_text` hover
+    /// (`pumpkin-data/src/generated/advancement.rs`, `option_name`), and the
+    /// display name attaches a `show_entity` hover
+    /// (`pumpkin/src/entity/player.rs`, `Player::get_display_name`).
+    ///
+    /// A 26.2 client rejected this packet with
+    /// `Failed to decode packet 'clientbound/minecraft:system_chat'` because the
+    /// `show_entity` payload was nested under an `entity` sub-compound. Per
+    /// <https://minecraft.wiki/w/Text_component_format> those fields sit directly
+    /// beside `action`, while `show_text`'s `value` may be a string, a compound or
+    /// a list. This asserts the real advancement component over both arms.
+    #[test]
+    fn nether_advancement_announcement_nbt_shape() {
+        use pumpkin_util::text::click::ClickEvent;
+        use pumpkin_util::text::hover::HoverEvent;
+
+        let advancement = Advancement::STORY_ENTER_THE_NETHER;
+        assert!(
+            advancement.display.unwrap().announce_to_chat,
+            "story/enter_the_nether must announce, otherwise this path never fires"
+        );
+
+        let display_name = TextComponent::text("Steve")
+            .click_event(ClickEvent::SuggestCommand {
+                command: "/tell Steve ".into(),
+            })
+            .hover_event(HoverEvent::show_entity(
+                "8d1a9b6e-0000-4000-8000-000000000000",
+                "player",
+                Some(TextComponent::text("Steve")),
+            ));
+
+        let message = TextComponent::translate(
+            advancement.display.unwrap().frame_type.get_translation(),
+            [display_name, advancement.name()],
+        );
+        let bytes = message.encode();
+        let compound = message.0.to_translated().to_nbt_compound();
+        let with = compound.get_list("with").expect("with list");
+
+        // Substitution 0: the player display name, carrying show_entity.
+        let name_tag = with[0].extract_compound().expect("display name compound");
+        let hover = name_tag.get_compound("hover_event").expect("hover_event");
+        assert_eq!(hover.get_string("action"), Some("show_entity"));
+        assert_eq!(hover.get_string("id"), Some("player"));
+        assert_eq!(
+            hover.get_string("uuid"),
+            Some("8d1a9b6e-0000-4000-8000-000000000000")
+        );
+        assert!(
+            hover.get_compound("entity").is_none(),
+            "show_entity fields must not be nested under an `entity` sub-compound"
+        );
+
+        // Substitution 1: the real advancement name, carrying show_text on the
+        // component wrapped by `chat.square_brackets`.
+        let adv_tag = with[1].extract_compound().expect("advancement compound");
+        let inner = adv_tag
+            .get_list("with")
+            .expect("chat.square_brackets substitution")[0]
+            .extract_compound()
+            .expect("bracketed title");
+        let title_hover = inner
+            .get_compound("hover_event")
+            .expect("title hover_event");
+        assert_eq!(title_hover.get_string("action"), Some("show_text"));
+        assert!(
+            title_hover.get_compound("value").is_some(),
+            "show_text value must be a component compound"
+        );
+
+        // And the whole thing must survive the encode the packet writer performs.
+        let mut cursor = std::io::Cursor::new(&bytes[..]);
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+            pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+        );
+        pumpkin_nbt::Nbt::read_unnamed(&mut reader).unwrap();
+    }
 }
