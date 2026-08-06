@@ -23,6 +23,7 @@ pub mod chunker;
 pub mod explosion;
 pub mod loot;
 pub mod map;
+mod neighbor_updater;
 pub mod portal;
 pub mod time;
 
@@ -4978,37 +4979,7 @@ impl World {
         block_pos: &BlockPos,
         except: Option<BlockDirection>,
     ) {
-        let source_block = self.get_block(block_pos);
-        for direction in BlockDirection::update_order() {
-            if except.is_some_and(|d| d == direction) {
-                continue;
-            }
-
-            let neighbor_pos = block_pos.offset(direction.to_offset());
-            let (neighbor_block, neighbor_fluid) = self.get_block_and_fluid(&neighbor_pos);
-
-            if let Some(neighbor_pumpkin_block) =
-                self.block_registry.get_pumpkin_block(neighbor_block.id)
-            {
-                neighbor_pumpkin_block
-                    .on_neighbor_update(OnNeighborUpdateArgs {
-                        world: self,
-                        block: neighbor_block,
-                        position: &neighbor_pos,
-                        source_block,
-                        notify: false,
-                    })
-                    .await;
-            }
-
-            if let Some(neighbor_pumpkin_fluid) =
-                self.block_registry.get_pumpkin_fluid(neighbor_fluid.id)
-            {
-                neighbor_pumpkin_fluid
-                    .on_neighbor_update(self, neighbor_fluid, &neighbor_pos, false)
-                    .await;
-            }
-        }
+        neighbor_updater::update_neighbors(self, block_pos, except).await;
     }
 
     pub async fn update_neighbor(
@@ -5016,19 +4987,39 @@ impl World {
         neighbor_block_pos: &BlockPos,
         source_block: &Block,
     ) {
-        let neighbor_block = self.get_block(neighbor_block_pos);
+        neighbor_updater::update_neighbor(self, neighbor_block_pos, source_block).await;
+    }
 
-        if let Some(neighbor_pumpkin_block) =
-            self.block_registry.get_pumpkin_block(neighbor_block.id)
-        {
-            neighbor_pumpkin_block
+    async fn execute_neighbor_update(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        source_block: &Block,
+        include_fluid: bool,
+    ) {
+        let (block, fluid) = if include_fluid {
+            let (block, fluid) = self.get_block_and_fluid(position);
+            (block, Some(fluid))
+        } else {
+            (self.get_block(position), None)
+        };
+
+        if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {
+            pumpkin_block
                 .on_neighbor_update(OnNeighborUpdateArgs {
                     world: self,
-                    block: neighbor_block,
-                    position: neighbor_block_pos,
+                    block,
+                    position,
                     source_block,
                     notify: false,
                 })
+                .await;
+        }
+
+        if let Some(fluid) = fluid
+            && let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid.id)
+        {
+            pumpkin_fluid
+                .on_neighbor_update(self, fluid, position, false)
                 .await;
         }
     }
@@ -5060,6 +5051,15 @@ impl World {
     }
 
     pub async fn replace_with_state_for_neighbor_update(
+        self: &Arc<Self>,
+        block_pos: &BlockPos,
+        direction: BlockDirection,
+        flags: BlockFlags,
+    ) {
+        neighbor_updater::update_shape(self, block_pos, direction, flags).await;
+    }
+
+    async fn execute_shape_update(
         self: &Arc<Self>,
         block_pos: &BlockPos,
         direction: BlockDirection,
