@@ -112,42 +112,70 @@ mod test {
         chunk.stage = StagedChunkEnum::StructureReferences;
         chunk.step_to_noise(generator);
 
-        assert_eq!(chunk.flat_block_map.len(), expected_data.len());
-        let min_y = chunk.bottom_y() as i32;
-        let height = chunk.height() as usize;
-        let mut mismatches = 0;
-        for (i, (&actual, &expected)) in chunk
-            .flat_block_map
-            .iter()
-            .zip(expected_data.iter())
-            .enumerate()
-        {
-            if actual.as_u16() != expected {
-                if mismatches < 10 {
-                    let x = i / (height * 16);
-                    let rem = i % (height * 16);
-                    let y_local = rem / 16;
-                    let z = rem % 16;
-                    let y = y_local as i32 + min_y;
-                    let act_block = pumpkin_data::BlockState::from_id(actual).id.to_block().name;
-                    let exp_block = pumpkin_data::BlockState::from_id(
-                        pumpkin_data::BlockStateId::new(expected).unwrap(),
-                    )
-                    .id
-                    .to_block()
-                    .name;
-                    println!(
-                        "[{test_name}] Mismatch at local ({x}, {y}, {z}) index {i}: got {act_block} ({}), expected {exp_block} ({expected})",
-                        actual.as_u16()
-                    );
-                }
-                mismatches += 1;
-            }
-        }
+        let mismatches = count_dump_mismatches(&chunk, expected_data, test_name);
+        assert_air_above_dumped_window(&chunk, expected_data, test_name);
         assert_eq!(
             mismatches, 0,
             "[{test_name}] Chunk noise generation mismatches vanilla!"
         );
+    }
+
+    fn dumped_window_height(expected_data: &[u16]) -> usize {
+        let columns = 16 * 16;
+        assert_eq!(expected_data.len() % columns, 0);
+        expected_data.len() / columns
+    }
+
+    fn count_dump_mismatches(chunk: &ProtoChunk, expected_data: &[u16], test_name: &str) -> usize {
+        let dumped_height = dumped_window_height(expected_data);
+        assert!(dumped_height <= chunk.height() as usize);
+
+        let min_y = chunk.bottom_y() as i32;
+        let mut mismatches = 0;
+        for x in 0..16usize {
+            for local_y in 0..dumped_height {
+                for z in 0..16usize {
+                    let expected = expected_data[(x * dumped_height + local_y) * 16 + z];
+                    let actual = chunk.get_block_state_raw(x as i32, local_y as i32, z as i32);
+                    if actual.as_u16() == expected {
+                        continue;
+                    }
+                    if mismatches < 10 {
+                        let y = local_y as i32 + min_y;
+                        let act_block =
+                            pumpkin_data::BlockState::from_id(actual).id.to_block().name;
+                        let exp_block = pumpkin_data::BlockState::from_id(
+                            pumpkin_data::BlockStateId::new(expected).unwrap(),
+                        )
+                        .id
+                        .to_block()
+                        .name;
+                        println!(
+                            "[{test_name}] Mismatch at local ({x}, {y}, {z}): got {act_block} ({}), expected {exp_block} ({expected})",
+                            actual.as_u16()
+                        );
+                    }
+                    mismatches += 1;
+                }
+            }
+        }
+        mismatches
+    }
+
+    fn assert_air_above_dumped_window(chunk: &ProtoChunk, expected_data: &[u16], test_name: &str) {
+        let min_y = chunk.bottom_y() as i32;
+        for x in 0..16usize {
+            for local_y in dumped_window_height(expected_data)..chunk.height() as usize {
+                for z in 0..16usize {
+                    let actual = chunk.get_block_state_raw(x as i32, local_y as i32, z as i32);
+                    assert!(
+                        pumpkin_data::BlockState::from_id(actual).is_air(),
+                        "[{test_name}] Block above the noise window at local ({x}, {}, {z}) is not air",
+                        local_y as i32 + min_y
+                    );
+                }
+            }
+        }
     }
 
     fn verify_chunk_surface(
@@ -170,38 +198,8 @@ mod test {
         chunk.step_to_noise(generator);
         chunk.step_to_surface(generator);
 
-        assert_eq!(chunk.flat_block_map.len(), expected_data.len());
-        let min_y = chunk.bottom_y() as i32;
-        let height = chunk.height() as usize;
-        let mut mismatches = 0;
-        for (i, (&actual, &expected)) in chunk
-            .flat_block_map
-            .iter()
-            .zip(expected_data.iter())
-            .enumerate()
-        {
-            if actual.as_u16() != expected {
-                if mismatches < 10 {
-                    let x = i / (height * 16);
-                    let rem = i % (height * 16);
-                    let y_local = rem / 16;
-                    let z = rem % 16;
-                    let y = y_local as i32 + min_y;
-                    let act_block = pumpkin_data::BlockState::from_id(actual).id.to_block().name;
-                    let exp_block = pumpkin_data::BlockState::from_id(
-                        pumpkin_data::BlockStateId::new(expected).unwrap(),
-                    )
-                    .id
-                    .to_block()
-                    .name;
-                    println!(
-                        "[{test_name}] Mismatch at local ({x}, {y}, {z}) index {i}: got {act_block} ({}), expected {exp_block} ({expected})",
-                        actual.as_u16()
-                    );
-                }
-                mismatches += 1;
-            }
-        }
+        let mismatches = count_dump_mismatches(&chunk, expected_data, test_name);
+        assert_air_above_dumped_window(&chunk, expected_data, test_name);
         let allowed_mismatches = 1060;
         assert!(
             mismatches <= allowed_mismatches,

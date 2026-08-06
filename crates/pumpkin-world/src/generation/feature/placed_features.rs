@@ -65,8 +65,8 @@ impl PlacedFeature {
         if let ConfiguredFeature::SculkPatch(feature) = feature {
             feature.generate_in_proto_chunk(chunk, random, pos)
         } else {
-            let min_y = chunk.bottom_y();
-            let height = chunk.height();
+            let min_y = chunk.generation_bottom_y();
+            let height = chunk.generation_height();
             self.generate(
                 chunk,
                 block_registry,
