@@ -315,16 +315,21 @@ async fn setup_sighandler() -> io::Result<()> {
 // Unix signal handling
 #[cfg(unix)]
 async fn setup_sighandler() -> io::Result<()> {
-    if signal(SignalKind::interrupt())?.recv().await.is_some() {
-        handle_interrupt();
-    }
+    // All three streams must be registered up front. `tokio::signal::unix::signal`
+    // installs the handler when it is called, so awaiting them one after another
+    // left SIGTERM and SIGHUP on their default disposition (immediate process
+    // death) until a SIGINT had already arrived. `systemctl restart`, `docker
+    // stop` and plain `kill` all send SIGTERM, so the server was killed outright
+    // and `PumpkinServer::stop` -- the only path that serializes live entities
+    // into their entity chunks -- never ran.
+    let mut interrupt = signal(SignalKind::interrupt())?;
+    let mut hangup = signal(SignalKind::hangup())?;
+    let mut terminate = signal(SignalKind::terminate())?;
 
-    if signal(SignalKind::hangup())?.recv().await.is_some() {
-        handle_interrupt();
-    }
-
-    if signal(SignalKind::terminate())?.recv().await.is_some() {
-        handle_interrupt();
+    tokio::select! {
+        _ = interrupt.recv() => handle_interrupt(),
+        _ = hangup.recv() => handle_interrupt(),
+        _ = terminate.recv() => handle_interrupt(),
     }
 
     Ok(())
