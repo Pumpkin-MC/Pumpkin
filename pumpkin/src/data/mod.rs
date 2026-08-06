@@ -45,9 +45,17 @@ pub trait LoadJSONConfiguration {
     {
         let exe_dir = env::current_dir().expect("Failed to get current directory");
         let data_dir = exe_dir.join(DATA_FOLDER);
-        if !data_dir.exists() {
-            debug!("creating new data root folder");
-            fs::create_dir(&data_dir).expect("Failed to create data root folder");
+        debug!("ensuring the data root folder exists");
+        if let Err(err) = fs::create_dir_all(&data_dir) {
+            error!(
+                "Failed to create the data directory at {}: {err}",
+                data_dir.display()
+            );
+            error!(
+                "Make sure the server has permission to write to its working directory. \
+                 This often fails in Docker when the container runs as a non-root user."
+            );
+            std::process::exit(1);
         }
         let path = data_dir.join(Self::get_path());
 
@@ -94,9 +102,13 @@ pub trait SaveJSONConfiguration: LoadJSONConfiguration {
     {
         let exe_dir = env::current_dir().expect("Failed to get current directory");
         let data_dir = exe_dir.join(DATA_FOLDER);
-        if !data_dir.exists() {
-            debug!("creating new data root folder");
-            fs::create_dir(&data_dir).expect("Failed to create data root folder");
+        debug!("ensuring the data root folder exists");
+        if let Err(err) = fs::create_dir_all(&data_dir) {
+            warn!(
+                "Couldn't create the data directory at {}: {err}",
+                data_dir.display()
+            );
+            return;
         }
         let path = data_dir.join(Self::get_path());
 
