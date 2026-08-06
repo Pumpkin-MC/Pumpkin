@@ -11,11 +11,99 @@ use pumpkin_util::math::vector3::Vector3;
 use std::collections::VecDeque;
 //use std::time::Instant;
 
-// These are hit on every neighbour of every propagated block, so the hash
-// function dominates. Use rustc-hash's fast hasher instead of the std default
-// (SipHash), which is what "Fast" was meant to imply.
-type FastHashSet<K> = rustc_hash::FxHashSet<K>;
-type FastHashMap<K, V> = rustc_hash::FxHashMap<K, V>;
+const LIGHTING_REGION_WIDTH: usize = 18;
+
+/// Dense cache-relative visitation map used by light propagation.
+///
+/// Propagation never leaves the chunk cache, so hashing absolute block positions
+/// wastes work and memory. A bit per cache block also lets the hot path combine
+/// the cache-boundary and visited checks.
+struct DenseVisited {
+    bits: Vec<u64>,
+    origin_x: i32,
+    origin_z: i32,
+    min_y: i32,
+    width: usize,
+    height: usize,
+}
+
+impl DenseVisited {
+    const fn new() -> Self {
+        Self {
+            bits: Vec::new(),
+            origin_x: 0,
+            origin_z: 0,
+            min_y: 0,
+            width: 0,
+            height: 0,
+        }
+    }
+
+    fn ensure_layout(&mut self, cache: &Cache) {
+        let width = cache.size as usize * 16;
+        let height = cache.height() as usize;
+        let origin_x = cache.x * 16;
+        let origin_z = cache.z * 16;
+        let min_y = cache.bottom_y() as i32;
+
+        if self.width == width
+            && self.height == height
+            && self.origin_x == origin_x
+            && self.origin_z == origin_z
+            && self.min_y == min_y
+        {
+            return;
+        }
+
+        self.origin_x = origin_x;
+        self.origin_z = origin_z;
+        self.min_y = min_y;
+        self.width = width;
+        self.height = height;
+
+        let bit_count = width
+            .checked_mul(width)
+            .and_then(|area| area.checked_mul(height))
+            .expect("light cache dimensions overflow");
+        self.bits.resize(bit_count.div_ceil(64), 0);
+        self.bits.fill(0);
+    }
+
+    fn clear(&mut self) {
+        self.bits.fill(0);
+    }
+
+    fn index(&self, pos: BlockPos) -> Option<usize> {
+        let x = usize::try_from(pos.0.x - self.origin_x).ok()?;
+        let y = usize::try_from(pos.0.y - self.min_y).ok()?;
+        let z = usize::try_from(pos.0.z - self.origin_z).ok()?;
+        if x >= self.width || y >= self.height || z >= self.width {
+            return None;
+        }
+
+        Some((y * self.width + z) * self.width + x)
+    }
+
+    /// Returns true for positions already visited or outside the cache.
+    fn contains_or_out_of_bounds(&self, pos: BlockPos) -> bool {
+        let Some(index) = self.index(pos) else {
+            return true;
+        };
+        self.bits[index >> 6] & (1u64 << (index & 63)) != 0
+    }
+
+    /// Marks an in-bounds position and reports whether it was newly visited.
+    fn insert(&mut self, pos: BlockPos) -> bool {
+        let Some(index) = self.index(pos) else {
+            return false;
+        };
+        let word = &mut self.bits[index >> 6];
+        let mask = 1u64 << (index & 63);
+        let newly_inserted = *word & mask == 0;
+        *word |= mask;
+        newly_inserted
+    }
+}
 
 /// Trait to unify Block and Sky light logic
 pub trait LightProvider {
@@ -62,7 +150,7 @@ pub struct PropagationEntry {
 
 pub struct LightPropagator<P: LightProvider> {
     pub(crate) queue: VecDeque<PropagationEntry>,
-    pub(crate) visited: FastHashSet<BlockPos>,
+    visited: DenseVisited,
     pub(crate) decrease_queue: VecDeque<(BlockPos, u8)>,
     _marker: std::marker::PhantomData<P>,
 }
@@ -72,7 +160,7 @@ impl<P: LightProvider> LightPropagator<P> {
     pub fn new() -> Self {
         Self {
             queue: VecDeque::with_capacity(4096),
-            visited: FastHashSet::default(),
+            visited: DenseVisited::new(),
             decrease_queue: VecDeque::new(),
             _marker: std::marker::PhantomData,
         }
@@ -90,12 +178,7 @@ impl<P: LightProvider> LightPropagator<P> {
     /// lookup) instead of maintaining a separate hashed shadow cache and batched
     /// write buffer; the storage is the single source of truth.
     pub fn propagate(&mut self, cache: &mut Cache) {
-        // Cache metadata for bounds checking
-        let cache_x = cache.x;
-        let cache_z = cache.z;
-        let cache_size = cache.size;
-        let min_y = cache.bottom_y() as i32;
-        let max_y = min_y + cache.height() as i32;
+        self.visited.ensure_layout(cache);
 
         while let Some(entry) = self.queue.pop_front() {
             let pos = entry.pos;
@@ -115,20 +198,8 @@ impl<P: LightProvider> LightPropagator<P> {
 
                 let neighbor_pos = pos.offset(dir.to_offset());
 
-                // Skip if already visited (critical early-exit optimization)
-                if self.visited.contains(&neighbor_pos) {
-                    continue;
-                }
-
-                // Skip neighbor if it's outside world bounds
-                if neighbor_pos.0.y < min_y || neighbor_pos.0.y >= max_y {
-                    continue;
-                }
-
-                let (cx, _rel) = neighbor_pos.chunk_and_chunk_relative_position();
-                let rel_x = cx.x - cache_x;
-                let rel_z = cx.y - cache_z;
-                if rel_x < 0 || rel_x >= cache_size || rel_z < 0 || rel_z >= cache_size {
+                // One dense lookup replaces both hashing and cache bounds checks.
+                if self.visited.contains_or_out_of_bounds(neighbor_pos) {
                     continue;
                 }
 
@@ -218,6 +289,7 @@ impl<P: LightProvider> Default for LightPropagator<P> {
 impl BlockLightPropagator {
     pub fn propagate_light(&mut self, cache: &mut Cache) {
         self.clear();
+        self.visited.ensure_layout(cache);
 
         //let scan_start = Instant::now();
 
@@ -265,6 +337,7 @@ impl SkyLightPropagator {
     #[expect(clippy::too_many_lines)]
     pub fn convert_light(&mut self, cache: &mut Cache) {
         self.clear();
+        self.visited.ensure_layout(cache);
 
         //let scan_start = Instant::now();
 
@@ -278,10 +351,7 @@ impl SkyLightPropagator {
         let bottom_y = cache.bottom_y() as i32;
         let max_y = bottom_y + cache.height() as i32;
 
-        // Pre-allocate with exact size needed
-        let capacity = ((end_x - start_x) * (end_z - start_z)) as usize;
-        let mut surface_heights =
-            FastHashMap::with_capacity_and_hasher(capacity, rustc_hash::FxBuildHasher);
+        let mut surface_heights = [0i32; LIGHTING_REGION_WIDTH * LIGHTING_REGION_WIDTH];
 
         // Process in Z-outer, X-inner order for better cache locality
         for z in start_z..end_z {
@@ -294,7 +364,9 @@ impl SkyLightPropagator {
 
                 // Get heightmap (top solid blocks)
                 let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
-                surface_heights.insert((x, z), top_y);
+                let height_index =
+                    (z - start_z) as usize * LIGHTING_REGION_WIDTH + (x - start_x) as usize;
+                surface_heights[height_index] = top_y;
 
                 // Get chunk index once per column
                 let rel_x = chunk_x - cache.x;
@@ -381,12 +453,27 @@ impl SkyLightPropagator {
         // Enqueue horizontal propagation
         for z in start_z..end_z {
             for x in start_x..end_x {
-                let top_y = surface_heights[&(x, z)];
+                let local_x = (x - start_x) as usize;
+                let local_z = (z - start_z) as usize;
+                let height_index = local_z * LIGHTING_REGION_WIDTH + local_x;
+                let top_y = surface_heights[height_index];
 
-                let north_top = surface_heights.get(&(x, z - 1)).copied().unwrap_or(top_y);
-                let south_top = surface_heights.get(&(x, z + 1)).copied().unwrap_or(top_y);
-                let west_top = surface_heights.get(&(x - 1, z)).copied().unwrap_or(top_y);
-                let east_top = surface_heights.get(&(x + 1, z)).copied().unwrap_or(top_y);
+                let north_top = local_z.checked_sub(1).map_or(top_y, |z| {
+                    surface_heights[z * LIGHTING_REGION_WIDTH + local_x]
+                });
+                let south_top = if local_z + 1 < LIGHTING_REGION_WIDTH {
+                    surface_heights[(local_z + 1) * LIGHTING_REGION_WIDTH + local_x]
+                } else {
+                    top_y
+                };
+                let west_top = local_x.checked_sub(1).map_or(top_y, |x| {
+                    surface_heights[local_z * LIGHTING_REGION_WIDTH + x]
+                });
+                let east_top = if local_x + 1 < LIGHTING_REGION_WIDTH {
+                    surface_heights[local_z * LIGHTING_REGION_WIDTH + local_x + 1]
+                } else {
+                    top_y
+                };
 
                 // We must check up to the highest neighbor to catch the "air sources"
                 let max_check_y = top_y
@@ -474,6 +561,8 @@ impl LightEngine {
         old_luminance: u8,
         new_luminance: u8,
     ) {
+        self.block_light.visited.ensure_layout(cache);
+
         // Decrease Logic
         if old_luminance > new_luminance {
             let current_light = get_block_light(cache, pos);
@@ -498,6 +587,9 @@ impl LightEngine {
     }
 
     pub fn run_light_updates(&mut self, cache: &mut Cache) {
+        self.block_light.visited.ensure_layout(cache);
+        self.sky_light.visited.ensure_layout(cache);
+
         if !self.block_light.decrease_queue.is_empty() {
             self.block_light.process_decrease_queue(cache);
         }
@@ -518,5 +610,83 @@ impl LightEngine {
 impl Default for LightEngine {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DenseVisited;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector3::Vector3;
+
+    fn visited_map() -> DenseVisited {
+        let width = 48usize;
+        let height = 384usize;
+        DenseVisited {
+            bits: vec![0; (width * width * height).div_ceil(64)],
+            origin_x: -32,
+            origin_z: 48,
+            min_y: -64,
+            width,
+            height,
+        }
+    }
+
+    fn pos(x: i32, y: i32, z: i32) -> BlockPos {
+        BlockPos(Vector3::new(x, y, z))
+    }
+
+    #[test]
+    fn dense_visited_indexes_cache_bounds_and_negative_coordinates() {
+        let mut visited = visited_map();
+
+        for position in [
+            pos(-32, -64, 48),
+            pos(15, 319, 95),
+            pos(-7, 80, 73),
+            pos(0, 0, 64),
+        ] {
+            assert!(!visited.contains_or_out_of_bounds(position));
+            assert!(visited.insert(position));
+            assert!(visited.contains_or_out_of_bounds(position));
+            assert!(!visited.insert(position));
+        }
+
+        for position in [
+            pos(-33, 0, 48),
+            pos(16, 0, 48),
+            pos(-32, -65, 48),
+            pos(-32, 320, 48),
+            pos(-32, 0, 47),
+            pos(-32, 0, 96),
+        ] {
+            assert!(visited.contains_or_out_of_bounds(position));
+            assert!(!visited.insert(position));
+        }
+    }
+
+    #[test]
+    fn dense_visited_positions_do_not_alias_and_can_be_reused() {
+        let mut visited = visited_map();
+        let positions = [
+            pos(-32, -64, 48),
+            pos(-31, -64, 48),
+            pos(-32, -63, 48),
+            pos(-32, -64, 49),
+            pos(15, 319, 95),
+        ];
+
+        for &position in &positions {
+            assert!(visited.insert(position));
+        }
+        for &position in &positions {
+            assert!(visited.contains_or_out_of_bounds(position));
+        }
+
+        visited.clear();
+        for position in positions {
+            assert!(!visited.contains_or_out_of_bounds(position));
+            assert!(visited.insert(position));
+        }
     }
 }
