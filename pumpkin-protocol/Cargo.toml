@@ -29,7 +29,6 @@ aes.workspace = true
 cfb8.workspace = true
 ctr.workspace = true
 sha2.workspace = true
-hybrid-array = "0.4"
 
 # compression
 async-compression = { workspace = true, features = ["tokio", "zlib", "deflate"] }
@@ -38,7 +37,11 @@ flate2.workspace = true
 bitflags.workspace = true
 
 [dev-dependencies]
-# Validate correctness
+criterion = { workspace = true, features = ["async_tokio"] }
+
+[[bench]]
+name = "stream_encryption"
+harness = false
 
 [lints]
 workspace = true
