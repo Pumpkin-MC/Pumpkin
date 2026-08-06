@@ -1014,6 +1014,8 @@ impl World {
             block_entity_future
         );
 
+        self.flush_block_updates().await;
+
         self.level.chunk_loading.lock().unwrap().send_change();
 
         if let Some(ref fight_mutex) = self.dragon_fight {

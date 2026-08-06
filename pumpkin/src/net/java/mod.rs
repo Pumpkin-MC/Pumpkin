@@ -280,7 +280,7 @@ impl JavaClient {
                     let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
                     if seq != -1 {
                         self
-                            .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
+                            .enqueue_packet(&CAcknowledgeBlockChange::new(seq.into()))
                             .await;
                     }
                 }
@@ -431,24 +431,24 @@ impl JavaClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
-        if let Err(err) = self
+        match self
             .outgoing_packet_queue_send
             .try_send(OutgoingPacket::normal(packet_data))
         {
-            match err {
-                tokio::sync::mpsc::error::TrySendError::Full(_) => {
-                    debug!(
-                        "Failed to add packet to the outgoing packet queue for client {}: channel full",
+            Ok(()) => {}
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                warn!(
+                    "Outgoing packet queue for client {} is full; closing the connection",
+                    self.id
+                );
+                self.close();
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                if !self.close_token.is_cancelled() {
+                    error!(
+                        "Failed to add packet to the outgoing packet queue for client {}: channel closed",
                         self.id
                     );
-                }
-                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
-                    if !self.close_token.is_cancelled() {
-                        error!(
-                            "Failed to add packet to the outgoing packet queue for client {}: channel closed",
-                            self.id
-                        );
-                    }
                 }
             }
         }
