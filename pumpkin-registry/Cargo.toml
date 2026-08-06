@@ -14,6 +14,7 @@ rustc-hash.workspace = true
 
 [dev-dependencies]
 # Validate correctness
+tokio = {workspace = true, features = ["macros", "rt-multi-thread"]}
 
 [lints]
 workspace = true

@@ -10,9 +10,14 @@ pub enum RegistryInsertError {
 }
 
 #[derive(Debug, Error)]
-pub enum RegistryLockError {
-    #[error("registry locking was interrupted while the registry was being built")]
-    Interrupted,
+pub enum RegistryInitError {
+    #[error(
+        "the amount of values ({values}) doesn't match the amount of identifiers ({identifiers})"
+    )]
+    MappingMismatch { values: usize, identifiers: usize },
+
+    #[error("registry entry `{0}` is already registered")]
+    AlreadyRegistered(Identifier),
 }
 
 #[derive(Debug, Error)]

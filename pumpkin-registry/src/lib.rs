@@ -1,262 +1,196 @@
-use crate::error::RegistryLockError;
+use crate::value::ErasedRegistryRef;
 use pumpkin_util::identifier::Identifier;
-use std::any::{Any, TypeId, type_name};
+use std::any::{Any, TypeId};
+use std::pin::Pin;
 
 mod builder;
-mod holder;
+mod immutable;
+mod mutable;
+
+mod access;
 mod key;
-mod registry;
+mod value;
 
 pub mod error;
-pub use crate::holder::RegistryHolder;
-pub use crate::key::{ArcDataKey, DataKeyBuilder, RefDataKey};
+pub use crate::access::{RootRegistryOwner, RootRegistryReference, RootRegistryState};
+pub use crate::immutable::ImmutableRegistry;
+pub use crate::key::{ArcDataKey, DataKey, DataKeyBuilder, RefDataKey};
+pub use crate::mutable::MutableRegistry;
 
-pub trait LockableRegistry: Any + Send + Sync {
-    fn lock(&mut self) -> Result<(), RegistryLockError>;
-    fn is_locked(&self) -> bool;
+type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-    fn type_id(&self) -> TypeId;
-    fn type_name(&self) -> &'static str;
+pub trait Registry: Any + Send + Sync {
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
+    fn into_immutable(self: Box<Self>) -> BoxFuture<'static, BoxedRegistry>;
 
-    fn get_id(&self, identifier: &Identifier) -> Option<usize>;
-    fn get_by_id(&self, id: usize) -> Option<&(dyn Any + Send + Sync)>;
+    fn item_type_id(&self) -> TypeId;
+    fn item_type_name(&self) -> &'static str;
+
+    fn get_id<'a>(&'a self, identifier: &'a Identifier) -> BoxFuture<'a, Option<usize>>;
+    fn get_by_id(&self, id: usize) -> BoxFuture<'_, Option<ErasedRegistryRef<'_>>>;
 }
 
-pub type ErasedRegistry = Box<dyn LockableRegistry>;
-pub type NestRegistry = RegistryHolder<ErasedRegistry>;
-
-impl<T: Send + Sync + 'static> LockableRegistry for RegistryHolder<T> {
-    fn lock(&mut self) -> Result<(), RegistryLockError> {
-        Self::lock(self)
-    }
-
-    fn is_locked(&self) -> bool {
-        Self::is_locked(self)
-    }
-
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
-    }
-
-    fn type_name(&self) -> &'static str {
-        type_name::<T>()
-    }
-
-    fn get_id(&self, identifier: &Identifier) -> Option<usize> {
-        self.get_id(identifier)
-    }
-
-    fn get_by_id(&self, id: usize) -> Option<&(dyn Any + Send + Sync)> {
-        self.get_by_id(id)
-            .map(|value| value as &(dyn Any + Send + Sync))
-    }
-}
-
-impl NestRegistry {
-    pub fn lock_recursive(&mut self) -> Result<(), RegistryLockError> {
-        match self {
-            Self::Immutable(_) => return Ok(()),
-            Self::Mutating => return Err(RegistryLockError::Interrupted),
-            Self::Mutable(builder) => {
-                for registry in builder.iter_mut() {
-                    registry.lock()?;
-                }
-            }
-        }
-
-        self.lock()
-    }
-}
+pub type BoxedRegistry = Box<dyn Registry>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::{DataKeyBuildError, RegistryInsertError};
+    use crate::error::{DataKeyBuildError, DataKeyGetError, RegistryInsertError};
     use std::sync::Arc;
 
     fn id(value: &'static str) -> Identifier {
         Identifier::parse_static(value)
     }
 
-    fn number_registry() -> RegistryHolder<u32> {
-        let mut registry = RegistryHolder::new(&[]);
-        registry.register(id("test:one"), 1).unwrap();
-        registry.register(id("test:two"), 2).unwrap();
-        registry
-    }
+    async fn nested_root() -> (RootRegistryOwner, RootRegistryReference) {
+        let numbers = MutableRegistry::new(&[], &[]).unwrap();
+        numbers.register(id("test:one"), 1u32).await.unwrap();
+        numbers.register(id("test:two"), 2u32).await.unwrap();
 
-    fn nested_root() -> NestRegistry {
-        let mut root = NestRegistry::new(&[]);
-        root.register(id("test:numbers"), Box::new(number_registry()))
+        let owner = RootRegistryOwner::new(&[], &[]).unwrap();
+        let root = owner.get();
+        root.register(id("test:numbers"), Box::new(numbers))
+            .await
             .unwrap();
-        root
+        (owner, root)
     }
 
-    #[test]
-    fn recursive_lock_freezes_root_and_children() {
-        let mut root = nested_root();
+    #[tokio::test]
+    async fn mutable_registry_supports_lookup_and_guarded_iteration() {
+        let registry = MutableRegistry::new(&[], &[]).unwrap();
+        let first = id("test:first");
+        let second = id("test:second");
+        registry.register(first.clone(), 10u32).await.unwrap();
+        registry.register(second.clone(), 20u32).await.unwrap();
 
-        root.lock_recursive().unwrap();
+        assert_eq!(registry.len().await, 2);
+        assert!(registry.contains(&first).await);
+        assert_eq!(*registry.get(&first).await.unwrap(), 10);
+        assert_eq!(*registry.get_by_id(1).await.unwrap(), 20);
 
-        assert!(root.is_locked());
-        let child = root.get(&id("test:numbers")).unwrap();
-        assert!(child.is_locked());
+        let mut values = registry
+            .iter()
+            .await
+            .map(|(_, value)| *value)
+            .collect::<Vec<_>>();
+        values.sort_unstable();
+        assert_eq!(values, vec![10, 20]);
     }
 
-    #[test]
-    fn recursive_lock_is_idempotent() {
-        let mut root = nested_root();
-
-        root.lock_recursive().unwrap();
-        root.lock_recursive().unwrap();
-
-        assert!(root.is_locked());
-    }
-
-    #[test]
-    fn recursive_lock_stops_on_interrupted_child_without_freezing_root() {
-        let mut root = NestRegistry::new(&[]);
-        root.register(
-            id("test:interrupted"),
-            Box::new(RegistryHolder::<u32>::Mutating),
-        )
-        .unwrap();
-
-        assert!(matches!(
-            root.lock_recursive(),
-            Err(RegistryLockError::Interrupted)
-        ));
+    #[tokio::test]
+    async fn root_lock_recursively_freezes_dynamic_child_registries() {
+        let (owner, root) = nested_root().await;
         assert!(!root.is_locked());
+
+        owner.lock().await;
+
+        assert!(root.is_locked());
+        assert_eq!(root.len().await, 1);
         assert!(matches!(
-            root.register(id("test:other"), Box::new(number_registry())),
-            Ok(())
+            root.register(
+                id("test:other"),
+                Box::new(MutableRegistry::<u32>::new(&[], &[]).unwrap())
+            )
+            .await,
+            Err(RegistryInsertError::Immutable)
         ));
+
+        let child = root.get(&id("test:numbers")).await.unwrap();
+        assert_eq!(child.item_type_id(), TypeId::of::<u32>());
+        let value = child.get_by_id(1).await.unwrap();
+        assert_eq!(value.downcast_ref::<u32>(), Some(&2));
     }
 
-    #[test]
-    fn ref_data_key_resolves_nested_value_and_exposes_numeric_path() {
-        let mut root = nested_root();
-        root.lock_recursive().unwrap();
+    #[tokio::test]
+    async fn root_lock_is_idempotent_and_keeps_ids_stable() {
+        let (owner, root) = nested_root().await;
+        let before = root.get_id(&id("test:numbers")).await;
 
+        owner.lock().await;
+        owner.lock().await;
+
+        assert_eq!(before, Some(0));
+        assert_eq!(root.get_id(&id("test:numbers")).await, before);
+        assert!(root.get_by_id(0).await.is_some());
+    }
+
+    #[tokio::test]
+    async fn ref_data_key_resolves_nested_values_before_and_after_locking() {
+        let (owner, root) = nested_root().await;
         let key = DataKeyBuilder::<u32>::new()
             .child(id("test:numbers"))
             .child(id("test:two"))
-            .build_ref(&root)
+            .build_ref(&*root)
+            .await
             .unwrap();
 
         assert_eq!(key.ids(), &[0, 1]);
-        assert_eq!(key.get().unwrap(), &2);
-        assert_eq!(key.get().unwrap(), &2);
+        assert_eq!(key.with(|value| *value).await.unwrap(), 2);
+
+        owner.lock().await;
+        assert_eq!(key.with(|value| *value).await.unwrap(), 2);
     }
 
-    #[test]
-    fn arc_data_key_keeps_registry_alive() {
-        let mut root = Arc::new(nested_root());
-        Arc::get_mut(&mut root).unwrap().lock_recursive().unwrap();
-
+    #[tokio::test]
+    async fn arc_data_key_keeps_the_registry_tree_alive() {
+        let (owner, root) = nested_root().await;
+        let root: Arc<dyn Registry> = root;
         let key = DataKeyBuilder::<u32>::new()
             .child(id("test:numbers"))
             .child(id("test:one"))
             .build_arc(&root)
+            .await
             .unwrap();
         drop(root);
+        drop(owner);
 
         assert_eq!(key.ids(), &[0, 0]);
-        assert_eq!(key.get().unwrap(), &1);
-        assert_eq!(key.get().unwrap(), &1);
+        assert_eq!(key.with(|value| *value).await.unwrap(), 1);
     }
 
-    #[test]
-    fn data_key_builder_rejects_empty_path() {
-        let root = nested_root();
+    #[tokio::test]
+    async fn data_key_builder_reports_structural_errors() {
+        let (_owner, root) = nested_root().await;
 
         assert!(matches!(
-            DataKeyBuilder::<u32>::new().build_ref(&root),
+            DataKeyBuilder::<u32>::new().build_ref(&*root).await,
             Err(DataKeyBuildError::Empty)
         ));
-    }
 
-    #[test]
-    fn data_key_builder_reports_missing_registry() {
-        let root = nested_root();
-        let missing = id("test:missing");
-
-        let Err(error) = DataKeyBuilder::<u32>::new()
-            .child(missing.clone())
-            .child(id("test:value"))
-            .build_ref(&root)
-        else {
-            panic!("expected missing registry error")
-        };
-
+        let missing_registry = id("test:missing_registry");
         assert!(matches!(
-            error,
-            DataKeyBuildError::MissingRegistry(found) if found == missing
+            DataKeyBuilder::<u32>::new()
+                .child(missing_registry.clone())
+                .child(id("test:value"))
+                .build_ref(&*root)
+                .await,
+            Err(DataKeyBuildError::MissingRegistry(found)) if found == missing_registry
+        ));
+
+        let missing_value = id("test:missing_value");
+        assert!(matches!(
+            DataKeyBuilder::<u32>::new()
+                .child(id("test:numbers"))
+                .child(missing_value.clone())
+                .build_ref(&*root)
+                .await,
+            Err(DataKeyBuildError::MissingValue(found)) if found == missing_value
         ));
     }
 
-    #[test]
-    fn data_key_builder_reports_non_registry_path_component() {
-        let root = nested_root();
-        let value = id("test:one");
-
-        let Err(error) = DataKeyBuilder::<u32>::new()
-            .child(id("test:numbers"))
-            .child(value.clone())
-            .child(id("test:deeper"))
-            .build_ref(&root)
-        else {
-            panic!("expected non-registry path error")
-        };
-
-        assert!(matches!(
-            error,
-            DataKeyBuildError::NotARegistry(found) if found == value
-        ));
-    }
-
-    #[test]
-    fn data_key_builder_reports_registry_value_type_mismatch() {
-        let root = nested_root();
-
-        let Err(error) = DataKeyBuilder::<u32>::new()
+    #[tokio::test]
+    async fn data_key_get_reports_value_type_mismatch() {
+        let (_owner, root) = nested_root().await;
+        let key = DataKeyBuilder::<u64>::new()
             .child(id("test:numbers"))
             .child(id("test:one"))
-            .build_ref(&root)
-        else {
-            panic!("expected registry type mismatch")
-        };
-
-        assert!(matches!(error, DataKeyBuildError::TypeMismatch { .. }));
-    }
-
-    #[test]
-    fn data_key_builder_reports_missing_value() {
-        let root = nested_root();
-        let missing = id("test:missing");
-
-        let Err(error) = DataKeyBuilder::<u32>::new()
-            .child(id("test:numbers"))
-            .child(missing.clone())
-            .build_ref(&root)
-        else {
-            panic!("expected missing value error")
-        };
+            .build_ref(&*root)
+            .await
+            .unwrap();
 
         assert!(matches!(
-            error,
-            DataKeyBuildError::MissingValue(found) if found == missing
-        ));
-    }
-
-    #[test]
-    fn locking_prevents_new_nested_registries() {
-        let mut root = nested_root();
-        root.lock_recursive().unwrap();
-
-        assert!(matches!(
-            root.register(id("test:other"), Box::new(number_registry())),
-            Err(RegistryInsertError::Immutable)
+            key.with(|value| *value).await,
+            Err(DataKeyGetError::TypeMismatch { .. })
         ));
     }
 }
