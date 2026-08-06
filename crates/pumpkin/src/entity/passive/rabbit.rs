@@ -1,6 +1,6 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicU8, Ordering},
+    atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering},
 };
 
 use pumpkin_data::attributes::Attributes;
@@ -9,7 +9,10 @@ use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
-use pumpkin_data::{entity::EntityType, item::Item};
+use pumpkin_data::{
+    entity::{EntityType, MobCategory},
+    item::Item,
+};
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
@@ -18,11 +21,9 @@ use crate::entity::{
     ai::goal::{
         active_target::ActiveTargetGoal, breed::BreedGoal,
         climb_on_top_of_powder_snow::ClimbOnTopOfPowderSnowGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
-        rabbit_avoid_entity::RabbitAvoidEntityGoal, rabbit_hop::RabbitHopGoal,
-        raid_garden::RaidGardenGoal, revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        rabbit_avoid_entity::RabbitAvoidEntityGoal, raid_garden::RaidGardenGoal,
+        revenge::RevengeGoal, swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     attributes::{Modifier, ModifierOperation},
     mob::{Mob, MobEntity},
@@ -93,10 +94,37 @@ fn get_random_rabbit_variant(biome: Option<&'static pumpkin_data::biome::Biome>)
     }
 }
 
+/// Vanilla `Rabbit.setLandingDelay` (lines 242-248): a rabbit that just landed waits 10 ticks
+/// before hopping again, but only 1 tick once its speed modifier reaches 2.2 - the flee/panic
+/// speed (`FLEE_SPEED_MOD`, line 72), which is what makes a fleeing rabbit hop near-continuously.
+#[must_use]
+const fn landing_delay_for_speed(speed: f64) -> i32 {
+    if speed < 2.2 { 10 } else { 1 }
+}
+
+/// Vanilla `customServerAiStep` lines 182-187: `moreCarrotTicks -= random.nextInt(3)`, floored
+/// at 0, and only while already positive.
+#[must_use]
+const fn decay_more_carrot_ticks(current: i32, roll: i32) -> i32 {
+    if current <= 0 {
+        return current;
+    }
+    let next = current - roll;
+    if next < 0 { 0 } else { next }
+}
+
 pub struct RabbitEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: AgeableData,
     variant: AtomicU8,
+    /// Vanilla `Rabbit.jumpDelayTicks`. Ticks remaining before the rabbit may start another
+    /// hop; refreshed by `set_landing_delay` on every landing.
+    jump_delay_ticks: AtomicI32,
+    /// Vanilla `Rabbit.wasOnGround`.
+    was_on_ground: AtomicBool,
+    /// Vanilla `Rabbit.moreCarrotTicks`, persisted as the `MoreCarrotTicks` NBT int
+    /// (`addAdditionalSaveData` line 275 / `readAdditionalSaveData` line 282).
+    more_carrot_ticks: AtomicI32,
     /// Guards the one-time goal/target-selector registration in `set_variant(Evil)`. Without
     /// this, an evil kit gets `set_variant` called twice (once explicitly by
     /// `create_offspring`, once again by `mob_init_data_tracker`'s NBT-restore branch after
@@ -112,6 +140,9 @@ impl RabbitEntity {
             mob_entity,
             ageable_data: AgeableData::default(),
             variant: AtomicU8::new(VARIANT_UNSET),
+            jump_delay_ticks: AtomicI32::new(0),
+            was_on_ground: AtomicBool::new(true),
+            more_carrot_ticks: AtomicI32::new(0),
             evil_goals_registered: std::sync::atomic::AtomicBool::new(false),
         };
         let mob_arc = Arc::new(this);
@@ -120,6 +151,7 @@ impl RabbitEntity {
             Arc::downgrade(&mob_arc)
         };
         let rabbit_weak = Arc::downgrade(&mob_arc);
+        let raid_weak = rabbit_weak.clone();
 
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
@@ -129,33 +161,81 @@ impl RabbitEntity {
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.2));
             goal_selector.add_goal(2, BreedGoal::new(0.8));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS, false)));
-            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(0.8)));
             goal_selector.add_goal(
                 4,
                 RabbitAvoidEntityGoal::new(&EntityType::PLAYER, 8.0, 2.2, 2.2, rabbit_weak.clone()),
             );
             goal_selector.add_goal(
                 4,
-                RabbitAvoidEntityGoal::new(&EntityType::WOLF, 10.0, 2.2, 2.2, rabbit_weak),
+                RabbitAvoidEntityGoal::new(&EntityType::WOLF, 10.0, 2.2, 2.2, rabbit_weak.clone()),
             );
-            goal_selector.add_goal(5, RaidGardenGoal::new(0.7));
+            goal_selector.add_goal(
+                4,
+                RabbitAvoidEntityGoal::new_for_category(
+                    &MobCategory::MONSTER,
+                    4.0,
+                    2.2,
+                    2.2,
+                    rabbit_weak,
+                ),
+            );
+            goal_selector.add_goal(5, RaidGardenGoal::new(0.7, raid_weak));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(0.6)));
             goal_selector.add_goal(
                 11,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
             );
-            goal_selector.add_goal(11, Box::new(RandomLookAroundGoal::default()));
-            // Lower priority (higher number) than `ClimbOnTopOfPowderSnowGoal` (priority 1):
-            // both claim `Controls::JUMP`, and priority is the only tie-break the goal selector
-            // uses to preempt a same-control goal that's already running -- equal priority never
-            // preempts (see `PrioritizedGoal::can_be_replaced_by`), so if this ran at the same
-            // priority and grabbed the control first (its `can_start` is unconditionally `true`,
-            // unlike the powder-snow goal's conditional one), the powder-snow climb would be
-            // permanently locked out.
-            goal_selector.add_goal(10, RabbitHopGoal::new());
         };
 
         mob_arc
+    }
+
+    /// Vanilla `Rabbit.setJumping` (line 157): sets the physics jump flag and, on the rising
+    /// edge, plays `entity.rabbit.jump`.
+    fn set_jumping(&self, jumping: bool) {
+        self.mob_entity
+            .living_entity
+            .jumping
+            .store(jumping, Ordering::SeqCst);
+        if jumping {
+            self.mob_entity
+                .living_entity
+                .entity
+                .play_sound(Sound::EntityRabbitJump);
+        }
+    }
+
+    /// Vanilla `Rabbit.startJumping` (line 164). The `jumpDuration`/`jumpTicks` pair it also
+    /// sets drives only the client-side hop animation (`getJumpCompletion`, line 147) and the
+    /// `aiStep` teardown at line 258; neither is ported, so this sets the flag alone.
+    fn start_jumping(&self) {
+        self.set_jumping(true);
+    }
+
+    /// Vanilla `Rabbit.setLandingDelay` (line 242): 10 ticks normally, 1 tick when the active
+    /// speed modifier is at least 2.2 (i.e. while fleeing or panicking).
+    fn set_landing_delay(&self) {
+        let speed = self
+            .mob_entity
+            .navigator
+            .lock()
+            .unwrap()
+            .speed()
+            .unwrap_or(0.0);
+        self.jump_delay_ticks
+            .store(landing_delay_for_speed(speed), Ordering::Relaxed);
+    }
+
+    /// Vanilla `Rabbit.wantsMoreFood` (line 397). Read by `RaidGardenGoal`.
+    #[must_use]
+    pub fn wants_more_food(&self) -> bool {
+        self.more_carrot_ticks.load(Ordering::Relaxed) <= 0
+    }
+
+    /// Vanilla `RaidGardenGoal.tick` line 575: `this.rabbit.moreCarrotTicks = 40`
+    /// (`MORE_CARROTS_DELAY`, line 80).
+    pub fn set_more_carrot_delay(&self) {
+        self.more_carrot_ticks.store(40, Ordering::Relaxed);
     }
 
     #[must_use]
@@ -242,6 +322,11 @@ impl NBTStorage for RabbitEntity {
             self.write_ageable_nbt(nbt);
             self.write_animal_nbt(nbt);
             nbt.put_int("RabbitType", self.variant.load(Ordering::Relaxed) as i32);
+            // Vanilla `addAdditionalSaveData` line 275.
+            nbt.put_int(
+                "MoreCarrotTicks",
+                self.more_carrot_ticks.load(Ordering::Relaxed),
+            );
         })
     }
 
@@ -253,6 +338,11 @@ impl NBTStorage for RabbitEntity {
             if let Some(variant) = nbt.get_int("RabbitType") {
                 self.variant.store(variant as u8, Ordering::Relaxed);
             }
+            // Vanilla `readAdditionalSaveData` line 282.
+            self.more_carrot_ticks.store(
+                nbt.get_int("MoreCarrotTicks").unwrap_or(0),
+                Ordering::Relaxed,
+            );
         })
     }
 }
@@ -260,6 +350,100 @@ impl NBTStorage for RabbitEntity {
 impl Mob for RabbitEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    /// Port of vanilla `Rabbit.customServerAiStep` (lines 177-223).
+    ///
+    /// This lives here, not in a goal, because vanilla's hop logic is not a goal: it runs
+    /// unconditionally every server AI step, outside the goal selector. The previous
+    /// `RabbitHopGoal` modelled it as a `Controls::JUMP` goal whose `can_start` was
+    /// unconditionally `true`, which permanently held the JUMP control and had to be given an
+    /// artificial priority to avoid locking out `ClimbOnTopOfPowderSnowGoal`. Moving it here
+    /// removes that invented contention entirely.
+    ///
+    /// Not ported: vanilla's `facePoint` yaw snap (lines 214/198) and `getJumpPower`
+    /// (line 110); see the deferred list in the branch commit message.
+    ///
+    /// Two interactions with the surrounding tick loop, both checked in `Mob::tick`
+    /// (`entity/mob/mod.rs`) rather than assumed:
+    ///
+    /// - The navigator `Mutex` taken here is not held at this point. `Mob::tick` calls
+    ///   `mob_tick` at line 949, well before it `mem::take`s the navigator out of its mutex
+    ///   at step 4. `std::sync::Mutex` is not reentrant, so this ordering is what makes the
+    ///   `speed()`/`is_idle()` reads below safe.
+    /// - `LivingEntity`'s 10-tick `jumping_cooldown` (`living.rs` ~1031) does not clamp the
+    ///   1-tick flee landing delay away. Its `else` branch (`living.rs` ~1036) resets the
+    ///   cooldown to 0 whenever `jumping` is false, and this method clears `jumping` on
+    ///   landing, so the cooldown only spans the airborne phase and `jump_delay_ticks` is
+    ///   the constant that actually governs hop cadence on the ground.
+    ///
+    /// Known ordering divergence, inherited from the framework rather than introduced here:
+    /// vanilla runs `customServerAiStep` *after* `goalSelector.tick()` and `navigation.tick()`
+    /// within `Mob.serverAiStep`, whereas `mob_tick` runs before both. The hop therefore reacts
+    /// to the previous tick's navigation state - a one-tick lag, not a behavioural break.
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let living = &self.mob_entity.living_entity;
+            let entity = &living.entity;
+
+            if self.jump_delay_ticks.load(Ordering::Relaxed) > 0 {
+                self.jump_delay_ticks.fetch_sub(1, Ordering::Relaxed);
+            }
+
+            // Vanilla lines 182-187: decay by `random.nextInt(3)` every tick, floored at 0.
+            let carrots = self.more_carrot_ticks.load(Ordering::Relaxed);
+            if carrots > 0 {
+                self.more_carrot_ticks.store(
+                    decay_more_carrot_ticks(carrots, rand::random_range(0..3)),
+                    Ordering::Relaxed,
+                );
+            }
+
+            let on_ground = entity.on_ground.load(Ordering::SeqCst);
+            if on_ground {
+                if !self.was_on_ground.load(Ordering::Relaxed) {
+                    // Vanilla `checkLandingDelay` (line 250).
+                    self.set_jumping(false);
+                    self.set_landing_delay();
+                }
+
+                let mut evil_lunged = false;
+
+                // Vanilla lines 195-203: the killer bunny lunges at a nearby target the moment
+                // its landing delay expires, bypassing the usual "needs a navigation
+                // destination" gate below.
+                if self.get_variant() == RabbitVariant::Evil
+                    && self.jump_delay_ticks.load(Ordering::Relaxed) == 0
+                {
+                    let target = self.mob_entity.target.lock().await.clone();
+                    if let Some(target) = target {
+                        let dist_sq = target
+                            .get_entity()
+                            .pos
+                            .load()
+                            .squared_distance_to_vec(&entity.pos.load());
+                        if dist_sq < 16.0 {
+                            self.start_jumping();
+                            evil_lunged = true;
+                        }
+                    }
+                }
+
+                // Vanilla lines 206-216. `moveControl.hasWanted()` is "the move control has a
+                // destination it is still travelling to"; the closest equivalent here is a
+                // non-idle navigator.
+                if !evil_lunged
+                    && !living.jumping.load(Ordering::SeqCst)
+                    && self.jump_delay_ticks.load(Ordering::Relaxed) == 0
+                    && !self.mob_entity.navigator.lock().unwrap().is_idle()
+                {
+                    self.start_jumping();
+                }
+            }
+
+            // Vanilla line 222.
+            self.was_on_ground.store(on_ground, Ordering::Relaxed);
+        })
     }
 
     fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
@@ -331,5 +515,48 @@ impl Mob for RabbitEntity {
 
             Some(baby)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Vanilla `Rabbit.setLandingDelay` (lines 242-248). The pre-existing `RabbitHopGoal` this
+    /// replaces hardcoded 10 unconditionally and its doc comment claimed the fast case was 3;
+    /// vanilla's fast case is 1, and the branch is on `< 2.2`, not `<= 2.2`.
+    #[test]
+    fn landing_delay_is_ten_when_slow_and_one_at_flee_speed() {
+        assert_eq!(landing_delay_for_speed(0.0), 10);
+        assert_eq!(landing_delay_for_speed(0.6), 10);
+        assert_eq!(landing_delay_for_speed(1.0), 10);
+        // 2.2 is `FLEE_SPEED_MOD`; vanilla's `else` branch owns the boundary itself.
+        assert_eq!(landing_delay_for_speed(2.2), 1);
+        assert_eq!(landing_delay_for_speed(3.0), 1);
+    }
+
+    /// Vanilla `customServerAiStep` lines 182-187.
+    #[test]
+    fn more_carrot_ticks_decay_floors_at_zero_and_ignores_non_positive() {
+        assert_eq!(decay_more_carrot_ticks(40, 2), 38);
+        assert_eq!(decay_more_carrot_ticks(40, 0), 40);
+        assert_eq!(decay_more_carrot_ticks(1, 2), 0);
+        // Never decays below zero, and a zero/negative counter is left untouched rather than
+        // being driven further negative every tick.
+        assert_eq!(decay_more_carrot_ticks(0, 2), 0);
+    }
+
+    /// Vanilla `MORE_CARROTS_DELAY` (line 80) is 40, and `wantsMoreFood` (line 397) is
+    /// `moreCarrotTicks <= 0`, so a rabbit that just ate needs at least 20 ticks (40 decayed by
+    /// the maximum roll of 2 each tick) before it will raid again.
+    #[test]
+    fn full_carrot_delay_takes_at_least_twenty_ticks_to_expire() {
+        let mut ticks = 40;
+        let mut elapsed = 0;
+        while ticks > 0 {
+            ticks = decay_more_carrot_ticks(ticks, 2);
+            elapsed += 1;
+        }
+        assert_eq!(elapsed, 20);
     }
 }

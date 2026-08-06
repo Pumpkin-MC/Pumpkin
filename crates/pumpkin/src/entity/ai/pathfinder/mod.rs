@@ -104,6 +104,13 @@ impl Navigator {
         self.current_path = None;
     }
 
+    /// Speed modifier of the active navigation goal, or `None` when idle. Stands in for
+    /// vanilla's `MoveControl.getSpeedModifier()`, which `Rabbit.setLandingDelay` reads.
+    #[must_use]
+    pub fn speed(&self) -> Option<f64> {
+        self.current_goal.as_ref().map(|goal| goal.speed)
+    }
+
     pub const fn set_speed(&mut self, speed: f64) {
         if let Some(goal) = &mut self.current_goal {
             goal.speed = speed;
