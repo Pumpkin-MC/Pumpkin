@@ -327,10 +327,22 @@ impl PumpkinServer {
         let identity_key = load_or_create_identity_key(&config.nethernet.identity_key)
             .expect("Failed to load or create the Bedrock NetherNet identity key");
         let _ = server.bedrock_private_key.set(identity_key.clone());
+        let oidc_verifier = (config.online_mode && config.authentication.enabled).then(|| {
+            let (issuer, keys) = server
+                .bedrock_oidc_keys
+                .get()
+                .expect("Bedrock OIDC keys should be initialized before binding NetherNet");
+            Arc::new((issuer.clone(), keys.clone()))
+        });
         Some(
-            NetherNetListener::bind(config.nethernet.address, identity_key)
-                .await
-                .expect("Failed to bind Bedrock NetherNet signaling endpoint"),
+            NetherNetListener::bind(
+                config.nethernet.address,
+                identity_key,
+                oidc_verifier,
+                config.nethernet.stun_servers.clone(),
+            )
+            .await
+            .expect("Failed to bind Bedrock NetherNet signaling endpoint"),
         )
     }
 

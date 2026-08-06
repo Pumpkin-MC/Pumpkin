@@ -136,7 +136,7 @@ pub fn decode_header_get_x5u(header_b64: &str) -> Result<String, AuthError> {
 }
 
 /// JSON Web Key Set containing a vector of JWK public keys.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Jwks {
     /// Vector of public keys.
     pub keys: Vec<Jwk>,

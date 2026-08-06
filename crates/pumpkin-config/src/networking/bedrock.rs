@@ -28,6 +28,8 @@ pub struct NetherNetConfig {
     pub address: SocketAddr,
     /// PKCS#8 P-384 identity key retained across restarts for Trust On First Use.
     pub identity_key: PathBuf,
+    /// Optional STUN server URLs used to gather a public ICE candidate behind NAT.
+    pub stun_servers: Vec<String>,
 }
 
 impl Default for NetherNetConfig {
@@ -36,6 +38,7 @@ impl Default for NetherNetConfig {
             enabled: true,
             address: "0.0.0.0:19132".parse().unwrap(),
             identity_key: "nethernet-key.der".into(),
+            stun_servers: Vec::new(),
         }
     }
 }

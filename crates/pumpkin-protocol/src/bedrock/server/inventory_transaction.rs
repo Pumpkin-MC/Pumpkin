@@ -10,6 +10,19 @@ use crate::{
 };
 use pumpkin_util::math::vector3::Vector3;
 
+const MAX_COLLECTION_LENGTH: u32 = 1024;
+
+fn collection_length<R: Read>(reader: &mut R, name: &str) -> Result<usize, Error> {
+    let len = VarUInt::read(reader)?.0;
+    if len > MAX_COLLECTION_LENGTH {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!("{name} length {len} exceeds {MAX_COLLECTION_LENGTH}"),
+        ));
+    }
+    Ok(len as usize)
+}
+
 pub const WINDOW_ID_INVENTORY: i32 = 0;
 pub const WINDOW_ID_OFF_HAND: i32 = 119;
 pub const WINDOW_ID_ARMOUR: i32 = 120;
@@ -45,10 +58,25 @@ pub enum TransactionData {
     ReleaseItem(ReleaseItemTransactionData),
 }
 
-#[derive(Debug, PacketRead)]
+#[derive(Debug)]
 pub struct LegacySetItemSlot {
     pub container_id: u8,
     pub slots: Vec<u8>,
+}
+
+impl PacketRead for LegacySetItemSlot {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let container_id = u8::read(reader)?;
+        let len = collection_length(reader, "legacy item slots")?;
+        let mut slots = Vec::with_capacity(len);
+        for _ in 0..len {
+            slots.push(u8::read(reader)?);
+        }
+        Ok(Self {
+            container_id,
+            slots,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -190,7 +218,8 @@ impl PacketRead for SInventoryTransaction {
         let has_legacy_slots = bool::read(buf)?;
         let mut legacy_set_item_slots = Vec::new();
         if has_legacy_slots {
-            let len = VarUInt::read(buf)?.0;
+            let len = collection_length(buf, "legacy item slot groups")?;
+            legacy_set_item_slots.reserve(len);
             for _ in 0..len {
                 legacy_set_item_slots.push(LegacySetItemSlot::read(buf)?);
             }
@@ -210,8 +239,8 @@ impl PacketRead for SInventoryTransaction {
                 "missing inventory action data",
             ));
         }
-        let actions_len = VarUInt::read(buf)?.0;
-        let mut actions = Vec::with_capacity(actions_len as usize);
+        let actions_len = collection_length(buf, "inventory actions")?;
+        let mut actions = Vec::with_capacity(actions_len);
         for _ in 0..actions_len {
             actions.push(InventoryAction::read(buf)?);
         }

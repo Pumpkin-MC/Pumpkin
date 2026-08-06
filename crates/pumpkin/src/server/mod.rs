@@ -357,30 +357,23 @@ impl Server {
         info!("All worlds loaded successfully.");
 
         if server.advanced_config.networking.bedrock.online_mode {
-            let server_clone = server.clone();
-            tokio::spawn(async move {
-                server_clone
-                    .bedrock_oidc_keys
-                    .get_or_init(|| async {
-                        tokio::task::block_in_place(|| {
-                            let auth = &server_clone
-                                .advanced_config
-                                .networking
-                                .bedrock
-                                .authentication;
-                            pumpkin_util::jwt::fetch_oidc_jwks(
-                                auth.url.as_deref(),
-                                auth.connect_timeout,
-                                auth.read_timeout,
-                            )
-                            .unwrap_or_else(|e| {
-                                error!("Failed to fetch Bedrock OIDC keys: {e}");
-                                (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
-                            })
-                        })
+            server
+                .bedrock_oidc_keys
+                .get_or_init(|| async {
+                    tokio::task::block_in_place(|| {
+                        let auth = &server.advanced_config.networking.bedrock.authentication;
+                        pumpkin_util::jwt::fetch_oidc_jwks(
+                            auth.url.as_deref(),
+                            auth.connect_timeout,
+                            auth.read_timeout,
+                        )
                     })
-                    .await;
-            });
+                    .unwrap_or_else(|error| {
+                        error!("Failed to fetch Bedrock OIDC keys: {error}");
+                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                    })
+                })
+                .await;
         }
         server
     }

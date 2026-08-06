@@ -19,6 +19,7 @@ use axum::{
     routing::{get, post},
 };
 use base64::{Engine, engine::general_purpose};
+use pumpkin_util::jwt::Jwks;
 use pumpkin_util::p384::{
     PublicKey,
     ecdsa::{
@@ -37,6 +38,7 @@ use tracing::{debug, info, warn};
 use webrtc::{
     api::{APIBuilder, media_engine::MediaEngine},
     data_channel::{RTCDataChannel, data_channel_message::DataChannelMessage},
+    ice_transport::ice_server::RTCIceServer,
     peer_connection::{
         RTCPeerConnection, configuration::RTCConfiguration,
         peer_connection_state::RTCPeerConnectionState,
@@ -63,16 +65,25 @@ pub struct NetherNetListener {
 struct EndpointState {
     incoming: mpsc::Sender<IncomingSession>,
     identity_key: Arc<SigningKey>,
+    oidc_verifier: Option<Arc<(String, Jwks)>>,
+    stun_servers: Arc<[String]>,
 }
 
 impl NetherNetListener {
-    pub async fn bind(address: SocketAddr, identity_key: Arc<SigningKey>) -> std::io::Result<Self> {
+    pub async fn bind(
+        address: SocketAddr,
+        identity_key: Arc<SigningKey>,
+        oidc_verifier: Option<Arc<(String, Jwks)>>,
+        stun_servers: Vec<String>,
+    ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(address).await?;
         let local_addr = listener.local_addr()?;
         let (incoming, receiver) = mpsc::channel(128);
         let state = EndpointState {
             incoming,
             identity_key,
+            oidc_verifier,
+            stun_servers: stun_servers.into(),
         };
         let router = Router::new()
             .route("/v1/join", get(ping))
@@ -189,7 +200,8 @@ async fn negotiate(
     address: SocketAddr,
     offer: &str,
 ) -> Result<(String, Arc<NetherNetSession>), String> {
-    let (offer, client_public_key) = verify_and_strip_identity(offer)?;
+    let (offer, client_public_key) =
+        verify_and_strip_identity(offer, state.oidc_verifier.as_deref())?;
 
     let mut media_engine = MediaEngine::default();
     media_engine
@@ -197,9 +209,18 @@ async fn negotiate(
         .map_err(|error| error.to_string())?;
     let api = APIBuilder::new().with_media_engine(media_engine).build();
     let peer = Arc::new(
-        api.new_peer_connection(RTCConfiguration::default())
-            .await
-            .map_err(|error| error.to_string())?,
+        api.new_peer_connection(RTCConfiguration {
+            ice_servers: (!state.stun_servers.is_empty())
+                .then(|| RTCIceServer {
+                    urls: state.stun_servers.to_vec(),
+                    ..Default::default()
+                })
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        })
+        .await
+        .map_err(|error| error.to_string())?,
     );
     let session = Arc::new(NetherNetSession::new(
         peer.clone(),
@@ -429,6 +450,29 @@ impl NetherNetSession {
         Ok(())
     }
 
+    pub async fn send_unreliable(&self, data: Bytes) -> Result<(), String> {
+        if self.is_closed() {
+            return Err("connection is closed".to_string());
+        }
+        if data.len() > MAX_FRAGMENT_SIZE {
+            return Err("unreliable NetherNet packet is too large".to_string());
+        }
+        let channel = self
+            .unreliable
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| "unreliable channel is not open".to_string())?;
+        let mut segment = Vec::with_capacity(data.len() + 1);
+        segment.push(0);
+        segment.extend_from_slice(&data);
+        channel
+            .send(&Bytes::from(segment))
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
     pub const fn client_public_key(&self) -> &PublicKey {
         &self.client_public_key
     }
@@ -481,7 +525,10 @@ impl FragmentBuffer {
     }
 }
 
-fn verify_and_strip_identity(offer: &str) -> Result<(String, PublicKey), String> {
+fn verify_and_strip_identity(
+    offer: &str,
+    oidc_verifier: Option<&(String, Jwks)>,
+) -> Result<(String, PublicKey), String> {
     let identity = offer
         .lines()
         .find_map(|line| line.strip_prefix("a=identity:"))
@@ -504,9 +551,14 @@ fn verify_and_strip_identity(offer: &str) -> Result<(String, PublicKey), String>
     let token = assertion["token"]
         .as_str()
         .ok_or_else(|| "identity token is missing".to_string())?;
+    if let Some((issuer, keys)) = oidc_verifier {
+        pumpkin_util::jwt::verify_oidc_token(token, issuer, keys)
+            .map_err(|error| format!("invalid GameServerToken: {error}"))?;
+    } else {
+        validate_token_expiration(token)?;
+    }
     let public_key = pumpkin_util::jwt::extract_cpk_from_token(token)
         .map_err(|error| format!("invalid identity public key: {error}"))?;
-    validate_token_expiration(token)?;
     let fingerprints = assertion["fingerprints"]
         .as_str()
         .ok_or_else(|| "fingerprint assertion is missing".to_string())?;
@@ -612,30 +664,21 @@ fn add_server_identity(sdp: &str, key: &SigningKey) -> Result<String, String> {
 }
 
 fn fingerprint_payload(sdp: &str) -> Result<Vec<u8>, String> {
-    let mut session_fingerprint = None;
-    let mut media_fingerprint = None;
-    let mut in_media = false;
-    let mut in_application = false;
-    for line in sdp.lines() {
-        if line.starts_with("m=") {
-            in_media = true;
-            in_application = line.starts_with("m=application ");
-        } else if let Some(fingerprint) = line.strip_prefix("a=fingerprint:") {
-            if in_application {
-                media_fingerprint.get_or_insert(fingerprint);
-            } else if !in_media {
-                session_fingerprint.get_or_insert(fingerprint);
-            }
-        }
+    let fingerprints = sdp
+        .lines()
+        .filter_map(|line| line.strip_prefix("a=fingerprint:"))
+        .map(|fingerprint| {
+            let (algorithm, digest) = fingerprint
+                .split_once(' ')
+                .ok_or_else(|| "malformed DTLS fingerprint".to_string())?;
+            Ok(json!({"algorithm": algorithm, "digest": digest}))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    if fingerprints.is_empty() {
+        return Err("SDP has no DTLS fingerprint".to_string());
     }
-    let fingerprint = media_fingerprint
-        .or(session_fingerprint)
-        .ok_or_else(|| "SDP has no DTLS fingerprint".to_string())?;
-    let (algorithm, digest) = fingerprint
-        .split_once(' ')
-        .ok_or_else(|| "malformed DTLS fingerprint".to_string())?;
     serde_json::to_vec(&json!({
-        "fingerprint": [{"algorithm": algorithm, "digest": digest}],
+        "fingerprint": fingerprints,
     }))
     .map_err(|error| error.to_string())
 }
@@ -696,8 +739,29 @@ mod tests {
         let key = SigningKey::from_slice(&[7; 48]).unwrap();
         let sdp = "v=0\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\na=fingerprint:sha-256 AA:BB\r\n";
         let answer = add_server_identity(sdp, &key).unwrap();
-        let (_, public_key) = verify_and_strip_identity(&answer).unwrap();
+        let (_, public_key) = verify_and_strip_identity(&answer, None).unwrap();
         assert_eq!(public_key, PublicKey::from(key.verifying_key()));
+    }
+
+    #[test]
+    fn fingerprint_payload_contains_every_sdp_fingerprint() {
+        let sdp = "v=0\r\na=fingerprint:sha-256 AA:BB\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\na=fingerprint:sha-384 CC:DD\r\n";
+        assert_eq!(
+            fingerprint_payload(sdp).unwrap(),
+            br#"{"fingerprint":[{"algorithm":"sha-256","digest":"AA:BB"},{"algorithm":"sha-384","digest":"CC:DD"}]}"#,
+        );
+    }
+
+    #[test]
+    fn configured_oidc_validation_rejects_untrusted_identity_tokens() {
+        let key = SigningKey::from_slice(&[7; 48]).unwrap();
+        let sdp = "v=0\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\na=fingerprint:sha-256 AA:BB\r\n";
+        let answer = add_server_identity(sdp, &key).unwrap();
+        let verifier = (
+            "https://issuer.example".to_string(),
+            Jwks { keys: Vec::new() },
+        );
+        assert!(verify_and_strip_identity(&answer, Some(&verifier)).is_err());
     }
 
     #[tokio::test]
@@ -721,7 +785,7 @@ mod tests {
             )
             .await
             .unwrap();
-        client
+        let unreliable = client
             .create_data_channel(
                 UNRELIABLE_CHANNEL,
                 Some(RTCDataChannelInit {
@@ -732,6 +796,13 @@ mod tests {
             )
             .await
             .unwrap();
+        let (unreliable_sender, mut unreliable_receiver) = mpsc::channel(1);
+        unreliable.on_message(Box::new(move |message| {
+            let sender = unreliable_sender.clone();
+            Box::pin(async move {
+                let _ = sender.send(message.data).await;
+            })
+        }));
 
         let offer = client.create_offer(None).await.unwrap();
         let mut gathering_complete = client.gathering_complete_promise().await;
@@ -746,12 +817,14 @@ mod tests {
         let state = EndpointState {
             incoming,
             identity_key: server_key.clone(),
+            oidc_verifier: None,
+            stun_servers: Arc::from([]),
         };
         let (answer, server_session) =
             negotiate(&state, "127.0.0.1:19132".parse().unwrap(), &offer)
                 .await
                 .unwrap();
-        let (answer, public_key) = verify_and_strip_identity(&answer).unwrap();
+        let (answer, public_key) = verify_and_strip_identity(&answer, None).unwrap();
         assert_eq!(public_key, PublicKey::from(server_key.verifying_key()));
         client
             .set_remote_description(RTCSessionDescription::answer(answer).unwrap())
@@ -776,6 +849,15 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(packet, b"hello".as_slice());
+        session
+            .send_unreliable(Bytes::from_static(b"world"))
+            .await
+            .unwrap();
+        let packet = tokio::time::timeout(Duration::from_secs(5), unreliable_receiver.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(packet, b"\0world".as_slice());
 
         session.close().await;
         client.close().await.unwrap();
