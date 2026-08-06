@@ -165,36 +165,44 @@ impl Server {
 
         let block_registry = super::block::registry::default_registry();
 
-        let level_info = AnvilLevelInfo.read_world_info(&world_path);
-        if let Err(error) = &level_info {
-            match error {
-                // If it doesn't exist, just make a new one
-                WorldInfoError::InfoNotFound => (),
-                WorldInfoError::UnsupportedDataVersion(_version)
-                | WorldInfoError::UnsupportedLevelVersion(_version) => {
-                    error!("Failed to load world info!");
-                    error!("{error}");
-                    panic!("Unsupported world version! See the logs for more info.");
+        let level_info = match AnvilLevelInfo.read_world_info(&world_path) {
+            Ok(level_info) => {
+                let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
+                if dat_path.exists() {
+                    let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
+                    fs::copy(dat_path, backup_path).unwrap();
                 }
-                e => {
-                    panic!("World Error {e}");
+                level_info
+            }
+            Err(WorldInfoError::InfoNotFound) => {
+                warn!(
+                    "No {LEVEL_DAT_FILE_NAME} in {}, creating a new world with seed {}",
+                    world_path.display(),
+                    basic_config.seed.0 as i64
+                );
+                let default_data = LevelData::default(basic_config.seed);
+                if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
+                    error!("Failed to save level.dat: {err}");
                 }
+                default_data
             }
-        } else {
-            let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
-            if dat_path.exists() {
-                let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
-                fs::copy(dat_path, backup_path).unwrap();
+            Err(
+                error @ (WorldInfoError::UnsupportedDataVersion(_)
+                | WorldInfoError::UnsupportedLevelVersion(_)),
+            ) => {
+                error!("Failed to load world info!");
+                error!("{error}");
+                panic!("Unsupported world version! See the logs for more info.");
             }
-        }
-        let level_info = level_info.unwrap_or_else(|err| {
-            warn!("Failed to get level_info, using default instead: {err}");
-            let default_data = LevelData::default(basic_config.seed);
-            if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
-                error!("Failed to save level.dat: {err}");
+            Err(error) => {
+                error!("Failed to load the world data in {}!", world_path.display());
+                error!("{error}");
+                error!(
+                    "Refusing to continue: a default world would generate different terrain on top of the existing region files. Restore {LEVEL_DAT_FILE_NAME} from {LEVEL_DAT_BACKUP_FILE_NAME}, which also holds a copy of the world seed, or move the world folder aside to start a new world."
+                );
+                panic!("Failed to load the world data! See the logs for more info.");
             }
-            default_data
-        });
+        };
 
         let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
