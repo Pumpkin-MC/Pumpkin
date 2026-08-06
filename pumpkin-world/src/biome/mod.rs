@@ -8,9 +8,24 @@ pub mod end;
 pub mod multi_noise;
 pub mod position_finder;
 
+/// Give each biome tree a single stable address. `OVERWORLD_BIOME_SOURCE` and
+/// `NETHER_BIOME_SOURCE` are `const`, so taking a reference to them promotes an anonymous
+/// static per use site with no guarantee that the addresses unify; the cache below
+/// identifies trees by address and needs that guarantee.
+static OVERWORLD_TREE: BiomeTree = OVERWORLD_BIOME_SOURCE;
+static NETHER_TREE: BiomeTree = NETHER_BIOME_SOURCE;
+
 thread_local! {
-    /// A shortcut; check if last used biome is what we should use
-    static LAST_RESULT_NODE: RefCell<Option<&'static BiomeTree>> = const {RefCell::new(None) };
+    /// A shortcut; check if last used biome is what we should use.
+    ///
+    /// The cached node is stored together with the tree it belongs to and is only reused
+    /// for a lookup in that same tree. The node seeds the search with an initial best
+    /// distance and the search only replaces it on a strictly smaller distance, so
+    /// feeding a node from another tree into a lookup makes that lookup return a biome
+    /// the tree does not contain: a cached Overworld leaf at distance 0 can never be
+    /// beaten by any Nether leaf.
+    static LAST_RESULT_NODE: RefCell<Option<(&'static BiomeTree, &'static BiomeTree)>> =
+        const { RefCell::new(None) };
 }
 
 pub trait BiomeSupplier {
@@ -22,8 +37,8 @@ pub struct MultiNoiseBiomeSupplier {
 }
 
 impl MultiNoiseBiomeSupplier {
-    pub const OVERWORLD: Self = Self::new(&OVERWORLD_BIOME_SOURCE);
-    pub const NETHER: Self = Self::new(&NETHER_BIOME_SOURCE);
+    pub const OVERWORLD: Self = Self::new(&OVERWORLD_TREE);
+    pub const NETHER: Self = Self::new(&NETHER_TREE);
 
     const fn new(source: &'static BiomeTree) -> Self {
         Self { source }
@@ -34,7 +49,14 @@ impl BiomeSupplier for MultiNoiseBiomeSupplier {
     fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome {
         let point = noise.sample(x, y, z);
         let point_list = point.convert_to_list();
-        LAST_RESULT_NODE.with_borrow_mut(|last_result| self.source.get(&point_list, last_result))
+        LAST_RESULT_NODE.with_borrow_mut(|cache| {
+            let mut node = cache
+                .filter(|(tree, _)| std::ptr::eq(*tree, self.source))
+                .map(|(_, node)| node);
+            let biome = self.source.get(&point_list, &mut node);
+            *cache = node.map(|node| (self.source, node));
+            biome
+        })
     }
 }
 
@@ -73,6 +95,50 @@ mod test {
             MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
         let biome = MultiNoiseBiomeSupplier::OVERWORLD.biome(-24, 1, 8, &mut sampler);
         assert_eq!(biome, &Biome::DESERT);
+    }
+
+    /// The Nether biome tree must never return an Overworld biome, even when Overworld
+    /// lookups ran first on the same thread.
+    #[test]
+    fn nether_lookup_is_not_poisoned_by_overworld_lookups() {
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+        use pumpkin_util::world_seed::Seed;
+
+        const NETHER_BIOMES: [&Biome; 5] = [
+            &Biome::NETHER_WASTES,
+            &Biome::CRIMSON_FOREST,
+            &Biome::WARPED_FOREST,
+            &Biome::SOUL_SAND_VALLEY,
+            &Biome::BASALT_DELTAS,
+        ];
+
+        let overworld = VanillaGenerator::new(Seed(0), Dimension::OVERWORLD);
+        let nether = VanillaGenerator::new(Seed(0), Dimension::THE_NETHER);
+
+        let config = MultiNoiseSamplerBuilderOptions::new(0, 0, 16);
+        let mut overworld_sampler =
+            MultiNoiseSampler::generate(&overworld.base_router.multi_noise, &config);
+        let mut nether_sampler =
+            MultiNoiseSampler::generate(&nether.base_router.multi_noise, &config);
+
+        let mut leaked = Vec::new();
+        for x in 0..16 {
+            for z in 0..16 {
+                for y in [0, 4, 8, 12] {
+                    // Warm the cache with an Overworld result first.
+                    let _ =
+                        MultiNoiseBiomeSupplier::OVERWORLD.biome(x, y, z, &mut overworld_sampler);
+                    let biome = MultiNoiseBiomeSupplier::NETHER.biome(x, y, z, &mut nether_sampler);
+                    if !NETHER_BIOMES.contains(&biome) {
+                        leaked.push((x, y, z, biome.registry_id));
+                    }
+                }
+            }
+        }
+        assert!(
+            leaked.is_empty(),
+            "Nether biome lookup returned non-Nether biomes: {leaked:?}"
+        );
     }
 
     #[test]
