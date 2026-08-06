@@ -25,7 +25,11 @@ pub mod loader;
 /// host features.
 pub mod permissions;
 
-use crate::{LOGGER_IMPL, plugin::loader::wasm::WasmPluginLoader, server::Server};
+use crate::{
+    LOGGER_IMPL,
+    plugin::loader::wasm::{WasmPluginLoader, wasm_host::WasmPlugin},
+    server::Server,
+};
 pub use api::*;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -1029,6 +1033,26 @@ impl PluginManager {
             if !handler.is_blocking() {
                 handler.handle_dyn(server, event).await;
             }
+        }
+    }
+
+    pub async fn send_message(
+        &self,
+        sender: &str,
+        recipient: &str,
+        message: &[u8],
+    ) -> Result<Result<Vec<u8>, String>, ()> {
+        let plugins = self.plugins.read().await;
+        let target_plugin = &plugins
+            .iter()
+            .find(|p| p.metadata.name == recipient)
+            .ok_or(())?;
+        tracing::info!("Found target: {}", recipient);
+        if let Some(instance) = &target_plugin.instance {
+            tracing::info!("Found instance: {}", recipient);
+            Ok(instance.on_ipc_message(sender, message).await)
+        } else {
+            Err(())
         }
     }
 }

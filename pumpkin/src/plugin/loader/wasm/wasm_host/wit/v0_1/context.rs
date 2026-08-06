@@ -226,7 +226,10 @@ async fn register_player_event(
 }
 
 impl PluginHostState {
-    fn get_context(&self, res: &Resource<Context>) -> wasmtime::Result<&ContextResource> {
+    pub(crate) fn get_context(
+        &self,
+        res: &Resource<Context>,
+    ) -> wasmtime::Result<&ContextResource> {
         self.resource_table
             .get::<ContextResource>(&Resource::new_own(res.rep()))
             .map_err(wasmtime::Error::from)
