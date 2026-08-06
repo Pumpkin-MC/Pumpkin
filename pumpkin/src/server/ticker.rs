@@ -17,6 +17,7 @@ impl Ticker {
     /// IMPORTANT: Run this in a new thread/tokio task.
     pub async fn run(server: &Arc<Server>) {
         let mut next_tick = Instant::now();
+        let mut last_metrics = std::time::Instant::now();
 
         'ticker: loop {
             let tick_start_time = std::time::Instant::now();
@@ -53,6 +54,37 @@ impl Ticker {
                 .await;
 
             server.update_tick_times(tick_duration_nanos).await;
+
+            if last_metrics.elapsed() >= Duration::from_secs(1) {
+                let tick_count = server.tick_count.load(Ordering::Relaxed);
+                let sample_size = (tick_count as usize).min(100);
+                if sample_size > 0 {
+                    let mut samples = server.get_tick_times_nanos_copy().await;
+                    let samples = &mut samples[..sample_size];
+                    samples.sort_unstable();
+                    let percentile = |fraction: f64| {
+                        let index = ((sample_size - 1) as f64 * fraction).round() as usize;
+                        samples[index]
+                    };
+                    let target_nanos = manager.nanoseconds_per_tick();
+                    let ticks_over_budget = samples
+                        .iter()
+                        .filter(|duration| **duration > target_nanos)
+                        .count();
+                    debug!(
+                        target: "pumpkin::tick_metrics",
+                        sample_size,
+                        p50_ms = percentile(0.50) as f64 / 1_000_000.0,
+                        p95_ms = percentile(0.95) as f64 / 1_000_000.0,
+                        p99_ms = percentile(0.99) as f64 / 1_000_000.0,
+                        max_ms = samples[sample_size - 1] as f64 / 1_000_000.0,
+                        ticks_over_budget,
+                        target_ms = target_nanos as f64 / 1_000_000.0,
+                        "server tick interval"
+                    );
+                }
+                last_metrics = std::time::Instant::now();
+            }
 
             let tick_interval = if manager.is_sprinting() {
                 Duration::ZERO
