@@ -4,7 +4,7 @@ use pumpkin_protocol::java::client::play::{
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
@@ -61,6 +61,7 @@ use tokio::{
 use tokio::{
     sync::mpsc::{Receiver, Sender, error::TryRecvError},
     task::JoinHandle,
+    time::timeout,
 };
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -74,7 +75,7 @@ pub mod recipe_helper;
 pub mod status;
 
 use crate::entity::player::Player;
-use crate::net::{GameProfile, PacketHandlerResult, PlayerConfig};
+use crate::net::{GameProfile, PacketHandlerResult, PlayerConfig, login_idle_timeout};
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::{error::PumpkinError, net::EncryptionError, server::Server};
@@ -229,7 +230,8 @@ impl JavaClient {
     ///
     /// * `server`: A reference to the `Server` instance.
     pub async fn handle_login_sequence(&self, server: &Arc<Server>) -> PacketHandlerResult {
-        while let Some(packet) = self.get_packet().await {
+        let idle_timeout = login_idle_timeout(server);
+        while let Some(packet) = self.get_packet_before_idle(idle_timeout).await {
             match self.handle_packet(server, &packet).await {
                 Ok(result) => {
                     if let Some(result) = result {
@@ -479,6 +481,30 @@ impl JavaClient {
                 }
             }
         }
+    }
+
+    /// Like [`Self::get_packet`], but gives up when the client stays silent for
+    /// `idle_timeout`.
+    ///
+    /// The timer covers the wait for a single packet, so it resets every time
+    /// one arrives: a client that is slow but still talking (downloading a
+    /// large resource pack, for instance) is never disconnected. `None`
+    /// disables the timeout entirely.
+    async fn get_packet_before_idle(&self, idle_timeout: Option<Duration>) -> Option<RawPacket> {
+        let Some(idle_timeout) = idle_timeout else {
+            return self.get_packet().await;
+        };
+
+        let Ok(packet) = timeout(idle_timeout, self.get_packet()).await else {
+            debug!(
+                "Client id {} sent nothing for {idle_timeout:?} during login; disconnecting",
+                self.id
+            );
+            self.close();
+            return None;
+        };
+
+        packet
     }
 
     pub async fn kick(&self, reason: TextComponent) {
