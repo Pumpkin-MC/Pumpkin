@@ -493,4 +493,34 @@ mod test {
             "end_surface_no_blend_no_beard_7_4",
         );
     }
+
+    #[test]
+    fn noise_generation_deterministic_checksums() {
+        let test_cases = [
+            (Seed(0), 0, 0),
+            (Seed(42), 5, -3),
+            (Seed(123456789), -10, 8),
+        ];
+
+        for (seed, chunk_x, chunk_z) in test_cases {
+            let world_gen =
+                get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
+            let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+            let WorldGenerator::Noise(generator) = &*world_gen else {
+                unreachable!()
+            };
+
+            chunk.step_to_biomes(generator);
+            chunk.stage = StagedChunkEnum::StructureReferences;
+            chunk.step_to_noise(generator);
+
+            let block_bytes: Vec<u8> = chunk
+                .flat_block_map
+                .iter()
+                .flat_map(|id| id.as_u16().to_le_bytes())
+                .collect();
+            let hash = xxhash_rust::xxh64::xxh64(&block_bytes, 0);
+            assert!(hash > 0, "Noise block map checksum should be non-zero");
+        }
+    }
 }

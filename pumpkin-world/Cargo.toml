@@ -83,6 +83,10 @@ harness = false
 name = "noise_router"
 harness = false
 
+[[bench]]
+name = "noise_gen"
+harness = false
+
 
 [lints]
 workspace = true
