@@ -18,7 +18,7 @@ pub mod resource_pack;
 
 pub use chat::ChatConfig;
 pub use commands::CommandsConfig;
-pub use networking::auth::AuthenticationConfig;
+pub use networking::auth::{AuthenticationConfig, YggdrasilServiceConfig};
 pub use networking::bedrock::BedrockConfig;
 pub use networking::compression::CompressionConfig;
 pub use networking::java::JavaConfig;
@@ -83,6 +83,58 @@ impl LoadConfiguration for PumpkinConfig {
                 self.advanced.networking.java.encryption,
                 "When online mode is enabled, encryption must be enabled"
             );
+        }
+        if !self
+            .advanced
+            .networking
+            .java
+            .authentication
+            .services
+            .is_empty()
+        {
+            assert!(
+                self.advanced.networking.java.encryption,
+                "Multi-auth services require encryption (server hash is needed for /hasJoined)"
+            );
+
+            // Validate: every name in `services` must have a matching config table.
+            let auth = &self.advanced.networking.java.authentication;
+            for name in &auth.services {
+                assert!(
+                    auth.service_entries.contains_key(name),
+                    "Service '{name}' is listed in `services` but no matching \
+                     `[networking.java.authentication.{name}]` config table was found",
+                );
+            }
+
+            // Soft warning: config tables not referenced in `services` are ignored.
+            for name in auth.service_entries.keys() {
+                if !auth.services.contains(name) {
+                    warn!(
+                        "Auth service entry `[networking.java.authentication.{name}]` \
+                         is not listed in `services` and will be ignored"
+                    );
+                }
+            }
+
+            // Warn about overlapping player_names between services.
+            let mut seen_names: std::collections::HashMap<&str, &str> =
+                std::collections::HashMap::new();
+            for name in &auth.services {
+                if let Some(svc) = auth.service_entries.get(name) {
+                    for p in &svc.player_names {
+                        if let Some(prev_svc) = seen_names.get(p.as_str()) {
+                            warn!(
+                                "Player '{p}' is listed in player_names of both \
+                                 '{prev_svc}' and '{name}'; only the first match \
+                                 ('{prev_svc}') will be used"
+                            );
+                        } else {
+                            seen_names.insert(p.as_str(), name.as_str());
+                        }
+                    }
+                }
+            }
         }
 
         // Validate Bedrock
