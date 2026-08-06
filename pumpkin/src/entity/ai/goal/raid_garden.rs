@@ -1,19 +1,22 @@
 use std::pin::Pin;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Weak};
 
 use super::move_to_target_pos::{MoveToTargetPos, MoveToTargetPosGoal};
 use super::{Controls, Goal, GoalFuture, ParentHandle};
+use crate::entity::EntityBase;
 use crate::entity::mob::Mob;
+use crate::entity::passive::rabbit::RabbitEntity;
 use crate::world::World;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, WheatLikeProperties};
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::world::WorldEvent;
 use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
-use rand::RngExt;
 
 /// Port of vanilla's `Rabbit.RaidGardenGoal`.
 ///
@@ -30,55 +33,45 @@ pub struct RaidGardenGoal {
     move_to_target_pos_goal: MoveToTargetPosGoal<Self>,
     wants_to_raid: bool,
     can_raid: AtomicBool,
-    /// Mirrors vanilla's `Rabbit.moreCarrotTicks`: while positive, the rabbit isn't hungry
-    /// enough to raid a garden again. Vanilla decays this by a random 0..3 every tick in
-    /// `aiStep` and persists it to NBT (`MoreCarrotTicks`). This port only decays it while
-    /// this goal itself is polled (roughly once per cooldown interval) and does not persist
-    /// it across saves - an intentional, reported scope reduction since `RabbitEntity`
-    /// doesn't currently have NBT-backed extra state and adding it is out of scope for this
-    /// goal port.
-    more_carrot_ticks: AtomicI32,
+    /// Owner, for vanilla's `this.rabbit.wantsMoreFood()` (line 536) and
+    /// `this.rabbit.moreCarrotTicks = 40` (line 575). The counter itself lives on
+    /// `RabbitEntity`, not here, because vanilla decays it every tick in
+    /// `customServerAiStep` (lines 182-187) and persists it as `MoreCarrotTicks` NBT
+    /// (lines 275/282) - neither of which a goal can express.
+    rabbit: Weak<RabbitEntity>,
 }
 
 impl RaidGardenGoal {
     #[must_use]
-    pub fn new(speed: f64) -> Box<Self> {
+    pub fn new(speed: f64, rabbit: Weak<RabbitEntity>) -> Box<Self> {
         let mut this = Box::new(Self {
             move_to_target_pos_goal: MoveToTargetPosGoal::new(ParentHandle::none(), speed, 16, 1),
             wants_to_raid: false,
             can_raid: AtomicBool::new(false),
-            more_carrot_ticks: AtomicI32::new(0),
+            rabbit,
         });
 
         this.move_to_target_pos_goal.move_to_target_pos = unsafe { ParentHandle::new(&this) };
 
         this
     }
-
-    fn wants_more_food(&self, mob: &dyn Mob) -> bool {
-        let ticks = self.more_carrot_ticks.load(Ordering::Relaxed);
-        // Approximate vanilla's per-tick `moreCarrotTicks -= random.nextInt(3)` decay by
-        // applying it once per cooldown poll instead of every server tick.
-        if ticks > 0 {
-            let decay = mob.get_random().random_range(0..3);
-            self.more_carrot_ticks
-                .store((ticks - decay).max(0), Ordering::Relaxed);
-        }
-        self.more_carrot_ticks.load(Ordering::Relaxed) <= 0
-    }
 }
 
 impl Goal for RaidGardenGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
-            let world = mob.get_entity().world.load();
-            if !world.level_info.load().game_rules.mob_griefing {
-                return false;
-            }
-
+            // Vanilla `canUse` lines 530-537: the mobGriefing check is *inside* the
+            // `nextStartTick <= 0` block, so once the goal is on cooldown it is not consulted
+            // at all. Hoisting it to the top of `can_start` would make the goal re-evaluate
+            // the game rule on every poll, a different (if benign-looking) gate.
             if self.move_to_target_pos_goal.cooldown <= 0 {
+                let world = mob.get_entity().world.load();
+                if !world.level_info.load().game_rules.mob_griefing {
+                    return false;
+                }
+
                 self.can_raid.store(false, Ordering::Relaxed);
-                self.wants_to_raid = self.wants_more_food(mob);
+                self.wants_to_raid = self.rabbit.upgrade().is_some_and(|r| r.wants_more_food());
             }
 
             self.move_to_target_pos_goal.can_start(mob).await
@@ -135,6 +128,20 @@ impl Goal for RaidGardenGoal {
                         .set_block_state(&crops_pos, new_state_id, BlockFlags::NOTIFY_ALL)
                         .await;
 
+                    // Vanilla line 571: the age-decrement path emits BLOCK_CHANGE explicitly
+                    // (the age-0 path goes through `destroyBlock`, which emits it internally).
+                    emit_game_event(
+                        &world,
+                        GameEvent::BlockChange,
+                        crops_pos.to_f64(),
+                        self.rabbit
+                            .upgrade()
+                            .map_or_else(GameEventContext::none, |r| {
+                                GameEventContext::of_entity(r as Arc<dyn EntityBase>)
+                            }),
+                    )
+                    .await;
+
                     let packet = CWorldEvent::new(
                         WorldEvent::ParticlesDestroyBlock as i32,
                         crops_pos,
@@ -144,7 +151,9 @@ impl Goal for RaidGardenGoal {
                     world.broadcast_to_chunk(crops_pos.chunk_position(), &packet);
                 }
 
-                self.more_carrot_ticks.store(40, Ordering::Relaxed);
+                if let Some(rabbit) = self.rabbit.upgrade() {
+                    rabbit.set_more_carrot_delay();
+                }
             }
 
             self.can_raid.store(false, Ordering::Relaxed);

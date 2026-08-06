@@ -4,7 +4,7 @@ use super::avoid_entity::AvoidEntityGoal;
 use super::{Controls, Goal, GoalFuture};
 use crate::entity::mob::Mob;
 use crate::entity::passive::rabbit::{RabbitEntity, RabbitVariant};
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityType, MobCategory};
 
 /// Vanilla `Rabbit.RabbitAvoidEntityGoal`: identical to the generic `AvoidEntityGoal` except
 /// `canUse()` additionally requires the rabbit not be the killer-bunny (`EVIL`) variant.
@@ -24,6 +24,27 @@ impl RabbitAvoidEntityGoal {
     ) -> Box<Self> {
         Box::new(Self {
             inner: AvoidEntityGoal::new(flee_type, flee_distance, slow_speed, fast_speed),
+            rabbit,
+        })
+    }
+
+    /// Vanilla `new Rabbit.RabbitAvoidEntityGoal<>(this, Monster.class, 4.0F, 2.2, 2.2)`
+    /// (`Rabbit.registerGoals`, line 103).
+    #[must_use]
+    pub fn new_for_category(
+        category: &'static MobCategory,
+        flee_distance: f64,
+        slow_speed: f64,
+        fast_speed: f64,
+        rabbit: Weak<RabbitEntity>,
+    ) -> Box<Self> {
+        Box::new(Self {
+            inner: AvoidEntityGoal::new_for_category(
+                category,
+                flee_distance,
+                slow_speed,
+                fast_speed,
+            ),
             rabbit,
         })
     }

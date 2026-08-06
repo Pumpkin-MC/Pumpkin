@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::{Controls, Goal, GoalFuture};
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, living::LivingEntity, mob::Mob};
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityType, MobCategory};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use rand::RngExt;
 
@@ -19,9 +19,20 @@ const VERTICAL_RANGE: i32 = 7;
 /// `get_closest_entity_where` already take sync closures.
 pub type AvoidEntityPredicate = Arc<dyn Fn(&dyn EntityBase) -> bool + Send + Sync>;
 
+/// What the goal flees from. Vanilla's `AvoidEntityGoal` is generic over a `Class<T>`, which
+/// callers instantiate with either a concrete entity class (`Wolf.class`) or an abstract
+/// supertype (`Monster.class`, used by `Rabbit.registerGoals` line 103). Rust has no class
+/// hierarchy to match on, so the abstract case is expressed as a `MobCategory` test - the same
+/// stand-in `armadillo_curl_up.rs` and `conduit.rs` already use for vanilla's `Monster`.
+#[derive(Clone, Copy)]
+enum FleeSelector {
+    Type(&'static EntityType),
+    Category(&'static MobCategory),
+}
+
 pub struct AvoidEntityGoal {
     goal_control: Controls,
-    flee_type: &'static EntityType,
+    flee_from: FleeSelector,
     flee_distance: f64,
     slow_speed: f64,
     fast_speed: f64,
@@ -38,9 +49,40 @@ impl AvoidEntityGoal {
         slow_speed: f64,
         fast_speed: f64,
     ) -> Self {
+        Self::from_selector(
+            FleeSelector::Type(flee_type),
+            flee_distance,
+            slow_speed,
+            fast_speed,
+        )
+    }
+
+    /// Flees any entity in `category` rather than one concrete type. Vanilla's
+    /// `new AvoidEntityGoal<>(this, Monster.class, ...)`.
+    #[must_use]
+    pub fn new_for_category(
+        category: &'static MobCategory,
+        flee_distance: f64,
+        slow_speed: f64,
+        fast_speed: f64,
+    ) -> Self {
+        Self::from_selector(
+            FleeSelector::Category(category),
+            flee_distance,
+            slow_speed,
+            fast_speed,
+        )
+    }
+
+    fn from_selector(
+        flee_from: FleeSelector,
+        flee_distance: f64,
+        slow_speed: f64,
+        fast_speed: f64,
+    ) -> Self {
         Self {
             goal_control: Controls::MOVE,
-            flee_type,
+            flee_from,
             flee_distance,
             slow_speed,
             fast_speed,
@@ -66,7 +108,7 @@ impl AvoidEntityGoal {
 
         // The validity check runs per candidate inside the search, so a nearer but invalid threat
         // (a dead entity or a spectator) does not hide a valid one standing behind it.
-        if self.flee_type == &EntityType::PLAYER {
+        if matches!(self.flee_from, FleeSelector::Type(t) if t == &EntityType::PLAYER) {
             world
                 .get_closest_player_where(pos, self.flee_distance, |player| {
                     player.living_entity.is_part_of_game()
@@ -77,14 +119,27 @@ impl AvoidEntityGoal {
                 })
                 .map(|p| p as Arc<dyn EntityBase>)
         } else {
+            // `get_closest_entity_where` applies the type filter and the predicate to the same
+            // candidate, so the category case can leave the type filter open (`None`) and test
+            // the category per candidate without changing the search's shape.
+            let types: Option<[&'static EntityType; 1]> = match self.flee_from {
+                FleeSelector::Type(t) => Some([t]),
+                FleeSelector::Category(_) => None,
+            };
+            let category = match self.flee_from {
+                FleeSelector::Category(c) => Some(c),
+                FleeSelector::Type(_) => None,
+            };
+
             world.get_closest_entity_where(
                 pos,
                 self.flee_distance,
-                Some(&[self.flee_type]),
+                types.as_ref().map(|t| &t[..]),
                 |entity| {
-                    entity
-                        .get_living_entity()
-                        .is_some_and(LivingEntity::is_part_of_game)
+                    category.is_none_or(|c| entity.get_entity().entity_type.category.id == c.id)
+                        && entity
+                            .get_living_entity()
+                            .is_some_and(LivingEntity::is_part_of_game)
                         && self.extra_predicate.as_ref().is_none_or(|p| p(entity))
                 },
             )
