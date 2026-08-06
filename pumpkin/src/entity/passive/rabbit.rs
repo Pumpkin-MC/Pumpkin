@@ -363,6 +363,24 @@ impl Mob for RabbitEntity {
     ///
     /// Not ported: vanilla's `facePoint` yaw snap (lines 214/198) and `getJumpPower`
     /// (line 110); see the deferred list in the branch commit message.
+    ///
+    /// Two interactions with the surrounding tick loop, both checked in `Mob::tick`
+    /// (`entity/mob/mod.rs`) rather than assumed:
+    ///
+    /// - The navigator `Mutex` taken here is not held at this point. `Mob::tick` calls
+    ///   `mob_tick` at line 949, well before it `mem::take`s the navigator out of its mutex
+    ///   at step 4. `std::sync::Mutex` is not reentrant, so this ordering is what makes the
+    ///   `speed()`/`is_idle()` reads below safe.
+    /// - `LivingEntity`'s 10-tick `jumping_cooldown` (`living.rs` ~1031) does not clamp the
+    ///   1-tick flee landing delay away. Its `else` branch (`living.rs` ~1036) resets the
+    ///   cooldown to 0 whenever `jumping` is false, and this method clears `jumping` on
+    ///   landing, so the cooldown only spans the airborne phase and `jump_delay_ticks` is
+    ///   the constant that actually governs hop cadence on the ground.
+    ///
+    /// Known ordering divergence, inherited from the framework rather than introduced here:
+    /// vanilla runs `customServerAiStep` *after* `goalSelector.tick()` and `navigation.tick()`
+    /// within `Mob.serverAiStep`, whereas `mob_tick` runs before both. The hop therefore reacts
+    /// to the previous tick's navigation state - a one-tick lag, not a behavioural break.
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let living = &self.mob_entity.living_entity;

@@ -23,9 +23,10 @@ use pumpkin_world::world::BlockFlags;
 /// Makes rabbits seek out fully grown carrots on farmland and nibble the crop down one
 /// growth stage at a time, fully removing it once its age reaches 0.
 ///
-/// Vanilla source is `net/minecraft/world/entity/animal/rabbit/Rabbit.java` (inner class
-/// `RaidGardenGoal`, lines ~592-663 of the 26.2 decompile). Note the task brief referred
-/// to this behavior by the name of an older/different goal class, `RemoveBlockGoal`
+/// Vanilla source is `net/minecraft/world/entity/animal/Rabbit.java` (inner class
+/// `RaidGardenGoal`, lines 518-596 of the Mojang-named 1.21.4 decompile that every line
+/// citation in this file refers to). Note the original task brief referred to this
+/// behavior by the name of an older/different goal class, `RemoveBlockGoal`
 /// (used today by zombies raiding turtle eggs, already ported as `StepAndDestroyBlockGoal`
 /// / `destroy_egg.rs`); current vanilla implements the rabbit's carrot-raiding behavior as
 /// its own bespoke goal instead, so this ports `RaidGardenGoal` directly.
