@@ -117,7 +117,9 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         let packet_len = VarInt::decode_async(reader)
             .await
             .map_err(|err| match err {
-                ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
+                ReadingError::CleanEOF(_) | ReadingError::ConnectionClosed(_) => {
+                    PacketDecodeError::ConnectionClosed
+                }
                 err => PacketDecodeError::MalformedLength(err.to_string()),
             })?;
 

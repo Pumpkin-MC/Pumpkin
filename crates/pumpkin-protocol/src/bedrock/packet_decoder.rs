@@ -166,7 +166,9 @@ impl UDPNetworkDecoder {
         decompressed_reader: &mut Cursor<Vec<u8>>,
     ) -> Result<RawPacket, PacketDecodeError> {
         let packet_len = VarUInt::decode(decompressed_reader).map_err(|err| match err {
-            ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
+            ReadingError::CleanEOF(_) | ReadingError::ConnectionClosed(_) => {
+                PacketDecodeError::ConnectionClosed
+            }
             err => PacketDecodeError::MalformedLength(err.to_string()),
         })?;
         let packet_len = packet_len.0 as usize;

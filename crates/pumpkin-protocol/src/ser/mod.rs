@@ -17,6 +17,11 @@ use thiserror::Error;
 pub enum ReadingError {
     #[error("EOF, Tried to read {0} but No bytes left to consume")]
     CleanEOF(String),
+    /// The peer dropped the connection (reset, abort or broken pipe). Distinct from
+    /// [`Self::CleanEOF`] because there is no clean end of stream, and distinct from
+    /// [`Self::Incomplete`] because the data is not malformed — the socket is simply gone.
+    #[error("the connection has closed: {0}")]
+    ConnectionClosed(String),
     #[error("incomplete: {0}")]
     Incomplete(String),
     #[error("too large: {0}")]

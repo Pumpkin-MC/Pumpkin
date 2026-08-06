@@ -75,12 +75,12 @@ impl VarUInt {
     pub async fn decode_async(read: &mut (impl AsyncRead + Unpin)) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
-            let byte = read.read_u8().await.map_err(|err| {
-                if i == 0 && matches!(err.kind(), ErrorKind::UnexpectedEof) {
-                    ReadingError::CleanEOF("VarUInt".to_string())
-                } else {
-                    ReadingError::Incomplete(err.to_string())
-                }
+            let byte = read.read_u8().await.map_err(|err| match err.kind() {
+                ErrorKind::UnexpectedEof if i == 0 => ReadingError::CleanEOF("VarUInt".to_string()),
+                ErrorKind::ConnectionReset
+                | ErrorKind::ConnectionAborted
+                | ErrorKind::BrokenPipe => ReadingError::ConnectionClosed(err.to_string()),
+                _ => ReadingError::Incomplete(err.to_string()),
             })?;
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
