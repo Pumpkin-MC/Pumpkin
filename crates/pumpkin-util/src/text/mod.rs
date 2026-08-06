@@ -238,30 +238,26 @@ impl TextComponentBase {
                 }
                 HoverEvent::ShowItem { id, count } => {
                     hover_tag.put_string("action", "show_item".to_string());
-                    let mut item_tag = pumpkin_nbt::NbtCompound::new();
-                    item_tag.put_string("id", id.to_string());
+                    hover_tag.put_string("id", id.to_string());
                     if let Some(cnt) = count {
-                        item_tag.put_int("count", *cnt);
+                        hover_tag.put_int("count", *cnt);
                     }
-                    hover_tag.put_compound("item", item_tag);
                 }
                 HoverEvent::ShowEntity { id, uuid, name } => {
                     hover_tag.put_string("action", "show_entity".to_string());
-                    let mut entity_tag = pumpkin_nbt::NbtCompound::new();
-                    entity_tag.put_string("id", id.to_string());
-                    entity_tag.put_string("uuid", uuid.to_string());
+                    hover_tag.put_string("id", id.to_string());
+                    hover_tag.put_string("uuid", uuid.to_string());
                     if let Some(n) = name {
                         if n.len() == 1 {
-                            entity_tag.put_compound("name", n[0].to_nbt_compound());
+                            hover_tag.put_compound("name", n[0].to_nbt_compound());
                         } else {
                             let list = n
                                 .iter()
                                 .map(|e| pumpkin_nbt::tag::NbtTag::Compound(e.to_nbt_compound()))
                                 .collect();
-                            entity_tag.put_list("name", list);
+                            hover_tag.put_list("name", list);
                         }
                     }
-                    hover_tag.put_compound("entity", entity_tag);
                 }
             }
             compound.put_compound("hover_event", hover_tag);
