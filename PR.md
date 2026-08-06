@@ -1,7 +1,7 @@
 ## 概述
 
 > [!IMPORTANT]
-> 本PR为实验性功能，仅用于追踪问题和测试环境，相关问题请在本PR下回复，切记请勿合并！！！
+> 本PR为实验性功能，仅用于追踪问题和测试环境，相关问题请在本PR下回复，请勿合并！！！
 > 
 
 使用 wgpu 的 GPU 计算加速，目前实现世界生成的 4 个阶段：
@@ -105,10 +105,10 @@ init_global_gpu_with_config() → has_global_gpu()?
 
 ### World crate（GPU 相关测试）
 
-| 类别      | 数量 | 示例                                                              |
+| 类别      | 数量 | 示例                                                               |
 |-----------|:----:|------------- ------------------------------------------------------|
 | 地表批次  |  4   | `no_gpu_callback_returns_none_by_default`，`batch_oob_indexing_does_not_panic` |
-| 洞穴/裂谷 |  10  | `restores_surface`，`overworld_has_aquifer`，`skips_surface_restore` |
+| 洞穴/裂谷 |  10  | `restores_surface`，`overworld_has_aquifer`，`skips_surface_restore`  |
 
 ---
 
@@ -175,11 +175,11 @@ wgpu 通过你系统的原生图形 API 访问 GPU。`backend` 字段控制在**
 
 当设为 `"auto"` 时，wgpu 按以下顺序探测：
 
-| 平台      | 优先级 1     | 优先级 2  | 优先级 3     |
-|-----------|:------------:|:---------:|:------------:|
-| **Linux**   |  Vulkan     |    GL     |      —       |
-| **macOS**   |   Metal     |     —     |      —       |
-| **Windows** |  DirectX 12 |  Vulkan   |     GL       |
+| 平台        |  优先级 1  | 优先级 2 | 优先级 3 |
+|-------------|:----------:|:--------:|:--------:|
+| **Linux**   |   Vulkan   |    GL    |    —     |
+| **macOS**   |   Metal    |    —     |    —     |
+| **Windows** | DirectX 12 |  Vulkan  |    GL    |
 
 即：在 Linux 上，Vulkan 优先，GL (OpenGL/GLES) 作为后备；在 macOS 上仅 Metal；在 Windows 上 DX12 优先于 Vulkan。
 
@@ -192,13 +192,13 @@ wgpu 通过你系统的原生图形 API 访问 GPU。`backend` 字段控制在**
 backend = "vulkan"   # 可选项：auto | vulkan | metal | dx12 | gl
 ```
 
-| 值        | 对应 wgpu 后端          | 适用平台          |
-|-----------|------------------------|-------------------|
-| `"auto"`  | 平台自动（见上表）       | 所有              |
-| `"vulkan"`| `wgpu::Backend::Vulkan` | Linux, Windows    |
-| `"metal"` | `wgpu::Backend::Metal`  | macOS             |
-| `"dx12"`  | `wgpu::Backend::Dx12`   | Windows           |
-| `"gl"`    | `wgpu::Backend::Gl`     | 所有（兼容性最好） |
+| 值         | 对应 wgpu 后端          | 适用平台           |
+|------------|-------------------------|--------------------|
+| `"auto"`   | 平台自动（见上表）      | 所有               |
+| `"vulkan"` | `wgpu::Backend::Vulkan` | Linux, Windows     |
+| `"metal"`  | `wgpu::Backend::Metal`  | macOS              |
+| `"dx12"`   | `wgpu::Backend::Dx12`   | Windows            |
+| `"gl"`     | `wgpu::Backend::Gl`     | 所有（兼容性最好） |
 
 > **注意**：强制后端会跳过 wgpu 的自动探测，直接枚举**该后端的所有适配器**，按设备类型排序（独立 GPU > 集成 GPU > CPU），再结合 `device.strategy` 筛选。
 
@@ -258,16 +258,16 @@ strategy = "integrated"
 
 ### 字段速查表
 
-| 字段                          | 类型   | 默认       | 说明                                              |
-|-------------------------------|--------|------------|---------------------------------------------------|
-| `gpu.enabled`                 | bool   | `true`     | 总开关，`false` 时行为与无 GPU 构建完全相同          |
-| `gpu.noise_acceleration`      | bool   | `true`     | GPU 区块密度函数图评估（单次调度 98K 点）           |
-| `gpu.light_acceleration`      | bool   | `true`     | GPU 天空光/方块光列扫描                            |
-| `gpu.surface_acceleration`    | bool   | `true`     | GPU 地表 + 洞穴/裂谷 DoublePerlin 批量噪声         |
-| `gpu.backend`                 | enum   | `"auto"`   | 图形后端：`auto` / `vulkan` / `metal` / `dx12` / `gl` |
-| `gpu.device.strategy`         | enum   | `"auto"`   | 设备选择：`auto` / `index` / `name` / `integrated`  |
-| `gpu.device.index`            | u32    | —          | `strategy = "index"` 时的适配器索引                |
-| `gpu.device.name`             | string | —          | `strategy = "name"` 时的名称子串（大小写不敏感）    |
+| 字段                       | 类型   | 默认     | 说明                                                  |
+|----------------------------|--------|----------|-------------------------------------------------------|
+| `gpu.enabled`              | bool   | `true`   | 总开关，`false` 时行为与无 GPU 构建完全相同           |
+| `gpu.noise_acceleration`   | bool   | `true`   | GPU 区块密度函数图评估（单次调度 98K 点）             |
+| `gpu.light_acceleration`   | bool   | `true`   | GPU 天空光/方块光列扫描                               |
+| `gpu.surface_acceleration` | bool   | `true`   | GPU 地表 + 洞穴/裂谷 DoublePerlin 批量噪声            |
+| `gpu.backend`              | enum   | `"auto"` | 图形后端：`auto` / `vulkan` / `metal` / `dx12` / `gl` |
+| `gpu.device.strategy`      | enum   | `"auto"` | 设备选择：`auto` / `index` / `name` / `integrated`    |
+| `gpu.device.index`         | u32    | —        | `strategy = "index"` 时的适配器索引                   |
+| `gpu.device.name`          | string | —        | `strategy = "name"` 时的名称子串（大小写不敏感）      |
 
 ---
 
@@ -369,12 +369,6 @@ enabled = false            # 无 GPU 可用时直接禁用
 
 ## 验证清单
 
-- [x] `cargo fmt --all -- --check` — 0 差异
-- [x] `cargo clippy --all-targets --all-features` — 0 错误
-- [x] `cargo check --all-targets --all-features` — 编译通过
-- [x] `cargo check`（仅 CPU）— 编译通过，GPU 不存在
-- [x] `cargo check --features gpu` — 编译通过，GPU 存在
-- [x] `cargo check -p pumpkin-gpu` — GPU crate 编译通过
 - [x] `cargo test -p pumpkin-gpu --release` — **44/44** 通过
 - [x] `cargo test -p pumpkin-world -- carver` — **10/10** 通过
 - [x] `cargo test -p pumpkin-world -- gpu_batch` — **4/4** 通过
@@ -383,6 +377,5 @@ enabled = false            # 无 GPU 可用时直接禁用
 - [x] 洞穴/裂谷 OOB 坐标边界检查安全网
 - [x] `Arc<[f64]>` 共享批次（O(1) 克隆）
 - [x] GPU 缓冲区缓存消除重复上传
-- [x] 无循环依赖（函数指针解耦）
 - [x] `noise_acceleration` / `surface_acceleration` / `light_acceleration` 标志均已生效
 - [x] 地表 + 洞穴/裂谷测试验证批次 vs CPU 路径
