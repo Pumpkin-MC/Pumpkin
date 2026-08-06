@@ -14,10 +14,10 @@ use pumpkin_data::data_component_impl::{
     LodestoneTarget, LodestoneTrackerImpl, MapIdImpl, MaxStackSizeImpl, MooshroomVariantImpl,
     PaintingVariantImpl, ParrotVariantImpl, PigSoundVariantImpl, PigVariantImpl,
     PotionContentsImpl, RabbitVariantImpl, SalmonSizeImpl, SheepColorImpl, ShulkerColorImpl,
-    SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, TropicalFishBaseColorImpl,
-    TropicalFishPatternColorImpl, TropicalFishPatternImpl, UnbreakableImpl, UseCooldownImpl,
-    VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl, WolfVariantImpl,
-    ZombieNautilusVariantImpl, get,
+    SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, SuspiciousStewEffect,
+    SuspiciousStewEffectsImpl, TropicalFishBaseColorImpl, TropicalFishPatternColorImpl,
+    TropicalFishPatternImpl, UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl,
+    WolfSoundVariantImpl, WolfVariantImpl, ZombieNautilusVariantImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -580,6 +580,44 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
     }
 }
 
+impl DataComponentCodec<Self> for SuspiciousStewEffectsImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_var_int(&VarInt(self.effects.len() as i32))?;
+        for effect in self.effects.iter() {
+            let effect_id = StatusEffect::from_minecraft_name(&effect.effect_id)
+                .ok_or_else(|| {
+                    WritingError::Message(format!("Invalid status effect: {}", effect.effect_id))
+                })?
+                .registry_id();
+            seq.write_var_int(&VarInt(i32::from(effect_id)))?;
+            seq.write_var_int(&VarInt(effect.duration))?;
+        }
+        Ok(())
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        let len = seq.get_var_int()?.0 as usize;
+        if len > MAX_STATUS_EFFECTS {
+            return Err(ReadingError::Message("Too many status effects".into()));
+        }
+        let mut effects = Vec::with_capacity(len);
+        for _ in 0..len {
+            let effect_id = seq.get_var_int()?.0;
+            let effect_name = StatusEffect::from_id(effect_id as u16)
+                .ok_or(ReadingError::Message("Invalid effect_id!".into()))?
+                .minecraft_name;
+            let duration = seq.get_var_int()?.0;
+            effects.push(SuspiciousStewEffect {
+                effect_id: Cow::Borrowed(effect_name),
+                duration,
+            });
+        }
+        Ok(Self {
+            effects: Cow::Owned(effects),
+        })
+    }
+}
+
 /// Helper to skip hidden effect parameters recursively
 fn skip_effect_parameters(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
     // amplifier
@@ -769,6 +807,9 @@ pub fn deserialize(
         DataComponent::Damage => Ok(DamageImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Unbreakable => Ok(UnbreakableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::PotionContents => Ok(PotionContentsImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::SuspiciousStewEffects => {
+            Ok(SuspiciousStewEffectsImpl::deserialize(seq)?.to_dyn())
+        }
         DataComponent::FireworkExplosion => Ok(FireworkExplosionImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
         DataComponent::ItemModel => Ok(ItemModelImpl::deserialize(seq)?.to_dyn()),
@@ -800,6 +841,9 @@ pub fn serialize(
         DataComponent::Damage => get::<DamageImpl>(value).serialize(seq),
         DataComponent::Unbreakable => get::<UnbreakableImpl>(value).serialize(seq),
         DataComponent::PotionContents => get::<PotionContentsImpl>(value).serialize(seq),
+        DataComponent::SuspiciousStewEffects => {
+            get::<SuspiciousStewEffectsImpl>(value).serialize(seq)
+        }
         DataComponent::FireworkExplosion => get::<FireworkExplosionImpl>(value).serialize(seq),
         DataComponent::Fireworks => get::<FireworksImpl>(value).serialize(seq),
         DataComponent::ItemModel => get::<ItemModelImpl>(value).serialize(seq),
@@ -1112,7 +1156,26 @@ codec_string_variant!(ShulkerColorImpl);
 
 #[cfg(test)]
 mod tests {
-    use super::{BaseColorImpl, DataComponentCodec, LodestoneTarget, LodestoneTrackerImpl};
+    use super::{
+        BaseColorImpl, DataComponentCodec, LodestoneTarget, LodestoneTrackerImpl,
+        SuspiciousStewEffect, SuspiciousStewEffectsImpl,
+    };
+    use std::borrow::Cow;
+
+    #[test]
+    fn suspicious_stew_effects_round_trip() {
+        let value = SuspiciousStewEffectsImpl {
+            effects: Cow::Owned(vec![SuspiciousStewEffect {
+                effect_id: Cow::Borrowed("minecraft:fire_resistance"),
+                duration: 60,
+            }]),
+        };
+
+        let mut buf = Vec::new();
+        value.serialize(&mut buf).unwrap();
+        let read_back = SuspiciousStewEffectsImpl::deserialize(&mut buf.as_slice()).unwrap();
+        assert_eq!(read_back, value);
+    }
 
     #[test]
     fn lodestone_tracker_round_trips_with_a_target() {

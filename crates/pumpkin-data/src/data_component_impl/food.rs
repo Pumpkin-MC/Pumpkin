@@ -589,8 +589,121 @@ mod tests {
     }
 }
 
+/// A single `SuspiciousStewEffects.Entry`: an effect plus its duration in ticks.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct SuspiciousStewEffectsImpl;
+pub struct SuspiciousStewEffect {
+    pub effect_id: Cow<'static, str>,
+    pub duration: i32,
+}
+
+impl SuspiciousStewEffect {
+    /// `SuspiciousStewEffects.DEFAULT_DURATION`; `Entry.CODEC` falls back to it when the
+    /// entry has no `duration` field.
+    pub const DEFAULT_DURATION: i32 = 160;
+
+    #[must_use]
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let compound = tag.extract_compound()?;
+        let effect_id = Cow::Owned(compound.get_string("id")?.to_string());
+        let duration = compound
+            .get_int("duration")
+            .or_else(|| compound.get_byte("duration").map(i32::from))
+            .unwrap_or(Self::DEFAULT_DURATION);
+        Some(Self {
+            effect_id,
+            duration,
+        })
+    }
+
+    #[must_use]
+    pub fn as_nbt(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("id", self.effect_id.to_string());
+        compound.put_int("duration", self.duration);
+        NbtTag::Compound(compound)
+    }
+
+    #[must_use]
+    pub fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&get_str_hash(self.effect_id.as_ref()).to_le_bytes());
+        digest.update(&get_i32_hash(self.duration).to_le_bytes());
+        digest.finalize() as i32
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct SuspiciousStewEffectsImpl {
+    pub effects: Cow<'static, [SuspiciousStewEffect]>,
+}
+impl SuspiciousStewEffectsImpl {
+    #[must_use]
+    pub fn read_data(tag: &NbtTag) -> Option<Self> {
+        let entries = tag.extract_list()?;
+        Some(Self {
+            effects: Cow::Owned(
+                entries
+                    .iter()
+                    .filter_map(SuspiciousStewEffect::read_data)
+                    .collect(),
+            ),
+        })
+    }
+}
 impl DataComponentImpl for SuspiciousStewEffectsImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::List(
+            self.effects
+                .iter()
+                .map(SuspiciousStewEffect::as_nbt)
+                .collect(),
+        )
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&get_i32_hash(self.effects.len() as i32).to_le_bytes());
+        for effect in self.effects.iter() {
+            digest.update(&effect.get_hash().to_le_bytes());
+        }
+        digest.finalize() as i32
+    }
     default_impl!(SuspiciousStewEffects);
+}
+
+#[cfg(test)]
+mod suspicious_stew_tests {
+    use super::{
+        DataComponentImpl, NbtCompound, NbtTag, SuspiciousStewEffect, SuspiciousStewEffectsImpl,
+    };
+    use std::borrow::Cow;
+
+    #[test]
+    fn suspicious_stew_effects_round_trip_as_a_list() {
+        let effects = SuspiciousStewEffectsImpl {
+            effects: Cow::Owned(vec![SuspiciousStewEffect {
+                effect_id: Cow::Borrowed("minecraft:blindness"),
+                duration: 220,
+            }]),
+        };
+        let encoded = effects.write_data();
+        let decoded =
+            SuspiciousStewEffectsImpl::read_data(&encoded).expect("effects should decode");
+
+        assert_eq!(decoded, effects);
+    }
+
+    #[test]
+    fn entry_without_duration_uses_the_vanilla_default() {
+        let mut entry = NbtCompound::new();
+        entry.put_string("id", "minecraft:jump_boost".to_string());
+        let decoded =
+            SuspiciousStewEffectsImpl::read_data(&NbtTag::List(vec![NbtTag::Compound(entry)]))
+                .expect("effects should decode");
+
+        assert_eq!(decoded.effects.len(), 1);
+        assert_eq!(
+            decoded.effects[0].duration,
+            SuspiciousStewEffect::DEFAULT_DURATION
+        );
+    }
 }

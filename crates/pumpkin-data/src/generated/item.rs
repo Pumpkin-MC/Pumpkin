@@ -55709,7 +55709,7 @@ impl Item {
             (Lore, &LoreImpl),
             (Rarity, &RarityImpl),
             (RepairCost, &RepairCostImpl),
-            (SuspiciousStewEffects, &SuspiciousStewEffectsImpl),
+            (SuspiciousStewEffects, &SuspiciousStewEffectsImpl { effects: Cow::Borrowed(&[]) }),
             (SwingAnimation, &SwingAnimationImpl),
             (TooltipDisplay, &TooltipDisplayImpl),
             (UseEffects, &UseEffectsImpl),

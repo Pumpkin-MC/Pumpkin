@@ -3111,6 +3111,30 @@ impl EntityBase for LivingEntity {
                         crate::item::potion::PotionContents::apply_effects_to(self, effects, 1.0, crate::item::potion::PotionApplicationSource::Normal).await;
                     }
 
+                    // SuspiciousStewEffects.onConsume: every entry is applied as a plain
+                    // `MobEffectInstance(effect, duration)`, so amplifier 0 and default
+                    // visibility, with no duration scaling.
+                    if let Some(stew) = item
+                        .get_data_component::<pumpkin_data::data_component_impl::SuspiciousStewEffectsImpl>()
+                    {
+                        for entry in stew.effects.iter() {
+                            let Some(effect_type) = StatusEffect::from_minecraft_name(&entry.effect_id)
+                            else {
+                                continue;
+                            };
+                            self.add_effect(pumpkin_data::potion::Effect {
+                                effect_type,
+                                duration: entry.duration,
+                                amplifier: 0,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                                blend: false,
+                            })
+                            .await;
+                        }
+                    }
+
                     if consumable_clears_all_effects(item) {
                         if let Some(player) = caller.get_player() {
                             // This sends one removal packet per active effect before the

@@ -900,7 +900,7 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (StoredEnchantments, &StoredEnchantmentsImpl { enchantment: Cow::Borrowed(&[]) }), });
         }
         if self.suspicious_stew_effects.is_some() {
-            tokens.extend(quote! { (SuspiciousStewEffects, &SuspiciousStewEffectsImpl), });
+            tokens.extend(quote! { (SuspiciousStewEffects, &SuspiciousStewEffectsImpl { effects: Cow::Borrowed(&[]) }), });
         }
         if self.swing_animation.is_some() {
             tokens.extend(quote! { (SwingAnimation, &SwingAnimationImpl), });
