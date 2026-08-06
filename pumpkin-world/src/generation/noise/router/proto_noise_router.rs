@@ -29,6 +29,9 @@ use super::{
 };
 use pumpkin_util::math::vector3::Vector3;
 
+pub static BEARDIFIER_ZERO_CONSTANT: IndependentProtoNoiseFunctionComponent =
+    IndependentProtoNoiseFunctionComponent::Constant(Constant::new(0.0));
+
 pub enum IndependentProtoNoiseFunctionComponent {
     Constant(Constant),
     EndIsland(EndIsland),

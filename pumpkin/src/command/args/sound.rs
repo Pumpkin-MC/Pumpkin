@@ -54,9 +54,11 @@ impl<'a> FindArg<'a> for SoundArgumentConsumer {
             Some(Arg::Block(name)) => {
                 Sound::from_name(name.strip_prefix("minecraft:").unwrap_or(name)).map_or_else(
                     || {
-                        Err(CommandError::CommandFailed(TextComponent::text(format!(
-                            "Sound {name} does not exist."
-                        ))))
+                        Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                            pumpkin_data::translation::java::ARGUMENT_ID_INVALID,
+                            pumpkin_data::translation::java::ARGUMENT_ID_INVALID,
+                            [],
+                        )))
                     },
                     Result::Ok,
                 )
