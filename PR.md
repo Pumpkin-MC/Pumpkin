@@ -21,30 +21,31 @@ RUSTFLAGS='-C target-cpu=native' cargo build --release -p pumpkin --features gpu
 
 ## 新 crate：`pumpkin-gpu`
 
-| 文件                                       | 用途                                                |
-|--------------------------------------------|-----------------------------------------------------|
-| `pumpkin-gpu/src/world/gpu.rs`             | GPU 上下文，缓冲区缓存调度，图评估，回读            |
-| `pumpkin-gpu/src/world/graph.rs`           | 噪声路由器 → GPU 指令编译器，CPU 参考评估器         |
-| `pumpkin-gpu/src/world/noise.rs`           | 区块噪声密度评估回调，密度映射，beardifier 扭曲     |
-| `pumpkin-gpu/src/world/surface.rs`         | 地表/洞穴裂谷噪声批量 GPU 回调，DoublePerlin 预处理 |
-| `pumpkin-gpu/src/world/light.rs`           | 天空/方块光 GPU 扫描 + 全局 GPU 上下文单例          |
-| `pumpkin-gpu/src/world/chunk.rs`           | 区块级 GPU 调度辅助，完整管线编排                   |
-| `pumpkin-gpu/src/world/graph.wgsl`         | GPU 密度函数图着色                                  |
-| `pumpkin-gpu/src/world/octave_perlin.wgsl` | GPU 八度柏林噪声着色器                              |
-| `pumpkin-gpu/src/world/light.wgsl`         | GPU 光照传播着色器                                  |
+| 文件                                            | 用途                                                |
+|-------------------------------------------------|-----------------------------------------------------|
+| `crates/pumpkin-gpu/src/world/gpu.rs`             | GPU 上下文，缓冲区缓存调度，图评估，回读            |
+| `crates/pumpkin-gpu/src/world/graph.rs`           | 噪声路由器 → GPU 指令编译器，CPU 参考评估器         |
+| `crates/pumpkin-gpu/src/world/noise.rs`           | 区块噪声密度评估回调，密度映射，beardifier 扭曲     |
+| `crates/pumpkin-gpu/src/world/surface.rs`         | 地表/洞穴裂谷噪声批量 GPU 回调，DoublePerlin 预处理 |
+| `crates/pumpkin-gpu/src/world/light.rs`           | 天空/方块光 GPU 扫描 + 全局 GPU 上下文单例          |
+| `crates/pumpkin-gpu/src/world/chunk.rs`           | 区块级 GPU 调度辅助，完整管线编排                   |
+| `crates/pumpkin-gpu/src/world/graph.wgsl`         | GPU 密度函数图着色                                  |
+| `crates/pumpkin-gpu/src/world/octave_perlin.wgsl` | GPU 八度柏林噪声着色器                              |
+| `crates/pumpkin-gpu/src/world/light.wgsl`         | GPU 光照传播着色器                                  |
 
 ### 其他变更
 
 | 文件                                           | 变更内容                                     |
 |------------------------------------------------|----------------------------------------------|
-| `pumpkin-config/src/gpu.rs`                    | GPU 配置结构体、设备选择、后端强制           |
-| `pumpkin-world/src/generation/surface/mod.rs`  | SurfaceNoiseBatch 类型、GPU 回调注册入口     |
-| `pumpkin-world/src/generation/noise/mod.rs`    | NoiseGpuFn 类型、GPU 回调注册入口            |
-| `pumpkin-world/src/lighting/mod.rs`            | SkyLightGpuFn 类型、GPU 回调注册入口         |
-| `pumpkin-world/src/generation/carver/mod.rs`   | precompute_carver_noise_batch GPU 快速路径   |
-| `pumpkin-world/src/generation/proto_chunk.rs`  | 地表构建 GPU 快速路径                        |
-| `pumpkin-world/src/generation/noise/perlin.rs` | `#[cfg(feature = "gpu")]` 门控暴露访问器方法 |
-| `pumpkin/src/server/mod.rs`                    | GPU 初始化、回调注册、配置驱动的功能开关     |
+| `crates/pumpkin-config/src/gpu.rs`                    | GPU 配置结构体、设备选择、后端强制           |
+| `crates/pumpkin-world/src/generation/surface/mod.rs`  | SurfaceNoiseBatch 类型、GPU 回调注册入口     |
+| `crates/pumpkin-world/src/generation/noise/mod.rs`    | NoiseGpuFn 类型、GPU 回调注册入口            |
+| `crates/pumpkin-world/src/lighting/mod.rs`            | SkyLightGpuFn 类型、GPU 回调注册入口         |
+| `crates/pumpkin-world/src/lighting/engine.rs`         | 修复 OpacityCache 越界崩溃（BFS 传播越界）   |
+| `crates/pumpkin-world/src/generation/carver/mod.rs`   | precompute_carver_noise_batch GPU 快速路径   |
+| `crates/pumpkin-world/src/generation/proto_chunk.rs`  | 地表构建 GPU 快速路径                        |
+| `crates/pumpkin-world/src/generation/noise/perlin.rs` | `#[cfg(feature = "gpu")]` 门控暴露访问器方法 |
+| `crates/pumpkin/src/server/mod.rs`                    | GPU 初始化、回调注册、配置驱动的功能开关     |
 
 ---
 
@@ -54,9 +55,9 @@ RUSTFLAGS='-C target-cpu=native' cargo build --release -p pumpkin --features gpu
 
 ```
 pumpkin --features gpu
-  ├── pumpkin-gpu (可选依赖)
-  │     └── pumpkin-world/gpu (解锁访问器方法)
-  └── pumpkin-world/gpu (传播)
+  ├── crates/pumpkin-gpu (可选依赖)
+  │     └── crates/pumpkin-world/gpu (解锁访问器方法)
+  └── crates/pumpkin-world/gpu (传播)
 ```
 
 ### 回调注册（`server/mod.rs`）
