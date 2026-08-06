@@ -354,3 +354,120 @@ impl PathType {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ALL_PATH_TYPES: [PathType; PATH_TYPE_COUNT] = [
+        PathType::Blocked,
+        PathType::Open,
+        PathType::Walkable,
+        PathType::WalkableDoor,
+        PathType::Trapdoor,
+        PathType::PowderSnow,
+        PathType::DangerPowderSnow,
+        PathType::Fence,
+        PathType::Lava,
+        PathType::Water,
+        PathType::WaterBorder,
+        PathType::Rail,
+        PathType::UnpassableRail,
+        PathType::DangerFire,
+        PathType::DamageFire,
+        PathType::DangerOther,
+        PathType::DamageOther,
+        PathType::DoorOpen,
+        PathType::DoorWoodClosed,
+        PathType::DoorIronClosed,
+        PathType::Breach,
+        PathType::Leaves,
+        PathType::StickyHoney,
+        PathType::Cocoa,
+        PathType::DamageCautious,
+        PathType::DangerTrapdoor,
+    ];
+
+    /// `is_passable`/`is_blocked` must partition every variant by malus sign.
+    #[test]
+    fn passable_and_blocked_partition_all_variants() {
+        for ty in ALL_PATH_TYPES {
+            assert_eq!(ty.is_passable(), ty.get_malus() >= 0.0, "{ty:?}");
+            assert_eq!(ty.is_blocked(), !ty.is_passable(), "{ty:?}");
+        }
+    }
+
+    #[test]
+    fn known_malus_values_are_stable() {
+        assert_eq!(PathType::Blocked.get_malus(), -1.0);
+        assert_eq!(PathType::Open.get_malus(), 0.0);
+        assert_eq!(PathType::Walkable.get_malus(), 0.0);
+        assert_eq!(PathType::Breach.get_malus(), 4.0);
+        assert_eq!(PathType::Water.get_malus(), 8.0);
+        assert_eq!(PathType::DamageFire.get_malus(), 16.0);
+    }
+
+    #[test]
+    fn door_classification_matches_variants() {
+        for ty in ALL_PATH_TYPES {
+            let expected = matches!(
+                ty,
+                PathType::WalkableDoor
+                    | PathType::DoorOpen
+                    | PathType::DoorWoodClosed
+                    | PathType::DoorIronClosed
+            );
+            assert_eq!(ty.is_door(), expected, "{ty:?}");
+        }
+    }
+
+    #[test]
+    fn dangerous_and_water_classification() {
+        assert!(PathType::Lava.is_dangerous());
+        assert!(PathType::DamageFire.is_dangerous());
+        assert!(!PathType::Walkable.is_dangerous());
+
+        assert!(PathType::Water.is_water());
+        assert!(PathType::WaterBorder.is_water());
+        assert!(!PathType::Lava.is_water());
+    }
+
+    #[test]
+    fn partial_collision_variants() {
+        assert!(PathType::Fence.has_partial_collision());
+        assert!(PathType::DoorIronClosed.has_partial_collision());
+        assert!(!PathType::Walkable.has_partial_collision());
+    }
+
+    #[test]
+    fn coordinate_distance_metrics() {
+        // dx=3, dy=4, dz=0 -> sqr=25, dist=5, xz=3, manhattan=7
+        let a = BlockPos::new(1, 2, 3);
+        let b = BlockPos::new(4, 6, 3);
+
+        assert_eq!(a.distance_sqr(&b), 25.0);
+        assert_eq!(a.distance(&b), 5.0);
+        assert_eq!(a.distance_xz(&b), 3.0);
+        assert_eq!(a.distance_manhattan(&b), 7.0);
+    }
+
+    /// The `Coordinate` impls for `Node`, `BlockPos` and `Vector3<i32>` must agree.
+    #[test]
+    fn coordinate_impls_are_consistent() {
+        let target = BlockPos::new(10, -3, 7);
+        let block = BlockPos::new(2, 4, 1);
+        let vec = block.0;
+        let node = Node::new(block);
+
+        assert_eq!(block.distance(&target), vec.distance(&target));
+        assert_eq!(block.distance(&target), node.distance(&target));
+        assert_eq!(
+            block.distance_manhattan(&target),
+            node.distance_manhattan(&target)
+        );
+        assert_eq!(block.distance_xz(&target), vec.distance_xz(&target));
+
+        assert_eq!(node.as_vector3(), vec);
+        assert_eq!(node.as_blockpos(), block);
+    }
+}
