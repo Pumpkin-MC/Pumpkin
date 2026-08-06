@@ -294,6 +294,22 @@ impl WasmPlugin {
             }
         }
     }
+
+    pub async fn handle_ipc_message(
+        &self,
+        sender: &String,
+        message: &Vec<u8>,
+    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
+        let mut store = self.store.lock().await;
+
+        match self.plugin_instance {
+            PluginInstance::V0_1(ref plugin) => {
+                plugin
+                    .call_handle_ipc_message(&mut *store, sender, message)
+                    .await
+            }
+        }
+    }
 }
 
 pub trait DowncastResourceExt<E> {

@@ -19,6 +19,7 @@ pub mod forms;
 pub mod generated_packets;
 pub mod gui;
 pub mod i18n;
+pub mod ipc;
 pub mod item_stack;
 pub mod java_dialogs;
 pub mod logging;
