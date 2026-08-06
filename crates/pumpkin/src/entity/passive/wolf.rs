@@ -14,12 +14,27 @@ use pumpkin_protocol::java::client::play::Metadata;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        beg::BegGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, beg::BegGoal, breed::BreedGoal,
+        escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
+    living::LivingEntity,
     mob::{Mob, MobEntity},
 };
+use crate::world::World;
+
+const PREY_TYPES: &[&EntityType] = &[&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX];
+
+const SKELETON_TYPES: &[&EntityType] = &[
+    &EntityType::SKELETON,
+    &EntityType::WITHER_SKELETON,
+    &EntityType::STRAY,
+    &EntityType::BOGGED,
+    &EntityType::PARCHED,
+];
+
+const TARGET_RECIPROCAL_CHANCE: i32 = 10;
 
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
@@ -45,6 +60,7 @@ impl WolfEntity {
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             // goal_selector.add_goal(2, SitGoal::new(mob_arc.clone()));
             goal_selector.add_goal(4, EscapeDangerGoal::new(1.5));
+            goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(5, BreedGoal::new(1.0));
             // goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0, false));
             goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.1)));
@@ -55,6 +71,37 @@ impl WolfEntity {
             );
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(12, Box::new(WanderAroundGoal::new(1.0)));
+
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+
+            for prey in PREY_TYPES {
+                target_selector.add_goal(
+                    5,
+                    ActiveTargetGoal::with_default(&mob_arc.mob_entity, prey, false),
+                );
+            }
+
+            target_selector.add_goal(
+                6,
+                Box::new(ActiveTargetGoal::new(
+                    &mob_arc.mob_entity,
+                    &EntityType::TURTLE,
+                    TARGET_RECIPROCAL_CHANCE,
+                    false,
+                    false,
+                    Some(|target: Arc<LivingEntity>, _world: Arc<World>| async move {
+                        target.entity.age.load(Ordering::Relaxed) < 0
+                            && !target.entity.touching_water.load(Ordering::SeqCst)
+                    }),
+                )),
+            );
+
+            for skeleton in SKELETON_TYPES {
+                target_selector.add_goal(
+                    7,
+                    ActiveTargetGoal::with_default(&mob_arc.mob_entity, skeleton, false),
+                );
+            }
         };
 
         mob_arc
