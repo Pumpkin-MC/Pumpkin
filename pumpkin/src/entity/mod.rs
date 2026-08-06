@@ -1072,13 +1072,88 @@ impl Entity {
             visible,
         );
         self.send_meta_data(
-            &[Metadata::new(
-                TrackedData::CUSTOM_NAME,
-                MetaDataType::OPTIONAL_TEXT_COMPONENT,
-                Some(name),
-            )],
+            &[
+                Metadata::new(
+                    TrackedData::CUSTOM_NAME,
+                    MetaDataType::OPTIONAL_TEXT_COMPONENT,
+                    Some(name.clone()),
+                ),
+                Metadata::new(
+                    TrackedData::CUSTOM_NAME,
+                    MetaDataType::OPTIONAL_COMPONENT,
+                    Some(name),
+                ),
+            ],
             Some(&bedrock_meta),
         );
+    }
+
+    /// Sends the current custom-name metadata to one player after that player has
+    /// received this entity's spawn packet.
+    pub fn send_custom_name_to_player(&self, player: &Player) {
+        let Some(name) = &**self.custom_name.load() else {
+            return;
+        };
+        let name = name.clone();
+        let visible = self.custom_name_visible.load(Ordering::Relaxed);
+
+        match player.client.as_ref() {
+            ClientPlatform::Java(client) => {
+                let mut buf = Vec::new();
+                Metadata::new(
+                    TrackedData::CUSTOM_NAME,
+                    MetaDataType::OPTIONAL_TEXT_COMPONENT,
+                    Some(name.clone()),
+                )
+                .write(&mut buf, &client.version.load())
+                .unwrap();
+                Metadata::new(
+                    TrackedData::CUSTOM_NAME,
+                    MetaDataType::OPTIONAL_COMPONENT,
+                    Some(name),
+                )
+                .write(&mut buf, &client.version.load())
+                .unwrap();
+                Metadata::new(
+                    TrackedData::CUSTOM_NAME_VISIBLE,
+                    MetaDataType::BOOLEAN,
+                    visible,
+                )
+                .write(&mut buf, &client.version.load())
+                .unwrap();
+                buf.put_u8(255);
+                client.try_enqueue_packet(&CSetEntityMetadata::new(
+                    self.entity_id.into(),
+                    buf.into(),
+                ));
+            }
+            ClientPlatform::Bedrock(client) => {
+                let mut metadata = EntityMetadata::new();
+                metadata.set(
+                    entity_data_key::NAME,
+                    MetadataValue::String(name.get_text()),
+                );
+                metadata.set_flag(
+                    entity_data_key::FLAGS,
+                    entity_data_flag::SHOW_NAME as u8,
+                    visible,
+                );
+                metadata.set_flag(
+                    entity_data_key::FLAGS,
+                    entity_data_flag::ALWAYS_SHOW_NAME as u8,
+                    visible,
+                );
+                client.try_enqueue_packet(&CSetActorData {
+                    actor_runtime_id: VarULong(self.entity_id as u64),
+                    metadata,
+                    synced_properties: PropertySyncData {
+                        int_properties: std::collections::HashMap::new(),
+                        float_properties: std::collections::HashMap::new(),
+                    },
+                    tick: VarULong(0),
+                });
+            }
+        }
     }
 
     pub fn set_custom_name_visible(&self, visible: bool) {
@@ -3547,12 +3622,11 @@ impl NBTStorage for Entity {
                 nbt.put_bool("HasVisualFire", true);
             }
             nbt.put_int("TicksFrozen", self.frozen_ticks.load(Relaxed));
-            if let Some(custom_name) = &**self.custom_name.load()
-                && let Ok(name_json) = pumpkin_util::serde_json::to_string(custom_name)
-            {
-                nbt.put_string("CustomName", name_json);
-            }
-            nbt.put_bool("CustomNameVisible", self.custom_name_visible.load(Relaxed));
+            write_custom_name_nbt(
+                nbt,
+                self.custom_name.load().as_ref().as_ref(),
+                self.custom_name_visible.load(Relaxed),
+            );
 
             let tags = self.scoreboard_tags.lock().await;
             if !tags.is_empty() {
@@ -3615,13 +3689,9 @@ impl NBTStorage for Entity {
                 .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
             self.frozen_ticks
                 .store(nbt.get_int("TicksFrozen").unwrap_or(0), Relaxed);
-            if let Some(name_json) = nbt.get_string("CustomName")
-                && let Ok(component) = pumpkin_util::serde_json::from_str(name_json)
-            {
-                self.custom_name.store(Arc::new(Some(component)));
-            }
-            self.custom_name_visible
-                .store(nbt.get_bool("CustomNameVisible").unwrap_or(false), Relaxed);
+            let (custom_name, custom_name_visible) = read_custom_name_nbt(nbt);
+            self.custom_name.store(Arc::new(custom_name));
+            self.custom_name_visible.store(custom_name_visible, Relaxed);
 
             if let Some(tag_list) = nbt.get_list("Tags") {
                 let mut tags = self.scoreboard_tags.lock().await;
@@ -3637,6 +3707,27 @@ impl NBTStorage for Entity {
             // todo more...
         })
     }
+}
+
+fn write_custom_name_nbt(
+    nbt: &mut NbtCompound,
+    custom_name: Option<&TextComponent>,
+    visible: bool,
+) {
+    if let Some(custom_name) = custom_name
+        && let Ok(name_json) = pumpkin_util::serde_json::to_string(custom_name)
+    {
+        nbt.put_string("CustomName", name_json);
+    }
+    nbt.put_bool("CustomNameVisible", visible);
+}
+
+fn read_custom_name_nbt(nbt: &NbtCompound) -> (Option<TextComponent>, bool) {
+    let custom_name = nbt
+        .get_string("CustomName")
+        .and_then(|name_json| pumpkin_util::serde_json::from_str(name_json).ok());
+    let visible = nbt.get_bool("CustomNameVisible").unwrap_or(false);
+    (custom_name, visible)
 }
 
 impl EntityBase for Entity {
@@ -3820,5 +3911,29 @@ mod tests {
                 "status mismatch at index {i}"
             );
         }
+    }
+
+    #[test]
+    fn custom_name_nbt_round_trip_preserves_default_visibility() {
+        let name = TextComponent::text("Persistent mob");
+        let mut nbt = NbtCompound::new();
+
+        write_custom_name_nbt(&mut nbt, Some(&name), false);
+        let (loaded_name, loaded_visible) = read_custom_name_nbt(&nbt);
+
+        assert_eq!(loaded_name.unwrap().get_text(), "Persistent mob");
+        assert!(!loaded_visible);
+    }
+
+    #[test]
+    fn custom_name_nbt_round_trip_preserves_always_visible() {
+        let name = TextComponent::text("Always visible mob");
+        let mut nbt = NbtCompound::new();
+
+        write_custom_name_nbt(&mut nbt, Some(&name), true);
+        let (loaded_name, loaded_visible) = read_custom_name_nbt(&nbt);
+
+        assert_eq!(loaded_name.unwrap().get_text(), "Always visible mob");
+        assert!(loaded_visible);
     }
 }
