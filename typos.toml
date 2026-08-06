@@ -11,6 +11,3 @@ replaceables = "replaceables"
 # Mojang's own spelling: `Goal.isInterruptable` (verified in Goal.java:18). Doc comments cite
 # vanilla method names verbatim, so correcting this to "Interruptible" would falsify the citation.
 Interruptable = "Interruptable"
-# Mojang's own spelling: `Goal.isInterruptable` (verified in Goal.java:18). Doc comments cite
-# vanilla method names verbatim, so correcting this to "Interruptible" would falsify the citation.
-Interruptable = "Interruptable"
