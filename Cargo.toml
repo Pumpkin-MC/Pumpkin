@@ -1,19 +1,23 @@
 [workspace]
 resolver = "3"
 members = [
-    "pumpkin-api-macros",
-    "pumpkin-config",
-    "pumpkin-util",
-    "pumpkin-inventory",
-    "pumpkin-macros/",
-    "pumpkin-protocol/",
-    "pumpkin-world",
-    "pumpkin/",
-    "pumpkin-data",
-    "pumpkin-plugin-api",
-    "pumpkin-codecs"
+    "crates/pumpkin",
+    "crates/pumpkin-api-macros",
+    "crates/pumpkin-codecs",
+    "crates/pumpkin-config",
+    "crates/pumpkin-data",
+    "crates/pumpkin-inventory",
+    "crates/pumpkin-macros",
+    "crates/pumpkin-nbt",
+    "crates/pumpkin-plugin-api",
+    "crates/pumpkin-protocol",
+    "crates/pumpkin-util",
+    "crates/pumpkin-world",
 ]
-exclude = ["pumpkin-codegen"]
+exclude = ["tools/pumpkin-codegen"]
+
+# [workspace.lints.rust]
+# missing_docs = "warn"
 
 [workspace.lints.clippy]
 # Groups
@@ -49,7 +53,23 @@ print_stderr = "deny"
 todo = "deny"
 unreachable = "deny"
 unimplemented = "deny"
-# indexing_slicing = "deny" 
+
+# Safety & Soundness
+undocumented_unsafe_blocks = "deny"
+uninit_assumed_init = "deny"
+uninit_vec = "deny"
+cast_ptr_alignment = "deny"
+ptr_as_ptr = "deny"
+
+# Production Quality & Best Practices
+fallible_impl_from = "deny"
+mut_mut = "deny"
+char_lit_as_u8 = "deny"
+match_wild_err_arm = "deny"
+invalid_upcast_comparisons = "deny"
+
+# Expected/Allowed
+clone_on_ref_ptr = "allow"
 
 # Expected/Allowed
 cargo_common_metadata = "allow"
@@ -77,7 +97,7 @@ module_name_repetitions = "allow"
 struct_excessive_bools = "allow"
 
 [workspace.package]
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0"
@@ -148,15 +168,15 @@ num-traits = { version = "0.2", default-features = false, features = ["std"] }
 p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8", "ecdh"] }
 phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
-pumpkin-codecs = { path = "pumpkin-codecs", default-features = false }
-pumpkin-config = { path = "pumpkin-config", default-features = false }
-pumpkin-data = { path = "pumpkin-data", default-features = false }
-pumpkin-inventory = { path = "pumpkin-inventory", default-features = false }
-pumpkin-macros = { path = "pumpkin-macros", default-features = false }
-pumpkin-nbt = { path = "pumpkin-nbt", default-features = false }
-pumpkin-protocol = { path = "pumpkin-protocol", default-features = false }
-pumpkin-util = { path = "pumpkin-util", default-features = false }
-pumpkin-world = { path = "pumpkin-world", default-features = false }
+pumpkin-codecs = { path = "crates/pumpkin-codecs", default-features = false }
+pumpkin-config = { path = "crates/pumpkin-config", default-features = false }
+pumpkin-data = { path = "crates/pumpkin-data", default-features = false }
+pumpkin-inventory = { path = "crates/pumpkin-inventory", default-features = false }
+pumpkin-macros = { path = "crates/pumpkin-macros", default-features = false }
+pumpkin-nbt = { path = "crates/pumpkin-nbt", default-features = false }
+pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
+pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
+pumpkin-world = { path = "crates/pumpkin-world", default-features = false }
 quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
 rand = { version = "0.10.2", default-features = false, features = ["std", "std_rng", "thread_rng"] }
 rsa = { version = "=0.10.0-rc.18", default-features = false, features = ["std", "encoding"] }
