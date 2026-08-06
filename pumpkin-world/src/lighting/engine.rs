@@ -499,6 +499,7 @@ mod sky_light_heightmap_tests {
     use crate::chunk::format::chunk_codec_tests::encode_terrain_chunk_without_world_surface;
     use crate::generation::get_world_gen;
     use crate::generation::proto_chunk::ProtoChunk;
+    use pumpkin_data::Block;
     use pumpkin_data::dimension::Dimension;
     use pumpkin_util::math::vector2::Vector2;
     use pumpkin_util::world_seed::Seed;
@@ -533,6 +534,101 @@ mod sky_light_heightmap_tests {
             size: 3,
             chunks,
         }
+    }
+
+    /// A 3x3 cache of freshly generated proto chunks holding a synthetic ocean:
+    /// stone from the world bottom up to `seabed_y`, water from `seabed_y + 1`
+    /// up to `surface_y`, open air above.
+    fn ocean_cache(seabed_y: i32, surface_y: i32) -> Cache {
+        let world_gen = get_world_gen(
+            Seed(42),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+
+        let mut chunks = Vec::new();
+        for dx in -1..=1 {
+            for dz in -1..=1 {
+                let mut proto = ProtoChunk::new(dx, dz, &world_gen);
+                let bottom = proto.bottom_y() as i32;
+                for x in (dx * 16)..(dx * 16 + 16) {
+                    for z in (dz * 16)..(dz * 16 + 16) {
+                        for y in bottom..=seabed_y {
+                            proto.set_block_state(x, y, z, Block::STONE.default_state);
+                        }
+                        for y in (seabed_y + 1)..=surface_y {
+                            proto.set_block_state(x, y, z, Block::WATER.default_state);
+                        }
+                    }
+                }
+                chunks.push(Chunk::Proto(Box::new(proto)));
+            }
+        }
+
+        Cache {
+            x: -1,
+            z: -1,
+            size: 3,
+            chunks,
+        }
+    }
+
+    /// Vanilla: water's `getLightBlock` is 1, and the sky light engine charges
+    /// `max(1, opacity)` per step except straight down through a block that
+    /// propagates sky light (which water does not). So a water column loses
+    /// exactly one level per block: 15 in the air above the surface, 14 at the
+    /// topmost water block, and 0 fifteen blocks below that. A deep ocean floor
+    /// is genuinely pitch black. See <https://minecraft.wiki/w/Light>
+    /// ("Sunlight ... decreases by one level for each block of water").
+    #[test]
+    fn sky_light_attenuates_one_level_per_water_block() {
+        let surface_y = 62;
+        let seabed_y = 20;
+        let mut cache = ocean_cache(seabed_y, surface_y);
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default);
+
+        let at = |cache: &Cache, y: i32| get_sky_light(cache, BlockPos(Vector3::new(8, y, 8)));
+
+        // Open air above the ocean surface.
+        assert_eq!(at(&cache, surface_y + 1), 15, "air above the water surface");
+
+        // One level per water block, down to darkness.
+        for depth in 0..=14i32 {
+            let y = surface_y - depth;
+            assert_eq!(
+                at(&cache, y),
+                14 - depth as u8,
+                "water at y={y} (depth {depth} below the surface)"
+            );
+        }
+
+        // Fifteen blocks below the surface and everything under it is dark,
+        // including the ocean floor.
+        for y in (seabed_y..=(surface_y - 15)).rev() {
+            assert_eq!(at(&cache, y), 0, "deep water / ocean floor at y={y}");
+        }
+    }
+
+    /// Non-vacuity: the assertions above are not "everything is 0" or
+    /// "everything is 15". A shallow pool lets a measurable, non-zero level
+    /// reach the floor, and the value there is the depth-derived one.
+    #[test]
+    fn shallow_water_leaves_a_measurable_level_on_the_floor() {
+        let surface_y = 62;
+        let seabed_y = 57; // 5 water blocks: 58..=62
+        let mut cache = ocean_cache(seabed_y, surface_y);
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default);
+
+        let at = |cache: &Cache, y: i32| get_sky_light(cache, BlockPos(Vector3::new(8, y, 8)));
+
+        assert_eq!(at(&cache, surface_y + 1), 15);
+        assert_eq!(at(&cache, 62), 14);
+        assert_eq!(at(&cache, 58), 10, "lowest water block above the floor");
+        assert_eq!(at(&cache, seabed_y), 0, "opaque stone floor");
     }
 
     #[test]
