@@ -154,8 +154,14 @@ impl Server {
     ) -> Arc<Self> {
         let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
         // First register the default commands. After that, plugins can put in their own.
-        let command_dispatcher =
-            RwLock::new(default_dispatcher(&permission_registry, &basic_config).await);
+        let command_dispatcher = RwLock::new(
+            default_dispatcher(
+                &permission_registry,
+                &basic_config,
+                &advanced_config.commands,
+            )
+            .await,
+        );
 
         crate::command::set_broadcast_console_to_ops(
             advanced_config.commands.broadcast_console_to_ops,
