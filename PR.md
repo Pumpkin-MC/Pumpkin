@@ -1,8 +1,8 @@
 ## 概述
 
 > [!IMPORTANT]
+> 基于[gerofurlani07-gif/gpu-noise-acceleration](https://github.com/gerofurlani07-gif/Pumpkin/tree/gpu-noise-acceleration)二次开发，添加光照、地表、洞穴/裂谷等生成加速
 > 本PR为实验性功能，仅用于追踪问题和测试环境，相关问题请在本PR下回复，请勿合并！！！
-> 
 
 使用 wgpu 的 GPU 计算加速，目前实现世界生成的 4 个阶段：
 
@@ -278,7 +278,7 @@ strategy = "integrated"
 #### 查看系统中可用的 GPU
 
 ```bash
-# 列出所有 GPU 硬件
+# Linux 列出所有 GPU 硬件
 lspci -nn | grep -i 'vga\|3d\|display'
 # 输出示例：
 # 00:02.0 VGA compatible controller: Intel Corporation UHD Graphics 630
