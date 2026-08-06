@@ -97,6 +97,53 @@ const NODE_REACH_XZ: f64 = 0.5;
 const NODE_REACH_Y: f64 = 1.0;
 const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 
+fn should_relax_node(tentative_g: f32, known_g: Option<f32>) -> bool {
+    known_g.is_none_or(|known_g| tentative_g < known_g)
+}
+
+fn known_node_g(
+    open_set: &BinaryHeap,
+    closed_set: &HashMap<Vector3<i32>, Node>,
+    candidate: &Node,
+) -> Option<f32> {
+    open_set
+        .get_node(candidate)
+        .map(|node| node.g)
+        .or_else(|| closed_set.get(&candidate.pos.0).map(|node| node.g))
+}
+
+fn node_center(node: &Node) -> Vector3<f64> {
+    Vector3::new(
+        f64::from(node.pos.0.x) + 0.5,
+        f64::from(node.pos.0.y),
+        f64::from(node.pos.0.z) + 0.5,
+    )
+}
+
+fn should_target_next_node_in_direction(path: &Path, mob_pos: Vector3<f64>) -> bool {
+    let index = path.get_next_node_index();
+    let (Some(current), Some(next)) = (path.get_node(index), path.get_node(index + 1)) else {
+        return false;
+    };
+
+    if matches!(
+        current.path_type,
+        PathType::DangerFire | PathType::DangerOther | PathType::WalkableDoor
+    ) {
+        return false;
+    }
+
+    let to_current = node_center(current).sub(&mob_pos);
+    let to_next = node_center(next).sub(&mob_pos);
+    let current_distance_sq =
+        to_current.x * to_current.x + to_current.y * to_current.y + to_current.z * to_current.z;
+    let next_distance_sq = to_next.x * to_next.x + to_next.y * to_next.y + to_next.z * to_next.z;
+
+    current_distance_sq < 4.0
+        && (next_distance_sq < current_distance_sq || current_distance_sq < 0.5)
+        && to_current.x * to_next.x + to_current.y * to_next.y + to_current.z * to_next.z < 0.0
+}
+
 impl Navigator {
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
         self.is_idle.store(false, Ordering::Relaxed);
@@ -220,13 +267,11 @@ impl Navigator {
                 let tentative_g = current.g + step_cost + neighbor.cost_malus;
 
                 let in_heap = self.open_set.contains(&neighbor);
-                if neighbor.walked_dist < follow_range
-                    && (!in_heap
-                        || self
-                            .open_set
-                            .get_node(&neighbor)
-                            .is_some_and(|existing| tentative_g < existing.g))
-                {
+                let known_g = known_node_g(&self.open_set, &closed_set, &neighbor);
+                if neighbor.walked_dist < follow_range && should_relax_node(tentative_g, known_g) {
+                    // A lower-cost route may reopen a closed node. Higher-cost routes must not
+                    // overwrite its predecessor, or reconstruction can form a cycle.
+                    closed_set.remove(&neighbor.pos.0);
                     neighbor.came_from = Some(current.pos.0);
                     neighbor.g = tentative_g;
                     let dist_to_target = neighbor.distance(&target);
@@ -337,6 +382,12 @@ impl Navigator {
             return;
         }
 
+        let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+        let can_update_path = on_ground
+            || entity.entity.touching_water.load(Ordering::Relaxed)
+            || entity.entity.touching_lava.load(Ordering::Relaxed)
+            || entity.entity.has_vehicle().await;
+
         if let Some(path) = &mut self.current_path {
             if path.is_done() || !path.is_valid() {
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
@@ -378,7 +429,12 @@ impl Navigator {
                 self.path_start_pos = Some(entity.entity.pos.load());
             }
 
-            let on_ground = entity.entity.on_ground.load(Ordering::Relaxed);
+            let current_pos = entity.entity.pos.load();
+            let navigation_pos =
+                Vector3::new(current_pos.x, (current_pos.y + 0.5).floor(), current_pos.z);
+            if can_update_path && should_target_next_node_in_direction(path, navigation_pos) {
+                path.advance();
+            }
 
             if let Some(next_block) = path.get_next_node_pos() {
                 let target_pos = Vector3::new(
@@ -454,5 +510,113 @@ impl Navigator {
     #[must_use]
     pub fn is_idle(&self) -> bool {
         self.is_idle.load(Ordering::Relaxed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        BinaryHeap, HashMap, Node, Path, Vector3, known_node_g, should_relax_node,
+        should_target_next_node_in_direction,
+    };
+    use crate::entity::ai::pathfinder::node::PathType;
+    use pumpkin_util::math::position::BlockPos;
+
+    #[test]
+    fn only_relaxes_unseen_or_lower_cost_nodes() {
+        assert!(should_relax_node(2.0, None));
+        assert!(should_relax_node(2.0, Some(3.0)));
+        assert!(!should_relax_node(2.0, Some(2.0)));
+        assert!(!should_relax_node(2.0, Some(1.0)));
+    }
+
+    #[test]
+    fn does_not_reopen_closed_node_with_worse_cost() {
+        let closed_node = Node {
+            g: 2.0,
+            ..Default::default()
+        };
+
+        let mut closed_set = HashMap::new();
+        closed_set.insert(closed_node.pos.0, closed_node);
+
+        let known_g = known_node_g(&BinaryHeap::new(), &closed_set, &closed_node);
+        assert_eq!(known_g, Some(2.0));
+        assert!(!should_relax_node(4.0, known_g));
+    }
+
+    #[test]
+    fn prefers_open_node_cost_over_closed_node_cost() {
+        let open_node = Node {
+            g: 2.0,
+            ..Default::default()
+        };
+        let closed_node = Node {
+            g: 4.0,
+            ..Default::default()
+        };
+
+        let mut open_set = BinaryHeap::new();
+        open_set.insert(open_node);
+        let mut closed_set = HashMap::new();
+        closed_set.insert(closed_node.pos.0, closed_node);
+
+        assert_eq!(known_node_g(&open_set, &closed_set, &open_node), Some(2.0));
+    }
+
+    #[test]
+    fn skips_a_waypoint_behind_the_mob() {
+        let path = Path::new(
+            vec![
+                Node::new(BlockPos::new(0, 64, 0)),
+                Node::new(BlockPos::new(1, 64, 0)),
+            ],
+            Vector3::new(1, 64, 0),
+            true,
+        );
+
+        assert!(should_target_next_node_in_direction(
+            &path,
+            Vector3::new(0.9, 64.0, 0.5)
+        ));
+    }
+
+    #[test]
+    fn skips_a_later_waypoint_behind_the_mob() {
+        let mut path = Path::new(
+            vec![
+                Node::new(BlockPos::new(0, 64, 0)),
+                Node::new(BlockPos::new(1, 64, 0)),
+                Node::new(BlockPos::new(2, 64, 0)),
+            ],
+            Vector3::new(2, 64, 0),
+            true,
+        );
+        path.set_next_node_index(1);
+
+        assert!(should_target_next_node_in_direction(
+            &path,
+            Vector3::new(2.1, 64.0, 0.5)
+        ));
+    }
+
+    #[test]
+    fn does_not_skip_a_dangerous_waypoint() {
+        let path = Path::new(
+            vec![
+                Node {
+                    path_type: PathType::DangerFire,
+                    ..Node::new(BlockPos::new(0, 64, 0))
+                },
+                Node::new(BlockPos::new(1, 64, 0)),
+            ],
+            Vector3::new(1, 64, 0),
+            true,
+        );
+
+        assert!(!should_target_next_node_in_direction(
+            &path,
+            Vector3::new(0.9, 64.0, 0.5)
+        ));
     }
 }
