@@ -17,7 +17,7 @@ use std::collections::VecDeque;
 type FastHashSet<K> = rustc_hash::FxHashSet<K>;
 type FastHashMap<K, V> = rustc_hash::FxHashMap<K, V>;
 
-/// Pre-computed opacity for the 18×18×N BFS propagation region.
+/// Pre-computed opacity for the BFS propagation region (typically 18×18×N).
 ///
 /// Built once before propagation starts so that `cache.get_block_state()`
 /// calls (and their inner mutex acquisitions for Level chunks) are replaced
@@ -27,6 +27,8 @@ pub struct OpacityCache {
     start_x: i32,
     start_z: i32,
     bottom_y: i32,
+    width: u32,
+    depth: u32,
     height: u32,
 }
 
@@ -63,15 +65,34 @@ impl OpacityCache {
             start_x,
             start_z,
             bottom_y,
+            width,
+            depth,
             height,
         }
     }
 
+    /// Returns the opacity at the given world coordinates.
+    ///
+    /// # Safety
+    ///
+    /// The BFS in [`LightPropagator::propagate`] guards coordinates with
+    /// chunk-level checks, but those span 16× the block range of this cache.
+    /// When a neighbour falls outside the pre-computed region we return 0
+    /// (fully opaque) so propagation stops harmlessly rather than panicking.
     fn get(&self, x: i32, y: i32, z: i32) -> u8 {
-        let zi = (z - self.start_z) as u32;
-        let xi = (x - self.start_x) as u32;
-        let col = (zi * 18 + xi) as usize;
-        let yi = (y - self.bottom_y) as u32;
+        let xi = x.wrapping_sub(self.start_x);
+        let zi = z.wrapping_sub(self.start_z);
+        let yi = y.wrapping_sub(self.bottom_y);
+
+        if xi < 0 || zi < 0 || yi < 0 {
+            return 0;
+        }
+        let (xi, zi, yi) = (xi as u32, zi as u32, yi as u32);
+        if xi >= self.width || zi >= self.depth || yi >= self.height {
+            return 0;
+        }
+
+        let col = (zi * self.width + xi) as usize;
         self.data[col * self.height as usize + yi as usize]
     }
 }
