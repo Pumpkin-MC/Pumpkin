@@ -50,6 +50,12 @@ pub struct BedrockConfig {
     pub compression: CompressionConfig,
     /// Message of the Day; the server's description displayed on the status screen.
     pub motd: String,
+    /// Prefix prepended to Bedrock Edition player names, so they cannot collide with
+    /// Java Edition account names on a cross-play server. Empty means no prefix.
+    pub username_prefix: String,
+    /// Whether spaces in Bedrock Edition player names are replaced with underscores.
+    /// Names containing spaces cannot be typed as command arguments.
+    pub replace_username_spaces: bool,
     /// Bedrock Edition authentication settings.
     pub authentication: BedrockAuthenticationConfig,
 }
@@ -66,6 +72,8 @@ impl Default for BedrockConfig {
             simulation_distance: NonZeroU8::new(10).unwrap(),
             compression: CompressionConfig::default(),
             motd: "A blazingly fast Pumpkin server!".to_string(),
+            username_prefix: String::new(),
+            replace_username_spaces: true,
             authentication: BedrockAuthenticationConfig::default(),
         }
     }
