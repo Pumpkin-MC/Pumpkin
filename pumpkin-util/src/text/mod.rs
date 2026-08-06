@@ -97,6 +97,7 @@ pub struct TextComponentBase {
 
 impl TextComponentBase {
     /// Converts this component to an NBT compound tag.
+    #[expect(clippy::too_many_lines)]
     #[must_use]
     pub fn to_nbt_compound(&self) -> pumpkin_nbt::NbtCompound {
         let mut compound = pumpkin_nbt::NbtCompound::new();
@@ -187,6 +188,83 @@ impl TextComponentBase {
         }
         if let Some(obfuscated) = self.style.obfuscated {
             compound.put_byte("obfuscated", i8::from(obfuscated));
+        }
+
+        if let Some(ref click) = self.style.click_event {
+            let mut click_tag = pumpkin_nbt::NbtCompound::new();
+            match click {
+                ClickEvent::OpenUrl { url } => {
+                    click_tag.put_string("action", "open_url".to_string());
+                    click_tag.put_string("url", url.to_string());
+                }
+                ClickEvent::OpenFile { path } => {
+                    click_tag.put_string("action", "open_file".to_string());
+                    click_tag.put_string("path", path.to_string());
+                }
+                ClickEvent::RunCommand { command } => {
+                    click_tag.put_string("action", "run_command".to_string());
+                    click_tag.put_string("command", command.to_string());
+                }
+                ClickEvent::SuggestCommand { command } => {
+                    click_tag.put_string("action", "suggest_command".to_string());
+                    click_tag.put_string("command", command.to_string());
+                }
+                ClickEvent::ChangePage { page } => {
+                    click_tag.put_string("action", "change_page".to_string());
+                    click_tag.put_int("page", *page as i32);
+                }
+                ClickEvent::CopyToClipboard { value } => {
+                    click_tag.put_string("action", "copy_to_clipboard".to_string());
+                    click_tag.put_string("value", value.to_string());
+                }
+            }
+            compound.put_compound("click_event", click_tag);
+        }
+
+        if let Some(ref hover) = self.style.hover_event {
+            let mut hover_tag = pumpkin_nbt::NbtCompound::new();
+            match hover {
+                HoverEvent::ShowText { value } => {
+                    hover_tag.put_string("action", "show_text".to_string());
+                    if value.len() == 1 {
+                        hover_tag.put_compound("value", value[0].to_nbt_compound());
+                    } else {
+                        let list = value
+                            .iter()
+                            .map(|e| pumpkin_nbt::tag::NbtTag::Compound(e.to_nbt_compound()))
+                            .collect();
+                        hover_tag.put_list("value", list);
+                    }
+                }
+                HoverEvent::ShowItem { id, count } => {
+                    hover_tag.put_string("action", "show_item".to_string());
+                    let mut item_tag = pumpkin_nbt::NbtCompound::new();
+                    item_tag.put_string("id", id.to_string());
+                    if let Some(cnt) = count {
+                        item_tag.put_int("count", *cnt);
+                    }
+                    hover_tag.put_compound("item", item_tag);
+                }
+                HoverEvent::ShowEntity { id, uuid, name } => {
+                    hover_tag.put_string("action", "show_entity".to_string());
+                    let mut entity_tag = pumpkin_nbt::NbtCompound::new();
+                    entity_tag.put_string("id", id.to_string());
+                    entity_tag.put_string("uuid", uuid.to_string());
+                    if let Some(n) = name {
+                        if n.len() == 1 {
+                            entity_tag.put_compound("name", n[0].to_nbt_compound());
+                        } else {
+                            let list = n
+                                .iter()
+                                .map(|e| pumpkin_nbt::tag::NbtTag::Compound(e.to_nbt_compound()))
+                                .collect();
+                            entity_tag.put_list("name", list);
+                        }
+                    }
+                    hover_tag.put_compound("entity", entity_tag);
+                }
+            }
+            compound.put_compound("hover_event", hover_tag);
         }
 
         if !self.extra.is_empty() {
@@ -893,6 +971,8 @@ impl TextComponent {
 
         self.0.content = Box::new(TextContent::Text { text: "".into() });
         self.0.extra = colored_extra;
+        self.0.style.click_event = None;
+        self.0.style.hover_event = None;
         self
     }
 

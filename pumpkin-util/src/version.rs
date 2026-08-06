@@ -271,8 +271,8 @@ impl std::fmt::Display for JavaMinecraftVersion {
 pub enum BedrockMinecraftVersion {
     /// 1.21: Tricky Trials.
     V_1_21,
-    /// 1.26.30
-    V_1_26_30,
+    /// 1.26.40
+    V_1_26_40,
     /// Fallback for unrecognized protocol versions.
     Unknown,
 }
@@ -285,7 +285,7 @@ impl BedrockMinecraftVersion {
     pub const fn protocol_version(&self) -> i32 {
         match self {
             Self::V_1_21 => 671,
-            Self::V_1_26_30 => 1001,
+            Self::V_1_26_40 => 2168,
             Self::Unknown => -1,
         }
     }
@@ -297,7 +297,7 @@ impl BedrockMinecraftVersion {
     pub const fn from_protocol(protocol: u32) -> Self {
         match protocol {
             671 => Self::V_1_21,
-            1001 => Self::V_1_26_30,
+            2168 => Self::V_1_26_40,
             _ => Self::Unknown,
         }
     }
@@ -307,7 +307,7 @@ impl std::fmt::Display for BedrockMinecraftVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::V_1_21 => write!(f, "1.21"),
-            Self::V_1_26_30 => write!(f, "1.26.30"),
+            Self::V_1_26_40 => write!(f, "1.26.40"),
             Self::Unknown => write!(f, "unknown"),
         }
     }
