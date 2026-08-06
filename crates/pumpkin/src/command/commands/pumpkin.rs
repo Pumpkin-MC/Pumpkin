@@ -182,7 +182,9 @@ impl CommandExecutor for Executor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let contributors = fetch_all_contributors();
+            let contributors = tokio::task::spawn_blocking(fetch_all_contributors)
+                .await
+                .unwrap_or_default();
             let contributor_names = contributors
                 .iter()
                 .map(|c| c.login.as_str())
@@ -282,7 +284,9 @@ impl CommandExecutor for Executor {
 
             msg = msg.add_child(TextComponent::text("  "));
 
-            let donators_hover = fetch_donators_hover();
+            let donators_hover = tokio::task::spawn_blocking(fetch_donators_hover)
+                .await
+                .unwrap_or_else(|_| TextComponent::text("Unable to load donators"));
             msg = msg.add_child(
                 TextComponent::text("[Donate]")
                     .click_event(ClickEvent::OpenUrl {

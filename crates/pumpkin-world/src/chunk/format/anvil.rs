@@ -72,6 +72,7 @@ impl<R: Read> Read for CompressionRead<R> {
     }
 }
 
+#[derive(Clone)]
 pub struct AnvilChunkData {
     compression: Option<Compression>,
     // Length is always the length of this + compression byte (1) so we dont need to save a length
@@ -324,11 +325,14 @@ impl AnvilChunkData {
             .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
 
         let compression = compression.unwrap_or_else(|| chunk_config.compression.algorithm.into());
+        let level = chunk_config.compression.level;
 
-        // We need to buffer here anyway so there's no use in making an impl Write for this
-        let compressed_data = compression
-            .compress_data(&raw_bytes, chunk_config.compression.level)
-            .map_err(ChunkWritingError::Compression)?;
+        // Offload CPU-heavy compression to blocking thread pool
+        let compressed_data =
+            tokio::task::spawn_blocking(move || compression.compress_data(&raw_bytes, level))
+                .await
+                .map_err(|err| ChunkWritingError::IoError(std::io::Error::other(err)))?
+                .map_err(ChunkWritingError::Compression)?;
 
         Ok(Self {
             compression: Some(compression),
@@ -507,7 +511,7 @@ impl<S: SingleChunkDataSerializer> Default for AnvilChunkFile<S> {
     }
 }
 
-pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable {
+pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable + 'static {
     fn to_bytes(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>>;
@@ -515,7 +519,7 @@ pub trait SingleChunkDataSerializer: Send + Sync + Sized + Dirtiable {
     fn position(&self) -> (i32, i32);
 }
 
-impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
+impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<S> {
     type Data = S;
     type WriteBackend = PathBuf;
 
@@ -799,11 +803,17 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
             let is_ok = match &self.chunks_data[index] {
                 None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
                 Some(chunk_metadata) => {
-                    let chunk_data = &chunk_metadata.serialized_data;
-                    let result = match chunk_data.to_chunk(chunk) {
-                        Ok(chunk) => LoadedData::Loaded(chunk),
-                        Err(err) => LoadedData::Error((chunk, err)),
-                    };
+                    let chunk_data = chunk_metadata.serialized_data.clone();
+                    let result =
+                        match tokio::task::spawn_blocking(move || chunk_data.to_chunk(chunk)).await
+                        {
+                            Ok(Ok(chunk_res)) => LoadedData::Loaded(chunk_res),
+                            Ok(Err(err)) => LoadedData::Error((chunk, err)),
+                            Err(err) => LoadedData::Error((
+                                chunk,
+                                ChunkReadingError::IoError(std::io::Error::other(err)),
+                            )),
+                        };
 
                     stream.send(result).await.is_ok()
                 }

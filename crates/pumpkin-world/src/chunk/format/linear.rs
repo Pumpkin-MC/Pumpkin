@@ -339,8 +339,12 @@ impl<S: SingleChunkDataSerializer> LinearV2File<S> {
     }
 
     /// Build the decompressed byte stream for bucket `bucket_idx`.
-    fn serialise_bucket(&self, bucket_idx: usize) -> Vec<u8> {
-        let grid_size = self.grid_size;
+    fn serialise_bucket(
+        chunks_data: &[Option<Bytes>; CHUNK_COUNT],
+        timestamps: &[u64; CHUNK_COUNT],
+        bucket_idx: usize,
+        grid_size: u8,
+    ) -> Vec<u8> {
         let cpb = Self::chunks_per_bucket(grid_size);
         let mut buf = Vec::new();
 
@@ -348,8 +352,8 @@ impl<S: SingleChunkDataSerializer> LinearV2File<S> {
             // Recover the global chunk index from bucket + local.
             let chunk_index = Self::global_chunk_index(bucket_idx, local, grid_size);
             let entry = BucketChunkEntry {
-                timestamp: self.timestamps[chunk_index],
-                data: self.chunks_data[chunk_index].clone(),
+                timestamp: timestamps[chunk_index],
+                data: chunks_data[chunk_index].clone(),
             };
             entry.write_into(&mut buf);
         }
@@ -371,13 +375,15 @@ impl<S: SingleChunkDataSerializer> LinearV2File<S> {
     fn build_bitmap(&self) -> ChunkBitmap {
         let mut bitmap = ChunkBitmap::new();
         for (i, chunk) in self.chunks_data.iter().enumerate() {
-            bitmap.set(i, chunk.is_some());
+            if chunk.is_some() {
+                bitmap.set(i, true);
+            }
         }
         bitmap
     }
 }
 
-impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
+impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S> {
     type Data = S;
     type WriteBackend = PathBuf;
     type ChunkConfig = ();
@@ -398,23 +404,29 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
 
         let grid_size = self.grid_size;
         let bucket_count = Self::bucket_count(grid_size);
+        let chunks_data = self.chunks_data.clone();
+        let timestamps = self.timestamps;
 
-        let mut compressed_buckets: Vec<Box<[u8]>> = Vec::with_capacity(bucket_count);
-        let mut bucket_entries: Vec<BucketSizeEntry> = Vec::with_capacity(bucket_count);
+        let (bucket_entries, compressed_buckets) = tokio::task::spawn_blocking(move || {
+            let mut compressed_buckets: Vec<Box<[u8]>> = Vec::with_capacity(bucket_count);
+            let mut bucket_entries: Vec<BucketSizeEntry> = Vec::with_capacity(bucket_count);
 
-        for bucket_idx in 0..bucket_count {
-            let raw = self.serialise_bucket(bucket_idx);
-            // TODO: ruzstd currently only supports Fastest level.
-            let compressed =
-                compress_to_vec(raw.as_slice(), CompressionLevel::Fastest).into_boxed_slice();
-            let hash = xxh64(&compressed, 0);
-            bucket_entries.push(BucketSizeEntry {
-                size: compressed.len() as u32,
-                compression_level: 1,
-                xxhash: hash,
-            });
-            compressed_buckets.push(compressed);
-        }
+            for bucket_idx in 0..bucket_count {
+                let raw = Self::serialise_bucket(&chunks_data, &timestamps, bucket_idx, grid_size);
+                let compressed =
+                    compress_to_vec(raw.as_slice(), CompressionLevel::Fastest).into_boxed_slice();
+                let hash = xxh64(&compressed, 0);
+                bucket_entries.push(BucketSizeEntry {
+                    size: compressed.len() as u32,
+                    compression_level: 1,
+                    xxhash: hash,
+                });
+                compressed_buckets.push(compressed);
+            }
+            (bucket_entries, compressed_buckets)
+        })
+        .await
+        .map_err(std::io::Error::other)?;
 
         let newest_timestamp = self.timestamps.iter().copied().max().unwrap_or(0);
 
@@ -583,15 +595,27 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
         for chunk in chunks {
             let index = Self::get_chunk_index(chunk.x, chunk.y);
 
-            let result = self.chunks_data[index].as_ref().map_or_else(
-                || LoadedData::Missing(chunk),
-                |data| match S::from_bytes(data, chunk) {
-                    Ok(c) => LoadedData::Loaded(c),
-                    Err(err) => LoadedData::Error((chunk, err)),
-                },
-            );
+            let is_ok = match &self.chunks_data[index] {
+                None => stream.send(LoadedData::Missing(chunk)).await.is_ok(),
+                Some(data) => {
+                    let data = data.clone();
+                    let result = match tokio::task::spawn_blocking(move || {
+                        S::from_bytes(&data, chunk)
+                    })
+                    .await
+                    {
+                        Ok(Ok(c)) => LoadedData::Loaded(c),
+                        Ok(Err(err)) => LoadedData::Error((chunk, err)),
+                        Err(err) => LoadedData::Error((
+                            chunk,
+                            ChunkReadingError::IoError(std::io::Error::other(err)),
+                        )),
+                    };
+                    stream.send(result).await.is_ok()
+                }
+            };
 
-            if stream.send(result).await.is_err() {
+            if !is_ok {
                 // Receiver dropped — stop early to avoid unnecessary work.
                 return;
             }

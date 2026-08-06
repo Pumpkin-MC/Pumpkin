@@ -58,7 +58,7 @@ struct ChunkSerializerLazyLoader<S: ChunkSerializer<WriteBackend = PathBuf>> {
     internal: OnceCell<Arc<RwLock<S>>>,
 }
 
-impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
+impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLoader<S> {
     fn new(path: PathBuf) -> Self {
         Self {
             path,
@@ -101,7 +101,9 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
 
         match tokio::fs::read(&self.path).await {
             Ok(bytes) => {
-                let value = S::read(bytes.into())?;
+                let value = tokio::task::spawn_blocking(move || S::read(bytes.into()))
+                    .await
+                    .map_err(|e| ChunkReadingError::IoError(std::io::Error::other(e)))??;
                 trace!("Successfully read file from disk: {}", self.path.display());
                 Ok(value)
             }
@@ -426,5 +428,94 @@ where
 
             join_all(drain_tasks).await;
         })
+    }
+}
+
+pub enum LevelFileIO<Linear, Anvil, Pump>
+where
+    Linear: ChunkSerializer<WriteBackend = PathBuf>,
+    Anvil: ChunkSerializer<WriteBackend = PathBuf>,
+    Pump: ChunkSerializer<WriteBackend = PathBuf>,
+{
+    Linear(ChunkFileManager<Linear>),
+    Anvil(ChunkFileManager<Anvil>),
+    Pump(ChunkFileManager<Pump>),
+}
+
+impl<P, Linear, Anvil, Pump> FileIO for LevelFileIO<Linear, Anvil, Pump>
+where
+    P: PathFromLevelFolder + Send + Sync + Sized + Dirtiable + 'static,
+    Linear: ChunkSerializer<Data = P, WriteBackend = PathBuf>,
+    Anvil: ChunkSerializer<Data = P, WriteBackend = PathBuf>,
+    Pump: ChunkSerializer<Data = P, WriteBackend = PathBuf>,
+    Linear::ChunkConfig: Send + Sync,
+    Anvil::ChunkConfig: Send + Sync,
+    Pump::ChunkConfig: Send + Sync,
+{
+    type Data = Arc<P>;
+
+    fn fetch_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        chunk_coords: &'a [Vector2<i32>],
+        stream: tokio::sync::mpsc::Sender<LoadedData<Self::Data, ChunkReadingError>>,
+    ) -> BoxFuture<'a, ()> {
+        match self {
+            Self::Linear(io) => io.fetch_chunks(folder, chunk_coords, stream),
+            Self::Anvil(io) => io.fetch_chunks(folder, chunk_coords, stream),
+            Self::Pump(io) => io.fetch_chunks(folder, chunk_coords, stream),
+        }
+    }
+
+    fn save_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        chunks_data: Vec<(Vector2<i32>, Self::Data)>,
+    ) -> BoxFuture<'a, Result<(), ChunkWritingError>> {
+        match self {
+            Self::Linear(io) => io.save_chunks(folder, chunks_data),
+            Self::Anvil(io) => io.save_chunks(folder, chunks_data),
+            Self::Pump(io) => io.save_chunks(folder, chunks_data),
+        }
+    }
+
+    fn watch_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        chunks: &'a [Vector2<i32>],
+    ) -> BoxFuture<'a, ()> {
+        match self {
+            Self::Linear(io) => io.watch_chunks(folder, chunks),
+            Self::Anvil(io) => io.watch_chunks(folder, chunks),
+            Self::Pump(io) => io.watch_chunks(folder, chunks),
+        }
+    }
+
+    fn unwatch_chunks<'a>(
+        &'a self,
+        folder: &'a LevelFolder,
+        chunks: &'a [Vector2<i32>],
+    ) -> BoxFuture<'a, ()> {
+        match self {
+            Self::Linear(io) => io.unwatch_chunks(folder, chunks),
+            Self::Anvil(io) => io.unwatch_chunks(folder, chunks),
+            Self::Pump(io) => io.unwatch_chunks(folder, chunks),
+        }
+    }
+
+    fn clear_watched_chunks(&self) -> BoxFuture<'_, ()> {
+        match self {
+            Self::Linear(io) => io.clear_watched_chunks(),
+            Self::Anvil(io) => io.clear_watched_chunks(),
+            Self::Pump(io) => io.clear_watched_chunks(),
+        }
+    }
+
+    fn block_and_await_ongoing_tasks(&self) -> BoxFuture<'_, ()> {
+        match self {
+            Self::Linear(io) => io.block_and_await_ongoing_tasks(),
+            Self::Anvil(io) => io.block_and_await_ongoing_tasks(),
+            Self::Pump(io) => io.block_and_await_ongoing_tasks(),
+        }
     }
 }

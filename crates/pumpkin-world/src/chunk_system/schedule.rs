@@ -211,19 +211,24 @@ impl GenerationSchedule {
         pos: ChunkPos,
         stage: StagedChunkEnum,
     ) -> i8 {
-        if last_high_priority.is_empty() {
-            return *last_level.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL) + (stage as i8);
+        let base_level = *last_level.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL);
+        if base_level == ChunkLoading::MAX_LEVEL {
+            return 127;
         }
+        if last_high_priority.is_empty() {
+            return base_level + (stage as i8);
+        }
+        let mut min_dst = i32::MAX;
         for i in last_high_priority {
             let dst = max((i.x - pos.x).abs(), (i.y - pos.y).abs());
+            min_dst = min_dst.min(dst);
             if dst <= StagedChunkEnum::FULL_RADIUS
                 && stage <= StagedChunkEnum::FULL_DEPENDENCIES[dst as usize]
             {
-                return *last_level.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL) + (stage as i8)
-                    - 100;
+                return base_level + (stage as i8) - 100 + (dst as i8);
             }
         }
-        *last_level.get(&pos).unwrap_or(&ChunkLoading::MAX_LEVEL) + (stage as i8)
+        base_level + (stage as i8) + (min_dst.min(60) as i8)
     }
 
     fn sort_queue(&mut self) {
@@ -1158,6 +1163,20 @@ impl GenerationSchedule {
                                 *task_slot = NodeKey::null();
                             }
                         }
+                        self.waiting_for_chunks.remove(&task.1);
+                        self.drop_node(task.1);
+                        continue;
+                    }
+
+                    // Cancel/drop task if chunk is out of range or no longer needed by any target/dependency
+                    let effective_target = self
+                        .chunk_map
+                        .get(&node.pos)
+                        .map_or(StagedChunkEnum::None, |h| {
+                            h.target_stage.max(h.dependency_stage)
+                        });
+
+                    if node.stage > effective_target {
                         self.waiting_for_chunks.remove(&task.1);
                         self.drop_node(task.1);
                         continue;

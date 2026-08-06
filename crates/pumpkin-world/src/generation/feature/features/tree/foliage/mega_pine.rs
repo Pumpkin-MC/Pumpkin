@@ -26,16 +26,16 @@ impl MegaPineFoliagePlacer {
     ) -> Vec<BlockPos> {
         let mut foliage_positions = Vec::new();
         let pos = node.center;
-        let mut current = 0;
-        for y in pos.0.y - foliage_height + offset..pos.0.y + offset {
+        let mut current_radius = 0;
+        for y in (pos.0.y - foliage_height + offset)..=(pos.0.y + offset) {
             let delta = pos.0.y - y;
-            let rad = radius
+            let computed_radius = radius
                 + node.foliage_radius
-                + (delta as f32 / foliage_height as f32 * 3.5).floor() as i32;
-            let radius = if delta > 0 && rad == current && (y & 1) == 0 {
-                radius + 1
+                + ((delta as f32 / foliage_height as f32) * 3.5).floor() as i32;
+            let r = if delta > 0 && computed_radius == current_radius && (y & 1) == 0 {
+                computed_radius + 1
             } else {
-                radius
+                computed_radius
             };
             FoliagePlacer::generate_square(
                 &mut foliage_positions,
@@ -43,12 +43,12 @@ impl MegaPineFoliagePlacer {
                 chunk,
                 random,
                 BlockPos::new(pos.0.x, y, pos.0.z),
-                radius,
+                r,
                 0,
                 node.giant_trunk,
                 foliage_provider,
             );
-            current = rad;
+            current_radius = computed_radius;
         }
         foliage_positions
     }

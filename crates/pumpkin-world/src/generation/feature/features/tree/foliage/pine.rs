@@ -26,7 +26,7 @@ impl PineFoliagePlacer {
     ) -> Vec<BlockPos> {
         let mut foliage_positions = Vec::new();
         let mut radius = 0;
-        for y in (offset - foliage_height)..offset {
+        for y in (offset - foliage_height..=offset).rev() {
             FoliagePlacer::generate_square(
                 &mut foliage_positions,
                 self,

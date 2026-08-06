@@ -34,7 +34,7 @@ impl<D> Default for PumpFile<D> {
 
 impl<D> ChunkSerializer for PumpFile<D>
 where
-    D: SingleChunkDataSerializer + Send + Sync + Sized,
+    D: SingleChunkDataSerializer + Send + Sync + Sized + 'static,
 {
     type Data = D;
     type WriteBackend = PathBuf;
@@ -129,34 +129,30 @@ where
             let index = (rel_x + rel_z * 32) as usize;
 
             if let Some(chunk_bytes) = self.data.chunks.get(&index.to_string()) {
-                let mut decoder = match StreamingDecoder::new(&chunk_bytes[..]) {
-                    Ok(d) => d,
-                    Err(e) => {
-                        let _ = stream
-                            .send(LoadedData::Error((
-                                pos,
-                                ChunkReadingError::IoError(std::io::Error::other(e.to_string())),
-                            )))
-                            .await;
-                        continue;
-                    }
-                };
-                let mut decompressed = Vec::new();
-                if let Err(e) = std::io::Read::read_to_end(&mut decoder, &mut decompressed) {
-                    let _ = stream
-                        .send(LoadedData::Error((pos, ChunkReadingError::IoError(e))))
-                        .await;
-                    continue;
-                }
+                let chunk_bytes = chunk_bytes.clone();
+                let res = tokio::task::spawn_blocking(move || {
+                    let mut decoder = StreamingDecoder::new(&chunk_bytes[..]).map_err(|e| {
+                        ChunkReadingError::IoError(std::io::Error::other(e.to_string()))
+                    })?;
+                    let mut decompressed = Vec::new();
+                    std::io::Read::read_to_end(&mut decoder, &mut decompressed)
+                        .map_err(ChunkReadingError::IoError)?;
+                    let bytes = Bytes::from(decompressed);
+                    D::from_bytes(&bytes, pos)
+                })
+                .await;
 
-                let bytes = Bytes::from(decompressed);
-                match D::from_bytes(&bytes, pos) {
-                    Ok(data) => {
-                        let _ = stream.send(LoadedData::Loaded(data)).await;
-                    }
-                    Err(e) => {
-                        let _ = stream.send(LoadedData::Error((pos, e))).await;
-                    }
+                let data_res = match res {
+                    Ok(Ok(data)) => LoadedData::Loaded(data),
+                    Ok(Err(e)) => LoadedData::Error((pos, e)),
+                    Err(e) => LoadedData::Error((
+                        pos,
+                        ChunkReadingError::IoError(std::io::Error::other(e)),
+                    )),
+                };
+
+                if stream.send(data_res).await.is_err() {
+                    return;
                 }
             } else {
                 let _ = stream.send(LoadedData::Missing(pos)).await;

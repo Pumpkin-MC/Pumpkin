@@ -7,7 +7,10 @@ use crate::{
     chunk::{
         ChunkData, ChunkEntityData, ChunkReadingError,
         format::anvil::AnvilChunkFile,
-        io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
+        io::{
+            Dirtiable, FileIO, LoadedData,
+            file_manager::{ChunkFileManager, LevelFileIO},
+        },
         palette::has_random_ticking_fluid,
     },
     generation::get_world_gen,
@@ -47,6 +50,15 @@ use tokio_util::task::TaskTracker;
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
 
+pub type ChunkSaver =
+    LevelFileIO<LinearV2File<ChunkData>, AnvilChunkFile<ChunkData>, PumpFile<ChunkData>>;
+
+pub type EntitySaver = LevelFileIO<
+    LinearV2File<ChunkEntityData>,
+    AnvilChunkFile<ChunkEntityData>,
+    PumpFile<ChunkEntityData>,
+>;
+
 /// The `Level` module provides functionality for working with chunks within or outside a Minecraft world.
 ///
 /// Key features include:
@@ -79,8 +91,8 @@ pub struct Level {
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
-    pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
-    entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
+    pub chunk_saver: Arc<ChunkSaver>,
+    entity_saver: Arc<EntitySaver>,
 
     pub world_gen: Arc<WorldGenerator>,
 
@@ -229,21 +241,19 @@ impl Level {
             flat_biome,
         ));
 
-        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
-            ChunkConfig::Linear => Arc::new(ChunkFileManager::<LinearV2File<ChunkData>>::new(())),
-            ChunkConfig::Anvil(config) => Arc::new(
-                ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(config.clone()),
-            ),
-            ChunkConfig::Pump => Arc::new(ChunkFileManager::<PumpFile<ChunkData>>::new(())),
-        };
-        let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
-            ChunkConfig::Linear => {
-                Arc::new(ChunkFileManager::<LinearV2File<ChunkEntityData>>::new(()))
+        let chunk_saver = match &level_config.chunk {
+            ChunkConfig::Linear => Arc::new(ChunkSaver::Linear(ChunkFileManager::new(()))),
+            ChunkConfig::Anvil(config) => {
+                Arc::new(ChunkSaver::Anvil(ChunkFileManager::new(config.clone())))
             }
-            ChunkConfig::Anvil(config) => Arc::new(ChunkFileManager::<
-                AnvilChunkFile<ChunkEntityData>,
-            >::new(config.clone())),
-            ChunkConfig::Pump => Arc::new(ChunkFileManager::<PumpFile<ChunkEntityData>>::new(())),
+            ChunkConfig::Pump => Arc::new(ChunkSaver::Pump(ChunkFileManager::new(()))),
+        };
+        let entity_saver = match &level_config.chunk {
+            ChunkConfig::Linear => Arc::new(EntitySaver::Linear(ChunkFileManager::new(()))),
+            ChunkConfig::Anvil(config) => {
+                Arc::new(EntitySaver::Anvil(ChunkFileManager::new(config.clone())))
+            }
+            ChunkConfig::Pump => Arc::new(EntitySaver::Pump(ChunkFileManager::new(()))),
         };
 
         let pending_entity_generations = Arc::new(DashMap::new());
