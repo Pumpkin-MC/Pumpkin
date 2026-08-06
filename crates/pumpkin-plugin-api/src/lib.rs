@@ -63,7 +63,7 @@ pub use wit::pumpkin::plugin::{
     entity_types::EntityType,
     event::{self as events_wit, EventType},
     gui, i18n, item_stack, java_dialogs, java_packets, particles, permission, player, scoreboard,
-    server, text, uuid, world,
+    server, storage, text, uuid, world,
 };
 
 // Convenience re-exports of commonly-used plugin types so plugin authors can

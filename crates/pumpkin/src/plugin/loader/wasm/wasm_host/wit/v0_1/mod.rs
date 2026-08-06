@@ -27,6 +27,7 @@ pub mod player;
 pub mod recipe;
 pub mod scheduler;
 pub mod scoreboard;
+pub mod storage;
 pub mod server;
 pub mod status_effect;
 pub mod text;
@@ -91,6 +92,7 @@ pub async fn init_plugin(
         .data_mut()
         .permissions
         .clone_from(&metadata.permissions);
+    store.data_mut().plugin_name = Some(metadata.name.clone());
 
     Ok((
         WasmPlugin {

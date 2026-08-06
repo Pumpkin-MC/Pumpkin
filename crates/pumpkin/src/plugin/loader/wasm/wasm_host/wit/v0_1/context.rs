@@ -652,6 +652,9 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
     }
 
     async fn get_data_folder(&mut self, _context: Resource<Context>) -> wasmtime::Result<String> {
+        // The plugin's data folder is preopened into the WASI sandbox under the
+        // guest path "data" (see the loader's `preopened_dir` call), so that is
+        // the path a plugin uses to read and write its own files.
         Ok("data".to_string())
     }
 

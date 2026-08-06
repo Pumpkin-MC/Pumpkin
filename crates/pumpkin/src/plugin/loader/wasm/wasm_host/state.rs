@@ -69,6 +69,12 @@ pub struct PluginHostState {
     pub plugin: Option<Weak<WasmPlugin>>,
     pub server: Option<Arc<Server>>,
     pub permissions: Vec<String>,
+    /// The name of the plugin this state belongs to, used to locate its private
+    /// data folder. Set once the plugin's metadata has been read.
+    pub plugin_name: Option<String>,
+    /// The plugin's persistent key-value store, loaded from disk the first time
+    /// the plugin uses it.
+    pub storage: Option<crate::plugin::loader::wasm::wasm_host::wit::v0_1::storage::PluginKvStore>,
 }
 
 impl Default for PluginHostState {
@@ -92,6 +98,8 @@ impl PluginHostState {
             plugin: None,
             server: None,
             permissions: Vec::new(),
+            plugin_name: None,
+            storage: None,
         }
     }
 
