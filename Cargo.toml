@@ -11,9 +11,15 @@ members = [
     "pumpkin/",
     "pumpkin-data",
     "pumpkin-plugin-api",
-    "pumpkin-codecs"
+    "pumpkin-codecs",
+    "workspace-hack"
 ]
 exclude = ["pumpkin-codegen"]
+
+# workspace-hack is depended on by every member but never referenced in code,
+# so cargo-machete would flag it as unused without this.
+[workspace.metadata.cargo-machete]
+ignored = ["workspace-hack"]
 
 [workspace.lints.clippy]
 # Groups

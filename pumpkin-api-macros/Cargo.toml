@@ -13,6 +13,7 @@ syn .workspace = true
 quote.workspace = true
 proc-macro2.workspace = true
 proc-macro-error2.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [lints]
 workspace = true

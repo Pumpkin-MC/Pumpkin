@@ -26,6 +26,7 @@ rand.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [lints]
 workspace = true

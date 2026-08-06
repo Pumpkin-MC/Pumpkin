@@ -1,0 +1,3 @@
+# workspace-hack is a generated feature-unification crate (cargo-hakari):
+# it declares many deps it never imports, so exclude it from unused-dep scans.
+workspace-hack/
