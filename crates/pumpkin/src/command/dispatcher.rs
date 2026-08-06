@@ -727,8 +727,9 @@ mod test {
     #[tokio::test]
     async fn dynamic_command() {
         let config = BasicConfiguration::default();
+        let commands_config = pumpkin_config::CommandsConfig::default();
         let registry = RwLock::new(PermissionRegistry::new());
-        let mut dispatcher = default_dispatcher(&registry, &config)
+        let mut dispatcher = default_dispatcher(&registry, &config, &commands_config)
             .await
             .fallback_dispatcher;
         let tree = CommandTree::new(["test"], "test_desc");

@@ -27,7 +27,7 @@ pub mod recipe;
 pub mod resource_pack;
 
 pub use chat::ChatConfig;
-pub use commands::CommandsConfig;
+pub use commands::{CommandOverride, CommandsConfig};
 pub use networking::auth::AuthenticationConfig;
 pub use networking::bedrock::BedrockConfig;
 pub use networking::compression::CompressionConfig;
