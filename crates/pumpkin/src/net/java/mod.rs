@@ -31,7 +31,19 @@ use pumpkin_protocol::{
     java::{
         client::{config::CConfigDisconnect, login::CLoginDisconnect},
         packet_decoder::TCPNetworkDecoder,
-        packet_encoder::TCPNetworkEncoder,
+        packet_encoder::{PreparedPacket, SerializedPacket, TCPNetworkEncoder},
+        server::{
+            config::{
+                SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse,
+                SConfigResourcePack, SKnownPacks, SPluginMessage,
+            },
+            handshake::SHandShake,
+            login::{
+                SEncryptionResponse, SLoginAcknowledged, SLoginCookieResponse,
+                SLoginPluginResponse, SLoginStart,
+            },
+            status::{SStatusPingRequest, SStatusRequest},
+        },
     },
     ser::{NetworkWriteExt, WritingError},
 };
@@ -118,21 +130,36 @@ pub enum OutgoingPacketType {
 }
 
 struct OutgoingPacket {
-    data: Bytes,
+    data: OutgoingPacketData,
     completion: Option<oneshot::Sender<()>>,
 }
 
+enum OutgoingPacketData {
+    Serialized(SerializedPacket),
+    Prepared(Arc<PreparedPacket>),
+}
+
 impl OutgoingPacket {
-    const fn normal(data: Bytes) -> Self {
+    const fn normal(data: SerializedPacket) -> Self {
         Self {
-            data,
+            data: OutgoingPacketData::Serialized(data),
             completion: None,
         }
     }
 
-    const fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
+    const fn high_priority(data: SerializedPacket, completion: oneshot::Sender<()>) -> Self {
         Self {
-            data,
+            data: OutgoingPacketData::Serialized(data),
+            completion: Some(completion),
+        }
+    }
+
+    const fn high_priority_prepared(
+        data: Arc<PreparedPacket>,
+        completion: oneshot::Sender<()>,
+    ) -> Self {
+        Self {
+            data: OutgoingPacketData::Prepared(data),
             completion: Some(completion),
         }
     }
@@ -315,18 +342,24 @@ impl JavaClient {
             error!("Failed to write packet: {err:?}");
             return;
         }
-        let payload = Bytes::from(buf);
+        let payload = match SerializedPacket::try_from_bytes(buf.into()) {
+            Ok(payload) => payload,
+            Err(err) => {
+                error!("Failed to validate serialized packet: {err}");
+                return;
+            }
+        };
 
         let player = self.player.load_full();
         let cancelled = if let Some(player) = player.as_ref() {
             player
-                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
+                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.as_bytes().clone())
                 .await
         } else {
             false
         };
         if !cancelled {
-            self.enqueue_packet_data(payload).await;
+            self.enqueue_serialized_packet(payload).await;
         }
     }
 
@@ -337,7 +370,10 @@ impl JavaClient {
             error!("Failed to write packet: {err:?}");
             return;
         }
-        self.try_enqueue_packet_data(buf.into());
+        match SerializedPacket::try_from_bytes(buf.into()) {
+            Ok(packet) => self.try_enqueue_serialized_packet(packet),
+            Err(err) => error!("Failed to validate serialized packet: {err}"),
+        }
     }
 
     /// Queues a clientbound packet to be sent to the connected client. Queued chunks are sent
@@ -347,9 +383,20 @@ impl JavaClient {
     ///
     /// * `packet`: A reference to a packet object implementing the `ClientPacket` trait.
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
+        let packet = match SerializedPacket::try_from_bytes(packet_data) {
+            Ok(packet) => packet,
+            Err(err) => {
+                error!("Failed to validate raw serialized packet: {err}");
+                return;
+            }
+        };
+        self.enqueue_serialized_packet(packet).await;
+    }
+
+    async fn enqueue_serialized_packet(&self, packet: SerializedPacket) {
         if let Err(err) = self
             .outgoing_packet_queue_send
-            .send(OutgoingPacket::normal(packet_data))
+            .send(OutgoingPacket::normal(packet))
             .await
         {
             // This is expected to fail if we are closed
@@ -363,9 +410,20 @@ impl JavaClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        let packet = match SerializedPacket::try_from_bytes(packet_data) {
+            Ok(packet) => packet,
+            Err(err) => {
+                error!("Failed to validate raw serialized packet: {err}");
+                return;
+            }
+        };
+        self.try_enqueue_serialized_packet(packet);
+    }
+
+    pub(crate) fn try_enqueue_serialized_packet(&self, packet: SerializedPacket) {
         if let Err(err) = self
             .outgoing_packet_queue_send
-            .try_send(OutgoingPacket::normal(packet_data))
+            .try_send(OutgoingPacket::normal(packet))
         {
             match err {
                 tokio::sync::mpsc::error::TrySendError::Full(_) => {
@@ -442,23 +500,40 @@ impl JavaClient {
             error!("Failed to write packet: {err:?}");
             return;
         }
-        let payload = Bytes::from(packet_buf);
+        let payload = match SerializedPacket::try_from_bytes(packet_buf.into()) {
+            Ok(payload) => payload,
+            Err(err) => {
+                error!("Failed to validate serialized packet: {err}");
+                return;
+            }
+        };
 
         let player = self.player.load_full();
         let cancelled = if let Some(player) = player.as_ref() {
             player
-                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
+                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.as_bytes().clone())
                 .await
         } else {
             false
         };
 
         if !cancelled {
-            self.send_packet_now_data(payload).await;
+            self.send_serialized_packet_now(payload).await;
         }
     }
 
     pub async fn send_packet_now_data(&self, packet: Bytes) {
+        let packet = match SerializedPacket::try_from_bytes(packet) {
+            Ok(packet) => packet,
+            Err(err) => {
+                error!("Failed to validate raw serialized packet: {err}");
+                return;
+            }
+        };
+        self.send_serialized_packet_now(packet).await;
+    }
+
+    async fn send_serialized_packet_now(&self, packet: SerializedPacket) {
         let (completion_tx, completion_rx) = oneshot::channel();
 
         if let Err(err) = self
@@ -485,6 +560,32 @@ impl JavaClient {
         }
     }
 
+    pub async fn send_prepared_packet_now(&self, packet: Arc<PreparedPacket>) {
+        let (completion_tx, completion_rx) = oneshot::channel();
+
+        if let Err(err) = self
+            .outgoing_packet_priority_send
+            .send(OutgoingPacket::high_priority_prepared(
+                packet,
+                completion_tx,
+            ))
+            .await
+        {
+            if !self.close_token.is_cancelled() {
+                warn!(
+                    "Failed to add prepared packet to the outgoing queue for client {}: {}",
+                    self.id, err
+                );
+                self.close();
+            }
+            return;
+        }
+
+        if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
+            self.close();
+        }
+    }
+
     pub fn write_packet_for_version<P: ClientPacket>(
         packet: &P,
         version: JavaMinecraftVersion,
@@ -505,11 +606,12 @@ impl JavaClient {
     pub fn serialize_packet_for_version<P: ClientPacket>(
         packet: &P,
         version: JavaMinecraftVersion,
-    ) -> Result<Bytes, WritingError> {
+    ) -> Result<SerializedPacket, WritingError> {
         let mut packet_buf = Vec::new();
 
         Self::write_packet_for_version(packet, version, &mut packet_buf)?;
-        Ok(packet_buf.into())
+        SerializedPacket::try_from_bytes(packet_buf.into())
+            .map_err(|err| WritingError::Message(err.to_string()))
     }
 
     pub fn write_packet<P: ClientPacket>(
@@ -579,7 +681,15 @@ impl JavaClient {
                 let send_failed = {
                     let mut failed = false;
                     for packet in &packet_batch {
-                        if let Err(err) = writer.write_packet(packet.data.clone()).await {
+                        let result = match &packet.data {
+                            OutgoingPacketData::Serialized(packet) => {
+                                writer.write_packet(packet.clone()).await
+                            }
+                            OutgoingPacketData::Prepared(packet) => {
+                                writer.write_prepared_packet(packet).await
+                            }
+                        };
+                        if let Err(err) = result {
                             failed = true;
                             // It is expected that the packet will fail if we are closed
                             if !close_token.is_cancelled() {

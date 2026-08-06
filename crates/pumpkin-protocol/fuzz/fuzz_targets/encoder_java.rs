@@ -1,6 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use pumpkin_protocol::java::packet_encoder::TCPNetworkEncoder;
+use pumpkin_protocol::java::packet_encoder::{SerializedPacket, TCPNetworkEncoder};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::ser::NetworkWriteExt;
 use pumpkin_protocol::ServerPacket;
@@ -42,7 +42,9 @@ fuzz_target!(|data: &[u8]| {
         let packet_id = if packet_data.is_empty() { 0 } else { packet_data[0] as i32 };
         let _ = buf.write_var_int(&VarInt(packet_id));
         buf.extend_from_slice(packet_data);
-        let _ = encoder.write_packet(buf.into()).await;
+        if let Ok(packet) = SerializedPacket::try_from_bytes(buf.into()) {
+            let _ = encoder.write_packet(packet).await;
+        }
 
         // 2. Fuzz with actual packets if they can be partially read
         let mut cursor = Cursor::new(packet_data);
@@ -51,7 +53,9 @@ fuzz_target!(|data: &[u8]| {
              let id = CPlayerPosition::to_id(TARGET_VERSION);
              let _ = packet_buf.write_var_int(&VarInt(id));
              let _ = packet.write_packet_data(&mut packet_buf, &TARGET_VERSION);
-             let _ = encoder.write_packet(packet_buf.into()).await;
+             if let Ok(packet) = SerializedPacket::try_from_bytes(packet_buf.into()) {
+                 let _ = encoder.write_packet(packet).await;
+             }
         }
 
         let _ = encoder.flush().await;
