@@ -749,6 +749,27 @@ impl World {
         }
     }
 
+    /// Spawns a `block` particle cluster textured with `block_state_id`, mirroring
+    /// vanilla's `BlockParticleOption` (the particles blocks emit when broken).
+    pub fn spawn_block_particle(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        particle_count: i32,
+        block_state_id: BlockStateId,
+    ) {
+        for player in self.players.load().iter() {
+            player.spawn_block_particle(
+                position,
+                offset,
+                max_speed,
+                particle_count,
+                block_state_id,
+            );
+        }
+    }
+
     pub fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
         self.play_sound_raw(sound as u16, category, position, 1.0, 1.0);
     }
