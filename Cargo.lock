@@ -2793,7 +2793,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-registry"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "pumpkin-util",
  "rustc-hash",
