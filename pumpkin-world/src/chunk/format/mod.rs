@@ -151,6 +151,27 @@ where
     })
 }
 
+/// Derives the sky light of a section whose `SkyLight` array was omitted from
+/// the one directly above it, by taking that section's bottom 16x16 layer and
+/// repeating it 16 times, as the chunk format specifies.
+fn repeat_bottom_layer(above: &LightContainer) -> LightContainer {
+    match above {
+        // A uniform section's bottom layer is that same value everywhere.
+        LightContainer::Empty(value) => LightContainer::Empty(*value),
+        LightContainer::Full(data) => {
+            // `LightContainer::index` is `y * 256 + z * 16 + x` at a nibble each,
+            // so local y = 0 occupies the first 128 bytes.
+            const LAYER_BYTES: usize = LightContainer::ARRAY_SIZE / LightContainer::DIM;
+            let layer = &data[..LAYER_BYTES];
+            let mut repeated = Vec::with_capacity(LightContainer::ARRAY_SIZE);
+            for _ in 0..LightContainer::DIM {
+                repeated.extend_from_slice(layer);
+            }
+            LightContainer::Full(repeated.into_boxed_slice())
+        }
+    }
+}
+
 impl ChunkData {
     #[allow(clippy::too_many_lines)]
     pub fn internal_from_bytes(
@@ -317,24 +338,38 @@ impl ChunkData {
             }
         }
 
-        // Vanilla only writes a `SkyLight` array for a section it actually touched
-        // while lighting; an omitted array is not a stored "0", it is derived from
-        // position. Sections above the highest section that carries a `SkyLight` tag
-        // see open sky and are 15. Sections at or below it that lack a tag repeat the
-        // nearest tagged layer above them, since the light engine skips writing a
-        // section whose value is identical to the one above it. If no section in the
-        // chunk carries a `SkyLight` tag at all, this dimension has no sky light and
-        // every section is dark (0).
+        // An omitted `SkyLight` array is not a stored "0", it is derived from the
+        // section above. The chunk format specifies exactly how:
+        //
+        //   "If the sky light data for a section is omitted you should look at the
+        //    light data of the section directly above it. Take the 16x16 layer at
+        //    the bottom of that section and repeat that light data 16 times to
+        //    recompute the data for the omitted section. If there is no section
+        //    above the current one, you are at the top section of the chunk. The
+        //    light data for this top section should be set as completely bright
+        //    (0xF for each block)."
+        //   -- https://minecraft.wiki/w/Chunk_format, `SkyLight`
+        //
+        // Repeating the *bottom layer* is not the same as cloning the whole array,
+        // and the difference is only visible where the section above is not uniform
+        // in y. An ocean is exactly that case: the section holding the water surface
+        // carries a 15..0 vertical gradient, so cloning it downwards re-lights every
+        // section beneath with a repeating 15..0 stripe and floods a seabed that must
+        // be pitch black. Taking its bottom layer instead carries the 0 down, which is
+        // both what the format says and what the light engine computed before saving.
+        //
+        // If no section in the chunk carries a `SkyLight` tag at all, this dimension
+        // has no sky light and every section is dark (0).
         if let Some(top) = sky_light_present.iter().rposition(|&present| present) {
             for light in sky_lights.iter_mut().skip(top + 1) {
                 *light = LightContainer::new_empty(15);
             }
-            let mut nearest_above = sky_lights[top].clone();
+            // Walking downwards means the section above is always resolved already,
+            // and a repeated layer is uniform in y, so its own bottom layer is the
+            // same layer - the rule chains correctly across runs of omitted sections.
             for i in (0..top).rev() {
-                if sky_light_present[i] {
-                    nearest_above = sky_lights[i].clone();
-                } else {
-                    sky_lights[i] = nearest_above.clone();
+                if !sky_light_present[i] {
+                    sky_lights[i] = repeat_bottom_layer(&sky_lights[i + 1]);
                 }
             }
         } else {
@@ -960,6 +995,98 @@ pub(crate) mod chunk_codec_tests {
 
         // The tagged section itself round-trips unchanged.
         assert_eq!(light.sky_light[1].get(0, 0, 0), 7);
+    }
+
+    /// Builds a `SkyLight` array whose value depends only on the local y layer,
+    /// via `layer(local_y)`.
+    fn graded_sky_light(layer: impl Fn(usize) -> u8) -> Box<[i8]> {
+        let mut container = LightContainer::new_filled(0);
+        for y in 0..16 {
+            let value = layer(y);
+            for z in 0..16 {
+                for x in 0..16 {
+                    container.set(x, y, z, value);
+                }
+            }
+        }
+        match container {
+            LightContainer::Full(data) => data.iter().map(|&b| b as i8).collect(),
+            LightContainer::Empty(_) => unreachable!(),
+        }
+    }
+
+    fn section_with_sky_light(y: i8, sky_light: Box<[i8]>) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_byte("Y", y);
+        compound.put("SkyLight", NbtTag::ByteArray(sky_light));
+        NbtTag::Compound(compound)
+    }
+
+    /// An omitted `SkyLight` array repeats the *bottom* 16x16 layer of the
+    /// section above, not a clone of that section's whole array.
+    ///
+    /// This is the ocean case. The section holding the water surface carries a
+    /// vertical 15..0 gradient, and every section beneath it is uniformly dark,
+    /// so the writer omits them. Cloning the gradient downwards re-lights the
+    /// deep water and the seabed with a repeating 15..0 stripe - broadly lit,
+    /// with no depth attenuation. Repeating the bottom layer carries the 0 down.
+    #[test]
+    fn omitted_sky_light_repeats_the_bottom_layer_not_the_whole_section() {
+        // Section 1 is a water surface: local y = 15 sees open sky at 15 and each
+        // block of water below costs one level, reaching 0 at local y = 0.
+        let gradient = graded_sky_light(|y| y as u8);
+        let sections = vec![
+            section(0, None),
+            section_with_sky_light(1, gradient),
+            section(2, None),
+        ];
+        let bytes = encode_chunk(0, sections);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let light = chunk.light_engine.lock().unwrap();
+
+        // The tagged section round-trips unchanged.
+        for y in 0..16 {
+            assert_eq!(light.sky_light[1].get(3, y, 9), y as u8, "tagged layer {y}");
+        }
+
+        // The omitted section below is dark at every layer, because the bottom
+        // layer of the section above is 0. Cloning the array instead would put
+        // 15 at local y = 15 and a full gradient underneath it.
+        for y in 0..16 {
+            assert_eq!(
+                light.sky_light[0].get(3, y, 9),
+                0,
+                "omitted section below the water surface must be dark at layer {y}"
+            );
+        }
+
+        // Above the highest tagged section is still open sky, so this test is not
+        // just asserting that everything is 0.
+        assert_eq!(light.sky_light[2].get(3, 0, 9), 15);
+    }
+
+    /// Non-vacuity for the rule above: a non-zero bottom layer really is carried
+    /// down, so `repeat_bottom_layer` is not just zeroing omitted sections.
+    #[test]
+    fn omitted_sky_light_carries_a_non_zero_bottom_layer_down() {
+        // Bottom layer is 6, everything above it in the section is brighter.
+        let gradient = graded_sky_light(|y| 6 + y as u8 / 2);
+        let sections = vec![
+            section(0, None),
+            section_with_sky_light(1, gradient),
+            section(2, None),
+        ];
+        let bytes = encode_chunk(0, sections);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let light = chunk.light_engine.lock().unwrap();
+
+        for y in 0..16 {
+            assert_eq!(
+                light.sky_light[0].get(11, y, 2),
+                6,
+                "omitted section must repeat the bottom layer value at layer {y}"
+            );
+        }
     }
 
     #[test]
