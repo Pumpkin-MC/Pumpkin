@@ -9,7 +9,7 @@ pub struct CChangeDimension {
     pub dimension: VarInt,
     pub position: Vector3<f32>,
     pub respawn: bool,
-    pub has_loading_screen_id: bool,
+    pub loading_screen_id: Option<u32>,
 }
 
 impl CChangeDimension {
@@ -19,7 +19,7 @@ impl CChangeDimension {
             dimension: VarInt(dimension),
             position,
             respawn,
-            has_loading_screen_id: false,
+            loading_screen_id: None,
         }
     }
 }

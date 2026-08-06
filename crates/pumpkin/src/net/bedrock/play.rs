@@ -411,7 +411,7 @@ impl BedrockClient {
             player,
             server,
             SPlayerAction {
-                runtime_id: VarInt(0), // Unused
+                runtime_id: VarULong(0), // Unused
                 action,
                 block_pos: packet.block_pos,
                 result_pos: BlockPos::ZERO,
@@ -430,11 +430,11 @@ impl BedrockClient {
         let world = entity.world.load();
 
         let java_animation = match packet.action {
+            AnimateAction::NoAction => None,
             AnimateAction::SwingArm => Some(Animation::SwingMainArm),
             AnimateAction::WakeUp => Some(Animation::LeaveBed),
             AnimateAction::CriticalHit => Some(Animation::CriticalEffect),
             AnimateAction::MagicCriticalHit => Some(Animation::MagicCriticaleffect),
-            AnimateAction::StopSleep => None, // TODO
         };
 
         if let Some(animation) = java_animation {
@@ -1241,8 +1241,11 @@ impl BedrockClient {
         let mut event =
             crate::plugin::api::events::player::bedrock_form_response::BedrockFormResponseEvent::new(
                 player.clone(),
-                packet.form_id.0 as u32,
-                packet.form_data.map(std::borrow::Cow::into_owned),
+                packet.form_id.0,
+                packet
+                    .form_data
+                    .filter(|data| data != "null")
+                    .map(std::borrow::Cow::into_owned),
             );
         server.plugin_manager.fire(server, &mut event).await;
     }
@@ -1317,16 +1320,6 @@ impl BedrockClient {
                         destination,
                     }
                     | ItemStackRequestAction::Place {
-                        count,
-                        source,
-                        destination,
-                    }
-                    | ItemStackRequestAction::PlaceInContainer {
-                        count,
-                        source,
-                        destination,
-                    }
-                    | ItemStackRequestAction::TakeOutContainer {
                         count,
                         source,
                         destination,

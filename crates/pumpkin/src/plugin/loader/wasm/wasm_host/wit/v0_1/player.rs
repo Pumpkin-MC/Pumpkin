@@ -112,7 +112,8 @@ const fn to_wasm_bedrock_version(
     match version {
         BedrockMinecraftVersion::V_1_21 => pumpkin::plugin::player::BedrockMinecraftVersion::V121,
         BedrockMinecraftVersion::V_1_26_40 => {
-            pumpkin::plugin::player::BedrockMinecraftVersion::V12630
+            // The v0.1 plugin ABI predates 26.40; do not misreport it as 26.30.
+            pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
         }
         BedrockMinecraftVersion::Unknown => {
             pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
@@ -2527,7 +2528,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
 
             client
                 .send_game_packet(&CModalFormRequest {
-                    form_id: pumpkin_protocol::codec::var_int::VarInt(form_id as i32),
+                    form_id: pumpkin_protocol::codec::var_uint::VarUInt(form_id),
                     form_data: form_json.to_string(),
                 })
                 .await;

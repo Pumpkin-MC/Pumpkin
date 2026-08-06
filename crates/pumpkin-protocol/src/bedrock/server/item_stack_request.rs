@@ -31,7 +31,7 @@ impl PacketWrite for ItemStackRequestSlotInfo {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.container_name.write(writer)?;
         self.slot_id.write(writer)?;
-        self.stack_id.write(writer)?;
+        self.stack_id.0.write(writer)?;
         Ok(())
     }
 }
@@ -67,16 +67,6 @@ pub enum ItemStackRequestAction {
     },
     Create {
         result_index: u8,
-    },
-    PlaceInContainer {
-        count: u8,
-        source: ItemStackRequestSlotInfo,
-        destination: ItemStackRequestSlotInfo,
-    },
-    TakeOutContainer {
-        count: u8,
-        source: ItemStackRequestSlotInfo,
-        destination: ItemStackRequestSlotInfo,
     },
     LabTableCombine,
     BeaconPayment {
@@ -307,5 +297,29 @@ impl PacketRead for SItemStackRequest {
             requests.push(ItemStackRequest::read(buf)?);
         }
         Ok(Self { requests })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bedrock::network_item::ContainerName;
+
+    #[test]
+    fn stack_request_slot_uses_raw_i32_network_id() {
+        let slot = ItemStackRequestSlotInfo {
+            container_name: FullContainerName {
+                container_name: ContainerName::Inventory,
+                dynamic_id: None,
+            },
+            slot_id: 4,
+            stack_id: VarInt(-2),
+        };
+        let mut encoded = Vec::new();
+        slot.write(&mut encoded).unwrap();
+
+        assert_eq!(&encoded[encoded.len() - 4..], &(-2i32).to_le_bytes());
+        let decoded = ItemStackRequestSlotInfo::read(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded.stack_id, VarInt(-2));
     }
 }

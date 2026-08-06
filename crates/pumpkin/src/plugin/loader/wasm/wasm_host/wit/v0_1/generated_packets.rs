@@ -8,6 +8,7 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_pac
 };
 use bytes::Bytes;
 use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::codec::var_uint::VarUInt;
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::packet::Packet;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -2074,7 +2075,7 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
                     data.position.2 as _,
                 ),
                 respawn: data.respawn.try_into().unwrap(),
-                has_loading_screen_id: data.has_loading_screen_id.try_into().unwrap(),
+                loading_screen_id: data.has_loading_screen_id.then_some(0),
             };
             let mut buf = Vec::new();
             crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
@@ -2118,6 +2119,8 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
                     data.pos_delta.1 as _,
                     data.pos_delta.2 as _,
                 ),
+                rotation: pumpkin_util::math::vector2::Vector2::new(0.0, 0.0),
+                vehicle_angular_velocity: None,
                 on_ground: data.on_ground.try_into().unwrap(),
                 tick: pumpkin_protocol::codec::var_ulong::VarULong(data.tick.try_into().unwrap()),
             };
@@ -2151,19 +2154,20 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
             Some(buf.into())
         }
         BClientboundPacket::CLevelSoundEvent(data) => {
+            let position = pumpkin_util::math::vector3::Vector3::new(
+                data.position.0 as _,
+                data.position.1 as _,
+                data.position.2 as _,
+            );
             let p = pumpkin_protocol::bedrock::client::CLevelSoundEvent {
-                sound_id: pumpkin_protocol::codec::var_uint::VarUInt(
-                    data.sound_id.try_into().unwrap(),
-                ),
-                position: pumpkin_util::math::vector3::Vector3::new(
-                    data.position.0 as _,
-                    data.position.1 as _,
-                    data.position.2 as _,
-                ),
+                sound_id: data.sound_id.to_string(),
+                position,
                 extra_data: VarInt(data.extra_data),
                 entity_type: data.entity_type.clone(),
                 is_baby_mob: data.is_baby_mob.try_into().unwrap(),
                 is_global: data.is_global.try_into().unwrap(),
+                actor_unique_id: 0,
+                fire_at_position: Some(position),
             };
             let mut buf = Vec::new();
             crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
@@ -2171,7 +2175,7 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
         }
         BClientboundPacket::CModalFormRequest(data) => {
             let p = pumpkin_protocol::bedrock::client::CModalFormRequest {
-                form_id: VarInt(data.form_id),
+                form_id: VarUInt(data.form_id.try_into().unwrap()),
                 form_data: data.form_data.clone(),
             };
             let mut buf = Vec::new();
@@ -2477,7 +2481,7 @@ pub fn deserialize_bedrock_serverbound_packet(
             use pumpkin_protocol::BServerPacket;
             let p = <pumpkin_protocol::bedrock::server::SPlayerHotbar as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
             Some(BServerboundPacket::SPlayerHotbar(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SPlayerHotbar {
-                selected_slot: p.selected_slot.try_into().unwrap(),
+                selected_slot: p.selected_slot.0.try_into().unwrap(),
                 container_id: p.container_id.try_into().unwrap(),
                 select_slot: p.select_slot.try_into().unwrap(),
             }))
@@ -2516,11 +2520,11 @@ pub fn deserialize_bedrock_serverbound_packet(
             use pumpkin_protocol::BServerPacket;
             let p = <pumpkin_protocol::bedrock::server::SSetPlayerInventoryOptions as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
             Some(BServerboundPacket::SSetPlayerInventoryOptions(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SSetPlayerInventoryOptions {
-                left_inventory_tab: p.left_inventory_tab.try_into().unwrap(),
-                right_inventory_tab: p.right_inventory_tab.try_into().unwrap(),
+                left_inventory_tab: p.left_inventory_tab.0.try_into().unwrap(),
+                right_inventory_tab: p.right_inventory_tab.0.try_into().unwrap(),
                 filtering: p.filtering.try_into().unwrap(),
-                inventory_layout: p.inventory_layout.try_into().unwrap(),
-                crafting_layout: p.crafting_layout.try_into().unwrap(),
+                inventory_layout: p.inventory_layout.0.try_into().unwrap(),
+                crafting_layout: p.crafting_layout.0.try_into().unwrap(),
             }))
         }
         _ => None,
@@ -2537,7 +2541,7 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CChangeDimen
                 dimension: self.dimension.0.try_into().unwrap(),
                 position: (self.position.x as _, self.position.y as _, self.position.z as _),
                 respawn: self.respawn.try_into().unwrap(),
-                has_loading_screen_id: self.has_loading_screen_id.try_into().unwrap(),
+                has_loading_screen_id: self.loading_screen_id.is_some().try_into().unwrap(),
         })
     }
 }
@@ -2597,7 +2601,7 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CLevelEvent 
 impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CLevelSoundEvent {
     fn to_wit(&self) -> BClientboundPacket {
         BClientboundPacket::CLevelSoundEvent(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CLevelSoundEvent {
-                sound_id: self.sound_id.0.try_into().unwrap(),
+                sound_id: self.sound_id.parse().unwrap_or_default(),
                 position: (self.position.x as _, self.position.y as _, self.position.z as _),
                 extra_data: self.extra_data.0.try_into().unwrap(),
                 entity_type: self.entity_type.to_string(),

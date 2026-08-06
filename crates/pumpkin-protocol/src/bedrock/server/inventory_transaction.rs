@@ -65,7 +65,7 @@ impl PacketRead for InventoryAction {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let source_type = VarUInt::read(buf)?.0;
         let window_id = if bool::read(buf)? && bool::read(buf)? {
-            Some(i32::from(u8::read(buf)?))
+            Some(i32::from(i8::read(buf)?))
         } else {
             None
         };

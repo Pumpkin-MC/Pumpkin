@@ -220,7 +220,14 @@ pub struct PieceTintColor {
 
 impl PacketWrite for PieceTintColor {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.piece_type.write(writer)?;
+        let piece_type = if self.piece_type == "persona_hand" {
+            "hands"
+        } else {
+            self.piece_type
+                .strip_prefix("persona_")
+                .unwrap_or(&self.piece_type)
+        };
+        piece_type.write(writer)?;
         for color in self.colors {
             color.write(writer)?;
         }

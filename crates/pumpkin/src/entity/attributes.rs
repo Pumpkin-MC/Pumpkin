@@ -121,8 +121,6 @@ pub async fn send_attribute_updates_for_living(
             }
         }
 
-        let modifiers_count = modifiers.len();
-
         // Move modifiers into the property
         je_properties.push(JeProperty::new(
             VarInt(i32::from(attribute.id)),
@@ -152,7 +150,9 @@ pub async fn send_attribute_updates_for_living(
             default_max_value: 3.402_823_5E38,
             default_value: base_value as f32,
             name,
-            modifiers_list_size: VarUInt(modifiers_count as u32),
+            // Bedrock receives the already-computed effective value above. Do not advertise
+            // modifier entries until their payload is encoded as well.
+            modifiers_list_size: VarUInt(0),
         };
 
         be_attributes.push(be_attribute);
