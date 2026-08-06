@@ -63,22 +63,19 @@ pub struct InventoryAction {
 
 impl PacketRead for InventoryAction {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        let source_type = VarULong::read(buf)?.0 as u32;
+        let source_type = VarUInt::read(buf)?.0;
+        let window_id = if bool::read(buf)? && bool::read(buf)? {
+            Some(i32::from(u8::read(buf)?))
+        } else {
+            None
+        };
+        let source_flags = if bool::read(buf)? && bool::read(buf)? {
+            Some(VarUInt::read(buf)?.0)
+        } else {
+            None
+        };
 
-        let mut window_id = None;
-        let mut source_flags = None;
-
-        match InventoryActionSource::from(source_type) {
-            InventoryActionSource::Container | InventoryActionSource::Todo => {
-                window_id = Some(VarInt::read(buf)?.0);
-            }
-            InventoryActionSource::World => {
-                source_flags = Some(VarULong::read(buf)?.0 as u32);
-            }
-            _ => {}
-        }
-
-        let inventory_slot = VarULong::read(buf)?.0 as u32;
+        let inventory_slot = VarUInt::read(buf)?.0;
 
         let old_item = NetworkItemDescriptor::read(buf)?;
         let new_item = NetworkItemDescriptor::read(buf)?;
@@ -102,7 +99,7 @@ pub struct MismatchTransactionData;
 
 #[derive(Debug)]
 pub struct UseItemTransactionData {
-    pub action_type: VarUInt,
+    pub action_type: VarInt,
     pub trigger_type: u8,
     pub block_position: BlockPos,
     pub block_face: i32,
@@ -118,7 +115,7 @@ pub struct UseItemTransactionData {
 impl PacketRead for UseItemTransactionData {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         Ok(Self {
-            action_type: VarUInt::read(buf)?,
+            action_type: VarInt::read(buf)?,
             trigger_type: u8::read(buf)?,
             block_position: BlockPos::read(buf)?,
             block_face: i32::from(u8::read(buf)?),
@@ -136,7 +133,7 @@ impl PacketRead for UseItemTransactionData {
 #[derive(Debug)]
 pub struct UseItemOnEntityTransactionData {
     pub target_entity_runtime_id: VarULong,
-    pub action_type: VarUInt,
+    pub action_type: VarInt,
     pub hot_bar_slot: VarInt,
     pub item_in_hand: NetworkItemDescriptor,
     pub player_position: Vector3<f32>,
@@ -147,7 +144,7 @@ impl PacketRead for UseItemOnEntityTransactionData {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         Ok(Self {
             target_entity_runtime_id: VarULong::read(buf)?,
-            action_type: VarUInt::read(buf)?,
+            action_type: VarInt::read(buf)?,
             hot_bar_slot: VarInt::read(buf)?,
             item_in_hand: NetworkItemDescriptor::read(buf)?,
             player_position: Vector3::read(buf)?,
@@ -158,7 +155,7 @@ impl PacketRead for UseItemOnEntityTransactionData {
 
 #[derive(Debug)]
 pub struct ReleaseItemTransactionData {
-    pub action_type: VarUInt,
+    pub action_type: VarInt,
     pub hot_bar_slot: VarInt,
     pub item_in_hand: NetworkItemDescriptor,
     pub head_position: Vector3<f32>,
@@ -167,7 +164,7 @@ pub struct ReleaseItemTransactionData {
 impl PacketRead for ReleaseItemTransactionData {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         Ok(Self {
-            action_type: VarUInt::read(buf)?,
+            action_type: VarInt::read(buf)?,
             hot_bar_slot: VarInt::read(buf)?,
             item_in_hand: NetworkItemDescriptor::read(buf)?,
             head_position: Vector3::read(buf)?,
@@ -199,19 +196,26 @@ impl PacketRead for SInventoryTransaction {
             }
         }
 
-        let _has_transaction_type = bool::read(buf)?;
+        if !bool::read(buf)? {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "missing inventory transaction type",
+            ));
+        }
         let transaction_type = VarUInt::read(buf)?;
 
-        let _has_tr_data = bool::read(buf)?;
-
-        let has_value = bool::read(buf)?;
-        let mut actions = Vec::new();
-        if has_value {
-            let actions_len = VarUInt::read(buf)?.0;
-            for _ in 0..actions_len {
-                actions.push(InventoryAction::read(buf)?);
-            }
+        if !bool::read(buf)? {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "missing inventory action data",
+            ));
         }
+        let actions_len = VarUInt::read(buf)?.0;
+        let mut actions = Vec::with_capacity(actions_len as usize);
+        for _ in 0..actions_len {
+            actions.push(InventoryAction::read(buf)?);
+        }
+        let has_value = !actions.is_empty();
 
         let transaction_data = match transaction_type.0 {
             0 => TransactionData::Normal(NormalTransactionData::read(buf)?),

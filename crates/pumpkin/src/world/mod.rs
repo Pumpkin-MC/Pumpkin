@@ -1893,7 +1893,7 @@ impl World {
             is_created_in_editor: false,
             is_exported_from_editor: false,
             day_cycle_stop_time: VarInt(-1),
-            education_edition_offer: VarInt(0),
+            education_edition_offer: VarUInt(0),
             has_education_features_enabled: false,
             education_product_id: String::new(),
             rain_level: weather.rain_level,
@@ -1915,7 +1915,7 @@ impl World {
             bonus_chest: false,
             has_start_with_map_enabled: false,
             // TODO Bedrock permission level are different
-            permission_level: VarInt(2),
+            permission_level: 2,
             server_simulation_distance: server
                 .advanced_config
                 .networking
@@ -1982,7 +1982,6 @@ impl World {
                 enable_clientside_generation: false,
                 blocknetwork_ids_are_hashed: false,
                 server_auth_sounds: true,
-                is_logging_chat: false,
                 server_join_information: None,
                 telemetry: ServerTelemetryData {
                     server_id: String::new(),
@@ -2112,15 +2111,15 @@ impl World {
                                 JavaToBedrockItemMapping::from_java_item_id(item.id)
                         {
                             return ItemDescriptorCount {
-                                network_id: mapping.bedrock_item.id,
-                                metadata_value: mapping.bedrock_data as i16,
+                                item_identifier: mapping.bedrock_item.registry_key.to_string(),
+                                metadata_value: mapping.bedrock_data as i32,
                                 count: 1,
                             };
                         }
                     }
 
                     ItemDescriptorCount {
-                        network_id: 0,
+                        item_identifier: String::new(),
                         metadata_value: 0,
                         count: 0,
                     }
@@ -2145,7 +2144,7 @@ impl World {
                                 let ch = pattern_row.chars().nth(c as usize).unwrap_or(' ');
                                 if ch == ' ' {
                                     input.push(ItemDescriptorCount {
-                                        network_id: 0,
+                                        item_identifier: String::new(),
                                         metadata_value: 0,
                                         count: 0,
                                     });
@@ -2161,7 +2160,7 @@ impl World {
                                         input.push(map_ingredient(ing));
                                     } else {
                                         input.push(ItemDescriptorCount {
-                                            network_id: 0,
+                                            item_identifier: String::new(),
                                             metadata_value: 0,
                                             count: 0,
                                         });

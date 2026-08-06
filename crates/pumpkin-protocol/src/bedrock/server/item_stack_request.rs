@@ -18,7 +18,7 @@ impl PacketRead for ItemStackRequestSlotInfo {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let container_name = FullContainerName::read(buf)?;
         let slot_id = u8::read(buf)?;
-        let stack_id = VarInt::read(buf)?;
+        let stack_id = VarInt(i32::read(buf)?);
         Ok(Self {
             container_name,
             slot_id,
@@ -124,7 +124,8 @@ pub enum ItemStackRequestAction {
 impl PacketRead for ItemStackRequestAction {
     #[allow(clippy::too_many_lines)]
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        let action_type = u8::read(buf)?;
+        let action_type = VarUInt::read(buf)?.0;
+        let _legacy_action_type = u8::read(buf)?;
         match action_type {
             0 => Ok(Self::Take {
                 count: u8::read(buf)?,
@@ -156,75 +157,59 @@ impl PacketRead for ItemStackRequestAction {
             6 => Ok(Self::Create {
                 result_index: u8::read(buf)?,
             }),
-            7 => Ok(Self::PlaceInContainer {
-                count: u8::read(buf)?,
-                source: ItemStackRequestSlotInfo::read(buf)?,
-                destination: ItemStackRequestSlotInfo::read(buf)?,
-            }),
-            8 => Ok(Self::TakeOutContainer {
-                count: u8::read(buf)?,
-                source: ItemStackRequestSlotInfo::read(buf)?,
-                destination: ItemStackRequestSlotInfo::read(buf)?,
-            }),
-            9 => Ok(Self::LabTableCombine),
-            10 => Ok(Self::BeaconPayment {
+            7 => Ok(Self::LabTableCombine),
+            8 => Ok(Self::BeaconPayment {
                 primary_effect_id: VarInt::read(buf)?,
                 secondary_effect_id: VarInt::read(buf)?,
             }),
-            11 => Ok(Self::MineBlock {
+            9 => Ok(Self::MineBlock {
                 hotbar_slot: VarInt::read(buf)?,
                 predicted_durability: VarInt::read(buf)?,
-                stack_id: VarInt::read(buf)?,
+                stack_id: VarInt(i32::read(buf)?),
             }),
-            12 => Ok(Self::CraftRecipe {
+            10 => Ok(Self::CraftRecipe {
                 recipe_id: VarUInt::read(buf)?,
                 repetitions: u8::read(buf)?,
             }),
-            13 => {
+            11 => {
                 let recipe_id = VarUInt::read(buf)?;
                 let repetitions = u8::read(buf)?;
-                let repetitions2 = u8::read(buf)?;
-                let count = u8::read(buf)?;
-                // Read and discard ingredients if present (we don't need them server-side)
-                if count > 0 {
-                    for _ in 0..count {
-                        // NetworkItemStack includes id, count, aux_value, block_runtime_id and extra_data
-                        let _ = crate::bedrock::network_item::NetworkItemStack::read(buf)?;
-                    }
+                let count = VarUInt::read(buf)?.0;
+                for _ in 0..count {
+                    skip_autocraft_ingredient(buf)?;
                 }
                 Ok(Self::CraftRecipeAuto {
                     recipe_id,
                     repetitions,
-                    repetitions2,
+                    repetitions2: repetitions,
                 })
             }
-            14 => Ok(Self::CraftCreative {
+            12 => Ok(Self::CraftCreative {
                 creative_item_id: VarUInt::read(buf)?,
                 repetitions: u8::read(buf)?,
             }),
-            15 => Ok(Self::Optional {
+            13 => Ok(Self::Optional {
                 recipe_id: VarUInt::read(buf)?,
                 filter_string_index: i32::read(buf)?,
             }),
-            16 => Ok(Self::Grindstone {
-                recipe_id: VarUInt::read(buf)?,
-                repair_cost: VarInt::read(buf)?,
+            14 => Ok(Self::Grindstone {
+                recipe_id: VarUInt(i32::read(buf)? as u32),
                 repetitions: u8::read(buf)?,
+                repair_cost: VarInt::read(buf)?,
             }),
-            17 => Ok(Self::Loom {
+            15 => Ok(Self::Loom {
                 pattern_id: String::read(buf)?,
                 repetitions: u8::read(buf)?,
             }),
-            18 => Ok(Self::CraftNonImplemented),
-            19 => {
+            16 => Ok(Self::CraftNonImplemented),
+            17 => {
                 let result_items_len = VarUInt::read(buf)?.0;
-                let mut result_items = Vec::with_capacity(result_items_len as usize);
                 for _ in 0..result_items_len {
-                    result_items.push(crate::bedrock::network_item::NetworkItemStack::read(buf)?);
+                    skip_request_result_item(buf)?;
                 }
                 let times_crafted = u8::read(buf)?;
                 Ok(Self::CraftResultsDeprecated {
-                    result_items,
+                    result_items: Vec::new(),
                     times_crafted,
                 })
             }
@@ -234,6 +219,47 @@ impl PacketRead for ItemStackRequestAction {
             )),
         }
     }
+}
+
+fn skip_autocraft_ingredient<R: Read>(reader: &mut R) -> Result<(), Error> {
+    let descriptor_type = VarUInt::read(reader)?.0;
+    let _legacy_type = u8::read(reader)?;
+    match descriptor_type {
+        0 => {}
+        1 => {
+            let _identifier = String::read(reader)?;
+            let _aux = VarInt::read(reader)?;
+        }
+        2 => {
+            let _expression = String::read(reader)?;
+            let _version = i16::read(reader)?;
+        }
+        3 => {
+            let _tag = String::read(reader)?;
+        }
+        _ => {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("unknown item descriptor type {descriptor_type}"),
+            ));
+        }
+    }
+    let _count = u16::read(reader)?;
+    Ok(())
+}
+
+fn skip_request_result_item<R: Read>(reader: &mut R) -> Result<(), Error> {
+    let descriptor_type = VarUInt::read(reader)?.0;
+    let _legacy_type = u8::read(reader)?;
+    if descriptor_type != 0 {
+        let _identifier = String::read(reader)?;
+        let _aux = VarInt::read(reader)?;
+    }
+    let _count = i16::read(reader)?;
+    let _block_runtime_id = VarUInt::read(reader)?;
+    let data_len = VarUInt::read(reader)?.0 as usize;
+    let mut data = vec![0; data_len];
+    reader.read_exact(&mut data)
 }
 
 #[derive(Debug)]

@@ -10,6 +10,14 @@ use tracing::warn;
 
 use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates};
 
+fn bedrock_palette_bits(palette_len: usize) -> u8 {
+    match encompassing_bits(palette_len) {
+        bits @ 0..=6 => bits,
+        7..=8 => 8,
+        _ => 16,
+    }
+}
+
 /// 3d array indexed by y,z,x
 type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
 
@@ -549,7 +557,7 @@ impl BiomePalette {
                 packed_data: Box::new([]),
             },
             Self::Heterogeneous(data) => {
-                let bits_per_entry = encompassing_bits(data.palette.len());
+                let bits_per_entry = bedrock_palette_bits(data.palette.len());
 
                 let key_to_index_map: HashMap<_, usize> = data
                     .palette
@@ -698,7 +706,7 @@ impl BlockPalette {
                 packed_data: Box::new([]),
             },
             Self::Heterogeneous(data) => {
-                let bits_per_entry = encompassing_bits(data.palette.len());
+                let bits_per_entry = bedrock_palette_bits(data.palette.len());
 
                 let key_to_index_map: HashMap<_, usize> = data
                     .palette
@@ -981,5 +989,17 @@ mod tests {
         assert_bulk_matches_mutations(|x, y, z| {
             BlockStateId::new_or_air(((y * 256 + z * 16 + x) % 300) as u16)
         });
+    }
+
+    #[test]
+    fn bedrock_palette_uses_supported_bit_widths() {
+        let palette = BlockPalette::from_fn(|x, y, z| {
+            BlockStateId::new(((y * 256 + z * 16 + x) % 65) as u16).unwrap()
+        });
+        let network = palette.convert_be_network();
+
+        assert_eq!(network.bits_per_entry, 8);
+        assert_eq!(network.packed_data.len(), 1024);
+        assert!(matches!(network.palette, NetworkPalette::Indirect(values) if values.len() == 65));
     }
 }

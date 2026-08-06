@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_macros::packet;
 
-#[derive(PacketWrite, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct ItemStackResponseSlotInfo {
     pub slot: u8,
     pub hotbar_slot: u8,
@@ -16,6 +16,22 @@ pub struct ItemStackResponseSlotInfo {
     pub custom_name: String,
     pub filtered_custom_name: String,
     pub durability_correction: VarInt,
+}
+
+impl PacketWrite for ItemStackResponseSlotInfo {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.slot.write(writer)?;
+        self.hotbar_slot.write(writer)?;
+        self.count.write(writer)?;
+        true.write(writer)?;
+        (self.item_stack_id.0 > 0).write(writer)?;
+        if self.item_stack_id.0 > 0 {
+            self.item_stack_id.write(writer)?;
+        }
+        self.custom_name.write(writer)?;
+        self.filtered_custom_name.write(writer)?;
+        self.durability_correction.write(writer)
+    }
 }
 
 #[derive(PacketWrite, Debug, Clone)]
@@ -35,7 +51,9 @@ impl PacketWrite for ItemStackResponse {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.result.write(writer)?;
         self.request_id.write(writer)?;
-        if self.result == 0 {
+        true.write(writer)?;
+        (!self.container_infos.is_empty()).write(writer)?;
+        if !self.container_infos.is_empty() {
             VarUInt(self.container_infos.len() as u32).write(writer)?;
             for info in &self.container_infos {
                 info.write(writer)?;

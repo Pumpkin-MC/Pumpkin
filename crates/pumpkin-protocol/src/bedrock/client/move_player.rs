@@ -66,6 +66,7 @@ impl PacketWrite for CMovePlayer {
         self.mode.write(writer)?;
         self.on_ground.write(writer)?;
         self.riding_runtime_id.write(writer)?;
+        (self.mode == Self::MODE_TELEPORT).write(writer)?;
         if self.mode == Self::MODE_TELEPORT {
             self.teleport_cause.write(writer)?;
             self.teleport_source_entity_type.write(writer)?;
