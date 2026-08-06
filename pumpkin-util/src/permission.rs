@@ -368,6 +368,7 @@ impl<'de> Deserialize<'de> for PermissionLvl {
         let value = u8::deserialize(deserializer)?;
         match value {
             0 => Ok(Self::Zero),
+            1 => Ok(Self::One),
             2 => Ok(Self::Two),
             3 => Ok(Self::Three),
             4 => Ok(Self::Four),
