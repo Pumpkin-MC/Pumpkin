@@ -88,6 +88,8 @@ pub mod forms;
 pub mod permissions;
 /// Custom recipe registration and builder utilities.
 pub mod recipe;
+/// Ergonomic helpers for the bulk region block operations on the world.
+pub mod region;
 /// Scheduler utilities.
 pub mod scheduler;
 /// Scoreboard team management and builder utilities.
@@ -135,6 +137,7 @@ pub use recipe::{
     CookingRecipeBuilder, Ingredient, RecipeCategory, RecipeError, RecipeManager,
     RegistrableRecipe, ShapedRecipeBuilder, ShapelessRecipeBuilder,
 };
+pub use region::{Region, WorldExt};
 pub use screens_wit::Screen;
 pub use statistics_wit::{CustomStatistic, StatisticCategory};
 pub use team::{PlayerTeamExt, ScoreboardTeamExt, Team, TeamSettingsBuilder};

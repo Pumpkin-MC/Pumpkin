@@ -66,7 +66,7 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::game_rul
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockDirection as WitBlockDirection, BlockEntity, BlockEntityType, BlockFlags as WitBlockFlags,
     BlockPos as WitBlockPos, BlockState as WitBlockState, BlockStateInfo as WitBlockStateInfo,
-    BoundingBox as WitBoundingBox, Chunk as WitChunk,
+    BlockUpdate as WitBlockUpdate, BoundingBox as WitBoundingBox, Chunk as WitChunk,
     NoteblockInstrument as WitNoteblockInstrument, PistonBehavior as WitPistonBehavior,
     WorldBorder as WitWorldBorder,
 };
@@ -332,6 +332,105 @@ impl pumpkin::plugin::world::Host for PluginHostState {
         Ok(result.ok())
     }
 }
+
+/// The largest number of blocks a single bulk world operation may touch.
+///
+/// This is a memory-safety limit, not a game-mechanics one. A `get-region`
+/// result is a `list<u16>`, so 2 bytes per block; the value here (2^21) caps
+/// that copy into the plugin's memory at 4 MiB, and bounds how much work a
+/// single call can ask for. It is far larger than vanilla's `/fill` limit;
+/// larger jobs should be split across several calls.
+const MAX_BULK_BLOCKS: u64 = 2_097_152;
+
+/// How many blocks a bulk operation processes before yielding back to the async
+/// runtime, so a large operation cannot starve the server tick.
+///
+/// This trades tick responsiveness against throughput: yielding too often adds
+/// overhead a capable server does not need, while yielding too rarely can stall
+/// a tick. 32768 keeps the pause between yields well under a tick's budget even
+/// on modest hardware while staying cheap. A future improvement could make this
+/// server-configurable.
+const BULK_YIELD_INTERVAL: u64 = 32_768;
+
+/// Converts the plugin-facing block update flags into the server's internal
+/// flags.
+fn to_internal_flags(update_flags: WitBlockFlags) -> BlockFlags {
+    let mut internal_flags = BlockFlags::empty();
+    if update_flags.contains(WitBlockFlags::NOTIFY_NEIGHBORS) {
+        internal_flags |= BlockFlags::NOTIFY_NEIGHBORS;
+    }
+    if update_flags.contains(WitBlockFlags::NOTIFY_LISTENERS) {
+        internal_flags |= BlockFlags::NOTIFY_LISTENERS;
+    }
+    if update_flags.contains(WitBlockFlags::FORCE_STATE) {
+        internal_flags |= BlockFlags::FORCE_STATE;
+    }
+    if update_flags.contains(WitBlockFlags::SKIP_DROPS) {
+        internal_flags |= BlockFlags::SKIP_DROPS;
+    }
+    if update_flags.contains(WitBlockFlags::MOVED) {
+        internal_flags |= BlockFlags::MOVED;
+    }
+    if update_flags.contains(WitBlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT) {
+        internal_flags |= BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT;
+    }
+    if update_flags.contains(WitBlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
+        internal_flags |= BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK;
+    }
+    if update_flags.contains(WitBlockFlags::SKIP_BLOCK_ADDED_CALLBACK) {
+        internal_flags |= BlockFlags::SKIP_BLOCK_ADDED_CALLBACK;
+    }
+    internal_flags
+}
+
+/// Returns the corner-wise minimum and maximum of two positions, so callers can
+/// pass the two corners of a region in any order.
+fn normalized_bounds(a: (i32, i32, i32), b: (i32, i32, i32)) -> ((i32, i32, i32), (i32, i32, i32)) {
+    (
+        (a.0.min(b.0), a.1.min(b.1), a.2.min(b.2)),
+        (a.0.max(b.0), a.1.max(b.1), a.2.max(b.2)),
+    )
+}
+
+/// Returns the number of blocks in the inclusive cuboid between `min` and
+/// `max`, saturating instead of overflowing for absurdly large regions.
+fn region_volume(min: (i32, i32, i32), max: (i32, i32, i32)) -> u64 {
+    // Widen to i64 before subtracting so an extreme span (for example
+    // `i32::MAX - i32::MIN`) cannot overflow.
+    let span = |lo: i32, hi: i32| (i64::from(hi) - i64::from(lo)).unsigned_abs() + 1;
+    span(min.0, max.0)
+        .saturating_mul(span(min.1, max.1))
+        .saturating_mul(span(min.2, max.2))
+}
+
+/// Yields every position in the inclusive cuboid between `min` and `max`,
+/// ordered by x, then z, then y.
+///
+/// `get-region` and `set-region` both iterate through this, which is what
+/// guarantees a snapshot read back with `get-region` lines up with the blocks
+/// `set-region` writes.
+fn region_positions(
+    min: (i32, i32, i32),
+    max: (i32, i32, i32),
+) -> impl Iterator<Item = (i32, i32, i32)> {
+    // The captured tuples are `Copy`, so each nested closure gets its own copy.
+    (min.0..=max.0).flat_map(move |x| {
+        (min.2..=max.2).flat_map(move |z| (min.1..=max.1).map(move |y| (x, y, z)))
+    })
+}
+
+/// Returns an error if a bulk operation would touch more than the allowed
+/// number of blocks.
+fn check_bulk_volume(volume: u64) -> Result<(), String> {
+    if volume > MAX_BULK_BLOCKS {
+        Err(format!(
+            "bulk world operation covers {volume} blocks, which is over the limit of {MAX_BULK_BLOCKS}"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 impl pumpkin::plugin::particles::Host for PluginHostState {}
 impl pumpkin::plugin::sounds::Host for PluginHostState {}
 
@@ -451,31 +550,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let world_ref = self.get_world_res(&world)?;
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
 
-        let mut internal_flags = BlockFlags::empty();
-        if update_flags.contains(WitBlockFlags::NOTIFY_NEIGHBORS) {
-            internal_flags |= BlockFlags::NOTIFY_NEIGHBORS;
-        }
-        if update_flags.contains(WitBlockFlags::NOTIFY_LISTENERS) {
-            internal_flags |= BlockFlags::NOTIFY_LISTENERS;
-        }
-        if update_flags.contains(WitBlockFlags::FORCE_STATE) {
-            internal_flags |= BlockFlags::FORCE_STATE;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_DROPS) {
-            internal_flags |= BlockFlags::SKIP_DROPS;
-        }
-        if update_flags.contains(WitBlockFlags::MOVED) {
-            internal_flags |= BlockFlags::MOVED;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT) {
-            internal_flags |= BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
-            internal_flags |= BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_BLOCK_ADDED_CALLBACK) {
-            internal_flags |= BlockFlags::SKIP_BLOCK_ADDED_CALLBACK;
-        }
+        let internal_flags = to_internal_flags(update_flags);
         let Some(state) = BlockStateId::new(state) else {
             return Err(wasmtime::Error::msg("Invalid BlockStateId"));
         };
@@ -485,6 +560,163 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             .set_block_state(&internal_pos, state, internal_flags)
             .await;
         Ok(())
+    }
+
+    async fn fill_blocks(
+        &mut self,
+        world: Resource<World>,
+        start: WitBlockPos,
+        end: WitBlockPos,
+        state: u16,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<Result<u32, String>> {
+        // Take an owned handle to the world so the loop below does not hold a
+        // borrow of `self` across the many await points.
+        let world = self.get_world_res(&world)?.provider.clone();
+
+        let Some(state) = BlockStateId::new(state) else {
+            return Ok(Err("invalid block state id".to_string()));
+        };
+
+        let (min, max) = normalized_bounds((start.x, start.y, start.z), (end.x, end.y, end.z));
+        if let Err(error) = check_bulk_volume(region_volume(min, max)) {
+            return Ok(Err(error));
+        }
+
+        let flags = to_internal_flags(update_flags);
+        let mut changed = 0u32;
+        // Iterating x, then z, then y keeps consecutive writes within the same
+        // chunk column as much as possible.
+        for (processed, (x, y, z)) in region_positions(min, max).enumerate() {
+            let pos = BlockPos::new(x, y, z);
+            let replaced = world.set_block_state(&pos, state, flags).await;
+            if replaced != state {
+                changed += 1;
+            }
+            if (processed as u64 + 1).is_multiple_of(BULK_YIELD_INTERVAL) {
+                tokio::task::yield_now().await;
+            }
+        }
+
+        Ok(Ok(changed))
+    }
+
+    async fn get_region(
+        &mut self,
+        world: Resource<World>,
+        start: WitBlockPos,
+        end: WitBlockPos,
+    ) -> wasmtime::Result<Result<Vec<u16>, String>> {
+        let world = self.get_world_res(&world)?.provider.clone();
+
+        let (min, max) = normalized_bounds((start.x, start.y, start.z), (end.x, end.y, end.z));
+        let volume = region_volume(min, max);
+        if let Err(error) = check_bulk_volume(volume) {
+            return Ok(Err(error));
+        }
+
+        let mut states = Vec::with_capacity(usize::try_from(volume).unwrap_or(0));
+        for (processed, (x, y, z)) in region_positions(min, max).enumerate() {
+            let pos = BlockPos::new(x, y, z);
+            states.push(world.get_block_state_id(&pos).as_u16());
+            if (processed as u64 + 1).is_multiple_of(BULK_YIELD_INTERVAL) {
+                tokio::task::yield_now().await;
+            }
+        }
+
+        Ok(Ok(states))
+    }
+
+    async fn set_region(
+        &mut self,
+        world: Resource<World>,
+        start: WitBlockPos,
+        end: WitBlockPos,
+        states: Vec<u16>,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<Result<u32, String>> {
+        let world = self.get_world_res(&world)?.provider.clone();
+
+        let (min, max) = normalized_bounds((start.x, start.y, start.z), (end.x, end.y, end.z));
+        let volume = region_volume(min, max);
+        if let Err(error) = check_bulk_volume(volume) {
+            return Ok(Err(error));
+        }
+
+        if states.len() as u64 != volume {
+            return Ok(Err(format!(
+                "set-region expected {volume} block states for the region but got {}",
+                states.len()
+            )));
+        }
+
+        // Validate every state id before changing anything, so an invalid entry
+        // cannot leave the region half-updated.
+        let mut validated = Vec::with_capacity(states.len());
+        for state in states {
+            let Some(state) = BlockStateId::new(state) else {
+                return Ok(Err(format!("invalid block state id {state}")));
+            };
+            validated.push(state);
+        }
+
+        let flags = to_internal_flags(update_flags);
+        let mut changed = 0u32;
+        // Shares `region_positions` with `get_region`, so the states line up with
+        // the same blocks a snapshot was read from.
+        for (index, (x, y, z)) in region_positions(min, max).enumerate() {
+            let pos = BlockPos::new(x, y, z);
+            let state = validated[index];
+            let replaced = world.set_block_state(&pos, state, flags).await;
+            if replaced != state {
+                changed += 1;
+            }
+            if (index as u64 + 1).is_multiple_of(BULK_YIELD_INTERVAL) {
+                tokio::task::yield_now().await;
+            }
+        }
+
+        Ok(Ok(changed))
+    }
+
+    async fn set_blocks(
+        &mut self,
+        world: Resource<World>,
+        blocks: Vec<WitBlockUpdate>,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<Result<u32, String>> {
+        let world = self.get_world_res(&world)?.provider.clone();
+
+        if let Err(error) = check_bulk_volume(blocks.len() as u64) {
+            return Ok(Err(error));
+        }
+
+        // Validate every state id before changing anything, so an invalid entry
+        // cannot leave the world half-updated.
+        let mut updates = Vec::with_capacity(blocks.len());
+        for block in blocks {
+            let Some(state) = BlockStateId::new(block.state) else {
+                return Ok(Err(format!(
+                    "invalid block state id {} at ({}, {}, {})",
+                    block.state, block.pos.x, block.pos.y, block.pos.z
+                )));
+            };
+            updates.push((BlockPos::new(block.pos.x, block.pos.y, block.pos.z), state));
+        }
+
+        let flags = to_internal_flags(update_flags);
+        let mut changed = 0u32;
+        for (index, (pos, state)) in updates.into_iter().enumerate() {
+            let replaced = world.set_block_state(&pos, state, flags).await;
+            if replaced != state {
+                changed += 1;
+            }
+            if (index as u64 + 1).is_multiple_of(BULK_YIELD_INTERVAL) {
+                tokio::task::yield_now().await;
+            }
+        }
+
+        Ok(Ok(changed))
     }
 
     async fn get_time_of_day(&mut self, world: Resource<World>) -> wasmtime::Result<u64> {
@@ -1754,5 +1986,74 @@ impl pumpkin_world::generation::generator::CustomChunkGenerator for WasmChunkGen
         let chunk = cache.chunks[mid].get_proto_chunk_mut();
         self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Features, chunk);
         chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Features;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{
+        MAX_BULK_BLOCKS, check_bulk_volume, normalized_bounds, region_positions, region_volume,
+    };
+
+    #[test]
+    fn bounds_are_normalized_regardless_of_corner_order() {
+        let (min, max) = normalized_bounds((5, 10, 5), (0, 2, 8));
+        assert_eq!(min, (0, 2, 5));
+        assert_eq!(max, (5, 10, 8));
+    }
+
+    #[test]
+    fn volume_counts_inclusive_blocks() {
+        assert_eq!(region_volume((7, 7, 7), (7, 7, 7)), 1);
+        assert_eq!(region_volume((0, 0, 0), (2, 2, 2)), 27);
+        assert_eq!(region_volume((0, 2, 5), (5, 10, 8)), 6 * 9 * 4);
+    }
+
+    #[test]
+    fn extreme_spans_saturate_instead_of_overflowing() {
+        // Would overflow if computed with i32 subtraction or non-saturating
+        // multiplication; must simply come back very large and be rejected.
+        let volume = region_volume(
+            (i32::MIN, i32::MIN, i32::MIN),
+            (i32::MAX, i32::MAX, i32::MAX),
+        );
+        assert!(volume >= MAX_BULK_BLOCKS);
+        assert!(check_bulk_volume(volume).is_err());
+    }
+
+    #[test]
+    fn region_positions_are_x_then_z_then_y_and_cover_the_volume() {
+        let (min, max) = ((0, 0, 0), (1, 1, 1));
+        let positions: Vec<_> = region_positions(min, max).collect();
+
+        // Count matches the volume, and the order is x (outer), z (middle),
+        // y (inner) so it round-trips with a get-region snapshot.
+        assert_eq!(positions.len() as u64, region_volume(min, max));
+        assert_eq!(
+            positions,
+            vec![
+                (0, 0, 0),
+                (0, 1, 0),
+                (0, 0, 1),
+                (0, 1, 1),
+                (1, 0, 0),
+                (1, 1, 0),
+                (1, 0, 1),
+                (1, 1, 1),
+            ]
+        );
+    }
+
+    #[test]
+    fn region_positions_handle_a_single_block() {
+        let positions: Vec<_> = region_positions((4, 5, 6), (4, 5, 6)).collect();
+        assert_eq!(positions, vec![(4, 5, 6)]);
+    }
+
+    #[test]
+    fn volume_limit_is_inclusive() {
+        assert!(check_bulk_volume(MAX_BULK_BLOCKS).is_ok());
+        assert!(check_bulk_volume(MAX_BULK_BLOCKS + 1).is_err());
+        assert!(check_bulk_volume(1).is_ok());
     }
 }
