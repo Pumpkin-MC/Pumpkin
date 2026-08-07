@@ -2661,6 +2661,7 @@ dependencies = [
  "pumpkin-macros",
  "pumpkin-nbt",
  "pumpkin-protocol",
+ "pumpkin-registry",
  "pumpkin-util",
  "pumpkin-world",
  "rand",
@@ -2814,12 +2815,7 @@ dependencies = [
 name = "pumpkin-registry"
 version = "0.1.0-dev+26.2-26.40"
 dependencies = [
- "dashmap",
- "pumpkin-data",
- "pumpkin-macros",
- "pumpkin-nbt",
  "pumpkin-util",
- "pumpkin-world",
  "rustc-hash",
  "thiserror 2.0.19",
  "tokio",
@@ -2869,6 +2865,7 @@ dependencies = [
  "futures",
  "itertools 0.15.0",
  "lz4-java-wrc",
+ "num-traits",
  "pumpkin-config",
  "pumpkin-data",
  "pumpkin-nbt",

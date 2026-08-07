@@ -7,24 +7,14 @@ license.workspace = true
 
 [features]
 [dependencies]
-pumpkin-nbt.workspace = true
-pumpkin-data = { workspace = true, features = ["packet", "item_id_remap", "entity_id_remap", "sound_id_remap", "particle_id_remap", "recipes", "bedrock_creative"] }
-pumpkin-macros.workspace = true
-pumpkin-world.workspace = true
 pumpkin-util.workspace = true
-
+tokio = { workspace = true, features = ["sync"] }
 thiserror.workspace = true
-dashmap.workspace = true
 rustc-hash.workspace = true
-tokio = { workspace = true, features = ["net"] }
 
 [dev-dependencies]
 # Validate correctness
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true
-
-[package.metadata.cargo-machete]
-# Not yet used: this crate is infrastructure only so far (see module docs). These are
-# needed once it actually registers Pumpkin's built-in registries and loads data packs.
-ignored = ["pumpkin-data", "pumpkin-macros", "pumpkin-nbt", "pumpkin-world", "tokio"]
