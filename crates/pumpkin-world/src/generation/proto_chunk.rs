@@ -414,7 +414,23 @@ impl ProtoChunk {
             }
         }
 
-        proto_chunk.stage = StagedChunkEnum::from(chunk_data.status);
+        let resumed_stage = StagedChunkEnum::from(chunk_data.status);
+
+        // `ChunkData` has no on-disk field for `structure_starts`/`structure_references`, so a
+        // chunk saved at or past `StructureReferences` and reloaded here would otherwise resume
+        // with that map permanently empty: the later `Features`-stage jigsaw placement reads
+        // only `self.structure_starts` and silently places nothing for this chunk. Recompute it
+        // here instead of persisting it -- it's a pure function of seed, biomes (just restored
+        // above) and the world-wide structure cache, so redoing it is cheap and exact.
+        if resumed_stage as u8 >= StagedChunkEnum::StructureReferences as u8
+            && let super::generator::WorldGenerator::Noise(noise_gen) = generator
+        {
+            proto_chunk.stage = StagedChunkEnum::Biomes;
+            proto_chunk.set_structure_starts(noise_gen);
+            proto_chunk.set_structure_references(noise_gen);
+        }
+
+        proto_chunk.stage = resumed_stage;
         proto_chunk
     }
 
