@@ -4003,7 +4003,8 @@ impl Player {
             self.close_handled_screen().await;
         }
 
-        if let Some(server) = self.world().server.upgrade() {
+        let server = self.world().server.upgrade();
+        if let Some(server) = server {
             let mut event =
                 crate::plugin::api::events::inventory::inventory_open::InventoryOpenEvent::new(
                     self.clone(),
