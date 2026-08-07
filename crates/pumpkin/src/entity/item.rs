@@ -19,7 +19,7 @@ use std::sync::atomic::Ordering::{AcqRel, Relaxed};
 use std::sync::{
     Arc,
     atomic::{
-        AtomicBool, AtomicU8, AtomicU32,
+        AtomicBool, AtomicI32, AtomicU8, AtomicU32,
         Ordering::{self},
     },
 };
@@ -27,16 +27,24 @@ use tokio::sync::Mutex;
 
 use super::{Entity, EntityBase, NBTStorage, NbtFuture, living::LivingEntity, player::Player};
 
+/// Vanilla `ItemEntity.setUnlimitedLifetime` sentinel: an item with this age
+/// never increments (`ItemEntity.java` tick: `if (this.age != -32768)`), so it
+/// never reaches the despawn threshold.
+const INFINITE_LIFETIME_AGE: i32 = -32768;
+
 pub struct ItemEntity {
     entity: Entity,
-    item_age: AtomicU32,
+    /// Vanilla `ItemEntity.age`: a plain signed counter, not a magnitude.
+    /// Negative starting values (e.g. -6000 for extended lifetime) still
+    /// increment every tick toward the 6000 despawn threshold; only
+    /// `INFINITE_LIFETIME_AGE` is exempt.
+    item_age: AtomicI32,
     merge_tick: AtomicU32,
     // These cannot be atomic values because we mutate their state based on what they are; we run
     // into the ABA problem
     item_stack: Mutex<ItemStack>,
     pickup_delay: AtomicU8,
     health: AtomicF32,
-    never_despawn: AtomicBool,
     never_pickup: AtomicBool,
 }
 
@@ -49,21 +57,15 @@ impl ItemEntity {
         ));
         entity.yaw.store(rand::random::<f32>() * 360.0);
 
-        // Set fire immunity for certain items
-        if let Some(res) = item_stack.get_data_component::<DamageResistantImpl>()
-            && res.res_type == DamageResistantType::Fire
-        {
-            entity.fire_immune.store(true, Ordering::Relaxed);
-        }
+        Self::update_fire_immunity(&entity, &item_stack);
 
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
-            item_age: AtomicU32::new(0),
+            item_age: AtomicI32::new(0),
             merge_tick: AtomicU32::new(0),
             pickup_delay: AtomicU8::new(10), // Vanilla pickup delay is 10 ticks
             health: AtomicF32::new(5.0),
-            never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
         }
     }
@@ -77,21 +79,15 @@ impl ItemEntity {
         entity.velocity.store(velocity);
         entity.yaw.store(rand::random::<f32>() * 360.0);
 
-        // Set fire immunity for certain items
-        if let Some(res) = item_stack.get_data_component::<DamageResistantImpl>()
-            && res.res_type == DamageResistantType::Fire
-        {
-            entity.fire_immune.store(true, Ordering::Relaxed);
-        }
+        Self::update_fire_immunity(&entity, &item_stack);
 
         Self {
             entity,
             item_stack: Mutex::new(item_stack),
-            item_age: AtomicU32::new(0),
+            item_age: AtomicI32::new(0),
             merge_tick: AtomicU32::new(0),
             pickup_delay: AtomicU8::new(pickup_delay), // Vanilla pickup delay is 10 ticks
             health: AtomicF32::new(5.0),
-            never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
         }
     }
@@ -102,13 +98,23 @@ impl ItemEntity {
         Self {
             entity,
             item_stack: Mutex::new(ItemStack::new(1, &pumpkin_data::item::Item::AIR)),
-            item_age: AtomicU32::new(0),
+            item_age: AtomicI32::new(0),
             merge_tick: AtomicU32::new(0),
             pickup_delay: AtomicU8::new(10),
             health: AtomicF32::new(5.0),
-            never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
         }
+    }
+
+    /// Vanilla derives fire immunity from the held stack on every query
+    /// (`ItemEntity.fireImmune`), so it has to be refreshed whenever the stack
+    /// is replaced -- notably when an entity is restored from NBT.
+    fn update_fire_immunity(entity: &Entity, item_stack: &ItemStack) {
+        let immune = item_stack
+            .get_data_component::<DamageResistantImpl>()
+            .is_some_and(|res| res.res_type == DamageResistantType::Fire);
+
+        entity.fire_immune.store(immune, Ordering::Relaxed);
     }
 
     pub const fn get_item_stack(&self) -> &Mutex<ItemStack> {
@@ -125,9 +131,11 @@ impl ItemEntity {
     }
 
     async fn can_merge(&self) -> bool {
+        let age = self.item_age.load(Ordering::Relaxed);
         if self.never_pickup.load(Ordering::Relaxed)
             || self.entity.removed.load(Ordering::Relaxed)
-            || self.item_age.load(Ordering::Relaxed) >= 6_000
+            || age == INFINITE_LIFETIME_AGE
+            || age >= 6_000
             || self.pickup_delay.load(Ordering::Relaxed) == u8::MAX
         {
             return false;
@@ -208,18 +216,15 @@ impl ItemEntity {
 
         drop(stack2);
 
-        let never_despawn = source.never_despawn.load(Ordering::Relaxed);
+        // Vanilla: `toItem.age = Math.min(toItem.age, fromItem.age)`, unconditionally.
+        // `INFINITE_LIFETIME_AGE` (-32768) is always the smallest legal age, so the
+        // plain min already propagates the "never despawn" sentinel to the target.
+        let age = target
+            .item_age
+            .load(Ordering::Relaxed)
+            .min(source.item_age.load(Ordering::Relaxed));
 
-        target.never_despawn.store(never_despawn, Ordering::Relaxed);
-
-        if !never_despawn {
-            let age = target
-                .item_age
-                .load(Ordering::Relaxed)
-                .min(source.item_age.load(Ordering::Relaxed));
-
-            target.item_age.store(age, Ordering::Relaxed);
-        }
+        target.item_age.store(age, Ordering::Relaxed);
 
         let never_pickup = source.never_pickup.load(Ordering::Relaxed);
 
@@ -309,22 +314,18 @@ impl ItemEntity {
         }
     }
 
-    async fn should_tick_move(&self, move_velo: Vector3<f64>) -> Option<bool> {
+    fn should_tick_move(&self, move_velo: Vector3<f64>) -> bool {
         let entity = &self.entity;
 
         let mut tick_move = !entity.on_ground.load(Ordering::SeqCst)
             || move_velo.horizontal_length_squared() > 1.0e-5;
 
         if !tick_move {
-            let Ok(item_age) = i32::try_from(self.item_age.load(Ordering::Relaxed)) else {
-                entity.remove().await;
-                return None;
-            };
-
+            let item_age = self.item_age.load(Ordering::Relaxed);
             tick_move = (item_age + entity.entity_id) % 4 == 0;
         }
 
-        Some(tick_move)
+        tick_move
     }
 
     async fn move_and_apply_friction<'a>(
@@ -344,7 +345,7 @@ impl ItemEntity {
         let mut velo = entity.velocity.load();
         if on_ground {
             let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).1;
-            friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
+            friction *= f64::from(block_affecting_velo.slipperiness);
         }
 
         velo = velo.multiply(friction, 0.98, friction);
@@ -358,15 +359,22 @@ impl ItemEntity {
 
     async fn process_age_and_merge(&self) -> bool {
         let entity = &self.entity;
-        let never_despawn = self.never_despawn.load(Ordering::Relaxed);
         let merge_tick = self.merge_tick.fetch_add(1, Ordering::Relaxed) + 1;
-        let age = if never_despawn {
-            self.item_age.load(Ordering::Relaxed)
-        } else {
-            self.item_age.fetch_add(1, Ordering::Relaxed) + 1
-        };
 
-        if !never_despawn && age >= 6000 {
+        // Vanilla: `if (this.age != -32768) { this.age++; }` -- every other age,
+        // including negative extended-lifetime starts, increments normally.
+        // A single fetch_update (rather than load-then-branch-then-fetch_add)
+        // is required here: `try_merge_with` can store INFINITE_LIFETIME_AGE
+        // into this same counter from another entity's tick concurrently, and
+        // a load/store split could race past it and increment it away.
+        let age = self
+            .item_age
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |age| {
+                (age != INFINITE_LIFETIME_AGE).then_some(age + 1)
+            })
+            .map_or(INFINITE_LIFETIME_AGE, |prev| prev + 1);
+
+        if age >= 6000 {
             entity.remove().await;
             return false;
         }
@@ -421,11 +429,17 @@ impl NBTStorage for ItemEntity {
             item.write_item_stack(&mut item_compound);
             nbt.put_compound("Item", item_compound);
 
+            // Vanilla: `output.putShort("Age", (short)this.age)` -- a plain cast,
+            // no special-casing for the sentinel.
             nbt.put_short("Age", self.item_age.load(Ordering::Relaxed) as i16);
-            nbt.put_short(
-                "PickupDelay",
-                self.pickup_delay.load(Ordering::Relaxed) as i16,
-            );
+
+            // `u8::MAX` is this implementation's "never pick up" sentinel;
+            // vanilla spells the same thing as 32767.
+            let pickup_delay = match self.pickup_delay.load(Ordering::Relaxed) {
+                u8::MAX => i16::MAX,
+                delay => i16::from(delay),
+            };
+            nbt.put_short("PickupDelay", pickup_delay);
             nbt.put_short("Health", self.health.load(Relaxed) as i16);
         })
     }
@@ -438,16 +452,30 @@ impl NBTStorage for ItemEntity {
             if let Some(item_compound) = nbt.get_compound("Item")
                 && let Some(stack) = ItemStack::read_item_stack(item_compound)
             {
+                Self::update_fire_immunity(&self.entity, &stack);
                 *self.item_stack.lock().await = stack;
             }
 
-            // Vanilla stores Age as a short
-            self.item_age
-                .store(nbt.get_short("Age").unwrap_or(0) as u32, Ordering::Relaxed);
+            // Vanilla: `this.age = input.getShortOr("Age", (short)0)`. Negative
+            // values are legitimate active states (-32768 never despawns, -6000
+            // is the extended-lifetime start) and must round-trip as-is.
+            let age = nbt.get_short("Age").unwrap_or(0);
+            self.item_age.store(i32::from(age), Ordering::Relaxed);
 
-            // Vanilla stores PickupDelay as a short
+            // Vanilla stores PickupDelay as a short where 32767 means "never".
+            // Truncating instead of saturating would turn e.g. 300 into 44.
             if let Some(delay) = nbt.get_short("PickupDelay") {
-                self.pickup_delay.store(delay as u8, Ordering::Relaxed);
+                // `delay >= i16::MAX` is the "never pick up" sentinel check (vanilla's 32767).
+                // clippy flags `>=` against a max value as redundant since `i16` can't exceed
+                // it, but `>=` documents intent (at-or-past the sentinel) better than `==` and
+                // is kept deliberately rather than narrowed to an exact-match comparison.
+                #[allow(clippy::absurd_extreme_comparisons)]
+                let delay = if delay >= i16::MAX {
+                    u8::MAX
+                } else {
+                    delay.clamp(0, i16::from(u8::MAX - 1)) as u8
+                };
+                self.pickup_delay.store(delay, Ordering::Relaxed);
             }
 
             // Vanilla stores Health as a short
@@ -466,6 +494,12 @@ impl EntityBase for ItemEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.entity;
+
+            if self.item_stack.lock().await.is_empty() {
+                entity.remove().await;
+                return;
+            }
+
             self.decrement_pickup_delay();
 
             let original_velo = entity.velocity.load();
@@ -477,11 +511,7 @@ impl EntityBase for ItemEntity {
 
             let move_velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
 
-            let Some(tick_move) = self.should_tick_move(move_velo).await else {
-                return;
-            };
-
-            if tick_move {
+            if self.should_tick_move(move_velo) {
                 self.move_and_apply_friction(caller, server, move_velo)
                     .await;
             }
