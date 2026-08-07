@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::block::entities::enchanting_table::EnchantingTableBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, PlacedArgs};
-use pumpkin_data::{Block, BlockStateId, translation};
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::{Block, translation};
 use pumpkin_inventory::enchanting::enchanting_screen_handler::EnchantingTableScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -30,9 +31,10 @@ impl BlockBehaviour for EnchantingTableBlock {
         Box::pin(async move {
             // EnchantingTableBlock.BOOKSHELF_OFFSETS / isValidBookShelf (26.2 decompile): every
             // (x,y,z) with x,z in -2..=2, y in 0..=1 and (|x| == 2 or |z| == 2) is a candidate
-            // shelf position, gated by a single-height air gap at (x/2, y, z/2) — integer
-            // division truncating toward zero, same as Java's, so the gap sits exactly between
-            // the table and the shelf.
+            // shelf position, gated by the gap at (x/2, y, z/2) — integer division truncating
+            // toward zero, same as Java's, so the gap sits exactly between the table and the
+            // shelf — being in `#minecraft:enchantment_power_transmitter` (air, water, lava,
+            // short grass, snow, vines, fire, seagrass, etc, not just air).
             let mut bookshelf_count = 0;
             for off_x in -2i32..=2 {
                 for off_z in -2i32..=2 {
@@ -41,7 +43,10 @@ impl BlockBehaviour for EnchantingTableBlock {
                     }
                     for off_y in 0..=1 {
                         let gap = args.position.add(off_x / 2, off_y, off_z / 2);
-                        if args.world.get_block_state(&gap).id != BlockStateId::AIR {
+                        let gap_state = args.world.get_block_state(&gap);
+                        let gap_block = Block::from_state_id(gap_state.id);
+                        if !gap_block.has_tag(&tag::Block::MINECRAFT_ENCHANTMENT_POWER_TRANSMITTER)
+                        {
                             continue;
                         }
                         if Self::is_bookshelf(args.world, &args.position.add(off_x, off_y, off_z)) {

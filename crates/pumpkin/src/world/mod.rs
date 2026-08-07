@@ -1599,21 +1599,31 @@ impl World {
         if !self.is_in_height_limit(pos.0.y) || self.get_block_light_level(pos).unwrap_or(0) >= 10 {
             return false;
         }
-        if !self.is_water_at(pos) {
+        // `fluidState.is(Fluids.WATER)`: the exact WATER *source* fluid object, not
+        // FLOWING_WATER (never fires here), not LAVA/FLOWING_LAVA (a source lava block is
+        // also `is_source`, so that check alone is not enough to exclude it), and not a
+        // waterlogged non-liquid block (that also reports the source fluid state but fails
+        // vanilla's accompanying `blockState.getBlock() instanceof LiquidBlock` check).
+        // Reading the fluid from the block's own state id, rather than through `get_fluid`
+        // (which maps waterlogged blocks to FLOWING_WATER), excludes waterlogged blocks here
+        // the same way vanilla's `instanceof LiquidBlock` does. `Fluid`'s `PartialEq` compares
+        // registry id, so this is the exact-object comparison vanilla's `.is()` performs.
+        let state_id = self.get_block_state_id(pos);
+        if Fluid::from_state_id(state_id) != Some(&Fluid::WATER) {
             return false;
         }
-        // A lake freezes from its edges inward: a source/flowing water block only freezes if
-        // at least one horizontal neighbor is not itself water.
+        // A lake freezes from its edges inward: a source water block only freezes if at least
+        // one horizontal neighbor is not itself water. `LevelReader#isWaterAt` is tag-based, so
+        // it also counts waterlogged non-liquid blocks (fences, stairs, kelp, ...) as water.
         [pos.west(), pos.east(), pos.north(), pos.south()]
             .iter()
             .any(|neighbor| !self.is_water_at(neighbor))
     }
 
-    /// `LevelReader#isWaterAt`.
+    /// `LevelReader#isWaterAt`: `getFluidState(pos).is(FluidTags.WATER)`. Tag-based, so
+    /// waterlogged non-liquid blocks count as water too.
     fn is_water_at(&self, pos: &BlockPos) -> bool {
-        let state_id = self.get_block_state_id(pos);
-        Fluid::from_state_id(state_id)
-            .unwrap_or(&Fluid::EMPTY)
+        self.get_fluid(pos)
             .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER)
     }
 
@@ -5129,6 +5139,35 @@ impl World {
     pub async fn release_poi(&self, pos: BlockPos) -> bool {
         let mut storage = self.portal_poi.lock().await;
         storage.release_ticket(&pos)
+    }
+
+    /// Like [`Self::acquire_poi`], but additionally requires the block at the candidate
+    /// position to satisfy `predicate` - needed where `poi_type` is a coarser bucket than
+    /// vanilla's per-profession POI types (see `village_poi::POI_TYPE_JOB_SITE`'s doc
+    /// comment) and a caller must only claim a POI whose block matches a specific
+    /// profession, e.g. a librarian must not claim a composter even though both are
+    /// `minecraft:job_site`.
+    pub async fn acquire_poi_where(
+        &self,
+        poi_type: &str,
+        center: BlockPos,
+        radius: i32,
+        predicate: impl Fn(&Block) -> bool,
+    ) -> Option<BlockPos> {
+        let mut storage = self.portal_poi.lock().await;
+        let mut candidates: Vec<BlockPos> = storage
+            .get_in_square(center, radius, Some(poi_type))
+            .into_iter()
+            .filter(|candidate| village_poi::in_sphere(center, *candidate, radius))
+            .collect();
+        candidates.sort_by_key(|candidate| village_poi::distance_sq(center, *candidate));
+        for candidate in candidates {
+            let (block, _state) = self.get_block_and_state(&candidate);
+            if predicate(block) && storage.acquire_ticket(&candidate) {
+                return Some(candidate);
+            }
+        }
+        None
     }
 
     /// The greater of the block light and the sky light reduced by

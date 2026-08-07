@@ -48,11 +48,21 @@ impl Default for TrialSpawnerConfig {
 }
 
 impl TrialSpawnerConfig {
-    fn from_nbt(nbt: Option<&NbtCompound>) -> Self {
+    // TrialSpawnerConfig.CODEC (TrialSpawnerConfig.java:53) is a RegistryFileCodec:
+    // structure-baked NBT stores a bare resource-key string (e.g.
+    // "minecraft:trial_chamber/melee/zombie/normal") pointing at the built-in
+    // trial_spawner_config registry (TrialSpawnerConfigs.java), not an inline compound.
+    // An inline compound is still accepted for hand-authored / test NBT.
+    fn from_nbt(nbt: Option<&NbtTag>) -> Self {
+        match nbt {
+            Some(NbtTag::String(key)) => built_in_config(key).unwrap_or_default(),
+            Some(NbtTag::Compound(nbt)) => Self::from_compound(nbt),
+            _ => Self::default(),
+        }
+    }
+
+    fn from_compound(nbt: &NbtCompound) -> Self {
         let mut config = Self::default();
-        let Some(nbt) = nbt else {
-            return config;
-        };
         if let Some(v) = nbt.get_int("spawn_range") {
             config.spawn_range = v;
         }
@@ -124,10 +134,92 @@ impl TrialSpawnerConfig {
     }
 }
 
+// TrialSpawnerConfigs.java:22-269 (bootstrap registry). Equipment loot tables and
+// per-mob NBT modifiers (baby zombie, slime size) are not carried through spawn_mob's
+// simple entity-type spawn, only the mob choice and pacing.
+fn built_in_config(key: &str) -> Option<TrialSpawnerConfig> {
+    const D_SIM: f32 = 2.0;
+    const D_TOTAL: f32 = 6.0;
+    const D_TOTAL_ADD: f32 = 2.0;
+
+    let key = key.strip_prefix("minecraft:").unwrap_or(key);
+    let (path, variant) = key.rsplit_once('/')?;
+    let is_ominous = match variant {
+        "normal" => false,
+        "ominous" => true,
+        _ => return None,
+    };
+
+    // (simultaneous_mobs, simultaneous_mobs_added_per_player, ticks_between_spawn,
+    // total_mobs, total_mobs_added_per_player, mob)
+    let (sim, sim_add, ticks, total, total_add, mob): (f32, f32, i64, f32, f32, &str) =
+        match (path, is_ominous) {
+            ("trial_chamber/breeze", false) => (1.0, 0.5, 20, 2.0, 1.0, "breeze"),
+            ("trial_chamber/breeze", true) => (D_SIM, 0.5, 20, 4.0, 1.0, "breeze"),
+            ("trial_chamber/melee/husk", false | true) => {
+                (3.0, 0.5, 20, D_TOTAL, D_TOTAL_ADD, "husk")
+            }
+            ("trial_chamber/melee/spider", false) => (3.0, 0.5, 20, D_TOTAL, D_TOTAL_ADD, "spider"),
+            ("trial_chamber/melee/spider", true) => (4.0, 0.5, 20, 12.0, D_TOTAL_ADD, "spider"),
+            ("trial_chamber/melee/zombie", false | true) => {
+                (3.0, 0.5, 20, D_TOTAL, D_TOTAL_ADD, "zombie")
+            }
+            ("trial_chamber/ranged/poison_skeleton", false | true) => {
+                (3.0, 0.5, 20, D_TOTAL, D_TOTAL_ADD, "bogged")
+            }
+            ("trial_chamber/ranged/skeleton", false | true) => {
+                (3.0, 0.5, 20, D_TOTAL, D_TOTAL_ADD, "skeleton")
+            }
+            ("trial_chamber/ranged/stray", false | true) => {
+                (3.0, 0.5, 20, D_TOTAL, D_TOTAL_ADD, "stray")
+            }
+            ("trial_chamber/slow_ranged/poison_skeleton", false | true) => {
+                (4.0, 2.0, 160, D_TOTAL, D_TOTAL_ADD, "bogged")
+            }
+            ("trial_chamber/slow_ranged/skeleton", false | true) => {
+                (4.0, 2.0, 160, D_TOTAL, D_TOTAL_ADD, "skeleton")
+            }
+            ("trial_chamber/slow_ranged/stray", false | true) => {
+                (4.0, 2.0, 160, D_TOTAL, D_TOTAL_ADD, "stray")
+            }
+            ("trial_chamber/small_melee/baby_zombie", false | true) => {
+                (D_SIM, 0.5, 20, D_TOTAL, D_TOTAL_ADD, "zombie")
+            }
+            ("trial_chamber/small_melee/cave_spider", false) => {
+                (3.0, 0.5, 20, D_TOTAL, D_TOTAL_ADD, "cave_spider")
+            }
+            ("trial_chamber/small_melee/cave_spider", true) => {
+                (4.0, 0.5, 20, 12.0, D_TOTAL_ADD, "cave_spider")
+            }
+            ("trial_chamber/small_melee/silverfish", false) => {
+                (3.0, 0.5, 20, D_TOTAL, D_TOTAL_ADD, "silverfish")
+            }
+            ("trial_chamber/small_melee/silverfish", true) => {
+                (4.0, 0.5, 20, 12.0, D_TOTAL_ADD, "silverfish")
+            }
+            ("trial_chamber/small_melee/slime", false) => {
+                (3.0, 0.5, 20, D_TOTAL, D_TOTAL_ADD, "slime")
+            }
+            ("trial_chamber/small_melee/slime", true) => (4.0, 0.5, 20, 12.0, D_TOTAL_ADD, "slime"),
+            _ => return None,
+        };
+
+    let entity_type = EntityType::from_name(mob)?;
+    Some(TrialSpawnerConfig {
+        spawn_range: 4,
+        total_mobs: total,
+        simultaneous_mobs: sim,
+        total_mobs_added_per_player: total_add,
+        simultaneous_mobs_added_per_player: sim_add,
+        ticks_between_spawn: ticks,
+        spawn_potentials: vec![(entity_type, 1)],
+    })
+}
+
 pub struct TrialSpawnerBlockEntity {
     pub position: BlockPos,
-    normal_config_nbt: Mutex<Option<NbtCompound>>,
-    ominous_config_nbt: Mutex<Option<NbtCompound>>,
+    normal_config_nbt: Mutex<Option<NbtTag>>,
+    ominous_config_nbt: Mutex<Option<NbtTag>>,
     normal_config: TrialSpawnerConfig,
     ominous_config: TrialSpawnerConfig,
     target_cooldown_length: i64,
@@ -514,8 +606,8 @@ impl BlockEntity for TrialSpawnerBlockEntity {
     where
         Self: Sized,
     {
-        let normal_config_nbt = nbt.get_compound("normal_config").cloned();
-        let ominous_config_nbt = nbt.get_compound("ominous_config").cloned();
+        let normal_config_nbt = nbt.get("normal_config").cloned();
+        let ominous_config_nbt = nbt.get("ominous_config").cloned();
         let normal_config = TrialSpawnerConfig::from_nbt(normal_config_nbt.as_ref());
         let ominous_config = TrialSpawnerConfig::from_nbt(ominous_config_nbt.as_ref());
         let target_cooldown_length = nbt
@@ -568,10 +660,10 @@ impl BlockEntity for TrialSpawnerBlockEntity {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             if let Some(cfg) = self.normal_config_nbt.lock().await.as_ref() {
-                nbt.put_compound("normal_config", cfg.clone());
+                nbt.put("normal_config", cfg.clone());
             }
             if let Some(cfg) = self.ominous_config_nbt.lock().await.as_ref() {
-                nbt.put_compound("ominous_config", cfg.clone());
+                nbt.put("ominous_config", cfg.clone());
             }
 
             let mut data = NbtCompound::new();
@@ -612,12 +704,12 @@ impl BlockEntity for TrialSpawnerBlockEntity {
         if let Ok(cfg) = self.normal_config_nbt.try_lock()
             && let Some(ref cfg) = *cfg
         {
-            nbt.put_compound("normal_config", cfg.clone());
+            nbt.put("normal_config", cfg.clone());
         }
         if let Ok(cfg) = self.ominous_config_nbt.try_lock()
             && let Some(ref cfg) = *cfg
         {
-            nbt.put_compound("ominous_config", cfg.clone());
+            nbt.put("ominous_config", cfg.clone());
         }
         Some(nbt)
     }
@@ -769,5 +861,25 @@ mod tests {
         assert!((c.total_mobs - 6.0).abs() < f32::EPSILON);
         assert!((c.simultaneous_mobs - 2.0).abs() < f32::EPSILON);
         assert_eq!(c.ticks_between_spawn, 40);
+    }
+
+    #[test]
+    fn built_in_config_resolves_structure_baked_resource_key() {
+        let cfg = built_in_config("minecraft:trial_chamber/melee/zombie/normal")
+            .expect("known key must resolve");
+        assert!(!cfg.spawn_potentials.is_empty());
+        assert_eq!(cfg.spawn_potentials[0].0.id, EntityType::ZOMBIE.id);
+        assert_eq!(cfg.ticks_between_spawn, 20);
+    }
+
+    #[test]
+    fn built_in_config_rejects_unknown_key() {
+        assert!(built_in_config("minecraft:not_a_real_config/normal").is_none());
+    }
+
+    #[test]
+    fn from_nbt_falls_back_to_empty_default_for_unresolvable_string() {
+        let config = TrialSpawnerConfig::from_nbt(Some(&NbtTag::String("nope".into())));
+        assert!(config.spawn_potentials.is_empty());
     }
 }
