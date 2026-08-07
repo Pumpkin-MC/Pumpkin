@@ -168,6 +168,13 @@ async fn enchant_target(
     }
 
     item.enchant(enchantment, level);
+    let enchanted = item.clone();
+    drop(item);
+
+    player
+        .sync_hand_slot(player.inventory.get_selected_slot() as usize, enchanted)
+        .await;
+
     Ok(())
 }
 
