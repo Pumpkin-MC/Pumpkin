@@ -1,6 +1,6 @@
 use crate::CompressionConfig;
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU8;
 use std::path::PathBuf;
 
@@ -24,11 +24,15 @@ pub struct BedrockAuthenticationConfig {
 pub struct NetherNetConfig {
     /// Whether clients may connect using `NetherNet`.
     pub enabled: bool,
-    /// HTTP signaling address. WebRTC uses separately allocated UDP ports for game traffic.
+    /// HTTP signaling address.
     pub address: SocketAddr,
+    /// UDP address shared by all WebRTC game sessions.
+    pub ice_address: SocketAddr,
+    /// Optional public IP advertised when the ICE address is behind NAT.
+    pub external_ip: Option<IpAddr>,
     /// PKCS#8 P-384 identity key retained across restarts for Trust On First Use.
     pub identity_key: PathBuf,
-    /// Optional STUN server URLs used to gather a public ICE candidate behind NAT.
+    /// Optional ICE server URLs. Use `external_ip` for NAT with the single-port UDP mux.
     pub stun_servers: Vec<String>,
 }
 
@@ -37,9 +41,14 @@ impl Default for NetherNetConfig {
         let address = "0.0.0.0:19132"
             .parse()
             .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 19132)));
+        let ice_address = "0.0.0.0:19134"
+            .parse()
+            .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 19134)));
         Self {
             enabled: true,
             address,
+            ice_address,
+            external_ip: None,
             identity_key: "nethernet-key.der".into(),
             stun_servers: Vec::new(),
         }

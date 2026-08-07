@@ -340,6 +340,8 @@ impl PumpkinServer {
         };
         match NetherNetListener::bind(
             config.nethernet.address,
+            config.nethernet.ice_address,
+            config.nethernet.external_ip,
             identity_key,
             oidc_verifier,
             config.nethernet.stun_servers.clone(),
