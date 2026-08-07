@@ -47,6 +47,7 @@ use pumpkin_data::data_component_impl::food::{
 use pumpkin_data::data_component_impl::{
     AttributeModifiersImpl, BlocksAttacksImpl, DamageResistantImpl, DamageResistantType,
     DeathProtectionImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+    OminousBottleAmplifierImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -65,6 +66,7 @@ use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{CDamageEvent, CSetEquipment, Metadata},
 };
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use rand::RngExt;
@@ -1901,6 +1903,13 @@ impl LivingEntity {
         } else if effect_type == &StatusEffect::SATURATION {
             // Saturation every tick
             true
+        } else if effect_type == &StatusEffect::BAD_OMEN {
+            // BadOmenMobEffect.shouldApplyEffectTickThisTick: every tick.
+            true
+        } else if effect_type == &StatusEffect::RAID_OMEN {
+            // RaidOmenMobEffect.shouldApplyEffectTickThisTick: only on the last tick before
+            // natural expiry.
+            duration == 1
         } else {
             // Other effects that don't tick
             false
@@ -1963,6 +1972,50 @@ impl LivingEntity {
                 let hunger = amplifier + 1;
                 player.hunger_manager.add_hunger(hunger);
                 player.hunger_manager.add_saturation(hunger as f32 * 2.0);
+            }
+        } else if effect_type == &StatusEffect::BAD_OMEN {
+            // BadOmenMobEffect.applyEffectTick: on entering a real village (with room left
+            // to raise the raid's omen level), convert BAD_OMEN into RAID_OMEN and remember
+            // where, so RaidOmenMobEffect can trigger the raid when RAID_OMEN expires.
+            let world = self.entity.world.load();
+            if let Some(entity) = world.get_entity_by_id(self.entity.entity_id)
+                && let Some(player) = entity.get_player()
+                && player.gamemode.load() != pumpkin_util::GameMode::Spectator
+                && world.level_info.load().difficulty != pumpkin_util::Difficulty::Peaceful
+            {
+                let pos = BlockPos::floored_v(self.entity.pos.load());
+                if world.is_close_to_village(pos, 1).await {
+                    let raids = world.raids.lock().await;
+                    let raid_ok = raids.raid_omen_level_near(pos).is_none_or(|level| {
+                        level < crate::world::raid::DEFAULT_MAX_RAID_OMEN_LEVEL
+                    });
+                    drop(raids);
+                    if raid_ok {
+                        self.remove_effect(&StatusEffect::BAD_OMEN).await;
+                        self.add_effect(Effect {
+                            effect_type: &StatusEffect::RAID_OMEN,
+                            duration: 600,
+                            amplifier,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                            blend: false,
+                        })
+                        .await;
+                        player.raid_omen_position.store(Some(pos));
+                    }
+                }
+            }
+        } else if effect_type == &StatusEffect::RAID_OMEN {
+            // RaidOmenMobEffect.applyEffectTick: on expiry, trigger/extend the raid at the
+            // stored position, then let the effect's own duration reach 0 as normal.
+            let world = self.entity.world.load();
+            if let Some(entity) = world.get_entity_by_id(self.entity.entity_id)
+                && let Some(player) = entity.get_player()
+                && let Some(pos) = player.raid_omen_position.swap(None)
+            {
+                let mut raids = world.raids.lock().await;
+                raids.create_or_extend_raid(&world, player, pos).await;
             }
         }
     }
@@ -2423,6 +2476,26 @@ impl EntityBase for LivingEntity {
                 return false;
             }
 
+            // Brain `HURT_BY`. Vanilla routes this through `HurtBySensor`
+            // (`ai/sensing/HurtBySensor.java:18-28`), which each tick mirrors
+            // `LivingEntity.getLastDamageSource()` -- a field that self-clears 40 ticks after
+            // the last hit (`LivingEntity.java:1419-1425`). Pumpkin has no `lastDamageSource`
+            // field, so the write happens here instead, with a 40-tick memory expiry standing
+            // in for that self-clearing.
+            //
+            // This is the write path the split-lock design exists for: this method is called
+            // from projectiles, blocks and fluids, i.e. from outside the damaged mob's own AI
+            // tick. It works only because `MemoryStore` is never taken out of its mutex.
+            // `HURT_BY_ENTITY` is not written -- no behavior in the current port reads it.
+            if let Some(mob) = caller.get_mob()
+                && let Some(brain) = mob.get_mob_entity().brain.as_ref()
+            {
+                brain.set_with_expiry::<crate::entity::ai::brain::memory::HurtByMemory>(
+                    damage_type,
+                    40,
+                );
+            }
+
             let world = self.entity.world.load();
             let is_fire_damage = damage_type == DamageType::IN_FIRE
                 || damage_type == DamageType::ON_FIRE
@@ -2456,177 +2529,10 @@ impl EntityBase for LivingEntity {
                 }
             }
 
-            // Vanilla parity: entities in FREEZE_HURTS_EXTRA_TYPES take 5x freezing damage.
-            if damage_type == DamageType::FREEZE
-                && self
-                    .entity
-                    .entity_type
-                    .has_tag(&tag::EntityType::MINECRAFT_FREEZE_HURTS_EXTRA_TYPES)
-            {
-                amount *= 5.0;
-            }
-
-            if damages_helmet(&damage_type) {
-                amount *= 0.75;
-            }
-
-            // These damage types bypass the hurt cooldown and death protection
-            let bypasses_cooldown_protection =
-                damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
-
-            let mut damage_after_armor = amount;
-            if !bypasses_armor_durability(&damage_type) {
-                let mut armor = 0.0f32;
-                let mut toughness = 0.0f32;
-                {
-                    let equipment_lock = self.entity_equipment.lock().await;
-                    for slot in [
-                        EquipmentSlot::HEAD,
-                        EquipmentSlot::CHEST,
-                        EquipmentSlot::LEGS,
-                        EquipmentSlot::FEET,
-                    ] {
-                        let stack_arc = equipment_lock.get(&slot);
-                        let stack = stack_arc.lock().await;
-                        if !stack.is_empty()
-                            && let Some(modifiers) =
-                                stack.get_data_component::<AttributeModifiersImpl>()
-                        {
-                            for modifier in modifiers.attribute_modifiers.iter() {
-                                if modifier.r#type == &Attributes::ARMOR {
-                                    armor += modifier.amount as f32;
-                                } else if modifier.r#type == &Attributes::ARMOR_TOUGHNESS {
-                                    toughness += modifier.amount as f32;
-                                }
-                            }
-                        }
-                    }
-                }
-                let value = 2.0f32 + toughness / 4.0;
-                let clamped_armor = (armor - damage_after_armor / value)
-                    .max(armor / 5.0)
-                    .min(20.0);
-                let mut armor_fraction = clamped_armor / 25.0;
-
-                if let Some(attacker) = source
-                    && let Some(player) = attacker
-                        .cast_any()
-                        .downcast_ref::<crate::entity::player::Player>()
-                {
-                    let held = player.inventory().held_item();
-                    let breach_level = held
-                        .lock()
-                        .await
-                        .get_enchantment_level(&Enchantment::BREACH);
-                    if breach_level > 0 {
-                        armor_fraction = breach_armor_fraction(armor_fraction, breach_level);
-                    }
-                }
-
-                damage_after_armor *= 1.0 - armor_fraction;
-            }
-
-            let mut damage_after_enchantments = damage_after_armor;
-            if !bypasses_enchantments(&damage_type) {
-                let mut epf = 0i32;
-                {
-                    let equipment_lock = self.entity_equipment.lock().await;
-                    for slot in [
-                        EquipmentSlot::HEAD,
-                        EquipmentSlot::CHEST,
-                        EquipmentSlot::LEGS,
-                        EquipmentSlot::FEET,
-                    ] {
-                        let stack_arc = equipment_lock.get(&slot);
-                        let stack = stack_arc.lock().await;
-                        if !stack.is_empty()
-                            && let Some(enchantments) =
-                                stack.get_data_component::<EnchantmentsImpl>()
-                        {
-                            for (enchantment, level) in enchantments.enchantment.iter() {
-                                for effect in crate::enchantment::effects_for(enchantment) {
-                                    let crate::enchantment::EnchantmentEffect::DamageProtection(
-                                        condition,
-                                        value,
-                                    ) = effect
-                                    else {
-                                        continue;
-                                    };
-                                    let applies = match condition {
-                                        crate::enchantment::ProtectionCondition::Always => {
-                                            damage_type != DamageType::DROWN
-                                                && damage_type != DamageType::STARVE
-                                                && damage_type != DamageType::GENERIC_KILL
-                                        }
-                                        crate::enchantment::ProtectionCondition::IsFire => {
-                                            is_fire_damage
-                                        }
-                                        crate::enchantment::ProtectionCondition::IsExplosion => {
-                                            damage_type == DamageType::EXPLOSION
-                                                || damage_type == DamageType::PLAYER_EXPLOSION
-                                        }
-                                        crate::enchantment::ProtectionCondition::IsProjectile => {
-                                            damage_type == DamageType::ARROW
-                                                || damage_type == DamageType::MOB_PROJECTILE
-                                                || damage_type == DamageType::THROWN
-                                        }
-                                        crate::enchantment::ProtectionCondition::IsFall => {
-                                            damage_type == DamageType::FALL
-                                        }
-                                    };
-                                    if applies {
-                                        epf += value.calculate(*level) as i32;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                epf = epf.min(20);
-                if epf > 0 {
-                    damage_after_enchantments *= 1.0 - (epf as f32 * 0.04);
-                }
-            }
-
-            // Apply Resistance unless the damage source bypasses effects or resistance.
-            let resistance_reduction = if !damage_type
-                .has_tag(&tag::DamageType::MINECRAFT_BYPASSES_EFFECTS)
-                && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_RESISTANCE)
-            {
-                self.get_effect(&StatusEffect::RESISTANCE)
-                    .await
-                    .map_or(0.0, |e| (0.2 * (e.amplifier + 1) as f32).min(1.0))
-            } else {
-                0.0
-            };
-
-            // Total damage after reductions
-            let effective_amount =
-                (damage_after_enchantments * (1.0 - resistance_reduction)).max(0.0);
-
-            if resistance_reduction > 0.0 {
-                let resisted = damage_after_enchantments * resistance_reduction;
-                if let Some(player) = caller.get_player() {
-                    player
-                        .increment_stat(
-                            StatisticCategory::Custom,
-                            CustomStatistic::DamageResisted as i32,
-                            (resisted * 10.0) as i32,
-                        )
-                        .await;
-                }
-                if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
-                    attacker_player
-                        .increment_stat(
-                            StatisticCategory::Custom,
-                            CustomStatistic::DamageDealtResisted as i32,
-                            (resisted * 10.0) as i32,
-                        )
-                        .await;
-                }
-            }
-
-            // Check for shield blocking
+            // Check for shield blocking. Vanilla resolves blocking in `applyItemBlocking`
+            // (hurtServer:1200) before the freeze multiplier (1203-1205) and the helmet
+            // multiplier/hurtHelmet call (1207-1210), so this must run on the raw `amount`
+            // before either multiplier is applied.
             let shield_source_position = position.or_else(|| {
                 source
                     .or(cause)
@@ -2647,7 +2553,7 @@ impl EntityBase for LivingEntity {
                     // Vanilla: `LivingEntity.blockUsingShield` -> `attacker.blockedByItem(this,
                     // source, damage)`. Called on the attacker, not the defender.
                     if let Some(attacker_mob) = cause.and_then(EntityBase::get_mob) {
-                        attacker_mob.blocked_by_item(caller, effective_amount).await;
+                        attacker_mob.blocked_by_item(caller, amount).await;
                     }
 
                     if let Some(player) = caller.get_player() {
@@ -2655,7 +2561,7 @@ impl EntityBase for LivingEntity {
                             .increment_stat(
                                 StatisticCategory::Custom,
                                 CustomStatistic::DamageBlockedByShield as i32,
-                                (effective_amount * 10.0) as i32,
+                                (amount * 10.0) as i32,
                             )
                             .await;
 
@@ -2732,25 +2638,199 @@ impl EntityBase for LivingEntity {
                 }
             }
 
-            // Apply hurt cooldown logic
+            // Vanilla parity: entities in FREEZE_HURTS_EXTRA_TYPES take 5x freezing damage.
+            if damage_type == DamageType::FREEZE
+                && self
+                    .entity
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_FREEZE_HURTS_EXTRA_TYPES)
+            {
+                amount *= 5.0;
+            }
+
+            if damages_helmet(&damage_type) {
+                amount *= 0.75;
+            }
+
+            // These damage types bypass the hurt cooldown and death protection
+            let bypasses_cooldown_protection =
+                damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
+
+            // Apply hurt cooldown logic. Vanilla compares and stores `damage` in the same
+            // pre-armor/enchantment/resistance domain (LivingEntity.hurtServer:1217-1230):
+            // only the freeze/helmet multipliers and shield blocking happen before this.
             let last_damage = self.last_damage_taken.load();
-            let (damage_amount, play_sound) =
+            let (raw_increment, play_sound) =
                 if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
-                    if effective_amount <= last_damage {
+                    if amount <= last_damage {
                         return false;
                     }
-                    (effective_amount - last_damage, false)
+                    (amount - last_damage, false)
                 } else {
                     self.hurt_cooldown.store(20, Relaxed);
-                    (effective_amount, true)
+                    (amount, true)
                 };
+            self.last_damage_taken.store(amount);
 
-            // Finalize state
-            // Keep the full post-reduction amount in the same domain used by the
-            // next cooldown comparison. Vanilla stores `damage`, not the incremental
-            // difference applied for this hit.
-            self.last_damage_taken.store(effective_amount);
-            let damage_amount = damage_amount.max(0.0);
+            // Armor, enchantment protection and resistance reduce only the incremental
+            // damage actually dealt this hit, not the full raw amount (actuallyHurt calls
+            // getDamageAfterArmorAbsorb/getDamageAfterMagicAbsorb on `damage - lastHurt`,
+            // LivingEntity.java:1222,1953-1956).
+            let mut damage_after_armor = raw_increment;
+            if !bypasses_armor_durability(&damage_type) {
+                let mut armor = 0.0f32;
+                let mut toughness = 0.0f32;
+                {
+                    let equipment_lock = self.entity_equipment.lock().await;
+                    for slot in [
+                        EquipmentSlot::HEAD,
+                        EquipmentSlot::CHEST,
+                        EquipmentSlot::LEGS,
+                        EquipmentSlot::FEET,
+                    ] {
+                        let stack_arc = equipment_lock.get(&slot);
+                        let stack = stack_arc.lock().await;
+                        if !stack.is_empty()
+                            && let Some(modifiers) =
+                                stack.get_data_component::<AttributeModifiersImpl>()
+                        {
+                            for modifier in modifiers.attribute_modifiers.iter() {
+                                if modifier.r#type == &Attributes::ARMOR {
+                                    armor += modifier.amount as f32;
+                                } else if modifier.r#type == &Attributes::ARMOR_TOUGHNESS {
+                                    toughness += modifier.amount as f32;
+                                }
+                            }
+                        }
+                    }
+                }
+                let value = 2.0f32 + toughness / 4.0;
+                let clamped_armor = (armor - damage_after_armor / value)
+                    .max(armor / 5.0)
+                    .min(20.0);
+                let mut armor_fraction = clamped_armor / 25.0;
+
+                if let Some(attacker) = source
+                    && let Some(player) = attacker
+                        .cast_any()
+                        .downcast_ref::<crate::entity::player::Player>()
+                {
+                    let held = player.inventory().held_item();
+                    let breach_level = held
+                        .lock()
+                        .await
+                        .get_enchantment_level(&Enchantment::BREACH);
+                    if breach_level > 0 {
+                        armor_fraction = breach_armor_fraction(armor_fraction, breach_level);
+                    }
+                }
+
+                damage_after_armor *= 1.0 - armor_fraction;
+            }
+
+            // Apply Resistance unless the damage source bypasses effects or resistance.
+            // Vanilla applies resistance before enchantment protection
+            // (getDamageAfterMagicAbsorb, LivingEntity.java:1913-1926 resistance,
+            // 1935-1948 enchantments).
+            let resistance_reduction = if !damage_type
+                .has_tag(&tag::DamageType::MINECRAFT_BYPASSES_EFFECTS)
+                && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_RESISTANCE)
+            {
+                self.get_effect(&StatusEffect::RESISTANCE)
+                    .await
+                    .map_or(0.0, |e| (0.2 * (e.amplifier + 1) as f32).min(1.0))
+            } else {
+                0.0
+            };
+
+            let damage_after_resistance = damage_after_armor * (1.0 - resistance_reduction);
+
+            if resistance_reduction > 0.0 {
+                let resisted = damage_after_armor * resistance_reduction;
+                if let Some(player) = caller.get_player() {
+                    player
+                        .increment_stat(
+                            StatisticCategory::Custom,
+                            CustomStatistic::DamageResisted as i32,
+                            (resisted * 10.0) as i32,
+                        )
+                        .await;
+                }
+                if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+                    attacker_player
+                        .increment_stat(
+                            StatisticCategory::Custom,
+                            CustomStatistic::DamageDealtResisted as i32,
+                            (resisted * 10.0) as i32,
+                        )
+                        .await;
+                }
+            }
+
+            let mut damage_after_enchantments = damage_after_resistance;
+            if !bypasses_enchantments(&damage_type) {
+                let mut epf = 0i32;
+                {
+                    let equipment_lock = self.entity_equipment.lock().await;
+                    for slot in [
+                        EquipmentSlot::HEAD,
+                        EquipmentSlot::CHEST,
+                        EquipmentSlot::LEGS,
+                        EquipmentSlot::FEET,
+                    ] {
+                        let stack_arc = equipment_lock.get(&slot);
+                        let stack = stack_arc.lock().await;
+                        if !stack.is_empty()
+                            && let Some(enchantments) =
+                                stack.get_data_component::<EnchantmentsImpl>()
+                        {
+                            for (enchantment, level) in enchantments.enchantment.iter() {
+                                for effect in crate::enchantment::effects_for(enchantment) {
+                                    let crate::enchantment::EnchantmentEffect::DamageProtection(
+                                        condition,
+                                        value,
+                                    ) = effect
+                                    else {
+                                        continue;
+                                    };
+                                    let applies = match condition {
+                                        crate::enchantment::ProtectionCondition::Always => {
+                                            damage_type != DamageType::DROWN
+                                                && damage_type != DamageType::STARVE
+                                                && damage_type != DamageType::GENERIC_KILL
+                                        }
+                                        crate::enchantment::ProtectionCondition::IsFire => {
+                                            is_fire_damage
+                                        }
+                                        crate::enchantment::ProtectionCondition::IsExplosion => {
+                                            damage_type == DamageType::EXPLOSION
+                                                || damage_type == DamageType::PLAYER_EXPLOSION
+                                        }
+                                        crate::enchantment::ProtectionCondition::IsProjectile => {
+                                            damage_type == DamageType::ARROW
+                                                || damage_type == DamageType::MOB_PROJECTILE
+                                                || damage_type == DamageType::THROWN
+                                        }
+                                        crate::enchantment::ProtectionCondition::IsFall => {
+                                            damage_type == DamageType::FALL
+                                        }
+                                    };
+                                    if applies {
+                                        epf += value.calculate(*level) as i32;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                epf = epf.min(20);
+                if epf > 0 {
+                    damage_after_enchantments *= 1.0 - (epf as f32 * 0.04);
+                }
+            }
+
+            // Finalize state: damage actually applied this hit, after armor/resistance/enchant.
+            let damage_amount = damage_after_enchantments.max(0.0);
 
             let config = &world.server.upgrade().unwrap().advanced_config.pvp;
 
@@ -2950,11 +3030,13 @@ impl EntityBase for LivingEntity {
                 self.on_death(damage_type, source, cause).await;
             }
 
-            // Armor durability is based on incoming raw damage, not post-absorption remaining.
-            // Armor loses floor(raw_damage / 4) durability, minimum 1.
-            // Not applied when the source is in `#minecraft:bypasses_armor`.
-            if damage_amount > 0.0 && !bypasses_armor_durability(&damage_type) {
-                self.damage_armor_items(caller, damage_amount, &damage_type)
+            // Armor durability wear uses the pre-armor-absorb increment, matching vanilla's
+            // `hurtArmor(damageSource, damage)` call inside `getDamageAfterArmorAbsorb`
+            // (LivingEntity.java:1903), entered from `actuallyHurt` with the same `dmg` that
+            // `getDamageAfterAbsorb` reduces at line 1904 -- i.e. `raw_increment`, not the
+            // post-reduction `damage_amount`.
+            if raw_increment > 0.0 && !bypasses_armor_durability(&damage_type) {
+                self.damage_armor_items(caller, raw_increment, &damage_type)
                     .await;
             }
 
@@ -3133,6 +3215,24 @@ impl EntityBase for LivingEntity {
                             })
                             .await;
                         }
+                    }
+
+                    // OminousBottleAmplifier.onConsume (ConsumableListener, applied outside
+                    // the onConsumeEffects list via `stack.getAllOfType(ConsumableListener.class)`
+                    // in Consumable.onConsume): always non-ambient, hidden particles/icon shown.
+                    if let Some(amplifier) = item.get_data_component::<OminousBottleAmplifierImpl>()
+                        && let Ok(amplifier) = u8::try_from(amplifier.amplifier)
+                    {
+                        self.add_effect(Effect {
+                            effect_type: &StatusEffect::BAD_OMEN,
+                            duration: 120_000,
+                            amplifier,
+                            ambient: false,
+                            show_particles: false,
+                            show_icon: true,
+                            blend: false,
+                        })
+                        .await;
                     }
 
                     if consumable_clears_all_effects(item) {
@@ -3358,9 +3458,114 @@ impl LivingEntity {
                     let world = self.entity.world.load();
                     world.play_sound_event(sound, SoundCategory::Players, &self.entity.pos.load());
                 }
-                ConsumeEffect::ClearAllEffects | ConsumeEffect::TeleportRandomly(_) => {}
+                ConsumeEffect::TeleportRandomly(diameter) => {
+                    self.teleport_randomly_on_consume(*diameter).await;
+                }
+                ConsumeEffect::ClearAllEffects => {}
             }
         }
+    }
+
+    /// `TeleportRandomlyConsumeEffect.apply` (26.2 decompile,
+    /// world/item/consume_effects/TeleportRandomlyConsumeEffect.java:38-72): tries up to 16
+    /// random offsets within `diameter` and stops at the first successful landing.
+    async fn teleport_randomly_on_consume(&self, diameter: f32) {
+        let pos = self.entity.pos.load();
+
+        let (min_y, max_y) = {
+            let world = self.entity.world.load();
+            (
+                f64::from(world.dimension.min_y),
+                f64::from(world.dimension.min_y + world.dimension.logical_height - 1),
+            )
+        };
+
+        for _ in 0..16 {
+            let (dx, dy, dz) = {
+                let mut rng = rand::rng();
+                (
+                    (rng.random_range(0.0..1.0) - 0.5) * f64::from(diameter),
+                    (rng.random_range(0.0..1.0) - 0.5) * f64::from(diameter),
+                    (rng.random_range(0.0..1.0) - 0.5) * f64::from(diameter),
+                )
+            };
+            // Clamp to the dimension's playable Y range before randomTeleport searches for ground.
+            let target_y = (pos.y + dy).clamp(min_y, max_y);
+
+            // Clone out of the lock first: holding the guard as the `if let` scrutinee would
+            // keep it alive for the whole block, across the `.await` below.
+            let vehicle = self.entity.vehicle.lock().await.clone();
+            if let Some(vehicle) = vehicle {
+                vehicle
+                    .get_entity()
+                    .remove_passenger(self.entity.entity_id)
+                    .await;
+            }
+
+            if self.random_teleport(pos.x + dx, target_y, pos.z + dz, true) {
+                let world = self.entity.world.load();
+                let is_fox = self.entity.entity_type == &EntityType::FOX;
+                let (sound, category) = if is_fox {
+                    (Sound::EntityFoxTeleport, SoundCategory::Neutral)
+                } else {
+                    (Sound::ItemChorusFruitTeleport, SoundCategory::Players)
+                };
+                world.play_sound(sound, category, &self.entity.pos.load());
+                self.fall_distance.store(0.0);
+                break;
+            }
+        }
+    }
+
+    /// `LivingEntity.randomTeleport` (26.2 decompile,
+    /// world/entity/LivingEntity.java:3665-3709): walks down from `(x, y, z)` to the first
+    /// block that blocks motion, then teleports there if the destination is free of block
+    /// collision and liquid, reverting otherwise.
+    fn random_teleport(&self, x: f64, y: f64, z: f64, show_particles: bool) -> bool {
+        let origin = self.entity.pos.load();
+        let world = self.entity.world.load();
+        let dimension = self.entity.entity_dimension.load();
+
+        let target_block = BlockPos::new(x.floor() as i32, y.floor() as i32, z.floor() as i32);
+        if !world.is_loaded(&target_block) {
+            return false;
+        }
+
+        let mut target_y = y;
+        let mut pos_y = target_block.0.y;
+        let mut landed = false;
+        while !landed && pos_y > world.dimension.min_y {
+            let below = BlockPos::new(target_block.0.x, pos_y - 1, target_block.0.z);
+            if world.get_block_state(&below).is_solid() {
+                landed = true;
+            } else {
+                target_y -= 1.0;
+                pos_y -= 1;
+            }
+        }
+
+        if !landed {
+            return false;
+        }
+
+        self.entity
+            .teleport(Vector3::new(x, target_y, z), None, None, world.clone());
+
+        let bb = BoundingBox::new_from_pos(x, target_y, z, &dimension);
+        let space_free = world.is_space_empty(bb);
+        let liquid_free = !BlockPos::iterate(bb.min_block_pos(), bb.max_block_pos())
+            .any(|pos| world.get_fluid(&pos) != &pumpkin_data::fluid::Fluid::EMPTY);
+
+        if !space_free || !liquid_free {
+            self.entity.teleport(origin, None, None, world.clone());
+            return false;
+        }
+
+        if show_particles {
+            world.send_entity_status(&self.entity, EntityStatus::Teleport);
+        }
+
+        true
     }
 }
 
