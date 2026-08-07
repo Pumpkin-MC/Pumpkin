@@ -49,6 +49,7 @@ mod plugins;
 mod pumpkin;
 mod random;
 mod recipe;
+mod reload;
 mod ride;
 mod rotate;
 mod saveall;
@@ -190,6 +191,7 @@ pub async fn default_dispatcher(
     saveall::register(&mut dispatcher, registry);
     saveoff::register(&mut dispatcher, registry);
     saveon::register(&mut dispatcher, registry);
+    reload::register(&mut dispatcher, registry);
     setidletimeout::register(&mut dispatcher, registry);
     spreadplayers::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
