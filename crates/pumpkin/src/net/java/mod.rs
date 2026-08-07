@@ -32,18 +32,6 @@ use pumpkin_protocol::{
         client::{config::CConfigDisconnect, login::CLoginDisconnect},
         packet_decoder::TCPNetworkDecoder,
         packet_encoder::{PreparedPacket, SerializedPacket, TCPNetworkEncoder},
-        server::{
-            config::{
-                SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse,
-                SConfigResourcePack, SKnownPacks, SPluginMessage,
-            },
-            handshake::SHandShake,
-            login::{
-                SEncryptionResponse, SLoginAcknowledged, SLoginCookieResponse,
-                SLoginPluginResponse, SLoginStart,
-            },
-            status::{SStatusPingRequest, SStatusRequest},
-        },
     },
     ser::{NetworkWriteExt, WritingError},
 };
