@@ -25,18 +25,24 @@ impl DataComponentImpl for WritableBookContentImpl {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct WrittenBookContentImpl {
     pub pages: Vec<String>,
+    /// `net/minecraft/world/item/component/WrittenBookContent.java:34,68-78`:
+    /// 0-3, defaults to 0 (an original) when absent, bumped by one on each
+    /// `craftCopy()`.
+    pub generation: i32,
 }
 impl WrittenBookContentImpl {
     pub fn read_data(tag: &NbtTag) -> Option<Self> {
         let mut pages = Vec::new();
-        if let NbtTag::Compound(c) = tag
-            && let Some(NbtTag::List(l)) = c.get("pages")
-        {
-            for _ in l {
-                pages.push(String::new());
+        let mut generation = 0;
+        if let NbtTag::Compound(c) = tag {
+            if let Some(NbtTag::List(l)) = c.get("pages") {
+                for _ in l {
+                    pages.push(String::new());
+                }
             }
+            generation = c.get_int("generation").unwrap_or(0);
         }
-        Some(Self { pages })
+        Some(Self { pages, generation })
     }
 }
 impl DataComponentImpl for WrittenBookContentImpl {

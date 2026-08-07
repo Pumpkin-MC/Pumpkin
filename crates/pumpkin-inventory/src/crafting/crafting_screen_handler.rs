@@ -33,7 +33,7 @@ use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
     DamageImpl, DataComponentImpl, EnchantmentsImpl, FireworkExplosionImpl, FireworkExplosionShape,
-    FireworksImpl, MaxDamageImpl, PotDecorationsImpl,
+    FireworksImpl, MaxDamageImpl, PotDecorationsImpl, WrittenBookContentImpl,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -57,6 +57,9 @@ pub struct ResultSlot {
     pub result: Arc<Mutex<ItemStack>>,
     /// Provider for dynamic recipes.
     pub recipe_provider: Option<Arc<dyn RecipeProvider>>,
+    /// Cached `RecipeResult::remaining_items` from the last match, consulted by
+    /// `on_take_item` in place of the static per-item remainder table.
+    pub remaining_items: Arc<Mutex<Vec<(usize, ItemStack)>>>,
 }
 
 pub struct RecipeResult {
@@ -65,6 +68,12 @@ pub struct RecipeResult {
     /// Components copied from a transmuted input, matching vanilla's
     /// `TransmuteRecipe::createWithOriginalComponents`.
     pub component_patch: Vec<(DataComponent, Option<Box<dyn DataComponentImpl>>)>,
+    /// Per-recipe `Recipe::getRemainingItems` override (26.2 decompile
+    /// `Recipe.java`'s default, overridden by e.g. `BookCloningRecipe.java:127-143`):
+    /// absolute inventory-slot index paired with the exact stack that survives the
+    /// craft in that slot. Empty means "use the static per-item crafting-remainder
+    /// table for every consumed slot", the prior/default behavior.
+    pub remaining_items: Vec<(usize, ItemStack)>,
 }
 
 impl RecipeResult {
@@ -73,6 +82,7 @@ impl RecipeResult {
             item_id,
             count,
             component_patch: Vec::new(),
+            remaining_items: Vec::new(),
         }
     }
 
@@ -81,6 +91,7 @@ impl RecipeResult {
             item_id,
             count,
             component_patch: input.patch.clone(),
+            remaining_items: Vec::new(),
         }
     }
 }
@@ -296,6 +307,7 @@ async fn recipe_matches(
                     DataComponent::PotDecorations,
                     Some(PotDecorationsImpl { decorations }.to_dyn()),
                 )],
+                remaining_items: Vec::new(),
             })
         }
         GenericRecipe::Dynamic(OwnedCraftingRecipe::Shaped {
@@ -457,6 +469,7 @@ fn match_firework_rocket(items: &[ItemStack]) -> Option<RecipeResult> {
             DataComponent::Fireworks,
             Some(FireworksImpl::new(fuel_count, explosions).to_dyn()),
         )],
+        remaining_items: Vec::new(),
     })
 }
 
@@ -514,6 +527,7 @@ fn match_firework_star(items: &[ItemStack]) -> Option<RecipeResult> {
                     .to_dyn(),
             ),
         )],
+        remaining_items: Vec::new(),
     })
 }
 
@@ -571,6 +585,7 @@ fn match_firework_star_fade(items: &[ItemStack]) -> Option<RecipeResult> {
         item_id: "minecraft:firework_star".to_string(),
         count: 1,
         component_patch: patch,
+        remaining_items: Vec::new(),
     })
 }
 
@@ -650,6 +665,59 @@ fn match_repair_item(items: &[ItemStack]) -> Option<RecipeResult> {
         item_id: format!("minecraft:{}", first.item.registry_key),
         count: 1,
         component_patch: patch,
+        remaining_items: Vec::new(),
+    })
+}
+
+/// `BookCloningRecipe::matches`/`assemble`/`getRemainingItems`, 26.2 decompile
+/// `BookCloningRecipe.java:58-143`. `book_cloning.json` does not override
+/// `allowed_generations`, so `DEFAULT_BOOK_GENERATION_RANGES` (line 18,
+/// `MinMaxBounds.Ints.between(0, 1)`) applies: only generation 0 (an original)
+/// or 1 (a copy of an original) may be cloned; a copy of a copy cannot be.
+/// The source book is never consumed as an ingredient -- it is returned via
+/// `remaining_items` (line 128-143), one slot short of the material count so
+/// its own occupied slot does not count toward the copies produced.
+fn match_book_cloning(items: &[(usize, ItemStack)]) -> Option<RecipeResult> {
+    if items.len() < 2 {
+        return None;
+    }
+    let mut source: Option<(usize, &ItemStack)> = None;
+    let mut material_count: u8 = 0;
+    for (slot, stack) in items {
+        if stack.item == &Item::WRITTEN_BOOK {
+            if source.is_some() {
+                return None;
+            }
+            source = Some((*slot, stack));
+        } else if stack
+            .item
+            .has_tag(&tag::Item::MINECRAFT_BOOK_CLONING_TARGET)
+        {
+            material_count += 1;
+        } else {
+            return None;
+        }
+    }
+    let (source_slot, source_stack) = source?;
+    if material_count == 0 {
+        return None;
+    }
+    let content = source_stack.get_data_component::<WrittenBookContentImpl>()?;
+    if !(0..=1).contains(&content.generation) {
+        return None;
+    }
+
+    let mut copied = content.clone();
+    copied.generation += 1;
+    let mut patch = source_stack.patch.clone();
+    patch.retain(|(id, _)| *id != DataComponent::WrittenBookContent);
+    patch.push((DataComponent::WrittenBookContent, Some(copied.to_dyn())));
+
+    Some(RecipeResult {
+        item_id: "minecraft:written_book".to_string(),
+        count: material_count,
+        component_patch: patch,
+        remaining_items: vec![(source_slot, source_stack.copy_with_count(1))],
     })
 }
 
@@ -657,11 +725,13 @@ fn match_repair_item(items: &[ItemStack]) -> Option<RecipeResult> {
 /// `pumpkin-data`'s generated recipe types carries no data to dispatch on,
 /// since each one is a Java class rather than JSON shape data), tried after
 /// every data-driven recipe has failed to match.
-fn match_special_recipe(items: &[ItemStack]) -> Option<RecipeResult> {
-    match_firework_rocket(items)
-        .or_else(|| match_firework_star(items))
-        .or_else(|| match_firework_star_fade(items))
-        .or_else(|| match_repair_item(items))
+fn match_special_recipe(items: &[(usize, ItemStack)]) -> Option<RecipeResult> {
+    let unindexed: Vec<ItemStack> = items.iter().map(|(_, s)| s.clone()).collect();
+    match_firework_rocket(&unindexed)
+        .or_else(|| match_firework_star(&unindexed))
+        .or_else(|| match_firework_star_fade(&unindexed))
+        .or_else(|| match_repair_item(&unindexed))
+        .or_else(|| match_book_cloning(items))
 }
 
 impl ResultSlot {
@@ -674,6 +744,7 @@ impl ResultSlot {
             id: AtomicU8::new(0),
             result: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             recipe_provider: provider,
+            remaining_items: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -744,25 +815,29 @@ impl ResultSlot {
             let slot = self.inventory.get_stack(i).await;
             let slot = slot.lock().await;
             if !slot.is_empty() {
-                items.push(slot.clone());
+                items.push((i, slot.clone()));
             }
         }
         match_special_recipe(&items)
     }
 
     async fn refill_output(&self) -> ItemStack {
-        let result = if let Some(matched) = self.match_recipe().await {
+        let (result, remaining_items) = if let Some(matched) = self.match_recipe().await {
             let key = matched
                 .item_id
                 .strip_prefix("minecraft:")
                 .unwrap_or(&matched.item_id);
             let item = pumpkin_data::item::Item::from_registry_key(key)
                 .unwrap_or(&pumpkin_data::item::Item::AIR);
-            ItemStack::new_with_component(matched.count, item, matched.component_patch)
+            (
+                ItemStack::new_with_component(matched.count, item, matched.component_patch),
+                matched.remaining_items,
+            )
         } else {
-            ItemStack::EMPTY.clone()
+            (ItemStack::EMPTY.clone(), Vec::new())
         };
         *self.result.lock().await = result.clone();
+        *self.remaining_items.lock().await = remaining_items;
         result
     }
 }
@@ -820,13 +895,27 @@ impl Slot for ResultSlot {
                     stack.item_count as i32,
                 )
                 .await;
+            let recipe_remaining_items = self.remaining_items.lock().await.clone();
             for i in 0..self.inventory.size() {
                 let slot = self.inventory.get_stack(i).await;
                 let mut stack = slot.lock().await;
                 if !stack.is_empty() {
-                    let remainder = get_recipe_remainder_id(stack.item.id)
-                        .and_then(pumpkin_data::item::Item::from_id)
-                        .map(|item| ItemStack::new(1, item));
+                    // A per-recipe remaining item (`Recipe::getRemainingItems`, e.g.
+                    // `BookCloningRecipe.java:127-143`) overrides the static per-item
+                    // crafting-remainder table for its slot. Guarded by item identity:
+                    // the cache is filled at match time but consulted here after any
+                    // number of awaits, so a slot whose contents changed in between
+                    // (a second concurrent take) must not hand back a stale item.
+                    let remainder = if let Some((_, item)) = recipe_remaining_items
+                        .iter()
+                        .find(|(slot, item)| *slot == i && item.item == stack.item)
+                    {
+                        Some(item.clone())
+                    } else {
+                        get_recipe_remainder_id(stack.item.id)
+                            .and_then(pumpkin_data::item::Item::from_id)
+                            .map(|item| ItemStack::new(1, item))
+                    };
                     stack.item_count -= 1;
                     if let Some(remainder) = remainder
                         && let Some(mut remainder) = apply_recipe_remainder(&mut stack, remainder)
@@ -1078,6 +1167,20 @@ mod recipe_remainder_tests {
         assert!(apply_recipe_remainder(&mut buckets, bucket).is_none());
         assert_eq!(buckets.item_count, 3);
     }
+
+    #[test]
+    fn book_cloning_source_survives_via_remaining_item() {
+        // `ResultSlot.onTake` (26.2 decompile `ResultSlot.java:100-115`) decrements the
+        // consumed slot by 1 first, then applies the recipe's remaining item exactly
+        // like a static crafting remainder. A written book has stack size 1, so the
+        // source slot is empty by the time this runs.
+        let mut consumed_source = ItemStack::new(0, &Item::WRITTEN_BOOK);
+        let returned_original = ItemStack::new(1, &Item::WRITTEN_BOOK);
+
+        assert!(apply_recipe_remainder(&mut consumed_source, returned_original).is_none());
+        assert!(consumed_source.item == &Item::WRITTEN_BOOK);
+        assert_eq!(consumed_source.item_count, 1);
+    }
 }
 
 #[cfg(test)]
@@ -1324,5 +1427,70 @@ mod special_recipe_tests {
             output.get_enchantment_level(&pumpkin_data::Enchantment::UNBREAKING),
             0
         );
+    }
+
+    fn written_book(generation: i32) -> ItemStack {
+        ItemStack::new_with_component(
+            1,
+            &Item::WRITTEN_BOOK,
+            vec![(
+                DataComponent::WrittenBookContent,
+                Some(
+                    super::WrittenBookContentImpl {
+                        pages: vec!["hi".to_string()],
+                        generation,
+                    }
+                    .to_dyn(),
+                ),
+            )],
+        )
+    }
+
+    #[test]
+    fn book_cloning_bumps_generation_and_returns_the_original() {
+        let items = vec![
+            (0, written_book(0)),
+            (1, ItemStack::new(1, &Item::WRITABLE_BOOK)),
+            (4, ItemStack::new(1, &Item::WRITABLE_BOOK)),
+        ];
+        let result = super::match_book_cloning(&items).expect("recipe should match");
+        assert_eq!(result.count, 2);
+        assert_eq!(result.remaining_items.len(), 1);
+        let (returned_slot, returned_stack) = &result.remaining_items[0];
+        assert_eq!(*returned_slot, 0);
+        assert!(returned_stack.item == &Item::WRITTEN_BOOK);
+        assert_eq!(returned_stack.item_count, 1);
+        assert_eq!(
+            returned_stack
+                .get_data_component::<super::WrittenBookContentImpl>()
+                .expect("original keeps its content")
+                .generation,
+            0
+        );
+
+        let output = output_of(result, &Item::WRITTEN_BOOK);
+        let content = output
+            .get_data_component::<super::WrittenBookContentImpl>()
+            .expect("written book content present");
+        assert_eq!(content.generation, 1);
+    }
+
+    #[test]
+    fn book_cloning_rejects_a_copy_of_a_copy() {
+        let items = vec![
+            (0, written_book(2)),
+            (1, ItemStack::new(1, &Item::WRITABLE_BOOK)),
+        ];
+        assert!(super::match_book_cloning(&items).is_none());
+    }
+
+    #[test]
+    fn book_cloning_rejects_two_written_books() {
+        let items = vec![
+            (0, written_book(0)),
+            (1, written_book(0)),
+            (2, ItemStack::new(1, &Item::WRITABLE_BOOK)),
+        ];
+        assert!(super::match_book_cloning(&items).is_none());
     }
 }
