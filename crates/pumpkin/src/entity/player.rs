@@ -4208,10 +4208,12 @@ impl Player {
     pub async fn on_set_beacon(self: &Arc<Self>, packet: SSetBeacon) {
         self.update_last_action_time();
 
-        let Some(pos) = self.open_container_pos.load() else {
-            return;
-        };
-        if !self.beacon_still_valid(pos) {
+        // `ContainerLevelAccess.NULL.evaluate` -> `Optional.empty()` -> `stillValid`'s
+        // `.orElse(true)` (ContainerLevelAccess.java:10-15, AbstractContainerMenu.java:93-95):
+        // a menu with no backing position defaults to valid, not invalid.
+        if let Some(pos) = self.open_container_pos.load()
+            && !self.beacon_still_valid(pos)
+        {
             return;
         }
 
@@ -4245,7 +4247,7 @@ impl Player {
             .await
         {
             warn!(
-                "Player {} sent invalid beacon effects at {pos}",
+                "Player {} sent invalid beacon effects",
                 self.gameprofile.name
             );
         }

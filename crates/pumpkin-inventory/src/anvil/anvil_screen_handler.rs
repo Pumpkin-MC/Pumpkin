@@ -621,10 +621,7 @@ impl ScreenHandler for AnvilScreenHandler {
             // `QuickMove` is excluded: `internal_on_slot_click` routes it into our own
             // `quick_move` override, which already calls `on_take` itself on a successful
             // take. Calling it again here would charge XP and wipe the inputs a second time.
-            if slot_index == 2
-                && prev_result_count > 0
-                && !was_quick_move
-            {
+            if slot_index == 2 && prev_result_count > 0 && !was_quick_move {
                 let new_count = self.get_behaviour().slots[2]
                     .get_cloned_stack()
                     .await
