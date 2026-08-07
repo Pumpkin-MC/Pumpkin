@@ -11,7 +11,7 @@ use crate::data::VanillaData;
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
 use crate::net::bedrock::{
     BedrockClient,
-    nethernet::{NetherNetListener, load_or_create_identity_key},
+    nethernet::{NetherNetListener, discovery::NetherNetDiscovery, load_or_create_identity_key},
     status::StatusResponder,
 };
 use crate::net::java::JavaClient;
@@ -217,6 +217,7 @@ pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub tcp_listener: Option<TcpListener>,
     pub bedrock_status: Option<StatusResponder>,
+    pub nethernet_discovery: Option<NetherNetDiscovery>,
     pub nethernet_listener: Option<NetherNetListener>,
 }
 
@@ -307,11 +308,29 @@ impl PumpkinServer {
 
         let nethernet_listener = Self::bind_nethernet(&server).await;
         let bedrock_status = Self::bind_bedrock_status(&server, nethernet_listener.is_some()).await;
+        let nethernet_discovery = if nethernet_listener.is_some() {
+            let discovery = NetherNetDiscovery::bind(
+                server.advanced_config.networking.bedrock.nethernet.address,
+                server.server_guid,
+            )
+            .await
+            .expect("Failed to bind NetherNet LAN discovery");
+            info!(
+                "Bedrock NetherNet LAN discovery is listening on {}",
+                discovery
+                    .local_addr()
+                    .expect("NetherNet discovery socket should have a local address")
+            );
+            Some(discovery)
+        } else {
+            None
+        };
 
         Self {
             server,
             tcp_listener,
             bedrock_status,
+            nethernet_discovery,
             nethernet_listener,
         }
     }
@@ -343,6 +362,7 @@ impl PumpkinServer {
             config.nethernet.ice_address,
             config.nethernet.external_ip,
             identity_key,
+            config.online_mode,
             oidc_verifier,
             config.nethernet.stun_servers.clone(),
         )
@@ -499,6 +519,8 @@ impl PumpkinServer {
         tasks: &Arc<TaskTracker>,
         bedrock_clients: &Arc<Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
     ) -> bool {
+        let mut discovery_buf = vec![0; u16::MAX as usize].into_boxed_slice();
+
         select! {
             // Branch for TCP connections (Java Edition)
             tcp_result = resolve_some(self.tcp_listener.as_ref(), tokio::net::TcpListener::accept) => {
@@ -579,6 +601,18 @@ impl PumpkinServer {
             ) => {
                 if let Err(error) = status_result {
                     debug!("Bedrock status packet failed: {error}");
+                }
+            },
+
+            // NetherNet-native LAN discovery for clients joining the discovered server entry.
+            discovery_result = resolve_some(
+                self.nethernet_discovery.as_ref().zip(self.nethernet_listener.as_ref()),
+                |(discovery, listener): (&NetherNetDiscovery, &NetherNetListener)| {
+                    discovery.receive(&self.server, listener, &mut discovery_buf)
+                },
+            ) => {
+                if let Err(error) = discovery_result {
+                    debug!("NetherNet discovery packet failed: {error}");
                 }
             },
 

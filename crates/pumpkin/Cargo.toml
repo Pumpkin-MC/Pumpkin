@@ -65,6 +65,7 @@ num-bigint.workspace = true
 rustyline.workspace = true
 
 # encryption
+aes.workspace = true
 rsa.workspace = true
 
 # verification & WASM parsing

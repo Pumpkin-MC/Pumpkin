@@ -34,7 +34,7 @@ use tokio::{
     sync::{Mutex, RwLock, mpsc},
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 use webrtc::{
     api::{API, APIBuilder, media_engine::MediaEngine, setting_engine::SettingEngine},
     data_channel::{RTCDataChannel, data_channel_message::DataChannelMessage},
@@ -43,6 +43,7 @@ use webrtc::{
         udp_mux::{UDPMuxDefault, UDPMuxParams},
         udp_network::UDPNetwork,
     },
+    ice_transport::ice_candidate::RTCIceCandidateInit,
     ice_transport::{ice_candidate_type::RTCIceCandidateType, ice_server::RTCIceServer},
     peer_connection::{
         RTCPeerConnection, configuration::RTCConfiguration,
@@ -52,6 +53,8 @@ use webrtc::{
 };
 
 use crate::STOP_INTERRUPT;
+
+pub mod discovery;
 
 const RELIABLE_CHANNEL: &str = "ReliableDataChannel";
 const UNRELIABLE_CHANNEL: &str = "UnreliableDataChannel";
@@ -66,6 +69,7 @@ type IncomingSession = (Arc<NetherNetSession>, SocketAddr);
 pub struct NetherNetListener {
     incoming: Mutex<mpsc::Receiver<IncomingSession>>,
     local_addr: SocketAddr,
+    state: EndpointState,
 }
 
 #[derive(Clone)]
@@ -73,6 +77,7 @@ struct EndpointState {
     incoming: mpsc::Sender<IncomingSession>,
     api: Arc<API>,
     identity_key: Arc<SigningKey>,
+    require_client_identity: bool,
     oidc_verifier: Option<Arc<(String, Jwks)>>,
     stun_servers: Arc<[String]>,
 }
@@ -83,6 +88,7 @@ impl NetherNetListener {
         ice_address: SocketAddr,
         external_ip: Option<IpAddr>,
         identity_key: Arc<SigningKey>,
+        require_client_identity: bool,
         oidc_verifier: Option<Arc<(String, Jwks)>>,
         stun_servers: Vec<String>,
     ) -> std::io::Result<Self> {
@@ -95,6 +101,7 @@ impl NetherNetListener {
             incoming,
             api: Arc::new(build_api(ice_socket, external_ip)?),
             identity_key,
+            require_client_identity,
             oidc_verifier,
             stun_servers: stun_servers.into(),
         };
@@ -102,7 +109,7 @@ impl NetherNetListener {
             .route("/v1/join", get(ping))
             .route("/v1/join/{network_id}", post(join))
             .layer(DefaultBodyLimit::max(MAX_SDP_SIZE))
-            .with_state(state);
+            .with_state(state.clone());
 
         tokio::spawn(async move {
             let result = axum::serve(
@@ -121,6 +128,7 @@ impl NetherNetListener {
         Ok(Self {
             incoming: Mutex::new(receiver),
             local_addr,
+            state,
         })
     }
 
@@ -227,7 +235,7 @@ async fn join(
         return (StatusCode::BAD_REQUEST, "SDP offer must be UTF-8").into_response();
     };
 
-    match negotiate(&state, address, &offer).await {
+    match negotiate(&state, address, &offer, None).await {
         Ok((answer, _session)) => {
             let mut response = (StatusCode::OK, answer).into_response();
             response
@@ -246,9 +254,14 @@ async fn negotiate(
     state: &EndpointState,
     address: SocketAddr,
     offer: &str,
+    candidates: Option<mpsc::UnboundedReceiver<RTCIceCandidateInit>>,
 ) -> Result<(String, Arc<NetherNetSession>), String> {
-    let (offer, client_public_key) =
-        verify_and_strip_identity(offer, state.oidc_verifier.as_deref())?;
+    trace!("Starting NetherNet negotiation with {address}");
+    let (offer, client_public_key) = authenticate_client_offer(
+        offer,
+        state.require_client_identity,
+        state.oidc_verifier.as_deref(),
+    )?;
 
     let peer = Arc::new(
         state
@@ -277,6 +290,7 @@ async fn negotiate(
     peer.on_data_channel(Box::new(move |channel| {
         let session = session_for_channels.clone();
         Box::pin(async move {
+            trace!(label = channel.label(), "Received NetherNet data channel");
             if let Err(error) = session.attach_channel(channel).await {
                 warn!("Rejected NetherNet data channel: {error}");
                 session.close().await;
@@ -288,6 +302,7 @@ async fn negotiate(
     peer.on_peer_connection_state_change(Box::new(move |connection_state| {
         let session = session_for_state.clone();
         Box::pin(async move {
+            trace!(?connection_state, "NetherNet peer connection state changed");
             if matches!(
                 connection_state,
                 RTCPeerConnectionState::Failed
@@ -303,6 +318,16 @@ async fn negotiate(
     peer.set_remote_description(offer)
         .await
         .map_err(|error| error.to_string())?;
+    if let Some(mut candidates) = candidates {
+        let peer = peer.clone();
+        tokio::spawn(async move {
+            while let Some(candidate) = candidates.recv().await {
+                if let Err(error) = peer.add_ice_candidate(candidate).await {
+                    debug!("Failed to add NetherNet LAN ICE candidate: {error}");
+                }
+            }
+        });
+    }
     let answer = peer
         .create_answer(None)
         .await
@@ -318,10 +343,27 @@ async fn negotiate(
         .local_description()
         .await
         .ok_or_else(|| "WebRTC did not produce a local description".to_string())?;
+    trace!("Completed NetherNet negotiation with {address}");
     Ok((
-        add_server_identity(&answer.sdp, &state.identity_key)?,
+        add_server_identity(
+            &remove_component_two_candidates(&answer.sdp),
+            &state.identity_key,
+        )?,
         session,
     ))
+}
+
+fn remove_component_two_candidates(sdp: &str) -> String {
+    let mut filtered = String::with_capacity(sdp.len());
+    for line in sdp.lines().filter(|line| {
+        line.strip_prefix("a=candidate:")
+            .and_then(|candidate| candidate.split_whitespace().nth(1))
+            != Some("2")
+    }) {
+        filtered.push_str(line);
+        filtered.push_str("\r\n");
+    }
+    filtered
 }
 
 /// A WebRTC connection carrying complete Bedrock batch packets.
@@ -336,7 +378,7 @@ pub struct NetherNetSession {
     open_channels: AtomicU8,
     accepted: AtomicBool,
     closed: CancellationToken,
-    client_public_key: PublicKey,
+    client_public_key: Option<PublicKey>,
     address: SocketAddr,
     incoming: mpsc::Sender<IncomingSession>,
 }
@@ -344,7 +386,7 @@ pub struct NetherNetSession {
 impl NetherNetSession {
     fn new(
         peer: Arc<RTCPeerConnection>,
-        client_public_key: PublicKey,
+        client_public_key: Option<PublicKey>,
         address: SocketAddr,
         incoming: mpsc::Sender<IncomingSession>,
     ) -> Self {
@@ -518,8 +560,8 @@ impl NetherNetSession {
         Ok(())
     }
 
-    pub const fn client_public_key(&self) -> &PublicKey {
-        &self.client_public_key
+    pub const fn client_public_key(&self) -> Option<&PublicKey> {
+        self.client_public_key.as_ref()
     }
 
     pub fn is_closed(&self) -> bool {
@@ -616,6 +658,21 @@ fn verify_and_strip_identity(
         .join("\r\n");
     stripped.push_str("\r\n");
     Ok((stripped, public_key))
+}
+
+fn authenticate_client_offer(
+    offer: &str,
+    require_identity: bool,
+    oidc_verifier: Option<&(String, Jwks)>,
+) -> Result<(String, Option<PublicKey>), String> {
+    if offer.lines().any(|line| line.starts_with("a=identity:")) {
+        let (offer, public_key) = verify_and_strip_identity(offer, oidc_verifier)?;
+        return Ok((offer, Some(public_key)));
+    }
+    if require_identity {
+        return Err("SDP offer is missing its identity assertion".to_string());
+    }
+    Ok((offer.to_owned(), None))
 }
 
 fn validate_token_expiration(token: &str) -> Result<(), String> {
@@ -808,6 +865,15 @@ mod tests {
     }
 
     #[test]
+    fn data_channel_sdp_only_advertises_component_one() {
+        let sdp = "v=0\r\na=candidate:1 1 udp 1 192.0.2.1 19134 typ host\r\na=candidate:1 2 udp 1 192.0.2.1 19134 typ host\r\na=end-of-candidates\r\n";
+        assert_eq!(
+            remove_component_two_candidates(sdp),
+            "v=0\r\na=candidate:1 1 udp 1 192.0.2.1 19134 typ host\r\na=end-of-candidates\r\n"
+        );
+    }
+
+    #[test]
     fn configured_oidc_validation_rejects_untrusted_identity_tokens() {
         let key = SigningKey::from_slice(&[7; 48]).unwrap();
         let sdp = "v=0\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\na=fingerprint:sha-256 AA:BB\r\n";
@@ -844,6 +910,23 @@ mod tests {
             verify_and_strip_identity(&offer, Some(&verifier)).unwrap_err(),
             "invalid identity provider"
         );
+    }
+
+    #[test]
+    fn offline_mode_accepts_an_offer_without_identity() {
+        let offer = "v=0\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n";
+        let (offer, public_key) = authenticate_client_offer(offer, false, None).unwrap();
+        assert_eq!(
+            offer,
+            "v=0\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n"
+        );
+        assert!(public_key.is_none());
+    }
+
+    #[test]
+    fn online_mode_rejects_an_offer_without_identity() {
+        let error = authenticate_client_offer("v=0\r\n", true, None).unwrap_err();
+        assert_eq!(error, "SDP offer is missing its identity assertion");
     }
 
     #[tokio::test]
@@ -902,11 +985,12 @@ mod tests {
             incoming,
             api: Arc::new(build_api(ice_socket, None).unwrap()),
             identity_key: server_key.clone(),
+            require_client_identity: true,
             oidc_verifier: None,
             stun_servers: Arc::from([]),
         };
         let (answer, server_session) =
-            negotiate(&state, "127.0.0.1:19132".parse().unwrap(), &offer)
+            negotiate(&state, "127.0.0.1:19132".parse().unwrap(), &offer, None)
                 .await
                 .unwrap();
         let (answer, public_key) = verify_and_strip_identity(&answer, None).unwrap();
