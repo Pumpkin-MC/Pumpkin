@@ -3,7 +3,6 @@ pub mod network_item;
 pub mod packet_decoder;
 pub mod packet_encoder;
 pub mod server;
-pub mod status;
 
 pub const BEDROCK_GAME_PACKET: u8 = 0xfe;
 

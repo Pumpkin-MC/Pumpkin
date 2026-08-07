@@ -149,9 +149,12 @@ async fn main() {
                 TextComponent::text("Bedrock Edition:")
                     .color_named(NamedColor::Gold)
                     .to_pretty_console(),
-                TextComponent::text(format!("{}", advanced_config.networking.bedrock.address))
-                    .color_named(NamedColor::DarkBlue)
-                    .to_pretty_console()
+                TextComponent::text(format!(
+                    "{}",
+                    advanced_config.networking.bedrock.nethernet.address
+                ))
+                .color_named(NamedColor::DarkBlue)
+                .to_pretty_console()
             )
         } else {
             TextComponent::text(String::new()).to_pretty_console()

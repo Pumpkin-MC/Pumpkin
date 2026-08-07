@@ -1,7 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
 use pumpkin_protocol::bedrock::packet_decoder::BedrockBatchDecoder;
-use pumpkin_protocol::bedrock::status::{SUnconnectedPing, SUnconnectedPingOpenConnections};
 use pumpkin_protocol::bedrock::server::{
     client_cache_status::SClientCacheStatus,
     command_request::SCommandRequest,
@@ -45,10 +44,7 @@ fn fuzz_serverbound_packets(payload: &[u8]) {
         SRequestChunkRadius,
         SRequestNetworkSettings,
         SText,
-        SUnconnectedPing,
-        SUnconnectedPingOpenConnections,
     );
-
 }
 
 // ---------------------------------------------------------------------------

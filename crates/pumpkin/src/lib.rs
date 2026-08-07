@@ -9,7 +9,7 @@ use crate::data::VanillaData;
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
 use crate::net::bedrock::{
     BedrockClient,
-    nethernet::{NetherNetListener, load_or_create_identity_key},
+    nethernet::{NetherNetListener, discovery::NetherNetDiscovery, load_or_create_identity_key},
 };
 use crate::net::java::JavaClient;
 use crate::net::java::pending::PendingConnection;
@@ -32,7 +32,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
-use tokio::net::{TcpListener, UdpSocket};
+use tokio::net::TcpListener;
 use tokio::select;
 use tokio::sync::Mutex;
 use tokio::time::sleep;
@@ -210,7 +210,7 @@ fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
 pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub tcp_listener: Option<TcpListener>,
-    pub udp_socket: Option<Arc<UdpSocket>>,
+    pub nethernet_discovery: Option<NetherNetDiscovery>,
     pub nethernet_listener: Option<NetherNetListener>,
 }
 
@@ -299,22 +299,28 @@ impl PumpkinServer {
             });
         };
 
-        let udp_socket = if server.advanced_config.networking.bedrock.enabled {
-            Some(Arc::new(
-                UdpSocket::bind(server.advanced_config.networking.bedrock.address)
-                    .await
-                    .expect("Failed to bind UDP Socket"),
-            ))
+        let nethernet_listener = Self::bind_nethernet(&server).await;
+        let nethernet_discovery = if nethernet_listener.is_some() {
+            let discovery = NetherNetDiscovery::bind(
+                server.advanced_config.networking.bedrock.nethernet.address,
+            )
+            .await
+            .expect("Failed to bind NetherNet LAN discovery");
+            info!(
+                "Bedrock NetherNet LAN discovery is listening on {}",
+                discovery
+                    .local_addr()
+                    .expect("NetherNet discovery socket should have a local address")
+            );
+            Some(discovery)
         } else {
             None
         };
 
-        let nethernet_listener = Self::bind_nethernet(&server).await;
-
         Self {
             server,
             tcp_listener,
-            udp_socket,
+            nethernet_discovery,
             nethernet_listener,
         }
     }
@@ -542,21 +548,13 @@ impl PumpkinServer {
                 }
             },
 
-            // Branch for UDP packets (Bedrock Edition)
-            udp_result = resolve_some(self.udp_socket.as_ref(), |sock: &Arc<UdpSocket>| sock.recv_from(&mut udp_buf)) => {
-                match udp_result {
-                    Ok((len, client_addr)) => {
-                        if len > 0 && let Some(socket) = self.udp_socket.as_ref() {
-                            let _ = net::bedrock::status::handle_packet(
-                                &self.server,
-                                udp_buf[0],
-                                &udp_buf[1..len],
-                                client_addr,
-                                socket,
-                            ).await;
-                        }
-                    }
-                    Err(e) => error!("UDP socket error: {e}"),
+            // Branch for NetherNet LAN discovery and MOTD packets.
+            discovery_result = resolve_some(
+                self.nethernet_discovery.as_ref(),
+                |discovery: &NetherNetDiscovery| discovery.receive(&self.server, &mut udp_buf),
+            ) => {
+                if let Err(error) = discovery_result {
+                    debug!("NetherNet discovery packet failed: {error}");
                 }
             },
 
