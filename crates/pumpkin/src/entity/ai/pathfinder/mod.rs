@@ -345,6 +345,12 @@ impl Navigator {
         }
 
         if self.current_path.is_none() {
+            // No path could be found to the goal: matches vanilla `PathNavigation.isDone()`
+            // (`path == null`). Without this, `is_idle` stays false forever, the owning
+            // goal's `should_continue` (`!navigator.is_idle()`) never returns false, and the
+            // mob is stuck retrying this tick forever instead of the goal ending and a new
+            // one starting.
+            self.is_idle.store(true, Ordering::Relaxed);
             entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
             self.current_goal = Some(goal);
             return;
@@ -352,6 +358,11 @@ impl Navigator {
 
         if let Some(path) = &mut self.current_path {
             if path.is_done() || !path.is_valid() {
+                // Path finished or was invalidated: same "must signal idle" reasoning as
+                // above (vanilla `PathNavigation.isDone()`'s `path.isDone()` half). This is
+                // the case that fires every tick after a path completes normally, so without
+                // it a mob freezes in place permanently after reaching its very first target.
+                self.is_idle.store(true, Ordering::Relaxed);
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
                 self.current_goal = Some(goal);
                 return;
@@ -368,6 +379,7 @@ impl Navigator {
             if self.ticks_on_current_node > 100 {
                 self.current_path = None;
                 self.ticks_on_current_node = 0;
+                self.is_idle.store(true, Ordering::Relaxed);
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
                 self.current_goal = Some(goal);
                 return;
@@ -383,6 +395,7 @@ impl Navigator {
                     if dist_sq < 2.0 * 2.0 {
                         self.current_path = None;
                         self.ticks_on_current_node = 0;
+                        self.is_idle.store(true, Ordering::Relaxed);
                         entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
                         self.current_goal = Some(goal);
                         return;
