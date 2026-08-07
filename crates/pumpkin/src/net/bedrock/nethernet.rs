@@ -30,7 +30,7 @@ use pumpkin_util::p384::{
 };
 use serde_json::{Value, json};
 use tokio::{
-    net::{TcpListener, UdpSocket},
+    net::TcpListener,
     sync::{Mutex, RwLock, mpsc},
 };
 use tokio_util::sync::CancellationToken;
@@ -53,6 +53,7 @@ use webrtc::{
 };
 
 use crate::STOP_INTERRUPT;
+use crate::net::bedrock::status::IceSocket;
 
 pub mod discovery;
 
@@ -85,7 +86,7 @@ struct EndpointState {
 impl NetherNetListener {
     pub async fn bind(
         address: SocketAddr,
-        ice_address: SocketAddr,
+        ice_socket: IceSocket,
         external_ip: Option<IpAddr>,
         identity_key: Arc<SigningKey>,
         require_client_identity: bool,
@@ -94,7 +95,6 @@ impl NetherNetListener {
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(address).await?;
         let local_addr = listener.local_addr()?;
-        let ice_socket = UdpSocket::bind(ice_address).await?;
         let ice_local_addr = ice_socket.local_addr()?;
         let (incoming, receiver) = mpsc::channel(128);
         let state = EndpointState {
@@ -141,8 +141,13 @@ impl NetherNetListener {
     }
 }
 
-fn build_api(ice_socket: UdpSocket, external_ip: Option<IpAddr>) -> std::io::Result<API> {
-    let ice_ip = ice_socket.local_addr()?.ip();
+fn build_api<C>(ice_socket: C, external_ip: Option<IpAddr>) -> std::io::Result<API>
+where
+    C: webrtc::util::Conn + Send + Sync + 'static,
+{
+    let ice_ip = webrtc::util::Conn::local_addr(&ice_socket)
+        .map_err(|error| std::io::Error::other(error.to_string()))?
+        .ip();
     if external_ip.is_some_and(|external_ip| external_ip.is_ipv4() != ice_ip.is_ipv4()) {
         return Err(std::io::Error::new(
             ErrorKind::InvalidInput,
@@ -818,6 +823,7 @@ fn unix_time() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::net::UdpSocket;
     use webrtc::data_channel::data_channel_init::RTCDataChannelInit;
 
     #[test]
