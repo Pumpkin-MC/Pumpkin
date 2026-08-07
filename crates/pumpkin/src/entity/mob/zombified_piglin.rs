@@ -15,7 +15,8 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, revenge::RevengeGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        reset_universal_anger_target::ResetUniversalAngerTargetGoal, revenge::RevengeGoal,
         spear_use::SpearUseGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     attributes::{Modifier, ModifierOperation, send_attribute_updates_for_living},
@@ -95,7 +96,7 @@ impl ZombifiedPiglinEntity {
                     10,
                     true,
                     false,
-                    Some(move |target: Arc<LivingEntity>, _world: Arc<World>| {
+                    Some(move |target: Arc<LivingEntity>, world: Arc<World>| {
                         let angry_weak = angry_weak.clone();
                         async move {
                             let Some(mob) = angry_weak.upgrade() else {
@@ -104,11 +105,19 @@ impl ZombifiedPiglinEntity {
                             let Some(anger) = mob.persistent_anger() else {
                                 return false;
                             };
-                            anger.is_angry_at(target.entity.entity_uuid).await
+                            if anger.is_angry_at(target.entity.entity_uuid).await {
+                                return true;
+                            }
+                            let universal_anger =
+                                world.level_info.load().game_rules.universal_anger;
+                            anger.is_angry_at_all_players(universal_anger).await
                         }
                     }),
                 )),
             );
+
+            // Vanilla `ZombifiedPiglin.java:77`: `ResetUniversalAngerTargetGoal(this, true)`.
+            target_selector.add_goal(3, ResetUniversalAngerTargetGoal::new(true));
         };
 
         mob_arc

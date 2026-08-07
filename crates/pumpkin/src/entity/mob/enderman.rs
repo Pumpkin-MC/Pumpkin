@@ -116,16 +116,13 @@ impl EndermanEntity {
 
             // Vanilla priority 4, `ResetUniversalAngerTargetGoal(this, false)` (EnderMan.java:105):
             // re-targets any nearby player while "universally angry" (a targetless grudge gated
-            // entirely behind the `UNIVERSAL_ANGER` game rule -- see
-            // `ResetUniversalAngerTargetGoal.canUse`). Pumpkin has no `UNIVERSAL_ANGER` game
-            // rule; Wolf documents the identical deferral at `wolf.rs:174`. Not ported here
-            // either, and (unlike Wolf) no `PersistentAnger`/`NeutralMob`-equivalent state is
-            // added for Enderman in this fix: Enderman's `set_target`/`is_angry` (an
-            // `AtomicBool` gating `TeleportTowardsPlayerGoal`, see `is_player_staring`'s
-            // caller) is a different, already-working concept from vanilla's per-player
-            // `persistentAngerTarget` grudge, and nothing in this codebase would consume a
-            // `PersistentAnger` on Enderman if one were added, so it would be inert
-            // machinery. `alertOthersOfSameType` is `false` here vs. Wolf's `true`.
+            // behind the `universal_anger` game rule). Not ported here: Enderman has no
+            // `PersistentAnger`/`NeutralMob`-equivalent state in this codebase (unlike Wolf,
+            // `ZombifiedPiglin`, `PolarBear`), and `ResetUniversalAngerTargetGoal` is a no-op
+            // without one (`mob.persistent_anger()` returns `None`). Enderman's
+            // `set_target`/`is_angry` (an `AtomicBool` gating `TeleportTowardsPlayerGoal`, see
+            // `is_player_staring`'s caller) is a different, already-working concept from
+            // vanilla's per-player `persistentAngerTarget` grudge and isn't a substitute.
         };
 
         mob_arc

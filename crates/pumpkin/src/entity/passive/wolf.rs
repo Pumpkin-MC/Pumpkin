@@ -24,10 +24,11 @@ use crate::entity::{
         active_target::ActiveTargetGoal, beg::BegGoal, breed::BreedGoal,
         escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
         follow_parent::FollowParentGoal, leap_at_target::LeapAtTargetGoal,
-        look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, non_tame_random_target::NonTameRandomTargetGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        non_tame_random_target::NonTameRandomTargetGoal,
         owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
-        revenge::RevengeGoal, sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        reset_universal_anger_target::ResetUniversalAngerTargetGoal, revenge::RevengeGoal,
+        sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     living::LivingEntity,
     mob::{Mob, MobEntity},
@@ -132,7 +133,7 @@ impl WolfEntity {
                     10,
                     true,
                     false,
-                    Some(move |target: Arc<LivingEntity>, _world: Arc<World>| {
+                    Some(move |target: Arc<LivingEntity>, world: Arc<World>| {
                         let angry_weak = angry_weak.clone();
                         async move {
                             let Some(mob) = angry_weak.upgrade() else {
@@ -141,7 +142,12 @@ impl WolfEntity {
                             let Some(anger) = mob.persistent_anger() else {
                                 return false;
                             };
-                            anger.is_angry_at(target.entity.entity_uuid).await
+                            if anger.is_angry_at(target.entity.entity_uuid).await {
+                                return true;
+                            }
+                            let universal_anger =
+                                world.level_info.load().game_rules.universal_anger;
+                            anger.is_angry_at_all_players(universal_anger).await
                         }
                     }),
                 )),
@@ -174,12 +180,7 @@ impl WolfEntity {
                 );
             }
 
-            // Vanilla priority 8, `ResetUniversalAngerTargetGoal(this, true)`, re-targets any
-            // nearby player while "universally angry" (a targetless grudge gated behind the
-            // `UNIVERSAL_ANGER` game rule) and separately expires the anger timer. Pumpkin has
-            // no `UNIVERSAL_ANGER` game rule and `PersistentAnger::tick` already expires the
-            // timer on its own, so only the universal-anger-only re-targeting behavior is
-            // missing here; deferred until that game rule exists.
+            target_selector.add_goal(8, ResetUniversalAngerTargetGoal::new(true));
         };
 
         mob_arc

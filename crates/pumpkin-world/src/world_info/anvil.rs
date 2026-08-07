@@ -7,7 +7,7 @@ use std::{
 use tracing::error;
 
 use flate2::read::GzDecoder;
-use num_traits::{FromPrimitive, ToPrimitive};
+use num_traits::FromPrimitive;
 use pumpkin_util::Difficulty;
 use serde::{Deserialize, Serialize};
 
@@ -84,38 +84,80 @@ fn check_file_level_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
     }
 }
 
-/// Reads the `WorldBorder` sub-compound of level.dat's `Data` compound.
+/// Reads the nested `spawn` compound (`LevelData.RespawnData.CODEC`, see
+/// `net/minecraft/world/level/storage/PrimaryLevelData.java:126,139` and the record at
+/// `net/minecraft/world/level/storage/LevelData.java:33-43`): a `GlobalPos` (`dimension`
+/// string + `pos` 3-element int array, `net/minecraft/core/GlobalPos.java:13-15`) plus
+/// float `yaw`/`pitch`.
+///
+/// Falls back to the legacy flat `SpawnX`/`SpawnY`/`SpawnZ`/`SpawnAngle`/`SpawnPitch` keys
+/// that older Pumpkin builds wrote, so worlds saved by those builds still load correctly.
 /// Split out of `read_world_info` to keep that function under the workspace line limit.
-fn read_world_border(data: &pumpkin_nbt::compound::NbtCompound, level_data: &mut LevelData) {
-    let Some(border) = data.get_compound("WorldBorder") else {
+fn read_spawn(data: &pumpkin_nbt::compound::NbtCompound, level_data: &mut LevelData) {
+    if let Some(spawn) = data.get_compound("spawn") {
+        if let Some(pos) = spawn.get_int_array("pos")
+            && let [x, y, z] = *pos
+        {
+            level_data.spawn_x = x;
+            level_data.spawn_y = y;
+            level_data.spawn_z = z;
+        }
+        if let Some(v) = spawn.get_float("yaw") {
+            level_data.spawn_yaw = v;
+        }
+        if let Some(v) = spawn.get_float("pitch") {
+            level_data.spawn_pitch = v;
+        }
         return;
-    };
-    if let Some(v) = border.get_double("CenterX") {
-        level_data.border_center_x = v;
     }
-    if let Some(v) = border.get_double("CenterZ") {
-        level_data.border_center_z = v;
+
+    // Legacy Pumpkin schema (commit 76265bef), migrated on next save.
+    if let Some(v) = data.get_int("SpawnX") {
+        level_data.spawn_x = v;
     }
-    if let Some(v) = border.get_double("Size") {
-        level_data.border_size = v;
+    if let Some(v) = data.get_int("SpawnY") {
+        level_data.spawn_y = v;
     }
-    if let Some(v) = border.get_double("SizeLerpTarget") {
-        level_data.border_size_lerp_target = v;
+    if let Some(v) = data.get_int("SpawnZ") {
+        level_data.spawn_z = v;
     }
-    if let Some(v) = border.get_long("SizeLerpTime") {
-        level_data.border_size_lerp_time = v;
+    if let Some(v) = data.get_float("SpawnAngle") {
+        level_data.spawn_yaw = v;
     }
-    if let Some(v) = border.get_double("DamagePerBlock") {
-        level_data.border_damage_per_block = v;
+    if let Some(v) = data.get_float("SpawnPitch") {
+        level_data.spawn_pitch = v;
     }
-    if let Some(v) = border.get_double("SafeZone") {
-        level_data.border_safe_zone = v;
+}
+
+/// Reads the nested `difficulty_settings` compound
+/// (`LevelSettings.DifficultySettings.CODEC`, `net/minecraft/world/level/LevelSettings.java:58-67`):
+/// `difficulty` as a lowercase string (`Difficulty.CODEC` is `StringRepresentable.fromEnum`,
+/// `net/minecraft/world/Difficulty.java:12-18`), plus `hardcore` and `locked` booleans.
+///
+/// Falls back to the legacy flat root-level `Difficulty` byte / `DifficultyLocked` bool
+/// that older Pumpkin builds wrote, so worlds saved by those builds still load correctly.
+/// Pumpkin does not track hardcore mode in `LevelData`, so `hardcore` is read but discarded.
+/// Split out of `read_world_info` to keep that function under the workspace line limit.
+fn read_difficulty(data: &pumpkin_nbt::compound::NbtCompound, level_data: &mut LevelData) {
+    if let Some(settings) = data.get_compound("difficulty_settings") {
+        if let Some(v) = settings
+            .get_string("difficulty")
+            .and_then(|s| s.parse::<Difficulty>().ok())
+        {
+            level_data.difficulty = v;
+        }
+        if let Some(v) = settings.get_bool("locked") {
+            level_data.difficulty_locked = v;
+        }
+        return;
     }
-    if let Some(v) = border.get_double("WarningBlocks") {
-        level_data.border_warning_blocks = v;
+
+    // Legacy Pumpkin schema (commit 76265bef), migrated on next save.
+    if let Some(v) = data.get_byte("Difficulty").and_then(Difficulty::from_i8) {
+        level_data.difficulty = v;
     }
-    if let Some(v) = border.get_double("WarningTime") {
-        level_data.border_warning_time = v;
+    if let Some(v) = data.get_bool("DifficultyLocked") {
+        level_data.difficulty_locked = v;
     }
 }
 
@@ -155,6 +197,36 @@ fn write_data_packs(level_data: &LevelData) -> pumpkin_nbt::compound::NbtCompoun
     comp
 }
 
+/// Builds the nested `spawn` compound. See [`read_spawn`] for the schema citation.
+/// Pumpkin does not track a per-spawn dimension, so `dimension` is always written as the
+/// overworld, matching the "minecraft:overworld" literal used elsewhere in this module.
+fn write_spawn(level_data: &LevelData) -> pumpkin_nbt::compound::NbtCompound {
+    let mut spawn = pumpkin_nbt::compound::NbtCompound::new();
+    spawn.put_string("dimension", "minecraft:overworld".to_string());
+    spawn.put(
+        "pos",
+        pumpkin_nbt::tag::NbtTag::IntArray(vec![
+            level_data.spawn_x,
+            level_data.spawn_y,
+            level_data.spawn_z,
+        ]),
+    );
+    spawn.put_float("yaw", level_data.spawn_yaw);
+    spawn.put_float("pitch", level_data.spawn_pitch);
+    spawn
+}
+
+/// Builds the nested `difficulty_settings` compound. See [`read_difficulty`] for the
+/// schema citation. Pumpkin does not track hardcore mode in `LevelData`, so `hardcore` is
+/// always written as `false`.
+fn write_difficulty(level_data: &LevelData) -> pumpkin_nbt::compound::NbtCompound {
+    let mut settings = pumpkin_nbt::compound::NbtCompound::new();
+    settings.put_string("difficulty", level_data.difficulty.name().to_string());
+    settings.put_bool("hardcore", false);
+    settings.put_bool("locked", level_data.difficulty_locked);
+    settings
+}
+
 impl WorldInfoReader for AnvilLevelInfo {
     fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError> {
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
@@ -170,9 +242,14 @@ impl WorldInfoReader for AnvilLevelInfo {
         let mut level_data = LevelData::default(pumpkin_util::world_seed::Seed(0));
 
         // Fields still stored directly in level.dat's "Data" compound (spawn point,
-        // difficulty, allowCommands, level name, data packs, world border). Everything
-        // else has moved to the per-type save files under data/minecraft/*.dat, handled
-        // below. Missing keys fall back to LevelData::default()'s values.
+        // difficulty, allowCommands, level name, data packs). Everything else has moved to
+        // the per-type save files under data/minecraft/*.dat, handled below. `WorldBorder`
+        // and `map_id` are no longer read from level.dat at all -- vanilla keeps those in
+        // separate SavedData files ("world_border" and "maps/last_id" respectively; see
+        // net/minecraft/world/level/border/WorldBorder.java:24-26 and
+        // net/minecraft/world/level/saveddata/maps/MapIndex.java:12-16) that Pumpkin does
+        // not yet write, so those values stay at LevelData::default() until that lands.
+        // Missing keys otherwise fall back to LevelData::default()'s values.
         {
             let mut cursor = Cursor::new(&buf);
             let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
@@ -187,31 +264,8 @@ impl WorldInfoReader for AnvilLevelInfo {
                 if let Some(v) = data.get_string("LevelName") {
                     level_data.level_name = v.to_string();
                 }
-                if let Some(v) = data.get_byte("Difficulty").and_then(Difficulty::from_i8) {
-                    level_data.difficulty = v;
-                }
-                if let Some(v) = data.get_bool("DifficultyLocked") {
-                    level_data.difficulty_locked = v;
-                }
-                if let Some(v) = data.get_int("map_id") {
-                    level_data.map_id = v;
-                }
-                if let Some(v) = data.get_int("SpawnX") {
-                    level_data.spawn_x = v;
-                }
-                if let Some(v) = data.get_int("SpawnY") {
-                    level_data.spawn_y = v;
-                }
-                if let Some(v) = data.get_int("SpawnZ") {
-                    level_data.spawn_z = v;
-                }
-                if let Some(v) = data.get_float("SpawnAngle") {
-                    level_data.spawn_yaw = v;
-                }
-                if let Some(v) = data.get_float("SpawnPitch") {
-                    level_data.spawn_pitch = v;
-                }
-                read_world_border(data, &mut level_data);
+                read_spawn(data, &mut level_data);
+                read_difficulty(data, &mut level_data);
                 read_data_packs(data, &mut level_data);
             }
         }
@@ -288,26 +342,10 @@ impl WorldInfoWriter for AnvilLevelInfo {
         data_comp.put_long("LastPlayed", level_data.last_played);
         data_comp.put_bool("allowCommands", level_data.allow_commands);
         data_comp.put_string("LevelName", level_data.level_name.clone());
-        data_comp.put_byte("Difficulty", level_data.difficulty.to_i8().unwrap_or(2));
-        data_comp.put_bool("DifficultyLocked", level_data.difficulty_locked);
-        data_comp.put_int("map_id", level_data.map_id);
-        data_comp.put_int("SpawnX", level_data.spawn_x);
-        data_comp.put_int("SpawnY", level_data.spawn_y);
-        data_comp.put_int("SpawnZ", level_data.spawn_z);
-        data_comp.put_float("SpawnAngle", level_data.spawn_yaw);
-        data_comp.put_float("SpawnPitch", level_data.spawn_pitch);
-
-        let mut border_comp = pumpkin_nbt::compound::NbtCompound::new();
-        border_comp.put_double("CenterX", level_data.border_center_x);
-        border_comp.put_double("CenterZ", level_data.border_center_z);
-        border_comp.put_double("Size", level_data.border_size);
-        border_comp.put_double("SizeLerpTarget", level_data.border_size_lerp_target);
-        border_comp.put_long("SizeLerpTime", level_data.border_size_lerp_time);
-        border_comp.put_double("DamagePerBlock", level_data.border_damage_per_block);
-        border_comp.put_double("SafeZone", level_data.border_safe_zone);
-        border_comp.put_double("WarningBlocks", level_data.border_warning_blocks);
-        border_comp.put_double("WarningTime", level_data.border_warning_time);
-        data_comp.put_compound("WorldBorder", border_comp);
+        data_comp.put_compound("difficulty_settings", write_difficulty(&level_data));
+        data_comp.put_compound("spawn", write_spawn(&level_data));
+        // `WorldBorder` and `map_id` are deliberately not written: vanilla keeps them in
+        // separate SavedData files, not level.dat (see the comment in read_world_info).
 
         data_comp.put_compound("DataPacks", write_data_packs(&level_data));
 

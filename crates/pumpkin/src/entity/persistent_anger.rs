@@ -42,6 +42,20 @@ impl PersistentAnger {
         self.is_angry() && *self.angry_at.lock().await == Some(target)
     }
 
+    /// Vanilla `NeutralMob.isAngryAtAllPlayers`: true while angry with no specific grudge
+    /// target, gated behind the `universal_anger` game rule (checked by the caller).
+    pub async fn is_angry_at_all_players(&self, universal_anger_rule: bool) -> bool {
+        universal_anger_rule && self.is_angry() && self.angry_at.lock().await.is_none()
+    }
+
+    /// Vanilla `NeutralMob.forgetCurrentTargetAndRefreshUniversalAnger`: `stopBeingAngry()`
+    /// then `startPersistentAngerTimer()`, leaving `angry_at` cleared so `isAngryAtAllPlayers`
+    /// becomes true for the duration of the new timer.
+    pub async fn forget_current_target_and_refresh_universal_anger(&self) {
+        self.stop_being_angry().await;
+        self.start_timer();
+    }
+
     pub async fn set_angry_at(&self, target: Option<Uuid>) {
         *self.angry_at.lock().await = target;
     }

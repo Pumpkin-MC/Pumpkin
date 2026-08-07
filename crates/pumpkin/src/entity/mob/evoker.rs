@@ -1,9 +1,10 @@
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal,
         evoker_spell::{
@@ -84,7 +85,24 @@ impl EvokerEntity {
     }
 }
 
-impl NBTStorage for EvokerEntity {}
+impl NBTStorage for EvokerEntity {
+    /// Vanilla: `SpellcasterIllager.addAdditionalSaveData` (`SpellTicks`).
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            nbt.put_int("SpellTicks", self.spellcaster.casting_ticks_left());
+        })
+    }
+
+    /// Vanilla: `SpellcasterIllager.readAdditionalSaveData` (`SpellTicks`, default 0).
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.spellcaster
+                .set_casting_time(nbt.get_int("SpellTicks").unwrap_or(0));
+        })
+    }
+}
 
 impl Mob for EvokerEntity {
     fn get_mob_entity(&self) -> &MobEntity {

@@ -187,9 +187,27 @@ impl ScreenHandlerFactory for WanderingTraderEntity {
             handler.on_trade = Some(Box::new(move |offer_index| {
                 if let Some(trader) = self_weak.upgrade() {
                     tokio::spawn(async move {
-                        let mut offers = trader.offers.lock().await;
-                        if offer_index < offers.len() {
-                            offers[offer_index].uses += 1;
+                        let reward_exp = {
+                            let mut offers = trader.offers.lock().await;
+                            if offer_index >= offers.len() {
+                                return;
+                            }
+                            let offer = &mut offers[offer_index];
+                            offer.uses += 1;
+                            !offer.is_disabled
+                        };
+
+                        // `WanderingTrader::rewardTradeXp` (WanderingTrader.java:157-163): unlike
+                        // `Villager`, no persisted XP counter or profession leveling, just a flat
+                        // orb.
+                        if reward_exp {
+                            let entity = trader.get_entity();
+                            crate::entity::experience_orb::ExperienceOrbEntity::spawn(
+                                &entity.world.load(),
+                                entity.pos.load(),
+                                3 + rand::random_range(0..4u32),
+                            )
+                            .await;
                         }
                     });
                 }

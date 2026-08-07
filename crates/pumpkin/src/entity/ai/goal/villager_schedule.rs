@@ -43,13 +43,14 @@ const REPATH_INTERVAL: i32 = 40;
 /// Vanilla drives this through the Brain/Activity/Memory framework (`WorkAtPoi`,
 /// `StrollAroundPoi`, `SetWalkTargetFromBlockMemory`, `SleepInBed`, ...), which Pumpkin has
 /// no equivalent of. This goal instead just walks the villager to its already-claimed job
-/// site during WORK hours and to its already-claimed bed during REST hours, reusing the
-/// job-site/home tracking `VillagerEntity` already does in `mob_tick`. During MEET/IDLE
-/// hours it does nothing, which is a control-conflict no-op: with `Controls::MOVE` and a
-/// lower (more urgent) priority number than `WanderAroundGoal`, this goal preempts
-/// wandering whenever it is active and yields `MOVE` back to `WanderAroundGoal` otherwise --
-/// so the villager wanders during MEET/IDLE and walks to work/bed on schedule the rest of
-/// the day, without needing to touch `WanderAroundGoal` itself (shared by dozens of
+/// site during WORK hours, to its already-claimed meeting-point (bell) during MEET hours, and
+/// to its already-claimed bed during REST hours, reusing the job-site/meeting-point/home
+/// tracking `VillagerEntity` already does in `mob_tick`. During IDLE hours it does nothing,
+/// which is a control-conflict no-op: with `Controls::MOVE` and a lower (more urgent)
+/// priority number than `WanderAroundGoal`, this goal preempts wandering whenever it is
+/// active and yields `MOVE` back to `WanderAroundGoal` otherwise -- so the villager wanders
+/// during IDLE (or MEET with no claimed bell) and walks to work/meet/bed on schedule the
+/// rest of the day, without needing to touch `WanderAroundGoal` itself (shared by dozens of
 /// unrelated mobs).
 pub struct VillagerScheduleGoal {
     speed: f64,
@@ -73,7 +74,10 @@ impl VillagerScheduleGoal {
         let pos = match villager_activity_for_time(time) {
             VillagerActivity::Work => mob.get_job_site(),
             VillagerActivity::Rest => mob.get_home(),
-            VillagerActivity::Idle | VillagerActivity::Meet => None,
+            // `SetWalkTargetFromBlockMemory.create(MemoryModuleType.MEETING_POINT, ...)`
+            // (`VillagerGoalPackages.getMeetPackage`, priority 2).
+            VillagerActivity::Meet => mob.get_meeting_point(),
+            VillagerActivity::Idle => None,
         }?;
         Some(Vector3::new(
             pos.0.x as f64 + 0.5,

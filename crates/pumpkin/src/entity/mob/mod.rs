@@ -656,6 +656,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn get_meeting_point(&self) -> Option<BlockPos> {
+        None
+    }
+
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
         None
     }
@@ -710,13 +714,13 @@ pub trait Mob: EntityBase + Send + Sync {
     /// (`TargetingConditions.java:78`). Defaults to `true`; species with a blanket "never
     /// target this" rule (Iron Golem's player-created and creeper exclusions) override it.
     ///
-    /// Only reached from `RevengeGoal::can_start` and `TrackTargetGoal::can_track`'s
-    /// continuation check, not from initial acquisition in `ActiveTargetGoal` or
-    /// `NearestHostileTargetGoal::find_closest_target` -- both call
-    /// `TargetPredicate::test` directly against a `&MobEntity` with no `dyn Mob` in scope,
-    /// so they cannot reach an override here. A mob whose `can_attack` override matters for
-    /// first acquisition, not just retaliation/tracking continuity, needs its own check in
-    /// that goal instead of relying on this hook.
+    /// Consulted at initial acquisition by `ActiveTargetGoal::find_closest_target` and
+    /// `NearestHostileTargetGoal::find_closest_target`, and at continuation by
+    /// `RevengeGoal::can_start` and `TrackTargetGoal::can_track`. Not yet threaded through
+    /// `nearest_attackable_witch_target.rs`, `polar_bear_attack_players.rs`,
+    /// `defend_village_target.rs`, `ghast_target.rs`, or `non_tame_random_target.rs`, which
+    /// still call `TargetPredicate::test` directly against a `&MobEntity` with no `dyn Mob`
+    /// in scope.
     fn can_attack(&self, _target: &Entity) -> bool {
         true
     }

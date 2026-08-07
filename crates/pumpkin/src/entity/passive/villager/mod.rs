@@ -67,6 +67,9 @@ pub struct VillagerEntity {
     pub offers: Mutex<Vec<pumpkin_protocol::java::client::play::MerchantOffer>>,
     pub job_site: std::sync::Mutex<Option<BlockPos>>,
     pub home_pos: std::sync::Mutex<Option<BlockPos>>,
+    /// Vanilla `MEETING_POINT` brain memory: the bell POI claimed via `AcquirePoi`
+    /// (`VillagerGoalPackages.java`, `getCorePackage` priority 10).
+    pub meeting_point: std::sync::Mutex<Option<BlockPos>>,
     pub self_weak: std::sync::Mutex<Option<Weak<Self>>>,
 }
 
@@ -100,6 +103,7 @@ impl VillagerEntity {
             offers: Mutex::new(Vec::new()),
             job_site: std::sync::Mutex::new(None),
             home_pos: std::sync::Mutex::new(None),
+            meeting_point: std::sync::Mutex::new(None),
             self_weak: std::sync::Mutex::new(None),
         };
         let mob_arc = Arc::new(villager);
@@ -756,6 +760,13 @@ impl NBTStorage for VillagerEntity {
                 nbt.put_int("HomeZ", pos.0.z);
             }
 
+            let meeting_pos = *self.meeting_point.lock().unwrap();
+            if let Some(pos) = meeting_pos {
+                nbt.put_int("MeetingX", pos.0.x);
+                nbt.put_int("MeetingY", pos.0.y);
+                nbt.put_int("MeetingZ", pos.0.z);
+            }
+
             // Save Offers
             {
                 let offers = self.offers.lock().await;
@@ -882,6 +893,16 @@ impl NBTStorage for VillagerEntity {
                 *self.home_pos.lock().unwrap() = None;
             }
 
+            if let (Some(x), Some(y), Some(z)) = (
+                nbt.get_int("MeetingX"),
+                nbt.get_int("MeetingY"),
+                nbt.get_int("MeetingZ"),
+            ) {
+                *self.meeting_point.lock().unwrap() = Some(BlockPos::new(x, y, z));
+            } else {
+                *self.meeting_point.lock().unwrap() = None;
+            }
+
             if let Some(offers_compound) = nbt.get_compound("Offers")
                 && let Some(recipes) = offers_compound.get_list("Recipes")
             {
@@ -975,6 +996,18 @@ impl NBTStorage for VillagerEntity {
     }
 }
 
+/// Vanilla `ValidateNearbyPoi.MAX_DISTANCE` / `BlockPos::closerToCenterThan`
+/// (`ValidateNearbyPoi.java:19,25`): a claimed POI is only (in)validated against the live
+/// block state while the villager is within 16 blocks of it. Outside that range vanilla's
+/// behavior returns `false` (no-op) rather than erasing the memory, which matters here
+/// because a chunk outside simulation/load range can read back as air - without this gate a
+/// villager that merely wandered away from an unloaded job site would incorrectly lose its
+/// ticket and profession.
+#[must_use]
+fn close_to_poi(pos: Vector3<f64>, poi: BlockPos) -> bool {
+    poi.to_centered_f64().squared_distance_to_vec(&pos) < 16.0 * 16.0
+}
+
 fn block_to_profession(block: &Block) -> Option<VillagerProfession> {
     if block == &Block::COMPOSTER {
         Some(VillagerProfession::Farmer)
@@ -1048,6 +1081,10 @@ impl Mob for VillagerEntity {
         *self.home_pos.lock().unwrap()
     }
 
+    fn get_meeting_point(&self) -> Option<BlockPos> {
+        *self.meeting_point.lock().unwrap()
+    }
+
     /// `Villager::setLastHurtByMob` -> `onReputationEventFrom(VILLAGER_HURT, ...)`
     /// (Villager.java:585-593, 861-862): the hurt villager itself records
     /// `MINOR_NEGATIVE` gossip against its attacker.
@@ -1093,11 +1130,30 @@ impl Mob for VillagerEntity {
         cause: Option<&'a dyn EntityBase>,
     ) -> crate::entity::EntityBaseFuture<'a, ()> {
         Box::pin(async move {
+            let world = self.get_entity().world.load();
+
+            // `Villager::die` -> `releaseAllPois` (Villager.java:596-605): release every
+            // claimed POI ticket unconditionally, murderer or not (fall damage, starvation,
+            // etc. all reach this too), so a dead villager never permanently locks a
+            // job-site/bed/bell that no other villager can ever claim. Positions are taken
+            // into an owned `Vec` before the first `.await` so no `std::sync::MutexGuard`
+            // (non-`Send`) is held across it.
+            let claimed_pois: Vec<BlockPos> = [
+                self.job_site.lock().unwrap().take(),
+                self.home_pos.lock().unwrap().take(),
+                self.meeting_point.lock().unwrap().take(),
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
+            for pos in claimed_pois {
+                world.release_poi(pos).await;
+            }
+
             let Some(murderer) = cause else {
                 return;
             };
             let murderer_uuid = murderer.get_entity().entity_uuid;
-            let world = self.get_entity().world.load();
             let pos = self.get_entity().pos.load();
             let aabb = BoundingBox::new(
                 Vector3::new(pos.x - 16.0, pos.y - 16.0, pos.z - 16.0),
@@ -1170,9 +1226,12 @@ impl Mob for VillagerEntity {
 
             // 1. Bed / Sleeping logic (for all villagers: babies, nitwits, adults)
             let is_sleeping = self.get_entity().pose.load() == EntityPose::Sleeping;
+            let self_pos = self.get_entity().pos.load();
 
             // Check if current bed is still valid
-            if let Some(current_home) = self.get_home_pos() {
+            if let Some(current_home) = self.get_home_pos()
+                && close_to_poi(self_pos, current_home)
+            {
                 let (block, state) = world.get_block_and_state(&current_home);
                 let valid = if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
                     let bed_props = BedProperties::from_state_id(state.id, block);
@@ -1284,9 +1343,36 @@ impl Mob for VillagerEntity {
                 }
             }
 
+            let is_adult = self.get_entity().age.load(Ordering::Relaxed) >= 0;
+
+            // 1b. Meeting-point (bell) POI - `AcquirePoi.create(p -> p.is(PoiTypes.MEETING),
+            // MEETING_POINT, true, ...)` (`VillagerGoalPackages.getCorePackage`, priority 10).
+            // `onlyIfAdult = true`, unconditional on profession (even Nitwits gather at the
+            // bell), so this runs ahead of the profession early-return below.
+            if is_adult {
+                let self_pos = self.get_entity().pos.load();
+                if let Some(current_meeting) = self.get_meeting_point()
+                    && close_to_poi(self_pos, current_meeting)
+                {
+                    let (block, _state) = world.get_block_and_state(&current_meeting);
+                    if block != &Block::BELL {
+                        world.release_poi(current_meeting).await;
+                        *self.meeting_point.lock().unwrap() = None;
+                    }
+                }
+                if self.get_meeting_point().is_none() {
+                    let pos = self.get_entity().block_pos.load();
+                    if let Some(meeting) = world
+                        .acquire_poi(crate::world::village_poi::POI_TYPE_MEETING, pos, 48)
+                        .await
+                    {
+                        *self.meeting_point.lock().unwrap() = Some(meeting);
+                    }
+                }
+            }
+
             // 2. Job / Profession logic (skip for Nitwits and babies)
             let data = self.villager_data.lock().await;
-            let is_adult = self.get_entity().age.load(Ordering::Relaxed) >= 0;
             let xp = self.xp.load(Ordering::Relaxed);
             let profession = data.profession_enum();
             drop(data);
@@ -1295,7 +1381,9 @@ impl Mob for VillagerEntity {
                 return;
             }
 
-            if let Some(current_site) = self.get_job_site() {
+            if let Some(current_site) = self.get_job_site()
+                && close_to_poi(self.get_entity().pos.load(), current_site)
+            {
                 let (block, _state) = world.get_block_and_state(&current_site);
                 let valid = if profession == VillagerProfession::None {
                     block_to_profession(block).is_some()
@@ -1304,6 +1392,9 @@ impl Mob for VillagerEntity {
                 };
 
                 if !valid {
+                    // Vanilla `ValidateNearbyPoi`: release the job-site ticket once the block
+                    // stops matching (e.g. broken), same as the bed-release path above.
+                    world.release_poi(current_site).await;
                     *self.job_site.lock().unwrap() = None;
                     if xp == 0 && profession != VillagerProfession::None {
                         let r#type = self.villager_data.lock().await.type_enum();
@@ -1315,83 +1406,53 @@ impl Mob for VillagerEntity {
                         .await;
                         self.offers.lock().await.clear();
                     }
+                } else if profession == VillagerProfession::None
+                    && let Some(prof) = block_to_profession(block)
+                {
+                    // `AssignProfessionFromJobSite` (`VillagerGoalPackages.java`, priority 10):
+                    // a valid job-site claim with no profession yet assigns one. Covers a
+                    // villager loaded from a save with a claimed `JobSiteX` but no profession
+                    // (e.g. an interrupted acquisition), not just the fresh-acquisition path
+                    // below.
+                    let r#type = self.villager_data.lock().await.type_enum();
+                    self.set_villager_data(VillagerData::new(r#type, prof, 1))
+                        .await;
                 }
             }
 
+            // Atomically claim the closest unclaimed job-site POI - vanilla `AcquirePoi`
+            // (`AcquirePoi.SCAN_RANGE = 48`). Ticket-based via `World::acquire_poi[_where]`
+            // (`PoiManager.take`), matching the bed acquisition above: no other villager can
+            // claim the same block, so there is no need to separately scan nearby villagers
+            // for what they've already claimed. An employed villager is restricted to POIs
+            // whose block still matches its own profession (`AssignProfessionFromJobSite`
+            // never reassigns an already-employed villager away from its trade).
             if self.get_job_site().is_none() {
                 let pos = self.get_entity().block_pos.load();
-                let start = BlockPos::new(pos.0.x - 10, pos.0.y - 4, pos.0.z - 10);
-                let end = BlockPos::new(pos.0.x + 10, pos.0.y + 4, pos.0.z + 10);
+                let claimed = if profession == VillagerProfession::None {
+                    world
+                        .acquire_poi(crate::world::village_poi::POI_TYPE_JOB_SITE, pos, 48)
+                        .await
+                } else {
+                    world
+                        .acquire_poi_where(
+                            crate::world::village_poi::POI_TYPE_JOB_SITE,
+                            pos,
+                            48,
+                            |block| profession_matches_block(profession, block),
+                        )
+                        .await
+                };
 
-                let aabb = BoundingBox::new(
-                    Vector3::new(
-                        pos.0.x as f64 - 32.0,
-                        pos.0.y as f64 - 16.0,
-                        pos.0.z as f64 - 32.0,
-                    ),
-                    Vector3::new(
-                        pos.0.x as f64 + 32.0,
-                        pos.0.y as f64 + 16.0,
-                        pos.0.z as f64 + 32.0,
-                    ),
-                );
-                let nearby_entities = world.get_all_at_box(&aabb);
-
-                let mut claimed_sites = Vec::new();
-                for entity in nearby_entities {
-                    if entity.get_entity().entity_id != self.get_entity().entity_id
-                        && entity.get_entity().entity_type
-                            == &pumpkin_data::entity::EntityType::VILLAGER
-                        && let Some(site) = entity.get_job_site_pos()
-                    {
-                        claimed_sites.push(site);
-                    }
-                }
-
-                let mut best_site = None;
-                let mut best_dist = f64::MAX;
-                let mut best_profession = VillagerProfession::None;
-
-                for p in BlockPos::iterate(start, end) {
-                    if claimed_sites.contains(&p) {
-                        continue;
-                    }
-
-                    let (block, _state) = world.get_block_and_state(&p);
-                    if let Some(prof) = block_to_profession(block) {
-                        if profession != VillagerProfession::None && prof != profession {
-                            continue;
-                        }
-
-                        let dist = p
-                            .to_f64()
-                            .squared_distance_to_vec(&self.get_entity().pos.load());
-                        if dist < best_dist {
-                            best_dist = dist;
-                            best_site = Some(p);
-                            best_profession = prof;
-                        }
-                    }
-                }
-
-                if let Some(site) = best_site {
+                if let Some(site) = claimed {
                     *self.job_site.lock().unwrap() = Some(site);
                     if profession == VillagerProfession::None {
-                        let r#type = self.villager_data.lock().await.type_enum();
-                        self.set_villager_data(VillagerData::new(r#type, best_profession, 1))
-                            .await;
-                    }
-                }
-            } else {
-                let current_prof = self.villager_data.lock().await.profession_enum();
-                if current_prof == VillagerProfession::None
-                    && let Some(site) = self.get_job_site()
-                {
-                    let (block, _state) = world.get_block_and_state(&site);
-                    if let Some(prof) = block_to_profession(block) {
-                        let r#type = self.villager_data.lock().await.type_enum();
-                        self.set_villager_data(VillagerData::new(r#type, prof, 1))
-                            .await;
+                        let (block, _state) = world.get_block_and_state(&site);
+                        if let Some(prof) = block_to_profession(block) {
+                            let r#type = self.villager_data.lock().await.type_enum();
+                            self.set_villager_data(VillagerData::new(r#type, prof, 1))
+                                .await;
+                        }
                     }
                 }
             }

@@ -43,17 +43,13 @@
 //! is *actually in use*, not merely present). A meeting point
 //! (`maxTickets = 32`) can be both simultaneously.
 //!
-//! Residual gap: only bed (`HOME`) acquisition is wired up
-//! (`VillagerEntity`'s rest logic calls `World::acquire_poi`/`release_poi`).
-//! Job-site and meeting-point POIs are never claimed by anything in Pumpkin
-//! (no profession job-site claiming, no bell-ringing meeting-point
-//! claiming), so their `free_tickets` never moves off `max_tickets` and they
-//! never satisfy `IS_OCCUPIED`. `sections_to_village`'s job-site/meeting
-//! contribution is therefore inert until that claiming exists - only the
-//! `HOME` contribution is currently meaningful. A village with claimed beds
-//! still registers correctly; a freshly-generated, never-slept-in village
-//! (no villager has claimed a bed yet) will not, which matches vanilla's own
-//! `isVillageCenter` requiring an *occupied* POI, not merely an existing one.
+//! Bed (`HOME`), job-site, and meeting-point (bell) acquisition are all wired up
+//! (`VillagerEntity::mob_tick` calls `World::acquire_poi`/`acquire_poi_where`/`release_poi`
+//! for all three), so `sections_to_village`'s job-site/meeting contribution is meaningful
+//! whenever a villager has actually claimed one - not merely whenever the block exists. A
+//! village with claimed beds/job sites/bells registers correctly; a freshly-generated,
+//! never-visited village (no villager has claimed anything yet) will not, which matches
+//! vanilla's own `isVillageCenter` requiring an *occupied* POI, not merely an existing one.
 //!
 //! Existing worlds with POI entries persisted before this ticket system
 //! landed have `free_tickets == 0` on disk (the prior code always wrote

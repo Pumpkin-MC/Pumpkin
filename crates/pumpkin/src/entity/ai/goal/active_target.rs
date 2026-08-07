@@ -80,19 +80,25 @@ impl ActiveTargetGoal {
         self.target = target;
     }
 
-    async fn find_closest_target(&mut self, mob: &MobEntity) {
-        let follow_range = mob
+    async fn find_closest_target(&mut self, mob: &dyn Mob) {
+        let mob_entity = mob.get_mob_entity();
+        let follow_range = mob_entity
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
 
         // Vanilla updates the target conditions with the current follow distance on every search
         self.target_predicate.base_max_distance = follow_range;
 
-        let world = mob.living_entity.entity.world.load();
+        let world = mob_entity.living_entity.entity.world.load();
 
         // Vanilla searches using getEyeY(), so we offset the position by the eye height
-        let mut search_pos = mob.living_entity.entity.pos.load();
-        search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
+        let mut search_pos = mob_entity.living_entity.entity.pos.load();
+        search_pos.y += mob_entity
+            .living_entity
+            .entity
+            .entity_dimension
+            .load()
+            .eye_height as f64;
 
         // Vanilla evaluates the target conditions per candidate inside the search, so the result is
         // the nearest *valid* target. Testing only the nearest candidate would make a single
@@ -111,10 +117,17 @@ impl ActiveTargetGoal {
             });
             let mut result = None;
             for player in candidates {
-                if self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), &player.living_entity)
-                    .await
+                // Vanilla `TargetingConditions.test` (combat branch, `TargetingConditions.java:78`)
+                // consults `targeter.canAttack(target)` before the rest of the predicate.
+                if mob.can_attack(player.get_entity())
+                    && self
+                        .target_predicate
+                        .test(
+                            &world,
+                            Some(&mob_entity.living_entity),
+                            &player.living_entity,
+                        )
+                        .await
                 {
                     result = Some(player as Arc<dyn EntityBase>);
                     break;
@@ -133,9 +146,10 @@ impl ActiveTargetGoal {
             let mut result = None;
             for entity in candidates {
                 if let Some(living) = entity.get_living_entity()
+                    && mob.can_attack(entity.get_entity())
                     && self
                         .target_predicate
-                        .test(&world, Some(&mob.living_entity), living)
+                        .test(&world, Some(&mob_entity.living_entity), living)
                         .await
                 {
                     result = Some(entity);
@@ -155,7 +169,7 @@ impl Goal for ActiveTargetGoal {
             {
                 return false;
             }
-            self.find_closest_target(mob.get_mob_entity()).await;
+            self.find_closest_target(mob).await;
             self.target.is_some()
         })
     }

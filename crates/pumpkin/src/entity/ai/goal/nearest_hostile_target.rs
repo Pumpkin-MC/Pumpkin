@@ -96,16 +96,22 @@ impl NearestHostileTargetGoal {
         })
     }
 
-    async fn find_closest_target(&mut self, mob: &MobEntity) {
-        let follow_range = mob
+    async fn find_closest_target(&mut self, mob: &dyn Mob) {
+        let mob_entity = mob.get_mob_entity();
+        let follow_range = mob_entity
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
         self.target_predicate.base_max_distance = follow_range;
 
-        let world = mob.living_entity.entity.world.load();
+        let world = mob_entity.living_entity.entity.world.load();
 
-        let mut search_pos = mob.living_entity.entity.pos.load();
-        search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
+        let mut search_pos = mob_entity.living_entity.entity.pos.load();
+        search_pos.y += mob_entity
+            .living_entity
+            .entity
+            .entity_dimension
+            .load()
+            .eye_height as f64;
 
         // Gather-sort-iterate, same shape as `ActiveTargetGoal::find_closest_target`: the
         // target conditions are evaluated per candidate in distance order so a single
@@ -136,10 +142,13 @@ impl NearestHostileTargetGoal {
 
         let mut result = None;
         for entity in candidates {
+            // Vanilla `TargetingConditions.test` (combat branch, `TargetingConditions.java:78`)
+            // consults `targeter.canAttack(target)` before the rest of the predicate.
             if let Some(living) = entity.get_living_entity()
+                && mob.can_attack(entity.get_entity())
                 && self
                     .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
+                    .test(&world, Some(&mob_entity.living_entity), living)
                     .await
             {
                 result = Some(entity);
@@ -158,7 +167,7 @@ impl Goal for NearestHostileTargetGoal {
             {
                 return false;
             }
-            self.find_closest_target(mob.get_mob_entity()).await;
+            self.find_closest_target(mob).await;
             self.target.is_some()
         })
     }

@@ -6,8 +6,10 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use tokio::sync::Mutex;
 
+use pumpkin_nbt::compound::NbtCompound;
+
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal,
         avoid_entity::AvoidEntityGoal,
@@ -104,7 +106,24 @@ impl IllusionerEntity {
     }
 }
 
-impl NBTStorage for IllusionerEntity {}
+impl NBTStorage for IllusionerEntity {
+    /// Vanilla: `SpellcasterIllager.addAdditionalSaveData` (`SpellTicks`).
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            nbt.put_int("SpellTicks", self.spellcaster.casting_ticks_left());
+        })
+    }
+
+    /// Vanilla: `SpellcasterIllager.readAdditionalSaveData` (`SpellTicks`, default 0).
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.spellcaster
+                .set_casting_time(nbt.get_int("SpellTicks").unwrap_or(0));
+        })
+    }
+}
 
 impl Mob for IllusionerEntity {
     fn get_mob_entity(&self) -> &MobEntity {

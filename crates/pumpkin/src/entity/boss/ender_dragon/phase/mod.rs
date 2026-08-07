@@ -1,3 +1,4 @@
+use crate::entity::EntityBase;
 use crate::entity::boss::ender_dragon::EnderDragonEntity;
 use futures::future::BoxFuture;
 use pumpkin_util::math::vector3::Vector3;
@@ -38,6 +39,12 @@ pub trait Phase: Send + Sync {
     }
     fn is_sitting(&self) -> bool {
         false
+    }
+    /// Vanilla `DragonPhaseInstance.onHurt` (`AbstractDragonPhaseInstance.java:54-57`):
+    /// identity by default, called before the head/non-head damage split in
+    /// `EnderDragon.hurt` (`EnderDragon.java:451`).
+    fn on_hurt(&self, _dragon: &EnderDragonEntity, _source: &dyn EntityBase, damage: f32) -> f32 {
+        damage
     }
     fn get_fly_speed(&self) -> f32 {
         0.6
@@ -102,6 +109,28 @@ impl EnderDragonPhase {
             10 => Self::Dying,
             _ => Self::Circling,
         }
+    }
+}
+
+/// Shared `AbstractDragonSittingPhase.onHurt` body (`AbstractDragonSittingPhase.java:18-26`):
+/// arrows, tridents and thrown wind charges deal no damage while sitting and ignite the
+/// projectile for a second instead; anything else passes through unchanged. Used by the
+/// three Pumpkin phases that model vanilla's `DragonSittingScanningPhase`,
+/// `DragonSittingAttackingPhase` and `DragonSittingFlamingPhase`.
+pub(super) fn sitting_on_hurt(source: &dyn EntityBase, damage: f32) -> f32 {
+    use pumpkin_data::entity::EntityType;
+
+    let id = source.get_entity().entity_type.id;
+    let is_arrow_or_wind_charge = id == EntityType::ARROW.id
+        || id == EntityType::SPECTRAL_ARROW.id
+        || id == EntityType::TRIDENT.id
+        || id == EntityType::WIND_CHARGE.id;
+
+    if is_arrow_or_wind_charge {
+        source.set_on_fire_for(1.0);
+        0.0
+    } else {
+        damage
     }
 }
 

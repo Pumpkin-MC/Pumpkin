@@ -4195,8 +4195,26 @@ impl Player {
         }
     }
 
+    /// Mirrors vanilla's `BeaconMenu.stillValid` / `AbstractContainerMenu.stillValid`
+    /// (`ContainerLevelAccess`-gated: block at `pos` is still `Blocks.BEACON` and the player
+    /// is within `blockInteractionRange() + 4.0`), decompile
+    /// `net/minecraft/world/inventory/BeaconMenu.java:68-70` and
+    /// `net/minecraft/world/inventory/AbstractContainerMenu.java:93-95`.
+    fn beacon_still_valid(&self, pos: BlockPos) -> bool {
+        self.world().get_block(&pos).id == Block::BEACON.id
+            && self.can_interact_with_block_at(&pos, 4.0)
+    }
+
     pub async fn on_set_beacon(self: &Arc<Self>, packet: SSetBeacon) {
         self.update_last_action_time();
+
+        let Some(pos) = self.open_container_pos.load() else {
+            return;
+        };
+        if !self.beacon_still_valid(pos) {
+            return;
+        }
+
         let screen_handler_arc = self.current_screen_handler.lock().await.clone();
         let screen_handler = screen_handler_arc.lock().await;
 
@@ -4215,13 +4233,22 @@ impl Player {
             return;
         };
 
-        beacon
+        // ServerGamePacketListenerImpl.java:786-789 discards the effect change on a
+        // failed `updateEffects` validation; this codebase does not disconnect on invalid
+        // input, so just refuse the mutation and log it.
+        if !beacon
             .update_effects(
                 &self.world(),
                 packet.primary_effect.map(|id| id.0),
                 packet.secondary_effect.map(|id| id.0),
             )
-            .await;
+            .await
+        {
+            warn!(
+                "Player {} sent invalid beacon effects at {pos}",
+                self.gameprofile.name
+            );
+        }
     }
 
     pub async fn open_handled_screen(

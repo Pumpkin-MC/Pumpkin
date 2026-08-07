@@ -839,14 +839,10 @@ impl EnderDragonEntity {
     }
 
     /// Vanilla `EnderDragon.hurt` (EnderDragon.java:446-469). Applies the
-    /// DYING-phase immunity, the non-head damage reduction, the 0.01 cutoff,
-    /// the player/`ALWAYS_HURTS_ENDER_DRAGONS` gate, and the sitting-damage
-    /// accumulation that triggers the TAKEOFF transition at
-    /// `0.25 * max health`.
-    ///
-    /// `PhaseInstance::onHurt` (the per-phase damage hook, e.g.
-    /// `AbstractDragonSittingPhase.onHurt` nullifying arrow/wind-charge
-    /// damage while sitting) is not implemented here.
+    /// DYING-phase immunity, the per-phase `onHurt` hook, the non-head damage
+    /// reduction, the 0.01 cutoff, the player/`ALWAYS_HURTS_ENDER_DRAGONS`
+    /// gate, and the sitting-damage accumulation that triggers the TAKEOFF
+    /// transition at `0.25 * max health`.
     pub async fn hurt_part(
         &self,
         is_head: bool,
@@ -854,9 +850,16 @@ impl EnderDragonEntity {
         damage_type: DamageType,
         mut damage: f32,
     ) -> bool {
-        if *self.phase.lock().await == EnderDragonPhase::Dying {
+        let phase_type = *self.phase.lock().await;
+        if phase_type == EnderDragonPhase::Dying {
             return false;
         }
+
+        // EnderDragon.java:451: the per-phase hook runs before the head/body split.
+        damage = self
+            .phase_manager
+            .get_phase(phase_type)
+            .on_hurt(self, source, damage);
 
         if !is_head {
             damage = damage / 4.0 + damage.min(1.0);

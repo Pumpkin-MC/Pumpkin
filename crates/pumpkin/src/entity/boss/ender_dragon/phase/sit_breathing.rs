@@ -1,6 +1,7 @@
 use super::EnderDragonPhase;
 use crate::entity::{
-    Entity, area_effect_cloud::AreaEffectCloudEntity, boss::ender_dragon::EnderDragonEntity,
+    Entity, EntityBase, area_effect_cloud::AreaEffectCloudEntity,
+    boss::ender_dragon::EnderDragonEntity,
 };
 use futures::future::BoxFuture;
 use pumpkin_data::entity::EntityType;
@@ -11,6 +12,10 @@ pub struct SitBreathingPhase;
 impl super::Phase for SitBreathingPhase {
     fn get_type(&self) -> EnderDragonPhase {
         EnderDragonPhase::SitBreathing
+    }
+
+    fn on_hurt(&self, _dragon: &EnderDragonEntity, source: &dyn EntityBase, damage: f32) -> f32 {
+        super::sitting_on_hurt(source, damage)
     }
 
     fn begin<'a>(&'a self, dragon: &'a EnderDragonEntity) -> BoxFuture<'a, ()> {

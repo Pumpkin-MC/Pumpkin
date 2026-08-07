@@ -1,4 +1,5 @@
 use super::EnderDragonPhase;
+use crate::entity::EntityBase;
 use crate::entity::boss::ender_dragon::EnderDragonEntity;
 use futures::future::BoxFuture;
 
@@ -7,6 +8,10 @@ pub struct SitAttackingPhase;
 impl super::Phase for SitAttackingPhase {
     fn get_type(&self) -> EnderDragonPhase {
         EnderDragonPhase::SitAttacking
+    }
+
+    fn on_hurt(&self, _dragon: &EnderDragonEntity, source: &dyn EntityBase, damage: f32) -> f32 {
+        super::sitting_on_hurt(source, damage)
     }
 
     fn begin<'a>(&'a self, dragon: &'a EnderDragonEntity) -> BoxFuture<'a, ()> {

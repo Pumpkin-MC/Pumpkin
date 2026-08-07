@@ -88,6 +88,7 @@ pub mod ranged_crossbow_attack;
 pub mod ranged_llama_spit_attack;
 pub mod ranged_snowball_attack;
 pub mod ranged_trident_attack;
+pub mod reset_universal_anger_target;
 pub mod revenge;
 pub mod run_around_like_crazy;
 pub mod silverfish_merge_with_stone;
