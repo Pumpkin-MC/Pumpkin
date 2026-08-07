@@ -7,6 +7,8 @@ use std::{
 use tracing::error;
 
 use flate2::read::GzDecoder;
+use num_traits::{FromPrimitive, ToPrimitive};
+use pumpkin_util::Difficulty;
 use serde::{Deserialize, Serialize};
 
 use crate::world_info::{
@@ -82,6 +84,77 @@ fn check_file_level_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
     }
 }
 
+/// Reads the `WorldBorder` sub-compound of level.dat's `Data` compound.
+/// Split out of `read_world_info` to keep that function under the workspace line limit.
+fn read_world_border(data: &pumpkin_nbt::compound::NbtCompound, level_data: &mut LevelData) {
+    let Some(border) = data.get_compound("WorldBorder") else {
+        return;
+    };
+    if let Some(v) = border.get_double("CenterX") {
+        level_data.border_center_x = v;
+    }
+    if let Some(v) = border.get_double("CenterZ") {
+        level_data.border_center_z = v;
+    }
+    if let Some(v) = border.get_double("Size") {
+        level_data.border_size = v;
+    }
+    if let Some(v) = border.get_double("SizeLerpTarget") {
+        level_data.border_size_lerp_target = v;
+    }
+    if let Some(v) = border.get_long("SizeLerpTime") {
+        level_data.border_size_lerp_time = v;
+    }
+    if let Some(v) = border.get_double("DamagePerBlock") {
+        level_data.border_damage_per_block = v;
+    }
+    if let Some(v) = border.get_double("SafeZone") {
+        level_data.border_safe_zone = v;
+    }
+    if let Some(v) = border.get_double("WarningBlocks") {
+        level_data.border_warning_blocks = v;
+    }
+    if let Some(v) = border.get_double("WarningTime") {
+        level_data.border_warning_time = v;
+    }
+}
+
+/// Reads the `DataPacks` sub-compound of level.dat's `Data` compound.
+/// Split out of `read_world_info` to keep that function under the workspace line limit.
+fn read_data_packs(data: &pumpkin_nbt::compound::NbtCompound, level_data: &mut LevelData) {
+    let Some(packs) = data.get_compound("DataPacks") else {
+        return;
+    };
+    let strings = |list: &[pumpkin_nbt::tag::NbtTag]| -> Vec<String> {
+        list.iter()
+            .filter_map(|t| match t {
+                pumpkin_nbt::tag::NbtTag::String(s) => Some(s.to_string()),
+                _ => None,
+            })
+            .collect()
+    };
+    if let Some(list) = packs.get_list("Disabled") {
+        level_data.data_packs.disabled = strings(list);
+    }
+    if let Some(list) = packs.get_list("Enabled") {
+        level_data.data_packs.enabled = strings(list);
+    }
+}
+
+/// Builds the `DataPacks` sub-compound for level.dat.
+/// Split out of `write_world_info` to keep that function under the workspace line limit.
+fn write_data_packs(level_data: &LevelData) -> pumpkin_nbt::compound::NbtCompound {
+    let as_tags = |v: &[String]| -> Vec<pumpkin_nbt::tag::NbtTag> {
+        v.iter()
+            .map(|s| pumpkin_nbt::tag::NbtTag::String(s.clone().into_boxed_str()))
+            .collect()
+    };
+    let mut comp = pumpkin_nbt::compound::NbtCompound::new();
+    comp.put_list("Disabled", as_tags(&level_data.data_packs.disabled));
+    comp.put_list("Enabled", as_tags(&level_data.data_packs.enabled));
+    comp
+}
+
 impl WorldInfoReader for AnvilLevelInfo {
     fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError> {
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
@@ -95,6 +168,53 @@ impl WorldInfoReader for AnvilLevelInfo {
 
         // For now, construct a default LevelData or parse manually
         let mut level_data = LevelData::default(pumpkin_util::world_seed::Seed(0));
+
+        // Fields still stored directly in level.dat's "Data" compound (spawn point,
+        // difficulty, allowCommands, level name, data packs, world border). Everything
+        // else has moved to the per-type save files under data/minecraft/*.dat, handled
+        // below. Missing keys fall back to LevelData::default()'s values.
+        {
+            let mut cursor = Cursor::new(&buf);
+            let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(
+                pumpkin_nbt::deserializer::NbtStreamReader(&mut cursor),
+            );
+            if let Ok(nbt) = pumpkin_nbt::Nbt::read(&mut reader)
+                && let Some(data) = nbt.root_tag.get_compound("Data")
+            {
+                if let Some(v) = data.get_bool("allowCommands") {
+                    level_data.allow_commands = v;
+                }
+                if let Some(v) = data.get_string("LevelName") {
+                    level_data.level_name = v.to_string();
+                }
+                if let Some(v) = data.get_byte("Difficulty").and_then(Difficulty::from_i8) {
+                    level_data.difficulty = v;
+                }
+                if let Some(v) = data.get_bool("DifficultyLocked") {
+                    level_data.difficulty_locked = v;
+                }
+                if let Some(v) = data.get_int("map_id") {
+                    level_data.map_id = v;
+                }
+                if let Some(v) = data.get_int("SpawnX") {
+                    level_data.spawn_x = v;
+                }
+                if let Some(v) = data.get_int("SpawnY") {
+                    level_data.spawn_y = v;
+                }
+                if let Some(v) = data.get_int("SpawnZ") {
+                    level_data.spawn_z = v;
+                }
+                if let Some(v) = data.get_float("SpawnAngle") {
+                    level_data.spawn_yaw = v;
+                }
+                if let Some(v) = data.get_float("SpawnPitch") {
+                    level_data.spawn_pitch = v;
+                }
+                read_world_border(data, &mut level_data);
+                read_data_packs(data, &mut level_data);
+            }
+        }
 
         // game_rules.dat – prefer the new file; fall back to level.dat values
         if minecraft_data_dir(level_folder)
@@ -166,6 +286,30 @@ impl WorldInfoWriter for AnvilLevelInfo {
         data_comp.put_int("DataVersion", level_data.data_version);
         data_comp.put_int("version", MAXIMUM_SUPPORTED_LEVEL_VERSION);
         data_comp.put_long("LastPlayed", level_data.last_played);
+        data_comp.put_bool("allowCommands", level_data.allow_commands);
+        data_comp.put_string("LevelName", level_data.level_name.clone());
+        data_comp.put_byte("Difficulty", level_data.difficulty.to_i8().unwrap_or(2));
+        data_comp.put_bool("DifficultyLocked", level_data.difficulty_locked);
+        data_comp.put_int("map_id", level_data.map_id);
+        data_comp.put_int("SpawnX", level_data.spawn_x);
+        data_comp.put_int("SpawnY", level_data.spawn_y);
+        data_comp.put_int("SpawnZ", level_data.spawn_z);
+        data_comp.put_float("SpawnAngle", level_data.spawn_yaw);
+        data_comp.put_float("SpawnPitch", level_data.spawn_pitch);
+
+        let mut border_comp = pumpkin_nbt::compound::NbtCompound::new();
+        border_comp.put_double("CenterX", level_data.border_center_x);
+        border_comp.put_double("CenterZ", level_data.border_center_z);
+        border_comp.put_double("Size", level_data.border_size);
+        border_comp.put_double("SizeLerpTarget", level_data.border_size_lerp_target);
+        border_comp.put_long("SizeLerpTime", level_data.border_size_lerp_time);
+        border_comp.put_double("DamagePerBlock", level_data.border_damage_per_block);
+        border_comp.put_double("SafeZone", level_data.border_safe_zone);
+        border_comp.put_double("WarningBlocks", level_data.border_warning_blocks);
+        border_comp.put_double("WarningTime", level_data.border_warning_time);
+        data_comp.put_compound("WorldBorder", border_comp);
+
+        data_comp.put_compound("DataPacks", write_data_packs(&level_data));
 
         let mut root = pumpkin_nbt::compound::NbtCompound::new();
         root.put_compound("Data", data_comp);
