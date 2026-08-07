@@ -20,7 +20,7 @@ use pumpkin_protocol::java::server::play::{
     SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
     SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
     SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SRenameItem,
-    SSeenAdvancement, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+    SSeenAdvancement, SSelectTrade, SSetBeacon, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
     SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
     STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
 };
@@ -958,6 +958,11 @@ impl JavaClient {
             id if id == SRenameItem::to_id(version) => {
                 player
                     .on_rename_item(SRenameItem::read(&mut payload, &version)?)
+                    .await;
+            }
+            id if id == SSetBeacon::to_id(version) => {
+                player
+                    .on_set_beacon(SSetBeacon::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SPlaceRecipe::to_id(version) => {

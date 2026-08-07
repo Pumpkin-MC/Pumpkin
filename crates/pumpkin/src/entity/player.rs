@@ -74,7 +74,7 @@ use pumpkin_protocol::java::client::play::{
     PlayerSpawnData, PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
-    SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
+    SClickSlot, SContainerButtonClick, SRenameItem, SSetBeacon, SlotActionType,
 };
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
@@ -455,6 +455,9 @@ pub struct Player {
     pub open_container: AtomicCell<Option<u64>>,
     /// The block position of the currently open container screen (if any).
     pub open_container_pos: AtomicCell<Option<BlockPos>>,
+    /// `ServerPlayer.raidOmenPosition`: the village position at which `BAD_OMEN` converted to
+    /// `RAID_OMEN`, consumed by `RaidOmenMobEffect` on `RAID_OMEN` expiry to trigger the raid.
+    pub raid_omen_position: AtomicCell<Option<BlockPos>>,
     /// The item currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
     /// The player's abilities and special powers.
@@ -710,6 +713,7 @@ impl Player {
             gamemode: AtomicCell::new(gamemode),
             previous_gamemode: AtomicCell::new(None),
             camera_target_id: AtomicCell::new(None),
+            raid_omen_position: AtomicCell::new(None),
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
             respawn_point: Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
@@ -4186,9 +4190,38 @@ impl Player {
             .downcast_mut::<pumpkin_inventory::anvil::AnvilScreenHandler>()
         {
             anvil_handler
-                .update_item_name(packet.item_name.to_string())
+                .update_item_name(packet.item_name.to_string(), self.as_ref())
                 .await;
         }
+    }
+
+    pub async fn on_set_beacon(self: &Arc<Self>, packet: SSetBeacon) {
+        self.update_last_action_time();
+        let screen_handler_arc = self.current_screen_handler.lock().await.clone();
+        let screen_handler = screen_handler_arc.lock().await;
+
+        let Some(beacon_handler) = screen_handler
+            .as_any()
+            .downcast_ref::<pumpkin_inventory::beacon_screen_handler::BeaconScreenHandler>(
+        ) else {
+            return;
+        };
+
+        let Some(beacon) = beacon_handler
+            .inventory
+            .as_any()
+            .downcast_ref::<crate::block::entities::beacon::BeaconBlockEntity>()
+        else {
+            return;
+        };
+
+        beacon
+            .update_effects(
+                &self.world(),
+                packet.primary_effect.map(|id| id.0),
+                packet.secondary_effect.map(|id| id.0),
+            )
+            .await;
     }
 
     pub async fn open_handled_screen(

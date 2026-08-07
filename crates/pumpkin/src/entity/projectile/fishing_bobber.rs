@@ -13,6 +13,7 @@ use pumpkin_data::Block;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -182,14 +183,6 @@ impl FishingBobberEntity {
 
         if self.bite_countdown.load(Ordering::Relaxed) > 0 {
             // Caught something!
-            player
-                .increment_stat(
-                    pumpkin_data::statistic::StatisticCategory::Custom,
-                    pumpkin_data::statistic::CustomStatistic::FishCaught as i32,
-                    1,
-                )
-                .await;
-
             let luck_of_the_sea = player
                 .inventory
                 .held_item()
@@ -201,34 +194,59 @@ impl FishingBobberEntity {
             } else {
                 fishing_catch_item(rand::random())
             };
-            let mut item_stack = ItemStack::new(1, item);
-            if !player
-                .inventory
-                .insert_stack_anywhere(&mut item_stack)
-                .await
-                && !item_stack.is_empty()
-            {
-                let item_entity = Entity::new(
-                    world.clone(),
-                    self.entity.pos.load(),
-                    &pumpkin_data::entity::EntityType::ITEM,
-                );
-                world
-                    .spawn_entity(Arc::new(ItemEntity::new(item_entity, item_stack)))
+
+            if item.has_tag(&pumpkin_data::tag::Item::MINECRAFT_FISHES) {
+                player
+                    .increment_stat(
+                        pumpkin_data::statistic::StatisticCategory::Custom,
+                        pumpkin_data::statistic::CustomStatistic::FishCaught as i32,
+                        1,
+                    )
                     .await;
             }
 
-            if let Some(owner) = world.get_player_by_id(self.owner_id) {
-                owner
-                    .add_experience_points(fishing_experience_reward(rand::random()))
-                    .await;
-            }
-
-            world.play_sound(
-                Sound::EntityExperienceOrbPickup,
-                SoundCategory::Neutral,
-                &player.position(),
+            // Vanilla FishingHook#retrieve always spawns a physical ItemEntity thrown
+            // from the hook towards the owner - it never inserts straight into the
+            // inventory.
+            let hook_pos = self.entity.pos.load();
+            let player_pos = player.get_entity().pos.load();
+            let delta = player_pos - hook_pos;
+            let velocity =
+                delta
+                    .multiply(0.1, 0.1, 0.1)
+                    .add_raw(0.0, delta.length().sqrt() * 0.08, 0.0);
+            let item_entity = Entity::new(
+                world.clone(),
+                hook_pos,
+                &pumpkin_data::entity::EntityType::ITEM,
             );
+            world
+                .spawn_entity(Arc::new(ItemEntity::new_with_velocity(
+                    item_entity,
+                    ItemStack::new(1, item),
+                    velocity,
+                    0,
+                )))
+                .await;
+
+            // Vanilla constructs a single `ExperienceOrb` directly here (FishingHook.java:465),
+            // unlike XP-drop sources that go through `ExperienceOrb.award` and split into
+            // round-sized orbs - so spawn one orb with the exact roll instead of
+            // `ExperienceOrbEntity::spawn`.
+            let orb_entity = Entity::new(
+                world.clone(),
+                player_pos.add_raw(0.0, 0.5, 0.5),
+                &pumpkin_data::entity::EntityType::EXPERIENCE_ORB,
+            );
+            world
+                .spawn_entity(Arc::new(
+                    crate::entity::experience_orb::ExperienceOrbEntity::new(
+                        orb_entity,
+                        fishing_experience_reward(rand::random()) as u32,
+                    ),
+                ))
+                .await;
+
             return 1;
         }
 
