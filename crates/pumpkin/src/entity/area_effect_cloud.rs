@@ -325,34 +325,35 @@ impl EntityBase for AreaEffectCloudEntity {
                     continue;
                 }
 
-                let scale = 1.0f32 - (dist as f32 / radius_f as f32);
+                // Vanilla applies a flat reduction to any entity inside the cloud's
+                // radius, with no falloff by distance from the centre: lingering
+                // potions apply 1/4 of the base effect duration, and instant effects
+                // (instant health/damage) apply at half potency. Being inside the
+                // radius is binary; the 0.25 / 0.5 factors are applied in
+                // `PotionContents::apply_effects_to` for
+                // `PotionApplicationSource::AreaEffectCloud`.
+                // https://minecraft.wiki/w/Lingering_Potion#Effects : "the duration
+                // applied by the cloud is 1/4 that of the corresponding potion...
+                // the potency of the effect is 1/2 that of the corresponding potion."
+                let scale = 1.0f32;
 
-                // Decide whether this contact will actually apply an effect
-                let effs_clone = self.effects.lock().await.clone();
-                let mut will_apply = false;
-
-                // Only living entities can receive effects
-                if let Some(living_ref) = cand_clone.get_living_entity() {
-                    for (eff, _, _, _, _, _) in &effs_clone {
-                        // Instant effects always apply
-                        let is_instant = eff.id
-                            == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id
-                            || eff.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id;
-                        if is_instant {
-                            will_apply = true;
-                            break;
-                        }
-
-                        // Only apply if entity does not already have that effect
-                        if !living_ref.has_effect(eff).await {
-                            will_apply = true;
-                            break;
-                        }
-                    }
+                // Skip entities still on cooldown from a previous application.
+                // Vanilla gates reapplication with a per-victim cooldown (the
+                // `victims` map keyed by entity, storing the tick at which the
+                // entity becomes eligible again) rather than checking whether the
+                // target currently holds the effect, so standing in the cloud keeps
+                // refreshing the effect once `ReapplicationDelay` (20 ticks for
+                // lingering-potion clouds, see the `create` call sites) expires. See
+                // the Bukkit API doc for `AreaEffectCloud#getReapplicationDelay()`:
+                // "Gets the time that an entity will be immune from subsequent
+                // exposure."
+                // https://hub.spigotmc.org/javadocs/spigot/org/bukkit/entity/AreaEffectCloud.html#getReapplicationDelay()
+                if self.reapplication_map.lock().await.contains_key(&ent_id) {
+                    continue;
                 }
 
-                // If nothing would be applied, skip
-                if !will_apply {
+                let effs_clone = self.effects.lock().await.clone();
+                if effs_clone.is_empty() || cand_clone.get_living_entity().is_none() {
                     continue;
                 }
 
