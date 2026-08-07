@@ -5,7 +5,6 @@ use crate::{
     server::Server,
 };
 use arc_swap::ArcSwap;
-use pumpkin_protocol::bedrock::client::handshake::CHandshake;
 use pumpkin_protocol::bedrock::{
     client::{
         network_settings::CNetworkSettings, play_status::CPlayStatus,
@@ -21,10 +20,8 @@ use pumpkin_protocol::bedrock::{
 use pumpkin_util::jwt::AuthError;
 use pumpkin_util::version::BedrockMinecraftVersion;
 use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
-use rand::RngExt;
 use serde::{Deserialize, de::Error};
 use serde_repr::Deserialize_repr;
-use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::debug;
@@ -126,16 +123,15 @@ impl BedrockClient {
         self: &Arc<Self>,
         packet: SLogin,
         server: &Server,
-    ) -> Result<Option<PacketHandlerResult>, LoginError> {
+    ) -> Result<PacketHandlerResult, LoginError> {
         self.try_handle_login(packet, server).await
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn try_handle_login(
         self: &Arc<Self>,
         packet: SLogin,
         server: &Server,
-    ) -> Result<Option<PacketHandlerResult>, LoginError> {
+    ) -> Result<PacketHandlerResult, LoginError> {
         let auth_payload: AuthPayload = serde_json::from_slice(&packet.jwt)?;
         let player_data = if server.advanced_config.networking.bedrock.online_mode {
             match auth_payload.authentication_type {
@@ -188,93 +184,14 @@ impl BedrockClient {
             profile_actions: None,
         };
 
-        if let Some(peer_public_key) = self.nethernet_public_key() {
-            let login_public_key = pumpkin_util::jwt::extract_cpk_from_token(&auth_payload.token)
-                .map_err(LoginError::ChainValidationFailed)?;
-            if peer_public_key != &login_public_key {
-                return Err(LoginError::ChainValidationFailed(
-                    AuthError::PublicKeyBuild(
-                        "NetherNet and Bedrock login identities do not match".into(),
-                    ),
-                ));
-            }
-        }
-
-        if server.advanced_config.networking.bedrock.encryption && !self.is_nethernet() {
-            let client_public_key = pumpkin_util::jwt::extract_cpk_from_token(&auth_payload.token)
-                .map_err(LoginError::ChainValidationFailed)?;
-
-            let (server_private_key, salt) = {
-                let server_key_arc = server
-                    .bedrock_private_key
-                    .get_or_init(|| async {
-                        let mut rng = rand::rng();
-                        loop {
-                            let mut private_key_bytes = [0u8; 48];
-                            for b in &mut private_key_bytes {
-                                *b = rng.random();
-                            }
-                            if let Ok(key) = pumpkin_util::p384::ecdsa::SigningKey::from_slice(
-                                &private_key_bytes,
-                            ) {
-                                break Arc::new(key);
-                            }
-                        }
-                    })
-                    .await
-                    .clone();
-
-                let mut salt = [0u8; 16];
-                for b in &mut salt {
-                    *b = rand::rng().random();
-                }
-
-                (server_key_arc, salt)
-            };
-
-            let handshake_jwt =
-                pumpkin_util::jwt::generate_handshake_jwt(&server_private_key, &salt)
-                    .map_err(LoginError::ChainValidationFailed)?;
-            let handshake_packet = CHandshake::new(handshake_jwt);
-            self.send_game_packet(&handshake_packet).await;
-
-            let shared_secret =
-                pumpkin_util::jwt::compute_shared_secret(&server_private_key, &client_public_key);
-            let mut hasher = Sha256::new();
-            hasher.update(salt);
-            hasher.update(shared_secret);
-            let key_bytes: [u8; 32] = hasher.finalize().into();
-
-            self.network_reader
-                .lock()
-                .await
-                .set_encryption(&key_bytes)
-                .map_err(|_| {
-                    LoginError::ChainValidationFailed(AuthError::PublicKeyBuild(
-                        "encryption enable error".into(),
-                    ))
-                })?;
-            self.network_writer
-                .write()
-                .await
-                .set_encryption(&key_bytes)
-                .map_err(|_| {
-                    LoginError::ChainValidationFailed(AuthError::PublicKeyBuild(
-                        "encryption enable error".into(),
-                    ))
-                })?;
-
-            let new_config = PlayerConfig {
-                locale: client_data.language_code.clone(),
-                ..Default::default()
-            };
-            self.client_data
-                .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
-            self.pending_profile
-                .store(std::sync::Arc::new(Some(std::sync::Arc::new((
-                    profile, new_config,
-                )))));
-            return Ok(None);
+        let login_public_key = pumpkin_util::jwt::extract_cpk_from_token(&auth_payload.token)
+            .map_err(LoginError::ChainValidationFailed)?;
+        if self.nethernet_public_key() != &login_public_key {
+            return Err(LoginError::ChainValidationFailed(
+                AuthError::PublicKeyBuild(
+                    "NetherNet and Bedrock login identities do not match".into(),
+                ),
+            ));
         }
 
         self.enqueue_packet_internal(&CPlayStatus::LoginSuccess)
@@ -318,7 +235,7 @@ impl BedrockClient {
         self.client_data
             .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
 
-        Ok(Some(PacketHandlerResult::ReadyToPlay(profile, new_config)))
+        Ok(PacketHandlerResult::ReadyToPlay(profile, new_config))
     }
 
     pub async fn handle_resource_pack_response(

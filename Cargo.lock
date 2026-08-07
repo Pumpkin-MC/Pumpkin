@@ -58,7 +58,7 @@ dependencies = [
  "aead",
  "aes 0.8.4",
  "cipher 0.4.4",
- "ctr 0.9.2",
+ "ctr",
  "ghash",
  "subtle",
 ]
@@ -457,7 +457,7 @@ checksum = "9ae3c82e4355234767756212c570e29833699ab63e6ffd161887314cc5b43847"
 dependencies = [
  "aead",
  "cipher 0.4.4",
- "ctr 0.9.2",
+ "ctr",
  "subtle",
 ]
 
@@ -567,7 +567,6 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8cf2a2c93cd704877c0858356ed03480ff301ee950b43f1cbe4573b088bfa6c"
 dependencies = [
- "block-buffer 0.12.1",
  "crypto-common 0.2.2",
  "inout 0.2.2",
 ]
@@ -1126,15 +1125,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctr"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baaca1c4b237092596f64d571e9db6ce4109c4ef9742e27590f1709594461f21"
-dependencies = [
- "cipher 0.5.2",
-]
-
-[[package]]
 name = "ctutils"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1416,7 +1406,7 @@ dependencies = [
  "ff 0.13.1",
  "generic-array",
  "group 0.13.0",
- "hkdf 0.12.4",
+ "hkdf",
  "pem-rfc7468 0.7.0",
  "pkcs8 0.10.2",
  "rand_core 0.6.4",
@@ -1437,7 +1427,6 @@ dependencies = [
  "digest 0.11.3",
  "ff 0.14.0",
  "group 0.14.0",
- "hkdf 0.13.0",
  "hybrid-array",
  "pkcs8 0.11.0",
  "rand_core 0.10.1",
@@ -1879,15 +1868,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b5f8eb2ad728638ea2c7d47a21db23b7b58a72ed6a38256b8a1849f15fbbdf7"
 dependencies = [
  "hmac 0.12.1",
-]
-
-[[package]]
-name = "hkdf"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4aaa26c720c68b866f2c96ef5c1264b3e6f473fe5d4ce61cd44bbe913e553018"
-dependencies = [
- "hmac 0.13.0",
 ]
 
 [[package]]
@@ -3424,7 +3404,6 @@ dependencies = [
  "bitflags 2.13.1",
  "bytes",
  "cfb8",
- "ctr 0.10.1",
  "flate2",
  "hybrid-array",
  "pumpkin-data",
@@ -3433,7 +3412,6 @@ dependencies = [
  "pumpkin-util",
  "pumpkin-world",
  "serde",
- "sha2 0.11.0",
  "thiserror 2.0.19",
  "tokio",
  "uuid",
@@ -5572,7 +5550,7 @@ dependencies = [
  "aes-gcm",
  "byteorder",
  "bytes",
- "ctr 0.9.2",
+ "ctr",
  "hmac 0.12.1",
  "log",
  "rtcp",

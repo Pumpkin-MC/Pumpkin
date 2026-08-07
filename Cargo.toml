@@ -143,7 +143,6 @@ base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 bitflags = { version = "2.13.1", default-features = false, features = ["std"] }
 cesu8 = { version = "1.1", default-features = false }
 cfb8 = { version = "0.9", default-features = false }
-ctr = { version = "0.10.1", default-features = false }
 colored = { version = "3.1", default-features = false }
 console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = { version = "1.10.0", default-features = false, features = ["std"] }
@@ -165,7 +164,7 @@ md5 = { version = "0.8", default-features = false }
 num-bigint = { version = "0.5", default-features = false, features = ["std"] }
 num-derive = { version = "0.5", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["std"] }
-p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8", "ecdh"] }
+p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8"] }
 phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
 pumpkin-codecs = { path = "crates/pumpkin-codecs", default-features = false }

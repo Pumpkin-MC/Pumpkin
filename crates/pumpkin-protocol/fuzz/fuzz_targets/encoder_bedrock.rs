@@ -1,6 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use pumpkin_protocol::bedrock::packet_encoder::UDPNetworkEncoder;
+use pumpkin_protocol::bedrock::packet_encoder::BedrockBatchEncoder;
 use pumpkin_protocol::bedrock::SubClient;
 
 fuzz_target!(|data: &[u8]| {
@@ -26,7 +26,7 @@ fuzz_target!(|data: &[u8]| {
     let use_compression = data[6] % 2 == 0;
     let packet_payload = &data[7..];
 
-    let mut encoder = UDPNetworkEncoder::new();
+    let mut encoder = BedrockBatchEncoder::new();
 
     if use_compression {
         encoder.set_compression((compression_threshold, compression_level));

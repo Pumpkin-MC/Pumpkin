@@ -112,13 +112,6 @@ impl LoadConfiguration for PumpkinConfig {
             self.advanced.networking.bedrock.view_distance <= max_vd,
             "Bedrock View distance must be less than 64"
         );
-        if self.advanced.networking.bedrock.online_mode {
-            assert!(
-                self.advanced.networking.bedrock.encryption,
-                "When online mode is enabled, bedrock_encryption must be enabled"
-            );
-        }
-
         if self.basic.allow_chat_reports {
             assert!(
                 self.advanced.networking.java.online_mode,

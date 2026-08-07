@@ -25,7 +25,7 @@ use rustyline::Editor;
 use rustyline::history::FileHistory;
 use rustyline::{Config, error::ReadlineError};
 use std::collections::HashMap;
-use std::io::{Cursor, ErrorKind, IsTerminal, stdin};
+use std::io::{ErrorKind, IsTerminal, stdin};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
@@ -546,61 +546,14 @@ impl PumpkinServer {
             udp_result = resolve_some(self.udp_socket.as_ref(), |sock: &Arc<UdpSocket>| sock.recv_from(&mut udp_buf)) => {
                 match udp_result {
                     Ok((len, client_addr)) => {
-                        if len > 0 {
-                            let Some(socket) = self.udp_socket.clone() else {
-                                error!("UDP socket disappeared during receive");
-                                return true;
-                            };
-
-                            let id = udp_buf[0];
-                            let is_online = id & pumpkin_protocol::bedrock::RAKNET_VALID != 0;
-
-                            if is_online {
-                                let be_clients = bedrock_clients.clone();
-                                let mut clients_guard = bedrock_clients.lock().await;
-
-                                if clients_guard
-                                    .get(&client_addr)
-                                    .is_some_and(|client| client.is_closed())
-                                {
-                                    clients_guard.remove(&client_addr);
-                                }
-
-                                let mut is_new = false;
-                                let client = clients_guard.entry(client_addr).or_insert_with(|| {
-                                    is_new = true;
-                                    *master_client_id_counter += 1;
-
-                                    let new_client = Arc::new(BedrockClient::new(
-                                        socket,
-                                        client_addr,
-                                        be_clients
-                                    ));
-
-                                    new_client.start_outgoing_packet_task();
-                                    new_client
-                                }).clone();
-
-                                if is_new {
-                                    self.spawn_bedrock_client_task(client.clone(), tasks);
-                                }
-
-                                let packet_bytes = udp_buf[..len].to_vec();
-                                let server = self.server.clone();
-
-                                tasks.spawn(async move {
-                                    client.process_packet(&server, packet_bytes.into()).await;
-                                });
-                            } else if let Some(sock) = self.udp_socket.as_ref() {
-                                let _ = BedrockClient::handle_offline_packet(
-                                    &self.server,
-                                    id,
-                                    &mut Cursor::new(&udp_buf[1..len]),
-                                    client_addr,
-                                    sock,
-                                    bedrock_clients,
-                                ).await;
-                            }
+                        if len > 0 && let Some(socket) = self.udp_socket.as_ref() {
+                            let _ = net::bedrock::status::handle_packet(
+                                &self.server,
+                                udp_buf[0],
+                                &udp_buf[1..len],
+                                client_addr,
+                                socket,
+                            ).await;
                         }
                     }
                     Err(e) => error!("UDP socket error: {e}"),
@@ -612,7 +565,7 @@ impl PumpkinServer {
                 if let Some((session, client_addr)) = nethernet_result {
                     *master_client_id_counter += 1;
                     let be_clients = bedrock_clients.clone();
-                    let client = Arc::new(BedrockClient::new_nethernet(
+                    let client = Arc::new(BedrockClient::new(
                         session.clone(),
                         client_addr,
                         be_clients,

@@ -24,7 +24,7 @@ proc-macro2 = { workspace = true, optional = true }
 uuid.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 base64.workspace = true
-p384 = { workspace = true, features = ["ecdsa", "ecdh"] }
+p384 = { workspace = true, features = ["ecdsa"] }
 thiserror.workspace = true
 ecdsa.workspace = true
 rsa.workspace = true
