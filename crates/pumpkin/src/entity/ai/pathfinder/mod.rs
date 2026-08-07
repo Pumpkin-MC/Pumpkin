@@ -130,6 +130,12 @@ impl Navigator {
         self.path_type_overrides.insert(path_type, malus);
     }
 
+    /// Vanilla `PathNavigation::setCanOpenDoors` (`GroundPathNavigation.java`'s inherited base),
+    /// which just forwards to `NodeEvaluator::setCanOpenDoors`.
+    pub fn set_can_open_doors(&mut self, can_open_doors: bool) {
+        self.evaluator.set_can_open_doors(can_open_doors);
+    }
+
     pub const fn set_mob_dimensions(&mut self, width: f32, height: f32) {
         self.mob_width = width;
         self.mob_height = height;

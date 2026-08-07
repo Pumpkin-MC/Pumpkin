@@ -63,7 +63,10 @@ impl VindicatorEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, Box::new(BreakDoorGoal::new(break_door::normal_or_hard)));
+            goal_selector.add_goal(
+                2,
+                Box::new(BreakDoorGoal::new(break_door::normal_or_hard).raid_gated(true)),
+            );
             goal_selector.add_goal(
                 3,
                 Box::new(InteractWithDoorGoal::new(false).raid_gated(true)),
@@ -130,10 +133,10 @@ impl Mob for VindicatorEntity {
     /// Vanilla: `Vindicator.setCustomName`'s one-way "Johnny" latch. Pumpkin has no per-mob
     /// custom-name-changed hook, so this lazily checks-and-latches every tick instead (up to one
     /// tick of latency versus vanilla's setter-time latch, unobservable to a player).
-    /// `customServerAiStep`'s `getNavigation().setCanOpenDoors(level.isRaided(...))` is
-    /// approximated by `InteractWithDoorGoal::raid_gated`/`BreakDoorGoal` each independently
-    /// checking `has_active_raid()` rather than a shared navigator flag, since Pumpkin's
-    /// navigator has no `can_open_doors` concept to set.
+    /// Also `customServerAiStep`: `getNavigation().setCanOpenDoors(level.isRaided(pos))`,
+    /// approximated with `has_active_raid()` (this mob's own raid membership) rather than
+    /// re-querying the level for any raid covering this position -- same approximation
+    /// `InteractWithDoorGoal::raid_gated`/`BreakDoorGoal` already use.
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             if !self.is_johnny.load(Relaxed)
@@ -142,6 +145,13 @@ impl Mob for VindicatorEntity {
             {
                 self.is_johnny.store(true, Relaxed);
             }
+
+            let can_open_doors = self.mob_entity.living_entity.has_active_raid();
+            self.mob_entity
+                .navigator
+                .lock()
+                .unwrap()
+                .set_can_open_doors(can_open_doors);
         })
     }
 

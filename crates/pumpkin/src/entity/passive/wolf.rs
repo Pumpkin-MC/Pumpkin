@@ -23,7 +23,8 @@ use crate::entity::{
     ai::goal::{
         active_target::ActiveTargetGoal, beg::BegGoal, breed::BreedGoal,
         escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        follow_parent::FollowParentGoal, leap_at_target::LeapAtTargetGoal,
+        look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, non_tame_random_target::NonTameRandomTargetGoal,
         owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
         revenge::RevengeGoal, sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -101,6 +102,8 @@ impl WolfEntity {
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, SitGoal::new());
             goal_selector.add_goal(4, EscapeDangerGoal::new(1.5));
+            // Wolf.java:133
+            goal_selector.add_goal(4, LeapAtTargetGoal::new(0.4));
             goal_selector.add_goal(5, BreedGoal::new(1.0));
             goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0));
             goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.1)));

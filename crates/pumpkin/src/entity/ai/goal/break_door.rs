@@ -12,11 +12,19 @@ use crate::entity::mob::Mob;
 ///
 /// Ports `net.minecraft.world.entity.ai.goal.BreakDoorGoal`: shares `DoorInteractGoal`'s door
 /// discovery, but breaks the door open over time (destroying the block) rather than opening it,
-/// gated on an active raid, the `MOB_GRIEFING` gamerule, and a caller-supplied valid-difficulty
-/// predicate. Note vanilla's `getDoorBreakTime` is `Math.max(240, doorBreakTime)`, so the
-/// constructor's `seconds` parameter (Vindicator passes `6`) is actually irrelevant in practice --
-/// break time is always 240 ticks (12 seconds).
+/// gated on the `MOB_GRIEFING` gamerule and a caller-supplied valid-difficulty predicate. Note
+/// vanilla's `getDoorBreakTime` is `Math.max(240, doorBreakTime)`, so the constructor's `seconds`
+/// parameter (Vindicator passes `6`) is actually irrelevant in practice -- break time is always
+/// 240 ticks (12 seconds).
+///
+/// The base `BreakDoorGoal.canUse`/`canContinueToUse` (`BreakDoorGoal.java:30-53`) has no raid
+/// check at all -- that's added only by Vindicator's private `VindicatorBreakDoorGoal` inner
+/// class, and only as an extra `canContinueToUse` clause (`Vindicator.java:188-192`:
+/// `vindicator.hasActiveRaid() && super.canContinueToUse()`), not `canUse`. `raid_gated` opts a
+/// caller into that same extra clause; other users (e.g. `Zombie`, whose `DOOR_BREAKING_PREDICATE`
+/// is plain `d == Difficulty.HARD` with no raid involvement) leave it off.
 pub struct BreakDoorGoal {
+    only_during_raid: bool,
     door_pos: Option<BlockPos>,
     break_time: i32,
     last_break_progress: i32,
@@ -29,11 +37,20 @@ impl BreakDoorGoal {
     #[must_use]
     pub const fn new(valid_difficulties: fn(Difficulty) -> bool) -> Self {
         Self {
+            only_during_raid: false,
             door_pos: None,
             break_time: 0,
             last_break_progress: -1,
             valid_difficulties,
         }
+    }
+
+    /// Vanilla: `Vindicator.VindicatorBreakDoorGoal.canContinueToUse` -- gates continued use on
+    /// `hasActiveRaid()`. See the struct doc for why this is a builder rather than baked in.
+    #[must_use]
+    pub const fn raid_gated(mut self, only_during_raid: bool) -> Self {
+        self.only_during_raid = only_during_raid;
+        self
     }
 
     fn is_valid_difficulty(&self, difficulty: Difficulty) -> bool {
@@ -47,9 +64,6 @@ impl Goal for BreakDoorGoal {
             let mob_entity = mob.get_mob_entity();
             let entity = &mob_entity.living_entity.entity;
 
-            if !mob_entity.living_entity.has_active_raid() {
-                return false;
-            }
             if !entity.horizontal_collision.load(Relaxed) {
                 return false;
             }
@@ -109,6 +123,9 @@ impl Goal for BreakDoorGoal {
                 return false;
             };
             let mob_entity = mob.get_mob_entity();
+            if self.only_during_raid && !mob_entity.living_entity.has_active_raid() {
+                return false;
+            }
             let entity = &mob_entity.living_entity.entity;
             let world = entity.world.load_full();
 
@@ -186,9 +203,15 @@ pub const fn normal_or_hard(difficulty: Difficulty) -> bool {
     matches!(difficulty, Difficulty::Normal | Difficulty::Hard)
 }
 
+/// Vanilla: `Zombie.DOOR_BREAKING_PREDICATE` (`d -> d == Difficulty.HARD`).
+#[must_use]
+pub const fn hard_only(difficulty: Difficulty) -> bool {
+    matches!(difficulty, Difficulty::Hard)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::normal_or_hard;
+    use super::{hard_only, normal_or_hard};
     use pumpkin_util::Difficulty;
 
     #[test]
@@ -197,5 +220,13 @@ mod tests {
         assert!(!normal_or_hard(Difficulty::Easy));
         assert!(normal_or_hard(Difficulty::Normal));
         assert!(normal_or_hard(Difficulty::Hard));
+    }
+
+    #[test]
+    fn zombie_door_break_predicate_is_hard_only() {
+        assert!(!hard_only(Difficulty::Peaceful));
+        assert!(!hard_only(Difficulty::Easy));
+        assert!(!hard_only(Difficulty::Normal));
+        assert!(hard_only(Difficulty::Hard));
     }
 }

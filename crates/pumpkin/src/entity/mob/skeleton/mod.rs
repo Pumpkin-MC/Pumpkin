@@ -26,9 +26,12 @@ pub mod skeleton;
 pub mod stray;
 pub mod wither;
 
-/// `AbstractSkeleton#getHardAttackInterval` (AbstractSkeleton.java). Pumpkin picks the goal
-/// once at construction and does not re-run `reassessWeaponGoal`, so the hard-difficulty
-/// value is used unconditionally, as it already was before Parched existed.
+/// `AbstractSkeleton#getHardAttackInterval` (AbstractSkeleton.java). Pumpkin does not re-run
+/// `reassessWeaponGoal`'s difficulty check, so the hard-difficulty value is used unconditionally,
+/// as it already was before Parched existed. `RangedBowAttackGoal::is_holding_bow` does gate the
+/// goal itself on the current main-hand item (see `ranged_bow_attack.rs`), so a stripped bow stops
+/// a skeleton from shooting -- it just does not fall back to `meleeGoal` the way vanilla does,
+/// since there is no equip-change signal to swap goals on (see `equipment.rs`, spawn-time only).
 const SKELETON_ATTACK_INTERVAL: i32 = 20;
 /// `Parched#getHardAttackInterval` (Parched.java).
 const PARCHED_ATTACK_INTERVAL: i32 = 50;

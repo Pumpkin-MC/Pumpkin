@@ -1,5 +1,6 @@
 use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
 use crate::entity::EntityBaseFuture;
+use crate::entity::ai::brain::Brain;
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
@@ -70,6 +71,12 @@ pub mod zombified_piglin;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
+    /// `Mob.brain` -- present only for mobs migrated to the Brain/Memory/Activity system
+    /// (`crate::entity::ai::brain`). `None` for every Goal-driven mob, which is still the vast
+    /// majority; vanilla likewise holds a `goalSelector` and a `brain` on the same `Mob` and
+    /// lets each mob use whichever it needs. A Brain-having mob keeps its `goals_selector`, and
+    /// the two are ticked independently and do not know about each other.
+    pub brain: Option<Brain>,
     pub goals_selector: std::sync::Mutex<GoalSelector>,
     pub target_selector: std::sync::Mutex<GoalSelector>,
     pub navigator: std::sync::Mutex<Navigator>,
@@ -109,6 +116,7 @@ impl MobEntity {
     pub fn new(entity: Entity) -> Self {
         Self {
             living_entity: LivingEntity::new(entity),
+            brain: None,
             goals_selector: std::sync::Mutex::new(GoalSelector::default()),
             target_selector: std::sync::Mutex::new(GoalSelector::default()),
             navigator: std::sync::Mutex::new(Navigator::default()),
@@ -698,6 +706,21 @@ pub trait Mob: EntityBase + Send + Sync {
         true
     }
 
+    /// Vanilla `Mob.canAttack`, consulted by `TargetingConditions.test`'s combat branch
+    /// (`TargetingConditions.java:78`). Defaults to `true`; species with a blanket "never
+    /// target this" rule (Iron Golem's player-created and creeper exclusions) override it.
+    ///
+    /// Only reached from `RevengeGoal::can_start` and `TrackTargetGoal::can_track`'s
+    /// continuation check, not from initial acquisition in `ActiveTargetGoal` or
+    /// `NearestHostileTargetGoal::find_closest_target` -- both call
+    /// `TargetPredicate::test` directly against a `&MobEntity` with no `dyn Mob` in scope,
+    /// so they cannot reach an override here. A mob whose `can_attack` override matters for
+    /// first acquisition, not just retaliation/tracking continuity, needs its own check in
+    /// that goal instead of relying on this hook.
+    fn can_attack(&self, _target: &Entity) -> bool {
+        true
+    }
+
     /// Exposes this mob's `NeutralMob`-equivalent grudge state (Wolf, `ZombifiedPiglin`),
     /// if it has one, for shared goals (`ActiveTargetGoal`'s angry-at-player predicate).
     fn persistent_anger(&self) -> Option<&crate::entity::persistent_anger::PersistentAnger> {
@@ -968,6 +991,33 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 *mob_entity.target_selector.lock().unwrap() = target_selector;
                 *mob_entity.goals_selector.lock().unwrap() = goals_selector;
             };
+
+            // 3b. Brain tick, for mobs migrated to the Brain/Memory/Activity system.
+            //
+            // Placement matters: this must run *after* the goal selectors are back in their
+            // mutexes and *before* the navigator is taken out, so that a `WALK_TARGET` written
+            // this tick reaches `Navigator::set_progress` and is consumed by the navigator in
+            // the same tick, matching vanilla where `Brain.tick` runs inside
+            // `Mob.customServerAiStep` ahead of navigation.
+            //
+            // `Brain::tick` takes only its own runtime out of its mutex; the memory store stays
+            // live so damage/game-event writes arriving mid-tick are not dropped.
+            if let Some(brain) = &mob_entity.brain {
+                // DEVIATION: vanilla passes `level.getGameTime()`. Reading that here means
+                // locking the world's async `level_time` mutex once per mob per tick. Behaviors
+                // only ever compare this value against timestamps they themselves recorded, so
+                // any monotonic per-entity clock is equivalent; `Entity::age` is that clock and
+                // is a plain atomic. Consequence: durations are correct, but a timestamp is not
+                // comparable across entities and does not survive a restart.
+                let game_time = i64::from(
+                    mob_entity
+                        .living_entity
+                        .entity
+                        .age
+                        .load(std::sync::atomic::Ordering::Relaxed),
+                );
+                brain.tick(self, game_time).await;
+            }
 
             // 4. Repeat for Navigator
             let mut navigator = {

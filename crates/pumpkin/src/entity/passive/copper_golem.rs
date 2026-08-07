@@ -111,6 +111,14 @@ impl CopperGolemEntity {
             Arc::downgrade(&mob_arc)
         };
 
+        // Vanilla `CopperGolem` constructor: `this.getNavigation().setCanOpenDoors(true);`.
+        mob_arc
+            .mob_entity
+            .navigator
+            .lock()
+            .unwrap()
+            .set_can_open_doors(true);
+
         // Cites `CopperGolemAi.initCoreActivity`/`initIdleActivity`. Deferred: `AnimalPanic`
         // (no per-mob danger-flee goal ported here), `SetEntityLookTargetSometimes`,
         // `CountDownCooldownTicks` bookkeeping -- none change observable behavior beyond

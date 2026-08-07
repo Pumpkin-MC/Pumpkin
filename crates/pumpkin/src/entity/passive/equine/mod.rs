@@ -222,6 +222,24 @@ pub trait AbstractHorse: Animal {
         100
     }
 
+    /// `AbstractHorse.getTemper`.
+    fn get_temper(&self) -> i32 {
+        self.horse_data().temper.load(Relaxed)
+    }
+
+    /// `AbstractHorse.modifyTemper` (`AbstractHorse.java:247-250`).
+    fn modify_temper(&self, amount: i32) -> i32 {
+        let temper = (self.get_temper() + amount).clamp(0, self.max_temper());
+        self.horse_data().temper.store(temper, Relaxed);
+        temper
+    }
+
+    /// `AbstractHorse.isMobControlled`, default `false`. `ZombieHorseEntity` is the only
+    /// current override (a non-player mob riding counts as "in control").
+    fn is_mob_controlled(&self) -> BoxFuture<'_, bool> {
+        Box::pin(async { false })
+    }
+
     fn can_perform_rearing(&self) -> bool {
         true
     }

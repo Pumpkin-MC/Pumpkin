@@ -122,6 +122,18 @@ impl Pattern {
             Self::Clayfish => "clayfish",
         }
     }
+
+    /// `Pattern.CODEC` (`StringRepresentable.fromEnum`), used when restoring a packed variant
+    /// from the `minecraft:tropical_fish/pattern` bucket component. Unknown names fall back to
+    /// `KOB`, matching `from_packed_id`'s fallback for the same reason a corrupted/foreign save
+    /// shouldn't panic.
+    #[must_use]
+    pub fn from_name(name: &str) -> Self {
+        Self::ALL
+            .into_iter()
+            .find(|pattern| pattern.name() == name)
+            .unwrap_or(Self::Kob)
+    }
 }
 
 /// `TropicalFish.DEFAULT_VARIANT`: `KOB` / `WHITE` / `WHITE`.
@@ -237,6 +249,16 @@ impl TropicalFishEntity {
         dye_color_from_id(unpack_pattern_color_id(self.packed_variant.load(Relaxed)))
     }
 
+    /// `TropicalFish.setPackedVariant`, exposed for `MobBucketItem.checkExtraContent` /
+    /// `saveToBucketTag` round-tripping: the bucket item stores pattern/base/pattern-color as
+    /// three separate data components, not the raw packed int, so the bucket-emptying path
+    /// needs to set the unpacked triple directly rather than going through entity NBT.
+    pub fn set_variant(&self, pattern: Pattern, base_color: DyeColor, pattern_color: DyeColor) {
+        let packed = pack_variant(pattern.packed_id(), base_color as u8, pattern_color as u8);
+        self.packed_variant.store(packed, Relaxed);
+        self.send_packed_variant(packed);
+    }
+
     /// `TropicalFish.isMaxGroupSizeReached`: a non-common fish is immediately at max group
     /// size (i.e. refuses to group at all).
     #[must_use]
@@ -283,5 +305,22 @@ impl Mob for TropicalFishEntity {
         Box::pin(async move {
             self.send_packed_variant(self.packed_variant.load(Relaxed));
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Pattern;
+
+    #[test]
+    fn pattern_from_name_round_trips_every_pattern() {
+        for pattern in Pattern::ALL {
+            assert_eq!(Pattern::from_name(pattern.name()), pattern);
+        }
+    }
+
+    #[test]
+    fn pattern_from_name_falls_back_to_kob_for_unknown_names() {
+        assert_eq!(Pattern::from_name("not_a_real_pattern"), Pattern::Kob);
     }
 }

@@ -2,9 +2,10 @@ use std::sync::Arc;
 
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    DataComponentImpl, PotionContentsImpl, StatusEffectInstance,
+    DataComponentImpl, EquipmentSlot, PotionContentsImpl, StatusEffectInstance,
 };
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CSoundEffect;
@@ -54,6 +55,19 @@ impl RangedBowAttackGoal {
 
     const fn reset_attack_cooldown(&mut self) {
         self.attack_cooldown = self.attack_interval;
+    }
+
+    /// `RangedBowAttackGoal#isHoldingBow` (RangedBowAttackGoal.java:40-42): `mob.isHolding(Items.BOW)`.
+    async fn is_holding_bow(mob: &dyn Mob) -> bool {
+        let stack = mob
+            .get_mob_entity()
+            .living_entity
+            .entity_equipment
+            .lock()
+            .await
+            .get(&EquipmentSlot::MAIN_HAND);
+        let item = stack.lock().await.item;
+        item.registry_key == Item::BOW.registry_key
     }
 
     async fn has_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
@@ -142,23 +156,27 @@ impl RangedBowAttackGoal {
 impl Goal for RangedBowAttackGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            mob.get_mob_entity()
+            let has_target = mob
+                .get_mob_entity()
                 .target
                 .lock()
                 .await
                 .as_ref()
-                .is_some_and(|target| target.get_entity().is_alive())
+                .is_some_and(|target| target.get_entity().is_alive());
+            has_target && Self::is_holding_bow(mob).await
         })
     }
 
     fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            mob.get_mob_entity()
+            let has_target = mob
+                .get_mob_entity()
                 .target
                 .lock()
                 .await
                 .as_ref()
-                .is_some_and(|target| target.get_entity().is_alive())
+                .is_some_and(|target| target.get_entity().is_alive());
+            has_target && Self::is_holding_bow(mob).await
         })
     }
 

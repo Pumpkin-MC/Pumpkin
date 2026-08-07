@@ -27,6 +27,15 @@ pub struct RevengeGoal {
     /// class is ignored entirely, so raid-mates don't retaliate against friendly fire from
     /// other raiders. Used by Vex (`Vex.java:93`) and Witch (`Witch.java:72`).
     exclude_raiders: bool,
+    /// Vanilla `PolarBear.PolarBearHurtByTargetGoal::alertOther` override: only alert nearby
+    /// same-species mobs that aren't babies (`PolarBear.java:296-301`).
+    alert_only_adults: bool,
+    /// Vanilla `PolarBear.PolarBearHurtByTargetGoal` never calls `setAlertOthers()`, so the
+    /// base class's unconditional `if (alertSameType) alertOthers()` never fires for it; only
+    /// its `start()` override calls `alertOthers()` directly, and only when the hurt bear
+    /// itself is a baby (`PolarBear.java:284-291`). When set, gates the alert loop below on
+    /// that condition instead of always running it.
+    alert_only_when_self_is_baby: bool,
 }
 
 impl RevengeGoal {
@@ -41,12 +50,26 @@ impl RevengeGoal {
             last_attacked_time: 0,
             target_predicate,
             exclude_raiders: false,
+            alert_only_adults: false,
+            alert_only_when_self_is_baby: false,
         }
     }
 
     #[must_use]
     pub const fn exclude_raiders(mut self) -> Self {
         self.exclude_raiders = true;
+        self
+    }
+
+    #[must_use]
+    pub const fn alert_only_adults(mut self) -> Self {
+        self.alert_only_adults = true;
+        self
+    }
+
+    #[must_use]
+    pub const fn alert_only_when_self_is_baby(mut self) -> Self {
+        self.alert_only_when_self_is_baby = true;
         self
     }
 }
@@ -87,6 +110,14 @@ impl Goal for RevengeGoal {
                 return false;
             }
 
+            // Vanilla `TargetingConditions.test`'s combat branch (`TargetingConditions.java:78`)
+            // consults `targeter.canAttack(target)`; `HurtByTargetGoal` reaches it through
+            // `TargetGoal.canAttack`. This is what stops a player-created iron golem from
+            // retaliating against the player who punched it.
+            if !mob.can_attack(attacker.get_entity()) {
+                return false;
+            }
+
             if !self
                 .target_predicate
                 .test(&world, Some(&mob_entity.living_entity), attacker_living)
@@ -116,6 +147,9 @@ impl Goal for RevengeGoal {
             let Some(target) = self.target.as_ref() else {
                 return;
             };
+            if self.alert_only_when_self_is_baby && mob.get_entity().age.load(Relaxed) >= 0 {
+                return;
+            }
             let mob_entity = mob.get_mob_entity();
             let entity = &mob_entity.living_entity.entity;
             let world = entity.world.load();
@@ -137,6 +171,9 @@ impl Goal for RevengeGoal {
                 let Some(nearby_mob) = nearby.get_mob() else {
                     continue;
                 };
+                if self.alert_only_adults && nearby.get_entity().age.load(Relaxed) < 0 {
+                    continue;
+                }
                 if nearby_mob.get_mob_entity().target.lock().await.is_some() {
                     continue;
                 }

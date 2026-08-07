@@ -23,7 +23,8 @@ use crate::entity::{
         follow_parent::FollowParentGoal, llama_follow_caravan::LlamaFollowCaravanGoal,
         llama_hurt_by_target::LlamaHurtByTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, ranged_llama_spit_attack::RangedLlamaSpitAttackGoal,
-        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
+        run_around_like_crazy::RunAroundLikeCrazyGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     passive::{
@@ -146,13 +147,19 @@ pub fn set_random_strength(data: &LlamaData, random: &mut impl RngExt) {
 /// On top of the base set every `AbstractHorse`-family species shares. Shared by `LlamaEntity`
 /// and `TraderLlamaEntity` (`TraderLlama.registerGoals` calls `super.registerGoals()` first) so
 /// the exact same priorities and goal instances back both.
-pub fn register_llama_goals(mob_arc: &Arc<dyn Mob>, mob_weak: Weak<dyn Mob>) {
+///
+/// `llama_weak` is a second, non-type-erased handle onto the same mob (the caller still has its
+/// concrete `Arc<Self>` at the call site) -- needed by `RunAroundLikeCrazyGoal`, which reaches
+/// into `AbstractHorse`-specific state (`dyn Mob` alone can't).
+pub fn register_llama_goals(
+    mob_arc: &Arc<dyn Mob>,
+    mob_weak: Weak<dyn Mob>,
+    llama_weak: Weak<dyn LlamaMob>,
+) {
     let mut goal_selector = mob_arc.get_mob_entity().goals_selector.lock().unwrap();
     goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-    // Vanilla priority 1 is `RunAroundLikeCrazyGoal(this, 1.2)` (`Llama.java:119`) -- a
-    // frenzied, undirected flee that's distinct from `EscapeDangerGoal`'s "path to a random
-    // point" behavior and has no existing Pumpkin equivalent; left unported (documented gap)
-    // rather than approximated with the wrong goal shape.
+    // `Llama.java:119`.
+    goal_selector.add_goal(1, RunAroundLikeCrazyGoal::new(llama_weak, 1.2));
     goal_selector.add_goal(2, LlamaFollowCaravanGoal::new(2.1));
     goal_selector.add_goal(3, RangedLlamaSpitAttackGoal::new(1.25, 40, 20.0));
     goal_selector.add_goal(3, EscapeDangerGoal::new(1.2));
@@ -420,7 +427,9 @@ impl LlamaEntity {
 
         let dyn_mob: Arc<dyn Mob> = mob_arc.clone();
         let mob_weak = Arc::downgrade(&dyn_mob);
-        register_llama_goals(&dyn_mob, mob_weak);
+        let llama_dyn: Arc<dyn LlamaMob> = mob_arc.clone();
+        let llama_weak = Arc::downgrade(&llama_dyn);
+        register_llama_goals(&dyn_mob, mob_weak, llama_weak);
 
         mob_arc
     }

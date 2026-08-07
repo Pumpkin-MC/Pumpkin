@@ -62,7 +62,9 @@ impl TraderLlamaEntity {
 
         let dyn_mob: Arc<dyn Mob> = mob_arc.clone();
         let mob_weak = Arc::downgrade(&dyn_mob);
-        register_llama_goals(&dyn_mob, mob_weak);
+        let llama_dyn: Arc<dyn LlamaMob> = mob_arc.clone();
+        let llama_weak = Arc::downgrade(&llama_dyn);
+        register_llama_goals(&dyn_mob, mob_weak, llama_weak);
 
         // `TraderLlama.registerGoals` (`TraderLlama.java:63-68`): an extra, faster
         // `PanicGoal` copy on top of the one `Llama.registerGoals` already adds, plus the

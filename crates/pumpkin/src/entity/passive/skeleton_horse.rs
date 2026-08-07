@@ -14,7 +14,8 @@ use crate::entity::{
     ai::goal::{
         ambient_stand::AmbientStandGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        skeleton_trap::SkeletonTrapGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        run_around_like_crazy::RunAroundLikeCrazyGoal, skeleton_trap::SkeletonTrapGoal,
+        swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     passive::{
@@ -64,8 +65,13 @@ impl SkeletonHorseEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            // Vanilla priority 1 (dynamically added/removed via `setTrap`); see
-            // `SkeletonTrapGoal`'s doc comment for why Pumpkin registers it unconditionally.
+            // Both at vanilla priority 1: `RunAroundLikeCrazyGoal` from the base
+            // `AbstractHorse.registerGoals` (`AbstractHorse.java:134`) -- effectively inert here
+            // since `mob_interact` below never lets a player mount an untamed skeleton horse,
+            // but kept for architectural parity -- and `skeletonTrapGoal`, dynamically
+            // added/removed via `setTrap` in vanilla; see `SkeletonTrapGoal`'s doc comment for
+            // why Pumpkin registers it unconditionally.
+            goal_selector.add_goal(1, RunAroundLikeCrazyGoal::new(horse_weak.clone(), 1.2));
             goal_selector.add_goal(1, SkeletonTrapGoal::new(Arc::downgrade(&mob_arc)));
             // `SkeletonHorse.java:65-66`: `addBehaviourGoals` is overridden to empty, so no
             // tempt/float/panic goal here (unlike Horse/Donkey/Mule) -- only the base

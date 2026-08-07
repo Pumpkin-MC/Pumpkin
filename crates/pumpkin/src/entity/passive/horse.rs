@@ -17,8 +17,8 @@ use crate::entity::{
     ai::goal::{
         ambient_stand::AmbientStandGoal, follow_parent::FollowParentGoal,
         horse_breed::HorseBreedGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, run_around_like_crazy::RunAroundLikeCrazyGoal,
+        swim::SwimGoal, tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     passive::{
@@ -77,10 +77,12 @@ impl HorseEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             // `AbstractHorse.java:134-151` (`registerGoals`/`addBehaviourGoals`, base
-            // `addBehaviourGoals` applies to Horse/Donkey/Mule): 0 float, (1 panic-when-ridden
-            // deferred, no rider-tracking infra), 2 breed, 3 tempt, 4 follow parent, 6
-            // water-avoiding wander, 7 look at player, 8 random look around, 9 random stand.
+            // `addBehaviourGoals` applies to Horse/Donkey/Mule): 0 float, 1 run-around-like-crazy
+            // (and, at the same priority, 1 panic-when-ridden deferred, no rider-tracking
+            // infra), 2 breed, 3 tempt, 4 follow parent, 6 water-avoiding wander, 7 look at
+            // player, 8 random look around, 9 random stand.
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(1, RunAroundLikeCrazyGoal::new(horse_weak.clone(), 1.2));
             goal_selector.add_goal(2, HorseBreedGoal::new(1.0, COMPATIBLE_MATES));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, HORSE_TEMPT_ITEMS, false)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.0)));

@@ -6,14 +6,16 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_inventory::screen_handler::BoxFuture;
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBaseFuture, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
         ambient_stand::AmbientStandGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        tempt::TemptGoal, wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        run_around_like_crazy::RunAroundLikeCrazyGoal, swim::SwimGoal, tempt::TemptGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
     passive::{
@@ -65,8 +67,10 @@ impl ZombieHorseEntity {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             // `ZombieHorse.java:126-129` (`addBehaviourGoals`): float + tempt only, no panic
-            // goal. Wander/look/stand come from the base `AbstractHorse.registerGoals`.
+            // goal. Wander/look/stand/run-around-like-crazy come from the base
+            // `AbstractHorse.registerGoals`.
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            goal_selector.add_goal(1, RunAroundLikeCrazyGoal::new(horse_weak.clone(), 1.2));
             goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, TEMPT_ITEMS, false)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.0)));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new_water_avoiding(0.7)));
@@ -135,6 +139,18 @@ impl AbstractHorse for ZombieHorseEntity {
     /// `ZombieHorse.canFallInLove` -- always false.
     fn can_fall_in_love(&self) -> bool {
         false
+    }
+
+    /// `ZombieHorse.isMobControlled`: `getFirstPassenger() instanceof Mob` -- a non-player
+    /// mob riding (e.g. a zombie jockey) counts as being "in control", which keeps
+    /// `RunAroundLikeCrazyGoal` from bucking it.
+    fn is_mob_controlled(&self) -> BoxFuture<'_, bool> {
+        Box::pin(async {
+            let passengers = self.get_entity().passengers.lock().await;
+            passengers
+                .first()
+                .is_some_and(|passenger| passenger.get_mob().is_some())
+        })
     }
 
     /// `ZombieHorse.randomizeAttributes`: only jump-strength and speed, using

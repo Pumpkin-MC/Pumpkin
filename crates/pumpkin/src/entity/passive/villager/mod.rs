@@ -30,9 +30,9 @@ use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase, NBTStorage,
     ai::goal::{
-        avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, villager_schedule::VillagerScheduleGoal,
-        wander_around::WanderAroundGoal,
+        avoid_entity::AvoidEntityGoal, interact_with_door::InteractWithDoorGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        villager_schedule::VillagerScheduleGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -109,10 +109,23 @@ impl VillagerEntity {
             Arc::downgrade(&mob_arc)
         };
 
+        // Vanilla `Villager` constructor: `this.getNavigation().setCanOpenDoors(true);`.
+        mob_arc
+            .mob_entity
+            .navigator
+            .lock()
+            .unwrap()
+            .set_can_open_doors(true);
+
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
+            // Approximates vanilla's brain-based `InteractWithDoor` behavior
+            // (`VillagerGoalPackages.java:37`, `Pair.of(0, InteractWithDoor.create())`) with the
+            // goal-based port, same as `CopperGolemEntity` does for its own `InteractWithDoor`
+            // core-activity entry.
+            goal_selector.add_goal(0, Box::new(InteractWithDoorGoal::new(true)));
             // Villagers avoid threats
             goal_selector.add_goal(
                 1,
@@ -321,8 +334,24 @@ impl VillagerEntity {
                 .get_reputation(player.get_entity().entity_uuid, |_| true);
             if reputation != 0 {
                 for offer in &mut offers {
-                    offer.special_price =
+                    offer.special_price +=
                         gossip::reputation_price_discount(reputation, offer.price_multiplier);
+                }
+            }
+            // `Villager::updateSpecialPrices` (`Villager.java:450-458`): Hero of the Village
+            // stacks an additional discount on top of the reputation one above, proportional
+            // to the offer's un-modified `cost_a` count and the effect's amplifier.
+            if let Some(effect) = player
+                .living_entity
+                .get_effect(&pumpkin_data::effect::StatusEffect::HERO_OF_THE_VILLAGE)
+                .await
+            {
+                let modifier = 0.3 + 0.0625 * f64::from(effect.amplifier);
+                for offer in &mut offers {
+                    let base_count = f64::from(offer.base_cost_a.0.item_count);
+                    #[allow(clippy::cast_possible_truncation)]
+                    let cost_reduction = (modifier * base_count).floor() as i32;
+                    offer.special_price -= cost_reduction.max(1);
                 }
             }
             let villager_data = self.villager_data.lock().await;

@@ -79,6 +79,12 @@ impl TrackTargetGoal {
         let mob_entity = mob.get_mob_entity();
         let world = mob_entity.living_entity.entity.world.load();
 
+        // Vanilla `TargetingConditions.test`'s combat branch (`TargetingConditions.java:78`)
+        // consults `targeter.canAttack(target)`.
+        if !mob.can_attack(&target.entity) {
+            return false;
+        }
+
         if !target_predicate
             .test(&world, Some(&mob_entity.living_entity), target)
             .await
