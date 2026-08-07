@@ -3,6 +3,7 @@ use indexmap::IndexMap;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
+use serde_json::Value;
 use std::fs;
 
 #[derive(Deserialize)]
@@ -35,11 +36,16 @@ struct TradeSetJson {
 #[derive(Deserialize)]
 struct TradeJson {
     wants: TradeItemJson,
-    wants_b: Option<TradeItemJson>,
+    #[serde(alias = "wants_b")]
+    additional_wants: Option<TradeItemJson>,
     gives: TradeItemJson,
     max_uses: Option<f32>,
     xp: Option<f32>,
-    price_multiplier: Option<f32>,
+    #[serde(alias = "price_multiplier")]
+    reputation_discount: Option<f32>,
+    #[serde(default)]
+    given_item_modifiers: Vec<Value>,
+    merchant_predicate: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -80,7 +86,7 @@ pub fn build() -> TokenStream {
         let wants_count = trade.wants.count.unwrap_or(1.0) as i32;
         let wants = quote! { VillagerTradeItem { item: &crate::item::Item::#wants_item, count: #wants_count } };
 
-        let wants_b = if let Some(b) = &trade.wants_b {
+        let wants_b = if let Some(b) = &trade.additional_wants {
             let item = format_ident!(
                 "{}",
                 b.id.strip_prefix("minecraft:")
@@ -107,7 +113,64 @@ pub fn build() -> TokenStream {
 
         let max_uses = trade.max_uses.unwrap_or(16.0) as i32;
         let xp = trade.xp.unwrap_or(2.0) as i32;
-        let price_multiplier = trade.price_multiplier.unwrap_or(0.05);
+        let price_multiplier = trade.reputation_discount.unwrap_or(0.05);
+
+        let modifier = trade
+            .given_item_modifiers
+            .iter()
+            .find_map(|modifier| {
+                let function = modifier.get("function")?.as_str()?;
+                Some(match function {
+                    "minecraft:enchant_randomly" => quote! { VillagerTradeModifier::EnchantRandomly },
+                    "minecraft:enchant_with_levels" => {
+                        let levels = modifier.get("levels")?;
+                        let min = levels.get("min")?.as_f64()? as i32;
+                        let max = levels.get("max")?.as_f64()? as i32;
+                        quote! { VillagerTradeModifier::EnchantWithLevels { min: #min, max: #max } }
+                    }
+                    "minecraft:exploration_map" => {
+                        let destination = modifier.get("destination")?.as_str()?;
+                        quote! { VillagerTradeModifier::ExplorationMap { destination: #destination } }
+                    }
+                    "minecraft:set_random_dyes" => quote! { VillagerTradeModifier::RandomDyes },
+                    "minecraft:set_random_potion" => quote! { VillagerTradeModifier::RandomPotion },
+                    "minecraft:set_stew_effect" => quote! { VillagerTradeModifier::SuspiciousStew },
+                    "minecraft:set_potion" => {
+                        let potion = modifier.get("id")?.as_str()?;
+                        quote! { VillagerTradeModifier::Potion(#potion) }
+                    }
+                    _ => return None,
+                })
+            })
+            .unwrap_or_else(|| quote! { VillagerTradeModifier::None });
+
+        let allowed_types = trade
+            .merchant_predicate
+            .as_ref()
+            .and_then(|predicate| {
+                predicate
+                    .pointer("/predicate/minecraft:predicates/minecraft:villager~1variant")
+            })
+            .map(|variants| {
+                let variants: Vec<_> = variants
+                    .as_array()
+                    .map_or_else(|| vec![variants], |variants| variants.iter().collect())
+                    .into_iter()
+                    .filter_map(Value::as_str)
+                    .map(|variant| {
+                        let ident = format_ident!(
+                            "{}",
+                            variant
+                                .strip_prefix("minecraft:")
+                                .unwrap_or(variant)
+                                .to_pascal_case()
+                        );
+                        quote! { VillagerType::#ident }
+                    })
+                    .collect();
+                quote! { &[#(#variants),*] }
+            })
+            .unwrap_or_else(|| quote! { &[] });
 
         quote! {
             VillagerTrade {
@@ -117,6 +180,8 @@ pub fn build() -> TokenStream {
                 max_uses: #max_uses,
                 xp: #xp,
                 price_multiplier: #price_multiplier,
+                modifier: #modifier,
+                allowed_types: #allowed_types,
             }
         }
     };
@@ -143,10 +208,12 @@ pub fn build() -> TokenStream {
             }
         }
 
-        // Fallback for smiths
-        if matching_trades.is_empty()
-            && (prof == "armorer" || prof == "toolsmith" || prof == "weaponsmith")
-        {
+        // The vanilla tags share a small number of smith trades between professions.
+        let includes_common_smith = matches!(
+            (prof, level_str),
+            ("armorer", "1" | "2") | ("toolsmith" | "weaponsmith", "1")
+        );
+        if includes_common_smith {
             let smith_prefix = format!("smith/{level_str}/");
             for (key, trade) in &data.villager_trades {
                 if key.starts_with(&smith_prefix) {
@@ -261,6 +328,20 @@ pub fn build() -> TokenStream {
             pub max_uses: i32,
             pub xp: i32,
             pub price_multiplier: f32,
+            pub modifier: VillagerTradeModifier,
+            pub allowed_types: &'static [VillagerType],
+        }
+
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        pub enum VillagerTradeModifier {
+            None,
+            EnchantRandomly,
+            EnchantWithLevels { min: i32, max: i32 },
+            ExplorationMap { destination: &'static str },
+            RandomDyes,
+            RandomPotion,
+            SuspiciousStew,
+            Potion(&'static str),
         }
 
         #[derive(Clone, Copy, PartialEq)]

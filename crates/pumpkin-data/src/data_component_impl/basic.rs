@@ -2,6 +2,7 @@ use crate::data_component_impl::{DataComponentImpl, default_impl, get_i32_hash, 
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
+use std::borrow::Cow;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CustomDataImpl {
@@ -117,13 +118,34 @@ impl DataComponentImpl for CustomNameImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ItemNameImpl {
-    pub name: &'static str,
+    pub name: Cow<'static, str>,
+}
+impl ItemNameImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let name = match data {
+            NbtTag::String(name) => name.to_string(),
+            NbtTag::Compound(component) => component
+                .get_string("translate")
+                .or_else(|| component.get_string("text"))?
+                .to_owned(),
+            _ => return None,
+        };
+        Some(Self {
+            name: Cow::Owned(name),
+        })
+    }
 }
 impl DataComponentImpl for ItemNameImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut component = NbtCompound::new();
+        component.put_string("translate", self.name.to_string());
+        NbtTag::Compound(component)
+    }
+    fn get_hash(&self) -> i32 {
+        get_str_hash(&self.name) as i32
+    }
     default_impl!(ItemName);
 }
-
-use std::borrow::Cow;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ItemModelImpl {

@@ -20,6 +20,7 @@ pub enum AdvancementTrigger {
     Arbalistic,
     Bullseye,
     CuredZombieVillager,
+    TradedWithVillager,
 }
 
 impl Player {
@@ -731,6 +732,23 @@ impl Player {
                     self.trigger_advancement_criterion(
                         Advancement::STORY_CURE_ZOMBIE_VILLAGER,
                         "cured_zombie",
+                    )
+                    .await;
+                }
+            }
+            AdvancementTrigger::TradedWithVillager => {
+                if !self.has_advancement(Advancement::ADVENTURE_TRADE).await {
+                    self.trigger_advancement_criterion(Advancement::ADVENTURE_TRADE, "traded")
+                        .await;
+                }
+                if self.living_entity.entity.pos.load().y >= 319.0
+                    && !self
+                        .has_advancement(Advancement::ADVENTURE_TRADE_AT_WORLD_HEIGHT)
+                        .await
+                {
+                    self.trigger_advancement_criterion(
+                        Advancement::ADVENTURE_TRADE_AT_WORLD_HEIGHT,
+                        "trade_at_world_height",
                     )
                     .await;
                 }

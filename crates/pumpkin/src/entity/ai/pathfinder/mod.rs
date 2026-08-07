@@ -128,6 +128,17 @@ impl Navigator {
         self.mob_height = height;
     }
 
+    pub async fn can_reach_within(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+        distance: f32,
+    ) -> bool {
+        self.compute_path(entity, destination)
+            .await
+            .is_some_and(|path| path.can_reach() || path.get_dist_to_target() <= distance)
+    }
+
     #[allow(clippy::too_many_lines)]
     async fn compute_path(
         &mut self,

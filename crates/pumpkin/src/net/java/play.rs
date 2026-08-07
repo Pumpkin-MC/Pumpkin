@@ -2877,6 +2877,9 @@ impl JavaClient {
     pub async fn handle_select_trade(&self, player: &Arc<Player>, packet: SSelectTrade) {
         let screen_handler = player.current_screen_handler.lock().await;
         let mut screen_handler = screen_handler.lock().await;
+        if !screen_handler.can_use(player.as_ref()) {
+            return;
+        }
         if let Some(merchant) = screen_handler
             .as_any_mut()
             .downcast_mut::<MerchantScreenHandler>()

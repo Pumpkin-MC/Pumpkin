@@ -492,6 +492,18 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn is_job_site_pending(&self) -> EntityBaseFuture<'_, bool> {
+        Box::pin(async { false })
+    }
+
+    fn release_pending_job_site(&self, _position: BlockPos) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
+    fn get_trading_player(&self) -> Option<Arc<Player>> {
+        None
+    }
+
     fn get_home(&self) -> Option<BlockPos> {
         None
     }
