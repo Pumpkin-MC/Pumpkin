@@ -598,6 +598,95 @@ impl Server {
         self.listing.lock().await.remove_player(player);
     }
 
+    /// Reloads the server configuration (whitelist, operators, bans and user cache) from disk.
+    pub async fn reload_config(&self) -> Result<(), &'static str> {
+        use crate::data::{
+            LoadJSONConfiguration, banned_ip::BannedIpList, banned_player::BannedPlayerList,
+            op::OperatorConfig, usercache::UserCache, whitelist::WhitelistConfig,
+        };
+
+        let whitelist = WhitelistConfig::load();
+        let operators = OperatorConfig::load();
+        let banned_players = BannedPlayerList::load();
+        let banned_ips = BannedIpList::load();
+        let user_cache = UserCache::load();
+
+        *self.data.whitelist_config.write().await = whitelist;
+        *self.data.operator_config.write().await = operators;
+        *self.data.banned_player_list.write().await = banned_players;
+        *self.data.banned_ip_list.write().await = banned_ips;
+        *self.data.user_cache.write().await = user_cache;
+
+        self.kick_non_whitelisted_players().await;
+        self.kick_banned_players().await;
+
+        Ok(())
+    }
+
+    /// Kicks all online players that are not on the whitelist.
+    async fn kick_non_whitelisted_players(&self) {
+        use pumpkin_data::translation;
+        use pumpkin_util::text::TextComponent;
+
+        use crate::net::DisconnectReason;
+
+        let whitelist = self.data.whitelist_config.read().await;
+        if self.basic_config.enforce_whitelist && self.white_list.load(Ordering::Relaxed) {
+            for player in self.get_all_players() {
+                if whitelist.is_whitelisted(&player.gameprofile) {
+                    continue;
+                }
+                player
+                    .kick(
+                        DisconnectReason::Kicked,
+                        TextComponent::translate_cross(
+                            translation::java::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
+                            translation::java::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
+                            &[],
+                        ),
+                    )
+                    .await;
+            }
+        }
+    }
+
+    /// Kicks all online players that are banned, either by UUID or by IP address.
+    async fn kick_banned_players(&self) {
+        use pumpkin_data::translation;
+        use pumpkin_util::text::TextComponent;
+
+        use crate::net::DisconnectReason;
+
+        let mut banned_players = self.data.banned_player_list.write().await;
+        let mut banned_ips = self.data.banned_ip_list.write().await;
+
+        for player in self.get_all_players() {
+            if let Some(entry) = banned_players.get_entry(&player.gameprofile) {
+                player
+                    .kick(
+                        DisconnectReason::Kicked,
+                        TextComponent::translate_cross(
+                            translation::java::MULTIPLAYER_DISCONNECT_BANNED_REASON,
+                            translation::java::MULTIPLAYER_DISCONNECT_BANNED_REASON,
+                            [TextComponent::text(entry.reason.clone())],
+                        ),
+                    )
+                    .await;
+            } else if let Some(entry) = banned_ips.get_entry(&player.client.address().ip()) {
+                player
+                    .kick(
+                        DisconnectReason::Kicked,
+                        TextComponent::translate_cross(
+                            translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_REASON,
+                            translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_REASON,
+                            [TextComponent::text(entry.reason.clone())],
+                        ),
+                    )
+                    .await;
+            }
+        }
+    }
+
     pub async fn shutdown(&self) {
         self.tasks.close();
         debug!("Awaiting tasks for server");
