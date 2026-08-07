@@ -221,8 +221,6 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
- "hyper",
- "hyper-util",
  "itoa",
  "matchit",
  "memchr",
@@ -231,7 +229,6 @@ dependencies = [
  "pin-project-lite",
  "serde_core",
  "sync_wrapper",
- "tokio",
  "tower",
  "tower-layer",
  "tower-service",
@@ -3241,8 +3238,8 @@ dependencies = [
 name = "pumpkin"
 version = "0.1.0-dev+26.2-26.40"
 dependencies = [
+ "aes 0.9.1",
  "arc-swap",
- "axum",
  "base64 0.23.1",
  "bitflags 2.13.1",
  "bytes",
