@@ -167,7 +167,13 @@ async fn enchant_target(
     }
 
     item.enchant(enchantment, level);
-    player.inventory().set_held_item(item).await;
+    let inventory = player.inventory();
+    inventory.set_held_item(item.clone()).await;
+
+    player
+        .sync_hand_slot(inventory.get_selected_slot() as usize, item)
+        .await;
+
     Ok(())
 }
 
