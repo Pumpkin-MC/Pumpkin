@@ -2,6 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use pumpkin_data::Block;
 use pumpkin_data::BlockState;
+use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::{BlockProperties, DispenserLikeProperties, Facing};
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Mirror, Rotation};
 use pumpkin_util::HeightMap;
 use pumpkin_util::{
@@ -203,6 +206,7 @@ impl StructurePiece {
                 block_state = block_registry.rotate(block, block_state.id, self.rotation);
             }
             chunk.set_block_state(pos.x, pos.y, pos.z, block_state);
+            schedule_fluid_tick_for_state(chunk, pos.x, pos.y, pos.z, block_state.id);
         }
     }
 
@@ -452,11 +456,7 @@ impl StructurePiece {
 
         // World interaction
         world.set_block_state(block_pos.x, block_pos.y, block_pos.z, block);
-
-        // let fluid_state = world.get_fluid_state(&block_pos);
-        // if !fluid_state.is_empty() {
-        //     world.schedule_fluid_tick(&block_pos, fluid_state.fluid(), 0);
-        // }
+        schedule_fluid_tick_for_state(world, block_pos.x, block_pos.y, block_pos.z, block.id);
 
         // if block.needs_post_processing() {
         //     world.mark_block_for_post_processing(&block_pos);
@@ -502,6 +502,65 @@ impl StructurePiece {
         chunk.add_block_entity(nbt);
 
         true
+    }
+
+    /// Places a dispenser facing `facing` with a deferred loot table at the given local
+    /// coordinates. Matches `StructurePiece.createDispenser`: placed through [`Self::place_block`]
+    /// so the piece's mirror/rotation apply to the facing, unlike [`Self::add_chest`].
+    ///
+    /// Returns `true` if the dispenser was placed (i.e. the position is within the bounding box),
+    /// `false` otherwise.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_dispenser(
+        &self,
+        chunk: &mut ProtoChunk,
+        block_registry: &dyn WorldPortalExt,
+        bb: &BlockBox,
+        random: &mut RandomGenerator,
+        x: i32,
+        y: i32,
+        z: i32,
+        facing: Facing,
+        loot_table: &str,
+    ) -> bool {
+        use pumpkin_nbt::compound::NbtCompound;
+
+        let world_pos = self.offset_pos(x, y, z);
+        if !bb.contains_pos(&world_pos) {
+            return false;
+        }
+
+        let mut props = DispenserLikeProperties::default(&Block::DISPENSER);
+        props.facing = facing;
+        let state = BlockState::from_id(props.to_state_id(&Block::DISPENSER));
+        self.place_block(chunk, block_registry, state, x, y, z, bb);
+
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:dispenser".to_string());
+        nbt.put_int("x", world_pos.x);
+        nbt.put_int("y", world_pos.y);
+        nbt.put_int("z", world_pos.z);
+        nbt.put_string("LootTable", loot_table.to_string());
+        nbt.put_long("LootTableSeed", random.next_i64());
+        chunk.add_block_entity(nbt);
+
+        true
+    }
+}
+
+/// Mirrors `StructurePiece.placeBlock`'s fluid-tick scheduling: a source block placed by a
+/// structure needs a scheduled tick to start flowing/settling like naturally-placed fluid.
+fn schedule_fluid_tick_for_state(
+    chunk: &mut ProtoChunk,
+    x: i32,
+    y: i32,
+    z: i32,
+    state_id: BlockStateId,
+) {
+    if state_id == Block::WATER.default_state.id {
+        chunk.schedule_fluid_tick(x, y, z, &Fluid::WATER);
+    } else if state_id == Block::LAVA.default_state.id {
+        chunk.schedule_fluid_tick(x, y, z, &Fluid::LAVA);
     }
 }
 

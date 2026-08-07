@@ -32,7 +32,7 @@ impl CoralMushroomFeature {
             for n in 0..=i {
                 for o in 0..=k {
                     let mut pos = pos;
-                    pos = pos.offset(Vector3::new(pos.0.x + m, pos.0.y + n, pos.0.z + o));
+                    pos = pos.offset(Vector3::new(m, n, o));
                     pos = pos.down_height(l);
 
                     let condition_a = (m != 0 && m != j) || (n != 0 && n != i);

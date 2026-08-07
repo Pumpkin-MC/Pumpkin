@@ -19,6 +19,8 @@ use crate::{
     },
 };
 
+const LOOT_TABLE: &str = "minecraft:chests/stronghold_library";
+
 pub struct LibraryPiece {
     pub piece: StrongholdPiece,
     pub tall: bool,
@@ -234,10 +236,10 @@ impl StructurePieceBase for LibraryPiece {
         }
 
         // 6. Chests
-        // inner.add_chest(chunk, &box_limit, random, 3, 3, 5, "stronghold_library");
-        // if self.tall {
-        //     inner.add_block(chunk, &Block::AIR.default_state, 12, 9, 1, &box_limit); // Clear space above top chest
-        //     inner.add_chest(chunk, &box_limit, random, 12, 8, 1, "stronghold_library");
-        // }
+        inner.add_chest(chunk, &box_limit, random, 3, 3, 5, LOOT_TABLE);
+        if self.tall {
+            inner.add_block(chunk, Block::AIR.default_state, 12, 9, 1, &box_limit); // Clear space above top chest
+            inner.add_chest(chunk, &box_limit, random, 12, 8, 1, LOOT_TABLE);
+        }
     }
 }

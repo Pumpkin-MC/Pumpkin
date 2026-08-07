@@ -33,6 +33,9 @@ use crate::{
 pub const WIDTH: i32 = 12;
 pub const DEPTH: i32 = 15;
 
+const LOOT_TABLE: &str = "minecraft:chests/jungle_temple";
+const DISPENSER_LOOT_TABLE: &str = "minecraft:chests/jungle_temple_dispenser";
+
 pub struct JungleTempleGenerator;
 
 impl StructureGenerator for JungleTempleGenerator {
@@ -56,10 +59,10 @@ impl StructureGenerator for JungleTempleGenerator {
         collector.add_piece(Box::new(JungleTemplePiece {
             piece,
             height_adjusted: false,
-            placed_main_chest: true,
-            placed_hidden_chest: true,
-            placed_trap_1: true,
-            placed_trap_2: true,
+            placed_main_chest: false,
+            placed_hidden_chest: false,
+            placed_trap_1: false,
+            placed_trap_2: false,
         }));
 
         Some(StructurePosition {
@@ -93,7 +96,7 @@ impl StructurePieceBase for JungleTemplePiece {
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
-        _block_registry: &dyn WorldPortalExt,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         _seed: i64,
         chunk_box: &BlockBox,
@@ -508,18 +511,19 @@ impl StructurePieceBase for JungleTemplePiece {
         );
         self.piece
             .add_block(chunk, Block::MOSSY_COBBLESTONE.default_state, 3, -3, 1, bb);
-        /*if !self.placed_trap_1 {
-            self.placed_trap_1 = this.createDispenser(
+        if !self.placed_trap_1 {
+            self.placed_trap_1 = self.piece.create_dispenser(
                 chunk,
+                block_registry,
                 bb,
                 random,
                 3,
                 -2,
                 1,
-                Direction.NORTH,
-                BuiltInLootTables.JUNGLE_TEMPLE_DISPENSER,
+                Facing::North,
+                DISPENSER_LOOT_TABLE,
             );
-        }*/
+        }
 
         self.piece
             .add_block(chunk, Self::vine_facing(Facing::South), 3, -2, 2, bb);
@@ -592,27 +596,29 @@ impl StructurePieceBase for JungleTemplePiece {
                 .add_block(chunk, Block::MOSSY_COBBLESTONE.default_state, 9, -3, 4, bb);
         };
         self.piece.add_block(chunk, redstone_wire_ns, 9, -2, 4, bb);
-        /*if !self.placed_trap_2 {
-            self.placed_trap_2 = this.createDispenser(
+        if !self.placed_trap_2 {
+            self.placed_trap_2 = self.piece.create_dispenser(
                 chunk,
+                block_registry,
                 bb,
                 random,
                 9,
                 -2,
                 3,
-                Direction.WEST,
-                BuiltInLootTables.JUNGLE_TEMPLE_DISPENSER,
+                Facing::West,
+                DISPENSER_LOOT_TABLE,
             );
-        }*/
+        }
 
         self.piece
             .add_block(chunk, Self::vine_facing(Facing::East), 8, -1, 3, bb);
         self.piece
             .add_block(chunk, Self::vine_facing(Facing::East), 8, -2, 3, bb);
-        /*if !self.placed_main_chest {
-            self.placed_main_chest =
-                this.createChest(chunk, bb, random, 8, -3, 3, BuiltInLootTables.JUNGLE_TEMPLE);
-        }*/
+        if !self.placed_main_chest {
+            self.placed_main_chest = self
+                .piece
+                .add_chest(chunk, bb, random, 8, -3, 3, LOOT_TABLE);
+        }
 
         self.piece
             .add_block(chunk, Block::MOSSY_COBBLESTONE.default_state, 9, -3, 2, bb);
@@ -738,17 +744,11 @@ impl StructurePieceBase for JungleTemplePiece {
             BlockState::from_id(props.to_state_id(&Block::REPEATER))
         };
         self.piece.add_block(chunk, repeater_state, 10, -2, 10, bb);
-        /*if !self.placed_hidden_chest {
-            self.placed_hidden_chest = this.createChest(
-                chunk,
-                bb,
-                random,
-                9,
-                -3,
-                10,
-                BuiltInLootTables.JUNGLE_TEMPLE,
-            );
-        }*/
+        if !self.placed_hidden_chest {
+            self.placed_hidden_chest = self
+                .piece
+                .add_chest(chunk, bb, random, 9, -3, 10, LOOT_TABLE);
+        }
     }
 }
 const fn set_side_dir(props: &mut RedstoneWireLikeProperties, facing: HorizontalFacing) {
