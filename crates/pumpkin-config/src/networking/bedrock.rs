@@ -24,10 +24,8 @@ pub struct BedrockAuthenticationConfig {
 pub struct NetherNetConfig {
     /// Whether clients may connect using `NetherNet`.
     pub enabled: bool,
-    /// HTTP signaling address.
+    /// TCP signaling and shared UDP status/ICE address.
     pub address: SocketAddr,
-    /// UDP address shared by all WebRTC game sessions.
-    pub ice_address: SocketAddr,
     /// Optional public IP advertised when the ICE address is behind NAT.
     pub external_ip: Option<IpAddr>,
     /// PKCS#8 P-384 identity key retained across restarts for Trust On First Use.
@@ -41,7 +39,6 @@ impl Default for NetherNetConfig {
         Self {
             enabled: true,
             address: "0.0.0.0:19132".parse().unwrap(),
-            ice_address: "0.0.0.0:19134".parse().unwrap(),
             external_ip: None,
             identity_key: "nethernet-key.der".into(),
             stun_servers: Vec::new(),
