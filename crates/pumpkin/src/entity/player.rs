@@ -64,8 +64,8 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::SoundEvent;
+use pumpkin_protocol::bedrock::client::actor_event::{ActorEventType, CActorEvent};
 use pumpkin_protocol::bedrock::client::container_open::CContainerOpen;
-use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
@@ -3440,7 +3440,7 @@ impl Player {
         self.client
             .send_packet_now_editioned(
                 &CCombatDeath::new(self.entity_id().into(), &death_msg),
-                &SActorEvent {
+                &CActorEvent {
                     entity_runtime_id: VarULong(self.entity_id() as u64),
                     event_type: ActorEventType::Death,
                     event_data: VarInt(0),

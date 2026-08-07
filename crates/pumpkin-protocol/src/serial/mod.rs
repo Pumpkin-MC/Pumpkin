@@ -1,6 +1,6 @@
 pub mod deserializer;
 pub mod serializer;
-pub use pumpkin_macros::{PacketRead, PacketWrite};
+pub use pumpkin_macros::{PacketRead, PacketReadSlice, PacketWrite};
 use std::io::{Error, Read, Write};
 
 pub trait PacketWrite {

@@ -96,6 +96,7 @@ use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
     bedrock::{
         client::{
+            actor_event::{ActorEventType, CActorEvent},
             add_player::CAddPlayer,
             block_event::CBlockEvent as CBedrockBlockEvent,
             common::BuildPlatform,
@@ -107,10 +108,7 @@ use pumpkin_protocol::{
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_attributes::{Attribute, CUpdateAttributes},
         },
-        server::{
-            actor_event::{ActorEventType, SActorEvent},
-            text::SText,
-        },
+        server::text::SText,
     },
     codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
     java::{
@@ -496,7 +494,7 @@ impl World {
         let chunk_pos = entity.chunk_pos.load();
         let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
         if let Some(be_event) = bedrock_status {
-            let be_packet = SActorEvent {
+            let be_packet = CActorEvent {
                 entity_runtime_id: VarULong(entity.entity_id as u64),
                 event_type: be_event,
                 event_data: VarInt(0),
@@ -2421,7 +2419,7 @@ impl World {
                                 height: VarInt(height),
                                 input,
                                 output: vec![output_descriptor],
-                                uuid: [0; 16],
+                                uuid: Uuid::nil(),
                                 block: "crafting_table".to_string(),
                                 priority: VarInt(1),
                                 assume_symmetry: true,
@@ -2459,7 +2457,7 @@ impl World {
                                 recipe_id: format!("pumpkin:recipe_{network_id_counter}"),
                                 input,
                                 output: vec![output_descriptor],
-                                uuid: [0; 16],
+                                uuid: Uuid::nil(),
                                 block: "crafting_table".to_string(),
                                 priority: VarInt(1),
                                 unlock_requirement: RecipeUnlockRequirement { context: 1 },

@@ -1,3 +1,4 @@
+pub mod actor_event;
 pub mod add_actor;
 pub mod add_item_actor;
 pub mod add_player;
@@ -22,6 +23,7 @@ pub mod item_registry;
 pub mod item_stack_response;
 pub mod level_chunk;
 pub mod level_event;
+pub mod level_sound_event;
 pub mod mob_effect;
 pub mod mob_equipment;
 pub mod modal_form_request;
@@ -39,6 +41,7 @@ pub mod resource_packs_info;
 pub mod respawn;
 pub mod scoreboard;
 pub mod set_actor_data;
+pub mod set_actor_link;
 pub mod set_actor_motion;
 pub mod set_difficulty;
 pub mod set_health;
@@ -53,9 +56,6 @@ pub mod transfer;
 pub mod update_abilities;
 pub mod update_attributes;
 pub mod update_block;
-
-pub mod level_sound_event;
-pub mod set_actor_link;
 
 pub use add_actor::*;
 pub use add_item_actor::*;

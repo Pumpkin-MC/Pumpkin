@@ -6,8 +6,8 @@ use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_protocol::bedrock::client::actor_event::{ActorEventType, CActorEvent};
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
-use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
@@ -2485,7 +2485,7 @@ impl EntityBase for LivingEntity {
                     (src.z - tgt.z).atan2(src.x - tgt.x).to_degrees() as f32
                         - self.entity.yaw.load()
                 });
-                let hurt_event = SActorEvent {
+                let hurt_event = CActorEvent {
                     entity_runtime_id: VarULong(entity_id as u64),
                     event_type: ActorEventType::Hurt,
                     event_data: VarInt(0),
