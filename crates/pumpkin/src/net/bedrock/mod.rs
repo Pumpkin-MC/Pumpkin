@@ -1,5 +1,6 @@
 pub mod nethernet;
 pub mod play;
+pub mod status;
 use crossbeam::atomic::AtomicCell;
 use std::{
     collections::HashMap,

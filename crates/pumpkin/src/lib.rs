@@ -10,6 +10,7 @@ use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrap
 use crate::net::bedrock::{
     BedrockClient,
     nethernet::{NetherNetListener, discovery::NetherNetDiscovery, load_or_create_identity_key},
+    status::StatusResponder,
 };
 use crate::net::java::JavaClient;
 use crate::net::java::pending::PendingConnection;
@@ -210,6 +211,7 @@ fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
 pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub tcp_listener: Option<TcpListener>,
+    pub bedrock_status: Option<StatusResponder>,
     pub nethernet_discovery: Option<NetherNetDiscovery>,
     pub nethernet_listener: Option<NetherNetListener>,
 }
@@ -300,6 +302,7 @@ impl PumpkinServer {
         };
 
         let nethernet_listener = Self::bind_nethernet(&server).await;
+        let bedrock_status = Self::bind_bedrock_status(&server, nethernet_listener.is_some()).await;
         let nethernet_discovery = if nethernet_listener.is_some() {
             let discovery = NetherNetDiscovery::bind(
                 server.advanced_config.networking.bedrock.nethernet.address,
@@ -320,6 +323,7 @@ impl PumpkinServer {
         Self {
             server,
             tcp_listener,
+            bedrock_status,
             nethernet_discovery,
             nethernet_listener,
         }
@@ -350,6 +354,21 @@ impl PumpkinServer {
             .await
             .expect("Failed to bind Bedrock NetherNet signaling endpoint"),
         )
+    }
+
+    async fn bind_bedrock_status(server: &Server, enabled: bool) -> Option<StatusResponder> {
+        if !enabled {
+            return None;
+        }
+        let responder =
+            StatusResponder::bind(server.advanced_config.networking.bedrock.nethernet.address)
+                .await
+                .expect("Failed to bind Bedrock server-list status");
+        let (ipv4, ipv6) = responder
+            .local_addrs()
+            .expect("Bedrock status sockets should have local addresses");
+        info!("Bedrock server-list status is listening on {ipv4} (IPv4) and {ipv6} (IPv6)");
+        Some(responder)
     }
 
     pub async fn init_plugins(&self) -> std::time::Duration {
@@ -474,7 +493,7 @@ impl PumpkinServer {
         tasks: &Arc<TaskTracker>,
         bedrock_clients: &Arc<Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
     ) -> bool {
-        let mut udp_buf = [0; 1496]; // Buffer for UDP receive
+        let mut discovery_buf = [0; 1496];
 
         select! {
             // Branch for TCP connections (Java Edition)
@@ -548,10 +567,21 @@ impl PumpkinServer {
                 }
             },
 
+            // Remote server-list status remains a RakNet unconnected ping/pong even
+            // when the game connection itself is negotiated over NetherNet.
+            status_result = resolve_some(
+                self.bedrock_status.as_ref(),
+                |status: &StatusResponder| status.receive(&self.server),
+            ) => {
+                if let Err(error) = status_result {
+                    debug!("Bedrock status packet failed: {error}");
+                }
+            },
+
             // Branch for NetherNet LAN discovery and MOTD packets.
             discovery_result = resolve_some(
                 self.nethernet_discovery.as_ref(),
-                |discovery: &NetherNetDiscovery| discovery.receive(&self.server, &mut udp_buf),
+                |discovery: &NetherNetDiscovery| discovery.receive(&self.server, &mut discovery_buf),
             ) => {
                 if let Err(error) = discovery_result {
                     debug!("NetherNet discovery packet failed: {error}");
