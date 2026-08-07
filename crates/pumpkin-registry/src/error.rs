@@ -39,6 +39,18 @@ pub enum RegistryGetError {
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum RegistryTreeError {
+    #[error("failed to get: {0}")]
+    Get(#[from] RegistryGetError),
+
+    #[error("failed to initialize: {0}")]
+    Init(#[from] RegistryInitError),
+
+    #[error("failed to insert: {0}")]
+    Insert(#[from] RegistryInsertError),
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum DataKeyBuildError {
     #[error("a data key must contain at least one identifier")]
     Empty,
