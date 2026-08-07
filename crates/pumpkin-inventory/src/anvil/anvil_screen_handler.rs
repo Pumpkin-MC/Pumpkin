@@ -38,7 +38,7 @@ use crate::{
         InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour,
         ScreenHandlerFuture, offer_or_drop_stack,
     },
-    slot::NormalSlot,
+    slot::{BoxFuture, NormalSlot, Slot},
     window_property::{Anvil, WindowProperty},
 };
 
@@ -200,6 +200,51 @@ fn remove_custom_name(stack: &mut ItemStack) {
         .retain(|(id, _)| *id != DataComponent::CustomName);
 }
 
+/// The output slot (`AnvilMenu.java:66-68`, inherited from `ItemCombinerMenu`): `mayPlace`
+/// is always `false`, regardless of the held item. Without this, the generic pickup logic in
+/// `screen_handler.rs` treats a mismatched cursor item as insertable and swaps it into the
+/// slot instead of declining the click, handing the player the result for free.
+struct AnvilResultSlot {
+    inventory: Arc<dyn Inventory>,
+    index: usize,
+    id: std::sync::atomic::AtomicU8,
+}
+
+impl AnvilResultSlot {
+    fn new(inventory: Arc<dyn Inventory>, index: usize) -> Self {
+        Self {
+            inventory,
+            index,
+            id: std::sync::atomic::AtomicU8::new(0),
+        }
+    }
+}
+
+impl Slot for AnvilResultSlot {
+    fn get_inventory(&self) -> Arc<dyn Inventory> {
+        self.inventory.clone()
+    }
+
+    fn get_index(&self) -> usize {
+        self.index
+    }
+
+    fn set_id(&self, id: usize) {
+        self.id
+            .store(id as u8, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn can_insert(&self, _stack: &ItemStack) -> BoxFuture<'_, bool> {
+        Box::pin(async move { false })
+    }
+
+    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.inventory.mark_dirty();
+        })
+    }
+}
+
 pub struct AnvilScreenHandler {
     pub inventory: Arc<dyn Inventory>,
     behaviour: ScreenHandlerBehaviour,
@@ -229,9 +274,10 @@ impl AnvilScreenHandler {
         };
 
         // Anvil specific slots: 2 input, 1 output
-        for i in 0..3 {
+        for i in 0..2 {
             handler.add_slot(Arc::new(NormalSlot::new(inventory.clone(), i)));
         }
+        handler.add_slot(Arc::new(AnvilResultSlot::new(inventory, 2)));
 
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
         handler.add_player_slots(&player_inventory);
@@ -549,6 +595,13 @@ impl ScreenHandler for AnvilScreenHandler {
         player: &'a dyn InventoryPlayer,
     ) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
+            // `AbstractContainerMenu.doClick` only calls `slot.onTake` after `slot.tryRemove`
+            // actually removed the stack (AbstractContainerMenu.java:420-464), reached only via
+            // the `slot.mayPickup(player)` branch. `may_pickup` mirrors that gate; the actual
+            // removal is left to `internal_on_slot_click` (now that `AnvilResultSlot::can_insert`
+            // matches `mayPlace == false`, that call only removes the slot's stack, never a
+            // mismatched-item swap), and `on_take` fires afterward only if the count dropped.
+            let mut prev_result_count = 0;
             if slot_index == 2 {
                 let result_slot = self.get_behaviour().slots[2].clone();
                 if result_slot.has_stack().await {
@@ -556,12 +609,31 @@ impl ScreenHandler for AnvilScreenHandler {
                         self.send_content_updates().await;
                         return;
                     }
+                    prev_result_count = result_slot.get_cloned_stack().await.item_count;
+                }
+            }
+
+            let was_quick_move =
+                action_type == pumpkin_protocol::java::server::play::SlotActionType::QuickMove;
+            self.internal_on_slot_click(slot_index, button, action_type, player)
+                .await;
+
+            // `QuickMove` is excluded: `internal_on_slot_click` routes it into our own
+            // `quick_move` override, which already calls `on_take` itself on a successful
+            // take. Calling it again here would charge XP and wipe the inputs a second time.
+            if slot_index == 2
+                && prev_result_count > 0
+                && !was_quick_move
+            {
+                let new_count = self.get_behaviour().slots[2]
+                    .get_cloned_stack()
+                    .await
+                    .item_count;
+                if new_count < prev_result_count {
                     self.on_take(player).await;
                 }
             }
 
-            self.internal_on_slot_click(slot_index, button, action_type, player)
-                .await;
             if slot_index == 0 || slot_index == 1 || slot_index == 2 {
                 self.create_result(player).await;
                 self.send_content_updates().await;
@@ -573,7 +645,32 @@ impl ScreenHandler for AnvilScreenHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{build_equipment_slots, entity_equipment::EntityEquipment};
     use pumpkin_data::item::Item;
+    use pumpkin_world::inventory::SimpleInventory;
+    use tokio::sync::Mutex as TokioMutex;
+
+    fn handler() -> AnvilScreenHandler {
+        let player_inventory = Arc::new(PlayerInventory::new(
+            Arc::new(TokioMutex::new(EntityEquipment::new())),
+            Arc::new(build_equipment_slots()),
+        ));
+        let inventory: Arc<dyn Inventory> = Arc::new(SimpleInventory::new(3));
+        AnvilScreenHandler::new(0, &player_inventory, inventory)
+    }
+
+    #[tokio::test]
+    async fn result_slot_never_accepts_items() {
+        // `AnvilMenu.java:66-68` (`ItemCombinerMenu`'s result slot): `mayPlace` is always
+        // `false`, matched by `AnvilResultSlot::can_insert`.
+        let handler = handler();
+        let result_slot = handler.get_behaviour().slots[2].clone();
+        assert!(
+            !result_slot
+                .can_insert(&ItemStack::new(1, &Item::DIRT))
+                .await
+        );
+    }
 
     #[test]
     fn repair_cost_matches_vanilla_formula() {

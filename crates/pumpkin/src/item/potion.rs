@@ -182,13 +182,24 @@ impl PotionContents {
                 // effect unconditionally. The `endsWithin(20)` drop is ThrownSplashPotion-only
                 // (ThrownSplashPotion.java:67).
                 let is_cloud = source == PotionApplicationSource::AreaEffectCloud;
-                let scaled = duration as f32 * source.duration_scale(scale);
-                let dur = if is_cloud {
-                    (scaled.floor() as i32).max(1)
+                // MobEffectInstance.mapDuration (MobEffectInstance.java:195-197), which both
+                // withScaledDuration (line 191, the cloud path) and ThrownSplashPotion's inline
+                // scale (ThrownSplashPotion.java:63) go through: infinite (-1) and zero durations
+                // are never scaled.
+                let dur = if duration == -1 || duration == 0 {
+                    duration
                 } else {
-                    (scaled + 0.5) as i32
+                    let scaled = duration as f32 * source.duration_scale(scale);
+                    if is_cloud {
+                        (scaled.floor() as i32).max(1)
+                    } else {
+                        (scaled + 0.5) as i32
+                    }
                 };
-                if !is_cloud && dur <= 20 {
+                // ThrownSplashPotion.java:67: `!newEffect.endsWithin(20)`, and endsWithin
+                // (MobEffectInstance.java:183-184) treats an infinite duration as never
+                // ending within any tick count, so it must not be dropped here.
+                if !is_cloud && dur != -1 && dur <= 20 {
                     continue;
                 }
                 let eff = pumpkin_data::potion::Effect {

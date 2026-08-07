@@ -114,9 +114,18 @@ pub(crate) fn set_waterlogged(
     block.from_properties(&props).to_state_id(block)
 }
 
-async fn give_player_bucket_item(player: &Player, mut item_stack: ItemStack) {
+/// `limit_creative_stack_size` is vanilla's `ItemUtils.createFilledResult`'s
+/// `limitCreativeStackSize` flag (`ItemUtils.java:16-25`): only the plain fluid-fill path
+/// passes `true`. `Bucketable.bucketMobPickup` always passes `false`
+/// (`Bucketable.java:86`), so catching a mob never dedups against an existing stack.
+async fn give_player_bucket_item(
+    player: &Player,
+    mut item_stack: ItemStack,
+    limit_creative_stack_size: bool,
+) {
     let item = item_stack.item;
-    if player.gamemode.load() == GameMode::Creative {
+    let is_creative = player.gamemode.load() == GameMode::Creative;
+    if limit_creative_stack_size && is_creative {
         for i in 0..player.inventory.main_inventory.len() {
             if player.inventory.main_inventory[i].lock().await.item.id == item.id {
                 return;
@@ -125,6 +134,14 @@ async fn give_player_bucket_item(player: &Player, mut item_stack: ItemStack) {
         player
             .inventory
             .insert_stack_anywhere(&mut item_stack)
+            .await;
+    } else if is_creative {
+        // `ItemStack.consume` (ItemStack.java:1082-1084) is a no-op for infinite-materials
+        // players, so a creative player's held bucket is never shrunk or replaced here --
+        // only the new item is granted.
+        player
+            .inventory
+            .offer_or_drop_stack(item_stack, player)
             .await;
     } else {
         let held_item = player.inventory.held_item();
@@ -566,7 +583,7 @@ impl ItemBehaviour for EmptyBucketItem {
                 );
             }
 
-            give_player_bucket_item(player, ItemStack::new(1, item)).await;
+            give_player_bucket_item(player, ItemStack::new(1, item), true).await;
         })
     }
 
@@ -635,7 +652,7 @@ impl ItemBehaviour for EmptyBucketItem {
                 });
             let bucket_stack = ItemStack::new_with_component(1, bucket_item, components);
 
-            give_player_bucket_item(player, bucket_stack).await;
+            give_player_bucket_item(player, bucket_stack, false).await;
             player.world().remove_entity(entity.as_ref()).await;
         })
     }
