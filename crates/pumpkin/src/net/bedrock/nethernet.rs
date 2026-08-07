@@ -48,8 +48,6 @@ use webrtc::{
 
 use crate::STOP_INTERRUPT;
 
-pub mod discovery;
-
 const RELIABLE_CHANNEL: &str = "ReliableDataChannel";
 const UNRELIABLE_CHANNEL: &str = "UnreliableDataChannel";
 const MAX_FRAGMENT_SIZE: usize = 262_143;
