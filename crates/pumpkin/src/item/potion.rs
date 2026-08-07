@@ -176,9 +176,19 @@ impl PotionContents {
                 // Vanilla ThrownSplashPotion#applyEffects: duration is rounded (not truncated),
                 // and effects whose scaled duration would end within 20 ticks are dropped
                 // entirely rather than clamped to a minimum of 1 tick.
-                let duration_scale = source.duration_scale(scale);
-                let dur = (duration as f32 * duration_scale + 0.5) as i32;
-                if dur <= 20 {
+                // Area effect clouds scale through PotionContents#forEachEffect ->
+                // MobEffectInstance#withScaledDuration (MobEffectInstance.java:191), which
+                // floors and clamps up to 1 tick, and AreaEffectCloud.java:233 then adds the
+                // effect unconditionally. The `endsWithin(20)` drop is ThrownSplashPotion-only
+                // (ThrownSplashPotion.java:67).
+                let is_cloud = source == PotionApplicationSource::AreaEffectCloud;
+                let scaled = duration as f32 * source.duration_scale(scale);
+                let dur = if is_cloud {
+                    (scaled.floor() as i32).max(1)
+                } else {
+                    (scaled + 0.5) as i32
+                };
+                if !is_cloud && dur <= 20 {
                     continue;
                 }
                 let eff = pumpkin_data::potion::Effect {

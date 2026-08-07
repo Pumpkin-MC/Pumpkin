@@ -18,6 +18,17 @@ struct ParticleMeta<'a> {
     data: &'a [u8],
 }
 
+/// `AreaEffectCloud.TIME_BETWEEN_APPLICATIONS`
+const TIME_BETWEEN_APPLICATIONS: i32 = 5;
+/// `AreaEffectCloud.MINIMAL_RADIUS`
+const MINIMAL_RADIUS: f32 = 0.5;
+/// `AreaEffectCloud.MAX_RADIUS`
+const MAX_RADIUS: f32 = 32.0;
+/// `AreaEffectCloud.HEIGHT`
+const CLOUD_HEIGHT: f64 = 0.5;
+/// `AreaEffectCloud.INFINITE_DURATION`
+const INFINITE_DURATION: i32 = -1;
+
 const fn application_scale(_distance: f64, _radius: f64) -> f32 {
     1.0
 }
@@ -69,11 +80,11 @@ impl AreaEffectCloudEntity {
             item_stack: Mutex::new(ItemStack::new(0, &pumpkin_data::item::Item::GLASS_BOTTLE)),
             effects: Mutex::new(Vec::new()),
             radius: Mutex::new(3.0),
-            duration: Mutex::new(600), // default for lingering potions
+            duration: Mutex::new(INFINITE_DURATION),
             age: Mutex::new(0),
             reapplication_delay: Mutex::new(20),
             reapplication_map: Mutex::new(HashMap::new()),
-            radius_on_tick: Mutex::new(-3.0 / 600.0), // default for lingering potions
+            radius_on_tick: Mutex::new(0.0),
             radius_on_use: Mutex::new(0.0),
             duration_on_use: Mutex::new(0),
             wait_time: Mutex::new(20),
@@ -93,6 +104,7 @@ impl AreaEffectCloudEntity {
         wait_time_in: i32,
         radius_on_use_in: f32,
         duration_on_use_in: i32,
+        radius_per_tick_in: f32,
     ) -> Arc<dyn EntityBase> {
         let cloud = Self {
             entity,
@@ -103,13 +115,29 @@ impl AreaEffectCloudEntity {
             age: Mutex::new(0),
             reapplication_delay: Mutex::new(reapplication_delay_in),
             reapplication_map: Mutex::new(HashMap::new()),
-            radius_on_tick: Mutex::new(-radius_in / (duration_in as f32).max(1.0)),
+            radius_on_tick: Mutex::new(radius_per_tick_in),
             radius_on_use: Mutex::new(radius_on_use_in),
             duration_on_use: Mutex::new(duration_on_use_in),
             wait_time: Mutex::new(wait_time_in),
         };
 
         Arc::new(cloud)
+    }
+
+    /// Stores the radius clamped to `[0, MAX_RADIUS]` and syncs it to clients.
+    /// Returns the clamped value.
+    async fn set_radius(&self, radius: f32) -> f32 {
+        let clamped = radius.clamp(0.0, MAX_RADIUS);
+        *self.radius.lock().await = clamped;
+        self.entity.send_meta_data(
+            &[pumpkin_protocol::java::client::play::Metadata::new(
+                pumpkin_data::tracked_data::TrackedData::RADIUS,
+                pumpkin_data::meta_data_type::MetaDataType::FLOAT,
+                clamped,
+            )],
+            None,
+        );
+        clamped
     }
 }
 
@@ -221,21 +249,20 @@ impl EntityBase for AreaEffectCloudEntity {
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            // Age & duration handling
-            {
+            let age = {
                 let mut age = self.age.lock().await;
                 *age += 1;
-                let duration = *self.duration.lock().await;
-                if *age > duration {
-                    // Remove old entities
-                    self.entity.remove().await;
-                    return;
-                }
-            }
-
-            // Get current age and waiting period
-            let age = *self.age.lock().await;
+                *age
+            };
             let wait_time = *self.wait_time.lock().await;
+
+            // AreaEffectCloud.java:191 -- the lifetime is measured from the end of the wait
+            // period, and a duration of -1 means the cloud never expires on its own.
+            let duration = *self.duration.lock().await;
+            if duration != INFINITE_DURATION && age - wait_time >= duration {
+                self.entity.remove().await;
+                return;
+            }
 
             // When the waiting period ends, notify clients so they render full particles
             if age == wait_time && wait_time > 0 {
@@ -254,50 +281,43 @@ impl EntityBase for AreaEffectCloudEntity {
                 return;
             }
 
-            // Update radius
-            {
-                let mut radius = self.radius.lock().await;
-                let delta = *self.radius_on_tick.lock().await;
-                *radius += delta;
-                let current_radius = *radius;
-                if current_radius <= 0.0 {
+            // AreaEffectCloud.java:201-210 -- the radius is only touched when a per-tick delta
+            // is configured, and the cloud dies once it shrinks below the minimal radius.
+            let mut radius = *self.radius.lock().await;
+            let radius_per_tick = *self.radius_on_tick.lock().await;
+            if radius_per_tick != 0.0 {
+                radius += radius_per_tick;
+                if radius < MINIMAL_RADIUS {
                     self.entity.remove().await;
                     return;
                 }
-
-                // Send new radius
-                drop(radius);
-                self.entity.send_meta_data(
-                    &[pumpkin_protocol::java::client::play::Metadata::new(
-                        pumpkin_data::tracked_data::TrackedData::RADIUS,
-                        pumpkin_data::meta_data_type::MetaDataType::FLOAT,
-                        current_radius,
-                    )],
-                    None,
-                );
+                radius = self.set_radius(radius).await;
             }
 
-            // Tick down reapplication map
-            {
-                let map = self.reapplication_map.lock().await;
-                let keys: Vec<i32> = map.keys().copied().collect();
-                drop(map);
-                for k in keys {
-                    let mut map = self.reapplication_map.lock().await;
-                    if let Some(v) = map.get_mut(&k) {
-                        *v -= 1;
-                        if *v <= 0 {
-                            map.remove(&k);
-                        }
-                    }
-                }
+            // AreaEffectCloud.java:212 -- effects are only applied every 5 ticks.
+            if age % TIME_BETWEEN_APPLICATIONS != 0 {
+                return;
             }
 
-            // Apply effects to nearby entities if eligible
+            // AreaEffectCloud.java:213 -- victims hold an absolute expiry tick, purged before
+            // the scan.
+            self.reapplication_map
+                .lock()
+                .await
+                .retain(|_, expires_at| age < *expires_at);
+
+            let effects = self.effects.lock().await.clone();
+            if effects.is_empty() {
+                self.reapplication_map.lock().await.clear();
+                return;
+            }
+
+            // AreaEffectCloud.java:357 -- the cloud's bounding box is `radius * 2` wide and
+            // 0.5 tall, anchored at its feet, not a cube extending `radius` on every axis.
             let pos = self.entity.pos.load();
-            let r = *self.radius.lock().await as f64;
-            let min = Vector3::new(pos.x - r, pos.y - r, pos.z - r);
-            let max = Vector3::new(pos.x + r, pos.y + r, pos.z + r);
+            let r = f64::from(radius);
+            let min = Vector3::new(pos.x - r, pos.y, pos.z - r);
+            let max = Vector3::new(pos.x + r, pos.y + CLOUD_HEIGHT, pos.z + r);
             let aabb = BoundingBox::new(min, max);
             let world = self.entity.world.load();
 
@@ -330,26 +350,30 @@ impl EntityBase for AreaEffectCloudEntity {
                     }
                 }
 
-                let radius_f = *self.radius.lock().await as f64;
+                // AreaEffectCloud.java:222 -- skip victims that none of the effects can affect.
+                let affectable = cand_clone.get_living_entity().is_some_and(|living| {
+                    effects
+                        .iter()
+                        .any(|(effect_type, ..)| living.can_be_affected(effect_type))
+                });
+                if !affectable {
+                    continue;
+                }
+
+                // AreaEffectCloud.java:223-226 -- the containment test is horizontal only.
+                let radius_f = f64::from(radius);
                 let pos_e = cand_clone.get_entity().pos.load();
                 let dx = pos_e.x - pos.x;
-                let dy = pos_e.y - pos.y;
                 let dz = pos_e.z - pos.z;
-                let dist = (dx * dx + dy * dy + dz * dz).sqrt();
-                if dist > radius_f {
+                let dist_sq = dx * dx + dz * dz;
+                if dist_sq > radius_f * radius_f {
                     continue;
                 }
-                let scale = application_scale(dist, radius_f);
-
-                // Decide whether this contact will actually apply an effect
-                let effs_clone = self.effects.lock().await.clone();
-                if effs_clone.is_empty() || cand_clone.get_living_entity().is_none() {
-                    continue;
-                }
+                let scale = application_scale(dist_sq.sqrt(), radius_f);
 
                 // Apply effects inside a spawned task
                 let cand_for_spawn = cand_clone.clone();
-                let effs_for_spawn = effs_clone.clone();
+                let effs_for_spawn = effects.clone();
                 tokio::spawn(async move {
                     if let Some(living) = cand_for_spawn.get_living_entity() {
                         crate::item::potion::PotionContents::apply_effects_to(
@@ -363,39 +387,28 @@ impl EntityBase for AreaEffectCloudEntity {
                 });
 
                 // Set reapplication delay for this entity
-                let mut map = self.reapplication_map.lock().await;
                 let delay = *self.reapplication_delay.lock().await;
-                map.insert(ent_id, delay);
+                self.reapplication_map
+                    .lock()
+                    .await
+                    .insert(ent_id, age + delay);
 
                 // Apply radius-on-use (shrink)
                 let radius_on_use = *self.radius_on_use.lock().await;
                 if radius_on_use != 0.0 {
-                    let mut radius_lock = self.radius.lock().await;
-                    *radius_lock += radius_on_use;
-                    let current_radius = *radius_lock;
-                    if current_radius < 0.5 {
-                        drop(radius_lock);
+                    radius += radius_on_use;
+                    if radius < MINIMAL_RADIUS {
                         self.entity.remove().await;
                         return;
                     }
-                    drop(radius_lock);
-
-                    // Send updated radius to clients
-                    self.entity.send_meta_data(
-                        &[pumpkin_protocol::java::client::play::Metadata::new(
-                            pumpkin_data::tracked_data::TrackedData::RADIUS,
-                            pumpkin_data::meta_data_type::MetaDataType::FLOAT,
-                            current_radius,
-                        )],
-                        None,
-                    );
+                    radius = self.set_radius(radius).await;
                 }
 
                 // Apply duration-on-use (shorten lifespan)
                 let duration_on_use = *self.duration_on_use.lock().await;
                 if duration_on_use != 0 {
                     let mut duration_lock = self.duration.lock().await;
-                    if *duration_lock != -1 {
+                    if *duration_lock != INFINITE_DURATION {
                         *duration_lock += duration_on_use;
                         if *duration_lock <= 0 {
                             drop(duration_lock);

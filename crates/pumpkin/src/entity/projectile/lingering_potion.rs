@@ -197,9 +197,10 @@ impl EntityBase for LingeringPotionEntity {
                 600,
                 3.0,
                 20,
-                20,
+                10,
                 -0.5,
-                -100,
+                0,
+                -3.0 / 600.0,
             );
 
             world.spawn_entity(cloud).await;

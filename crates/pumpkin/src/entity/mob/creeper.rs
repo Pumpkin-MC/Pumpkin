@@ -140,7 +140,7 @@ impl CreeperEntity {
             .map(|effect| {
                 (
                     effect.effect_type,
-                    (effect.duration / 4).max(1),
+                    effect.duration,
                     effect.amplifier,
                     effect.ambient,
                     effect.show_particles,
@@ -159,7 +159,8 @@ impl CreeperEntity {
                 20,
                 10,
                 -0.5,
-                -100,
+                0,
+                -2.5 / 300.0,
             );
             world.spawn_entity(cloud).await;
         }
