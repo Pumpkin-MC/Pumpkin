@@ -55,6 +55,9 @@ pub struct MaterialRuleContext<'a> {
     steep_material_condition: Option<bool>,
     /// Noise samplers built by [`test_noise_threshold`], keyed by noise parameter id.
     ///
+    /// For generated constants, `DoublePerlinNoiseParameters::id` uniquely identifies
+    /// the complete parameter set; generated surface rules only reference those constants.
+    ///
     /// Building one is expensive and only depends on `random_deriver`, so they are
     /// reused for the lifetime of the context. Surface rules reference very few
     /// distinct noises, so a linear scan beats hashing here.
