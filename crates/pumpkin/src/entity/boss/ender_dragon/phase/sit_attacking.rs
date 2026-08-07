@@ -36,12 +36,9 @@ impl super::Phase for SitAttackingPhase {
                 drop(timer);
             }
 
-            let mut dmg = dragon.sitting_damage_received.lock().await;
-            if *dmg > 150.0 {
-                *dmg = 0.0;
-                drop(dmg);
-                dragon.set_phase(EnderDragonPhase::TakingOff).await;
-            }
+            // The 0.25 * max-health sitting-damage threshold is enforced in
+            // `EnderDragonEntity::hurt_part` (EnderDragon.java:446-469), which
+            // is the only place vanilla checks it.
         })
     }
 }

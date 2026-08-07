@@ -1,6 +1,7 @@
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -156,6 +157,42 @@ impl EnderDragonPart {
             dragon_uuid,
         }
     }
+
+    /// Checks the part's own invulnerability, resolves this part's owning dragon and
+    /// whether this part is the head (vanilla `EnderDragon.head`, EnderDragon.java:93,101 -
+    /// the first entry of `subEntities`), then routes into `EnderDragonEntity::hurt_part`
+    /// (vanilla `EnderDragon.hurt`, EnderDragon.java:446-469).
+    async fn hurt_dragon(
+        &self,
+        source: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+    ) -> bool {
+        // Vanilla `EnderDragonPart.hurtServer` (EnderDragonPart.java:52-54) checks the part's
+        // own `isInvulnerableToBase(source)` before routing into `EnderDragon.hurt`.
+        if self.entity.is_invulnerable_to(&damage_type).await {
+            return false;
+        }
+
+        let world = self.entity.world.load();
+        let Some(dragon_base) = world
+            .entities
+            .load()
+            .iter()
+            .find(|e| e.get_entity().entity_uuid == self.dragon_uuid)
+            .cloned()
+        else {
+            return false;
+        };
+        let Some(dragon) = dragon_base.cast_any().downcast_ref::<EnderDragonEntity>() else {
+            return false;
+        };
+        let is_head = dragon
+            .parts
+            .first()
+            .is_some_and(|head| head.entity.entity_uuid == self.entity.entity_uuid);
+        dragon.hurt_part(is_head, source, damage_type, amount).await
+    }
 }
 
 impl NBTStorage for EnderDragonPart {}
@@ -177,17 +214,21 @@ impl EntityBase for EnderDragonPart {
         amount: f32,
         damage_type: DamageType,
     ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move { self.hurt_dragon(source, amount, damage_type).await })
+    }
+
+    fn damage_with_context<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        _position: Option<Vector3<f64>>,
+        source: Option<&'a dyn EntityBase>,
+        cause: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            let world = self.entity.world.load();
-            if let Some(dragon_base) = world
-                .entities
-                .load()
-                .iter()
-                .find(|e| e.get_entity().entity_uuid == self.dragon_uuid)
-            {
-                return dragon_base.damage(source, amount, damage_type).await;
-            }
-            false
+            let attacker = cause.or(source).unwrap_or(caller);
+            self.hurt_dragon(attacker, amount, damage_type).await
         })
     }
 
@@ -797,11 +838,68 @@ impl EnderDragonEntity {
         self.tick_parts().await;
     }
 
-    pub async fn hurt(&self, damage: f32) {
-        let phase_type: EnderDragonPhase = *self.phase.lock().await;
-        if phase_type.is_sitting() {
-            *self.sitting_damage_received.lock().await += damage;
+    /// Vanilla `EnderDragon.hurt` (EnderDragon.java:446-469). Applies the
+    /// DYING-phase immunity, the non-head damage reduction, the 0.01 cutoff,
+    /// the player/`ALWAYS_HURTS_ENDER_DRAGONS` gate, and the sitting-damage
+    /// accumulation that triggers the TAKEOFF transition at
+    /// `0.25 * max health`.
+    ///
+    /// `PhaseInstance::onHurt` (the per-phase damage hook, e.g.
+    /// `AbstractDragonSittingPhase.onHurt` nullifying arrow/wind-charge
+    /// damage while sitting) is not implemented here.
+    pub async fn hurt_part(
+        &self,
+        is_head: bool,
+        source: &dyn EntityBase,
+        damage_type: DamageType,
+        mut damage: f32,
+    ) -> bool {
+        if *self.phase.lock().await == EnderDragonPhase::Dying {
+            return false;
         }
+
+        if !is_head {
+            damage = damage / 4.0 + damage.min(1.0);
+        }
+
+        if damage < 0.01 {
+            return false;
+        }
+
+        // Vanilla `source.getEntity() instanceof Player` resolves the causing entity, not
+        // the direct one - for projectiles that's the shooter, so a projectile source must
+        // be followed back to its owner (EnderDragon.java:460, DamageSource.java:63).
+        let world = self.mob_entity.living_entity.entity.world.load();
+        let caused_by_player = source.get_player().is_some()
+            || crate::entity::projectile::projectile_owner_id(source)
+                .is_some_and(|id| world.get_player_by_id(id).is_some());
+
+        if caused_by_player
+            || damage_type.has_tag(&tag::DamageType::MINECRAFT_ALWAYS_HURTS_ENDER_DRAGONS)
+        {
+            let health_before = self.mob_entity.living_entity.health.load();
+            self.damage_with_context(self, damage, damage_type, None, Some(source), Some(source))
+                .await;
+            let health_after = self.mob_entity.living_entity.health.load();
+            // Race: a concurrent damage/heal landing between the two loads above can skew
+            // this delta (vanilla is single-threaded and has no such window). Clamped at
+            // zero rather than restructured, since the two health loads can't be merged
+            // into one atomic op and this call already holds no lock across the `.await`.
+            let delta = (health_before - health_after).max(0.0);
+
+            let phase_type: EnderDragonPhase = *self.phase.lock().await;
+            if phase_type.is_sitting() {
+                let mut received = self.sitting_damage_received.lock().await;
+                *received += delta;
+                if *received > 0.25 * self.mob_entity.living_entity.get_max_health() {
+                    *received = 0.0;
+                    drop(received);
+                    self.set_phase(EnderDragonPhase::TakingOff).await;
+                }
+            }
+        }
+
+        true
     }
 }
 

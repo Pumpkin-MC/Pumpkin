@@ -85,6 +85,72 @@ pub async fn on_target_block_hit(
     }
 }
 
+/// Resolves the id of a projectile's owner, following it back to the shooter the way
+/// vanilla's `DamageSource.getEntity()` does for projectile damage sources.
+///
+/// (`DamageSource.java:63` returns `causingEntity`, which is set to the shooter rather
+/// than the projectile itself - see `directEntity` vs `causingEntity`,
+/// `DamageSource.java:17-18`). Returns `None` if `source` is not a projectile type this
+/// resolves, or it is one with no tracked owner (e.g. dispenser-fired).
+///
+/// Callers reproducing `source.getEntity() instanceof Player` must also check
+/// `source.get_player().is_some()` themselves for the direct-hit case; this function only
+/// covers the indirect, projectile-owner case.
+#[must_use]
+pub fn projectile_owner_id(source: &dyn EntityBase) -> Option<i32> {
+    let any = source.cast_any();
+    if let Some(e) = any.downcast_ref::<arrow::ArrowEntity>() {
+        return e.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<trident::TridentEntity>() {
+        return e.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<fishing_bobber::FishingBobberEntity>() {
+        return Some(e.owner_id);
+    }
+    if let Some(e) = any.downcast_ref::<shulker_bullet::ShulkerBulletEntity>() {
+        return Some(e.owner_id);
+    }
+    if let Some(e) = any.downcast_ref::<snowball::SnowballEntity>() {
+        return e.thrown.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<egg::EggEntity>() {
+        return e.thrown.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<splash_potion::SplashPotionEntity>() {
+        return e.thrown.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<lingering_potion::LingeringPotionEntity>() {
+        return e.thrown.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<experience_bottle::ExperienceBottleEntity>() {
+        return e.thrown.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<ender_pearl::EnderPearlEntity>() {
+        return e.thrown.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<fireball::FireballEntity>() {
+        return e.thrown.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<small_fireball::SmallFireballEntity>() {
+        return e.thrown.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<wither_skull::WitherSkullEntity>() {
+        return e.thrown.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<llama_spit::LlamaSpitEntity>() {
+        return e.thrown.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<wind_charge::WindChargeEntity>() {
+        return e.thrown_item_entity.owner_id;
+    }
+    if let Some(e) = any.downcast_ref::<firework_rocket::FireworkRocketEntity>() {
+        return e.entity.owner_id;
+    }
+
+    None
+}
+
 /// The impact location vanilla passes to `GameEvent.PROJECTILE_LAND`.
 ///
 /// `Projectile.java:300` uses the exact hit location for entity hits, `:305` uses the

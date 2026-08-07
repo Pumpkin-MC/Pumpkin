@@ -141,7 +141,7 @@ impl super::Phase for StrafingPhase {
                         vec![(
                             &pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE,
                             1,
-                            0,
+                            1,
                             false,
                             true,
                             true,
@@ -150,8 +150,9 @@ impl super::Phase for StrafingPhase {
                         3.0,
                         20,
                         20,
-                        0.5,
-                        -100,
+                        0.0,
+                        0,
+                        (7.0 - 3.0) / 600.0,
                     );
                     world.spawn_entity(cloud).await;
 

@@ -35,7 +35,7 @@ enum WindChargeKind {
 
 pub struct WindChargeEntity {
     kind: WindChargeKind,
-    thrown_item_entity: ThrownItemEntity,
+    pub thrown_item_entity: ThrownItemEntity,
 }
 
 impl WindChargeEntity {

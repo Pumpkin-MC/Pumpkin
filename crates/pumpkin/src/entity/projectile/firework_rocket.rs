@@ -28,7 +28,7 @@ use std::sync::{
 const GRAVITY: f64 = 0.0;
 
 pub struct FireworkRocketEntity {
-    entity: ThrownItemEntity,
+    pub entity: ThrownItemEntity,
     item_stack: ItemStack,
     life: AtomicI32,
     life_time: AtomicI32,
@@ -163,7 +163,15 @@ impl FireworkRocketEntity {
         if explosion_count > 0 {
             let damage = 5.0 + (explosion_count as f32 * 2.0);
             let rocket_pos = entity.pos.load();
-            if let Some(owner_id) = self.entity.owner_id
+            // Vanilla's flat, un-falloff damage and the loop-exclusion below apply only to
+            // `attachedToEntity` - the player holding the rocket during an elytra boost. A
+            // crossbow- or dispenser-fired rocket (`shot_at_angle`) never sets that field, so
+            // its `owner` is a normal target: it takes falloff damage like anyone else, not
+            // this exemption.
+            let attached_to_entity = (!self.shot_at_angle.load(Ordering::Relaxed))
+                .then_some(self.entity.owner_id)
+                .flatten();
+            if let Some(owner_id) = attached_to_entity
                 && let Some(owner) = world.get_entity_by_id(owner_id)
             {
                 owner.damage(self, damage, DamageType::FIREWORKS).await;
@@ -173,9 +181,7 @@ impl FireworkRocketEntity {
             for target in targets {
                 let target_entity = target.get_entity();
                 if !target_entity.is_alive()
-                    || self
-                        .entity
-                        .owner_id
+                    || attached_to_entity
                         .is_some_and(|owner_id| owner_id == target_entity.entity_id)
                 {
                     continue;
