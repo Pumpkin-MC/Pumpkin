@@ -30,6 +30,20 @@ impl Default for DynamicLightEngine {
         Self::new()
     }
 }
+/// Sky light attenuation for one BFS step, matching vanilla
+/// `SkyLightEngine`/`LightEngine.getOpacity` (`fromLevel - max(1, dampening)`,
+/// LightEngine.java:77-79, used at SkyLightEngine.java:152/188). The direct-sun
+/// column (15 propagating straight down through a non-occluding block) is a
+/// separate vanilla mechanic (`ChunkSkyLightSources`/`isSource`) that does not
+/// decay at all, kept here as the `down` special case.
+fn sky_attenuation(from_level: u8, opacity: u8, down: bool) -> u8 {
+    if from_level == 15 && down && opacity == 0 {
+        15
+    } else {
+        from_level.saturating_sub(opacity.max(1))
+    }
+}
+
 impl DynamicLightEngine {
     /// Checks if there is an open sky above the given position (no opaque blocks blocking sky light).
     fn has_open_sky_above(level: &Arc<Level>, pos: &BlockPos) -> bool {
@@ -292,13 +306,7 @@ impl DynamicLightEngine {
             let opacity = neighbor_state.opacity;
 
             // Calculate new light level for neighbor
-            let new_light = if light_level == 15 && dir == BlockDirection::Down && opacity == 0 {
-                // Special case: Sky light at 15 propagates down as 15 through transparent blocks
-                15
-            } else {
-                // Normal propagation: reduce by 1 for distance, then by opacity
-                light_level.saturating_sub(1).saturating_sub(opacity)
-            };
+            let new_light = sky_attenuation(light_level, opacity, dir == BlockDirection::Down);
 
             // Only propagate if new light is brighter than current light
             if new_light > neighbor_light {
@@ -332,11 +340,7 @@ impl DynamicLightEngine {
             let opacity = neighbor_state.opacity;
 
             // Calculate what we would have given this neighbor
-            let expected = if removed_light == 15 && dir == BlockDirection::Down && opacity == 0 {
-                15
-            } else {
-                removed_light.saturating_sub(1).saturating_sub(opacity)
-            };
+            let expected = sky_attenuation(removed_light, opacity, dir == BlockDirection::Down);
 
             if neighbor_light == expected || neighbor_light < removed_light {
                 // This neighbor was lit by us, darken it
@@ -379,27 +383,21 @@ impl DynamicLightEngine {
                 // Direct sunlight, reduced by opacity
                 15u8.saturating_sub(opacity)
             } else {
-                // No direct sky, check neighbors for best light
+                // No direct sky, check neighbors for best light. A neighbor
+                // above transfers straight down (the direct-sun column case);
+                // opacity is applied once per neighbor by `sky_attenuation`,
+                // not again afterward.
                 let mut best_light = 0;
 
                 for dir in BlockDirection::all() {
                     let neighbor_pos = pos.offset(dir.to_offset());
-
                     let neighbor_light = self.get_sky_light_level(level, &neighbor_pos);
-                    // Calculate potential light from this neighbor
-                    let potential = if neighbor_light == 15 && dir == BlockDirection::Up {
-                        // Sky light at 15 from above stays 15
-                        15
-                    } else {
-                        // Normal decay
-                        neighbor_light.saturating_sub(1)
-                    };
-
+                    let potential =
+                        sky_attenuation(neighbor_light, opacity, dir == BlockDirection::Up);
                     best_light = best_light.max(potential);
                 }
 
-                // Apply opacity to the best incoming light
-                best_light.saturating_sub(opacity)
+                best_light
             }
         };
 
@@ -591,5 +589,47 @@ impl DynamicLightEngine {
             Ok(())
         });
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sky_attenuation;
+
+    // vanilla: fromLevel - max(1, dampening) (LightEngine.getOpacity,
+    // LightEngine.java:77-79; used at SkyLightEngine.java:152 and :188).
+    #[test]
+    fn transparent_block_decays_by_one() {
+        assert_eq!(sky_attenuation(15, 0, false), 14);
+    }
+
+    #[test]
+    fn dampening_one_decays_by_one_not_two() {
+        // e.g. water, opacity 1 in pumpkin-data. A prior bug applied an extra
+        // -1 on top of the opacity subtraction, decaying two levels here.
+        assert_eq!(sky_attenuation(15, 1, false), 14);
+    }
+
+    #[test]
+    fn dampening_above_one_decays_by_its_own_value() {
+        assert_eq!(sky_attenuation(15, 5, false), 10);
+    }
+
+    #[test]
+    fn direct_sun_column_does_not_decay_through_transparent_block() {
+        assert_eq!(sky_attenuation(15, 0, true), 15);
+    }
+
+    #[test]
+    fn direct_sun_column_still_decays_through_an_occluding_block() {
+        // the no-decay column case is only for opacity == 0 (ChunkSkyLightSources
+        // "source" concept); a block with real dampening must attenuate normally
+        // even when it happens to sit directly below full sky light.
+        assert_eq!(sky_attenuation(15, 1, true), 14);
+    }
+
+    #[test]
+    fn saturates_at_zero() {
+        assert_eq!(sky_attenuation(0, 5, false), 0);
     }
 }
