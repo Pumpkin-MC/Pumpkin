@@ -1,10 +1,10 @@
 use std::{
     fs::OpenOptions,
     io::{ErrorKind, Write},
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     path::Path as FsPath,
     sync::{
-        Arc,
+        Arc, OnceLock,
         atomic::{AtomicBool, AtomicU8, Ordering},
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -30,15 +30,20 @@ use pumpkin_util::p384::{
 };
 use serde_json::{Value, json};
 use tokio::{
-    net::TcpListener,
+    net::{TcpListener, UdpSocket},
     sync::{Mutex, RwLock, mpsc},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use webrtc::{
-    api::{APIBuilder, media_engine::MediaEngine},
+    api::{API, APIBuilder, media_engine::MediaEngine, setting_engine::SettingEngine},
     data_channel::{RTCDataChannel, data_channel_message::DataChannelMessage},
-    ice_transport::ice_server::RTCIceServer,
+    ice::{
+        network_type::NetworkType,
+        udp_mux::{UDPMuxDefault, UDPMuxParams},
+        udp_network::UDPNetwork,
+    },
+    ice_transport::{ice_candidate_type::RTCIceCandidateType, ice_server::RTCIceServer},
     peer_connection::{
         RTCPeerConnection, configuration::RTCConfiguration,
         peer_connection_state::RTCPeerConnectionState,
@@ -64,6 +69,7 @@ pub struct NetherNetListener {
 #[derive(Clone)]
 struct EndpointState {
     incoming: mpsc::Sender<IncomingSession>,
+    api: Arc<API>,
     identity_key: Arc<SigningKey>,
     oidc_verifier: Option<Arc<(String, Jwks)>>,
     stun_servers: Arc<[String]>,
@@ -72,15 +78,20 @@ struct EndpointState {
 impl NetherNetListener {
     pub async fn bind(
         address: SocketAddr,
+        ice_address: SocketAddr,
+        external_ip: Option<IpAddr>,
         identity_key: Arc<SigningKey>,
         oidc_verifier: Option<Arc<(String, Jwks)>>,
         stun_servers: Vec<String>,
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(address).await?;
         let local_addr = listener.local_addr()?;
+        let ice_socket = UdpSocket::bind(ice_address).await?;
+        let ice_local_addr = ice_socket.local_addr()?;
         let (incoming, receiver) = mpsc::channel(128);
         let state = EndpointState {
             incoming,
+            api: Arc::new(build_api(ice_socket, external_ip)?),
             identity_key,
             oidc_verifier,
             stun_servers: stun_servers.into(),
@@ -104,6 +115,7 @@ impl NetherNetListener {
         });
 
         info!("Bedrock NetherNet signaling is listening on {local_addr}");
+        info!("Bedrock NetherNet ICE is listening on {ice_local_addr}");
         Ok(Self {
             incoming: Mutex::new(receiver),
             local_addr,
@@ -117,6 +129,39 @@ impl NetherNetListener {
     pub const fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
+}
+
+fn build_api(ice_socket: UdpSocket, external_ip: Option<IpAddr>) -> std::io::Result<API> {
+    let ice_ip = ice_socket.local_addr()?.ip();
+    if external_ip.is_some_and(|external_ip| external_ip.is_ipv4() != ice_ip.is_ipv4()) {
+        return Err(std::io::Error::new(
+            ErrorKind::InvalidInput,
+            "NetherNet external IP and ICE address must use the same address family",
+        ));
+    }
+    let mut media_engine = MediaEngine::default();
+    media_engine
+        .register_default_codecs()
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+
+    let udp_mux = UDPMuxDefault::new(UDPMuxParams::new(ice_socket));
+    let mut setting_engine = SettingEngine::default();
+    setting_engine.set_udp_network(UDPNetwork::Muxed(udp_mux));
+    setting_engine.set_network_types(vec![if ice_ip.is_ipv4() {
+        NetworkType::Udp4
+    } else {
+        NetworkType::Udp6
+    }]);
+    if let Some(external_ip) = external_ip {
+        let selected_ip = OnceLock::new();
+        setting_engine.set_ip_filter(Box::new(move |ip| selected_ip.get_or_init(|| ip) == &ip));
+        setting_engine.set_nat_1to1_ips(vec![external_ip.to_string()], RTCIceCandidateType::Host);
+    }
+
+    Ok(APIBuilder::new()
+        .with_media_engine(media_engine)
+        .with_setting_engine(setting_engine)
+        .build())
 }
 
 pub fn load_or_create_identity_key(path: &FsPath) -> std::io::Result<Arc<SigningKey>> {
@@ -203,24 +248,21 @@ async fn negotiate(
     let (offer, client_public_key) =
         verify_and_strip_identity(offer, state.oidc_verifier.as_deref())?;
 
-    let mut media_engine = MediaEngine::default();
-    media_engine
-        .register_default_codecs()
-        .map_err(|error| error.to_string())?;
-    let api = APIBuilder::new().with_media_engine(media_engine).build();
     let peer = Arc::new(
-        api.new_peer_connection(RTCConfiguration {
-            ice_servers: (!state.stun_servers.is_empty())
-                .then(|| RTCIceServer {
-                    urls: state.stun_servers.to_vec(),
-                    ..Default::default()
-                })
-                .into_iter()
-                .collect(),
-            ..Default::default()
-        })
-        .await
-        .map_err(|error| error.to_string())?,
+        state
+            .api
+            .new_peer_connection(RTCConfiguration {
+                ice_servers: (!state.stun_servers.is_empty())
+                    .then(|| RTCIceServer {
+                        urls: state.stun_servers.to_vec(),
+                        ..Default::default()
+                    })
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            })
+            .await
+            .map_err(|error| error.to_string())?,
     );
     let session = Arc::new(NetherNetSession::new(
         peer.clone(),
@@ -841,8 +883,11 @@ mod tests {
 
         let (incoming, mut receiver) = mpsc::channel(1);
         let server_key = Arc::new(SigningKey::from_slice(&[9; 48]).unwrap());
+        let ice_socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+        let ice_port = ice_socket.local_addr().unwrap().port();
         let state = EndpointState {
             incoming,
+            api: Arc::new(build_api(ice_socket, None).unwrap()),
             identity_key: server_key.clone(),
             oidc_verifier: None,
             stun_servers: Arc::from([]),
@@ -853,6 +898,7 @@ mod tests {
                 .unwrap();
         let (answer, public_key) = verify_and_strip_identity(&answer, None).unwrap();
         assert_eq!(public_key, PublicKey::from(server_key.verifying_key()));
+        assert!(answer.contains(&format!(" {ice_port} typ host")));
         client
             .set_remote_description(RTCSessionDescription::answer(answer).unwrap())
             .await
