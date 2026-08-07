@@ -470,11 +470,26 @@ impl LivingEntity {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
-        // Apply instant effects immediately before storing
-        if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
+        // Apply instant effects immediately before storing.
+        //
+        // Undead mobs invert both instant effects: Instant Health damages them
+        // and Instant Damage heals them. The classification comes from vanilla's
+        // own `minecraft:inverted_healing_and_harm` entity type tag in the
+        // generated 26.2 data, not from a hand-maintained mob list, so new
+        // undead mobs are covered when the data is regenerated. Matching
+        // vanilla, the heal branch always restores `4 << amplifier` and the
+        // damage branch always deals `6 << amplifier`, whichever effect routed
+        // there.
+        let inverted = self
+            .entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_INVERTED_HEALING_AND_HARM);
+        let is_health = effect.effect_type == &StatusEffect::INSTANT_HEALTH;
+        let is_damage = effect.effect_type == &StatusEffect::INSTANT_DAMAGE;
+        if (is_health && !inverted) || (is_damage && inverted) {
             let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
             self.heal(heal_amount);
-        } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
+        } else if is_damage || is_health {
             let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
             if let Some(dyn_self) = self
                 .entity
