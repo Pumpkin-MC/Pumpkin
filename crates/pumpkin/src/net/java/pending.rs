@@ -144,7 +144,10 @@ impl PendingConnection {
         let payload = match SerializedPacket::try_from_bytes(Bytes::from(packet_buf)) {
             Ok(p) => p,
             Err(err) => {
-                warn!("Failed to serialize packet for client {}: {:?}", self.id, err);
+                warn!(
+                    "Failed to serialize packet for client {}: {:?}",
+                    self.id, err
+                );
                 return;
             }
         };
