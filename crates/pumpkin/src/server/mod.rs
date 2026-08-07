@@ -23,6 +23,7 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
+use pumpkin_registry::RootRegistryOwner;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
@@ -76,6 +77,9 @@ pub struct Server {
 
     /// Plugin manager
     pub plugin_manager: Arc<PluginManager>,
+
+    /// Central registry for the server.
+    pub registries: RootRegistryOwner,
 
     /// Permission manager for the server.
     pub permission_manager: Arc<RwLock<PermissionManager>>,
@@ -152,6 +156,8 @@ impl Server {
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
     ) -> Arc<Self> {
+        let registries = RootRegistryOwner::new(&[], &[]).unwrap();
+
         let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher =
@@ -266,6 +272,7 @@ impl Server {
             basic_config,
             advanced_config,
             data: vanilla_data,
+            registries,
             plugin_manager: Arc::new(PluginManager::new()),
             permission_manager: Arc::new(RwLock::new(PermissionManager::new(
                 permission_registry.clone(),
@@ -303,6 +310,7 @@ impl Server {
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
         };
+
         let server = Arc::new(server);
 
         let gen_pool = Arc::new(
@@ -342,6 +350,10 @@ impl Server {
                 world
             })
         };
+
+        // TODO: Move worldgen after plugin load to allow plugin registry initialization
+
+        server.registries.lock().await;
 
         info!("Starting parallel world load...");
         let mut world_futures = Vec::new();

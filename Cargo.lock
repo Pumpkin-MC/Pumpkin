@@ -3290,6 +3290,7 @@ dependencies = [
  "pumpkin-macros",
  "pumpkin-nbt",
  "pumpkin-protocol",
+ "pumpkin-registry",
  "pumpkin-util",
  "pumpkin-world",
  "rand 0.10.2",
@@ -3359,6 +3360,7 @@ dependencies = [
  "criterion",
  "phf",
  "pumpkin-nbt",
+ "pumpkin-registry",
  "pumpkin-util",
  "rand 0.10.2",
  "serde",
@@ -3437,6 +3439,16 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "pumpkin-registry"
+version = "0.1.0-dev+26.2-26.40"
+dependencies = [
+ "pumpkin-util",
+ "rustc-hash",
+ "thiserror 2.0.19",
+ "tokio",
 ]
 
 [[package]]

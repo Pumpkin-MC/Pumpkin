@@ -3,10 +3,26 @@ use crate::BlockState;
 use crate::biome::Biome;
 use crate::chunk::DoublePerlinNoiseParameters;
 use crate::dimension::Dimension;
+use crate::worldgen;
+use pumpkin_registry::{Registry, error::RegistryInsertError};
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::random::RandomDeriver;
 use pumpkin_util::y_offset::Absolute;
 use pumpkin_util::y_offset::YOffset;
+use std::sync::Arc;
+use std::sync::LazyLock;
 use std::{cell::RefCell, num::NonZeroUsize};
+pub static GENERATION_SETTINGS: LazyLock<Arc<Registry<GenerationSettings>>> = LazyLock::new(|| {
+    let registry = Arc::new(Registry::new());
+    initialize(&registry).unwrap();
+    worldgen::WORLD_GEN
+        .register_arc(
+            Identifier::vanilla_static("noise_settings"),
+            registry.clone(),
+        )
+        .unwrap();
+    registry
+});
 pub struct GenerationSettings {
     pub aquifers_enabled: bool,
     pub ore_veins_enabled: bool,

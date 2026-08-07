@@ -473,24 +473,45 @@ pub fn build() -> TokenStream {
     let mut const_defs = TokenStream::new();
 
     for (name, settings) in &json {
-        let upper_name = name.to_uppercase();
-        let const_name = format_ident!("{}", upper_name);
+        let lower_name = name.to_lowercase();
+
+        let minecraft_name = if lower_name.contains(':') {
+            lower_name.clone()
+        } else {
+            format!("minecraft:{lower_name}")
+        };
 
         const_defs.extend(quote!(
-            pub const #const_name: GenerationSettings = #settings;
+            registry.register(Identifier::parse_static(#minecraft_name), #settings)?;
         ));
     }
 
     quote!(
-        use crate::dimension::Dimension;
-        use crate::chunk::DoublePerlinNoiseParameters;
         use crate::BlockState;
-
-        use std::{cell::RefCell, num::NonZeroUsize};
-        use pumpkin_util::random::RandomDeriver;
-        use pumpkin_util::y_offset::YOffset;
         use crate::biome::Biome;
+        use crate::chunk::DoublePerlinNoiseParameters;
+        use crate::dimension::Dimension;
+        use crate::worldgen;
+        use pumpkin_registry::{Registry, error::RegistryInsertError};
+        use pumpkin_util::identifier::Identifier;
+        use pumpkin_util::random::RandomDeriver;
         use pumpkin_util::y_offset::Absolute;
+        use pumpkin_util::y_offset::YOffset;
+        use std::sync::Arc;
+        use std::sync::LazyLock;
+        use std::{cell::RefCell, num::NonZeroUsize};
+
+        pub static GENERATION_SETTINGS: LazyLock<Arc<Registry<GenerationSettings>>> = LazyLock::new(|| {
+            let registry = Arc::new(Registry::new());
+            initialize(&registry).unwrap();
+            worldgen::WORLD_GEN
+                .register_arc(
+                    Identifier::vanilla_static("noise_settings"),
+                    registry.clone(),
+                )
+                .unwrap();
+            registry
+        });
 
         pub struct GenerationSettings {
             pub aquifers_enabled: bool,
@@ -633,19 +654,10 @@ pub fn build() -> TokenStream {
             StoneDepth(StoneDepthMaterialCondition),
         }
 
-        impl GenerationSettings {
+        fn initialize(registry: &Arc<Registry<GenerationSettings>>) -> Result<(), RegistryInsertError> {
             #const_defs
 
-            #[must_use]
-            pub fn from_dimension(dimension: &Dimension) -> &'static Self {
-                if dimension == &Dimension::OVERWORLD {
-                    &Self::OVERWORLD
-                } else if dimension == &Dimension::THE_NETHER {
-                    &Self::NETHER
-                } else {
-                    &Self::END
-                }
-            }
+            Ok(())
         }
     )
 }
