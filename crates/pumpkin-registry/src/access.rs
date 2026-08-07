@@ -190,7 +190,7 @@ impl Registry for RootRegistryState {
         Box::pin(async move { Self::get_by_id(self, id).await.map(ErasedRegistryRef::new) })
     }
 
-    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+    fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 

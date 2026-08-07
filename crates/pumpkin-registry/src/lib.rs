@@ -20,7 +20,7 @@ pub use crate::mutable::MutableRegistry;
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait Registry: Any + Send + Sync {
-    fn into_any(self: Box<Self>) -> Box<dyn Any>;
+    fn as_any(&self) -> &dyn Any;
     fn into_immutable(self: Box<Self>) -> BoxFuture<'static, BoxedRegistry>;
 
     fn item_type_id(&self) -> TypeId;
