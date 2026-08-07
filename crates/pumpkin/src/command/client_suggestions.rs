@@ -32,6 +32,10 @@ pub async fn send_c_commands_packet(
 
     let fallback_dispatcher = &dispatcher.fallback_dispatcher;
     for key in fallback_dispatcher.commands.keys() {
+        if dispatcher.is_disabled(key) {
+            continue;
+        }
+
         let Ok(tree) = fallback_dispatcher.get_tree(key) else {
             continue;
         };
@@ -91,7 +95,30 @@ pub async fn send_c_commands_packet(
 
         match node {
             AttachedNode::Root(_) => {
-                root_node_children_second = children;
+                // Drop disabled commands from the root's child list so they
+                // disappear from the client's command graph (and tab-completion)
+                // entirely. The nodes themselves stay in `proto_nodes` to keep
+                // every other node's indices valid; they simply become
+                // unreachable.
+                root_node_children_second = node
+                    .children_ref()
+                    .values()
+                    .copied()
+                    .filter(|id| {
+                        let disabled = match &dispatcher.tree[*id] {
+                            AttachedNode::Literal(child) => {
+                                dispatcher.is_disabled(&child.meta.literal_lowercase)
+                            }
+                            AttachedNode::Command(child) => {
+                                dispatcher.is_disabled(&child.meta.literal_lowercase)
+                            }
+                            _ => false,
+                        };
+                        !disabled
+                    })
+                    .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
+                    .map(|i| i.try_into().expect("i32 limit reached for ids"))
+                    .collect();
             }
             AttachedNode::Literal(literal_attached_node) => {
                 let node = ProtoNode {
@@ -272,6 +299,10 @@ pub async fn send_bedrock_commands_packet(
 
     let fallback_dispatcher = &dispatcher.fallback_dispatcher;
     for key in fallback_dispatcher.commands.keys() {
+        if dispatcher.is_disabled(key) {
+            continue;
+        }
+
         let Ok(tree) = fallback_dispatcher.get_tree(key) else {
             continue;
         };
@@ -334,6 +365,10 @@ pub async fn send_bedrock_commands_packet(
             ),
             _ => continue,
         };
+
+        if dispatcher.is_disabled(&name.to_ascii_lowercase()) {
+            continue;
+        }
 
         let mut ctx = BuilderContext {
             enum_values: &mut enum_values,
