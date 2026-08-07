@@ -117,6 +117,7 @@ strip = false
 
 
 [workspace.dependencies]
+async-trait = "0.1"
 serde_json5 = "0.2.1"
 tokio = { version = "1.53", default-features = false }
 syn = { version = "3.0", default-features = false, features = ["full", "parsing", "printing", "proc-macro", "clone-impls", "derive"] }

@@ -10,7 +10,7 @@ use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrap
 use crate::net::bedrock::{
     BedrockClient,
     nethernet::{NetherNetListener, load_or_create_identity_key},
-    status::StatusResponder,
+    status::{IceSocket, StatusResponder},
 };
 use crate::net::java::JavaClient;
 use crate::net::java::pending::PendingConnection;
@@ -300,8 +300,8 @@ impl PumpkinServer {
             });
         };
 
-        let nethernet_listener = Self::bind_nethernet(&server).await;
-        let bedrock_status = Self::bind_bedrock_status(&server, nethernet_listener.is_some()).await;
+        let (bedrock_status, ice_socket) = Self::bind_bedrock_status(&server).await;
+        let nethernet_listener = Self::bind_nethernet(&server, ice_socket).await;
 
         Self {
             server,
@@ -311,11 +311,15 @@ impl PumpkinServer {
         }
     }
 
-    async fn bind_nethernet(server: &Arc<Server>) -> Option<NetherNetListener> {
+    async fn bind_nethernet(
+        server: &Arc<Server>,
+        ice_socket: Option<IceSocket>,
+    ) -> Option<NetherNetListener> {
         let config = &server.advanced_config.networking.bedrock;
         if !config.enabled || !config.nethernet.enabled {
             return None;
         }
+        let ice_socket = ice_socket.expect("Bedrock UDP should be bound before NetherNet");
         let identity_key = load_or_create_identity_key(&config.nethernet.identity_key)
             .expect("Failed to load or create the Bedrock NetherNet identity key");
         let _ = server.bedrock_private_key.set(identity_key.clone());
@@ -329,7 +333,10 @@ impl PumpkinServer {
         Some(
             NetherNetListener::bind(
                 config.nethernet.address,
+                ice_socket,
+                config.nethernet.external_ip,
                 identity_key,
+                config.online_mode,
                 oidc_verifier,
                 config.nethernet.stun_servers.clone(),
             )
@@ -338,19 +345,19 @@ impl PumpkinServer {
         )
     }
 
-    async fn bind_bedrock_status(server: &Server, enabled: bool) -> Option<StatusResponder> {
-        if !enabled {
-            return None;
+    async fn bind_bedrock_status(server: &Server) -> (Option<StatusResponder>, Option<IceSocket>) {
+        let config = &server.advanced_config.networking.bedrock;
+        if !config.enabled || !config.nethernet.enabled {
+            return (None, None);
         }
-        let responder =
-            StatusResponder::bind(server.advanced_config.networking.bedrock.nethernet.address)
-                .await
-                .expect("Failed to bind Bedrock server-list status");
+        let (responder, ice_socket) = StatusResponder::bind(config.nethernet.address)
+            .await
+            .expect("Failed to bind Bedrock UDP status/ICE endpoint");
         let (ipv4, ipv6) = responder
             .local_addrs()
             .expect("Bedrock status sockets should have local addresses");
         info!("Bedrock server-list status is listening on {ipv4} (IPv4) and {ipv6} (IPv6)");
-        Some(responder)
+        (Some(responder), Some(ice_socket))
     }
 
     pub async fn init_plugins(&self) -> std::time::Duration {

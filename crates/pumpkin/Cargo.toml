@@ -17,6 +17,7 @@ LegalCopyright = "Copyright © 2026 Aleksander Medvedev"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
 # pumpkin
 arc-swap.workspace = true
 rayon.workspace = true
@@ -65,6 +66,7 @@ num-bigint.workspace = true
 rustyline.workspace = true
 
 # encryption
+aes.workspace = true
 rsa.workspace = true
 
 # verification & WASM parsing
