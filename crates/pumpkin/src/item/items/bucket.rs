@@ -1,13 +1,20 @@
 use std::{pin::Pin, sync::Arc};
 
 use crate::{
+    block::entities::sign::DyeColor,
     entity::EntityBase,
+    entity::passive::tropical_fish::{Pattern, TropicalFishEntity},
     entity::player::Player,
     entity::r#type::from_type,
     item::{ItemBehaviour, ItemMetadata},
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId,
+    data_component::DataComponent,
+    data_component_impl::{
+        DataComponentImpl, TropicalFishBaseColorImpl, TropicalFishPatternColorImpl,
+        TropicalFishPatternImpl,
+    },
     dimension::Dimension,
     entity::EntityType,
     fluid::Fluid,
@@ -107,20 +114,19 @@ pub(crate) fn set_waterlogged(
     block.from_properties(&props).to_state_id(block)
 }
 
-async fn give_player_bucket_item(player: &Player, item: &'static Item) {
+async fn give_player_bucket_item(player: &Player, mut item_stack: ItemStack) {
+    let item = item_stack.item;
     if player.gamemode.load() == GameMode::Creative {
         for i in 0..player.inventory.main_inventory.len() {
             if player.inventory.main_inventory[i].lock().await.item.id == item.id {
                 return;
             }
         }
-        let mut item_stack = ItemStack::new(1, item);
         player
             .inventory
             .insert_stack_anywhere(&mut item_stack)
             .await;
     } else {
-        let item_stack = ItemStack::new(1, item);
         let held_item = player.inventory.held_item();
         let mut held_stack = held_item.lock().await;
 
@@ -324,6 +330,27 @@ const fn bucket_fill_sound(filled: &Item) -> Option<Sound> {
     }
 }
 
+/// `TropicalFish.applyImplicitComponents`/`get`: reads back the pattern/base/pattern-color
+/// components a bucket picked up a tropical fish saved (see `saveToBucketTag` above).
+///
+/// A bucket with no fish data (e.g. from `/give`) returns `None` here and leaves the freshly
+/// spawned fish at whatever `TropicalFishEntity::new` rolled. This matches vanilla:
+/// `EntityType.create` (EntityType.java:200-204) always calls `finalizeSpawn` -- which for
+/// `TropicalFish` unconditionally rolls the 90/10 variant regardless of spawn reason -- and only
+/// *afterward* does `MobBucketItem.spawn`'s `postSpawnConfig` (EntityType.java:207-209)
+/// overwrite it from `BUCKET_ENTITY_DATA` if present, so a variant-less bucket also produces a
+/// random vanilla fish, not `DEFAULT_VARIANT`.
+fn read_tropical_fish_variant(stack: &ItemStack) -> Option<(Pattern, DyeColor, DyeColor)> {
+    let pattern = stack.get_data_component::<TropicalFishPatternImpl>()?;
+    let base_color = stack.get_data_component::<TropicalFishBaseColorImpl>()?;
+    let pattern_color = stack.get_data_component::<TropicalFishPatternColorImpl>()?;
+    Some((
+        Pattern::from_name(&pattern.value),
+        DyeColor::from(base_color.value.as_ref()),
+        DyeColor::from(pattern_color.value.as_ref()),
+    ))
+}
+
 async fn try_place_powder_snow(
     world: &Arc<World>,
     pos: BlockPos,
@@ -411,6 +438,7 @@ async fn spawn_mob_bucket_entity(
     player: Option<Arc<Player>>,
     user: &Player,
     evaporated: bool,
+    tropical_fish_variant: Option<(Pattern, DyeColor, DyeColor)>,
 ) {
     let Some(entity_type) = mob_bucket_entity_type(item) else {
         return;
@@ -423,9 +451,15 @@ async fn spawn_mob_bucket_entity(
         f64::from(pos.0.y) + 0.5,
         f64::from(pos.0.z) + 0.5,
     );
-    world
-        .spawn_entity(from_type(entity_type, spawn_pos, world, Uuid::new_v4()))
-        .await;
+    let entity = from_type(entity_type, spawn_pos, world, Uuid::new_v4());
+    // `TropicalFish.saveToBucketTag`/`applyImplicitComponents`: restore the exact caught
+    // variant instead of leaving the fresh (random-rolled) one from construction.
+    if let Some((pattern, base_color, pattern_color)) = tropical_fish_variant
+        && let Some(fish) = entity.cast_any().downcast_ref::<TropicalFishEntity>()
+    {
+        fish.set_variant(pattern, base_color, pattern_color);
+    }
+    world.spawn_entity(entity).await;
     // Vanilla `MobBucketItem#playEmptySound`: `level.playSound(user, pos, emptySound, NEUTRAL,
     // 1.0F, 1.0F)`. `emptyContents` returns from the evaporation branch before reaching it, while
     // `checkExtraContent` still spawns the mob, so an evaporated mob bucket is silent.
@@ -532,7 +566,7 @@ impl ItemBehaviour for EmptyBucketItem {
                 );
             }
 
-            give_player_bucket_item(player, item).await;
+            give_player_bucket_item(player, ItemStack::new(1, item)).await;
         })
     }
 
@@ -562,7 +596,46 @@ impl ItemBehaviour for EmptyBucketItem {
                 );
             }
 
-            give_player_bucket_item(player, bucket_item).await;
+            // `TropicalFish.saveToBucketTag` (TropicalFish.java:200-206): copies the pattern
+            // and both colors onto the bucket item as data components so re-emptying it
+            // restores the exact same variant instead of a fresh random roll.
+            let components = entity
+                .cast_any()
+                .downcast_ref::<TropicalFishEntity>()
+                .map_or_else(Vec::new, |fish| {
+                    vec![
+                        (
+                            DataComponent::TropicalFishPattern,
+                            Some(
+                                TropicalFishPatternImpl {
+                                    value: fish.pattern().name().into(),
+                                }
+                                .to_dyn(),
+                            ),
+                        ),
+                        (
+                            DataComponent::TropicalFishBaseColor,
+                            Some(
+                                TropicalFishBaseColorImpl {
+                                    value: String::from(fish.base_color()).into(),
+                                }
+                                .to_dyn(),
+                            ),
+                        ),
+                        (
+                            DataComponent::TropicalFishPatternColor,
+                            Some(
+                                TropicalFishPatternColorImpl {
+                                    value: String::from(fish.pattern_color()).into(),
+                                }
+                                .to_dyn(),
+                            ),
+                        ),
+                    ]
+                });
+            let bucket_stack = ItemStack::new_with_component(1, bucket_item, components);
+
+            give_player_bucket_item(player, bucket_stack).await;
             player.world().remove_entity(entity.as_ref()).await;
         })
     }
@@ -580,6 +653,16 @@ impl ItemBehaviour for FilledBucketItem {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
+
+            // Read off the caught variant before the held stack is overwritten below.
+            let tropical_fish_variant = if item.id == Item::TROPICAL_FISH_BUCKET.id {
+                let held_item = player.inventory.held_item();
+                let held_stack = held_item.lock().await;
+                read_tropical_fish_variant(&held_stack)
+            } else {
+                None
+            };
+
             let (start_pos, end_pos) = get_start_and_end_pos(player);
             let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
                 let state_id = world_inner.get_block_state_id(pos);
@@ -659,7 +742,16 @@ impl ItemBehaviour for FilledBucketItem {
                 );
             }
 
-            spawn_mob_bucket_entity(&world, item, placed_pos, player_arc, player, evaporated).await;
+            spawn_mob_bucket_entity(
+                &world,
+                item,
+                placed_pos,
+                player_arc,
+                player,
+                evaporated,
+                tropical_fish_variant,
+            )
+            .await;
             if player.gamemode.load() != GameMode::Creative {
                 let item_stack = ItemStack::new(1, &Item::BUCKET);
                 player

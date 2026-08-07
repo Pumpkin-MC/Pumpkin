@@ -118,7 +118,13 @@ impl EnchantingTableScreenHandler {
                 let mut random = LegacyRand::from_seed(self.enchantment_seed as u64);
 
                 for i in 0..3 {
-                    let level = self.calculate_level_requirement(&mut random, i, enchantability);
+                    let mut level =
+                        self.calculate_level_requirement(&mut random, i, enchantability);
+                    // EnchantmentMenu.java:106-107 (26.2 decompile): a slot whose computed cost is
+                    // below its own lapis price (slot index + 1) is unavailable, not just cheap.
+                    if level < i as i32 + 1 {
+                        level = 0;
+                    }
                     self.level_requirements[i] = level;
                 }
 
@@ -228,9 +234,11 @@ impl EnchantingTableScreenHandler {
         if let Some(s) = selected {
             result.push(s);
 
-            // Add more?
+            // EnchantmentHelper.java:566-577: the loop condition compares against the running
+            // `enchantmentCost` directly (halved only after each successful pick), not a
+            // pre-halved value.
             let mut current_level = enchant_level;
-            while random.next_bounded_i32(50) <= (current_level + 1) / 2 {
+            while random.next_bounded_i32(50) <= current_level {
                 available.retain(|(e, _)| {
                     for (se, _) in &result {
                         if !e.are_compatible(se) {
@@ -255,6 +263,14 @@ impl EnchantingTableScreenHandler {
                 }
                 current_level /= 2;
             }
+        }
+
+        // EnchantmentMenu.java:194-197 (private getEnchantmentList, used for both the UI clue and
+        // the applied roll): a plain book with 2+ results has one dropped at random so a book
+        // never shows/grants the full roll the way a tool would.
+        if item.item == &Item::BOOK && result.len() > 1 {
+            let drop = random.next_bounded_i32(result.len() as i32) as usize;
+            result.remove(drop);
         }
 
         result

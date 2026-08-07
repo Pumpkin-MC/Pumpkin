@@ -27,7 +27,7 @@ pub mod map;
 pub mod portal;
 pub mod time;
 
-use crate::block::RandomTickArgs;
+use crate::block::{HandlePrecipitationArgs, Precipitation, RandomTickArgs};
 use crate::world::chunker::is_within_view_distance;
 use crate::world::{chunker::get_view_distance, loot::LootContextParameters};
 use crate::{block::BlockEvent, entity::item::ItemEntity};
@@ -1587,6 +1587,52 @@ impl World {
         }
     }
 
+    /// `Biome#shouldFreeze(level, pos, true)`. `pos` is vanilla's `belowPos`
+    /// (`topPos.below()`), not the exposed column position itself.
+    fn should_freeze_at(&self, biome: &'static Biome, pos: &BlockPos) -> bool {
+        if biome
+            .weather
+            .warm_enough_to_rain(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
+        {
+            return false;
+        }
+        if !self.is_in_height_limit(pos.0.y) || self.get_block_light_level(pos).unwrap_or(0) >= 10 {
+            return false;
+        }
+        if !self.is_water_at(pos) {
+            return false;
+        }
+        // A lake freezes from its edges inward: a source/flowing water block only freezes if
+        // at least one horizontal neighbor is not itself water.
+        [pos.west(), pos.east(), pos.north(), pos.south()]
+            .iter()
+            .any(|neighbor| !self.is_water_at(neighbor))
+    }
+
+    /// `LevelReader#isWaterAt`.
+    fn is_water_at(&self, pos: &BlockPos) -> bool {
+        let state_id = self.get_block_state_id(pos);
+        Fluid::from_state_id(state_id)
+            .unwrap_or(&Fluid::EMPTY)
+            .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER)
+    }
+
+    /// `Biome#shouldSnow`. `pos` is vanilla's `topPos`, the exposed heightmap column position.
+    fn should_snow_at(&self, biome: &'static Biome, pos: &BlockPos) -> bool {
+        if !biome
+            .weather
+            .is_snow_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
+        {
+            return false;
+        }
+        if !self.is_in_height_limit(pos.0.y) || self.get_block_light_level(pos).unwrap_or(0) >= 10 {
+            return false;
+        }
+        let block = self.get_block(pos);
+        (block == &Block::AIR || block == &Block::SNOW)
+            && crate::block::blocks::snow::can_place_at(self, pos)
+    }
+
     async fn tick_precipitation_chunk(self: &Arc<Self>, chunk_pos: Vector2<i32>) {
         let local_x = rng().random_range(0..16);
         let local_z = rng().random_range(0..16);
@@ -1601,24 +1647,17 @@ impl World {
         let Some(biome) = self.level.get_rough_biome(&top) else {
             return;
         };
-        let below_state_id = self.get_block_state_id(&below);
-        let below_fluid = Fluid::from_state_id(below_state_id).unwrap_or(&Fluid::EMPTY);
 
-        if biome.weather.is_snow_at(x, top.0.y, z, self.sea_level)
-            && self.can_see_sky(&top)
-            && below_fluid.is_source(below_state_id)
-            && below_fluid.has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER)
-        {
+        // Freezing is unconditional on rain/snow falling right now: only temperature, light and
+        // the lake-edge rule gate it (`ServerLevel#tickPrecipitation`, before the `isRaining`
+        // check).
+        if self.should_freeze_at(biome, &below) {
             self.clone()
                 .set_block_state(&below, Block::ICE.default_state.id, BlockFlags::NOTIFY_ALL)
                 .await;
         }
 
-        let raining = self.weather.lock().await.raining;
-        if !raining
-            || !biome.weather.is_snow_at(x, top.0.y, z, self.sea_level)
-            || !self.can_see_sky(&top)
-        {
+        if !self.weather.lock().await.raining {
             return;
         }
 
@@ -1628,29 +1667,58 @@ impl World {
             .game_rules
             .max_snow_accumulation_height
             .clamp(0, 8) as u8;
-        if maximum_layers == 0 {
-            return;
-        }
-
-        let state_id = self.get_block_state_id(&top);
-        if state_id == Block::SNOW.default_state.id {
-            let mut properties = SnowLikeProperties::from_state_id(state_id, &Block::SNOW);
-            if properties.layers < maximum_layers {
-                properties.layers += 1;
+        if maximum_layers > 0 && self.should_snow_at(biome, &top) {
+            let state_id = self.get_block_state_id(&top);
+            if state_id == Block::SNOW.default_state.id {
+                let mut properties = SnowLikeProperties::from_state_id(state_id, &Block::SNOW);
+                if properties.layers < maximum_layers {
+                    properties.layers += 1;
+                    self.clone()
+                        .set_block_state(
+                            &top,
+                            properties.to_state_id(&Block::SNOW),
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                }
+            } else {
                 self.clone()
-                    .set_block_state(
-                        &top,
-                        properties.to_state_id(&Block::SNOW),
-                        BlockFlags::NOTIFY_ALL,
-                    )
+                    .set_block_state(&top, Block::SNOW.default_state.id, BlockFlags::NOTIFY_ALL)
                     .await;
             }
-        } else if self.get_block(&top) == &Block::AIR
-            && crate::block::blocks::snow::can_place_at(self.as_ref(), &top)
-        {
-            self.clone()
-                .set_block_state(&top, Block::SNOW.default_state.id, BlockFlags::NOTIFY_ALL)
-                .await;
+        }
+
+        // `Biome#getPrecipitationAt(belowPos, seaLevel)` + `Block#handlePrecipitation`: fills
+        // cauldrons standing in the open. Independent of the freeze/snow branches above, and
+        // evaluated at `below`, not `top`.
+        let precipitation =
+            if biome
+                .weather
+                .is_snow_at(below.0.x, below.0.y, below.0.z, self.sea_level)
+            {
+                Some(Precipitation::Snow)
+            } else if biome
+                .weather
+                .is_rain_at(below.0.x, below.0.y, below.0.z, self.sea_level)
+            {
+                Some(Precipitation::Rain)
+            } else {
+                None
+            };
+        if let Some(precipitation) = precipitation {
+            let below_state_id = self.get_block_state_id(&below);
+            let below_block = Block::from_state_id(below_state_id);
+            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(below_block.id) {
+                pumpkin_block
+                    .handle_precipitation(HandlePrecipitationArgs {
+                        world: self,
+                        block: below_block,
+                        state_id: below_state_id,
+                        position: &below,
+                        precipitation,
+                    })
+                    .await;
+            }
         }
     }
 
@@ -5009,6 +5077,31 @@ impl World {
             return false;
         }
         self.sections_to_village(pos).await <= section_distance
+    }
+
+    /// Positions of *occupied* village-tag POIs (`home`/`meeting`/job-site) within a
+    /// `radius`-block sphere of `center` - vanilla `Raids.createOrExtendRaid`'s
+    /// `getInRange(e -> e.is(PoiTypeTags.VILLAGE), raidPosition, 64, IS_OCCUPIED)`.
+    pub async fn village_poi_positions_in_range(
+        &self,
+        center: BlockPos,
+        radius: i32,
+    ) -> Vec<BlockPos> {
+        let mut storage = self.portal_poi.lock().await;
+        let mut positions = Vec::new();
+        for poi_type in village_poi::VILLAGE_TAG_POI_TYPES {
+            positions.extend(
+                storage
+                    .get_in_square_with_tickets(center, radius, Some(poi_type))
+                    .into_iter()
+                    .filter(|(candidate, free, max)| {
+                        village_poi::in_sphere(center, *candidate, radius)
+                            && village_poi::Occupancy::IsOccupied.matches(*free, *max)
+                    })
+                    .map(|(candidate, _, _)| candidate),
+            );
+        }
+        positions
     }
 
     /// Vanilla `PoiManager.take`/`AcquirePoi`: finds the closest POI of `poi_type` with a

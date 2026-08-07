@@ -3,6 +3,7 @@ use pumpkin_data::block_properties::{
     BlockProperties, TrialSpawnerLikeProperties, TrialSpawnerState,
 };
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, world::WorldEvent};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
@@ -199,6 +200,16 @@ impl TrialSpawnerBlockEntity {
         (self.detected_players.lock().await.len() as i32 - 1).max(0)
     }
 
+    // TrialSpawner.java:150-158. overridePeacefulAndMobSpawnRule is a
+    // @VisibleForTesting-only escape hatch, never set by gameplay code, so it
+    // is omitted.
+    fn can_spawn_in_level(world: &Arc<World>) -> bool {
+        let level_data = world.level_info.load();
+        level_data.game_rules.spawner_blocks_work
+            && level_data.difficulty != pumpkin_util::Difficulty::Peaceful
+            && level_data.game_rules.spawn_mobs
+    }
+
     // StateData.java:121-159, simplified: no line-of-sight raycast, no ominous
     // acquisition (bad omen -> trial omen transform, TrialSpawner.java:103-113;
     // OminousItemSpawner) -- deferred, see report.
@@ -365,6 +376,10 @@ impl TrialSpawnerBlockEntity {
         match current {
             TrialSpawnerState::Inactive => TrialSpawnerState::WaitingForPlayers,
             TrialSpawnerState::WaitingForPlayers => {
+                if !Self::can_spawn_in_level(world) {
+                    self.reset_statistics().await;
+                    return TrialSpawnerState::WaitingForPlayers;
+                }
                 if !self.has_mob_to_spawn(config).await {
                     return TrialSpawnerState::Inactive;
                 }
@@ -376,32 +391,8 @@ impl TrialSpawnerBlockEntity {
                 }
             }
             TrialSpawnerState::Active => {
-                if !self.has_mob_to_spawn(config).await {
-                    return TrialSpawnerState::Inactive;
-                }
-                let additional_players = self.count_additional_players().await;
-                self.try_detect_players(world, is_ominous).await;
-
-                let total_spawned = self.total_mobs_spawned.load(Ordering::Relaxed);
-                if total_spawned >= config.calculate_target_total_mobs(additional_players) {
-                    if self.current_mobs.lock().await.is_empty() {
-                        self.cooldown_ends_at
-                            .store(game_time + self.target_cooldown_length, Ordering::Relaxed);
-                        self.total_mobs_spawned.store(0, Ordering::Relaxed);
-                        self.next_mob_spawns_at.store(0, Ordering::Relaxed);
-                        return TrialSpawnerState::WaitingForRewardEjection;
-                    }
-                } else if game_time >= self.next_mob_spawns_at.load(Ordering::Relaxed)
-                    && self.current_mobs.lock().await.len()
-                        < config.calculate_target_simultaneous_mobs(additional_players) as usize
-                    && let Some(uuid) = self.spawn_mob(world, config).await
-                {
-                    self.current_mobs.lock().await.insert(uuid);
-                    self.total_mobs_spawned.fetch_add(1, Ordering::Relaxed);
-                    self.next_mob_spawns_at
-                        .store(game_time + config.ticks_between_spawn, Ordering::Relaxed);
-                }
-                TrialSpawnerState::Active
+                self.tick_active_state(world, is_ominous, config, game_time)
+                    .await
             }
             TrialSpawnerState::WaitingForRewardEjection => {
                 // StateData.java:213-216
@@ -413,6 +404,11 @@ impl TrialSpawnerBlockEntity {
                     // picked once per reward cycle.
                     let table = if rand::random_range(0..2) == 0 { 1 } else { 2 };
                     self.ejecting_loot_table.store(table, Ordering::Relaxed);
+                    world.play_block_sound(
+                        Sound::BlockTrialSpawnerOpenShutter,
+                        SoundCategory::Blocks,
+                        self.position,
+                    );
                     TrialSpawnerState::EjectingReward
                 } else {
                     TrialSpawnerState::WaitingForRewardEjection
@@ -426,6 +422,11 @@ impl TrialSpawnerBlockEntity {
                 }
                 if self.detected_players.lock().await.is_empty() {
                     self.ejecting_loot_table.store(0, Ordering::Relaxed);
+                    world.play_block_sound(
+                        Sound::BlockTrialSpawnerCloseShutter,
+                        SoundCategory::Blocks,
+                        self.position,
+                    );
                     TrialSpawnerState::Cooldown
                 } else {
                     let table = self.ejecting_loot_table.load(Ordering::Relaxed);
@@ -451,6 +452,48 @@ impl TrialSpawnerBlockEntity {
                 }
             }
         }
+    }
+
+    /// `TrialSpawnerState.ACTIVE.tick` (`TrialSpawnerState.java`, `ACTIVE` case): counts nearby
+    /// players, spawns mobs up to the simultaneous/total caps, and transitions to
+    /// `WaitingForRewardEjection` once the total cap is hit and all spawned mobs are dead.
+    async fn tick_active_state(
+        &self,
+        world: &Arc<World>,
+        is_ominous: bool,
+        config: &TrialSpawnerConfig,
+        game_time: i64,
+    ) -> TrialSpawnerState {
+        if !Self::can_spawn_in_level(world) {
+            self.reset_statistics().await;
+            return TrialSpawnerState::WaitingForPlayers;
+        }
+        if !self.has_mob_to_spawn(config).await {
+            return TrialSpawnerState::Inactive;
+        }
+        let additional_players = self.count_additional_players().await;
+        self.try_detect_players(world, is_ominous).await;
+
+        let total_spawned = self.total_mobs_spawned.load(Ordering::Relaxed);
+        if total_spawned >= config.calculate_target_total_mobs(additional_players) {
+            if self.current_mobs.lock().await.is_empty() {
+                self.cooldown_ends_at
+                    .store(game_time + self.target_cooldown_length, Ordering::Relaxed);
+                self.total_mobs_spawned.store(0, Ordering::Relaxed);
+                self.next_mob_spawns_at.store(0, Ordering::Relaxed);
+                return TrialSpawnerState::WaitingForRewardEjection;
+            }
+        } else if game_time >= self.next_mob_spawns_at.load(Ordering::Relaxed)
+            && self.current_mobs.lock().await.len()
+                < config.calculate_target_simultaneous_mobs(additional_players) as usize
+            && let Some(uuid) = self.spawn_mob(world, config).await
+        {
+            self.current_mobs.lock().await.insert(uuid);
+            self.total_mobs_spawned.fetch_add(1, Ordering::Relaxed);
+            self.next_mob_spawns_at
+                .store(game_time + config.ticks_between_spawn, Ordering::Relaxed);
+        }
+        TrialSpawnerState::Active
     }
 }
 

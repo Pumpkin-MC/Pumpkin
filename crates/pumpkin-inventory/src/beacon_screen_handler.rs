@@ -1,13 +1,13 @@
-use std::{any::Any, sync::Arc};
+use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::{item_stack::ItemStack, screen::WindowType};
-use pumpkin_world::inventory::Inventory;
+use pumpkin_world::{block::entities::PropertyDelegate, inventory::Inventory};
 
 use crate::{
     player::player_inventory::PlayerInventory,
     screen_handler::{
         InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour,
-        ScreenHandlerFuture,
+        ScreenHandlerFuture, ScreenProperty,
     },
     slot::NormalSlot,
 };
@@ -19,8 +19,9 @@ pub async fn create_beacon_handler(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
+    property_delegate: Arc<dyn PropertyDelegate>,
 ) -> BeaconScreenHandler {
-    BeaconScreenHandler::new(sync_id, player_inventory, inventory).await
+    BeaconScreenHandler::new(sync_id, player_inventory, inventory, property_delegate).await
 }
 
 /// Screen handler specifically for Beacon blocks.
@@ -29,6 +30,8 @@ pub struct BeaconScreenHandler {
     pub inventory: Arc<dyn Inventory>,
     /// Core screen handler behavior (slots, sync ID, listeners).
     behaviour: ScreenHandlerBehaviour,
+    /// Delegate for the levels/primary/secondary properties synced to the client.
+    _property_delegate: Arc<dyn PropertyDelegate>,
 }
 
 impl BeaconScreenHandler {
@@ -37,13 +40,40 @@ impl BeaconScreenHandler {
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
         inventory: Arc<dyn Inventory>,
+        property_delegate: Arc<dyn PropertyDelegate>,
     ) -> Self {
+        struct BeaconScreenListener;
+        impl crate::screen_handler::ScreenHandlerListener for BeaconScreenListener {
+            fn on_property_update<'a>(
+                &'a self,
+                screen_handler: &'a ScreenHandlerBehaviour,
+                property: u8,
+                value: i32,
+            ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+                Box::pin(async move {
+                    if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
+                        sync_handler
+                            .update_property(screen_handler, i32::from(property), value)
+                            .await;
+                    }
+                })
+            }
+        }
+
         let mut handler = Self {
             inventory: inventory.clone(),
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(WindowType::Beacon)),
+            _property_delegate: property_delegate.clone(),
         };
 
         inventory.on_open().await;
+
+        // Levels (index 0), primary effect (index 1), secondary effect (index 2)
+        handler.add_property(ScreenProperty::new(property_delegate.clone(), 0));
+        handler.add_property(ScreenProperty::new(property_delegate.clone(), 1));
+        handler.add_property(ScreenProperty::new(property_delegate.clone(), 2));
+
+        handler.add_listener(Arc::new(BeaconScreenListener)).await;
 
         // Add the single payment slot for the beacon (slot 0)
         handler.add_slot(Arc::new(NormalSlot::new(handler.inventory.clone(), 0)));

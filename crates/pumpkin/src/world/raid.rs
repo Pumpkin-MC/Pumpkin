@@ -2,14 +2,25 @@
 //!
 //! Ports `net.minecraft.world.entity.raid.{Raids,Raid,Raider}` (vanilla 26.2 decompile).
 //!
+//! Trigger path: `BadOmenMobEffect`/`RaidOmenMobEffect` (`crate::entity::living::LivingEntity`
+//! `should_apply_effect_tick`/`apply_effect_tick`, `BAD_OMEN`/`RAID_OMEN` branches) convert
+//! `BAD_OMEN` into `RAID_OMEN` on entering a real village (`World::is_close_to_village`, backed
+//! by `world::village_poi`'s POI-density tracker) and, on `RAID_OMEN` expiry, call
+//! `RaidManager::create_or_extend_raid` - which computes the raid center from real occupied
+//! `village`-tag POIs, mirroring `Raids.createOrExtendRaid`.
+//!
 //! Scope reductions (no vanilla-parity infrastructure exists yet for these; see
 //! `pumpkin/src/world/mod.rs` `RaidManager` field and `CLAUDE.md`/`PARITY.md`):
-//! - No POI/village-bounds system exists. A "village" is approximated as "at least one
-//!   `EntityType::VILLAGER` within `VILLAGE_SEARCH_RADIUS` blocks" instead of `Level.isVillage`
-//!   (real vanilla trigger site: `Raids.createOrExtendRaid`, gated by occupied `PoiTypeTags.VILLAGE`
-//!   POIs). The raid center never re-centers onto a real village once triggered
+//! - The raid center never re-centers onto a real village once triggered
 //!   (`moveRaidCenterToNearbyVillageSection` is not ported), and a raid is never lost for
 //!   "no longer a village" (`Raid.java` lines 287-297).
+//! - `village_poi`'s job-site/meeting-point POIs are never claimed by anything in Pumpkin (see
+//!   that module's docs), so in practice only claimed beds (`HOME`) register as "occupied" -
+//!   village detection is real but currently under-populated relative to vanilla.
+//! - `EnvironmentAttributes.CAN_START_RAID` (`Raids.createOrExtendRaid`) is not checked - no
+//!   such attribute system exists in Pumpkin.
+//! - `ServerPlayer.raidOmenPosition` (`Player::raid_omen_position`) is not persisted to NBT;
+//!   a relog while `RAID_OMEN` is active drops the pending raid trigger instead of resuming it.
 //! - `Raid.findRandomSpawnPos` drops the `isVillage`/chunk-loaded/`SpawnPlacements` legality
 //!   checks and only checks the vertical-distance bound (`Raid.java` line 675).
 //! - No banner-pattern rendering: the wave leader is equipped with a plain white banner
@@ -48,12 +59,11 @@ const RAID_TIMEOUT_TICKS: i64 = 48000; // Raid.java:88
 const NUM_SPAWN_ATTEMPTS: i32 = 5; // Raid.java:89
 const DEFAULT_PRE_RAID_TICKS: i32 = 300; // Raid.java:94
 const MAX_CELEBRATION_TICKS: i32 = 600; // Raid.java:96
-const DEFAULT_MAX_RAID_OMEN_LEVEL: i32 = 5; // Raid.java:98
+pub(crate) const DEFAULT_MAX_RAID_OMEN_LEVEL: i32 = 5; // Raid.java:98
 const HERO_OF_THE_VILLAGE_DURATION: i32 = 48000; // Raid.java:103
 const POST_RAID_TICK_LIMIT: i32 = 40; // Raid.java:93
 const VALID_RAID_RADIUS_SQR: f64 = 9216.0; // Raid.java:105
 const RAID_REMOVAL_THRESHOLD_SQR: f64 = 12544.0; // Raid.java:106
-const VILLAGE_SEARCH_RADIUS: f64 = 32.0; // Raid.java:87 (VILLAGE_SEARCH_RADIUS), reused for the villager-count approximation
 
 // Raid.java:831-846, RaiderType.spawnsPerWaveBeforeBonus, indexed by wave number
 // (index 0 unused; index == numGroups is the bonus-wave row).
@@ -301,11 +311,13 @@ impl Raid {
         self.status = RaidStatus::Stopped;
     }
 
-    /// Raid.java:247-261.
+    /// Raid.java:247-261. Reads `RAID_OMEN` (not `BAD_OMEN` - see
+    /// `RaidOmenMobEffect.applyEffectTick`, which triggers this on `RAID_OMEN` expiry after
+    /// `BadOmenMobEffect` converted `BAD_OMEN` into `RAID_OMEN` on village entry).
     async fn absorb_raid_omen(&mut self, player: &Player) -> bool {
         let Some(effect) = player
             .living_entity
-            .get_effect(&StatusEffect::BAD_OMEN)
+            .get_effect(&StatusEffect::RAID_OMEN)
             .await
         else {
             return false;
@@ -732,57 +744,68 @@ impl RaidManager {
             .map(|(id, _)| id)
     }
 
-    /// Raids.createOrExtendRaid (Raids.java:106-149), approximated per the module-level doc:
-    /// village detection is "at least one villager within `VILLAGE_SEARCH_RADIUS`".
-    async fn scan_for_new_raids(&mut self, world: &Arc<World>) {
-        if world.level_info.load().difficulty == Difficulty::Peaceful {
+    /// `raid.getRaidOmenLevel()` for the nearest active raid within `getRaidAt`'s radius
+    /// (`ServerLevel.getRaidAt`), or `None` if there is none - used by `BadOmenMobEffect`'s
+    /// "no raid, or raid not yet at max omen" gate.
+    #[must_use]
+    pub fn raid_omen_level_near(&self, pos: BlockPos) -> Option<i32> {
+        self.find_active_raid_near(pos)
+            .map(|id| self.raids[&id].raid_omen_level())
+    }
+
+    /// Raids.createOrExtendRaid (Raids.java:102-146). Called from `RaidOmenMobEffect`
+    /// (`crate::entity::living::LivingEntity::apply_effect_tick`, `RAID_OMEN` branch) when a
+    /// player's `RAID_OMEN` effect expires with a stored `raid_omen_position`.
+    pub async fn create_or_extend_raid(
+        &mut self,
+        world: &Arc<World>,
+        player: &Player,
+        raid_position: BlockPos,
+    ) {
+        if player.gamemode.load() == pumpkin_util::GameMode::Spectator {
+            return;
+        }
+        if !world.level_info.load().game_rules.raids {
             return;
         }
 
-        let players = world.players.load().clone();
-        for player in players.iter() {
-            if player.living_entity.entity.is_removed() {
-                continue;
-            }
-            let has_bad_omen = player
-                .living_entity
-                .has_effect(&StatusEffect::BAD_OMEN)
-                .await;
-            if !has_bad_omen {
-                continue;
-            }
-
-            let pos = player.living_entity.entity.pos.load();
-            let block_pos = BlockPos::floored_v(pos);
-            let villagers_nearby = world
-                .get_nearby_entities(pos, VILLAGE_SEARCH_RADIUS)
-                .values()
-                .any(|e| e.get_entity().entity_type.id == EntityType::VILLAGER.id);
-            if !villagers_nearby {
-                continue;
-            }
-
-            let raid_id = self.find_active_raid_near(block_pos).unwrap_or_else(|| {
-                let id = self.next_id;
-                self.next_id += 1;
-                let difficulty = world.level_info.load().difficulty;
-                self.raids.insert(id, Raid::new(id, block_pos, difficulty));
-                id
+        let poi_positions = world
+            .village_poi_positions_in_range(raid_position, 64)
+            .await;
+        let raid_center = if poi_positions.is_empty() {
+            raid_position
+        } else {
+            let count = poi_positions.len() as f64;
+            let (sum_x, sum_y, sum_z) = poi_positions.iter().fold((0.0, 0.0, 0.0), |acc, p| {
+                (
+                    acc.0 + p.0.x as f64,
+                    acc.1 + p.0.y as f64,
+                    acc.2 + p.0.z as f64,
+                )
             });
+            BlockPos::new(
+                (sum_x / count).floor() as i32,
+                (sum_y / count).floor() as i32,
+                (sum_z / count).floor() as i32,
+            )
+        };
 
-            let should_absorb = {
-                let raid = self.raids.get(&raid_id).unwrap();
-                !raid.is_started() || raid.raid_omen_level() < DEFAULT_MAX_RAID_OMEN_LEVEL
-            };
-            if should_absorb {
-                let raid = self.raids.get_mut(&raid_id).unwrap();
-                if raid.absorb_raid_omen(player).await {
-                    player
-                        .living_entity
-                        .remove_effect(&StatusEffect::BAD_OMEN)
-                        .await;
-                }
-            }
+        let raid_id = self.find_active_raid_near(raid_center).unwrap_or_else(|| {
+            let id = self.next_id;
+            self.next_id += 1;
+            let difficulty = world.level_info.load().difficulty;
+            self.raids
+                .insert(id, Raid::new(id, raid_center, difficulty));
+            id
+        });
+
+        let should_absorb = {
+            let raid = self.raids.get(&raid_id).unwrap();
+            !raid.is_started() || raid.raid_omen_level() < DEFAULT_MAX_RAID_OMEN_LEVEL
+        };
+        if should_absorb {
+            let raid = self.raids.get_mut(&raid_id).unwrap();
+            raid.absorb_raid_omen(player).await;
         }
     }
 
@@ -816,8 +839,6 @@ impl RaidManager {
                 raid.remove_all_bossbars(world).await;
             }
         }
-
-        mgr.scan_for_new_raids(world).await;
     }
 }
 

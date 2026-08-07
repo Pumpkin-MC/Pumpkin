@@ -250,15 +250,49 @@ impl BlockEntity for PistonBlockEntity {
                             .clone()
                             .update_from_neighbor_shapes(self.pushed_block_state.id, &pos)
                             .await;
-                        world
-                            .clone()
-                            .set_block_state(
-                                &pos,
-                                updated_state,
-                                BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
-                            )
-                            .await;
-                        world.clone().update_neighbors(&pos, None).await;
+                        if BlockState::from_id(updated_state).is_air() {
+                            // PistonMovingBlockEntity.tick: the moved block can no longer
+                            // exist at its destination (e.g. an attached block lost its
+                            // support). Vanilla places it, then destroys it properly
+                            // (drops, block-break side effects) instead of it vanishing.
+                            world
+                                .clone()
+                                .set_block_state(
+                                    &pos,
+                                    self.pushed_block_state.id,
+                                    BlockFlags::FORCE_STATE | BlockFlags::MOVED,
+                                )
+                                .await;
+                            world
+                                .clone()
+                                .break_block(&pos, None, BlockFlags::MOVED)
+                                .await;
+                        } else {
+                            // PistonMovingBlockEntity.tick: a piston-moved block never
+                            // arrives waterlogged, even if update_from_neighbor_shapes
+                            // recomputed it that way.
+                            let block = Block::from_state_id(updated_state);
+                            let final_state = if block.is_waterlogged(updated_state) {
+                                let mut props = block.properties(updated_state).unwrap().to_props();
+                                if let Some(entry) =
+                                    props.iter_mut().find(|(k, _)| *k == "waterlogged")
+                                {
+                                    entry.1 = "false";
+                                }
+                                block.from_properties(&props).to_state_id(block)
+                            } else {
+                                updated_state
+                            };
+                            world
+                                .clone()
+                                .set_block_state(
+                                    &pos,
+                                    final_state,
+                                    BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
+                                )
+                                .await;
+                            world.clone().update_neighbors(&pos, None).await;
+                        }
                     }
                 }
                 return;

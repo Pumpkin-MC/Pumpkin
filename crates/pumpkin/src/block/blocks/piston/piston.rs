@@ -48,6 +48,13 @@ impl PistonBlock {
         position: &BlockPos,
         world: &World,
     ) -> bool {
+        // PistonBaseBlock.isPushable: reject positions strictly outside the world's
+        // vertical range before anything else, even for air (PistonBaseBlock.java:232-234).
+        if position.0.y < world.dimension.min_y
+            || position.0.y > world.dimension.min_y + world.dimension.height - 1
+        {
+            return false;
+        }
         if state.is_air() {
             return true;
         }
@@ -257,9 +264,20 @@ impl BlockBehaviour for PistonBlock {
                     false
                 };
                 if !piston_piece {
+                    // PistonBaseBlock.java:206: isPushable(movingState, level, twoPos,
+                    // direction.getOpposite(), false, direction) - the block being pulled
+                    // moves opposite the piston's facing, so the y-bound check must use that.
                     if r#type == 1
                         && !state.is_air()
-                        && Self::is_movable(block, state, dir, false, dir, &pull_pos, world)
+                        && Self::is_movable(
+                            block,
+                            state,
+                            dir.opposite(),
+                            false,
+                            dir,
+                            &pull_pos,
+                            world,
+                        )
                         && (state.piston_behavior == PistonBehavior::Normal
                             || block == &Block::PISTON
                             || block == &Block::STICKY_PISTON)

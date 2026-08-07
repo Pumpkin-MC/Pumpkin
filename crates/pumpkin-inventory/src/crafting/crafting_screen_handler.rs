@@ -29,8 +29,13 @@ use crate::screen_handler::{
 };
 use crate::slot::{BoxFuture, NormalSlot, Slot};
 
+use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component_impl::{DataComponentImpl, PotDecorationsImpl};
+use pumpkin_data::data_component_impl::{
+    DamageImpl, DataComponentImpl, EnchantmentsImpl, FireworkExplosionImpl, FireworkExplosionShape,
+    FireworksImpl, MaxDamageImpl, PotDecorationsImpl,
+};
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipe_remainder::get_recipe_remainder_id;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING};
@@ -368,6 +373,297 @@ async fn recipe_matches(
     }
 }
 
+/// Dye item -> vanilla firework explosion color. 26.2 decompile
+/// `net/minecraft/world/item/DyeColor.java:29-45,102-104` (the `fireworkColor`
+/// constructor argument, in enum declaration order white..black).
+fn firework_dye_color(item: &Item) -> Option<i32> {
+    Some(match item.registry_key {
+        "white_dye" => 15_790_320,
+        "orange_dye" => 15_435_844,
+        "magenta_dye" => 12_801_229,
+        "light_blue_dye" => 6_719_955,
+        "yellow_dye" => 14_602_026,
+        "lime_dye" => 4_312_372,
+        "pink_dye" => 14_188_952,
+        "gray_dye" => 4_408_131,
+        "light_gray_dye" => 11_250_603,
+        "cyan_dye" => 2_651_799,
+        "purple_dye" => 8_073_150,
+        "blue_dye" => 2_437_522,
+        "brown_dye" => 5_320_730,
+        "green_dye" => 3_887_386,
+        "red_dye" => 11_743_532,
+        "black_dye" => 1_973_019,
+        _ => return None,
+    })
+}
+
+/// Firework star shape ingredient, from `FireworkStarRecipe.shapes` as loaded
+/// from `assets/recipes.json` (`minecraft:firework_star`).
+fn firework_star_shape(item: &Item) -> Option<FireworkExplosionShape> {
+    match item.registry_key {
+        "feather" => Some(FireworkExplosionShape::Burst),
+        "fire_charge" => Some(FireworkExplosionShape::LargeBall),
+        "gold_nugget" => Some(FireworkExplosionShape::Star),
+        "player_head"
+        | "creeper_head"
+        | "zombie_head"
+        | "skeleton_skull"
+        | "wither_skeleton_skull"
+        | "dragon_head"
+        | "piglin_head" => Some(FireworkExplosionShape::Creeper),
+        _ => None,
+    }
+}
+
+/// `FireworkRocketRecipe::matches`/`assemble`, 26.2 decompile
+/// `FireworkRocketRecipe.java:52-96`. Only reached once the plain
+/// `firework_rocket_simple` shapeless recipe (paper + one gunpowder) has
+/// already failed to match; that recipe already covers the star-less,
+/// single-gunpowder case with an identical result.
+fn match_firework_rocket(items: &[ItemStack]) -> Option<RecipeResult> {
+    if items.len() < 2 {
+        return None;
+    }
+    let mut has_shell = false;
+    let mut fuel_count = 0;
+    let mut explosions = Vec::new();
+    for stack in items {
+        if stack.item == &Item::PAPER {
+            if has_shell {
+                return None;
+            }
+            has_shell = true;
+        } else if stack.item == &Item::GUNPOWDER {
+            fuel_count += 1;
+            if fuel_count > 3 {
+                return None;
+            }
+        } else if stack.item == &Item::FIREWORK_STAR {
+            if let Some(explosion) = stack.get_data_component::<FireworkExplosionImpl>() {
+                explosions.push(explosion.clone());
+            }
+        } else {
+            return None;
+        }
+    }
+    if !has_shell || fuel_count < 1 {
+        return None;
+    }
+    Some(RecipeResult {
+        item_id: "minecraft:firework_rocket".to_string(),
+        count: 3,
+        component_patch: vec![(
+            DataComponent::Fireworks,
+            Some(FireworksImpl::new(fuel_count, explosions).to_dyn()),
+        )],
+    })
+}
+
+/// `FireworkStarRecipe::matches`/`assemble`, 26.2 decompile
+/// `FireworkStarRecipe.java:87-160`.
+fn match_firework_star(items: &[ItemStack]) -> Option<RecipeResult> {
+    if items.len() < 2 {
+        return None;
+    }
+    let mut has_fuel = false;
+    let mut has_dye = false;
+    let mut has_trail = false;
+    let mut has_twinkle = false;
+    let mut has_shape = false;
+    let mut shape = FireworkExplosionShape::SmallBall;
+    let mut colors = Vec::new();
+    for stack in items {
+        if stack.item == &Item::GLOWSTONE_DUST {
+            if has_twinkle {
+                return None;
+            }
+            has_twinkle = true;
+        } else if stack.item == &Item::DIAMOND {
+            if has_trail {
+                return None;
+            }
+            has_trail = true;
+        } else if stack.item == &Item::GUNPOWDER {
+            if has_fuel {
+                return None;
+            }
+            has_fuel = true;
+        } else if let Some(color) = firework_dye_color(stack.item) {
+            has_dye = true;
+            colors.push(color);
+        } else {
+            let found_shape = firework_star_shape(stack.item)?;
+            if has_shape {
+                return None;
+            }
+            has_shape = true;
+            shape = found_shape;
+        }
+    }
+    if !has_fuel || !has_dye {
+        return None;
+    }
+    Some(RecipeResult {
+        item_id: "minecraft:firework_star".to_string(),
+        count: 1,
+        component_patch: vec![(
+            DataComponent::FireworkExplosion,
+            Some(
+                FireworkExplosionImpl::new(shape, colors, Vec::new(), has_trail, has_twinkle)
+                    .to_dyn(),
+            ),
+        )],
+    })
+}
+
+/// `FireworkStarFadeRecipe::matches`/`assemble`, 26.2 decompile
+/// `FireworkStarFadeRecipe.java:44-88`. Copies the target star's component
+/// patch and overwrites only `fade_colors`, matching
+/// `FireworkExplosion::withFadeColors`.
+fn match_firework_star_fade(items: &[ItemStack]) -> Option<RecipeResult> {
+    if items.len() < 2 {
+        return None;
+    }
+    let mut target = None;
+    let mut colors = Vec::new();
+    for stack in items {
+        if let Some(color) = firework_dye_color(stack.item) {
+            colors.push(color);
+        } else if stack.item == &Item::FIREWORK_STAR {
+            if target.is_some() {
+                return None;
+            }
+            target = Some(stack);
+        } else {
+            return None;
+        }
+    }
+    let target = target?;
+    if colors.is_empty() {
+        return None;
+    }
+    let explosion = target
+        .get_data_component::<FireworkExplosionImpl>()
+        .cloned()
+        .unwrap_or_else(|| {
+            FireworkExplosionImpl::new(
+                FireworkExplosionShape::SmallBall,
+                Vec::new(),
+                Vec::new(),
+                false,
+                false,
+            )
+        });
+    let mut patch = target.patch.clone();
+    patch.retain(|(id, _)| *id != DataComponent::FireworkExplosion);
+    patch.push((
+        DataComponent::FireworkExplosion,
+        Some(
+            FireworkExplosionImpl {
+                fade_colors: colors,
+                ..explosion
+            }
+            .to_dyn(),
+        ),
+    ));
+    Some(RecipeResult {
+        item_id: "minecraft:firework_star".to_string(),
+        count: 1,
+        component_patch: patch,
+    })
+}
+
+/// Curse enchantments carried over from both inputs, keeping the higher
+/// level of each. 26.2 decompile `RepairItemRecipe.java:71-79`: only
+/// `EnchantmentTags.CURSE` survives a crafting-grid repair; everything else
+/// is dropped (the anvil is the path that preserves ordinary enchantments).
+fn merged_curse_enchantments(
+    first: &ItemStack,
+    second: &ItemStack,
+) -> Vec<(&'static Enchantment, i32)> {
+    let mut merged: Vec<(&'static Enchantment, i32)> = Vec::new();
+    for stack in [first, second] {
+        let Some(data) = stack.get_data_component::<EnchantmentsImpl>() else {
+            continue;
+        };
+        for (enchantment, level) in data.enchantment.iter() {
+            if !enchantment.has_tag(&tag::Enchantment::MINECRAFT_CURSE) {
+                continue;
+            }
+            if let Some(existing) = merged.iter_mut().find(|(e, _)| *e == *enchantment) {
+                existing.1 = existing.1.max(*level);
+            } else {
+                merged.push((*enchantment, *level));
+            }
+        }
+    }
+    merged
+}
+
+/// `RepairItemRecipe::matches`/`assemble`, 26.2 decompile
+/// `RepairItemRecipe.java:24-79`.
+fn match_repair_item(items: &[ItemStack]) -> Option<RecipeResult> {
+    let [first, second] = items else {
+        return None;
+    };
+    if first.item != second.item || first.item_count != 1 || second.item_count != 1 {
+        return None;
+    }
+    let (Some(first_max), Some(second_max)) = (first.get_max_damage(), second.get_max_damage())
+    else {
+        return None;
+    };
+
+    let durability = first_max.max(second_max);
+    let remaining = (first_max - first.get_damage())
+        + (second_max - second.get_damage())
+        + durability * 5 / 100;
+    let damage = (durability - remaining).max(0);
+
+    let mut patch = vec![(
+        DataComponent::MaxDamage,
+        Some(
+            MaxDamageImpl {
+                max_damage: durability,
+            }
+            .to_dyn(),
+        ),
+    )];
+    if damage > 0 {
+        patch.push((DataComponent::Damage, Some(DamageImpl { damage }.to_dyn())));
+    }
+    let enchantments = merged_curse_enchantments(first, second);
+    if !enchantments.is_empty() {
+        patch.push((
+            DataComponent::Enchantments,
+            Some(
+                EnchantmentsImpl {
+                    enchantment: std::borrow::Cow::Owned(enchantments),
+                }
+                .to_dyn(),
+            ),
+        ));
+    }
+
+    Some(RecipeResult {
+        item_id: format!("minecraft:{}", first.item.registry_key),
+        count: 1,
+        component_patch: patch,
+    })
+}
+
+/// Vanilla's `CustomRecipe` special recipes (`CraftingSpecial` in
+/// `pumpkin-data`'s generated recipe types carries no data to dispatch on,
+/// since each one is a Java class rather than JSON shape data), tried after
+/// every data-driven recipe has failed to match.
+fn match_special_recipe(items: &[ItemStack]) -> Option<RecipeResult> {
+    match_firework_rocket(items)
+        .or_else(|| match_firework_star(items))
+        .or_else(|| match_firework_star_fade(items))
+        .or_else(|| match_repair_item(items))
+}
+
 impl ResultSlot {
     pub fn new(
         inventory: Arc<dyn RecipeInputInventory>,
@@ -442,7 +738,16 @@ impl ResultSlot {
                 }
             }
         }
-        None
+
+        let mut items = Vec::with_capacity(count);
+        for i in 0..self.inventory.size() {
+            let slot = self.inventory.get_stack(i).await;
+            let slot = slot.lock().await;
+            if !slot.is_empty() {
+                items.push(slot.clone());
+            }
+        }
+        match_special_recipe(&items)
     }
 
     async fn refill_output(&self) -> ItemStack {
@@ -890,6 +1195,134 @@ mod tests {
                 std::borrow::Cow::Borrowed("arms_up_pottery_sherd"),
                 std::borrow::Cow::Borrowed("blade_pottery_sherd"),
             ]
+        );
+    }
+}
+
+#[cfg(test)]
+mod special_recipe_tests {
+    use super::{
+        DataComponent, DataComponentImpl, FireworkExplosionImpl, FireworkExplosionShape,
+        FireworksImpl, match_firework_rocket, match_firework_star, match_repair_item,
+    };
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+
+    fn star_with_explosion(shape: FireworkExplosionShape, colors: Vec<i32>) -> ItemStack {
+        ItemStack::new_with_component(
+            1,
+            &Item::FIREWORK_STAR,
+            vec![(
+                DataComponent::FireworkExplosion,
+                Some(FireworkExplosionImpl::new(shape, colors, Vec::new(), false, false).to_dyn()),
+            )],
+        )
+    }
+
+    fn output_of(result: super::RecipeResult, item: &'static Item) -> ItemStack {
+        ItemStack::new_with_component(result.count, item, result.component_patch)
+    }
+
+    #[test]
+    fn firework_rocket_counts_gunpowder_and_collects_star_explosions() {
+        let items = vec![
+            ItemStack::new(1, &Item::PAPER),
+            ItemStack::new(1, &Item::GUNPOWDER),
+            ItemStack::new(1, &Item::GUNPOWDER),
+            star_with_explosion(FireworkExplosionShape::Star, vec![11_743_532]),
+        ];
+        let result = match_firework_rocket(&items).expect("recipe should match");
+        assert_eq!(result.item_id, "minecraft:firework_rocket");
+        let output = output_of(result, &Item::FIREWORK_ROCKET);
+        let fireworks = output
+            .get_data_component::<FireworksImpl>()
+            .expect("fireworks component present");
+        assert_eq!(fireworks.flight_duration, 2);
+        assert_eq!(fireworks.explosions.len(), 1);
+        assert_eq!(fireworks.explosions[0].shape, FireworkExplosionShape::Star);
+    }
+
+    #[test]
+    fn firework_rocket_rejects_more_than_three_gunpowder() {
+        let items = vec![
+            ItemStack::new(1, &Item::PAPER),
+            ItemStack::new(1, &Item::GUNPOWDER),
+            ItemStack::new(1, &Item::GUNPOWDER),
+            ItemStack::new(1, &Item::GUNPOWDER),
+            ItemStack::new(1, &Item::GUNPOWDER),
+        ];
+        assert!(match_firework_rocket(&items).is_none());
+    }
+
+    #[test]
+    fn firework_star_reads_shape_and_dye_color() {
+        let items = vec![
+            ItemStack::new(1, &Item::GUNPOWDER),
+            ItemStack::new(1, &Item::RED_DYE),
+            ItemStack::new(1, &Item::GOLD_NUGGET),
+        ];
+        let result = match_firework_star(&items).expect("recipe should match");
+        let output = output_of(result, &Item::FIREWORK_STAR);
+        let explosion = output
+            .get_data_component::<FireworkExplosionImpl>()
+            .expect("explosion component present");
+        assert_eq!(explosion.shape, FireworkExplosionShape::Star);
+        assert_eq!(explosion.colors, vec![11_743_532]);
+    }
+
+    #[test]
+    fn firework_star_rejects_two_shape_items() {
+        let items = vec![
+            ItemStack::new(1, &Item::GUNPOWDER),
+            ItemStack::new(1, &Item::WHITE_DYE),
+            ItemStack::new(1, &Item::FEATHER),
+            ItemStack::new(1, &Item::FIRE_CHARGE),
+        ];
+        assert!(match_firework_star(&items).is_none());
+    }
+
+    fn damaged_iron_pickaxe(damage: i32, count: u8) -> ItemStack {
+        let mut stack = ItemStack::new(count, &Item::IRON_PICKAXE);
+        stack.set_damage(damage);
+        stack
+    }
+
+    #[test]
+    fn repair_item_combines_durability_with_five_percent_bonus() {
+        // Vanilla RepairItemRecipe.java:69-73: durability = max(maxDamage),
+        // remaining = (max-dmg1) + (max-dmg2) + durability*5/100.
+        // Both inputs: max_damage 250, damage 200 -> remaining 50 each.
+        // remaining = 50 + 50 + 250*5/100 (=12) = 112; damage = 250-112 = 138.
+        let items = vec![damaged_iron_pickaxe(200, 1), damaged_iron_pickaxe(200, 1)];
+        let result = match_repair_item(&items).expect("recipe should match");
+        assert_eq!(result.item_id, "minecraft:iron_pickaxe");
+        let output = output_of(result, &Item::IRON_PICKAXE);
+        assert_eq!(output.get_max_damage(), Some(250));
+        assert_eq!(output.get_damage(), 138);
+    }
+
+    #[test]
+    fn repair_item_rejects_stacked_inputs() {
+        let items = vec![damaged_iron_pickaxe(50, 2), damaged_iron_pickaxe(50, 1)];
+        assert!(match_repair_item(&items).is_none());
+    }
+
+    #[test]
+    fn repair_item_keeps_only_curse_enchantments_at_the_higher_level() {
+        let mut first = damaged_iron_pickaxe(50, 1);
+        first.add_enchantment(&pumpkin_data::Enchantment::VANISHING_CURSE, 1);
+        let mut second = damaged_iron_pickaxe(50, 1);
+        second.add_enchantment(&pumpkin_data::Enchantment::UNBREAKING, 3);
+
+        let result = match_repair_item(&[first, second]).expect("recipe should match");
+        let output = output_of(result, &Item::IRON_PICKAXE);
+        assert_eq!(
+            output.get_enchantment_level(&pumpkin_data::Enchantment::VANISHING_CURSE),
+            1
+        );
+        assert_eq!(
+            output.get_enchantment_level(&pumpkin_data::Enchantment::UNBREAKING),
+            0
         );
     }
 }

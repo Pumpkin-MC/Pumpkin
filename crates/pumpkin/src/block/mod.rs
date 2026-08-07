@@ -178,6 +178,16 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
+    /// `Block#handlePrecipitation`: called from `ServerLevel#tickPrecipitation` on the block
+    /// directly below the exposed rain/snow column while it is raining. Only cauldrons override
+    /// this; every other block is a no-op like vanilla's base implementation.
+    fn handle_precipitation<'a>(
+        &'a self,
+        _args: HandlePrecipitationArgs<'a>,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     fn on_state_replaced<'a>(&'a self, _args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -410,6 +420,22 @@ pub struct OnScheduledTickArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub position: &'a BlockPos,
+}
+
+/// `Biome.Precipitation`, as narrowed by `ServerLevel#tickPrecipitation`: it only ever calls
+/// `handlePrecipitation` with `RAIN` or `SNOW`, never `NONE`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Precipitation {
+    Rain,
+    Snow,
+}
+
+pub struct HandlePrecipitationArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state_id: BlockStateId,
+    pub position: &'a BlockPos,
+    pub precipitation: Precipitation,
 }
 
 pub struct OnStateReplacedArgs<'a> {

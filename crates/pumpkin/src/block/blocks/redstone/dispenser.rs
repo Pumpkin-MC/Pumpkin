@@ -11,6 +11,7 @@ use crate::block::{
 };
 use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::item::ItemEntity;
+use crate::entity::passive::sheep::SheepEntity;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
 use crate::entity::tnt::TNTEntity;
 use crate::entity::r#type::from_type;
@@ -20,12 +21,16 @@ use crate::item::ItemMetadata;
 use crate::item::items::boat::BoatItem;
 use crate::item::items::spawn_egg::apply_entity_variant;
 use crate::world::World;
+use crate::world::game_event::{GameEventContext, emit_game_event};
 
 use crate::block::entities::dispenser::DispenserBlockEntity;
+use crate::block::entities::hopper::HopperBlockEntity;
+use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::{EntityType, entity_from_egg};
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -229,6 +234,25 @@ impl BlockBehaviour for DispenserBlock {
                     } else if entity_from_egg(item.item.id).is_some() {
                         // Spawn eggs
                         Self::dispense_spawn_egg(&ctx, &mut item).await;
+                    } else if item.item.id == Item::WATER_BUCKET.id
+                        || item.item.id == Item::LAVA_BUCKET.id
+                        || item.item.id == Item::POWDER_SNOW_BUCKET.id
+                    {
+                        // Filled buckets: empty onto the block the dispenser faces
+                        if !Self::dispense_bucket_empty(&ctx, &mut item, dispenser).await {
+                            Self::drop_item(&ctx, &mut item).await;
+                        }
+                    } else if item.item.id == Item::BUCKET.id {
+                        // Empty bucket: pick up a water/lava source in front
+                        if !Self::dispense_bucket_fill(&ctx, &mut item, dispenser).await {
+                            Self::drop_item(&ctx, &mut item).await;
+                        }
+                    } else if item.is_shears() {
+                        // Shears: unlike the other behaviors above, vanilla's
+                        // OptionalDispenseItemBehavior never falls back to dropping the
+                        // item on failure - it just plays the fail sound and leaves the
+                        // shears in the dispenser.
+                        Self::dispense_shears(&ctx, &mut item).await;
                     } else {
                         // Default / Drop
                         Self::drop_item(&ctx, &mut item).await;
@@ -501,6 +525,146 @@ impl DispenserBlock {
         ctx.world
             .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
 
+        ctx.world.sync_world_event(
+            WorldEvent::ParticlesShootSmoke,
+            *ctx.position,
+            to_data3d(ctx.facing),
+        );
+    }
+
+    /// Vanilla `DispenseItemBehavior.bootStrap`'s `filledBucketBehavior`: empties the
+    /// bucket onto the faced block if it is air or otherwise replaceable, then returns
+    /// the empty bucket to the slot. Waterlogging a partial block (e.g. a stair) and the
+    /// mob-bucket entity-spawn cases are not handled here; those fall through to the
+    /// default drop, same as an unrecognized item.
+    async fn dispense_bucket_empty(
+        ctx: &DispenseContext<'_>,
+        item: &mut ItemStack,
+        dispenser: &DispenserBlockEntity,
+    ) -> bool {
+        let fluid_block = if item.item.id == Item::LAVA_BUCKET.id {
+            &Block::LAVA
+        } else if item.item.id == Item::WATER_BUCKET.id {
+            &Block::WATER
+        } else if item.item.id == Item::POWDER_SNOW_BUCKET.id {
+            &Block::POWDER_SNOW
+        } else {
+            return false;
+        };
+
+        let target = Self::target_position(ctx);
+        let target_state = ctx.world.get_block_state(&target);
+        if !(target_state.is_air() || target_state.replaceable()) {
+            return false;
+        }
+
+        ctx.world
+            .set_block_state(
+                &target,
+                fluid_block.default_state.id,
+                BlockFlags::NOTIFY_NEIGHBORS,
+            )
+            .await;
+
+        let _ = item.split(1);
+        *item = ItemStack::new(1, &Item::BUCKET);
+        dispenser.mark_dirty();
+
+        ctx.world
+            .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
+        ctx.world.sync_world_event(
+            WorldEvent::ParticlesShootSmoke,
+            *ctx.position,
+            to_data3d(ctx.facing),
+        );
+        true
+    }
+
+    /// Vanilla `DispenseItemBehavior.bootStrap`'s `Items.BUCKET` behavior: picks up a
+    /// water or lava source block the dispenser faces. Non-source (flowing) fluid is
+    /// left alone, matching `LiquidBlock.pickupBlock`'s `isSource` check.
+    async fn dispense_bucket_fill(
+        ctx: &DispenseContext<'_>,
+        item: &mut ItemStack,
+        dispenser: &DispenserBlockEntity,
+    ) -> bool {
+        let target = Self::target_position(ctx);
+        let state = ctx.world.get_block_state(&target);
+        let filled = if state.id == Block::WATER.default_state.id {
+            &Item::WATER_BUCKET
+        } else if state.id == Block::LAVA.default_state.id {
+            &Item::LAVA_BUCKET
+        } else {
+            return false;
+        };
+
+        ctx.world
+            .set_block_state(
+                &target,
+                Block::AIR.default_state.id,
+                BlockFlags::NOTIFY_NEIGHBORS,
+            )
+            .await;
+
+        let _ = item.split(1);
+        dispenser.mark_dirty();
+
+        let all_slots: Vec<usize> = (0..DispenserBlockEntity::INVENTORY_SIZE).collect();
+        let mut remainder = ItemStack::new(1, filled);
+        if !HopperBlockEntity::add_one_item(dispenser, dispenser, remainder.clone(), &all_slots)
+            .await
+        {
+            Self::drop_item(ctx, &mut remainder).await;
+        }
+
+        ctx.world
+            .sync_world_event(WorldEvent::SoundDispenserDispense, *ctx.position, 0);
+        ctx.world.sync_world_event(
+            WorldEvent::ParticlesShootSmoke,
+            *ctx.position,
+            to_data3d(ctx.facing),
+        );
+        true
+    }
+
+    /// Vanilla `ShearsDispenseItemBehavior`: only the sheep branch of `tryShearEntity` is
+    /// ported (beehive honeycomb harvesting and leash-cutting are separate block-entity /
+    /// entity-graph features out of scope here). `OptionalDispenseItemBehavior.dispense`
+    /// always plays the animation smoke and plays sound 1000 on success / 1001 on
+    /// failure - never falls back to a plain item drop.
+    async fn dispense_shears(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
+        let target = Self::target_position(ctx);
+        let min = target.to_f64();
+        let aabb = BoundingBox::new(min, min.add_raw(1.0, 1.0, 1.0));
+
+        let mut success = false;
+        for entity in ctx.world.get_entities_at_box(&aabb) {
+            if let Some(sheep) = entity.cast_any().downcast_ref::<SheepEntity>()
+                && sheep.ready_for_shearing()
+            {
+                sheep.shear(ctx.world).await;
+                emit_game_event(
+                    ctx.world,
+                    GameEvent::Shear,
+                    target.to_centered_f64(),
+                    GameEventContext::none(),
+                )
+                .await;
+                let _ = item.damage_item(1);
+                success = true;
+                break;
+            }
+        }
+
+        ctx.world.sync_world_event(
+            if success {
+                WorldEvent::SoundDispenserDispense
+            } else {
+                WorldEvent::SoundDispenserFail
+            },
+            *ctx.position,
+            0,
+        );
         ctx.world.sync_world_event(
             WorldEvent::ParticlesShootSmoke,
             *ctx.position,

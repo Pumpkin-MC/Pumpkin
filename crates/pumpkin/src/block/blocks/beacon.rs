@@ -15,7 +15,10 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs};
 
 // Create the factory just like ChestScreenFactory
-struct BeaconScreenFactory(Arc<dyn Inventory>);
+struct BeaconScreenFactory(
+    Arc<dyn Inventory>,
+    Arc<dyn crate::block::entities::PropertyDelegate>,
+);
 
 impl ScreenHandlerFactory for BeaconScreenFactory {
     fn create_screen_handler<'a>(
@@ -25,11 +28,11 @@ impl ScreenHandlerFactory for BeaconScreenFactory {
         _player: &'a dyn InventoryPlayer,
     ) -> BoxFuture<'a, Option<SharedScreenHandler>> {
         Box::pin(async move {
-            // Assumes create_beacon_handler exists in your generic_container_screen_handler equivalent
             use pumpkin_inventory::beacon_screen_handler::create_beacon_handler;
 
             let concrete_handler =
-                create_beacon_handler(sync_id, player_inventory, self.0.clone()).await;
+                create_beacon_handler(sync_id, player_inventory, self.0.clone(), self.1.clone())
+                    .await;
             let concrete_arc = Arc::new(Mutex::new(concrete_handler));
 
             Some(concrete_arc as SharedScreenHandler)
@@ -53,8 +56,12 @@ impl BlockBehaviour for BeaconBlock {
         Box::pin(async move {
             let block_entity = args.world.get_block_entity(args.position);
 
-            // Extract the inventory from the entity
-            let Some(inventory) = block_entity.and_then(BlockEntity::get_inventory) else {
+            // Extract the inventory and property delegate from the entity
+            let Some(inventory) = block_entity.clone().and_then(BlockEntity::get_inventory) else {
+                return BlockActionResult::Fail;
+            };
+            let Some(property_delegate) = block_entity.and_then(BlockEntity::to_property_delegate)
+            else {
                 return BlockActionResult::Fail;
             };
 
@@ -68,7 +75,10 @@ impl BlockBehaviour for BeaconBlock {
 
             // Open the screen using the factory
             args.player
-                .open_handled_screen(&BeaconScreenFactory(inventory), Some(*args.position))
+                .open_handled_screen(
+                    &BeaconScreenFactory(inventory, property_delegate),
+                    Some(*args.position),
+                )
                 .await;
 
             BlockActionResult::Success

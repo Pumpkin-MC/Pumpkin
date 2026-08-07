@@ -7,7 +7,8 @@ use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
 use pumpkin_data::chest_loot_table::get_chest_loot_table;
-use pumpkin_data::entity::EntityPose;
+use pumpkin_data::entity::{EntityPose, EntityType};
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
@@ -17,16 +18,20 @@ use pumpkin_inventory::screen_handler::{
 };
 use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::GameMode;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::inventory::Inventory;
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
 
 use crate::block::blocks::copper_weathering;
 use crate::block::{
     BlockFuture, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs, GetRedstonePowerArgs,
-    NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs, RandomTickArgs,
+    GetStateForNeighborUpdateArgs, NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs,
+    RandomTickArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -130,6 +135,13 @@ async fn placed_chest_impl<E: BlockEntity + 'static>(
 }
 
 async fn get_chest_comparator_output(args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+    // Vanilla DoubleBlockCombiner.combineWithNeigbour (DoubleBlockCombiner.java:29-30, 47-49):
+    // a blocked chest (solid block above / sitting cat) combines to `acceptNone`, so its
+    // comparator reads 0 rather than the fill level.
+    if is_chest_blocked(args.world, args.position) {
+        return None;
+    }
+
     let state = args.world.get_block_state_id(args.position);
     let first_chest = args.world.get_block_entity(args.position);
     let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
@@ -142,6 +154,7 @@ async fn get_chest_comparator_output(args: GetComparatorOutputArgs<'_>) -> Optio
     };
 
     if let Some(direction) = connected_towards
+        && !is_chest_blocked(args.world, &args.position.offset(direction.to_offset()))
         && let Some(second_inventory) = args
             .world
             .get_block_entity(&args.position.offset(direction.to_offset()))
@@ -158,11 +171,14 @@ async fn get_chest_comparator_output(args: GetComparatorOutputArgs<'_>) -> Optio
     }
 }
 
-async fn normal_use_chest_impl(args: NormalUseArgs<'_>) -> BlockActionResult {
+async fn normal_use_chest_impl(
+    args: NormalUseArgs<'_>,
+    open_stat: pumpkin_data::statistic::CustomStatistic,
+) -> BlockActionResult {
     args.player
         .increment_stat(
             pumpkin_data::statistic::StatisticCategory::Custom,
-            pumpkin_data::statistic::CustomStatistic::OpenChest as i32,
+            open_stat as i32,
             1,
         )
         .await;
@@ -235,6 +251,26 @@ async fn normal_use_chest_impl(args: NormalUseArgs<'_>) -> BlockActionResult {
     BlockActionResult::Success
 }
 
+// Vanilla ChestBlock.updateShape (ChestBlock.java:169-171): a waterlogged chest keeps
+// rescheduling its own water fluid tick whenever a neighbor changes.
+//
+// Synchronous: callers wrap the result in `std::future::ready` to satisfy the trait's
+// boxed-future return type.
+fn get_state_for_neighbor_update_chest_impl(
+    args: &GetStateForNeighborUpdateArgs<'_>,
+) -> BlockStateId {
+    let props = ChestLikeProperties::from_state_id(args.state_id, args.block);
+    if props.waterlogged {
+        args.world.schedule_fluid_tick(
+            &Fluid::WATER,
+            *args.position,
+            Fluid::WATER.flow_speed as u8,
+            TickPriority::Normal,
+        );
+    }
+    args.state_id
+}
+
 async fn broken_chest_impl(args: BrokenArgs<'_>) {
     let chest_props = ChestLikeProperties::from_state_id(args.state.id, args.block);
     let connected_towards = match chest_props.r#type {
@@ -283,7 +319,19 @@ impl BlockBehaviour for ChestBlock {
     }
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(normal_use_chest_impl(args))
+        Box::pin(normal_use_chest_impl(
+            args,
+            pumpkin_data::statistic::CustomStatistic::OpenChest,
+        ))
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(std::future::ready(
+            get_state_for_neighbor_update_chest_impl(&args),
+        ))
     }
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
@@ -319,7 +367,19 @@ impl BlockBehaviour for CopperChestBlock {
     }
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(normal_use_chest_impl(args))
+        Box::pin(normal_use_chest_impl(
+            args,
+            pumpkin_data::statistic::CustomStatistic::OpenChest,
+        ))
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(std::future::ready(
+            get_state_for_neighbor_update_chest_impl(&args),
+        ))
     }
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
@@ -447,7 +507,21 @@ impl BlockBehaviour for TrappedChestBlock {
     }
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(normal_use_chest_impl(args))
+        // Vanilla TrappedChestBlock.getOpenChestStat (TrappedChestBlock.java:36-39):
+        // trapped chests award TRIGGER_TRAPPED_CHEST, not the regular OPEN_CHEST stat.
+        Box::pin(normal_use_chest_impl(
+            args,
+            pumpkin_data::statistic::CustomStatistic::TriggerTrappedChest,
+        ))
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(std::future::ready(
+            get_state_for_neighbor_update_chest_impl(&args),
+        ))
     }
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
@@ -593,14 +667,38 @@ fn get_chest_properties_if_can_connect(
     None
 }
 
+// Vanilla ChestBlock.isChestBlockedAt (ChestBlock.java:332-334): blocked by a
+// redstone-conducting block above, or a cat sitting on top.
 fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
-    // TODO: Block opening when a cat is sitting on top.
-    has_block_on_top(world, block_pos)
+    has_block_on_top(world, block_pos) || is_cat_sitting_on_chest(world, block_pos)
 }
 fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
     let above_pos = block_pos.up();
     let above_state = world.get_block_state(&above_pos);
     above_state.is_solid_block()
+}
+
+// Vanilla ChestBlock.isCatSittingOnChest (ChestBlock.java:341-352): any cat with
+// `isInSittingPose()` inside the 1x1x1 box directly above the chest.
+// Pumpkin doesn't track the cat's settled sitting-pose flag separately, so
+// `is_ordered_to_sit()` (the sit command state) is used as the closest available proxy.
+fn is_cat_sitting_on_chest(world: &World, block_pos: &BlockPos) -> bool {
+    let x = f64::from(block_pos.0.x);
+    let y = f64::from(block_pos.0.y);
+    let z = f64::from(block_pos.0.z);
+    let aabb = BoundingBox {
+        min: Vector3::new(x, y + 1.0, z),
+        max: Vector3::new(x + 1.0, y + 2.0, z + 1.0),
+    };
+
+    world.get_entities_at_box(&aabb).iter().any(|entity| {
+        // EntityBase::as_any carries a `where Self: Sized` bound, so it cannot be called
+        // on a trait object; get_mob reaches the shared MobEntity without downcasting.
+        entity.get_entity().entity_type == &EntityType::CAT
+            && entity
+                .get_mob()
+                .is_some_and(|cat| cat.get_mob_entity().is_ordered_to_sit())
+    })
 }
 
 trait ChestTypeExt {

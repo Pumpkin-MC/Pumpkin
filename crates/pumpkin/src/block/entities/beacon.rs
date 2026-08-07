@@ -8,12 +8,14 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use tokio::sync::Mutex;
 
-use crate::block::entities::BlockEntity;
+use crate::block::entities::{BlockEntity, PropertyDelegate};
 use crate::world::World;
 use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
 
@@ -53,26 +55,6 @@ impl BeaconBlockEntity {
             lock_key: Mutex::new(None),
             last_check_y: AtomicI32::new(position.0.y - 1),
         }
-    }
-
-    /// Replicates the Java `ContainerData` used to sync values to the `BeaconMenu`
-    pub fn get_data(&self, id: usize) -> i32 {
-        match id {
-            Self::DATA_LEVELS => self.levels.load(Ordering::Relaxed),
-            Self::DATA_PRIMARY => self.primary_effect.load(Ordering::Relaxed),
-            Self::DATA_SECONDARY => self.secondary_effect.load(Ordering::Relaxed),
-            _ => 0,
-        }
-    }
-
-    pub fn set_data(&self, id: usize, value: i32) {
-        match id {
-            Self::DATA_LEVELS => self.levels.store(value, Ordering::Relaxed),
-            Self::DATA_PRIMARY => self.primary_effect.store(value, Ordering::Relaxed),
-            Self::DATA_SECONDARY => self.secondary_effect.store(value, Ordering::Relaxed),
-            _ => {}
-        }
-        self.mark_dirty();
     }
 
     /// Scans straight up from the beacon for an opaque, non-bedrock block.
@@ -139,12 +121,14 @@ impl BeaconBlockEntity {
         let primary_id = self.primary_effect.load(Ordering::Relaxed);
         let secondary_id = self.secondary_effect.load(Ordering::Relaxed);
 
-        if primary_id <= 0 {
+        // -1 is the "no effect" sentinel; effect ids are 0-based (e.g. Speed is 0), so a
+        // `<= 0` check here would treat a Speed beacon as unset.
+        if primary_id < 0 {
             return;
         }
 
         let primary_effect = StatusEffect::from_id(primary_id as u16);
-        let secondary_effect = if secondary_id > 0 {
+        let secondary_effect = if secondary_id >= 0 {
             StatusEffect::from_id(secondary_id as u16)
         } else {
             None
@@ -198,6 +182,93 @@ impl BeaconBlockEntity {
                     .await;
             }
         }
+    }
+
+    /// Vanilla `BeaconBlockEntity.getRequiredLevelsFor`: the pyramid tier an effect needs.
+    /// `None` (no effect selected) requires tier 0; an effect outside the beacon's effect
+    /// set can never be satisfied.
+    const fn required_level(effect: Option<&'static StatusEffect>) -> i32 {
+        match effect {
+            None => 0,
+            Some(e) if e.id == StatusEffect::SPEED.id || e.id == StatusEffect::HASTE.id => 1,
+            Some(e)
+                if e.id == StatusEffect::RESISTANCE.id || e.id == StatusEffect::JUMP_BOOST.id =>
+            {
+                2
+            }
+            Some(e) if e.id == StatusEffect::STRENGTH.id => 3,
+            Some(e) if e.id == StatusEffect::REGENERATION.id => 4,
+            Some(_) => i32::MAX,
+        }
+    }
+
+    /// Vanilla `BeaconBlockEntity.validateEffects`.
+    fn validate_effects(
+        primary: Option<&'static StatusEffect>,
+        secondary: Option<&'static StatusEffect>,
+        levels: i32,
+    ) -> bool {
+        if secondary.is_some() && levels < 4 {
+            return false;
+        }
+
+        let primary_level = Self::required_level(primary);
+        let secondary_level = Self::required_level(secondary);
+        if primary_level > levels || secondary_level > levels {
+            return false;
+        }
+
+        if primary_level >= 4 {
+            return false;
+        }
+
+        secondary_level == 0
+            || secondary_level >= 4
+            || primary.map(|e| e.id) == secondary.map(|e| e.id)
+    }
+
+    /// Vanilla `BeaconMenu.updateEffects`: validates the requested effects against the
+    /// current pyramid tier, then consumes one payment item on success.
+    pub async fn update_effects(
+        &self,
+        world: &Arc<World>,
+        primary: Option<i32>,
+        secondary: Option<i32>,
+    ) -> bool {
+        let mut payment = self.payment.lock().await;
+        if payment.is_empty() {
+            return false;
+        }
+
+        let levels = self.levels.load(Ordering::Relaxed);
+        let primary_effect = primary.and_then(|id| StatusEffect::from_id(id as u16));
+        let secondary_effect = secondary.and_then(|id| StatusEffect::from_id(id as u16));
+
+        if !Self::validate_effects(primary_effect, secondary_effect, levels) {
+            return false;
+        }
+
+        self.primary_effect.store(
+            primary_effect.map_or(-1, |e| i32::from(e.id)),
+            Ordering::Relaxed,
+        );
+        self.secondary_effect.store(
+            secondary_effect.map_or(-1, |e| i32::from(e.id)),
+            Ordering::Relaxed,
+        );
+        payment.decrement(1);
+        drop(payment);
+
+        self.mark_dirty();
+
+        let pos = Vector3::new(
+            self.position.0.x as f64 + 0.5,
+            self.position.0.y as f64 + 0.5,
+            self.position.0.z as f64 + 0.5,
+        );
+        world.play_sound(Sound::BlockBeaconPowerSelect, SoundCategory::Blocks, &pos);
+
+        true
     }
 }
 
@@ -304,6 +375,34 @@ impl BlockEntity for BeaconBlockEntity {
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self as Arc<dyn Inventory>)
+    }
+
+    fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
+        Some(self as Arc<dyn PropertyDelegate>)
+    }
+}
+
+/// Vanilla's `BeaconMenu.encodeEffect`: the container-property wire value is the effect id
+/// plus one, with 0 meaning "no effect". This is only used for the synced `ContainerData`,
+/// not for the dedicated set-beacon packet, which carries raw effect ids.
+const fn encode_effect(id: i32) -> i32 {
+    if id < 0 { 0 } else { id + 1 }
+}
+
+impl PropertyDelegate for BeaconBlockEntity {
+    fn get_property(&self, index: i32) -> i32 {
+        match index as usize {
+            Self::DATA_LEVELS => self.levels.load(Ordering::Relaxed),
+            Self::DATA_PRIMARY => encode_effect(self.primary_effect.load(Ordering::Relaxed)),
+            Self::DATA_SECONDARY => encode_effect(self.secondary_effect.load(Ordering::Relaxed)),
+            _ => 0,
+        }
+    }
+
+    fn set_property(&self, _index: i32, _value: i32) {}
+
+    fn get_properties_size(&self) -> i32 {
+        Self::NUM_DATA_VALUES as i32
     }
 }
 

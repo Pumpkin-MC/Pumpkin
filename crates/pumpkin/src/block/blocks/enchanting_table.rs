@@ -28,48 +28,31 @@ impl BlockBehaviour for EnchantingTableBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
+            // EnchantingTableBlock.BOOKSHELF_OFFSETS / isValidBookShelf (26.2 decompile): every
+            // (x,y,z) with x,z in -2..=2, y in 0..=1 and (|x| == 2 or |z| == 2) is a candidate
+            // shelf position, gated by a single-height air gap at (x/2, y, z/2) — integer
+            // division truncating toward zero, same as Java's, so the gap sits exactly between
+            // the table and the shelf.
             let mut bookshelf_count = 0;
-
-            for off_z in -1..=1 {
-                for off_x in -1..=1 {
-                    if (off_z != 0 || off_x != 0)
-                        && args
-                            .world
-                            .get_block_state(&args.position.add(off_x, 0, off_z))
-                            .id
-                            == BlockStateId::AIR
-                        && args
-                            .world
-                            .get_block_state(&args.position.add(off_x, 1, off_z))
-                            .id
-                            == BlockStateId::AIR
-                    // Air
-                    {
-                        for off_y in 0..=1 {
-                            if Self::is_bookshelf(
-                                args.world,
-                                &args.position.add(off_x * 2, off_y, off_z * 2),
-                            ) {
-                                bookshelf_count += 1;
-                            }
-                            if off_x != 0 && off_z != 0 {
-                                if Self::is_bookshelf(
-                                    args.world,
-                                    &args.position.add(off_x * 2, off_y, off_z),
-                                ) {
-                                    bookshelf_count += 1;
-                                }
-                                if Self::is_bookshelf(
-                                    args.world,
-                                    &args.position.add(off_x, off_y, off_z * 2),
-                                ) {
-                                    bookshelf_count += 1;
-                                }
-                            }
+            for off_x in -2i32..=2 {
+                for off_z in -2i32..=2 {
+                    if off_x.abs() != 2 && off_z.abs() != 2 {
+                        continue;
+                    }
+                    for off_y in 0..=1 {
+                        let gap = args.position.add(off_x / 2, off_y, off_z / 2);
+                        if args.world.get_block_state(&gap).id != BlockStateId::AIR {
+                            continue;
+                        }
+                        if Self::is_bookshelf(args.world, &args.position.add(off_x, off_y, off_z)) {
+                            bookshelf_count += 1;
                         }
                     }
                 }
             }
+            // EnchantmentHelper.getEnchantmentCost (EnchantmentHelper.java:510-512) clamps the
+            // raw count to 15 before using it; done here since Pumpkin's screen handler doesn't
+            // re-clamp its own `bookshelf_count` field.
             let bookshelf_count = bookshelf_count.min(15);
 
             args.player

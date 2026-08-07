@@ -4,10 +4,9 @@ use pumpkin_util::{math::position::BlockPos, random::RandomGenerator, random::Ra
 use super::weeping_vines::WeepingVinesFeature;
 use crate::generation::proto_chunk::GenerationCache;
 
-/// `HugeFungusConfiguration.replaceableBlocks` as registered by
-/// `TreeFeatures` (Mojang-named 1.21.4 decompile,
-/// `net/minecraft/data/worldgen/features/TreeFeatures.java`): the shared
-/// `BlockPredicate.matchesBlocks(...)` list handed to every fungus config.
+/// `HugeFungusConfiguration.replaceable_blocks`, read directly from the 26.2
+/// datapack (`data/minecraft/worldgen/configured_feature/crimson_fungus.json`
+/// and `warped_fungus.json`, identical `matching_blocks` list in both).
 const REPLACEABLE_BLOCKS: &[pumpkin_data::BlockId] = &[
     Block::OAK_SAPLING.id,
     Block::SPRUCE_SAPLING.id,
@@ -64,14 +63,15 @@ const REPLACEABLE_BLOCKS: &[pumpkin_data::BlockId] = &[
     Block::FLOWERING_AZALEA.id,
     Block::MOSS_CARPET.id,
     Block::PINK_PETALS.id,
+    Block::WILDFLOWERS.id,
     Block::BIG_DRIPLEAF.id,
     Block::BIG_DRIPLEAF_STEM.id,
     Block::SMALL_DRIPLEAF.id,
 ];
 
 /// The `HugeFungusConfiguration` values the configured feature table drops on
-/// the floor. Sourced from `TreeFeatures.CRIMSON_FUNGUS` / `WARPED_FUNGUS`
-/// (Mojang-named 1.21.4 decompile).
+/// the floor, read from the 26.2 `crimson_fungus.json` / `warped_fungus.json`
+/// configured features above.
 struct FungusConfig {
     valid_base: pumpkin_data::BlockId,
     stem: &'static BlockState,

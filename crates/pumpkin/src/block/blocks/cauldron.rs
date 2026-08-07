@@ -2,7 +2,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, GetComparatorOutputArgs, OnEntityCollisionArgs,
+    BlockBehaviour, BlockFuture, BlockMetadata, GetComparatorOutputArgs, HandlePrecipitationArgs,
+    OnEntityCollisionArgs, Precipitation,
 };
 use crate::world::World;
 use crate::world::game_event::{GameEventContext, emit_game_event};
@@ -12,6 +13,7 @@ use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::{Block, BlockId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use rand::{RngExt, rng};
 
 pub struct CauldronBlock;
 
@@ -66,6 +68,58 @@ impl BlockBehaviour for CauldronBlock {
                 _ => Some(0),
             }
         })
+    }
+
+    /// `CauldronBlock#handlePrecipitation` (empty cauldron) and
+    /// `LayeredCauldronBlock#handlePrecipitation` (partially filled water/powder-snow cauldron).
+    /// Lava cauldrons keep `Block`'s no-op default: vanilla never registers a precipitation
+    /// type for them.
+    fn handle_precipitation<'a>(
+        &'a self,
+        args: HandlePrecipitationArgs<'a>,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if !should_handle_precipitation(args.precipitation) {
+                return;
+            }
+
+            let new_state_id = match (args.block.id, args.precipitation) {
+                (BlockId::CAULDRON, Precipitation::Rain) => Block::WATER_CAULDRON.default_state.id,
+                (BlockId::CAULDRON, Precipitation::Snow) => {
+                    Block::POWDER_SNOW_CAULDRON.default_state.id
+                }
+                (BlockId::WATER_CAULDRON, Precipitation::Rain)
+                | (BlockId::POWDER_SNOW_CAULDRON, Precipitation::Snow) => {
+                    let mut props =
+                        WaterCauldronLikeProperties::from_state_id(args.state_id, args.block);
+                    if props.level >= 3 {
+                        return;
+                    }
+                    props.level += 1;
+                    props.to_state_id(args.block)
+                }
+                _ => return,
+            };
+
+            args.world
+                .set_block_state(args.position, new_state_id, BlockFlags::NOTIFY_ALL)
+                .await;
+            emit_game_event(
+                args.world,
+                GameEvent::BlockChange,
+                args.position.to_centered_f64(),
+                GameEventContext::none(),
+            )
+            .await;
+        })
+    }
+}
+
+/// `CauldronBlock#shouldHandlePrecipitation`.
+fn should_handle_precipitation(precipitation: Precipitation) -> bool {
+    match precipitation {
+        Precipitation::Rain => rng().random::<f32>() < 0.05,
+        Precipitation::Snow => rng().random::<f32>() < 0.1,
     }
 }
 

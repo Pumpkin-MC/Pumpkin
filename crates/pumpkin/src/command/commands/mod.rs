@@ -66,6 +66,7 @@ mod spreadplayers;
 mod stop;
 mod stopsound;
 mod summon;
+mod swing;
 mod tag;
 mod team;
 mod teammsg;
@@ -202,6 +203,7 @@ pub async fn default_dispatcher(
     teammsg::register(&mut dispatcher, registry);
     clone::register(&mut dispatcher, registry);
     attribute::register(&mut dispatcher, registry);
+    swing::register(&mut dispatcher, registry);
     dispatcher
 }
 

@@ -283,12 +283,12 @@ impl ScreenHandler for MerchantScreenHandler {
                             // price-modified count, matching the affordability check in
                             // `update_result_slot` above -- `cost_b` (the secondary
                             // ingredient) is never demand-adjusted in vanilla, only `costA`.
-                            let (count_a, count_b, offer_xp) = {
+                            let (count_a, count_b) = {
                                 let offer = &mut self.offers[self.selected_offer];
                                 offer.uses += 1;
                                 let count_a = cost_a_count(offer) as u8;
                                 let count_b = offer.cost_b.as_ref().map(|c| c.0.item_count);
-                                (count_a, count_b, offer.xp)
+                                (count_a, count_b)
                             };
 
                             let input_a = self.inventory.get_stack(slot_a_index).await;
@@ -311,9 +311,12 @@ impl ScreenHandler for MerchantScreenHandler {
                                 self.get_behaviour().slots[slot_b_index].mark_dirty().await;
                             }
 
-                            // Award XP
-                            player.award_experience(offer_xp).await;
-
+                            // Player/villager XP is awarded by `on_trade` below, which mirrors
+                            // vanilla `Villager::rewardTradeXp` (`Villager.java:569-582`):
+                            // `offer.getXp()` (`offer_xp` above) is the VILLAGER's XP gain, not
+                            // the player's -- the player gets a separate `3 + random(4)` XP orb,
+                            // gated on `offer.shouldRewardExp()`. Awarding `offer_xp` to the
+                            // player here would double-grant XP with the wrong value.
                             if let Some(on_trade) = &self.on_trade {
                                 on_trade(self.selected_offer);
                             }
