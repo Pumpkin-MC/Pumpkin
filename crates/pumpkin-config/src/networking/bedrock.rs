@@ -18,13 +18,13 @@ pub struct BedrockAuthenticationConfig {
     pub read_timeout: u32,
 }
 
-/// Configuration for Bedrock's HTTP/WebRTC `NetherNet` transport.
+/// Configuration for Bedrock's `NetherNet` transport.
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct NetherNetConfig {
     /// Whether clients may connect using `NetherNet`.
     pub enabled: bool,
-    /// HTTP signaling address. WebRTC uses separately allocated UDP ports for game traffic.
+    /// LAN discovery and signaling address. WebRTC uses separately allocated UDP ports for game traffic.
     pub address: SocketAddr,
     /// PKCS#8 P-384 identity key retained across restarts for Trust On First Use.
     pub identity_key: PathBuf,
@@ -36,7 +36,7 @@ impl Default for NetherNetConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            address: "0.0.0.0:19132".parse().unwrap(),
+            address: "0.0.0.0:7551".parse().unwrap(),
             identity_key: "nethernet-key.der".into(),
             stun_servers: Vec::new(),
         }
@@ -60,6 +60,8 @@ impl Default for BedrockAuthenticationConfig {
 pub struct BedrockConfig {
     /// Whether Bedrock Edition Clients are Accepted.
     pub enabled: bool,
+    /// The address the server-list status responder listens on.
+    pub address: SocketAddr,
     /// Whether online mode is enabled.
     pub online_mode: bool,
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
@@ -82,6 +84,7 @@ impl Default for BedrockConfig {
     fn default() -> Self {
         Self {
             enabled: true,
+            address: "0.0.0.0:19132".parse().unwrap(),
             online_mode: true,
             max_players: 1000,
             view_distance: NonZeroU8::new(16).unwrap(),

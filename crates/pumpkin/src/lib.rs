@@ -328,13 +328,14 @@ impl PumpkinServer {
         });
         Some(
             NetherNetListener::bind(
+                server.clone(),
                 config.nethernet.address,
                 identity_key,
                 oidc_verifier,
                 config.nethernet.stun_servers.clone(),
             )
             .await
-            .expect("Failed to bind Bedrock NetherNet signaling endpoint"),
+            .expect("Failed to bind the Bedrock NetherNet discovery socket"),
         )
     }
 
@@ -342,10 +343,9 @@ impl PumpkinServer {
         if !enabled {
             return None;
         }
-        let responder =
-            StatusResponder::bind(server.advanced_config.networking.bedrock.nethernet.address)
-                .await
-                .expect("Failed to bind Bedrock server-list status");
+        let responder = StatusResponder::bind(server.advanced_config.networking.bedrock.address)
+            .await
+            .expect("Failed to bind Bedrock server-list status");
         let (ipv4, ipv6) = responder
             .local_addrs()
             .expect("Bedrock status sockets should have local addresses");
@@ -558,7 +558,7 @@ impl PumpkinServer {
                 }
             },
 
-            // Branch for Bedrock NetherNet connections negotiated over HTTP/WebRTC.
+            // Branch for Bedrock NetherNet connections negotiated over LAN discovery signaling.
             nethernet_result = resolve_some(self.nethernet_listener.as_ref(), NetherNetListener::accept) => {
                 if let Some((session, client_addr)) = nethernet_result {
                     *master_client_id_counter += 1;
