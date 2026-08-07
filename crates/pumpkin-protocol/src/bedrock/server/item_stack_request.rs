@@ -1,4 +1,4 @@
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind, Read};
 
 use crate::{
     bedrock::network_item::FullContainerName,
@@ -20,11 +20,11 @@ fn collection_length<R: Read>(reader: &mut R, name: &str) -> Result<usize, Error
     Ok(len as usize)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PacketRead, PacketWrite)]
 pub struct ItemStackRequestSlotInfo {
     pub container_name: FullContainerName,
     pub slot_id: u8,
-    pub stack_id: VarInt,
+    pub stack_id: i32,
 }
 
 #[derive(Debug)]
@@ -62,28 +62,6 @@ impl PacketRead for StackRequestItem {
             block_runtime_id,
             extra_data,
         })
-    }
-}
-
-impl PacketRead for ItemStackRequestSlotInfo {
-    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        let container_name = FullContainerName::read(buf)?;
-        let slot_id = u8::read(buf)?;
-        let stack_id = VarInt(i32::read(buf)?);
-        Ok(Self {
-            container_name,
-            slot_id,
-            stack_id,
-        })
-    }
-}
-
-impl PacketWrite for ItemStackRequestSlotInfo {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.container_name.write(writer)?;
-        self.slot_id.write(writer)?;
-        self.stack_id.0.write(writer)?;
-        Ok(())
     }
 }
 
@@ -349,14 +327,14 @@ mod tests {
                 dynamic_id: None,
             },
             slot_id: 4,
-            stack_id: VarInt(-2),
+            stack_id: -2,
         };
         let mut encoded = Vec::new();
         slot.write(&mut encoded).unwrap();
 
         assert_eq!(&encoded[encoded.len() - 4..], &(-2i32).to_le_bytes());
         let decoded = ItemStackRequestSlotInfo::read(&mut encoded.as_slice()).unwrap();
-        assert_eq!(decoded.stack_id, VarInt(-2));
+        assert_eq!(decoded.stack_id, -2);
     }
 
     #[test]

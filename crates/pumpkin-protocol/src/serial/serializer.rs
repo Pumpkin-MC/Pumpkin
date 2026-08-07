@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     io::{Error, Write},
     net::SocketAddr,
 };
@@ -198,5 +199,11 @@ impl PacketWrite for GameMode {
             Self::Spectator => 6,
         })
         .write(writer)
+    }
+}
+
+impl PacketWrite for Cow<'_, str> {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.as_ref().write(writer)
     }
 }

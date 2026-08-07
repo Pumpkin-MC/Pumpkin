@@ -1401,14 +1401,14 @@ impl BedrockClient {
                                 source.container_name.clone(),
                                 source.slot_id,
                                 source_stack.item_count,
-                                source.stack_id,
+                                VarInt(source.stack_id),
                             );
                             record_update(
                                 &mut updates,
                                 destination.container_name.clone(),
                                 destination.slot_id,
                                 dest_stack.item_count,
-                                destination.stack_id,
+                                VarInt(destination.stack_id),
                             );
                         }
                     }
@@ -1428,14 +1428,14 @@ impl BedrockClient {
                             slot1.container_name.clone(),
                             slot1.slot_id,
                             stack2.item_count,
-                            slot2.stack_id,
+                            VarInt(slot2.stack_id),
                         );
                         record_update(
                             &mut updates,
                             slot2.container_name.clone(),
                             slot2.slot_id,
                             stack1.item_count,
-                            slot1.stack_id,
+                            VarInt(slot1.stack_id),
                         );
                     }
                     ItemStackRequestAction::Drop {
@@ -1474,7 +1474,7 @@ impl BedrockClient {
                                 source.container_name.clone(),
                                 source.slot_id,
                                 source_stack.item_count,
-                                source.stack_id,
+                                VarInt(source.stack_id),
                             );
                         }
                     }
@@ -1508,7 +1508,7 @@ impl BedrockClient {
                                 source.container_name.clone(),
                                 source.slot_id,
                                 source_stack.item_count,
-                                source.stack_id,
+                                VarInt(source.stack_id),
                             );
                         }
                     }
