@@ -469,6 +469,40 @@ impl LivingEntity {
         self.entity.entity_id
     }
 
+    /// Vanilla merge rule for applying a new potion effect over one that is already active
+    /// on this entity (same `effect_type`). Returns `true` if `incoming` should replace
+    /// `current` as the active effect.
+    ///
+    /// Source: <https://minecraft.wiki/w/Effect#Effect_potency> -- "It is not possible to
+    /// apply the same effect multiple times, even if they are of different levels. When
+    /// applying an effect already active on the player, higher levels overwrite lower
+    /// levels, and higher durations overwrite lower durations of the same level."
+    ///
+    /// This implements only the amplifier/duration comparison from that rule. It does not
+    /// implement vanilla's "hidden effect" stack (also documented on that page), where a
+    /// superseded or rejected effect is remembered so it can resurface once the active
+    /// effect expires -- see the call site in `add_effect` for what that leaves incorrect.
+    const fn effect_should_replace(current: &Effect, incoming: &Effect) -> bool {
+        if incoming.amplifier > current.amplifier {
+            true
+        } else if incoming.amplifier < current.amplifier {
+            false
+        } else {
+            Self::effect_duration_outlasts(incoming.duration, current.duration)
+        }
+    }
+
+    /// Compares two effect durations for the equal-amplifier merge case, treating `-1`
+    /// (this codebase's sentinel for an infinite-duration effect, see `tick_effects`) as
+    /// outlasting any finite duration and as equal to another infinite duration.
+    const fn effect_duration_outlasts(candidate: i32, other: i32) -> bool {
+        match (candidate < 0, other < 0) {
+            (true, false) => true,
+            (_, true) => false,
+            (false, false) => candidate > other,
+        }
+    }
+
     pub async fn add_effect(&self, effect: Effect) {
         // Apply instant effects immediately before storing
         if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
@@ -487,11 +521,26 @@ impl LivingEntity {
                     .await;
             }
         } else {
-            // Apply non-instant effects
-            self.active_effects
-                .lock()
-                .await
-                .insert(effect.effect_type, effect.clone());
+            // Apply non-instant effects, merging with any existing effect of the same type
+            // instead of unconditionally overwriting it (see `effect_should_replace`). The
+            // lookup and conditional insert happen under a single lock acquisition so a
+            // concurrent tick task cannot observe or race the check-then-act.
+            let applied = {
+                let mut effects = self.active_effects.lock().await;
+                let should_replace = effects
+                    .get(effect.effect_type)
+                    .is_none_or(|existing| Self::effect_should_replace(existing, &effect));
+                if should_replace {
+                    effects.insert(effect.effect_type, effect.clone());
+                }
+                should_replace
+            };
+
+            if !applied {
+                // The incoming effect lost the merge: leave the active effect untouched and
+                // do not resync clients with the rejected values.
+                return;
+            }
 
             // Effects that modify attributes (ex. speed) should also update the
             // entity's attribute instances (server-side) and then notify clients.
@@ -2990,5 +3039,73 @@ mod tests {
             LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
             Sound::EntityGenericHurt
         );
+    }
+
+    // ── effect_should_replace / effect_duration_outlasts ─────────────
+    //
+    // Vanilla merge rule under test, see `LivingEntity::effect_should_replace`:
+    // https://minecraft.wiki/w/Effect#Effect_potency
+
+    fn effect(amplifier: u8, duration: i32) -> Effect {
+        Effect {
+            effect_type: &StatusEffect::SPEED,
+            duration,
+            amplifier,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        }
+    }
+
+    #[test]
+    fn higher_amplifier_always_replaces_regardless_of_duration() {
+        let current = effect(0, 1000);
+        let incoming = effect(1, 1);
+        assert!(LivingEntity::effect_should_replace(&current, &incoming));
+    }
+
+    #[test]
+    fn lower_amplifier_never_replaces_regardless_of_duration() {
+        let current = effect(1, 1);
+        let incoming = effect(0, 1000);
+        assert!(!LivingEntity::effect_should_replace(&current, &incoming));
+    }
+
+    #[test]
+    fn equal_amplifier_longer_duration_replaces() {
+        let current = effect(0, 100);
+        let incoming = effect(0, 200);
+        assert!(LivingEntity::effect_should_replace(&current, &incoming));
+    }
+
+    #[test]
+    fn equal_amplifier_shorter_or_equal_duration_does_not_replace() {
+        let current = effect(0, 200);
+        let shorter = effect(0, 100);
+        let equal = effect(0, 200);
+        assert!(!LivingEntity::effect_should_replace(&current, &shorter));
+        assert!(!LivingEntity::effect_should_replace(&current, &equal));
+    }
+
+    #[test]
+    fn infinite_duration_outlasts_any_finite_duration_at_equal_amplifier() {
+        let current = effect(0, 6000);
+        let infinite = effect(0, -1);
+        assert!(LivingEntity::effect_should_replace(&current, &infinite));
+    }
+
+    #[test]
+    fn finite_duration_never_replaces_infinite_at_equal_amplifier() {
+        let current = effect(0, -1);
+        let finite = effect(0, i32::MAX);
+        assert!(!LivingEntity::effect_should_replace(&current, &finite));
+    }
+
+    #[test]
+    fn two_infinite_durations_at_equal_amplifier_do_not_replace() {
+        let current = effect(0, -1);
+        let incoming = effect(0, -1);
+        assert!(!LivingEntity::effect_should_replace(&current, &incoming));
     }
 }
