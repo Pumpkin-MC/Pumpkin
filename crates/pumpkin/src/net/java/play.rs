@@ -2654,6 +2654,18 @@ impl JavaClient {
             return;
         }
 
+        // Vanilla `SignBlockEntity.updateSignText` only accepts the edit from the player
+        // holding the edit lock (`playerWhoMayEdit`); anyone else's packet is dropped with a
+        // warning. Without this check any player could rewrite any unwaxed sign's text.
+        let mut currently_editing = sign_entity.currently_editing_player.lock().await;
+        if *currently_editing != Some(player.gameprofile.id) {
+            tracing::warn!(
+                "Player {} just tried to change non-editable sign",
+                player.gameprofile.name
+            );
+            return;
+        }
+
         let text = if sign_data.is_front_text {
             &sign_entity.front_text
         } else {
@@ -2666,7 +2678,8 @@ impl JavaClient {
             sign_data.line_3.into(),
             sign_data.line_4.into(),
         ];
-        *sign_entity.currently_editing_player.lock().await = None;
+        *currently_editing = None;
+        drop(currently_editing);
         world.update_block_entity(&block_entity);
     }
 
