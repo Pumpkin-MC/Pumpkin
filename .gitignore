@@ -108,6 +108,7 @@ data/*
 
 # project's configurations
 pumpkin.toml
+nethernet-key.der
 
 
 *.local.nbt

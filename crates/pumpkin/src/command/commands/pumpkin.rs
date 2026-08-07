@@ -5,13 +5,17 @@ use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::translation::get_translation_text;
 use serde::Deserialize;
 use std::borrow::Cow;
+use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::command::CommandResult;
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
 
-const NAMES: [&str; 2] = ["pumpkin", "version"];
+const NAMES: [&str; 3] = ["pumpkin", "version", "ver"];
 
 const DESCRIPTION: &str = "Display information about Pumpkin.";
+
+const CACHE_DURATION: Duration = Duration::from_hours(24);
 
 struct Executor;
 
@@ -19,9 +23,49 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_HASH: &str = env!("GIT_HASH");
 const GIT_HASH_FULL: &str = env!("GIT_HASH_FULL");
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct Contributor {
     login: String,
+}
+
+struct ContributorCache {
+    fetched_at: Instant,
+    data: Vec<Contributor>,
+}
+
+static CONTRIBUTORS_CACHE: LazyLock<Mutex<Option<ContributorCache>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+struct DonatorCache {
+    fetched_at: Instant,
+    data: TextComponent,
+}
+
+static DONATORS_CACHE: LazyLock<Mutex<Option<DonatorCache>>> = LazyLock::new(|| Mutex::new(None));
+
+fn fetch_all_contributors_cached() -> Vec<Contributor> {
+    if let Ok(guard) = CONTRIBUTORS_CACHE.lock()
+        && let Some(cache) = guard.as_ref()
+        && cache.fetched_at.elapsed() < CACHE_DURATION
+    {
+        return cache.data.clone();
+    }
+
+    let contributors = fetch_all_contributors();
+    if !contributors.is_empty() {
+        if let Ok(mut guard) = CONTRIBUTORS_CACHE.lock() {
+            *guard = Some(ContributorCache {
+                fetched_at: Instant::now(),
+                data: contributors.clone(),
+            });
+        }
+    } else if let Ok(guard) = CONTRIBUTORS_CACHE.lock()
+        && let Some(cache) = guard.as_ref()
+    {
+        return cache.data.clone();
+    }
+
+    contributors
 }
 
 fn fetch_all_contributors() -> Vec<Contributor> {
@@ -173,6 +217,25 @@ fn fetch_donators_hover() -> TextComponent {
     donators_text.add_child(TextComponent::text("Unable to load donators"))
 }
 
+fn fetch_donators_hover_cached() -> TextComponent {
+    if let Ok(guard) = DONATORS_CACHE.lock()
+        && let Some(cache) = guard.as_ref()
+        && cache.fetched_at.elapsed() < CACHE_DURATION
+    {
+        return cache.data.clone();
+    }
+
+    let donators = fetch_donators_hover();
+    if let Ok(mut guard) = DONATORS_CACHE.lock() {
+        *guard = Some(DonatorCache {
+            fetched_at: Instant::now(),
+            data: donators.clone(),
+        });
+    }
+
+    donators
+}
+
 #[expect(clippy::too_many_lines)]
 impl CommandExecutor for Executor {
     fn execute<'a>(
@@ -182,7 +245,7 @@ impl CommandExecutor for Executor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let contributors = tokio::task::spawn_blocking(fetch_all_contributors)
+            let contributors = tokio::task::spawn_blocking(fetch_all_contributors_cached)
                 .await
                 .unwrap_or_default();
             let contributor_names = contributors
@@ -284,7 +347,7 @@ impl CommandExecutor for Executor {
 
             msg = msg.add_child(TextComponent::text("  "));
 
-            let donators_hover = tokio::task::spawn_blocking(fetch_donators_hover)
+            let donators_hover = tokio::task::spawn_blocking(fetch_donators_hover_cached)
                 .await
                 .unwrap_or_else(|_| TextComponent::text("Unable to load donators"));
             msg = msg.add_child(
@@ -328,4 +391,44 @@ impl CommandExecutor for Executor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn cache_duration_is_24_hours() {
+        assert_eq!(CACHE_DURATION, Duration::from_hours(24));
+    }
+
+    #[test]
+    fn contributor_cache_updates_and_retrieves() {
+        let mut guard = CONTRIBUTORS_CACHE.lock().unwrap();
+        *guard = Some(ContributorCache {
+            fetched_at: Instant::now(),
+            data: vec![Contributor {
+                login: "test_user".to_string(),
+            }],
+        });
+        drop(guard);
+
+        let contributors = fetch_all_contributors_cached();
+        assert_eq!(contributors.len(), 1);
+        assert_eq!(contributors[0].login, "test_user");
+    }
+
+    #[test]
+    fn donator_cache_updates_and_retrieves() {
+        let expected = TextComponent::text("Cached Donator Test");
+        let mut guard = DONATORS_CACHE.lock().unwrap();
+        *guard = Some(DonatorCache {
+            fetched_at: Instant::now(),
+            data: expected.clone(),
+        });
+        drop(guard);
+
+        let cached = fetch_donators_hover_cached();
+        assert_eq!(cached, expected);
+    }
 }

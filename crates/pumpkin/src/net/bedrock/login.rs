@@ -188,7 +188,19 @@ impl BedrockClient {
             profile_actions: None,
         };
 
-        if server.advanced_config.networking.bedrock.encryption {
+        if let Some(peer_public_key) = self.nethernet_public_key() {
+            let login_public_key = pumpkin_util::jwt::extract_cpk_from_token(&auth_payload.token)
+                .map_err(LoginError::ChainValidationFailed)?;
+            if peer_public_key != &login_public_key {
+                return Err(LoginError::ChainValidationFailed(
+                    AuthError::PublicKeyBuild(
+                        "NetherNet and Bedrock login identities do not match".into(),
+                    ),
+                ));
+            }
+        }
+
+        if server.advanced_config.networking.bedrock.encryption && !self.is_nethernet() {
             let client_public_key = pumpkin_util::jwt::extract_cpk_from_token(&auth_payload.token)
                 .map_err(LoginError::ChainValidationFailed)?;
 

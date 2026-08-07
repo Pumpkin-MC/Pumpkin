@@ -8,7 +8,6 @@ use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
-use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
@@ -2385,7 +2384,7 @@ impl EntityBase for LivingEntity {
                         - self.entity.yaw.load()
                 });
                 let hurt_event = SActorEvent {
-                    entity_runtime_id: VarLong(entity_id as i64),
+                    entity_runtime_id: VarULong(entity_id as u64),
                     event_type: ActorEventType::Hurt,
                     event_data: VarInt(0),
                     fire_at_position: None,

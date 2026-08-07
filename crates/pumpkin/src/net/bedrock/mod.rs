@@ -1,3 +1,4 @@
+pub mod nethernet;
 pub mod play;
 use crossbeam::atomic::AtomicCell;
 use std::{
@@ -84,6 +85,7 @@ pub mod connection;
 pub mod login;
 pub mod open_connection;
 pub mod unconnected;
+use self::nethernet::NetherNetSession;
 use crate::{
     entity::player::Player,
     net::{DisconnectReason, GameProfile, PacketHandlerResult, PlayerConfig},
@@ -116,8 +118,13 @@ impl OutgoingPacket {
     }
 }
 
+enum BedrockTransport {
+    RakNet(Arc<UdpSocket>),
+    NetherNet(Arc<NetherNetSession>),
+}
+
 pub struct BedrockClient {
-    socket: Arc<UdpSocket>,
+    transport: BedrockTransport,
     /// The client's IP address.
     pub address: SocketAddr,
     pub player: ArcSwap<Option<Arc<Player>>>,
@@ -175,12 +182,29 @@ impl BedrockClient {
         address: SocketAddr,
         be_clients: Arc<Mutex<HashMap<SocketAddr, Arc<Self>>>>,
     ) -> Self {
+        Self::with_transport(BedrockTransport::RakNet(socket), address, be_clients)
+    }
+
+    #[must_use]
+    pub fn new_nethernet(
+        session: Arc<NetherNetSession>,
+        address: SocketAddr,
+        be_clients: Arc<Mutex<HashMap<SocketAddr, Arc<Self>>>>,
+    ) -> Self {
+        Self::with_transport(BedrockTransport::NetherNet(session), address, be_clients)
+    }
+
+    fn with_transport(
+        transport: BedrockTransport,
+        address: SocketAddr,
+        be_clients: Arc<Mutex<HashMap<SocketAddr, Arc<Self>>>>,
+    ) -> Self {
         let (send, recv) = tokio::sync::mpsc::channel(4096);
         let (priority_send, priority_recv) = tokio::sync::mpsc::channel(4096);
         let (incoming_send, incoming_recv) = tokio::sync::mpsc::channel(4096);
         let rt_handle = tokio::runtime::Handle::current();
         Self {
-            socket,
+            transport,
             player: ArcSwap::new(Arc::new(None)),
             address,
             version: AtomicCell::new(BedrockMinecraftVersion::Unknown),
@@ -253,47 +277,8 @@ impl BedrockClient {
                         None => break,
                     },
                     _ = interval.tick() => {
-                        // Check for timeout (10 seconds)
-                        if client.last_seen.load().elapsed() > std::time::Duration::from_secs(10) {
-                            debug!("Bedrock client {} timed out", client.address);
-                            client.close().await;
+                        if !client.tick_outgoing_transport().await {
                             break;
-                        }
-
-                        // Flush ACKs
-                        let mut pending = client.pending_acks.lock().await;
-                        if !pending.is_empty() {
-                            let ack = Acknowledge::new(pending.clone());
-                            pending.clear();
-                            let _ = client.send_acknowledgement(&ack, RAKNET_ACK).await;
-                        }
-
-                        // Check retransmission
-                        let now = std::time::Instant::now();
-                        let mut resend = Vec::new();
-                        {
-                            let mut unacked = client.unacked_outgoing_frames.lock().await;
-                            for (seq, (id, data, timestamp)) in unacked.iter_mut() {
-                                if now.duration_since(*timestamp) > std::time::Duration::from_secs(1) {
-                                    resend.push((*seq, *id, data.clone()));
-                                    // Update timestamp
-                                    *timestamp = now;
-                                    // Limit resends per tick to avoid starvation
-                                    if resend.len() >= 50 {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        if !resend.is_empty() {
-                            let encoder = client.network_writer.read().await;
-                            for (seq, id, data) in resend {
-                                debug!("Resending reliable sequence {} (ID: {})", seq, id);
-                                if let Err(err) = encoder.write_packet(&data, client.address, &client.socket).await {
-                                    warn!("Failed to resend packet for sequence {}: {}", seq, err);
-                                }
-                            }
                         }
                         continue;
                     }
@@ -303,8 +288,8 @@ impl BedrockClient {
                     },
                 };
 
-                // Encrypt the packet payload if encryption is enabled.
-                if packet.data.len() > 1 && packet.data[0] == 0xfe {
+                // NetherNet is already encrypted by DTLS and must not use Minecraft encryption.
+                if !client.is_nethernet() && packet.data.len() > 1 && packet.data[0] == 0xfe {
                     let mut encoder = client.network_writer.write().await;
                     if let Some(encryptor) = encoder.encryptor_mut() {
                         let mut data_to_encrypt = packet.data[1..].to_vec();
@@ -316,15 +301,77 @@ impl BedrockClient {
                     }
                 }
 
-                client
-                    .send_framed_packet_data(packet.data.to_vec(), RakReliability::ReliableOrdered)
-                    .await;
+                match &client.transport {
+                    BedrockTransport::RakNet(_) => {
+                        client
+                            .send_framed_packet_data(
+                                packet.data.to_vec(),
+                                RakReliability::ReliableOrdered,
+                            )
+                            .await;
+                    }
+                    BedrockTransport::NetherNet(session) => {
+                        let data = packet.data.strip_prefix(&[RAKNET_GAME_PACKET as u8]);
+                        let Some(data) = data else {
+                            warn!("Refusing to send a non-game packet over NetherNet");
+                            continue;
+                        };
+                        if let Err(error) = session.send(Bytes::copy_from_slice(data)).await {
+                            warn!(
+                                "Failed to send NetherNet packet to {}: {error}",
+                                client.address
+                            );
+                            client.close().await;
+                        }
+                    }
+                }
 
                 if let Some(completion) = packet.completion {
                     let _ = completion.send(());
                 }
             }
         });
+    }
+
+    async fn tick_outgoing_transport(&self) -> bool {
+        if self.last_seen.load().elapsed() > std::time::Duration::from_secs(10) {
+            debug!("Bedrock client {} timed out", self.address);
+            self.close().await;
+            return false;
+        }
+        let Some(socket) = self.raknet_socket() else {
+            return true;
+        };
+
+        let mut pending = self.pending_acks.lock().await;
+        if !pending.is_empty() {
+            let ack = Acknowledge::new(pending.clone());
+            pending.clear();
+            let _ = self.send_acknowledgement(&ack, RAKNET_ACK).await;
+        }
+
+        let now = std::time::Instant::now();
+        let mut resend = Vec::new();
+        let mut unacked = self.unacked_outgoing_frames.lock().await;
+        for (sequence, (id, data, timestamp)) in unacked.iter_mut() {
+            if now.duration_since(*timestamp) > std::time::Duration::from_secs(1) {
+                resend.push((*sequence, *id, data.clone()));
+                *timestamp = now;
+                if resend.len() >= 50 {
+                    break;
+                }
+            }
+        }
+        drop(unacked);
+
+        let encoder = self.network_writer.read().await;
+        for (sequence, id, data) in resend {
+            debug!("Resending reliable sequence {sequence} (ID: {id})");
+            if let Err(error) = encoder.write_packet(&data, self.address, socket).await {
+                warn!("Failed to resend packet for sequence {sequence}: {error}");
+            }
+        }
+        true
     }
 
     pub async fn process_packet(self: &Arc<Self>, server: &Arc<Server>, packet: Bytes) {
@@ -336,6 +383,39 @@ impl BedrockClient {
             );
             self.kick(DisconnectReason::BadPacket, error.to_string())
                 .await;
+        }
+    }
+
+    pub async fn process_nethernet_packet(self: &Arc<Self>, server: &Arc<Server>, packet: Bytes) {
+        self.last_seen.store(std::time::Instant::now());
+        let mut raknet_batch = Vec::with_capacity(packet.len() + 1);
+        raknet_batch.push(RAKNET_GAME_PACKET as u8);
+        raknet_batch.extend_from_slice(&packet);
+        if let Err(error) = self.process_frame_payload(server, raknet_batch).await {
+            error!(
+                "Failed to handle NetherNet payload for {}: {error}",
+                self.address
+            );
+            self.kick(DisconnectReason::BadPacket, error.to_string())
+                .await;
+        }
+    }
+
+    pub const fn is_nethernet(&self) -> bool {
+        matches!(self.transport, BedrockTransport::NetherNet(_))
+    }
+
+    pub fn nethernet_public_key(&self) -> Option<&pumpkin_util::p384::PublicKey> {
+        match &self.transport {
+            BedrockTransport::NetherNet(session) => Some(session.client_public_key()),
+            BedrockTransport::RakNet(_) => None,
+        }
+    }
+
+    fn raknet_socket(&self) -> Option<&UdpSocket> {
+        match &self.transport {
+            BedrockTransport::RakNet(socket) => Some(socket),
+            BedrockTransport::NetherNet(_) => None,
         }
     }
 
@@ -698,6 +778,9 @@ impl BedrockClient {
     }
 
     pub async fn send_frame_set(&self, mut frame_set: FrameSet, id: u8) {
+        let Some(socket) = self.raknet_socket() else {
+            return;
+        };
         let sequence = self.output_sequence_number.fetch_add(1, Ordering::Relaxed);
         frame_set.sequence = u24(sequence);
 
@@ -718,7 +801,7 @@ impl BedrockClient {
             .network_writer
             .read()
             .await
-            .write_packet(&frame_set_buf, self.address, &self.socket)
+            .write_packet(&frame_set_buf, self.address, socket)
             .await
             && !self.is_closed()
         {
@@ -733,8 +816,13 @@ impl BedrockClient {
         }
         self.close_token.cancel();
 
-        self.send_framed_packet(&CDisconnect, RakReliability::Unreliable)
-            .await;
+        match &self.transport {
+            BedrockTransport::RakNet(_) => {
+                self.send_framed_packet(&CDisconnect, RakReliability::Unreliable)
+                    .await;
+            }
+            BedrockTransport::NetherNet(session) => session.close().await,
+        }
 
         self.be_clients.lock().await.remove(&self.address);
     }
@@ -746,6 +834,7 @@ impl BedrockClient {
 
     pub fn is_closed(&self) -> bool {
         self.close_token.is_cancelled()
+            || matches!(&self.transport, BedrockTransport::NetherNet(session) if session.is_closed())
     }
 
     pub fn enqueue_spawn_packet(self: &Arc<Self>, entity: Arc<dyn crate::entity::EntityBase>) {
@@ -756,6 +845,9 @@ impl BedrockClient {
     }
 
     pub async fn send_acknowledgement(&self, ack: &Acknowledge, id: u8) -> Result<(), Error> {
+        let Some(socket) = self.raknet_socket() else {
+            return Ok(());
+        };
         let mut packet_buf = Vec::new();
         ack.write(&mut packet_buf, id)?;
 
@@ -763,7 +855,7 @@ impl BedrockClient {
             .network_writer
             .read()
             .await
-            .write_packet(&packet_buf, self.address, &self.socket)
+            .write_packet(&packet_buf, self.address, socket)
             .await
         {
             warn!("Failed to send acknowledgement to {}: {err}", self.address);
@@ -818,11 +910,14 @@ impl BedrockClient {
         }
 
         for data in resend_data {
+            let Some(socket) = self.raknet_socket() else {
+                return;
+            };
             if let Err(err) = self
                 .network_writer
                 .read()
                 .await
-                .write_packet(&data, self.address, &self.socket)
+                .write_packet(&data, self.address, socket)
                 .await
             {
                 warn!("Failed to resend packet from NACK: {}", err);

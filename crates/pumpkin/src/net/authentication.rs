@@ -214,6 +214,33 @@ pub fn lookup_profile_by_name(
     Ok(Some((parsed_uuid, profile.name)))
 }
 
+pub fn fetch_profile_by_uuid(
+    uuid: Uuid,
+    _auth_config: &AuthenticationConfig,
+) -> Result<Option<GameProfile>, AuthError> {
+    let url = format!(
+        "https://sessionserver.mojang.com/session/minecraft/profile/{}?unsigned=false",
+        uuid.simple()
+    );
+
+    let mut response = ureq::get(&url)
+        .call()
+        .map_err(|_| AuthError::FailedResponse)?;
+
+    match response.status() {
+        StatusCode::OK => {}
+        StatusCode::NO_CONTENT | StatusCode::NOT_FOUND => return Ok(None),
+        other => Err(AuthError::UnknownStatusCode(other))?,
+    }
+
+    let profile: GameProfile = response
+        .body_mut()
+        .read_json()
+        .map_err(|_| AuthError::FailedParse)?;
+
+    Ok(Some(profile))
+}
+
 #[derive(Error, Debug)]
 pub enum AuthError {
     #[error("Authentication servers are down")]

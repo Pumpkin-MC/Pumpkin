@@ -449,6 +449,50 @@ impl CommandExecutor for TeamListExecutor {
     }
 }
 
+struct TeamModifyColorResetExecutor;
+
+impl CommandExecutor for TeamModifyColorResetExecutor {
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
+        Box::pin(async move {
+            let team_name = TeamArgumentType::get(context, ARG_TEAM)?;
+
+            let world = context.world();
+            let mut scoreboard = world.scoreboard.lock().await;
+
+            let mut team = scoreboard
+                .get_teams()
+                .get(team_name)
+                .ok_or_else(|| {
+                    TEAM_NOT_FOUND_ERROR
+                        .create_without_context(TextComponent::text(team_name.to_string()))
+                })?
+                .clone();
+
+            if team.color == NamedColor::White {
+                return Err(COLOR_UNCHANGED_ERROR.create_without_context());
+            }
+
+            team.color = NamedColor::White;
+            let team_display_name = team.display_name.clone();
+            scoreboard.update_team(world, team);
+
+            context
+                .source
+                .send_feedback(
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TEAM_OPTION_COLOR_CLEAR_SUCCESS,
+                        translation::java::COMMANDS_TEAM_OPTION_COLOR_CLEAR_SUCCESS,
+                        [team_display_name],
+                    ),
+                    true,
+                )
+                .await;
+
+            Ok(1)
+        })
+    }
+}
+
 struct TeamModifyColorExecutor;
 
 impl CommandExecutor for TeamModifyColorExecutor {
@@ -483,10 +527,7 @@ impl CommandExecutor for TeamModifyColorExecutor {
                     TextComponent::translate_cross(
                         translation::java::COMMANDS_TEAM_OPTION_COLOR_SUCCESS,
                         translation::java::COMMANDS_TEAM_OPTION_COLOR_SUCCESS,
-                        [
-                            team_display_name,
-                            TextComponent::text(format!("{new_color:?}").to_lowercase()),
-                        ],
+                        [team_display_name, TextComponent::text(new_color.name())],
                     ),
                     true,
                 )
@@ -962,13 +1003,17 @@ fn list_branch() -> LiteralArgumentBuilder {
         .then(argument(ARG_TEAM, TeamArgumentType).executes(TeamListExecutor { has_team: true }))
 }
 
+#[expect(clippy::too_many_lines)]
 fn modify_branch() -> LiteralArgumentBuilder {
     literal("modify").then(
         argument(ARG_TEAM, TeamArgumentType)
             .then(
-                literal("color").then(
-                    argument(ARG_VALUE, TeamColorArgumentType).executes(TeamModifyColorExecutor),
-                ),
+                literal("color")
+                    .then(literal("reset").executes(TeamModifyColorResetExecutor))
+                    .then(
+                        argument(ARG_VALUE, TeamColorArgumentType)
+                            .executes(TeamModifyColorExecutor),
+                    ),
             )
             .then(
                 literal("displayName").then(

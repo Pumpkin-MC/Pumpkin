@@ -2548,27 +2548,39 @@ impl Player {
 
     /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
+        let advance_time = {
+            let lock = world.level_info.load();
+            lock.game_rules.advance_time
+        };
+
+        let l_world = world.level_time.lock().await;
         if let Some((custom_time, relative)) = self.per_player_time.load() {
             let time_of_day = if relative {
-                let l_world = world.level_time.lock().await;
                 (l_world.time_of_day as u64 + custom_time) as i64
             } else {
                 custom_time as i64
             };
-            let l_world = world.level_time.lock().await;
+            let paused = l_world.paused || !advance_time;
+            let rate = if paused { 0.0 } else { l_world.rate };
             self.client
                 .enqueue_packet_editioned(
-                    &CUpdateTime::new(l_world.world_age, time_of_day, true),
+                    &CUpdateTime::new_clock(
+                        l_world.world_age,
+                        0,
+                        time_of_day,
+                        l_world.partial_tick,
+                        rate,
+                    ),
                     &CSetTime::new(time_of_day as _),
                 )
                 .await;
             return;
         }
 
-        let l_world = world.level_time.lock().await;
+        let (total_ticks, partial_tick, rate) = l_world.pack_network_state(advance_time);
         self.client
             .enqueue_packet_editioned(
-                &CUpdateTime::new(l_world.world_age, l_world.time_of_day, true),
+                &CUpdateTime::new_clock(l_world.world_age, 0, total_ticks, partial_tick, rate),
                 &CSetTime::new(l_world.query_daytime() as _),
             )
             .await;

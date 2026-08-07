@@ -53,8 +53,7 @@ impl PacketWrite for CResourcePacksInfo {
 
         self.world_template_version.write(writer)?;
 
-        let len = self.resource_packs.len() as u16;
-        writer.write_all(&len.to_le_bytes())?;
+        crate::codec::var_uint::VarUInt(self.resource_packs.len() as u32).write(writer)?;
 
         for entry in &self.resource_packs {
             entry.write(writer)?;

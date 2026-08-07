@@ -14,23 +14,21 @@ pub struct CPlayerList {
 
 impl PacketWrite for CPlayerList {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.action.write(writer)?;
         VarUInt(self.entries.len() as u32).write(writer)?;
-        match self.action {
-            Self::ACTION_ADD => {
-                for entry in &self.entries {
+        for entry in &self.entries {
+            match self.action {
+                Self::ACTION_ADD => {
+                    VarUInt(1).write(writer)?;
+                    Self::ACTION_ADD.write(writer)?;
                     entry.write(writer)?;
                 }
-                for entry in &self.entries {
-                    entry.skin.is_trusted.write(writer)?;
-                }
-            }
-            Self::ACTION_REMOVE => {
-                for entry in &self.entries {
+                Self::ACTION_REMOVE => {
+                    VarUInt(0).write(writer)?;
+                    Self::ACTION_REMOVE.write(writer)?;
                     entry.uuid.write(writer)?;
                 }
+                _ => return Err(Error::other("Invalid PlayerList action")),
             }
-            _ => return Err(Error::other("Invalid PlayerList action")),
         }
         Ok(())
     }
@@ -67,7 +65,7 @@ impl PacketWrite for PlayerListEntry {
         self.is_teacher.write(writer)?;
         self.is_host.write(writer)?;
         self.is_sub_client.write(writer)?;
-        self.player_color.write(writer)
+        u32::from_be_bytes(self.player_color).write(writer)
     }
 }
 
@@ -98,6 +96,7 @@ pub struct Skin {
     pub is_primary_user: bool,
     pub override_appearance: bool,
     pub is_trusted: bool,
+    pub profile_hash: String,
 }
 
 impl Skin {
@@ -131,6 +130,7 @@ impl Skin {
             is_primary_user: false,
             override_appearance: false,
             is_trusted: true,
+            profile_hash: String::new(),
         }
     }
 }
@@ -145,7 +145,7 @@ impl PacketWrite for Skin {
         self.image_height.write(writer)?;
         VarUInt(self.skin_data.len() as u32).write(writer)?;
         writer.write_all(&self.skin_data)?;
-        (self.animations.len() as u32).write(writer)?;
+        VarUInt(self.animations.len() as u32).write(writer)?;
         for anim in &self.animations {
             anim.write(writer)?;
         }
@@ -155,19 +155,19 @@ impl PacketWrite for Skin {
         writer.write_all(&self.cape_data)?;
         VarUInt(self.geometry_data.len() as u32).write(writer)?;
         writer.write_all(&self.geometry_data)?;
-        VarUInt(self.animation_data.len() as u32).write(writer)?;
-        writer.write_all(&self.animation_data)?;
         VarUInt(self.geometry_data_engine_version.len() as u32).write(writer)?;
         writer.write_all(&self.geometry_data_engine_version)?;
+        VarUInt(self.animation_data.len() as u32).write(writer)?;
+        writer.write_all(&self.animation_data)?;
         self.cape_id.write(writer)?;
         self.full_id.write(writer)?;
-        self.arm_size.write(writer)?;
-        self.skin_color.write(writer)?;
-        (self.persona_pieces.len() as u32).write(writer)?;
+        u8::from(!self.arm_size.eq_ignore_ascii_case("slim")).write(writer)?;
+        parse_color(&self.skin_color).write(writer)?;
+        VarUInt(self.persona_pieces.len() as u32).write(writer)?;
         for piece in &self.persona_pieces {
             piece.write(writer)?;
         }
-        (self.piece_tint_colors.len() as u32).write(writer)?;
+        VarUInt(self.piece_tint_colors.len() as u32).write(writer)?;
         for color in &self.piece_tint_colors {
             color.write(writer)?;
         }
@@ -175,11 +175,13 @@ impl PacketWrite for Skin {
         self.is_persona.write(writer)?;
         self.persona_cape_on_classic.write(writer)?;
         self.is_primary_user.write(writer)?;
-        self.override_appearance.write(writer)
+        self.override_appearance.write(writer)?;
+        self.is_trusted.to_string().write(writer)?;
+        self.profile_hash.write(writer)
     }
 }
 
-#[derive(Clone, PacketWrite)]
+#[derive(Clone)]
 pub struct SkinAnimation {
     pub image_width: u32,
     pub image_height: u32,
@@ -189,17 +191,51 @@ pub struct SkinAnimation {
     pub expression_type: u32,
 }
 
+impl PacketWrite for SkinAnimation {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.image_width.write(writer)?;
+        self.image_height.write(writer)?;
+        VarUInt(self.image_data.len() as u32).write(writer)?;
+        writer.write_all(&self.image_data)?;
+        VarUInt(self.animation_type).write(writer)?;
+        self.frames.write(writer)?;
+        VarUInt(self.expression_type).write(writer)
+    }
+}
+
 #[derive(Clone, PacketWrite)]
 pub struct PersonaPiece {
     pub piece_id: String,
-    pub piece_type: String,
-    pub pack_id: String,
+    pub piece_type: i32,
+    pub pack_id: Uuid,
     pub is_default: bool,
     pub product_id: String,
 }
 
-#[derive(Clone, PacketWrite)]
+#[derive(Clone)]
 pub struct PieceTintColor {
     pub piece_type: String,
-    pub colors: Vec<String>,
+    pub colors: [i32; 4],
+}
+
+impl PacketWrite for PieceTintColor {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        let piece_type = if self.piece_type == "persona_hand" {
+            "hands"
+        } else {
+            self.piece_type
+                .strip_prefix("persona_")
+                .unwrap_or(&self.piece_type)
+        };
+        piece_type.write(writer)?;
+        for color in self.colors {
+            color.write(writer)?;
+        }
+        Ok(())
+    }
+}
+
+fn parse_color(color: &str) -> i32 {
+    let value = color.trim_start_matches('#');
+    u32::from_str_radix(value, 16).unwrap_or_default() as i32
 }

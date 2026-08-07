@@ -1,4 +1,4 @@
-use std::io::{Error, Read};
+use std::io::{Error, ErrorKind, Read};
 
 use pumpkin_macros::packet;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3};
@@ -18,10 +18,10 @@ pub struct SPlayerAuthInput {
     pub position: Vector3<f32>,
     pub move_vec: Vector2<f32>,
     pub head_yaw: f32,
-    pub input_data: Bitset<65>,
+    pub input_data: Bitset<66>,
     pub input_mode: VarUInt,
     pub play_mode: VarUInt,
-    pub interaction_model: VarUInt,
+    pub interaction_model: VarInt,
     pub interact_pitch: f32,
     pub interact_yaw: f32,
     pub tick: VarULong,
@@ -37,39 +37,63 @@ pub struct SPlayerAuthInput {
 }
 
 impl PacketRead for SPlayerAuthInput {
-    #[expect(clippy::useless_let_if_seq)]
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let pitch = f32::read(reader)?;
         let yaw = f32::read(reader)?;
         let position = Vector3::<f32>::read(reader)?;
         let move_vec = Vector2::<f32>::read(reader)?;
         let head_yaw = f32::read(reader)?;
-        let input_data = Bitset::<65>::read(reader)?;
+        let mut input_data = Bitset::<66>::default();
+        if bool::read(reader)? {
+            let count = VarUInt::read(reader)?.0;
+            if count > 66 {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("too many player input flags: {count}"),
+                ));
+            }
+            for _ in 0..count {
+                let flag = VarInt::read(reader)?.0;
+                if !(0..66).contains(&flag) {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        format!("invalid player input flag {flag}"),
+                    ));
+                }
+                if input_data.get(flag as usize) {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        format!("duplicate player input flag {flag}"),
+                    ));
+                }
+                input_data.set(flag as usize, true);
+            }
+        }
         let input_mode = VarUInt::read(reader)?;
         let play_mode = VarUInt::read(reader)?;
-        let interaction_model = VarUInt::read(reader)?;
+        let interaction_model = VarInt::read(reader)?;
         let interact_pitch = f32::read(reader)?;
         let interact_yaw = f32::read(reader)?;
         let tick = VarULong::read(reader)?;
         let delta = Vector3::<f32>::read(reader)?;
 
         // 1. Perform Item Interaction
-        let item_interaction = if input_data.get(InputData::PerformItemInteraction as usize) {
+        let item_interaction = if bool::read(reader)? && bool::read(reader)? {
             Some(PlayerInventoryAction::read(reader)?)
         } else {
             None
         };
 
         // 2. Item Stack Request
-        let item_stack_request = if input_data.get(InputData::PerformItemStackRequest as usize) {
+        let item_stack_request = if bool::read(reader)? && bool::read(reader)? {
             Some(crate::bedrock::server::item_stack_request::ItemStackRequest::read(reader)?)
         } else {
             None
         };
 
         // 3. Block Actions
-        let block_actions = if input_data.get(InputData::PerformBlockActions as usize) {
-            let count = VarInt::read(reader)?.0 as usize;
+        let block_actions = if bool::read(reader)? && bool::read(reader)? {
+            let count = VarUInt::read(reader)?.0 as usize;
             let mut actions = Vec::with_capacity(count);
             for _ in 0..count {
                 actions.push(PlayerBlockAction::read(reader)?);
@@ -80,12 +104,12 @@ impl PacketRead for SPlayerAuthInput {
         };
 
         // 4. Vehicle Info (Matches Go logic)
-        let mut vehicle_rotation = None;
-        let mut vehicle_unique_id = None;
-        if input_data.get(InputData::ClientPredictedVehicle as usize) {
-            vehicle_rotation = Some(Vector2::<f32>::read(reader)?);
-            vehicle_unique_id = Some(VarLong::read(reader)?);
-        }
+        let vehicle_rotation = (bool::read(reader)? && bool::read(reader)?)
+            .then(|| Vector2::<f32>::read(reader))
+            .transpose()?;
+        let vehicle_unique_id = (bool::read(reader)? && bool::read(reader)?)
+            .then(|| VarLong::read(reader))
+            .transpose()?;
 
         // 5. Trailing Data
         let analog_move = Vector2::<f32>::read(reader)?;
@@ -123,14 +147,14 @@ pub struct PlayerInventoryAction {
     pub legacy_request_id: VarInt,
     pub legacy_slots: Vec<crate::bedrock::server::inventory_transaction::LegacySetItemSlot>,
     pub actions: Vec<crate::bedrock::server::inventory_transaction::InventoryAction>,
-    pub transaction: crate::bedrock::server::inventory_transaction::UseItemTransactionData,
+    pub transaction: PlayerUseItemTransactionData,
 }
 
 impl PacketRead for PlayerInventoryAction {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let legacy_request_id = VarInt::read(buf)?;
         let mut legacy_slots = Vec::new();
-        if legacy_request_id.0 < -1 && (legacy_request_id.0 & 1) == 0 {
+        if bool::read(buf)? && legacy_request_id.0 < -1 && (legacy_request_id.0 & 1) == 0 {
             let slots_len = VarUInt::read(buf)?.0;
             for _ in 0..slots_len {
                 legacy_slots.push(
@@ -138,19 +162,55 @@ impl PacketRead for PlayerInventoryAction {
                 );
             }
         }
-        let actions_len = VarUInt::read(buf)?.0;
-        let mut actions = Vec::with_capacity(actions_len as usize);
-        for _ in 0..actions_len {
-            actions
-                .push(crate::bedrock::server::inventory_transaction::InventoryAction::read(buf)?);
+        let mut actions = Vec::new();
+        if bool::read(buf)? && bool::read(buf)? {
+            let actions_len = VarUInt::read(buf)?.0;
+            actions.reserve(actions_len as usize);
+            for _ in 0..actions_len {
+                actions.push(
+                    crate::bedrock::server::inventory_transaction::InventoryAction::read(buf)?,
+                );
+            }
         }
-        let transaction =
-            crate::bedrock::server::inventory_transaction::UseItemTransactionData::read(buf)?;
+        let transaction = PlayerUseItemTransactionData::read(buf)?;
         Ok(Self {
             legacy_request_id,
             legacy_slots,
             actions,
             transaction,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct PlayerUseItemTransactionData {
+    pub action_type: VarInt,
+    pub trigger_type: u8,
+    pub block_position: BlockPos,
+    pub block_face: u8,
+    pub hot_bar_slot: VarInt,
+    pub item_in_hand: crate::bedrock::network_item::NetworkItemDescriptor,
+    pub player_position: Vector3<f32>,
+    pub click_position: Vector3<f32>,
+    pub block_runtime_id: VarUInt,
+    pub client_prediction: u8,
+    pub client_cooldown_state: u8,
+}
+
+impl PacketRead for PlayerUseItemTransactionData {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        Ok(Self {
+            action_type: VarInt::read(reader)?,
+            trigger_type: u8::read(reader)?,
+            block_position: BlockPos::read(reader)?,
+            block_face: u8::read(reader)?,
+            hot_bar_slot: VarInt::read(reader)?,
+            item_in_hand: crate::bedrock::network_item::NetworkItemDescriptor::read(reader)?,
+            player_position: Vector3::read(reader)?,
+            click_position: Vector3::read(reader)?,
+            block_runtime_id: VarUInt::read(reader)?,
+            client_prediction: u8::read(reader)?,
+            client_cooldown_state: u8::read(reader)?,
         })
     }
 }
@@ -256,4 +316,61 @@ pub enum InputData {
     SneakReleasedRaw = 62,
     SneakPressedRaw = 63,
     SneakCurrentRaw = 64,
+    InternalUpdate = 65,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::serial::PacketWrite;
+
+    fn auth_input_prefix() -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for _ in 0..8 {
+            0.0f32.write(&mut bytes).unwrap();
+        }
+        bytes
+    }
+
+    #[test]
+    fn auth_input_reads_v2168_flag_list_and_signed_interaction_model() {
+        let mut bytes = auth_input_prefix();
+        true.write(&mut bytes).unwrap();
+        VarUInt(2).write(&mut bytes).unwrap();
+        VarInt(0).write(&mut bytes).unwrap();
+        VarInt(65).write(&mut bytes).unwrap();
+        VarUInt(0).write(&mut bytes).unwrap();
+        VarUInt(0).write(&mut bytes).unwrap();
+        VarInt(-1).write(&mut bytes).unwrap();
+        0.0f32.write(&mut bytes).unwrap();
+        0.0f32.write(&mut bytes).unwrap();
+        VarULong(0).write(&mut bytes).unwrap();
+        for _ in 0..3 {
+            0.0f32.write(&mut bytes).unwrap();
+        }
+        for _ in 0..5 {
+            true.write(&mut bytes).unwrap();
+            false.write(&mut bytes).unwrap();
+        }
+        for _ in 0..7 {
+            0.0f32.write(&mut bytes).unwrap();
+        }
+
+        let packet = SPlayerAuthInput::read(&mut bytes.as_slice()).unwrap();
+        assert!(packet.input_data.get(0usize));
+        assert!(packet.input_data.get(65usize));
+        assert_eq!(packet.interaction_model, VarInt(-1));
+    }
+
+    #[test]
+    fn auth_input_rejects_duplicate_flags() {
+        let mut bytes = auth_input_prefix();
+        true.write(&mut bytes).unwrap();
+        VarUInt(2).write(&mut bytes).unwrap();
+        VarInt(1).write(&mut bytes).unwrap();
+        VarInt(1).write(&mut bytes).unwrap();
+
+        let error = SPlayerAuthInput::read(&mut bytes.as_slice()).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidData);
+    }
 }

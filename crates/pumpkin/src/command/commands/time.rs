@@ -2,14 +2,21 @@ use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandResult;
-use crate::command::args::{FindArg, time::TimeArgumentConsumer};
+use crate::command::args::{
+    FindArg, bounded_num::BoundedNumArgumentConsumer,
+    resource_location::ResourceLocationArgumentConsumer, time::TimeArgumentConsumer,
+};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::builder::{argument, literal};
 use crate::command::{CommandExecutor, CommandSender, ConsumedArgs, tree::CommandTree};
 
 const NAMES: [&str; 1] = ["time"];
-const DESCRIPTION: &str = "Query the world time.";
+const DESCRIPTION: &str = "Query or modify the world time and clocks.";
 const ARG_TIME: &str = "time";
+const ARG_RATE: &str = "rate";
+const ARG_CLOCK: &str = "clock";
+
+const DEFAULT_CLOCK: &str = "minecraft:overworld";
 
 #[derive(Clone, Copy)]
 enum PresetTime {
@@ -31,16 +38,24 @@ impl PresetTime {
 }
 
 #[derive(Clone, Copy)]
-enum Mode {
-    Add,
+enum Action {
     Set(Option<PresetTime>),
+    Add,
+    Pause,
+    Resume,
+    Rate,
 }
 
 #[derive(Clone, Copy)]
 enum QueryMode {
-    DayTime,
+    Time,
     GameTime,
+    DayTime,
     Day,
+}
+
+const fn wrap_time(ticks: i64) -> i32 {
+    (ticks % 2_147_483_647) as i32
 }
 
 struct QueryExecutor(QueryMode);
@@ -50,42 +65,72 @@ impl CommandExecutor for QueryExecutor {
         &'a self,
         sender: &'a CommandSender,
         server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
+        args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
+            let clock_name = ResourceLocationArgumentConsumer::find_arg(args, ARG_CLOCK)
+                .unwrap_or(DEFAULT_CLOCK);
             let mode = self.0;
-            // TODO: Maybe ask player for world, or get the current world
             let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
             let level_time = world.level_time.lock().await;
 
-            let curr_time = match mode {
-                QueryMode::DayTime => level_time.query_daytime(),
-                QueryMode::GameTime => level_time.query_gametime(),
-                QueryMode::Day => level_time.query_day(),
-            };
-            let bedrock_key = match mode {
-                QueryMode::DayTime => translation::bedrock::COMMANDS_TIME_QUERY_DAYTIME,
-                QueryMode::GameTime => translation::bedrock::COMMANDS_TIME_QUERY_GAMETIME,
-                QueryMode::Day => translation::bedrock::COMMANDS_TIME_QUERY_DAY,
-            };
-            sender
-                .send_message(TextComponent::translate_cross(
-                    translation::java::COMMANDS_TIME_QUERY,
-                    bedrock_key,
-                    [TextComponent::text(curr_time.to_string())],
-                ))
-                .await;
-            Ok(curr_time as i32)
+            match mode {
+                QueryMode::GameTime => {
+                    let game_time = level_time.query_gametime();
+                    sender
+                        .send_message(TextComponent::translate(
+                            translation::java::COMMANDS_TIME_QUERY_GAMETIME,
+                            [TextComponent::text(game_time.to_string())],
+                        ))
+                        .await;
+                    Ok(wrap_time(game_time))
+                }
+                QueryMode::Time => {
+                    let total_ticks = level_time.time_of_day;
+                    sender
+                        .send_message(TextComponent::translate(
+                            translation::java::COMMANDS_TIME_QUERY_ABSOLUTE,
+                            [
+                                TextComponent::text(clock_name.to_string()),
+                                TextComponent::text(total_ticks.to_string()),
+                            ],
+                        ))
+                        .await;
+                    Ok(wrap_time(total_ticks))
+                }
+                QueryMode::DayTime => {
+                    let curr_time = level_time.query_daytime();
+                    sender
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_TIME_QUERY,
+                            translation::bedrock::COMMANDS_TIME_QUERY_DAYTIME,
+                            [TextComponent::text(curr_time.to_string())],
+                        ))
+                        .await;
+                    Ok(curr_time as i32)
+                }
+                QueryMode::Day => {
+                    let curr_time = level_time.query_day();
+                    sender
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_TIME_QUERY,
+                            translation::bedrock::COMMANDS_TIME_QUERY_DAY,
+                            [TextComponent::text(curr_time.to_string())],
+                        ))
+                        .await;
+                    Ok(curr_time as i32)
+                }
+            }
         })
     }
 }
 
-struct ChangeExecutor(Mode);
+struct ActionExecutor(Action);
 
-impl CommandExecutor for ChangeExecutor {
+impl CommandExecutor for ActionExecutor {
     fn execute<'a>(
         &'a self,
         sender: &'a CommandSender,
@@ -93,51 +138,95 @@ impl CommandExecutor for ChangeExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let time_count = if let Mode::Set(Some(preset)) = &self.0 {
-                preset.to_ticks()
-            } else if let Ok(ticks) = TimeArgumentConsumer::find_arg(args, ARG_TIME) {
-                ticks
-            } else {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Invalid time specified.",
-                )));
-            };
-
-            let mode = self.0;
-            // TODO: Maybe ask player for world, or get the current world
+            let clock_name = ResourceLocationArgumentConsumer::find_arg(args, ARG_CLOCK)
+                .unwrap_or(DEFAULT_CLOCK);
+            let action = self.0;
             let worlds = server.worlds.load();
             let world = worlds
                 .first()
                 .expect("There should always be at least one world");
             let mut level_time = world.level_time.lock().await;
 
-            match mode {
-                Mode::Add => {
-                    // add
-                    level_time.add_time(time_count.into());
-                    level_time.send_time(world).await;
-                    let curr_time = level_time.query_daytime();
-                    sender
-                        .send_message(TextComponent::translate_cross(
-                            translation::java::COMMANDS_TIME_SET,
-                            translation::bedrock::COMMANDS_TIME_SET,
-                            [TextComponent::text(curr_time.to_string())],
-                        ))
-                        .await;
-                    Ok(curr_time as i32)
-                }
-                Mode::Set(_) => {
-                    // set
+            match action {
+                Action::Set(preset) => {
+                    let time_count = if let Some(p) = preset {
+                        p.to_ticks()
+                    } else if let Ok(ticks) = TimeArgumentConsumer::find_arg(args, ARG_TIME) {
+                        ticks
+                    } else {
+                        return Err(CommandError::CommandFailed(TextComponent::text(
+                            "Invalid time specified.",
+                        )));
+                    };
                     level_time.set_time(time_count.into());
                     level_time.send_time(world).await;
                     sender
-                        .send_message(TextComponent::translate_cross(
-                            translation::java::COMMANDS_TIME_SET,
-                            translation::bedrock::COMMANDS_TIME_SET,
-                            [TextComponent::text(time_count.to_string())],
+                        .send_message(TextComponent::translate(
+                            translation::java::COMMANDS_TIME_SET_ABSOLUTE,
+                            [
+                                TextComponent::text(clock_name.to_string()),
+                                TextComponent::text(time_count.to_string()),
+                            ],
                         ))
                         .await;
                     Ok(time_count)
+                }
+                Action::Add => {
+                    let time_count = TimeArgumentConsumer::find_arg(args, ARG_TIME)?;
+                    level_time.add_time(time_count.into());
+                    level_time.send_time(world).await;
+                    let total_ticks = level_time.time_of_day;
+                    sender
+                        .send_message(TextComponent::translate(
+                            translation::java::COMMANDS_TIME_SET_ABSOLUTE,
+                            [
+                                TextComponent::text(clock_name.to_string()),
+                                TextComponent::text(total_ticks.to_string()),
+                            ],
+                        ))
+                        .await;
+                    Ok(wrap_time(total_ticks))
+                }
+                Action::Pause => {
+                    level_time.set_paused(true);
+                    level_time.send_time(world).await;
+                    sender
+                        .send_message(TextComponent::translate(
+                            translation::java::COMMANDS_TIME_PAUSE,
+                            [TextComponent::text(clock_name.to_string())],
+                        ))
+                        .await;
+                    Ok(1)
+                }
+                Action::Resume => {
+                    level_time.set_paused(false);
+                    level_time.send_time(world).await;
+                    sender
+                        .send_message(TextComponent::translate(
+                            translation::java::COMMANDS_TIME_RESUME,
+                            [TextComponent::text(clock_name.to_string())],
+                        ))
+                        .await;
+                    Ok(1)
+                }
+                Action::Rate => {
+                    let rate_res = BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_RATE)?;
+                    let rate = match rate_res {
+                        Ok(val) => val,
+                        Err(err) => return Err(err.into()),
+                    };
+                    level_time.set_rate(rate);
+                    level_time.send_time(world).await;
+                    sender
+                        .send_message(TextComponent::translate(
+                            translation::java::COMMANDS_TIME_RATE,
+                            [
+                                TextComponent::text(clock_name.to_string()),
+                                TextComponent::text(rate.to_string()),
+                            ],
+                        ))
+                        .await;
+                    Ok(1)
                 }
             }
         })
@@ -145,29 +234,98 @@ impl CommandExecutor for ChangeExecutor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
+    let set_node = literal("set")
+        .then(literal("day").execute(ActionExecutor(Action::Set(Some(PresetTime::Day)))))
+        .then(literal("noon").execute(ActionExecutor(Action::Set(Some(PresetTime::Noon)))))
+        .then(literal("night").execute(ActionExecutor(Action::Set(Some(PresetTime::Night)))))
+        .then(literal("midnight").execute(ActionExecutor(Action::Set(Some(PresetTime::Midnight)))))
         .then(
-            literal("add")
-                .then(argument(ARG_TIME, TimeArgumentConsumer).execute(ChangeExecutor(Mode::Add))),
+            argument(ARG_TIME, TimeArgumentConsumer::new())
+                .execute(ActionExecutor(Action::Set(None))),
+        );
+
+    let add_node = literal("add").then(
+        argument(ARG_TIME, TimeArgumentConsumer::min(i32::MIN))
+            .execute(ActionExecutor(Action::Add)),
+    );
+
+    let pause_node = literal("pause").execute(ActionExecutor(Action::Pause));
+    let resume_node = literal("resume").execute(ActionExecutor(Action::Resume));
+
+    let rate_node = literal("rate").then(
+        argument(
+            ARG_RATE,
+            BoundedNumArgumentConsumer::<f32>::new()
+                .min(1.0e-5)
+                .max(1000.0),
         )
-        .then(
-            literal("query")
-                .then(literal("daytime").execute(QueryExecutor(QueryMode::DayTime)))
-                .then(literal("gametime").execute(QueryExecutor(QueryMode::GameTime)))
-                .then(literal("day").execute(QueryExecutor(QueryMode::Day))),
-        )
-        .then(
-            literal("set")
-                .then(literal("day").execute(ChangeExecutor(Mode::Set(Some(PresetTime::Day)))))
-                .then(literal("noon").execute(ChangeExecutor(Mode::Set(Some(PresetTime::Noon)))))
-                .then(literal("night").execute(ChangeExecutor(Mode::Set(Some(PresetTime::Night)))))
-                .then(
-                    literal("midnight")
-                        .execute(ChangeExecutor(Mode::Set(Some(PresetTime::Midnight)))),
-                )
-                .then(
-                    argument(ARG_TIME, TimeArgumentConsumer)
-                        .execute(ChangeExecutor(Mode::Set(None))),
+        .execute(ActionExecutor(Action::Rate)),
+    );
+
+    let query_node = literal("query")
+        .then(literal("time").execute(QueryExecutor(QueryMode::Time)))
+        .then(literal("gametime").execute(QueryExecutor(QueryMode::GameTime)))
+        .then(literal("daytime").execute(QueryExecutor(QueryMode::DayTime)))
+        .then(literal("day").execute(QueryExecutor(QueryMode::Day)));
+
+    let of_clock_node = literal("of").then(
+        argument(ARG_CLOCK, ResourceLocationArgumentConsumer)
+            .then(
+                literal("set")
+                    .then(
+                        literal("day").execute(ActionExecutor(Action::Set(Some(PresetTime::Day)))),
+                    )
+                    .then(
+                        literal("noon")
+                            .execute(ActionExecutor(Action::Set(Some(PresetTime::Noon)))),
+                    )
+                    .then(
+                        literal("night")
+                            .execute(ActionExecutor(Action::Set(Some(PresetTime::Night)))),
+                    )
+                    .then(
+                        literal("midnight")
+                            .execute(ActionExecutor(Action::Set(Some(PresetTime::Midnight)))),
+                    )
+                    .then(
+                        argument(ARG_TIME, TimeArgumentConsumer::new())
+                            .execute(ActionExecutor(Action::Set(None))),
+                    ),
+            )
+            .then(
+                literal("add").then(
+                    argument(ARG_TIME, TimeArgumentConsumer::min(i32::MIN))
+                        .execute(ActionExecutor(Action::Add)),
                 ),
-        )
+            )
+            .then(literal("pause").execute(ActionExecutor(Action::Pause)))
+            .then(literal("resume").execute(ActionExecutor(Action::Resume)))
+            .then(
+                literal("rate").then(
+                    argument(
+                        ARG_RATE,
+                        BoundedNumArgumentConsumer::<f32>::new()
+                            .min(1.0e-5)
+                            .max(1000.0),
+                    )
+                    .execute(ActionExecutor(Action::Rate)),
+                ),
+            )
+            .then(
+                literal("query")
+                    .then(literal("time").execute(QueryExecutor(QueryMode::Time)))
+                    .then(literal("gametime").execute(QueryExecutor(QueryMode::GameTime)))
+                    .then(literal("daytime").execute(QueryExecutor(QueryMode::DayTime)))
+                    .then(literal("day").execute(QueryExecutor(QueryMode::Day))),
+            ),
+    );
+
+    CommandTree::new(NAMES, DESCRIPTION)
+        .then(set_node)
+        .then(add_node)
+        .then(pause_node)
+        .then(resume_node)
+        .then(rate_node)
+        .then(query_node)
+        .then(of_clock_node)
 }

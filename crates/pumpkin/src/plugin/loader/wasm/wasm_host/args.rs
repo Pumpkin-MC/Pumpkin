@@ -81,7 +81,9 @@ impl OwnedArg {
             Arg::Enchantment(e) => Self::Enchantment(e),
             Arg::EntityAnchor(a) => Self::EntityAnchor(*a),
             Arg::Advancement(a) => Self::Advancement(a),
-            Arg::Slot(_, _) | Arg::Slots(_, _) => unreachable!(),
+            Arg::Slot(_, _) | Arg::Slots(_, _) | Arg::TeamColor(_) | Arg::HexColor(_) => {
+                unreachable!()
+            }
         }
     }
 }

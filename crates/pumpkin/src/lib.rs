@@ -7,7 +7,10 @@ extern crate pumpkin_macros;
 use crate::crash::CrashReport;
 use crate::data::VanillaData;
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
-use crate::net::bedrock::BedrockClient;
+use crate::net::bedrock::{
+    BedrockClient,
+    nethernet::{NetherNetListener, load_or_create_identity_key},
+};
 use crate::net::java::JavaClient;
 use crate::net::java::pending::PendingConnection;
 use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult};
@@ -208,6 +211,7 @@ pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub tcp_listener: Option<TcpListener>,
     pub udp_socket: Option<Arc<UdpSocket>>,
+    pub nethernet_listener: Option<NetherNetListener>,
 }
 
 impl PumpkinServer {
@@ -305,11 +309,41 @@ impl PumpkinServer {
             None
         };
 
+        let nethernet_listener = Self::bind_nethernet(&server).await;
+
         Self {
             server,
             tcp_listener,
             udp_socket,
+            nethernet_listener,
         }
+    }
+
+    async fn bind_nethernet(server: &Arc<Server>) -> Option<NetherNetListener> {
+        let config = &server.advanced_config.networking.bedrock;
+        if !config.enabled || !config.nethernet.enabled {
+            return None;
+        }
+        let identity_key = load_or_create_identity_key(&config.nethernet.identity_key)
+            .expect("Failed to load or create the Bedrock NetherNet identity key");
+        let _ = server.bedrock_private_key.set(identity_key.clone());
+        let oidc_verifier = (config.online_mode && config.authentication.enabled).then(|| {
+            let (issuer, keys) = server
+                .bedrock_oidc_keys
+                .get()
+                .expect("Bedrock OIDC keys should be initialized before binding NetherNet");
+            Arc::new((issuer.clone(), keys.clone()))
+        });
+        Some(
+            NetherNetListener::bind(
+                config.nethernet.address,
+                identity_key,
+                oidc_verifier,
+                config.nethernet.stun_servers.clone(),
+            )
+            .await
+            .expect("Failed to bind Bedrock NetherNet signaling endpoint"),
+        )
     }
 
     pub async fn init_plugins(&self) -> std::time::Duration {
@@ -548,38 +582,7 @@ impl PumpkinServer {
                                 }).clone();
 
                                 if is_new {
-                                    let server_clone = self.server.clone();
-                                    let client_clone = client.clone();
-                                    tasks.spawn(async move {
-                                        let login_result = client_clone.handle_login_sequence(&server_clone).await;
-
-                                         match login_result {
-                                            PacketHandlerResult::Stop => {
-                                                client_clone.close().await;
-                                                client_clone.await_tasks().await;
-                                            }
-                                            PacketHandlerResult::ReadyToPlay(profile, config) => {
-                                                if let Some((player, _world)) = server_clone
-                                                    .add_player(Arc::new(ClientPlatform::Bedrock(client_clone.clone())), profile, Some(config))
-                                                    .await
-                                                {
-                                                    client_clone.set_player(player.clone());
-
-                                                    client_clone.progress_player_packets(&player, &server_clone).await;
-
-                                                    client_clone.close().await;
-                                                    client_clone.await_tasks().await;
-                                                    player.remove().await;
-                                                    server_clone.remove_player(&player).await;
-                                                    if let Err(e) = server_clone.player_data_storage
-                                                        .handle_player_leave(&player)
-                                                        .await {
-                                                            error!("Failed to save player data on disconnect: {e}");
-                                                        }
-                                                }
-                                            }
-                                        }
-                                    });
+                                    self.spawn_bedrock_client_task(client.clone(), tasks);
                                 }
 
                                 let packet_bytes = udp_buf[..len].to_vec();
@@ -604,12 +607,80 @@ impl PumpkinServer {
                 }
             },
 
+            // Branch for Bedrock NetherNet connections negotiated over HTTP/WebRTC.
+            nethernet_result = resolve_some(self.nethernet_listener.as_ref(), NetherNetListener::accept) => {
+                if let Some((session, client_addr)) = nethernet_result {
+                    *master_client_id_counter += 1;
+                    let be_clients = bedrock_clients.clone();
+                    let client = Arc::new(BedrockClient::new_nethernet(
+                        session.clone(),
+                        client_addr,
+                        be_clients,
+                    ));
+                    client.start_outgoing_packet_task();
+                    bedrock_clients.lock().await.insert(client_addr, client.clone());
+
+                    let packet_client = client.clone();
+                    let packet_server = self.server.clone();
+                    tasks.spawn(async move {
+                        while let Some(packet) = session.recv().await {
+                            packet_client
+                                .process_nethernet_packet(&packet_server, packet)
+                                .await;
+                            if packet_client.is_closed() {
+                                break;
+                            }
+                        }
+                        packet_client.close().await;
+                    });
+
+                    self.spawn_bedrock_client_task(client, tasks);
+                }
+            },
+
             // Branch for the global stop signal
             () = STOP_INTERRUPT.cancelled() => {
                 return false;
             }
         }
         true
+    }
+
+    fn spawn_bedrock_client_task(&self, client: Arc<BedrockClient>, tasks: &Arc<TaskTracker>) {
+        let server = self.server.clone();
+        tasks.spawn(async move {
+            let login_result = client.handle_login_sequence(&server).await;
+            match login_result {
+                PacketHandlerResult::Stop => {
+                    client.close().await;
+                    client.await_tasks().await;
+                }
+                PacketHandlerResult::ReadyToPlay(profile, config) => {
+                    if let Some((player, _world)) = server
+                        .add_player(
+                            Arc::new(ClientPlatform::Bedrock(client.clone())),
+                            profile,
+                            Some(config),
+                        )
+                        .await
+                    {
+                        client.set_player(player.clone());
+                        client.progress_player_packets(&player, &server).await;
+                        client.close().await;
+                        client.await_tasks().await;
+                        player.remove().await;
+                        server.remove_player(&player).await;
+                        if let Err(error) = server
+                            .player_data_storage
+                            .handle_player_leave(&player)
+                            .await
+                        {
+                            error!("Failed to save player data on disconnect: {error}");
+                        }
+                    }
+                }
+            }
+        });
     }
 }
 

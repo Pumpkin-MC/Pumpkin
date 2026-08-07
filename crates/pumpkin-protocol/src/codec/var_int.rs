@@ -173,14 +173,31 @@ impl PacketWrite for VarInt {
 
 impl PacketRead for VarInt {
     fn read<W: Read>(read: &mut W) -> Result<Self, Error> {
-        let mut val = 0;
+        let mut val = 0u32;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = u8::read(read)?;
-            val |= (i32::from(byte) & 0x7F) << (i * 7);
+            val |= u32::from(byte & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
-                return Ok(Self((val >> 1) ^ (val << 31)));
+                return Ok(Self(((val >> 1) as i32) ^ -((val & 1) as i32)));
             }
         }
         Err(Error::new(ErrorKind::InvalidData, ""))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bedrock_zig_zag_round_trip() {
+        for value in [i32::MIN, -2, -1, 0, 1, 2, i32::MAX] {
+            let mut encoded = Vec::new();
+            VarInt(value).write(&mut encoded).unwrap();
+            assert_eq!(
+                VarInt::read(&mut encoded.as_slice()).unwrap(),
+                VarInt(value)
+            );
+        }
     }
 }

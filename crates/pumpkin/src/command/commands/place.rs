@@ -568,10 +568,10 @@ impl CommandExecutor for PlaceFeatureExecutor {
             let cx = block_pos.0.x >> 4;
             let cz = block_pos.0.z >> 4;
             let mut chunk = ProtoChunk::new(cx, cz, &world_gen);
-            let bottom_y = chunk.bottom_y();
-            let height = chunk.height();
-            let chunk_min_y = bottom_y as i32;
-            let chunk_height = height as i32;
+            let generation_bottom_y = chunk.generation_bottom_y();
+            let generation_height = chunk.generation_height();
+            let chunk_min_y = chunk.bottom_y() as i32;
+            let chunk_height = chunk.height() as i32;
             let surface_y = ground_y(block_pos.0.y, chunk_min_y, chunk_height);
 
             let ground = surface_y as i16;
@@ -601,8 +601,8 @@ impl CommandExecutor for PlaceFeatureExecutor {
             configured.generate(
                 &mut chunk,
                 &reg,
-                bottom_y,
-                height,
+                generation_bottom_y,
+                generation_height,
                 key,
                 &mut random,
                 block_pos,
