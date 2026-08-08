@@ -11,8 +11,10 @@ use crate::entity::projectile::snowball::SnowballEntity;
 use crate::entity::{Entity, EntityBase};
 
 pub struct RangedSnowballAttackGoal {
-    cooldown: i32,
-    interval: i32,
+    attack_time: i32,
+    see_time: i32,
+    attack_interval: i32,
+    speed: f64,
     range: f64,
 }
 
@@ -20,10 +22,34 @@ impl RangedSnowballAttackGoal {
     #[must_use]
     pub const fn new(interval: i32, range: f64) -> Self {
         Self {
-            cooldown: 0,
-            interval,
+            attack_time: -1,
+            see_time: 0,
+            attack_interval: interval,
+            speed: 1.25,
             range,
         }
+    }
+
+    async fn has_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
+        let entity = mob.get_entity();
+        let target_entity = target.get_entity();
+        let from = entity.get_eye_pos();
+        let to = target_entity.get_eye_pos();
+        if from.squared_distance_to_vec(&to) > 128.0 * 128.0 {
+            return false;
+        }
+
+        let world = entity.world.load_full();
+        if !Arc::ptr_eq(&world, &target_entity.world.load_full()) {
+            return false;
+        }
+
+        world
+            .raycast_collision(from, to, async |block_pos, world| {
+                !world.get_block_state(block_pos).collision_shapes.is_empty()
+            })
+            .await
+            .is_none()
     }
 
     fn projectile_velocity(
@@ -44,12 +70,15 @@ impl RangedSnowballAttackGoal {
         let position = shooter.pos.load();
         let projectile_entity = Entity::new(world.clone(), position, &EntityType::SNOWBALL);
         let projectile = SnowballEntity::new_shot(projectile_entity, shooter);
+        let projectile_position = projectile.get_entity().pos.load();
         let velocity = Self::projectile_velocity(
-            position,
+            projectile_position,
             target.get_entity().pos.load(),
             target.get_entity().get_eye_height(),
         );
-        projectile.get_entity().set_velocity(velocity);
+        projectile
+            .thrown
+            .set_velocity(velocity.x, velocity.y, velocity.z, 1.6, 12.0);
         world.spawn_entity(Arc::new(projectile)).await;
         world.play_sound(
             Sound::EntitySnowGolemShoot,
@@ -84,7 +113,6 @@ impl Goal for RangedSnowballAttackGoal {
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            self.cooldown = 0;
             mob.get_mob_entity().set_attacking(true);
         })
     }
@@ -93,6 +121,8 @@ impl Goal for RangedSnowballAttackGoal {
         Box::pin(async move {
             mob.get_mob_entity().navigator.lock().unwrap().stop();
             mob.get_mob_entity().set_attacking(false);
+            self.attack_time = -1;
+            self.see_time = 0;
         })
     }
 
@@ -105,15 +135,21 @@ impl Goal for RangedSnowballAttackGoal {
             let shooter_pos = shooter.pos.load();
             let target_pos = target.get_entity().pos.load();
             let distance_squared = shooter_pos.squared_distance_to_vec(&target_pos);
+            let has_line_of_sight = Self::has_line_of_sight(mob, target.as_ref()).await;
+            if has_line_of_sight {
+                self.see_time += 1;
+            } else {
+                self.see_time = 0;
+            }
 
             mob.get_mob_entity()
                 .look_control
                 .lock()
                 .unwrap()
                 .look_at_entity_with_range(&target, 30.0, 30.0);
-            self.cooldown = (self.cooldown - 1).max(0);
+            self.attack_time -= 1;
 
-            if distance_squared > self.range * self.range {
+            if distance_squared > self.range * self.range || self.see_time < 5 {
                 mob.get_mob_entity()
                     .navigator
                     .lock()
@@ -121,15 +157,20 @@ impl Goal for RangedSnowballAttackGoal {
                     .set_progress(NavigatorGoal {
                         current_progress: shooter_pos,
                         destination: target_pos,
-                        speed: 1.0,
+                        speed: self.speed,
                     });
                 return;
             }
 
             mob.get_mob_entity().navigator.lock().unwrap().stop();
-            if self.cooldown == 0 {
+            if self.attack_time == 0 {
+                if !has_line_of_sight {
+                    return;
+                }
                 self.shoot(mob, target.as_ref()).await;
-                self.cooldown = self.interval;
+                self.attack_time = self.attack_interval;
+            } else if self.attack_time < 0 {
+                self.attack_time = self.attack_interval;
             }
         })
     }
@@ -162,7 +203,8 @@ mod tests {
     #[test]
     fn snowball_goal_uses_vanilla_interval_and_range() {
         let goal = RangedSnowballAttackGoal::new(20, 10.0);
-        assert_eq!(goal.interval, 20);
+        assert_eq!(goal.attack_interval, 20);
+        assert_eq!(goal.speed, 1.25);
         assert_eq!(goal.range, 10.0);
     }
 }
