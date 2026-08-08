@@ -129,6 +129,14 @@ pub const DATA_VERSION: i32 = 4903; // 26.2
 /// must apply the same gating.
 pub const MINE_BLOCK_EXHAUSTION: f32 = 0.005; // Vanilla: 0.005F
 
+const fn bedrock_inventory_slot(player_screen_slot: i16) -> Option<u32> {
+    match player_screen_slot {
+        9..=35 => Some(player_screen_slot as u32),
+        36..=44 => Some((player_screen_slot - 36) as u32),
+        _ => None,
+    }
+}
+
 struct HeapNode(i32, Vector2<i32>, Weak<ChunkData>);
 
 impl Eq for HeapNode {}
@@ -5386,13 +5394,18 @@ impl InventoryPlayer for Player {
                     use pumpkin_protocol::codec::var_uint::VarUInt;
 
                     let window_id = packet.window_id.0 as u32;
-                    let slots: Vec<NetworkItemStackDescriptor> = packet
-                        .slot_data
-                        .iter()
-                        .map(|s| NetworkItemStackDescriptor::from(&*s.0))
-                        .collect();
-
                     if window_id == 0 {
+                        // Java's player screen also contains crafting, armor, and off-hand
+                        // slots. Bedrock container 0 contains only the 36-slot player
+                        // inventory in hotbar-first order.
+                        let slots = self
+                            .inventory
+                            .main_inventory
+                            .read()
+                            .await
+                            .iter()
+                            .map(NetworkItemStackDescriptor::from)
+                            .collect();
                         let bedrock_packet = CInventoryContent {
                             container_id: VarUInt(0),
                             slots,
@@ -5425,30 +5438,21 @@ impl InventoryPlayer for Player {
                     use pumpkin_protocol::codec::var_uint::VarUInt;
 
                     let window_id = packet.window_id;
-                    tracing::info!(
-                        "enqueue_slot_packet: window_id={}, slot={}",
-                        window_id,
-                        packet.slot
-                    );
-
                     if window_id == 0 {
-                        tracing::info!(
-                            "enqueue_slot_packet: window_id is 0, sending CInventorySlot to Bedrock client"
-                        );
-                        let slot_idx = packet.slot as usize;
-                        let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
-
-                        let bedrock_packet = CInventorySlot {
-                            window_id: VarUInt(0),
-                            inventory_slot: VarUInt(slot_idx as u32),
-                            container_name: Some(FullContainerName {
-                                container_name: ContainerName::Inventory,
-                                dynamic_id: None,
-                            }),
-                            storage: None,
-                            item: item_desc,
-                        };
-                        bedrock.enqueue_packet(&bedrock_packet).await;
+                        if let Some(slot_idx) = bedrock_inventory_slot(packet.slot) {
+                            let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
+                            let bedrock_packet = CInventorySlot {
+                                window_id: VarUInt(0),
+                                inventory_slot: VarUInt(slot_idx),
+                                container_name: Some(FullContainerName {
+                                    container_name: ContainerName::Inventory,
+                                    dynamic_id: None,
+                                }),
+                                storage: None,
+                                item: item_desc,
+                            };
+                            bedrock.enqueue_packet(&bedrock_packet).await;
+                        }
                     } else {
                         let slot_idx = packet.slot as usize;
                         let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
@@ -5655,5 +5659,20 @@ impl InventoryPlayer for Player {
         Box::pin(async move {
             self.increment_stat(category, stat_id, amount).await;
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bedrock_inventory_slot;
+
+    #[test]
+    fn player_screen_slots_map_to_bedrock_inventory() {
+        assert_eq!(bedrock_inventory_slot(9), Some(9));
+        assert_eq!(bedrock_inventory_slot(35), Some(35));
+        assert_eq!(bedrock_inventory_slot(36), Some(0));
+        assert_eq!(bedrock_inventory_slot(44), Some(8));
+        assert_eq!(bedrock_inventory_slot(8), None);
+        assert_eq!(bedrock_inventory_slot(45), None);
     }
 }
