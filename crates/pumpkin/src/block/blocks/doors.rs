@@ -181,7 +181,11 @@ impl BlockBehaviour for DoorBlock {
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        can_place_at(args.block_accessor, args.position)
+        has_support(args.block_accessor, args.position)
+            && args
+                .block_accessor
+                .get_block_state(&args.position.up())
+                .replaceable()
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
@@ -303,7 +307,7 @@ impl BlockBehaviour for DoorBlock {
             {
                 if lv == DoubleBlockHalf::Lower
                     && args.direction == BlockDirection::Down
-                    && !can_place_at(args.world, args.position)
+                    && !has_support(args.world, args.position)
                 {
                     return BlockStateId::AIR;
                 }
@@ -350,9 +354,8 @@ impl BlockBehaviour for DoorBlock {
     }
 }
 
-fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    world.get_block_state(&block_pos.up()).replaceable()
-        && world
-            .get_block_state(&block_pos.down())
-            .is_side_solid(BlockDirection::Up)
+fn has_support(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    world
+        .get_block_state(&block_pos.down())
+        .is_side_solid(BlockDirection::Up)
 }
