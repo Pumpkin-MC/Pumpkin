@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
 use crate::entity::ai::goal::GoalFuture;
@@ -31,13 +33,21 @@ const fn should_start_melee_goal(path_found: bool, in_attack_range: bool) -> boo
 async fn has_melee_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
     let mob_entity = mob.get_entity();
     let world = mob_entity.world.load_full();
+    let target_entity = target.get_entity();
+    let from = mob_entity.get_eye_pos();
+    let to = target_entity.get_eye_pos();
+    if from.squared_distance_to_vec(&to) > 128.0 * 128.0 {
+        return false;
+    }
+
+    if !Arc::ptr_eq(&world, &target_entity.world.load_full()) {
+        return false;
+    }
 
     world
-        .raycast(
-            mob_entity.get_eye_pos(),
-            target.get_entity().get_eye_pos(),
-            async |block_pos, world| world.get_block_state(block_pos).is_solid(),
-        )
+        .raycast_collision(from, to, async |block_pos, world| {
+            !world.get_block_state(block_pos).collision_shapes.is_empty()
+        })
         .await
         .is_none()
 }
