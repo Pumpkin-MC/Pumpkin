@@ -6,6 +6,7 @@ use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
@@ -35,7 +36,7 @@ pub struct BatEntity {
     pub mob_entity: MobEntity,
     hanging_position: Mutex<Option<BlockPos>>,
     roosting: AtomicBool,
-    ambient_sound_chance: AtomicI32,
+    ambient_sound_time: AtomicI32,
 }
 
 impl BatEntity {
@@ -45,7 +46,7 @@ impl BatEntity {
             mob_entity,
             hanging_position: Mutex::new(None),
             roosting: AtomicBool::new(true),
-            ambient_sound_chance: AtomicI32::new(MIN_AMBIENT_SOUND_DELAY),
+            ambient_sound_time: AtomicI32::new(-MIN_AMBIENT_SOUND_DELAY),
         };
         let mob_arc = Arc::new(bat);
 
@@ -97,6 +98,13 @@ impl BatEntity {
             None,
         );
     }
+
+    fn stop_roosting_with_event(&self, world: &World, position: BlockPos) {
+        self.set_roosting(false);
+        if !self.mob_entity.living_entity.entity.is_silent() {
+            world.sync_world_event(WorldEvent::SoundBatLiftoff, position, 0);
+        }
+    }
 }
 
 impl NBTStorage for BatEntity {
@@ -136,12 +144,16 @@ impl Mob for BatEntity {
             let above_pos = BlockPos::new(block_pos.0.x, block_pos.0.y + 1, block_pos.0.z);
             let world = entity.world.load();
 
-            // Ambient idle sound (vanilla: MobEntity.mobTick → playAmbientSound)
-            let chance = self.ambient_sound_chance.fetch_sub(1, Relaxed);
-            if chance <= 0 {
-                self.ambient_sound_chance
-                    .store(MIN_AMBIENT_SOUND_DELAY, Relaxed);
-                entity.play_sound(Sound::EntityBatAmbient);
+            // `Mob.baseTick`: ambientSoundTime starts at -getAmbientSoundInterval(), then
+            // increments until a 1/1000 roll triggers the sound. Bat.getAmbientSound returns
+            // null while roosting on three out of four trigger rolls.
+            let ambient_time = self.ambient_sound_time.fetch_add(1, Relaxed);
+            if entity.is_alive() && rand::rng().random_range(0..1000) < ambient_time {
+                self.ambient_sound_time
+                    .store(-MIN_AMBIENT_SOUND_DELAY, Relaxed);
+                if !self.is_roosting() || rand::rng().random_range(0..4) == 0 {
+                    entity.play_sound(Sound::EntityBatAmbient);
+                }
             }
 
             if self.is_roosting() {
@@ -161,10 +173,10 @@ impl Mob for BatEntity {
                         .get_closest_player(pos, CLOSE_PLAYER_DISTANCE)
                         .is_some()
                     {
-                        self.set_roosting(false);
+                        self.stop_roosting_with_event(&world, block_pos);
                     }
                 } else {
-                    self.set_roosting(false);
+                    self.stop_roosting_with_event(&world, block_pos);
                 }
             } else {
                 let mut hanging_pos = self.hanging_position.lock().await;
@@ -189,10 +201,12 @@ impl Mob for BatEntity {
                         });
                     let new_target = should_pick.then(|| {
                         let pos = entity.pos.load();
-                        BlockPos::new(
-                            pos.x as i32 + rng.random_range(0i32..7) - rng.random_range(0i32..7),
-                            (pos.y + f64::from(rng.random_range(0i32..6)) - 2.0) as i32,
-                            pos.z as i32 + rng.random_range(0i32..7) - rng.random_range(0i32..7),
+                        BlockPos::floored(
+                            pos.x + f64::from(rng.random_range(0i32..7))
+                                - f64::from(rng.random_range(0i32..7)),
+                            pos.y + f64::from(rng.random_range(0i32..6)) - 2.0,
+                            pos.z + f64::from(rng.random_range(0i32..7))
+                                - f64::from(rng.random_range(0i32..7)),
                         )
                     });
                     let try_roost = rng.random_range(0u32..100) == 0;
@@ -200,17 +214,10 @@ impl Mob for BatEntity {
                 };
 
                 if should_pick_new {
-                    // Pre-validate: only accept targets in air (avoids water, lava, hazards)
-                    if let Some(target) = new_target {
-                        let target_state = world.get_block_state(&target);
-                        if target_state.is_air() && target.0.y > world.dimension.min_y {
-                            *hanging_pos = Some(target);
-                        } else {
-                            *hanging_pos = None;
-                        }
-                    } else {
-                        *hanging_pos = None;
-                    }
+                    // Vanilla stores the sampled position without validating it here. The
+                    // existing target is invalidated at the top of the next tick, so an
+                    // obstruction still affects this tick's movement exactly once.
+                    *hanging_pos = new_target;
                 }
 
                 if let Some(target) = *hanging_pos {
@@ -230,6 +237,12 @@ impl Mob for BatEntity {
                     let yaw = (new_velo.z.atan2(new_velo.x) as f32).to_degrees() - 90.0;
                     let yaw_diff = pumpkin_util::math::wrap_degrees(yaw - entity.yaw.load());
                     entity.yaw.store(entity.yaw.load() + yaw_diff);
+                    let mut movement_input = self.mob_entity.living_entity.movement_input.load();
+                    movement_input.z = 0.5;
+                    self.mob_entity
+                        .living_entity
+                        .movement_input
+                        .store(movement_input);
                 }
                 drop(hanging_pos);
 
@@ -248,6 +261,10 @@ impl Mob for BatEntity {
             if self.is_roosting() {
                 let entity = &self.mob_entity.living_entity.entity;
                 entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
+                self.mob_entity
+                    .living_entity
+                    .movement_input
+                    .store(Vector3::new(0.0, 0.0, 0.0));
                 let pos = entity.pos.load();
                 let snapped_y = (pos.y.floor()) + 1.0 - f64::from(entity.height());
                 entity.set_pos(Vector3::new(pos.x, snapped_y, pos.z));
@@ -270,6 +287,9 @@ impl Mob for BatEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             if self.is_roosting() {
+                // `Bat.hurtServer` clears the roosting flag, but does not emit the
+                // liftoff world event. The event is only emitted by the AI transition
+                // in `customServerAiStep`.
                 self.set_roosting(false);
             }
         })
