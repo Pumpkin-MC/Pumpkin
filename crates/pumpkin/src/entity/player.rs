@@ -1722,12 +1722,11 @@ impl Player {
 
     async fn is_swimming(&self, flying: bool) -> bool {
         let entity = self.get_entity();
-        let swim_height = self.living_entity.get_swim_height();
+        let touching_water = entity.touching_water.load(Ordering::Relaxed);
+        let can_start_swimming = entity.water_height.load() > self.living_entity.get_swim_height();
 
-        // TODO: Replace this inferred check with vanilla-equivalent swimming state tracking
-        // (LivingEntity#updateSwimming + entity swimming flag).
-        entity.touching_water.load(Ordering::Relaxed)
-            && entity.water_height.load() > swim_height
+        touching_water
+            && (entity.swimming.load(Ordering::Relaxed) || can_start_swimming)
             && entity.is_sprinting()
             && !entity.on_ground.load(Ordering::Relaxed)
             && !flying
@@ -1757,9 +1756,11 @@ impl Player {
         }
 
         let flying = self.is_flying().await;
+        let swimming = self.is_swimming(flying).await;
+        entity.set_swimming(swimming).await;
         let desired_pose = if self.is_sleeping() {
             EntityPose::Sleeping
-        } else if self.is_swimming(flying).await {
+        } else if swimming {
             EntityPose::Swimming
         } else if entity.is_fall_flying() {
             EntityPose::FallFlying
@@ -2213,7 +2214,8 @@ impl Player {
         packet_id: i32,
         payload: Bytes,
     ) -> bool {
-        if let Some(server) = self.world().server.upgrade() {
+        let server = self.world().server.upgrade();
+        if let Some(server) = server {
             let mut event =
                 PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
             server.plugin_manager.fire(&server, &mut event).await;
@@ -2223,7 +2225,8 @@ impl Player {
     }
 
     pub async fn fire_packet_sent_no_obj(self: &Arc<Self>, packet_id: i32, payload: Bytes) -> bool {
-        if let Some(server) = self.world().server.upgrade() {
+        let server = self.world().server.upgrade();
+        if let Some(server) = server {
             // This is a dummy object to satisfy the non-optional requirement in WIT
             // In the future we should make all packets 'static or have a way to represent raw packets in WIT
             struct RawPacket;
@@ -3769,7 +3772,8 @@ impl Player {
 
     /// Add experience points to the player.
     pub async fn add_experience_points(self: &Arc<Self>, mut added_points: i32) {
-        if let Some(server) = self.world().server.upgrade() {
+        let server = self.world().server.upgrade();
+        if let Some(server) = server {
             let mut event = PlayerExpChangeEvent::new(self.clone(), added_points);
             server.plugin_manager.fire(&server, &mut event).await;
             added_points = event.amount;
@@ -3901,7 +3905,8 @@ impl Player {
             wt
         };
 
-        if let Some(server) = self.living_entity.entity.world.load().server.upgrade() {
+        let server = self.living_entity.entity.world.load().server.upgrade();
+        if let Some(server) = server {
             let mut event =
                 crate::plugin::api::events::player::inventory_close::InventoryCloseEvent::new(
                     self,
@@ -3969,7 +3974,8 @@ impl Player {
             self.close_handled_screen().await;
         }
 
-        if let Some(server) = self.world().server.upgrade() {
+        let server = self.world().server.upgrade();
+        if let Some(server) = server {
             let mut event =
                 crate::plugin::api::events::inventory::inventory_open::InventoryOpenEvent::new(
                     self.clone(),
@@ -4334,7 +4340,8 @@ impl Player {
         drop(perm_manager);
 
         let mut event = PlayerPermissionCheckEvent::new(self.clone(), node.to_string(), result);
-        if let Some(server_arc) = self.world().server.upgrade() {
+        let server_arc = self.world().server.upgrade();
+        if let Some(server_arc) = server_arc {
             server_arc
                 .plugin_manager
                 .fire(&server_arc, &mut event)
@@ -5622,7 +5629,8 @@ impl InventoryPlayer for Player {
             debug!("Player::award_experience called with amount={amount}");
             if amount > 0 {
                 debug!("Player: adding {amount} experience points");
-                if let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) {
+                let player = self.world().get_player_by_uuid(self.gameprofile.id);
+                if let Some(player) = player {
                     player.add_experience_points(amount).await;
                 }
             }

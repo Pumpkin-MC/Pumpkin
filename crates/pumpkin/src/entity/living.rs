@@ -474,12 +474,12 @@ impl LivingEntity {
             self.heal(heal_amount);
         } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
             let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
-            if let Some(dyn_self) = self
+            let dyn_self = self
                 .entity
                 .world
                 .load()
-                .get_entity_by_id(self.entity.entity_id)
-            {
+                .get_entity_by_id(self.entity.entity_id);
+            if let Some(dyn_self) = dyn_self {
                 dyn_self
                     .damage(&*dyn_self, damage_amount, DamageType::MAGIC)
                     .await;
@@ -1675,12 +1675,12 @@ impl LivingEntity {
             }
         } else if effect_type == &StatusEffect::WITHER {
             let damage_amount = 1.0;
-            if let Some(dyn_self) = self
+            let dyn_self = self
                 .entity
                 .world
                 .load()
-                .get_entity_by_id(self.entity.entity_id)
-            {
+                .get_entity_by_id(self.entity.entity_id);
+            if let Some(dyn_self) = dyn_self {
                 dyn_self
                     .damage(&*dyn_self, damage_amount, DamageType::WITHER)
                     .await;
