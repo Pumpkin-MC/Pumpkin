@@ -377,6 +377,13 @@ impl MobEntity {
         true
     }
 
+    pub fn check_any_light_monster_spawn_rules(_world: &World, _pos: &BlockPos) -> bool {
+        // Vanilla delegates this predicate to Mob.checkMobSpawnRules. The
+        // natural-spawn caller has already run is_spawn_position_ok, which is
+        // Pumpkin's equivalent of that block-state predicate.
+        true
+    }
+
     pub async fn try_attack(&self, target: &dyn EntityBase) -> bool {
         if self.living_entity.dead.load(Relaxed) {
             return false;

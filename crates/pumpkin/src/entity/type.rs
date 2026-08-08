@@ -431,6 +431,10 @@ pub fn check_spawn_rules(
             && world.get_raw_brightness(pos, 0) > 8;
     }
 
+    if entity_type.category == &MobCategory::MONSTER && uses_any_light_monster_spawn_rules(id) {
+        return mob::MobEntity::check_any_light_monster_spawn_rules(world, pos);
+    }
+
     if entity_type.category == &MobCategory::MONSTER && uses_generic_monster_spawn_rules(id) {
         return mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering);
     }
@@ -490,7 +494,13 @@ const fn uses_animal_spawn_rules(id: u16) -> bool {
 /// (`Slime.java`, 1.21.4), which applies the swamp-band and slime-chunk gates instead of
 /// the generic darkness gate, so the category-wide branch must not answer for it.
 const fn uses_generic_monster_spawn_rules(id: u16) -> bool {
-    id != EntityType::SLIME.id
+    id != EntityType::SLIME.id && !uses_any_light_monster_spawn_rules(id)
+}
+
+/// Monster types registered with `Monster.checkAnyLightMonsterSpawnRules` in
+/// vanilla's `SpawnPlacements`.
+const fn uses_any_light_monster_spawn_rules(id: u16) -> bool {
+    id == EntityType::BLAZE.id || id == EntityType::BREEZE.id || id == EntityType::ZOGLIN.id
 }
 
 /// `AgeableWaterCreature.checkSurfaceAgeableWaterCreatureSpawnRules`'s Y-range gate:
@@ -506,7 +516,7 @@ const fn is_below_glow_squid_y_threshold(y: i32, sea_level: i32) -> bool {
 
 #[cfg(test)]
 mod animal_spawn_dispatch_tests {
-    use super::{EntityType, uses_animal_spawn_rules};
+    use super::{EntityType, uses_animal_spawn_rules, uses_any_light_monster_spawn_rules};
 
     #[test]
     fn vanilla_animal_placements_use_the_animal_predicate() {
@@ -526,6 +536,14 @@ mod animal_spawn_dispatch_tests {
         ] {
             assert!(uses_animal_spawn_rules(entity_type.id));
         }
+    }
+
+    #[test]
+    fn any_light_monsters_skip_the_darkness_predicate() {
+        assert!(uses_any_light_monster_spawn_rules(EntityType::BLAZE.id));
+        assert!(uses_any_light_monster_spawn_rules(EntityType::BREEZE.id));
+        assert!(uses_any_light_monster_spawn_rules(EntityType::ZOGLIN.id));
+        assert!(!uses_any_light_monster_spawn_rules(EntityType::CREEPER.id));
     }
 
     #[test]
