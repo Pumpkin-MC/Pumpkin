@@ -170,10 +170,56 @@ jobs:
           name: pumpkin-${{ runner.arch }}-${{ runner.os }}
           compression-level: 9
           path: dist/pumpkin-*
+  build_release_android:
+    name: Build Android release (aarch64)
+    runs-on: ubuntu-latest
+    needs: [clippy_release]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install Rust target
+        run: rustup target add aarch64-linux-android
+
+      - name: Install Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Configure Android toolchain
+        shell: bash
+        run: |
+          TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "CC_aarch64_linux_android=$TOOLCHAIN/aarch64-linux-android21-clang" >> $GITHUB_ENV
+          echo "CXX_aarch64_linux_android=$TOOLCHAIN/aarch64-linux-android21-clang++" >> $GITHUB_ENV
+          echo "AR_aarch64_linux_android=llvm-ar" >> $GITHUB_ENV
+          echo "RANLIB_aarch64_linux_android=llvm-ranlib" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$TOOLCHAIN/aarch64-linux-android21-clang" >> $GITHUB_ENV
+
+      - name: Build release
+        run: cargo build --release --target aarch64-linux-android
+
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/aarch64-linux-android/release/pumpkin \
+             dist/pumpkin-aarch64-linux-android
+
+      - name: Export executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: pumpkin-aarch64-linux-android
+          compression-level: 9
+          path: dist/pumpkin-aarch64-linux-android
   draft_release:
     permissions:
       contents: write
-    needs: [build_release]
+    needs: [build_release, build_release_android]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     steps:
