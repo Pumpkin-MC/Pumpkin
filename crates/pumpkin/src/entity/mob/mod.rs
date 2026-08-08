@@ -1143,9 +1143,22 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                     std::mem::take(&mut *guard)
                 };
 
-                // 2. Perform AI logic (No locks held, so .await is safe!)
-                target_selector.tick(self).await;
-                goals_selector.tick(self).await;
+                // 2. Perform AI logic (No locks held, so .await is safe!). Vanilla only
+                // reevaluates selector membership on alternating ticks; on the other ticks it
+                // advances already-running goals that explicitly require every-tick updates.
+                // The phase is entity-specific so a mob swarm does not perform all expensive
+                // selector work on the same tick.
+                let tick_count = mob_entity.tick_count.load(Relaxed);
+                let run_all_goals = tick_count <= 1
+                    || (tick_count.wrapping_add(mob_entity.living_entity.entity.entity_id)) % 2
+                        == 0;
+                if run_all_goals {
+                    target_selector.tick(self).await;
+                    goals_selector.tick(self).await;
+                } else {
+                    target_selector.tick_goals(self, false).await;
+                    goals_selector.tick_goals(self, false).await;
+                }
 
                 // 3. "Put back" selectors
                 {
