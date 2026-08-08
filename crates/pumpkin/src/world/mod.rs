@@ -974,6 +974,7 @@ impl World {
         let entity_count = entities_to_tick.len();
         let server_for_entities = server.clone();
         let active_chunks = self.active_chunks.load();
+        let level_for_entities = self.level.clone();
 
         let entity_future = async move {
             let t = tokio::time::Instant::now();
@@ -991,6 +992,14 @@ impl World {
                     get_section_cord(entity_pos.z.floor() as i32),
                 );
                 if !active_chunks.contains(&entity_chunk) {
+                    continue;
+                }
+
+                // A chunk stays active while it is still being generated. Mobs spawned by the
+                // generator are added to the world before their chunk is published, and every
+                // block read in a missing chunk reports air, so ticking them here would let
+                // them fall through the terrain that is about to appear.
+                if !level_for_entities.is_chunk_loaded(&entity_chunk) {
                     continue;
                 }
 
