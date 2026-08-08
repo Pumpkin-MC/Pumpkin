@@ -1126,90 +1126,97 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 }
             }
 
-            self.mob_tick(caller).await;
-            self.mob_try_pick_up_items().await;
+            // Vanilla `LivingEntity.isEffectiveAi()` suppresses the complete server AI step
+            // for mobs carrying the `NoAI` flag. Physics, leash updates, ageing, living effects,
+            // and Mob.aiStep item pickup still run; only goals, brains, navigation, and
+            // controllers belong to the skipped AI step.
+            if !mob_entity.is_no_ai() {
+                self.mob_tick(caller).await;
 
-            // 1. "Take" selectors out of the mutexes
-            let mut target_selector = {
-                let mut guard = mob_entity.target_selector.lock().unwrap();
-                std::mem::take(&mut *guard)
-            };
-            let mut goals_selector = {
-                let mut guard = mob_entity.goals_selector.lock().unwrap();
-                std::mem::take(&mut *guard)
-            };
+                // 1. "Take" selectors out of the mutexes
+                let mut target_selector = {
+                    let mut guard = mob_entity.target_selector.lock().unwrap();
+                    std::mem::take(&mut *guard)
+                };
+                let mut goals_selector = {
+                    let mut guard = mob_entity.goals_selector.lock().unwrap();
+                    std::mem::take(&mut *guard)
+                };
 
-            // 2. Perform AI logic (No locks held, so .await is safe!)
-            target_selector.tick(self).await;
-            goals_selector.tick(self).await;
+                // 2. Perform AI logic (No locks held, so .await is safe!)
+                target_selector.tick(self).await;
+                goals_selector.tick(self).await;
 
-            // 3. "Put back" selectors
-            {
-                *mob_entity.target_selector.lock().unwrap() = target_selector;
-                *mob_entity.goals_selector.lock().unwrap() = goals_selector;
-            };
+                // 3. "Put back" selectors
+                {
+                    *mob_entity.target_selector.lock().unwrap() = target_selector;
+                    *mob_entity.goals_selector.lock().unwrap() = goals_selector;
+                };
 
-            // 3b. Brain tick, for mobs migrated to the Brain/Memory/Activity system.
-            //
-            // Placement matters: this must run *after* the goal selectors are back in their
-            // mutexes and *before* the navigator is taken out, so that a `WALK_TARGET` written
-            // this tick reaches `Navigator::set_progress` and is consumed by the navigator in
-            // the same tick, matching vanilla where `Brain.tick` runs inside
-            // `Mob.customServerAiStep` ahead of navigation.
-            //
-            // `Brain::tick` takes only its own runtime out of its mutex; the memory store stays
-            // live so damage/game-event writes arriving mid-tick are not dropped.
-            if let Some(brain) = &mob_entity.brain {
-                // DEVIATION: vanilla passes `level.getGameTime()`. Reading that here means
-                // locking the world's async `level_time` mutex once per mob per tick. Behaviors
-                // only ever compare this value against timestamps they themselves recorded, so
-                // any monotonic per-entity clock is equivalent; `Entity::age` is that clock and
-                // is a plain atomic. Consequence: durations are correct, but a timestamp is not
-                // comparable across entities and does not survive a restart.
-                let game_time = i64::from(
-                    mob_entity
-                        .living_entity
-                        .entity
-                        .age
-                        .load(std::sync::atomic::Ordering::Relaxed),
-                );
-                brain.tick(self, game_time).await;
+                // 3b. Brain tick, for mobs migrated to the Brain/Memory/Activity system.
+                //
+                // Placement matters: this must run *after* the goal selectors are back in their
+                // mutexes and *before* the navigator is taken out, so that a `WALK_TARGET` written
+                // this tick reaches `Navigator::set_progress` and is consumed by the navigator in
+                // the same tick, matching vanilla where `Brain.tick` runs inside
+                // `Mob.customServerAiStep` ahead of navigation.
+                //
+                // `Brain::tick` takes only its own runtime out of its mutex; the memory store stays
+                // live so damage/game-event writes arriving mid-tick are not dropped.
+                if let Some(brain) = &mob_entity.brain {
+                    // DEVIATION: vanilla passes `level.getGameTime()`. Reading that here means
+                    // locking the world's async `level_time` mutex once per mob per tick. Behaviors
+                    // only ever compare this value against timestamps they themselves recorded, so
+                    // any monotonic per-entity clock is equivalent; `Entity::age` is that clock and
+                    // is a plain atomic. Consequence: durations are correct, but a timestamp is not
+                    // comparable across entities and does not survive a restart.
+                    let game_time = i64::from(
+                        mob_entity
+                            .living_entity
+                            .entity
+                            .age
+                            .load(std::sync::atomic::Ordering::Relaxed),
+                    );
+                    brain.tick(self, game_time).await;
+                }
+
+                // 4. Repeat for Navigator
+                let mut navigator = {
+                    let mut guard = mob_entity.navigator.lock().unwrap();
+                    std::mem::take(&mut *guard)
+                };
+
+                navigator.tick(&mob_entity.living_entity).await;
+
+                {
+                    *mob_entity.navigator.lock().unwrap() = navigator;
+                };
+
+                // Controllers are synchronous, so we can just use normal blocks
+                {
+                    let mut look_control = mob_entity.look_control.lock().unwrap();
+                    look_control.tick(self);
+                };
+
+                {
+                    let mut move_control = mob_entity.move_control.lock().unwrap();
+                    // Vanilla PathNavigation never writes movement input directly: after following
+                    // its path it calls MoveControl.setWantedPosition. The waypoint was computed
+                    // while the navigator was taken out above, so hand it to the controller only
+                    // after restoring the navigator lock. This is especially important for
+                    // FlyingMoveControl, whose vertical input and no-gravity state otherwise never
+                    // receive path targets.
+                    let navigation_target =
+                        mob_entity.navigator.lock().unwrap().next_movement_target();
+                    if let Some((target, speed)) = navigation_target {
+                        move_control.set_wanted_position(target.x, target.y, target.z, speed);
+                    }
+                    move_control.tick(self);
+                }
             }
 
-            // 4. Repeat for Navigator
-            let mut navigator = {
-                let mut guard = mob_entity.navigator.lock().unwrap();
-                std::mem::take(&mut *guard)
-            };
-
-            navigator.tick(&mob_entity.living_entity).await;
-
-            {
-                *mob_entity.navigator.lock().unwrap() = navigator;
-            };
-
-            // Controllers are synchronous, so we can just use normal blocks
-            {
-                let mut look_control = mob_entity.look_control.lock().unwrap();
-                look_control.tick(self);
-            };
-
-            {
-                let mut move_control = mob_entity.move_control.lock().unwrap();
-                // Vanilla PathNavigation never writes movement input directly: after following
-                // its path it calls MoveControl.setWantedPosition. The waypoint was computed
-                // while the navigator was taken out above, so hand it to the controller only
-                // after restoring the navigator lock. This is especially important for
-                // FlyingMoveControl, whose vertical input and no-gravity state otherwise never
-                // receive path targets.
-                let navigation_target = mob_entity.navigator.lock().unwrap().next_movement_target();
-                if let Some((target, speed)) = navigation_target {
-                    move_control.set_wanted_position(target.x, target.y, target.z, speed);
-                }
-                move_control.tick(self);
-            };
-
             mob_entity.living_entity.tick(caller, server).await;
+            self.mob_try_pick_up_items().await;
             self.post_tick().await;
 
             // --- Packet logic remains the same ---
