@@ -1560,9 +1560,6 @@ impl LivingEntity {
         cause: Option<&dyn EntityBase>,
     ) {
         let world = self.entity.world.load();
-        let dyn_self = world
-            .get_entity_by_id(self.entity.entity_id)
-            .expect("Entity not found in world");
         if self
             .dead
             .compare_exchange(false, true, Relaxed, Relaxed)
@@ -1570,6 +1567,13 @@ impl LivingEntity {
         {
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
+
+            let Some(dyn_self) = world.get_entity_by_id(self.entity.entity_id) else {
+                // Damage can finish after the entity has been removed by another task.
+                // Vanilla's entity remains addressable during die(); do not bring down
+                // the server when Pumpkin observes the equivalent race.
+                return;
+            };
 
             Self::release_claimed_pois(&world, &*dyn_self).await;
 

@@ -127,8 +127,10 @@ impl Goal for LookAtEntityGoal {
 
             let mut candidates: Vec<Arc<dyn EntityBase>> = match self.target_type {
                 Some(target_type) if *target_type == EntityType::PLAYER => world
-                    .get_nearby_players(mob_pos, self.range.into())
-                    .into_iter()
+                    .players
+                    .load()
+                    .iter()
+                    .cloned()
                     .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
                     .collect(),
                 Some(target_type) => world
