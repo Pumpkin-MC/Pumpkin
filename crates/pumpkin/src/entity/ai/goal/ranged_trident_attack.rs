@@ -123,9 +123,9 @@ impl DrownedTridentAttackGoal {
         let trident_y = trident.get_entity().pos.load().y;
         let direction = Self::target_vector(shooter, trident_y, target);
         // `spawnProjectileUsingShoot(..., 1.6F, 14 - level.getDifficulty().getId() * 4)`.
-        // Normal difficulty is the server default (matching the same documented limitation in
-        // `RangedBowAttackGoal::shoot`), giving a 10 degree inaccuracy.
-        trident.set_velocity(direction.x, direction.y, direction.z, 1.6, 10.0);
+        let difficulty = world.level_info.load().difficulty as i32;
+        let inaccuracy = f64::from(14 - difficulty * 4);
+        trident.set_velocity(direction.x, direction.y, direction.z, 1.6, inaccuracy);
         world.spawn_entity(Arc::new(trident)).await;
 
         let sound = CSoundEffect::new(
