@@ -114,6 +114,10 @@ impl WindChargeEntity {
 impl NBTStorage for WindChargeEntity {}
 
 impl EntityBase for WindChargeEntity {
+    fn is_pickable(&self) -> bool {
+        true
+    }
+
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,

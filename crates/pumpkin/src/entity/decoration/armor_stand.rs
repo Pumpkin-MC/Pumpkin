@@ -332,6 +332,10 @@ impl EntityBase for ArmorStandEntity {
         Some(&self.living_entity)
     }
 
+    fn is_pickable(&self) -> bool {
+        self.get_entity().is_alive() && !self.is_marker()
+    }
+
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }

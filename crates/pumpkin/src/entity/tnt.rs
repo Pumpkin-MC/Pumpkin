@@ -34,6 +34,10 @@ impl TNTEntity {
 impl NBTStorage for TNTEntity {}
 
 impl EntityBase for TNTEntity {
+    fn is_pickable(&self) -> bool {
+        self.entity.is_alive()
+    }
+
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,

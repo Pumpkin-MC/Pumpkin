@@ -382,6 +382,10 @@ impl EntityBase for ItemFrameEntity {
         None
     }
 
+    fn is_pickable(&self) -> bool {
+        true
+    }
+
     fn damage_with_context<'a>(
         &'a self,
         _caller: &'a dyn EntityBase,

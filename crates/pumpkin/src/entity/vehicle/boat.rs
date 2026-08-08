@@ -64,6 +64,10 @@ impl EntityBase for BoatEntity {
         None
     }
 
+    fn is_pickable(&self) -> bool {
+        self.vehicle.entity.is_alive()
+    }
+
     fn tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,

@@ -380,6 +380,10 @@ impl NBTStorage for FallingEntity {
 }
 
 impl EntityBase for FallingEntity {
+    fn is_pickable(&self) -> bool {
+        self.entity.is_alive()
+    }
+
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,

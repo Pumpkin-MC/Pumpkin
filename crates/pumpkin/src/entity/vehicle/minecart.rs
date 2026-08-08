@@ -555,6 +555,10 @@ impl EntityBase for MinecartEntity {
         self.vehicle.entity.is_alive()
     }
 
+    fn is_pickable(&self) -> bool {
+        self.vehicle.entity.is_alive()
+    }
+
     fn damage_with_context<'a>(
         &'a self,
         _caller: &'a dyn EntityBase,

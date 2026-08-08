@@ -333,6 +333,11 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         false
     }
 
+    /// Vanilla `Entity.isPickable`; entity families override this where vanilla does.
+    fn is_pickable(&self) -> bool {
+        false
+    }
+
     fn is_flutterer(&self) -> bool {
         false
     }

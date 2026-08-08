@@ -47,6 +47,10 @@ impl FireballEntity {
 impl NBTStorage for FireballEntity {}
 
 impl EntityBase for FireballEntity {
+    fn is_pickable(&self) -> bool {
+        true
+    }
+
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,

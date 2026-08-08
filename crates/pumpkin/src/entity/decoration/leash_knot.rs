@@ -95,6 +95,10 @@ impl EntityBase for LeashKnotEntity {
         None
     }
 
+    fn is_pickable(&self) -> bool {
+        true
+    }
+
     fn tick<'a>(
         &'a self,
         _caller: &'a Arc<dyn EntityBase>,

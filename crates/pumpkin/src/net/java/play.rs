@@ -68,8 +68,8 @@ use pumpkin_protocol::java::server::play::{
     SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
     SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
     SRecipeBookSeenRecipe, SSeenAdvancement, SSelectTrade, SSetCommandBlock, SSetCreativeSlot,
-    SSetHeldItem, SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
-    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn, Status,
+    SSetHeldItem, SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSpectateEntity, SSwingArm,
+    STeleportToEntity, STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
@@ -1900,6 +1900,47 @@ impl JavaClient {
                     .await;
             }
         }
+    }
+
+    pub async fn handle_spectate_entity(&self, player: &Arc<Player>, packet: SSpectateEntity) {
+        if !player.has_client_loaded() || player.gamemode.load() != GameMode::Spectator {
+            return;
+        }
+        player.update_last_action_time();
+
+        let Some(entity_id) = packet.entity_id else {
+            return;
+        };
+
+        let world = player.world();
+        let target = world.get_entity_or_part(entity_id.0);
+        let Some(target) = target else {
+            return;
+        };
+
+        let target_pos = target.get_entity().pos.load();
+        let max_range = player.entity_interaction_range() + 3.0;
+        if !world
+            .worldborder
+            .lock()
+            .await
+            .contains_block(target_pos.x.floor() as i32, target_pos.z.floor() as i32)
+            || target
+                .get_entity()
+                .bounding_box
+                .load()
+                .squared_magnitude(player.eye_position())
+                >= max_range * max_range
+            || !target.is_pickable()
+        {
+            return;
+        }
+
+        player.camera_target_id.store(Some(entity_id.0));
+        player
+            .client
+            .send_packet_now(&CSetCamera::new(entity_id))
+            .await;
     }
 
     pub async fn handle_attack(&self, player: &Arc<Player>, attack: SAttack, server: &Arc<Server>) {

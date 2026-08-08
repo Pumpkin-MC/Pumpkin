@@ -131,6 +131,10 @@ impl EntityBase for InteractionEntity {
         None
     }
 
+    fn is_pickable(&self) -> bool {
+        true
+    }
+
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }

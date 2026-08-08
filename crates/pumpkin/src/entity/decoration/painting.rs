@@ -430,6 +430,10 @@ impl EntityBase for PaintingEntity {
         None
     }
 
+    fn is_pickable(&self) -> bool {
+        true
+    }
+
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {
             let entity = self.get_entity();

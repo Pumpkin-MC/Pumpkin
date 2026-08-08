@@ -21,8 +21,8 @@ use pumpkin_protocol::java::server::play::{
     SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
     SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SRenameItem,
     SSeenAdvancement, SSelectTrade, SSetBeacon, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
-    SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
-    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
+    SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSpectateEntity, SSwingArm,
+    STeleportToEntity, STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -855,6 +855,10 @@ impl JavaClient {
             }
             id if id == SPlayerLoaded::to_id(version) => {
                 Self::handle_player_loaded(player);
+            }
+            id if id == SSpectateEntity::to_id(version) => {
+                self.handle_spectate_entity(player, SSpectateEntity::read(&mut payload, &version)?)
+                    .await;
             }
             id if id == SPlayPingRequest::to_id(version) => {
                 self.handle_play_ping_request(SPlayPingRequest::read(&mut payload, &version)?)

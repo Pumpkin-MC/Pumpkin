@@ -4305,6 +4305,31 @@ impl World {
         None
     }
 
+    /// Gets an entity or an Ender Dragon part by entity id, matching vanilla's
+    /// `ServerLevel.getEntityOrPart`. Dragon parts are registered in the world
+    /// on the dragon's first AI tick, so inspect the dragon's subentities too
+    /// for packets that arrive before that tick.
+    pub fn get_entity_or_part(&self, id: i32) -> Option<Arc<dyn EntityBase>> {
+        if let Some(entity) = self.get_entity_by_id(id) {
+            return Some(entity);
+        }
+
+        for entity in self.entities.load().iter() {
+            let Some(dragon) = entity
+                .cast_any()
+                .downcast_ref::<crate::entity::boss::ender_dragon::EnderDragonEntity>(
+            ) else {
+                continue;
+            };
+
+            if let Some(part) = dragon.parts.iter().find(|part| part.entity.entity_id == id) {
+                return Some(part.clone() as Arc<dyn EntityBase>);
+            }
+        }
+
+        None
+    }
+
     /// Gets a `Player` by a username
     pub fn get_player_by_name(&self, name: &str) -> Option<Arc<Player>> {
         for player in self.players.load().iter() {

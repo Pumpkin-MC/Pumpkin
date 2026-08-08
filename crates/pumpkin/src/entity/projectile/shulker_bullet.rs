@@ -274,6 +274,10 @@ impl ShulkerBulletEntity {
 impl NBTStorage for ShulkerBulletEntity {}
 
 impl EntityBase for ShulkerBulletEntity {
+    fn is_pickable(&self) -> bool {
+        true
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.entity
     }

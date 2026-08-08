@@ -606,6 +606,11 @@ impl MobEntity {
 }
 
 pub trait Mob: EntityBase + Send + Sync {
+    /// Vanilla `Mob` entities are pickable unless a concrete entity overrides it.
+    fn is_pickable(&self) -> bool {
+        self.get_entity().is_alive()
+    }
+
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
     }
@@ -1327,6 +1332,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.get_mob_entity().living_entity)
+    }
+
+    fn is_pickable(&self) -> bool {
+        Mob::is_pickable(self)
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

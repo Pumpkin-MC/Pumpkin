@@ -202,6 +202,10 @@ impl EntityBase for EnderDragonPart {
         &self.entity
     }
 
+    fn is_pickable(&self) -> bool {
+        true
+    }
+
     /// Vanilla `EnderDragonPart.shouldBeSaved()` returns false; the parts are
     /// recreated by the dragon when it is loaded.
     fn should_be_saved(&self) -> bool {
@@ -936,6 +940,10 @@ impl NBTStorage for EnderDragonEntity {
 impl Mob for EnderDragonEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn is_pickable(&self) -> bool {
+        false
     }
 
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {

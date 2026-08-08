@@ -2955,6 +2955,11 @@ impl Player {
         }
     }
 
+    pub fn entity_interaction_range(&self) -> f64 {
+        self.living_entity
+            .get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE)
+    }
+
     pub fn can_interact_with_block_at(&self, position: &BlockPos, additional_range: f64) -> bool {
         let d = self.block_interaction_range() + additional_range;
         let box_pos = BoundingBox::from_block(position);
@@ -5339,6 +5344,10 @@ impl EntityBase for Player {
 
     fn is_spectator(&self) -> bool {
         self.gamemode.load() == GameMode::Spectator
+    }
+
+    fn is_pickable(&self) -> bool {
+        self.get_entity().is_alive() && !self.is_spectator()
     }
 
     fn set_on_fire_for_ticks(&self, ticks: u32) {
