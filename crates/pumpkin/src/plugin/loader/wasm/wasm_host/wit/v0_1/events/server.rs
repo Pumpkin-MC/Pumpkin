@@ -7,13 +7,14 @@ use crate::plugin::{
             generated_packets,
             pumpkin::plugin::event::{
                 ClientboundPacket, Event, PacketReceivedEventData, PacketSentEventData,
-                ServerBroadcastEventData, ServerCommandEventData, ServerLoadEventData,
-                ServerLoadType, ServerTickEndEventData, ServerTickStartEventData,
-                ServerboundPacket,
+                ServerBroadcastEventData, ServerCommandEventData, ServerListPingEventData,
+                ServerLoadEventData, ServerLoadType, ServerTickEndEventData,
+                ServerTickStartEventData, ServerboundPacket,
             },
         },
     },
     server::{
+        list_ping::ServerListPingEvent,
         packet::{PacketReceivedEvent, PacketSentEvent},
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
@@ -148,6 +149,29 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
                 message: consume_text_component(state, &data.message),
                 sender: consume_text_component(state, &data.sender),
                 cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for ServerListPingEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::ServerListPingEvent(ServerListPingEventData {
+            motd: self.motd.clone(),
+            max_players: self.max_players,
+            num_players: self.num_players,
+            favicon: self.favicon.clone(),
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::ServerListPingEvent(data) => Self {
+                motd: data.motd,
+                max_players: data.max_players,
+                num_players: data.num_players,
+                favicon: data.favicon,
             },
             _ => panic!("unexpected event type"),
         }
