@@ -55,6 +55,7 @@ pub struct GenerationSchedule {
     last_level: ChunkLevel,
     last_high_priority: Vec<ChunkPos>,
     send_level: Arc<LevelChannel>,
+    level: Arc<Level>,
 
     public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
@@ -154,6 +155,7 @@ impl GenerationSchedule {
                     last_level: ChunkLevel::default(),
                     last_high_priority: Vec::new(),
                     send_level: level_channel,
+                    level: level_sched.clone(),
                     public_chunk_map: level_sched.loaded_chunks.clone(),
                     unload_chunks: HashSetType::default(),
                     waiting_for_chunks: HashSetType::default(),
@@ -516,6 +518,7 @@ impl GenerationSchedule {
                             Chunk::Level(chunk) => {
                                 self.apply_lighting_override(chunk);
                                 self.public_chunk_map.insert(pos, chunk.clone());
+                                self.level.light_engine.on_chunk_loaded(&self.level, pos);
                                 self.listener.process_new_chunk(pos, chunk);
                             }
                             Chunk::Proto(_) => panic!(),
@@ -826,6 +829,7 @@ impl GenerationSchedule {
                     Chunk::Level(data) => {
                         self.apply_lighting_override(data);
                         let result = self.public_chunk_map.insert(pos, data.clone());
+                        self.level.light_engine.on_chunk_loaded(&self.level, pos);
                         if result.is_some() {
                             warn!(
                                 "receive_chunk(IO): replacing existing public chunk at {:?}",
@@ -886,6 +890,9 @@ impl GenerationSchedule {
                                 let public_chunk = chunk.clone();
                                 if was_public {
                                     self.public_chunk_map.insert(new_pos, public_chunk);
+                                    self.level
+                                        .light_engine
+                                        .on_chunk_loaded(&self.level, new_pos);
                                     info!(
                                         "Notifying players: regenerated chunk at {:?} (was already public)",
                                         new_pos
@@ -896,6 +903,9 @@ impl GenerationSchedule {
                                     holder.chunk = Some(Chunk::Level(chunk));
                                     let result =
                                         self.public_chunk_map.insert(new_pos, public_chunk);
+                                    self.level
+                                        .light_engine
+                                        .on_chunk_loaded(&self.level, new_pos);
                                     holder.public = true;
                                     if result.is_some() {
                                         warn!(

@@ -13,7 +13,19 @@ use std::io::Write;
 /// This packet updates lighting data for a specific chunk without sending the full chunk data.
 /// It's used when block placement or removal changes the lighting in a chunk.
 #[java_packet(PLAY_LIGHT_UPDATE)]
-pub struct CLightUpdate<'a>(pub &'a ChunkData);
+pub struct CLightUpdate<'a>(pub &'a ChunkData, pub Option<&'a [usize]>);
+
+impl<'a> CLightUpdate<'a> {
+    #[must_use]
+    pub const fn new(chunk: &'a ChunkData) -> Self {
+        Self(chunk, None)
+    }
+
+    #[must_use]
+    pub const fn sections(chunk: &'a ChunkData, sections: &'a [usize]) -> Self {
+        Self(chunk, Some(sections))
+    }
+}
 
 /// The four masks shared by initial chunk data and incremental light updates.
 ///
@@ -26,39 +38,73 @@ pub(super) struct LightMasks {
     pub empty_block: u64,
 }
 
+/// Java's `DataLayer.isEmpty()` is true only for an implicit zero-filled layer.
+/// `Empty(15)` is a uniform layer in Pumpkin's storage representation, but it is
+/// a real full-data layer in the wire protocol and must be included in the data
+/// mask with a serialized 0xFF array.
+pub(super) const fn light_container_has_data(container: &LightContainer) -> bool {
+    !matches!(container, LightContainer::Empty(0))
+}
+
+pub(super) fn write_light_container(
+    write: &mut impl Write,
+    container: &LightContainer,
+) -> Result<(), WritingError> {
+    let light_data_size = VarInt(LightContainer::ARRAY_SIZE as i32);
+    write.write_var_int(&light_data_size)?;
+    match container {
+        LightContainer::Full(data) => write.write_slice(data.as_ref())?,
+        LightContainer::Empty(default) => {
+            let byte = default << 4 | default;
+            write.write_slice(&[byte; LightContainer::ARRAY_SIZE])?;
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn light_masks(light_engine: &ChunkLight) -> LightMasks {
+    light_masks_for_sections(light_engine, None)
+}
+
+pub(super) fn light_masks_for_sections(
+    light_engine: &ChunkLight,
+    changed_sections: Option<&[usize]>,
+) -> LightMasks {
     let num_sections = light_engine.sky_light.len();
+    let include_padding = changed_sections.is_none();
     let mut masks = LightMasks {
         sky: 0,
         block: 0,
-        empty_sky: 1,
-        empty_block: 1,
+        empty_sky: u64::from(include_padding),
+        empty_block: u64::from(include_padding),
     };
 
     for section_index in 0..num_sections {
+        if let Some(changed_sections) = changed_sections
+            && !changed_sections.contains(&section_index)
+        {
+            continue;
+        }
+
         let bit_index = section_index + 1;
-        if matches!(
-            light_engine.sky_light[section_index],
-            LightContainer::Full(_)
-        ) {
+        if light_container_has_data(&light_engine.sky_light[section_index]) {
             masks.sky |= 1 << bit_index;
         } else {
             masks.empty_sky |= 1 << bit_index;
         }
 
-        if matches!(
-            light_engine.block_light[section_index],
-            LightContainer::Full(_)
-        ) {
+        if light_container_has_data(&light_engine.block_light[section_index]) {
             masks.block |= 1 << bit_index;
         } else {
             masks.empty_block |= 1 << bit_index;
         }
     }
 
-    let above_world_bit = num_sections + 1;
-    masks.empty_sky |= 1 << above_world_bit;
-    masks.empty_block |= 1 << above_world_bit;
+    if changed_sections.is_none() {
+        let above_world_bit = num_sections + 1;
+        masks.empty_sky |= 1 << above_world_bit;
+        masks.empty_block |= 1 << above_world_bit;
+    }
     masks
 }
 
@@ -81,7 +127,7 @@ impl ClientPacket for CLightUpdate<'_> {
             .lock()
             .map_err(|_| WritingError::Message("light_engine lock poisoned".into()))?;
         let num_sections = light_engine.sky_light.len();
-        let masks = light_masks(&light_engine);
+        let masks = light_masks_for_sections(&light_engine, self.1);
 
         // Write Sky Light Mask
         write.write_bitset(&BitSet(Box::new([masks.sky as i64])))?;
@@ -92,23 +138,27 @@ impl ClientPacket for CLightUpdate<'_> {
         // Write Empty Block Light Mask
         write.write_bitset(&BitSet(Box::new([masks.empty_block as i64])))?;
 
-        let light_data_size: VarInt = VarInt(LightContainer::ARRAY_SIZE as i32);
-
         // Write Sky Light arrays
         write.write_var_int(&VarInt(masks.sky.count_ones() as i32))?;
         for section_index in 0..num_sections {
-            if let LightContainer::Full(data) = &light_engine.sky_light[section_index] {
-                write.write_var_int(&light_data_size)?;
-                write.write_slice(data.as_ref())?;
+            if self
+                .1
+                .is_none_or(|sections| sections.contains(&section_index))
+                && light_container_has_data(&light_engine.sky_light[section_index])
+            {
+                write_light_container(&mut write, &light_engine.sky_light[section_index])?;
             }
         }
 
         // Write Block Light arrays
         write.write_var_int(&VarInt(masks.block.count_ones() as i32))?;
         for section_index in 0..num_sections {
-            if let LightContainer::Full(data) = &light_engine.block_light[section_index] {
-                write.write_var_int(&light_data_size)?;
-                write.write_slice(data.as_ref())?;
+            if self
+                .1
+                .is_none_or(|sections| sections.contains(&section_index))
+                && light_container_has_data(&light_engine.block_light[section_index])
+            {
+                write_light_container(&mut write, &light_engine.block_light[section_index])?;
             }
         }
 
@@ -154,7 +204,15 @@ mod tests {
 
     fn serialize(chunk: &ChunkData) -> Vec<u8> {
         let mut out = Vec::new();
-        CLightUpdate(chunk)
+        CLightUpdate::new(chunk)
+            .write_packet_data(&mut out, &JavaMinecraftVersion::V_26_2)
+            .unwrap();
+        out
+    }
+
+    fn serialize_sections(chunk: &ChunkData, sections: &[usize]) -> Vec<u8> {
+        let mut out = Vec::new();
+        CLightUpdate::sections(chunk, sections)
             .write_packet_data(&mut out, &JavaMinecraftVersion::V_26_2)
             .unwrap();
         out
@@ -265,7 +323,7 @@ mod tests {
     #[test]
     fn masks_include_padding_and_offset_physical_sections() {
         let light = ChunkLight {
-            sky_light: [LightContainer::new_filled(15), LightContainer::new_empty(0)].into(),
+            sky_light: [LightContainer::new_empty(15), LightContainer::new_empty(0)].into(),
             block_light: [LightContainer::new_empty(0), LightContainer::new_filled(1)].into(),
         };
 
@@ -275,5 +333,50 @@ mod tests {
         assert_eq!(masks.block, 1 << 2);
         assert_eq!(masks.empty_sky, (1 << 0) | (1 << 2) | (1 << 3));
         assert_eq!(masks.empty_block, (1 << 0) | (1 << 1) | (1 << 3));
+    }
+
+    #[test]
+    fn uniform_full_sky_layer_is_serialized_as_data() {
+        let chunk = chunk_with_light(
+            vec![LightContainer::new_empty(15)],
+            vec![LightContainer::new_empty(0)],
+        );
+        let bytes = serialize(&chunk);
+
+        // Coordinates (1, 1) and four one-long bitsets precede the arrays.
+        assert_eq!(&bytes[3..11], &(1u64 << 1).to_be_bytes());
+        assert_eq!(&bytes[21..29], &(1u64 | (1 << 2)).to_be_bytes());
+        let array_start = 1 + 1 + 4 * (1 + 8) + 1 + 2;
+        assert_eq!(bytes[array_start..array_start + 2048], [0xFF; 2048]);
+    }
+
+    #[test]
+    fn incremental_update_contains_only_changed_sections() {
+        let chunk = chunk_with_light(
+            vec![
+                LightContainer::new_filled(1),
+                LightContainer::new_empty(15),
+                LightContainer::new_filled(3),
+            ],
+            vec![
+                LightContainer::new_filled(4),
+                LightContainer::new_empty(0),
+                LightContainer::new_filled(5),
+            ],
+        );
+        let bytes = serialize_sections(&chunk, &[1]);
+
+        // Only physical section 1 (wire bit 2) is present. Incremental masks
+        // intentionally omit the below/above-world padding sections.
+        let changed_bit = (1u64 << 2).to_be_bytes();
+        assert_eq!(&bytes[3..11], &changed_bit); // sky data mask
+        assert_eq!(&bytes[12..20], &[0; 8]); // block section is empty
+        assert_eq!(&bytes[21..29], &[0; 8]); // no empty sky section
+        assert_eq!(&bytes[30..38], &changed_bit); // empty block mask
+
+        let sky_count_at = 38;
+        assert_eq!(bytes[sky_count_at], 1);
+        let block_count_at = sky_count_at + 1 + 2 + 2048;
+        assert_eq!(bytes[block_count_at], 0);
     }
 }

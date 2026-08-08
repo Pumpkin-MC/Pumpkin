@@ -333,13 +333,17 @@ impl Chunk {
         // height here too, the light portion of the packet ends up shorter than the block
         // portion the client just computed from the dimension registry - the same network
         // desync, just moved from the block data to the light data. Padding sections are
-        // unlit/empty, matching real never-generated space above the world.
+        // full sky in a skylit dimension and empty in a dimension without skylight, matching
+        // the open-sky sections above the stored world.
         let mut light_data = proto_chunk.light;
         let total_sections = dimension.height as usize / BlockPalette::SIZE;
         if light_data.sky_light.len() < total_sections {
             let mut sky_light = light_data.sky_light.into_vec();
             let mut block_light = light_data.block_light.into_vec();
-            sky_light.resize(total_sections, LightContainer::new_empty(0));
+            sky_light.resize(
+                total_sections,
+                LightContainer::new_empty(u8::from(dimension.has_skylight) * 15),
+            );
             block_light.resize(total_sections, LightContainer::new_empty(0));
             light_data = ChunkLight {
                 sky_light: sky_light.into_boxed_slice(),

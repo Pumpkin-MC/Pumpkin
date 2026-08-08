@@ -878,7 +878,10 @@ impl LightContainer {
     }
 
     pub fn fill(&mut self, value: u8) {
-        *self = Self::new_filled(value);
+        // Match vanilla DataLayer.fill: a uniform layer stays implicit rather
+        // than materializing a 2048-byte array. This matters for zero-filled
+        // layers, which must remain absent from the client's data mask.
+        *self = Self::new_empty(value);
     }
 }
 
@@ -1177,5 +1180,16 @@ pub(crate) mod chunk_codec_tests {
                 .and_then(|biomes| biomes.get_string("FutureBiomesField")),
             Some("retained")
         );
+    }
+
+    #[test]
+    fn fill_keeps_uniform_light_layers_implicit() {
+        let mut layer = LightContainer::new_filled(7);
+
+        layer.fill(0);
+        assert!(matches!(layer, LightContainer::Empty(0)));
+
+        layer.fill(15);
+        assert!(matches!(layer, LightContainer::Empty(15)));
     }
 }

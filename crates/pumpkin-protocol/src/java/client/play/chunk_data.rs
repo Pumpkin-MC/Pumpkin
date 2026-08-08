@@ -1,6 +1,8 @@
 use crate::WritingError;
 use crate::codec::bit_set::BitSet;
-use crate::java::client::play::light_update::light_masks;
+use crate::java::client::play::light_update::{
+    light_container_has_data, light_masks, write_light_container,
+};
 use crate::{ClientPacket, VarInt, ser::NetworkWriteExt};
 use pumpkin_data::block_state_remap::remap_block_state_for_version;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
@@ -8,7 +10,6 @@ use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::get_local_cord;
 use pumpkin_util::version::JavaMinecraftVersion;
-use pumpkin_world::chunk::format::LightContainer;
 use pumpkin_world::chunk::{ChunkData, palette::NetworkPalette};
 use std::io::Write;
 
@@ -267,23 +268,19 @@ impl ClientPacket for CChunkData<'_> {
             // Write Empty Block Light Mask
             write.write_bitset(&BitSet(Box::new([masks.empty_block as i64])))?;
 
-            let light_data_size: VarInt = VarInt(LightContainer::ARRAY_SIZE as i32);
-
             // Write Sky Light arrays
             write.write_var_int(&VarInt(masks.sky.count_ones() as i32))?;
             for section_index in 0..num_sections {
-                if let LightContainer::Full(data) = &light_engine.sky_light[section_index] {
-                    write.write_var_int(&light_data_size)?;
-                    write.write_slice(data.as_ref())?;
+                if light_container_has_data(&light_engine.sky_light[section_index]) {
+                    write_light_container(&mut write, &light_engine.sky_light[section_index])?;
                 }
             }
 
             // Write Block Light arrays
             write.write_var_int(&VarInt(masks.block.count_ones() as i32))?;
             for section_index in 0..num_sections {
-                if let LightContainer::Full(data) = &light_engine.block_light[section_index] {
-                    write.write_var_int(&light_data_size)?;
-                    write.write_slice(data.as_ref())?;
+                if light_container_has_data(&light_engine.block_light[section_index]) {
+                    write_light_container(&mut write, &light_engine.block_light[section_index])?;
                 }
             }
         }

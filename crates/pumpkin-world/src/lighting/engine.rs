@@ -4,8 +4,7 @@ use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
 use pumpkin_config::lighting::LightingEngineConfig;
-use pumpkin_data::BlockDirection;
-use pumpkin_util::HeightMap;
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::collections::VecDeque;
@@ -127,7 +126,11 @@ impl<P: LightProvider> LightPropagator<P> {
                 let new_level = P::propagate_level(current_light, opacity, dir);
                 let neighbor_light = P::get_light(cache, neighbor_pos);
 
-                if new_level > neighbor_light {
+                let from_state = cache.get_block_state(&pos.0).to_state();
+                let to_state = state.to_state();
+                if new_level > neighbor_light
+                    && !pumpkin_data::light_shape_occludes(from_state, to_state, dir)
+                {
                     P::set_light(cache, neighbor_pos, new_level);
 
                     // Add to propagation queue if bright enough
@@ -165,12 +168,7 @@ impl<P: LightProvider> LightPropagator<P> {
                         continue;
                     }
 
-                    let state = cache.get_block_state(&neighbor_pos.0);
-                    let opacity = state.to_state().opacity;
-
-                    let predicted = P::propagate_level(old_val, opacity, dir);
-
-                    if neighbor_light == predicted || neighbor_light < old_val {
+                    if neighbor_light <= old_val.saturating_sub(1) {
                         // Darken
                         P::set_light(cache, neighbor_pos, 0);
                         self.decrease_queue
@@ -241,6 +239,24 @@ impl BlockLightPropagator {
 }
 
 impl SkyLightPropagator {
+    fn lowest_source_y(cache: &Cache, x: i32, z: i32, bottom_y: i32, max_y: i32) -> i32 {
+        let mut top_state = Block::AIR.default_state;
+        let mut top_y = max_y;
+
+        for y in (bottom_y..max_y).rev() {
+            let state = cache.get_block_state(&Vector3::new(x, y, z)).to_state();
+            if state.opacity != 0
+                || pumpkin_data::light_shape_occludes(top_state, state, BlockDirection::Down)
+            {
+                return top_y;
+            }
+            top_state = state;
+            top_y = y;
+        }
+
+        bottom_y - 1
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn convert_light(&mut self, cache: &mut Cache) {
         self.clear();
@@ -259,7 +275,7 @@ impl SkyLightPropagator {
 
         // Pre-allocate with exact size needed
         let capacity = ((end_x - start_x) * (end_z - start_z)) as usize;
-        let mut surface_heights =
+        let mut source_heights =
             FastHashMap::with_capacity_and_hasher(capacity, rustc_hash::FxBuildHasher);
 
         // Process in Z-outer, X-inner order for better cache locality
@@ -271,9 +287,8 @@ impl SkyLightPropagator {
                 let chunk_x = x >> 4;
                 let local_x = (x & 15) as usize;
 
-                // Get heightmap (top solid blocks)
-                let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
-                surface_heights.insert((x, z), top_y);
+                let source_y = Self::lowest_source_y(cache, x, z, bottom_y, max_y);
+                source_heights.insert((x, z), source_y);
 
                 // Get chunk index once per column
                 let rel_x = chunk_x - cache.x;
@@ -285,8 +300,8 @@ impl SkyLightPropagator {
 
                 let chunk_idx = (rel_x * cache.size + rel_z) as usize;
 
-                // Fill everything above heightmap with 15 immediately
-                for y in (top_y + 1)..max_y {
+                // Fill every direct-sky source node with 15 immediately.
+                for y in source_y.max(bottom_y)..max_y {
                     let section_idx = ((y - bottom_y) >> 4) as usize;
                     let local_y = (y & 15) as usize;
 
@@ -310,48 +325,67 @@ impl SkyLightPropagator {
                     }
                 }
 
-                // Only iterate from top_y DOWN - not from max_y
+                // Attenuate from the first non-source block downward.
                 let mut light: i32 = 15;
 
-                for y in (bottom_y..=top_y).rev() {
-                    let section_idx = ((y - bottom_y) >> 4) as usize;
-                    let local_y = (y & 15) as usize;
+                if source_y > bottom_y {
+                    for y in (bottom_y..source_y).rev() {
+                        let section_idx = ((y - bottom_y) >> 4) as usize;
+                        let local_y = (y & 15) as usize;
 
-                    // Get block opacity
-                    let opacity = {
-                        let pos_vec = Vector3::new(x, y, z);
-                        let state = cache.get_block_state(&pos_vec);
-                        state.to_state().opacity
-                    } as i32;
+                        // Get block opacity
+                        let state = {
+                            let pos_vec = Vector3::new(x, y, z);
+                            cache.get_block_state(&pos_vec).to_state()
+                        };
+                        let above_state = if y + 1 >= max_y {
+                            Block::AIR.default_state
+                        } else {
+                            let pos_vec = Vector3::new(x, y + 1, z);
+                            cache.get_block_state(&pos_vec).to_state()
+                        };
 
-                    // Reduce light by opacity
-                    light = light.saturating_sub(opacity);
+                        // The direct column is blocked either by ordinary light
+                        // dampening or by the pair of voxel faces that closes
+                        // the edge. Vanilla's `SkyLightEngine` checks both
+                        // (`LightEngine.shapeOccludes` and
+                        // `ChunkSkyLightSources.isEdgeOccluded`).
+                        if pumpkin_data::light_shape_occludes(
+                            above_state,
+                            state,
+                            BlockDirection::Down,
+                        ) {
+                            light = 0;
+                        } else {
+                            light = light.saturating_sub(i32::from(state.opacity.max(1)));
+                        }
 
-                    // Set the light value directly
-                    let light_val = if light <= 0 { 0 } else { light as u8 };
+                        // Set the light value directly
+                        let light_val = if light <= 0 { 0 } else { light as u8 };
 
-                    match &mut cache.chunks[chunk_idx] {
-                        Chunk::Proto(c) => {
-                            if section_idx < c.light.sky_light.len() {
-                                c.light.sky_light[section_idx]
-                                    .set(local_x, local_y, local_z, light_val);
+                        match &mut cache.chunks[chunk_idx] {
+                            Chunk::Proto(c) => {
+                                if section_idx < c.light.sky_light.len() {
+                                    c.light.sky_light[section_idx]
+                                        .set(local_x, local_y, local_z, light_val);
+                                }
+                            }
+                            Chunk::Level(c) => {
+                                let mut light_engine = c
+                                    .light_engine
+                                    .lock()
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                                if section_idx < light_engine.sky_light.len() {
+                                    light_engine.sky_light[section_idx]
+                                        .set(local_x, local_y, local_z, light_val);
+                                }
                             }
                         }
-                        Chunk::Level(c) => {
-                            let mut light_engine = c
-                                .light_engine
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner);
-                            if section_idx < light_engine.sky_light.len() {
-                                light_engine.sky_light[section_idx]
-                                    .set(local_x, local_y, local_z, light_val);
-                            }
-                        }
-                    }
 
-                    // Early exit when light hits 0
-                    if light <= 0 {
-                        break;
+                        // Early exit when light hits 0
+                        if light <= 0 {
+                            break;
+                        }
                     }
                 }
             }
@@ -360,21 +394,30 @@ impl SkyLightPropagator {
         // Enqueue horizontal propagation
         for z in start_z..end_z {
             for x in start_x..end_x {
-                let top_y = surface_heights[&(x, z)];
+                let top_y = source_heights[&(x, z)];
 
-                let north_top = surface_heights.get(&(x, z - 1)).copied().unwrap_or(top_y);
-                let south_top = surface_heights.get(&(x, z + 1)).copied().unwrap_or(top_y);
-                let west_top = surface_heights.get(&(x - 1, z)).copied().unwrap_or(top_y);
-                let east_top = surface_heights.get(&(x + 1, z)).copied().unwrap_or(top_y);
+                let north_top = source_heights.get(&(x, z - 1)).copied().unwrap_or(top_y);
+                let south_top = source_heights.get(&(x, z + 1)).copied().unwrap_or(top_y);
+                let west_top = source_heights.get(&(x - 1, z)).copied().unwrap_or(top_y);
+                let east_top = source_heights.get(&(x + 1, z)).copied().unwrap_or(top_y);
 
                 // We must check up to the highest neighbor to catch the "air sources"
+                // `source_y` is a boundary, not an inclusive block coordinate.
+                // Keep the scan half-open so a source at `max_y` never causes
+                // a probe or enqueue outside the generation height limit.
                 let max_check_y = top_y
                     .max(north_top)
                     .max(south_top)
                     .max(west_top)
-                    .max(east_top);
+                    .max(east_top)
+                    .saturating_add(1)
+                    .min(max_y);
 
-                for y in (bottom_y..=max_check_y).rev() {
+                if max_check_y < bottom_y {
+                    continue;
+                }
+
+                for y in (bottom_y..max_check_y).rev() {
                     let pos = BlockPos(Vector3::new(x, y, z));
                     let light = get_sky_light(cache, pos);
 
