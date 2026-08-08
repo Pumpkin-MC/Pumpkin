@@ -178,6 +178,12 @@ impl Conn for IceSocket {
     }
 
     async fn send_to(&self, buffer: &[u8], target: SocketAddr) -> Result<usize, WebRtcError> {
+        trace!(
+            %target,
+            length = buffer.len(),
+            kind = ice_packet_kind(buffer),
+            "Sending Bedrock ICE datagram"
+        );
         Ok(self.socket.send_to(buffer, target).await?)
     }
 
