@@ -81,7 +81,7 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertyS
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::java::client::play::{
     CBlockUpdate, CChunkBatchEnd, CChunkBatchStart, CChunkData, CDisguisedChatMessage, CExplosion,
-    CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
+    CLightUpdate, CRespawn, CSetBlockDestroyStage, CWorldEvent, PlayerSpawnData,
 };
 use pumpkin_protocol::java::client::play::{
     CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
@@ -1121,8 +1121,7 @@ impl World {
                 .push((position, block_state_id));
         }
 
-        // TODO: only send packet to players who have the chunks loaded
-        // TODO: Send light updates to update the wire directly next to a broken block
+        // TODO: only send block packets to players who have the chunks loaded
         for (chunk_section, updates) in block_state_updates_by_chunk_section {
             if updates.is_empty() {
                 continue;
@@ -1173,6 +1172,18 @@ impl World {
                     recipients_by_version,
                 );
             }
+        }
+
+        // Vanilla's ServerChunkCache sends a light update for the sections the light engine
+        // marked, including neighboring chunks when propagation crosses a chunk border. The
+        // runtime engine records those section indices while it updates the light arrays.
+        for (chunk_pos, sections) in self.level.light_engine.take_dirty_sections() {
+            self.level.read_chunk_sync(&chunk_pos, |chunk| {
+                self.broadcast_to_chunk(
+                    chunk_pos,
+                    &CLightUpdate::sections(chunk.as_ref(), &sections),
+                );
+            });
         }
     }
 
@@ -4527,9 +4538,12 @@ impl World {
 
         let (_chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
 
-        self.level
-            .light_engine
-            .update_lighting_at(&self.level, *position);
+        self.level.light_engine.update_lighting_at_with_states(
+            &self.level,
+            *position,
+            replaced_block_state_id.to_state(),
+            block_state_id.to_state(),
+        );
 
         replaced_block_state_id
     }

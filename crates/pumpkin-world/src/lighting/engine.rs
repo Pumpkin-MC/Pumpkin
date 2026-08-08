@@ -4,8 +4,7 @@ use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
 use pumpkin_config::lighting::LightingEngineConfig;
-use pumpkin_data::BlockDirection;
-use pumpkin_util::HeightMap;
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::collections::VecDeque;
@@ -139,7 +138,11 @@ impl<P: LightProvider> LightPropagator<P> {
                 let new_level = P::propagate_level(current_light, opacity, dir);
                 let neighbor_light = P::get_light(cache, neighbor_pos);
 
-                if new_level > neighbor_light {
+                let from_state = cache.get_block_state(&pos.0).to_state();
+                let to_state = state.to_state();
+                if new_level > neighbor_light
+                    && !pumpkin_data::light_shape_occludes(from_state, to_state, dir)
+                {
                     P::set_light(cache, neighbor_pos, new_level);
 
                     // Add to propagation queue if bright enough
@@ -180,12 +183,7 @@ impl<P: LightProvider> LightPropagator<P> {
                         continue;
                     }
 
-                    let state = cache.get_block_state(&neighbor_pos.0);
-                    let opacity = state.to_state().opacity;
-
-                    let predicted = P::propagate_level(old_val, opacity, dir);
-
-                    if neighbor_light == predicted || neighbor_light < old_val {
+                    if neighbor_light <= old_val.saturating_sub(1) {
                         // Darken
                         P::set_light(cache, neighbor_pos, 0);
                         self.decrease_queue
@@ -262,6 +260,24 @@ impl BlockLightPropagator {
 }
 
 impl SkyLightPropagator {
+    fn lowest_source_y(cache: &Cache, x: i32, z: i32, bottom_y: i32, max_y: i32) -> i32 {
+        let mut top_state = Block::AIR.default_state;
+        let mut top_y = max_y;
+
+        for y in (bottom_y..max_y).rev() {
+            let state = cache.get_block_state(&Vector3::new(x, y, z)).to_state();
+            if state.opacity != 0
+                || pumpkin_data::light_shape_occludes(top_state, state, BlockDirection::Down)
+            {
+                return top_y;
+            }
+            top_state = state;
+            top_y = y;
+        }
+
+        bottom_y - 1
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn convert_light(&mut self, cache: &mut Cache) {
         self.clear();
@@ -280,7 +296,7 @@ impl SkyLightPropagator {
 
         // Pre-allocate with exact size needed
         let capacity = ((end_x - start_x) * (end_z - start_z)) as usize;
-        let mut surface_heights =
+        let mut source_heights =
             FastHashMap::with_capacity_and_hasher(capacity, rustc_hash::FxBuildHasher);
 
         // Process in Z-outer, X-inner order for better cache locality
@@ -292,9 +308,8 @@ impl SkyLightPropagator {
                 let chunk_x = x >> 4;
                 let local_x = (x & 15) as usize;
 
-                // Get heightmap (top solid blocks)
-                let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
-                surface_heights.insert((x, z), top_y);
+                let source_y = Self::lowest_source_y(cache, x, z, bottom_y, max_y);
+                source_heights.insert((x, z), source_y);
 
                 // Get chunk index once per column
                 let rel_x = chunk_x - cache.x;
@@ -306,8 +321,8 @@ impl SkyLightPropagator {
 
                 let chunk_idx = (rel_x * cache.size + rel_z) as usize;
 
-                // Fill everything above heightmap with 15 immediately
-                for y in (top_y + 1)..max_y {
+                // Fill every direct-sky source node with 15 immediately.
+                for y in source_y.max(bottom_y)..max_y {
                     let section_idx = ((y - bottom_y) >> 4) as usize;
                     let local_y = (y & 15) as usize;
 
@@ -331,48 +346,67 @@ impl SkyLightPropagator {
                     }
                 }
 
-                // Only iterate from top_y DOWN - not from max_y
+                // Attenuate from the first non-source block downward.
                 let mut light: i32 = 15;
 
-                for y in (bottom_y..=top_y).rev() {
-                    let section_idx = ((y - bottom_y) >> 4) as usize;
-                    let local_y = (y & 15) as usize;
+                if source_y > bottom_y {
+                    for y in (bottom_y..source_y).rev() {
+                        let section_idx = ((y - bottom_y) >> 4) as usize;
+                        let local_y = (y & 15) as usize;
 
-                    // Get block opacity
-                    let opacity = {
-                        let pos_vec = Vector3::new(x, y, z);
-                        let state = cache.get_block_state(&pos_vec);
-                        state.to_state().opacity
-                    } as i32;
+                        // Get block opacity
+                        let state = {
+                            let pos_vec = Vector3::new(x, y, z);
+                            cache.get_block_state(&pos_vec).to_state()
+                        };
+                        let above_state = if y + 1 >= max_y {
+                            Block::AIR.default_state
+                        } else {
+                            let pos_vec = Vector3::new(x, y + 1, z);
+                            cache.get_block_state(&pos_vec).to_state()
+                        };
 
-                    // Reduce light by opacity
-                    light = light.saturating_sub(opacity);
+                        // The direct column is blocked either by ordinary light
+                        // dampening or by the pair of voxel faces that closes
+                        // the edge. Vanilla's `SkyLightEngine` checks both
+                        // (`LightEngine.shapeOccludes` and
+                        // `ChunkSkyLightSources.isEdgeOccluded`).
+                        if pumpkin_data::light_shape_occludes(
+                            above_state,
+                            state,
+                            BlockDirection::Down,
+                        ) {
+                            light = 0;
+                        } else {
+                            light = light.saturating_sub(i32::from(state.opacity.max(1)));
+                        }
 
-                    // Set the light value directly
-                    let light_val = if light <= 0 { 0 } else { light as u8 };
+                        // Set the light value directly
+                        let light_val = if light <= 0 { 0 } else { light as u8 };
 
-                    match &mut cache.chunks[chunk_idx] {
-                        Chunk::Proto(c) => {
-                            if section_idx < c.light.sky_light.len() {
-                                c.light.sky_light[section_idx]
-                                    .set(local_x, local_y, local_z, light_val);
+                        match &mut cache.chunks[chunk_idx] {
+                            Chunk::Proto(c) => {
+                                if section_idx < c.light.sky_light.len() {
+                                    c.light.sky_light[section_idx]
+                                        .set(local_x, local_y, local_z, light_val);
+                                }
+                            }
+                            Chunk::Level(c) => {
+                                let mut light_engine = c
+                                    .light_engine
+                                    .lock()
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                                if section_idx < light_engine.sky_light.len() {
+                                    light_engine.sky_light[section_idx]
+                                        .set(local_x, local_y, local_z, light_val);
+                                }
                             }
                         }
-                        Chunk::Level(c) => {
-                            let mut light_engine = c
-                                .light_engine
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner);
-                            if section_idx < light_engine.sky_light.len() {
-                                light_engine.sky_light[section_idx]
-                                    .set(local_x, local_y, local_z, light_val);
-                            }
-                        }
-                    }
 
-                    // Early exit when light hits 0
-                    if light <= 0 {
-                        break;
+                        // Early exit when light hits 0
+                        if light <= 0 {
+                            break;
+                        }
                     }
                 }
             }
@@ -381,21 +415,30 @@ impl SkyLightPropagator {
         // Enqueue horizontal propagation
         for z in start_z..end_z {
             for x in start_x..end_x {
-                let top_y = surface_heights[&(x, z)];
+                let top_y = source_heights[&(x, z)];
 
-                let north_top = surface_heights.get(&(x, z - 1)).copied().unwrap_or(top_y);
-                let south_top = surface_heights.get(&(x, z + 1)).copied().unwrap_or(top_y);
-                let west_top = surface_heights.get(&(x - 1, z)).copied().unwrap_or(top_y);
-                let east_top = surface_heights.get(&(x + 1, z)).copied().unwrap_or(top_y);
+                let north_top = source_heights.get(&(x, z - 1)).copied().unwrap_or(top_y);
+                let south_top = source_heights.get(&(x, z + 1)).copied().unwrap_or(top_y);
+                let west_top = source_heights.get(&(x - 1, z)).copied().unwrap_or(top_y);
+                let east_top = source_heights.get(&(x + 1, z)).copied().unwrap_or(top_y);
 
                 // We must check up to the highest neighbor to catch the "air sources"
+                // `source_y` is a boundary, not an inclusive block coordinate.
+                // Keep the scan half-open so a source at `max_y` never causes
+                // a probe or enqueue outside the generation height limit.
                 let max_check_y = top_y
                     .max(north_top)
                     .max(south_top)
                     .max(west_top)
-                    .max(east_top);
+                    .max(east_top)
+                    .saturating_add(1)
+                    .min(max_y);
 
-                for y in (bottom_y..=max_check_y).rev() {
+                if max_check_y < bottom_y {
+                    continue;
+                }
+
+                for y in (bottom_y..max_check_y).rev() {
                     let pos = BlockPos(Vector3::new(x, y, z));
                     let light = get_sky_light(cache, pos);
 
@@ -447,7 +490,12 @@ impl LightEngine {
         }
     }
 
-    pub fn initialize_light(&mut self, cache: &mut Cache, config: &LightingEngineConfig) {
+    pub fn initialize_light(
+        &mut self,
+        cache: &mut Cache,
+        config: &LightingEngineConfig,
+        has_skylight: bool,
+    ) {
         if *config != LightingEngineConfig::Default {
             return;
         }
@@ -460,7 +508,9 @@ impl LightEngine {
             return;
         }
 
-        self.sky_light.convert_light(cache);
+        if has_skylight {
+            self.sky_light.convert_light(cache);
+        }
         self.block_light.propagate_light(cache);
 
         self.block_light.clear();
@@ -518,5 +568,185 @@ impl LightEngine {
 impl Default for LightEngine {
     fn default() -> Self {
         Self::new()
+    }
+}
+#[cfg(test)]
+mod sky_light_heightmap_tests {
+    use super::*;
+    use crate::chunk::ChunkData;
+    use crate::chunk::format::chunk_codec_tests::encode_terrain_chunk_without_world_surface;
+    use crate::generation::get_world_gen;
+    use crate::generation::proto_chunk::ProtoChunk;
+    use pumpkin_data::Block;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::world_seed::Seed;
+
+    /// A 3x3 cache of chunks all loaded from disk NBT that carries terrain but
+    /// no `WORLD_SURFACE` heightmap, centered on chunk (0, 0).
+    fn cache_from_heightmapless_disk_chunks() -> Cache {
+        let world_gen = get_world_gen(
+            Seed(42),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+
+        let mut chunks = Vec::new();
+        for dx in -1..=1 {
+            for dz in -1..=1 {
+                let bytes = encode_terrain_chunk_without_world_surface(dx, dz);
+                let chunk_data = ChunkData::internal_from_bytes(&bytes, Vector2::new(dx, dz))
+                    .expect("test chunk must parse");
+                chunks.push(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
+                    &chunk_data,
+                    &world_gen,
+                ))));
+            }
+        }
+
+        Cache {
+            x: -1,
+            z: -1,
+            size: 3,
+            chunks,
+        }
+    }
+
+    /// A 3x3 cache of freshly generated proto chunks holding a synthetic ocean:
+    /// stone from the world bottom up to `seabed_y`, water from `seabed_y + 1`
+    /// up to `surface_y`, open air above.
+    fn ocean_cache(seabed_y: i32, surface_y: i32) -> Cache {
+        let world_gen = get_world_gen(
+            Seed(42),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+
+        let mut chunks = Vec::new();
+        for dx in -1..=1 {
+            for dz in -1..=1 {
+                let mut proto = ProtoChunk::new(dx, dz, &world_gen);
+                let bottom = proto.bottom_y() as i32;
+                for x in (dx * 16)..(dx * 16 + 16) {
+                    for z in (dz * 16)..(dz * 16 + 16) {
+                        for y in bottom..=seabed_y {
+                            proto.set_block_state(x, y, z, Block::STONE.default_state);
+                        }
+                        for y in (seabed_y + 1)..=surface_y {
+                            proto.set_block_state(x, y, z, Block::WATER.default_state);
+                        }
+                    }
+                }
+                chunks.push(Chunk::Proto(Box::new(proto)));
+            }
+        }
+
+        Cache {
+            x: -1,
+            z: -1,
+            size: 3,
+            chunks,
+        }
+    }
+
+    /// Vanilla: water's `getLightBlock` is 1, and the sky light engine charges
+    /// `max(1, opacity)` per step except straight down through a block that
+    /// propagates sky light (which water does not). So a water column loses
+    /// exactly one level per block: 15 in the air above the surface, 14 at the
+    /// topmost water block, and 0 fifteen blocks below that. A deep ocean floor
+    /// is genuinely pitch black. See <https://minecraft.wiki/w/Light>
+    /// ("Sunlight ... decreases by one level for each block of water").
+    #[test]
+    fn sky_light_attenuates_one_level_per_water_block() {
+        let surface_y = 62;
+        let seabed_y = 20;
+        let mut cache = ocean_cache(seabed_y, surface_y);
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, true);
+
+        let at = |cache: &Cache, y: i32| get_sky_light(cache, BlockPos(Vector3::new(8, y, 8)));
+
+        // Open air above the ocean surface.
+        assert_eq!(at(&cache, surface_y + 1), 15, "air above the water surface");
+
+        // One level per water block, down to darkness.
+        for depth in 0..=14i32 {
+            let y = surface_y - depth;
+            assert_eq!(
+                at(&cache, y),
+                14 - depth as u8,
+                "water at y={y} (depth {depth} below the surface)"
+            );
+        }
+
+        // Fifteen blocks below the surface and everything under it is dark,
+        // including the ocean floor.
+        for y in (seabed_y..=(surface_y - 15)).rev() {
+            assert_eq!(at(&cache, y), 0, "deep water / ocean floor at y={y}");
+        }
+    }
+
+    /// Non-vacuity: the assertions above are not "everything is 0" or
+    /// "everything is 15". A shallow pool lets a measurable, non-zero level
+    /// reach the floor, and the value there is the depth-derived one.
+    #[test]
+    fn shallow_water_leaves_a_measurable_level_on_the_floor() {
+        let surface_y = 62;
+        let seabed_y = 57; // 5 water blocks: 58..=62
+        let mut cache = ocean_cache(seabed_y, surface_y);
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, true);
+
+        let at = |cache: &Cache, y: i32| get_sky_light(cache, BlockPos(Vector3::new(8, y, 8)));
+
+        assert_eq!(at(&cache, surface_y + 1), 15);
+        assert_eq!(at(&cache, 62), 14);
+        assert_eq!(at(&cache, 58), 10, "lowest water block above the floor");
+        assert_eq!(at(&cache, seabed_y), 0, "opaque stone floor");
+    }
+
+    #[test]
+    fn deep_enclosed_block_stays_dark_without_a_world_surface_heightmap() {
+        let mut cache = cache_from_heightmapless_disk_chunks();
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, true);
+
+        // Sections -4..=3 are solid stone, so y = 0 is buried under 64 blocks of
+        // it with no sky access. A missing `WORLD_SURFACE` heightmap used to
+        // make `get_top_y` answer `min_y - 1`, i.e. "this column is empty", and
+        // the producer then filled the whole column with 15 - straight through
+        // the stone and out into neighbouring chunks.
+        for pos in [
+            BlockPos(Vector3::new(8, 0, 8)),
+            BlockPos(Vector3::new(0, -60, 0)),
+            BlockPos(Vector3::new(15, 32, 15)),
+        ] {
+            assert_eq!(
+                get_sky_light(&cache, pos),
+                0,
+                "enclosed position {pos:?} must be dark"
+            );
+        }
+
+        // The same run must still light open sky above the terrain, so the
+        // assertions above are not just "everything is 0".
+        assert_eq!(get_sky_light(&cache, BlockPos(Vector3::new(8, 100, 8))), 15);
+    }
+
+    #[test]
+    fn initialization_can_disable_sky_light_for_ceiling_dimensions() {
+        let mut cache = ocean_cache(20, 62);
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, false);
+
+        assert_eq!(get_sky_light(&cache, BlockPos(Vector3::new(8, 100, 8))), 0);
+        assert_eq!(
+            get_block_light(&cache, BlockPos(Vector3::new(8, 100, 8))),
+            0
+        );
     }
 }

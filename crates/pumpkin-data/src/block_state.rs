@@ -1,5 +1,5 @@
 use pumpkin_util::math::boundingbox::BoundingBox;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::vector3::{Axis as MathAxis, Vector3};
 
 use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
 use crate::{Block, BlockDirection, BlockId};
@@ -31,6 +31,8 @@ pub struct BlockState {
     pub outline_shapes: &'static [u16],
     /// How much light is subtracted as it passes through this block (0 for transparent, 15 for opaque).
     pub opacity: u8,
+    /// Whether vanilla uses this state's voxel shape when checking light occlusion.
+    pub use_shape_for_light_occlusion: bool,
     /// The ID of the block entity associated with this state.
     /// Set to `u16::MAX` if the block does not hold NBT data.
     pub block_entity_type: u16,
@@ -190,6 +192,91 @@ impl BlockState {
 
         base_shapes.chain(water_shape)
     }
+
+    /// Returns the voxel boxes used by vanilla's light-occlusion shape.
+    ///
+    /// Most blocks use their outline shape. Lecterns and sculk shriekers override
+    /// `getOcclusionShape` in vanilla and therefore use their collision shape.
+    pub fn get_block_light_occlusion_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
+        let shapes = match Block::from_state_id(self.id).name {
+            "lectern" | "sculk_shrieker" => self.collision_shapes,
+            _ => self.outline_shapes,
+        };
+        shapes.iter().map(|&id| COLLISION_SHAPES[id as usize])
+    }
+}
+
+const LIGHT_SHAPE_EPSILON: f64 = 1.0e-7;
+
+/// Returns whether the two adjacent block faces cover their complete shared
+/// face, matching vanilla's `Shapes.faceShapeOccludes` for the generated
+/// axis-aligned voxel shapes.
+#[must_use]
+pub fn light_shape_occludes(
+    first: &'static BlockState,
+    second: &'static BlockState,
+    direction: crate::BlockDirection,
+) -> bool {
+    let face_boxes = |state: &'static BlockState, face_direction: crate::BlockDirection| {
+        if !state.use_shape_for_light_occlusion {
+            return Vec::new();
+        }
+
+        let axis: MathAxis = face_direction.to_axis().into();
+        let [first_axis, second_axis] = MathAxis::excluding(axis);
+        let positive = face_direction.positive();
+        state
+            .get_block_light_occlusion_shapes()
+            .filter_map(|shape| {
+                let face = if positive {
+                    shape.max.get_axis(axis)
+                } else {
+                    shape.min.get_axis(axis)
+                };
+                let expected_face = if positive { 1.0 } else { 0.0 };
+                if (face - expected_face).abs() > LIGHT_SHAPE_EPSILON {
+                    return None;
+                }
+
+                Some((
+                    shape.min.get_axis(first_axis),
+                    shape.max.get_axis(first_axis),
+                    shape.min.get_axis(second_axis),
+                    shape.max.get_axis(second_axis),
+                ))
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let mut rectangles = face_boxes(first, direction);
+    rectangles.extend(face_boxes(second, direction.opposite()));
+    if rectangles.is_empty() {
+        return false;
+    }
+
+    let mut x_edges = vec![0.0, 1.0];
+    let mut y_edges = vec![0.0, 1.0];
+    for (min_x, max_x, min_y, max_y) in &rectangles {
+        x_edges.extend([*min_x, *max_x]);
+        y_edges.extend([*min_y, *max_y]);
+    }
+    x_edges.sort_by(f64::total_cmp);
+    y_edges.sort_by(f64::total_cmp);
+    x_edges.dedup_by(|left, right| (*left - *right).abs() <= LIGHT_SHAPE_EPSILON);
+    y_edges.dedup_by(|left, right| (*left - *right).abs() <= LIGHT_SHAPE_EPSILON);
+
+    x_edges.windows(2).all(|x| {
+        y_edges.windows(2).all(|y| {
+            let x_mid = (x[0] + x[1]) * 0.5;
+            let y_mid = (y[0] + y[1]) * 0.5;
+            rectangles.iter().any(|(min_x, max_x, min_y, max_y)| {
+                x_mid >= *min_x - LIGHT_SHAPE_EPSILON
+                    && x_mid <= *max_x + LIGHT_SHAPE_EPSILON
+                    && y_mid >= *min_y - LIGHT_SHAPE_EPSILON
+                    && y_mid <= *max_y + LIGHT_SHAPE_EPSILON
+            })
+        })
+    })
 }
 
 impl BlockStateId {

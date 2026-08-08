@@ -764,12 +764,106 @@ impl LightContainer {
     }
 
     pub fn fill(&mut self, value: u8) {
-        *self = Self::new_filled(value);
+        // Match vanilla DataLayer.fill: a uniform layer stays implicit rather
+        // than materializing a 2048-byte array. This matters for zero-filled
+        // layers, which must remain absent from the client's data mask.
+        *self = Self::new_empty(value);
     }
 }
 
 impl Default for LightContainer {
     fn default() -> Self {
         Self::new_empty(15)
+    }
+}
+#[cfg(test)]
+pub(crate) mod chunk_codec_tests {
+    use super::*;
+    use pumpkin_nbt::tag::NbtTag;
+
+    fn full_sky_light(value: u8) -> Box<[i8]> {
+        let byte = ((value << 4) | value) as i8;
+        vec![byte; LightContainer::ARRAY_SIZE].into_boxed_slice()
+    }
+
+    fn section(y: i8, sky_light: Option<u8>) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_byte("Y", y);
+        if let Some(value) = sky_light {
+            compound.put("SkyLight", NbtTag::ByteArray(full_sky_light(value)));
+        }
+        NbtTag::Compound(compound)
+    }
+
+    /// Encodes an overworld-shaped chunk whose lowest 8 sections are solid
+    /// stone and which carries a `Heightmaps` compound *without* a
+    /// `WORLD_SURFACE` entry - the shape vanilla writes for any chunk saved
+    /// below `minecraft:full` that already contains terrain.
+    pub fn encode_terrain_chunk_without_world_surface(chunk_x: i32, chunk_z: i32) -> Vec<u8> {
+        const MIN_SECTION: i8 = -4;
+        const MAX_SECTION: i8 = 19;
+        const TOP_STONE_SECTION: i8 = 3;
+
+        let stone = i32::from(Block::STONE.default_state.id.as_u16());
+
+        let mut sections = Vec::new();
+        for y in MIN_SECTION..=MAX_SECTION {
+            let mut compound = NbtCompound::new();
+            compound.put_byte("Y", y);
+            if y <= TOP_STONE_SECTION {
+                let mut block_states = NbtCompound::new();
+                // Single-entry palette and no `data`: a uniform section.
+                block_states.put("palette", NbtTag::IntArray(vec![stone]));
+                compound.put_compound("block_states", block_states);
+            }
+            sections.push(NbtTag::Compound(compound));
+        }
+
+        let mut root = NbtCompound::new();
+        root.put_int("xPos", chunk_x);
+        root.put_int("zPos", chunk_z);
+        root.put_int("yPos", i32::from(MIN_SECTION));
+        root.put_list("sections", sections);
+        root.put_string("Status", "minecraft:carvers".to_string());
+        // Present but empty, exactly as a pre-`full` vanilla chunk with no
+        // status-eligible heightmap types is written.
+        root.put_compound("Heightmaps", NbtCompound::new());
+
+        pumpkin_nbt::Nbt::from(root).write().to_vec()
+    }
+
+    fn encode_chunk(min_y_section: i32, sections: Vec<NbtTag>) -> Vec<u8> {
+        let mut root = NbtCompound::new();
+        root.put_int("xPos", 0);
+        root.put_int("zPos", 0);
+        root.put_int("yPos", min_y_section);
+        root.put_list("sections", sections);
+        root.put_bool("isLightOn", true);
+
+        pumpkin_nbt::Nbt::from(root).write().to_vec()
+    }
+
+    #[test]
+    fn no_sky_light_tags_reads_as_dark_dimension() {
+        // No section carries a `SkyLight` tag at all, as in a dimension without
+        // sky light (e.g. the Nether). This must not be lit up as open sky.
+        let sections = vec![section(0, None), section(1, None)];
+        let bytes = encode_chunk(0, sections);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let light = chunk.light_engine.lock().unwrap();
+
+        assert_eq!(light.sky_light[0].get(0, 0, 0), 0);
+        assert_eq!(light.sky_light[1].get(0, 0, 0), 0);
+    }
+
+    #[test]
+    fn fill_keeps_uniform_light_layers_implicit() {
+        let mut layer = LightContainer::new_filled(7);
+
+        layer.fill(0);
+        assert!(matches!(layer, LightContainer::Empty(0)));
+
+        layer.fill(15);
+        assert!(matches!(layer, LightContainer::Empty(15)));
     }
 }
