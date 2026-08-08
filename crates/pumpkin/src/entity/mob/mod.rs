@@ -1183,19 +1183,15 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 // `Brain::tick` takes only its own runtime out of its mutex; the memory store stays
                 // live so damage/game-event writes arriving mid-tick are not dropped.
                 if let Some(brain) = &mob_entity.brain {
-                    // DEVIATION: vanilla passes `level.getGameTime()`. Reading that here means
-                    // locking the world's async `level_time` mutex once per mob per tick. Behaviors
-                    // only ever compare this value against timestamps they themselves recorded, so
-                    // any monotonic per-entity clock is equivalent; `Entity::age` is that clock and
-                    // is a plain atomic. Consequence: durations are correct, but a timestamp is not
-                    // comparable across entities and does not survive a restart.
-                    let game_time = i64::from(
-                        mob_entity
-                            .living_entity
-                            .entity
-                            .age
-                            .load(std::sync::atomic::Ordering::Relaxed),
-                    );
+                    // Vanilla passes `level.getGameTime()`, which is shared by every entity in
+                    // the dimension and persists across entity reloads.
+                    let game_time = mob_entity
+                        .living_entity
+                        .entity
+                        .world
+                        .load_full()
+                        .get_world_age()
+                        .await;
                     brain.tick(self, game_time).await;
                 }
 
