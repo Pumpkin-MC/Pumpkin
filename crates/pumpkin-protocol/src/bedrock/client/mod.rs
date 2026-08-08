@@ -47,6 +47,9 @@ pub mod update_abilities;
 pub mod update_attributes;
 pub mod update_block;
 
+/// `BuildPlatform::Unknown` in the Bedrock protocol.
+pub const UNKNOWN_BUILD_PLATFORM: i32 = -1;
+
 pub mod level_sound_event;
 pub mod set_actor_link;
 
