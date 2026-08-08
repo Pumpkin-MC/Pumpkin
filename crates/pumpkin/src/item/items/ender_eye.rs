@@ -72,7 +72,7 @@ impl ItemBehaviour for EnderEyeItem {
                 .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_LISTENERS)
                 .await;
             // Consume one item.
-            item.decrement(1);
+            item.decrement_unless_creative(player.gamemode.load(), 1);
             world.sync_world_event(WorldEvent::EndPortalFrameFill, location, 0);
 
             // Try to complete the portal.
@@ -135,7 +135,7 @@ impl ItemBehaviour for EnderEyeItem {
 
             player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::LaunchedEyeOfEnder).await;
             let mut stack = player.inventory.held_item().await;
-            stack.decrement(1);
+            stack.decrement_unless_creative(player.gamemode.load(), 1);
             player.inventory.set_held_item(stack).await;
         })
     }
