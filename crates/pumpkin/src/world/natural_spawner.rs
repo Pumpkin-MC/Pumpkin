@@ -525,6 +525,10 @@ pub fn spawn_mobs_for_chunk_generation(
     chunk_x: i32,
     chunk_z: i32,
 ) {
+    if !world.level_info.load().game_rules.spawn_mobs {
+        return;
+    }
+
     let mob_settings = &biome.spawners;
     let creatures = &mob_settings.creature;
 
