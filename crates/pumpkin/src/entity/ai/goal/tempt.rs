@@ -122,16 +122,6 @@ impl TemptGoal {
         }
         nearest.map(|(player, _)| player)
     }
-
-    async fn is_player_still_tempting(&self, player: &Player, mob: &dyn Mob) -> bool {
-        let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
-        let player_pos = player.get_entity().pos.load();
-        let range = Self::tempt_range(mob);
-        if mob_pos.squared_distance_to_vec(&player_pos) > range * range {
-            return false;
-        }
-        self.is_holding_tempt_item(player).await
-    }
 }
 
 impl Goal for TemptGoal {
@@ -187,7 +177,8 @@ impl Goal for TemptGoal {
                 }
             }
 
-            self.is_player_still_tempting(&player, mob).await
+            self.target_player = self.find_tempting_player(mob).await;
+            self.target_player.is_some()
         })
     }
 
