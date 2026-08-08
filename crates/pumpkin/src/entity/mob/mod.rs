@@ -954,6 +954,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_set_variant_name(name);
     }
 
+    #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,
@@ -1054,6 +1055,16 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             {
                 let mut move_control = mob_entity.move_control.lock().unwrap();
+                // Vanilla PathNavigation never writes movement input directly: after following
+                // its path it calls MoveControl.setWantedPosition. The waypoint was computed
+                // while the navigator was taken out above, so hand it to the controller only
+                // after restoring the navigator lock. This is especially important for
+                // FlyingMoveControl, whose vertical input and no-gravity state otherwise never
+                // receive path targets.
+                let navigation_target = mob_entity.navigator.lock().unwrap().next_movement_target();
+                if let Some((target, speed)) = navigation_target {
+                    move_control.set_wanted_position(target.x, target.y, target.z, speed);
+                }
                 move_control.tick(self);
             };
 

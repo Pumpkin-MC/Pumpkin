@@ -482,4 +482,19 @@ impl Navigator {
     pub fn is_idle(&self) -> bool {
         self.is_idle.load(Ordering::Relaxed)
     }
+
+    /// Returns the next path waypoint in the form consumed by vanilla's
+    /// `PathNavigation.tick`: navigation computes the path, then hands this point to the
+    /// mob's `MoveControl`. Keeping this handoff separate lets flying controls receive the
+    /// waypoint without making the async navigator hold a controller lock.
+    #[must_use]
+    pub fn next_movement_target(&self) -> Option<(Vector3<f64>, f64)> {
+        let goal = self.current_goal.as_ref()?;
+        let path = self.current_path.as_ref()?;
+        let (x, y, z) = path.get_next_entity_pos(self.mob_width)?;
+        Some((
+            Vector3::new(f64::from(x), f64::from(y), f64::from(z)),
+            goal.speed,
+        ))
+    }
 }
