@@ -1,10 +1,9 @@
 // Ported from vanilla Minecraft's FleeSunGoal (net.minecraft.world.entity.ai.goal.FleeSunGoal)
 // See: /tmp/pumpkin-vanilla-26.2/decompiled/net/minecraft/world/entity/ai/goal/FleeSunGoal.java
 //
-// PARITY NOTE: Vanilla's getHidePos uses getWalkTargetValue() to filter for pathfinder-friendly dark spots.
-// Pumpkin lacks the getWalkTargetValue() primitive (returns -getPathfindingCostFromLightLevels), so we
-// approximate with sky light level checks. This may select different shelter spots than vanilla.
-// TODO: Port getWalkTargetValue() from vanilla's PathfinderMob/Mob for full parity.
+// The current Pumpkin registration is for skeletons, which inherit Monster's
+// getWalkTargetValue implementation. Keep that calculation local until the
+// generic PathfinderMob value is ported for every mob type.
 
 use std::sync::atomic::Ordering::Relaxed;
 
@@ -18,6 +17,18 @@ const SEARCH_RANGE: i32 = 10;
 const SEARCH_HEIGHT: i32 = 3;
 const SEARCH_ATTEMPTS: usize = 10;
 const BRIGHT_OUTSIDE_THRESHOLD: u8 = 4;
+
+/// Vanilla `Monster#getWalkTargetValue` delegates to
+/// `LevelReader#getPathfindingCostFromLightLevels` and negates the result.
+fn monster_walk_target_value(
+    world: &crate::world::World,
+    pos: &pumpkin_util::math::position::BlockPos,
+) -> f32 {
+    let brightness = f32::from(world.get_max_local_raw_brightness(pos)) / 15.0;
+    let curved_brightness = brightness / (4.0 - 3.0 * brightness);
+    let light_value = curved_brightness + world.dimension.ambient_light * (1.0 - curved_brightness);
+    -(light_value - 0.5)
+}
 
 pub struct FleeSunGoal {
     speed: f64,
@@ -56,9 +67,9 @@ impl FleeSunGoal {
                 continue;
             }
 
-            // Position must have relatively low light level (dark shelter)
-            // We use sky light level < BRIGHT_OUTSIDE_THRESHOLD as a proxy for darkness
-            if world.get_sky_light_level(&candidate_pos) >= BRIGHT_OUTSIDE_THRESHOLD {
+            // Vanilla's skeleton is a Monster, whose getWalkTargetValue is
+            // negative when the pathfinding light cost is positive.
+            if monster_walk_target_value(&world, &candidate_pos) >= 0.0 {
                 continue;
             }
 
