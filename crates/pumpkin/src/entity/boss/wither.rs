@@ -1,7 +1,8 @@
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::world::WorldEvent;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -13,6 +14,7 @@ use crate::entity::{
         Controls, Goal, GoalFuture, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, revenge::RevengeGoal, track_target::TrackTargetGoal,
     },
+    ai::pathfinder::NavigatorGoal,
     ai::target_predicate::TargetPredicate,
     mob::{Mob, MobEntity},
     projectile::wither_skull::WitherSkullEntity,
@@ -73,9 +75,29 @@ impl WitherEntity {
         self.invulnerable_ticks
             .store(ticks.max(0), Ordering::Relaxed);
     }
+
+    #[must_use]
+    fn is_powered(&self) -> bool {
+        self.mob_entity.living_entity.health.load()
+            <= self.mob_entity.living_entity.get_max_health() / 2.0
+    }
 }
 
-impl NBTStorage for WitherEntity {}
+impl NBTStorage for WitherEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            nbt.put_int("Invul", self.invulnerable_ticks());
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.set_invulnerable_ticks(nbt.get_int("Invul").unwrap_or(0));
+        })
+    }
+}
 
 impl Mob for WitherEntity {
     fn get_mob_entity(&self) -> &MobEntity {
@@ -96,17 +118,35 @@ impl Mob for WitherEntity {
     /// wither-friends tag is also used for the boss's blanket immunity to friendly undead.
     fn pre_damage<'a>(
         &'a self,
-        _damage_type: DamageType,
+        damage_type: DamageType,
         source: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            self.invulnerable_ticks() == 0
-                && !source.is_some_and(|source| {
-                    source
-                        .get_entity()
-                        .entity_type
-                        .has_tag(&tag::EntityType::MINECRAFT_WITHER_FRIENDS)
+            if damage_type.has_tag(&tag::DamageType::MINECRAFT_WITHER_IMMUNE_TO)
+                || (self.invulnerable_ticks() > 0
+                    && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY))
+            {
+                return false;
+            }
+
+            if self.is_powered()
+                && source.is_some_and(|source| {
+                    let source_type = source.get_entity().entity_type;
+                    source_type == &EntityType::ARROW
+                        || source_type == &EntityType::SPECTRAL_ARROW
+                        || source_type == &EntityType::WIND_CHARGE
+                        || source_type == &EntityType::BREEZE_WIND_CHARGE
                 })
+            {
+                return false;
+            }
+
+            !source.is_some_and(|source| {
+                source
+                    .get_entity()
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_WITHER_FRIENDS)
+            })
         })
     }
 
@@ -126,9 +166,13 @@ impl Mob for WitherEntity {
                 }
                 if next == 0 {
                     let world = entity.world.load_full();
-                    world.explode(entity.pos.load(), 7.0).await;
+                    world.explode(entity.get_eye_pos(), 7.0).await;
                 }
                 return;
+            }
+
+            if age % 20 == 0 {
+                self.mob_entity.living_entity.heal(1.0);
             }
 
             let Some(target) = self.mob_entity.target.lock().await.clone() else {
@@ -141,7 +185,7 @@ impl Mob for WitherEntity {
             let target_pos = target.get_entity().pos.load();
             let pos = entity.pos.load();
             let mut velocity = entity.velocity.load().multiply(1.0, 0.6, 1.0);
-            if pos.y < target_pos.y || pos.y < target_pos.y + 5.0 {
+            if pos.y < target_pos.y || (!self.is_powered() && pos.y < target_pos.y + 5.0) {
                 velocity.y = velocity.y.max(0.0);
                 velocity.y += 0.3 - velocity.y * 0.6;
             }
@@ -181,12 +225,32 @@ impl Goal for WitherDoNothingGoal {
 
 /// `RangedAttackGoal(this, 1.0, 40, 20.0F)` from `WitherBoss.registerGoals`.
 struct WitherRangedAttackGoal {
-    cooldown: i32,
+    target: Option<Arc<dyn EntityBase>>,
+    attack_time: i32,
+    see_time: i32,
 }
 
 impl WitherRangedAttackGoal {
     const fn new() -> Self {
-        Self { cooldown: 0 }
+        Self {
+            target: None,
+            attack_time: -1,
+            see_time: 0,
+        }
+    }
+
+    async fn has_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
+        let entity = mob.get_entity();
+        entity
+            .world
+            .load_full()
+            .raycast(
+                entity.get_eye_pos(),
+                target.get_entity().get_eye_pos(),
+                async |block_pos, world| world.get_block_state(block_pos).is_solid(),
+            )
+            .await
+            .is_none()
     }
 
     async fn shoot(mob: &dyn Mob, target: &dyn EntityBase) {
@@ -200,66 +264,114 @@ impl WitherRangedAttackGoal {
             target_pos.y + target.get_entity().get_eye_height() * 0.5 - head.y,
             target_pos.z - head.z,
         );
+        let dangerous = mob.get_random().random::<f32>() < 0.001;
         let projectile_entity = Entity::new(world.clone(), head, &EntityType::WITHER_SKULL);
-        let skull = WitherSkullEntity::new_shot(projectile_entity, shooter, false);
+        let skull = WitherSkullEntity::new_shot(projectile_entity, shooter, dangerous);
         skull
             .thrown
             .set_velocity(direction.x, direction.y, direction.z, 1.0, 0.0);
+        if !shooter.is_silent() {
+            world.sync_world_event(
+                WorldEvent::SoundWitherBossShoot,
+                shooter.block_pos.load(),
+                0,
+            );
+        }
         world.spawn_entity(Arc::new(skull)).await;
-        world.play_sound(Sound::EntityWitherShoot, SoundCategory::Hostile, &head);
     }
 }
 
 impl Goal for WitherRangedAttackGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            mob.cast_any()
-                .downcast_ref::<WitherEntity>()
-                .is_some_and(|wither| wither.invulnerable_ticks() == 0)
-                && mob
-                    .get_mob_entity()
-                    .target
-                    .lock()
-                    .await
-                    .as_ref()
-                    .is_some_and(|target| target.get_entity().is_alive())
+            let target = mob.get_mob_entity().target.lock().await.clone();
+            if target
+                .as_ref()
+                .is_some_and(|target| target.get_entity().is_alive())
+            {
+                self.target = target;
+                true
+            } else {
+                false
+            }
         })
     }
 
     fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        self.can_start(mob)
+        Box::pin(async move {
+            if let Some(target) = mob.get_mob_entity().target.lock().await.clone()
+                && target.get_entity().is_alive()
+            {
+                self.target = Some(target);
+                return true;
+            }
+
+            self.target.as_ref().is_some_and(|target| {
+                target.get_entity().is_alive()
+                    && !mob.get_mob_entity().navigator.lock().unwrap().is_idle()
+            })
+        })
     }
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            self.cooldown = 0;
+            self.attack_time = -1;
+            self.see_time = 0;
             mob.get_mob_entity().set_attacking(true);
         })
     }
 
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move { mob.get_mob_entity().set_attacking(false) })
+        Box::pin(async move {
+            self.target = None;
+            self.see_time = 0;
+            self.attack_time = -1;
+            mob.get_mob_entity().set_attacking(false);
+        })
     }
 
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            let Some(target) = mob.get_mob_entity().target.lock().await.clone() else {
+            let Some(target) = self.target.clone() else {
                 return;
             };
+            let entity = mob.get_entity();
+            let target_pos = target.get_entity().pos.load();
+            let distance_squared = entity.pos.load().squared_distance_to_vec(&target_pos);
+            let has_line_of_sight = Self::has_line_of_sight(mob, target.as_ref()).await;
+            if has_line_of_sight {
+                self.see_time += 1;
+            } else {
+                self.see_time = 0;
+            }
+
+            if distance_squared > 400.0 || self.see_time < 5 {
+                mob.get_mob_entity()
+                    .navigator
+                    .lock()
+                    .unwrap()
+                    .set_progress(NavigatorGoal::new(entity.pos.load(), target_pos, 1.0));
+            } else {
+                mob.get_mob_entity().navigator.lock().unwrap().stop();
+            }
+
             mob.get_mob_entity()
                 .look_control
                 .lock()
                 .unwrap()
                 .look_at_entity_with_range(&target, 30.0, 30.0);
-            self.cooldown = (self.cooldown - 1).max(0);
-            let distance = mob
-                .get_entity()
-                .pos
-                .load()
-                .squared_distance_to_vec(&target.get_entity().pos.load());
-            if distance <= 400.0 && self.cooldown == 0 {
+
+            self.attack_time -= 1;
+            if self.attack_time == 0 {
+                if !has_line_of_sight {
+                    return;
+                }
+                let distance = distance_squared.sqrt() / 20.0;
+                let _power = distance.clamp(0.1, 1.0);
                 Self::shoot(mob, target.as_ref()).await;
-                self.cooldown = 40;
+                self.attack_time = 40;
+            } else if self.attack_time < 0 {
+                self.attack_time = 40;
             }
         })
     }
@@ -269,7 +381,7 @@ impl Goal for WitherRangedAttackGoal {
     }
 
     fn controls(&self) -> Controls {
-        Controls::LOOK
+        Controls::MOVE | Controls::LOOK
     }
 }
 
@@ -339,18 +451,17 @@ impl WitherNearestTargetGoal {
         Self {
             tracker: TrackTargetGoal::with_default(false),
             target: None,
-            target_predicate: TargetPredicate::create_attackable()
-                .ignore_visibility()
-                .set_base_max_distance(40.0),
+            target_predicate: TargetPredicate::create_attackable().set_base_max_distance(40.0),
         }
     }
 
     async fn find_target(&mut self, mob: &dyn Mob) {
         let entity = mob.get_entity();
         let world = entity.world.load();
-        let origin = entity.pos.load();
+        let mut search_pos = entity.pos.load();
+        search_pos.y += entity.get_eye_height();
         let mut candidates: Vec<Arc<dyn EntityBase>> = world
-            .get_nearby_entities(origin, 40.0)
+            .get_nearby_entities(search_pos, 40.0)
             .into_values()
             .filter(|candidate| {
                 candidate.get_entity().entity_id != entity.entity_id
@@ -363,11 +474,11 @@ impl WitherNearestTargetGoal {
             .collect();
         candidates.sort_by(|a, b| {
             let distance = |candidate: &Arc<dyn EntityBase>| {
-                candidate
-                    .get_entity()
-                    .pos
-                    .load()
-                    .squared_distance_to_vec(&origin)
+                    candidate
+                        .get_entity()
+                        .pos
+                        .load()
+                    .squared_distance_to_vec(&search_pos)
             };
             distance(a).partial_cmp(&distance(b)).unwrap()
         });
