@@ -653,6 +653,10 @@ pub fn spawn_category_for_position(
     spawn_state: &SpawnState,
     is_thundering: bool,
 ) -> Vec<Arc<dyn EntityBase>> {
+    if world.get_block_state(&pos).is_solid_block() {
+        return Vec::new();
+    }
+
     let mut batch_buffer = vec![];
     let mut spawn_cluster_size = 0;
     let player_positions: Vec<_> = world.players.load().iter().map(|p| p.position()).collect();
