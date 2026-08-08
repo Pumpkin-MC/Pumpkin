@@ -54,6 +54,13 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        if: runner.os == 'Linux'
+        with:
+          tool: wild-linker
+      - name: Use wild linker (Linux)
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=${RUSTFLAGS} -Clinker=clang -Clink-arg=--ld-path=wild" >> "$GITHUB_ENV"
       - name: Clippy (debug)
         run: cargo clippy --all-targets --all-features
   clippy_release:
@@ -71,6 +78,13 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        if: runner.os == 'Linux'
+        with:
+          tool: wild-linker
+      - name: Use wild linker (Linux)
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=${RUSTFLAGS} -Clinker=clang -Clink-arg=--ld-path=wild" >> "$GITHUB_ENV"
       - name: Clippy (release)
         run: cargo clippy --release --all-targets --all-features
   build_and_test:
@@ -96,6 +110,13 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        if: runner.os == 'Linux'
+        with:
+          tool: wild-linker
+      - name: Use wild linker (Linux)
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=${RUSTFLAGS} -Clinker=clang -Clink-arg=--ld-path=wild" >> "$GITHUB_ENV"
       - name: Cargo nextest
         run: cargo nextest run --verbose
       - name: Cargo doctest
@@ -123,7 +144,14 @@ jobs:
 
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
-      
+      - uses: taiki-e/install-action@v2
+        if: runner.os == 'Linux'
+        with:
+          tool: wild-linker
+      - name: Use wild linker (Linux)
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=${RUSTFLAGS} -Clinker=clang -Clink-arg=--ld-path=wild" >> "$GITHUB_ENV"
+
       - name: Build Release
         shell: bash
         run: |
