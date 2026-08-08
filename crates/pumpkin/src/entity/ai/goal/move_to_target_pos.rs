@@ -113,8 +113,19 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
         self.trying_time % 40 == 0
     }
 
-    fn start_moving_to_target(_mob: &dyn Mob) {
-        // TODO: implement when navigation is implemented
+    fn start_moving_to_target(&self, mob: &dyn Mob) {
+        let target = self.get_target_pos().to_f64();
+        let current = mob.get_entity().pos.load();
+
+        mob.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap()
+            .set_progress(NavigatorGoal::new(
+                current,
+                Vector3::new(target.x + 0.5, target.y, target.z + 0.5),
+                self.speed,
+            ));
     }
 }
 
@@ -159,7 +170,7 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
-            Self::start_moving_to_target(mob);
+            self.start_moving_to_target(mob);
             self.trying_time = 0;
             // Vanilla: `nextInt(nextInt(1200) + 1200) + 1200`, so the bound is itself drawn
             // from [1200, 2400) and the result lands in [1200, 3600).

@@ -11,6 +11,7 @@ use crate::entity::ai::pathfinder::path::Path;
 use crate::entity::ai::pathfinder::pathfinding_context::PathfindingContext;
 use crate::entity::ai::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
 use pumpkin_data::attributes::Attributes;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::wrap_degrees;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -178,7 +179,10 @@ impl Navigator {
 
         let mut start_node = self.evaluator.get_start().await?;
 
-        let mut target = self.evaluator.get_target(destination.to_block_pos());
+        // Vanilla NodeEvaluator floors navigation coordinates before resolving the target node.
+        let mut target = self
+            .evaluator
+            .get_target(BlockPos(destination.floor_to_i32()));
 
         start_node.g = 0.0;
         let start_dist = start_node.distance(&target);
@@ -312,7 +316,7 @@ impl Navigator {
         }
         self.current_path.as_ref().is_some_and(|p| {
             let path_target = p.get_target();
-            let goal_target = goal.destination.to_i32();
+            let goal_target = goal.destination.floor_to_i32();
             let dx = f64::from(path_target.x - goal_target.x);
             let dy = f64::from(path_target.y - goal_target.y);
             let dz = f64::from(path_target.z - goal_target.z);
