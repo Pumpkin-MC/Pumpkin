@@ -622,3 +622,25 @@ impl EntitySelectorParserSuggestions {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::EntitySelectorParser;
+    use crate::command::string_reader::StringReader;
+
+    fn parse(selector: &str) -> bool {
+        let mut reader = StringReader::new(selector);
+        EntitySelectorParser::new(&mut reader, true)
+            .parse_and_consume()
+            .is_ok()
+    }
+
+    #[test]
+    fn parse_entity_type_with_namespace() {
+        assert!(parse("@e[type=iron_golem]"));
+        assert!(parse("@e[type=minecraft:iron_golem]"));
+        assert!(parse("@e[type=!minecraft:iron_golem]"));
+        assert!(!parse("@e[type=pumpkin:iron_golem]"));
+        assert!(!parse("@e[type=minecraft:not_an_entity]"));
+    }
+}
