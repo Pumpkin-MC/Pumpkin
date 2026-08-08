@@ -50,9 +50,9 @@ impl OreFeature {
         let q = 2 * (g.ceil() as i32 + i);
         let r = 2 * (2 + i);
 
-        for _ in n..=(n + q) {
-            for _ in p..=(p + q) {
-                if o > chunk.ocean_floor_height_exclusive(pos.0.x, pos.0.z) {
+        for probe_x in n..=(n + q) {
+            for probe_z in p..=(p + q) {
+                if o > chunk.ocean_floor_height_exclusive(probe_x, probe_z) {
                     continue;
                 }
                 return self.generate_vein_part(chunk, random, d, e, h, j, l, m, n, o, p, q, r);
