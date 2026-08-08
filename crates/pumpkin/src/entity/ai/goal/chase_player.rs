@@ -94,7 +94,9 @@ impl Goal for ChasePlayerGoal {
                 let player_pos = player.get_entity().pos.load();
                 let eye_y = player_pos.y + PLAYER_EYE_HEIGHT;
                 let mut look_control = mob.get_mob_entity().look_control.lock().unwrap();
-                look_control.look_at(mob, player_pos.x, eye_y, player_pos.z);
+                // EndermanFreezeWhenLookedAt uses `lookAt(target, 10.0F, 10.0F)`;
+                // the generic LookControl limits pitch to 40 degrees for most mobs.
+                look_control.look_at_with_range(player_pos.x, eye_y, player_pos.z, 10.0, 10.0);
             }
         })
     }
