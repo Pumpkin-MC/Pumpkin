@@ -421,7 +421,12 @@ impl LightEngine {
         }
     }
 
-    pub fn initialize_light(&mut self, cache: &mut Cache, config: &LightingEngineConfig) {
+    pub fn initialize_light(
+        &mut self,
+        cache: &mut Cache,
+        config: &LightingEngineConfig,
+        has_skylight: bool,
+    ) {
         if *config != LightingEngineConfig::Default {
             return;
         }
@@ -434,7 +439,9 @@ impl LightEngine {
             return;
         }
 
-        self.sky_light.convert_light(cache);
+        if has_skylight {
+            self.sky_light.convert_light(cache);
+        }
         self.block_light.propagate_light(cache);
 
         self.block_light.clear();
@@ -588,7 +595,7 @@ mod sky_light_heightmap_tests {
         let seabed_y = 20;
         let mut cache = ocean_cache(seabed_y, surface_y);
         let mut engine = LightEngine::new();
-        engine.initialize_light(&mut cache, &LightingEngineConfig::Default);
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, true);
 
         let at = |cache: &Cache, y: i32| get_sky_light(cache, BlockPos(Vector3::new(8, y, 8)));
 
@@ -621,7 +628,7 @@ mod sky_light_heightmap_tests {
         let seabed_y = 57; // 5 water blocks: 58..=62
         let mut cache = ocean_cache(seabed_y, surface_y);
         let mut engine = LightEngine::new();
-        engine.initialize_light(&mut cache, &LightingEngineConfig::Default);
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, true);
 
         let at = |cache: &Cache, y: i32| get_sky_light(cache, BlockPos(Vector3::new(8, y, 8)));
 
@@ -635,7 +642,7 @@ mod sky_light_heightmap_tests {
     fn deep_enclosed_block_stays_dark_without_a_world_surface_heightmap() {
         let mut cache = cache_from_heightmapless_disk_chunks();
         let mut engine = LightEngine::new();
-        engine.initialize_light(&mut cache, &LightingEngineConfig::Default);
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, true);
 
         // Sections -4..=3 are solid stone, so y = 0 is buried under 64 blocks of
         // it with no sky access. A missing `WORLD_SURFACE` heightmap used to
@@ -657,5 +664,18 @@ mod sky_light_heightmap_tests {
         // The same run must still light open sky above the terrain, so the
         // assertions above are not just "everything is 0".
         assert_eq!(get_sky_light(&cache, BlockPos(Vector3::new(8, 100, 8))), 15);
+    }
+
+    #[test]
+    fn initialization_can_disable_sky_light_for_ceiling_dimensions() {
+        let mut cache = ocean_cache(20, 62);
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, false);
+
+        assert_eq!(get_sky_light(&cache, BlockPos(Vector3::new(8, 100, 8))), 0);
+        assert_eq!(
+            get_block_light(&cache, BlockPos(Vector3::new(8, 100, 8))),
+            0
+        );
     }
 }

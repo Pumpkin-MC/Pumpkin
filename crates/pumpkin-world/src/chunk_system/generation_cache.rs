@@ -542,7 +542,7 @@ impl Cache {
             },
             StagedChunkEnum::Lighting => {
                 let mut engine = crate::lighting::LightEngine::new();
-                engine.initialize_light(self, lighting_config);
+                engine.initialize_light(self, lighting_config, generator.dimension().has_skylight);
                 // Only set stage to Lighting if it wasn't already at Lighting or higher
                 // (initialize_light may short-circuit for already-lit chunks)
                 let chunk = self.chunks[mid].get_proto_chunk_mut();
