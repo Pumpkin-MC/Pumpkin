@@ -443,6 +443,7 @@ async fn register_server_event(
     event_type: EventType,
 ) {
     use crate::plugin::server::{
+        list_ping::ServerListPingEvent,
         packet::{PacketReceivedEvent, PacketSentEvent},
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
@@ -461,6 +462,10 @@ async fn register_server_event(
         }
         EventType::ServerCommandEvent => {
             register_typed_event::<ServerCommandEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::ServerListPingEvent => {
+            register_typed_event::<ServerListPingEvent>(resource, handler, priority, blocking)
+                .await;
         }
         EventType::ServerBroadcastEvent => {
             register_typed_event::<ServerBroadcastEvent>(resource, handler, priority, blocking)
@@ -544,6 +549,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             event_type @ (EventType::PacketReceivedEvent
             | EventType::PacketSentEvent
             | EventType::ServerCommandEvent
+            | EventType::ServerListPingEvent
             | EventType::ServerBroadcastEvent
             | EventType::ServerLoadEvent
             | EventType::ServerTickEndEvent
