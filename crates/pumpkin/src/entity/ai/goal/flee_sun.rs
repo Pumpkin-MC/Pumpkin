@@ -87,17 +87,21 @@ impl Goal for FleeSunGoal {
             }
             drop(target_lock);
 
-            // Must be on fire (visual fire flag) to activate this goal
-            // Note: fire_ticks tracks damage-tick counter; has_visual_fire tracks the on-fire visual state
-            if !entity.has_visual_fire.load(Relaxed) {
+            // Vanilla Entity.isOnFire() uses remaining fire ticks on the
+            // server; the shared visual-fire flag is only a client-side aid.
+            if entity.entity_type.fire_immune
+                || entity.fire_immune.load(Relaxed)
+                || entity.fire_ticks.load(Relaxed) <= 0
+            {
                 return false;
             }
 
             let world = entity.world.load();
 
             // Must be bright outside (daylight)
+            let is_fixed_time = world.dimension.fixed_time.is_some();
             let sky_darken = world.sky_darken.load(Relaxed);
-            if sky_darken >= BRIGHT_OUTSIDE_THRESHOLD {
+            if is_fixed_time || sky_darken >= BRIGHT_OUTSIDE_THRESHOLD {
                 return false;
             }
 
