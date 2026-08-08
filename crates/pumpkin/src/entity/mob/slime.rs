@@ -361,7 +361,11 @@ impl Mob for SlimeEntity {
                         pos.y + 0.5,
                         pos.z + zd as f64,
                     );
-                    let new_entity = Entity::new(world.clone(), new_pos, self.entity.living_entity.entity.entity_type);
+                    let new_entity = Entity::new(
+                        world.clone(),
+                        new_pos,
+                        self.entity.living_entity.entity.entity_type,
+                    );
                     let slime_like = Self::new(new_entity);
                     slime_like.set_size(half_size, true);
                     slime_like
