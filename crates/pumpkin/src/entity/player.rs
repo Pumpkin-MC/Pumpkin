@@ -603,7 +603,7 @@ impl Player {
         let img = image::load_from_memory(&buf).ok()?;
 
         let width = img.width();
-        let mut height = img.height();
+        let height = img.height();
 
         if width != 64 || (height != 32 && height != 64) {
             return None;
@@ -622,11 +622,6 @@ impl Player {
             if opaque_mask[pixel_index >> 3] & (1 << (pixel_index & 7)) != 0 {
                 rgba[pixel_index * 4 + 3] = u8::MAX;
             }
-        }
-
-        if height == 32 {
-            rgba.resize(64 * 64 * 4, 0);
-            height = 64;
         }
 
         let mut skin = pumpkin_protocol::bedrock::client::Skin::steve();
