@@ -1515,7 +1515,7 @@ impl JavaClient {
         swing_arm: SSwingArm,
     ) {
         player.update_last_action_time();
-        let Ok(hand) = Hand::try_from(swing_arm.hand.0) else {
+        let Ok(hand) = Hand::from_interaction_id(swing_arm.hand.0) else {
             self.kick(TextComponent::text("Invalid hand")).await;
             return;
         };
@@ -2449,7 +2449,7 @@ impl JavaClient {
             return Err(BlockPlacingError::InvalidBlockFace);
         };
 
-        let Ok(hand) = Hand::try_from(use_item_on.hand.0) else {
+        let Ok(hand) = Hand::from_interaction_id(use_item_on.hand.0) else {
             return Err(BlockPlacingError::InvalidHand);
         };
 
@@ -2464,12 +2464,12 @@ impl JavaClient {
         let held_item_empty = held_item.lock().await.is_empty();
         let off_hand_item_empty = off_hand_item.lock().await.is_empty();
 
-        let item = if matches!(hand, Hand::Left) {
+        let item = if matches!(hand, Hand::Right) {
             held_item
         } else {
             off_hand_item
         };
-        let equipment_slot = if matches!(hand, Hand::Left) {
+        let equipment_slot = if matches!(hand, Hand::Right) {
             EquipmentSlot::MAIN_HAND
         } else {
             EquipmentSlot::OFF_HAND
@@ -2532,7 +2532,7 @@ impl JavaClient {
             }
         }
 
-        let slot_index = if matches!(hand, Hand::Left) {
+        let slot_index = if matches!(hand, Hand::Right) {
             inventory.get_selected_slot() as usize
         } else {
             PlayerInventory::OFF_HAND_SLOT
@@ -2695,7 +2695,7 @@ impl JavaClient {
         player.update_last_action_time();
 
         let inventory = player.inventory();
-        let Ok(hand) = Hand::try_from(use_item.hand.0) else {
+        let Ok(hand) = Hand::from_interaction_id(use_item.hand.0) else {
             self.kick(TextComponent::text("InvalidHand")).await;
             return;
         };
@@ -3214,6 +3214,24 @@ mod tests {
     fn right_hand_uses_the_selected_inventory_slot() {
         assert!(uses_main_hand(Hand::Right));
         assert!(!uses_main_hand(Hand::Left));
+    }
+
+    /// `InteractionHand` is `MAIN_HAND(0)`/`OFF_HAND(1)` on the wire, which is the
+    /// opposite of the `HumanoidArm` `LEFT(0)`/`RIGHT(1)` encoding that
+    /// `ClientInformation.mainHand` uses. Decoding an interaction packet with the
+    /// latter silently swaps the player's hands, so pin the byte here rather than
+    /// only asserting the naming convention above.
+    #[test]
+    fn interaction_hand_id_zero_is_the_main_hand() {
+        assert_eq!(Hand::from_interaction_id(0).ok(), Some(Hand::Right));
+        assert_eq!(Hand::from_interaction_id(1).ok(), Some(Hand::Left));
+        assert!(Hand::from_interaction_id(2).is_err());
+
+        assert!(uses_main_hand(Hand::from_interaction_id(0).unwrap()));
+
+        // The client-settings encoding must stay as it was.
+        assert_eq!(Hand::try_from(0).ok(), Some(Hand::Left));
+        assert_eq!(Hand::try_from(1).ok(), Some(Hand::Right));
     }
 
     #[test]

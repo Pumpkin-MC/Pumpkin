@@ -264,15 +264,45 @@ impl Hand {
     pub const fn all() -> [Self; 2] {
         [Self::Right, Self::Left]
     }
+
+    /// Decodes the hand field of an *interaction* packet (use item, use item on
+    /// block, swing arm).
+    ///
+    /// Two distinct vanilla enums are both spelled `Hand` here, and they use
+    /// opposite wire encodings:
+    ///
+    /// - `InteractionHand` (`InteractionHand.java:10-12`) is `MAIN_HAND(0)`,
+    ///   `OFF_HAND(1)` and is what interaction packets carry.
+    /// - `HumanoidArm` is `LEFT(0)`, `RIGHT(1)` and is what
+    ///   `ClientInformation.mainHand` carries; that one is handled by the
+    ///   `TryFrom<i32>` impl below.
+    ///
+    /// This codebase resolves `Right` to the main hand everywhere downstream
+    /// (`equipment_slot_for_hand`, `get_stack_in_hand`, `swing_hand`), so an
+    /// interaction id of `0` must decode to `Right`.
+    ///
+    /// # Errors
+    /// Returns `InvalidHand` if the value is not 0 or 1.
+    pub const fn from_interaction_id(value: i32) -> Result<Self, InvalidHand> {
+        match value {
+            0 => Ok(Self::Right),
+            1 => Ok(Self::Left),
+            _ => Err(InvalidHand),
+        }
+    }
 }
 
 /// Error type for invalid hand conversion.
+#[derive(Debug)]
 pub struct InvalidHand;
 
 impl TryFrom<i32> for Hand {
     type Error = InvalidHand;
 
-    /// Converts an integer into a `Hand`.
+    /// Converts a `HumanoidArm` id into a `Hand`.
+    ///
+    /// This is the encoding used by `ClientInformation.mainHand`, **not** the
+    /// one used by interaction packets - see [`Hand::from_interaction_id`].
     ///
     /// # Parameters
     /// - `0`: `Left`
