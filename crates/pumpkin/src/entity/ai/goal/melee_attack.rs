@@ -19,7 +19,7 @@ const fn should_continue_melee_goal(
     if pause_when_mob_idle {
         target_in_range
     } else {
-        !navigation_idle || target_in_range
+        !navigation_idle
     }
 }
 
@@ -228,6 +228,8 @@ impl Goal for MeleeAttackGoal {
 
             let current_target_pos = target.get_entity().pos.load();
             let should_update_nav = self.update_countdown_ticks <= 0
+                && (self.pause_when_mob_idle
+                    || has_melee_line_of_sight(mob, target.as_ref()).await)
                 && (self.last_target_position.is_none_or(|last_pos| {
                     current_target_pos.squared_distance_to_vec(&last_pos) >= 1.0
                 }) || mob.get_random().random_range(0..20) == 0);
@@ -281,7 +283,7 @@ mod tests {
 
     #[test]
     fn in_range_targets_continue_when_navigation_is_idle() {
-        assert!(should_continue_melee_goal(false, true, true));
+        assert!(!should_continue_melee_goal(false, true, true));
         assert!(!should_continue_melee_goal(false, true, false));
         assert!(!should_continue_melee_goal(true, true, false));
         assert!(should_continue_melee_goal(true, false, true));
