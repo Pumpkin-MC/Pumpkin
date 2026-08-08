@@ -926,7 +926,7 @@ pub trait Mob: EntityBase + Send + Sync {
     /// Vanilla `Mob.wantsToPickUp` default: delegates to `canHoldItem`, which defaults to
     /// `true`. Whether picking up is ever attempted at all is gated separately by
     /// `can_pick_up_loot`.
-    fn wants_to_pick_up_item(&self, _stack: &ItemStack) -> bool {
+    fn wants_to_pick_up_item(&self, _world: &World, _stack: &ItemStack) -> bool {
         true
     }
 
@@ -977,7 +977,8 @@ pub trait Mob: EntityBase + Send + Sync {
                 }
 
                 let stack_snapshot = { item_entity.get_item_stack().lock().await.clone() };
-                if stack_snapshot.is_empty() || !self.wants_to_pick_up_item(&stack_snapshot) {
+                if stack_snapshot.is_empty() || !self.wants_to_pick_up_item(&world, &stack_snapshot)
+                {
                     continue;
                 }
 

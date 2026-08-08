@@ -117,6 +117,9 @@ use pumpkin_protocol::{
         server::play::SChatMessage,
     },
 };
+
+type RayShapeCheck =
+    fn(&World, &BlockPos, Vector3<f64>, Vector3<f64>) -> (bool, Option<BlockDirection>);
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
     java::client::play::{CBlockEvent, CRemoveMobEffect, CSetEquipment, CUpdateMobEffect},
@@ -6158,11 +6161,52 @@ impl World {
         (false, None)
     }
 
+    fn ray_collision_check(
+        &self,
+        block_pos: &BlockPos,
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+    ) -> (bool, Option<BlockDirection>) {
+        let state = self.get_block_state(block_pos);
+        for shape in state.get_block_collision_shapes() {
+            let world_min = shape.min.add(&block_pos.0.to_f64());
+            let world_max = shape.max.add(&block_pos.0.to_f64());
+
+            let direction = Self::intersects_aabb_with_direction(from, to, world_min, world_max);
+            if direction.is_some() {
+                return (true, direction);
+            }
+        }
+
+        (false, None)
+    }
+
     pub async fn raycast(
         self: &Arc<Self>,
         start_pos: Vector3<f64>,
         end_pos: Vector3<f64>,
         hit_check: impl AsyncFn(&BlockPos, &Arc<Self>) -> bool,
+    ) -> Option<(BlockPos, BlockDirection)> {
+        self.raycast_with_check(start_pos, end_pos, hit_check, Self::ray_outline_check)
+            .await
+    }
+
+    pub async fn raycast_collision(
+        self: &Arc<Self>,
+        start_pos: Vector3<f64>,
+        end_pos: Vector3<f64>,
+        hit_check: impl AsyncFn(&BlockPos, &Arc<Self>) -> bool,
+    ) -> Option<(BlockPos, BlockDirection)> {
+        self.raycast_with_check(start_pos, end_pos, hit_check, Self::ray_collision_check)
+            .await
+    }
+
+    async fn raycast_with_check(
+        self: &Arc<Self>,
+        start_pos: Vector3<f64>,
+        end_pos: Vector3<f64>,
+        hit_check: impl AsyncFn(&BlockPos, &Arc<Self>) -> bool,
+        shape_check: RayShapeCheck,
     ) -> Option<(BlockPos, BlockDirection)> {
         if start_pos == end_pos {
             return None;
@@ -6174,7 +6218,7 @@ impl World {
 
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
-        let (collision, direction) = self.ray_outline_check(&block, from, to);
+        let (collision, direction) = shape_check(self, &block, from, to);
         if let Some(dir) = direction
             && collision
         {
@@ -6256,7 +6300,7 @@ impl World {
             };
 
             if hit_check(&block, self).await {
-                let (collision, direction) = self.ray_outline_check(&block, from, to);
+                let (collision, direction) = shape_check(self, &block, from, to);
                 if collision {
                     if let Some(dir) = direction {
                         return Some((block, dir));
