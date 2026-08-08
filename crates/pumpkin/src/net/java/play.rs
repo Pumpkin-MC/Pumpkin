@@ -38,7 +38,7 @@ use crate::block::entities::jigsaw_block::JigsawBlockEntity;
 use crate::block::entities::sign::SignBlockEntity;
 use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
-use crate::world::{World, chunker};
+use crate::world::{BlockBreakingProgress, World, chunker};
 use pumpkin_data::block_properties::{BlockProperties, CommandBlockLikeProperties};
 use pumpkin_data::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl,
@@ -2052,7 +2052,19 @@ impl JavaClient {
                             player.mining.store(true, Ordering::Relaxed);
                             *player.mining_pos.lock().await = position;
                             let progress = (speed * 10.0) as i32;
-                            world.set_block_breaking(entity, position, progress).await;
+                            player
+                                .current_block_breaking_speed
+                                .store(speed.to_bits(), Ordering::Relaxed);
+                            world
+                                .set_block_breaking(
+                                    entity,
+                                    position,
+                                    BlockBreakingProgress::Start {
+                                        stage: progress,
+                                        speed,
+                                    },
+                                )
+                                .await;
                             player
                                 .current_block_destroy_stage
                                 .store(progress, Ordering::Relaxed);
@@ -2074,7 +2086,11 @@ impl JavaClient {
                     entity
                         .world
                         .load()
-                        .set_block_breaking(entity, player_action.position, -1)
+                        .set_block_breaking(
+                            entity,
+                            player_action.position,
+                            BlockBreakingProgress::Stop,
+                        )
                         .await;
                     self.update_sequence(player, player_action.sequence.0);
                 }
@@ -2095,7 +2111,9 @@ impl JavaClient {
                     let world = entity.world.load_full();
 
                     player.mining.store(false, Ordering::Relaxed);
-                    world.set_block_breaking(entity, location, -1).await;
+                    world
+                        .set_block_breaking(entity, location, BlockBreakingProgress::Stop)
+                        .await;
 
                     let (block, state) = world.get_block_and_state(&location);
                     let block_drop = player.gamemode.load() != GameMode::Creative
