@@ -121,6 +121,16 @@ impl NetherNetDiscovery {
             server.advanced_config.networking.bedrock.online_mode,
         )?;
         self.socket.send_to(&response, address).await?;
+        trace!(
+            %address,
+            network_id = self.network_id,
+            advertisement_id = format_args!("{:016x}", self.advertisement_id),
+            version = SERVER_DATA_VERSION,
+            players,
+            max_players = server.advanced_config.networking.bedrock.max_players,
+            online_mode = server.advanced_config.networking.bedrock.online_mode,
+            "Sent NetherNet LAN discovery response"
+        );
         Ok(())
     }
 
@@ -138,15 +148,18 @@ impl NetherNetDiscovery {
         let (Some(signal_type), Some(connection_id), Some(data)) =
             (parts.next(), parts.next(), parts.next())
         else {
+            trace!(%address, sender_id, "Ignored empty or malformed NetherNet LAN signal");
             return;
         };
         let Ok(connection_id) = connection_id.parse::<u64>() else {
+            trace!(%address, sender_id, "Ignored NetherNet LAN signal with invalid connection ID");
             return;
         };
         let key = (sender_id, connection_id);
 
         match signal_type {
             "CONNECTREQUEST" => {
+                trace!(%address, sender_id, connection_id, "Accepted NetherNet LAN connection request");
                 let (candidate_sender, candidate_receiver) = mpsc::unbounded_channel();
                 self.candidates.lock().await.insert(key, candidate_sender);
 
@@ -170,6 +183,8 @@ impl NetherNetDiscovery {
                         Ok(response) => {
                             if let Err(error) = socket.send_to(&response, address).await {
                                 warn!("Failed to send NetherNet LAN signal to {address}: {error}");
+                            } else {
+                                trace!(%address, sender_id, connection_id, "Sent NetherNet LAN connection response");
                             }
                         }
                         Err(error) => warn!("Failed to encode NetherNet LAN signal: {error}"),
@@ -186,6 +201,9 @@ impl NetherNetDiscovery {
                     });
                 if let Some(sender) = self.candidates.lock().await.get(&key) {
                     let _ = sender.send(candidate);
+                    trace!(%address, sender_id, connection_id, "Forwarded NetherNet LAN ICE candidate");
+                } else {
+                    trace!(%address, sender_id, connection_id, "Ignored NetherNet LAN ICE candidate for unknown connection");
                 }
             }
             signal_type => debug!("Ignoring NetherNet LAN signal {signal_type}"),
