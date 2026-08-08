@@ -1,8 +1,7 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
-use std::sync::{Arc, Weak};
 
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -15,11 +14,9 @@ use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
-    ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        squid_flee::SquidFleeGoal, wander_around::WanderAroundGoal,
-    },
+    ai::goal::squid_flee::SquidFleeGoal,
     mob::{Mob, MobEntity},
+    passive::squid::SquidRandomMovementGoal,
 };
 
 /// `GlowSquid.hurtServer`: dark ticks reset to this value on a successful hit.
@@ -31,6 +28,9 @@ const DARK_TICKS_ON_HURT: i32 = 100;
 pub struct GlowSquidEntity {
     pub mob_entity: MobEntity,
     dark_ticks_remaining: AtomicI32,
+    movement_vector: crossbeam::atomic::AtomicCell<Vector3<f64>>,
+    tentacle_movement: crossbeam::atomic::AtomicCell<f64>,
+    tentacle_speed: crossbeam::atomic::AtomicCell<f64>,
 }
 
 impl GlowSquidEntity {
@@ -39,28 +39,19 @@ impl GlowSquidEntity {
         let glow_squid = Self {
             mob_entity,
             dark_ticks_remaining: AtomicI32::new(0),
+            movement_vector: crossbeam::atomic::AtomicCell::new(Vector3::default()),
+            tentacle_movement: crossbeam::atomic::AtomicCell::new(0.0),
+            tentacle_speed: crossbeam::atomic::AtomicCell::new(
+                1.0 / (rand::random::<f64>() + 1.0) * 0.2,
+            ),
         };
         let mob_arc = Arc::new(glow_squid);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
-
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            // Vanilla `Squid.registerGoals` (inherited by `GlowSquid`) has no float/swim goal.
-            // See the identical note in squid.rs: vanilla GlowSquid inherits Squid's
-            // jet-propulsion `aiStep`/neutered `travel`, which isn't portable without a
-            // travel-override hook this codebase doesn't have yet.
-            // See squid.rs for why SquidFleeGoal is 0 (higher priority) instead of vanilla's 1.
-            goal_selector.add_goal(0, SquidFleeGoal::new());
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
-            goal_selector.add_goal(
-                2,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
-            );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            // Glow squid inherits `Squid.registerGoals`; see `Squid.java:57-61`.
+            goal_selector.add_goal(0, Box::new(SquidRandomMovementGoal));
+            goal_selector.add_goal(1, SquidFleeGoal::new());
         };
 
         mob_arc
@@ -103,6 +94,48 @@ impl Mob for GlowSquidEntity {
         &self.mob_entity
     }
 
+    fn set_movement_vector(&self, movement: Vector3<f64>) {
+        self.movement_vector.store(movement);
+    }
+
+    fn get_movement_vector(&self) -> Option<Vector3<f64>> {
+        Some(self.movement_vector.load())
+    }
+
+    fn custom_travel<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            let entity = &self.mob_entity.living_entity.entity;
+            let mut velocity = entity.velocity.load();
+            if entity
+                .touching_water
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                let phase = self.tentacle_movement.load();
+                if phase < std::f64::consts::PI {
+                    if phase / std::f64::consts::PI > 0.75 {
+                        velocity = self.movement_vector.load();
+                    }
+                } else {
+                    velocity = velocity * 0.9;
+                }
+            } else {
+                let levitation = self
+                    .mob_entity
+                    .living_entity
+                    .get_effect(&pumpkin_data::effect::StatusEffect::LEVITATION)
+                    .await;
+                let y = levitation.map_or_else(
+                    || velocity.y - self.get_mob_gravity(),
+                    |effect| 0.05 * f64::from(effect.amplifier + 1),
+                );
+                velocity = Vector3::new(0.0, y * 0.98, 0.0);
+            }
+            entity.set_velocity(velocity);
+            entity.move_entity(caller, velocity).await;
+            true
+        })
+    }
+
     fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             self.send_dark_ticks(self.dark_ticks_remaining.load(Relaxed));
@@ -117,6 +150,16 @@ impl Mob for GlowSquidEntity {
             if self.mob_entity.living_entity.dead.load(Relaxed) {
                 return;
             }
+
+            let mut phase = self.tentacle_movement.load() + self.tentacle_speed.load();
+            if phase > std::f64::consts::TAU {
+                phase -= std::f64::consts::TAU;
+                if rand::rng().random_range(0..10) == 0 {
+                    self.tentacle_speed
+                        .store(1.0 / (rand::random::<f64>() + 1.0) * 0.2);
+                }
+            }
+            self.tentacle_movement.store(phase);
 
             let remaining = self.dark_ticks_remaining.load(Relaxed);
             if remaining > 0 {

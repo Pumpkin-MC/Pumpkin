@@ -1,58 +1,45 @@
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
+
+use crossbeam::atomic::AtomicCell;
 
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::vector3::Vector3;
+use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
-    ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        squid_flee::SquidFleeGoal, wander_around::WanderAroundGoal,
-    },
+    ai::goal::{Goal, GoalFuture, squid_flee::SquidFleeGoal},
     mob::{Mob, MobEntity},
 };
 
 pub struct SquidEntity {
     pub mob_entity: MobEntity,
+    movement_vector: AtomicCell<Vector3<f64>>,
+    tentacle_movement: AtomicCell<f64>,
+    tentacle_speed: AtomicCell<f64>,
 }
 
 impl SquidEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let squid = Self { mob_entity };
-        let mob_arc = Arc::new(squid);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
+        let squid = Self {
+            mob_entity,
+            movement_vector: AtomicCell::new(Vector3::default()),
+            tentacle_movement: AtomicCell::new(0.0),
+            tentacle_speed: AtomicCell::new(1.0 / (rand::random::<f64>() + 1.0) * 0.2),
         };
-
+        let mob_arc = Arc::new(squid);
         {
             let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
-            // Vanilla `Squid.registerGoals` has no float/swim goal at all: squids are always
-            // in water and don't need to surface.
-            // NOTE: vanilla Squid has no WanderAroundGoal at all - locomotion instead comes
-            // entirely from Squid.aiStep's jet-propulsion physics (a `movementVector` applied
-            // directly to velocity, with `travel()` neutered to skip the generic AI-movement
-            // path). That physics is NOT ported here: this codebase has no per-mob hook to
-            // override/neuter the generic travel_in_fluid/travel_in_air path (they are
-            // concrete LivingEntity methods, not part of the Mob trait), so a real port would
-            // either need that hook added first or would double-apply movement on top of the
-            // goal-driven system. Kept as the existing placeholder rather than removed, since
-            // removing it with no replacement would leave squids unable to move at all.
-            // Vanilla `Squid.registerGoals` puts `SquidFleeGoal` above `SquidRandomMovementGoal`
-            // (priorities 1 and 0 respectively); reversed here so fleeing can interrupt the
-            // `WanderAroundGoal` placeholder, which occupies priority 1 rather than 0.
-            goal_selector.add_goal(0, SquidFleeGoal::new());
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(0.6)));
-            goal_selector.add_goal(
-                2,
-                LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
-            );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            // `Squid.registerGoals` (`animal/squid/Squid.java:57-61`) contains exactly these
+            // two goals. They intentionally do not claim MOVE: both write the shared
+            // movementVector, and the flee goal runs after random movement and overwrites it.
+            goal_selector.add_goal(0, Box::new(SquidRandomMovementGoal));
+            goal_selector.add_goal(1, SquidFleeGoal::new());
         };
 
         mob_arc
@@ -67,6 +54,15 @@ impl SquidEntity {
     pub const fn squirt_sound(&self) -> Sound {
         Sound::EntitySquidSquirt
     }
+
+    pub fn set_movement_vector(&self, movement: Vector3<f64>) {
+        self.movement_vector.store(movement);
+    }
+
+    #[must_use]
+    pub fn movement_vector(&self) -> Vector3<f64> {
+        self.movement_vector.load()
+    }
 }
 
 impl NBTStorage for SquidEntity {}
@@ -74,6 +70,76 @@ impl NBTStorage for SquidEntity {}
 impl Mob for SquidEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn set_movement_vector(&self, movement: Vector3<f64>) {
+        self.set_movement_vector(movement);
+    }
+
+    fn get_movement_vector(&self) -> Option<Vector3<f64>> {
+        Some(self.movement_vector())
+    }
+
+    /// `Squid.travel` (`animal/squid/Squid.java:200-203`) moves using the current velocity and
+    /// deliberately skips generic `LivingEntity.travel`. `Squid.aiStep` (`:112-164`) supplies
+    /// the water jet propulsion and the gravity/drag fallback outside water.
+    fn custom_travel<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            let entity = &self.mob_entity.living_entity.entity;
+            let mut velocity = entity.velocity.load();
+
+            if entity
+                .touching_water
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                let movement = self.movement_vector();
+                let phase = self.tentacle_movement.load();
+                if phase < std::f64::consts::PI {
+                    if phase / std::f64::consts::PI > 0.75 {
+                        velocity = movement;
+                    }
+                } else {
+                    velocity = velocity * 0.9;
+                }
+            } else {
+                let levitation = self
+                    .mob_entity
+                    .living_entity
+                    .get_effect(&StatusEffect::LEVITATION)
+                    .await;
+                let y = levitation.map_or_else(
+                    || velocity.y - self.get_mob_gravity(),
+                    |effect| 0.05 * f64::from(effect.amplifier + 1),
+                );
+                velocity = Vector3::new(0.0, y * 0.98, 0.0);
+            }
+
+            entity.set_velocity(velocity);
+            entity.move_entity(caller, velocity).await;
+            true
+        })
+    }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            if self
+                .mob_entity
+                .living_entity
+                .dead
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                return;
+            }
+            let mut phase = self.tentacle_movement.load() + self.tentacle_speed.load();
+            if phase > std::f64::consts::TAU {
+                phase -= std::f64::consts::TAU;
+                if rand::rng().random_range(0..10) == 0 {
+                    self.tentacle_speed
+                        .store(1.0 / (rand::random::<f64>() + 1.0) * 0.2);
+                }
+            }
+            self.tentacle_movement.store(phase);
+        })
     }
 
     /// `Squid.hurtServer`: on a successful hit with a known attacker, spawns an ink cloud and
@@ -101,5 +167,37 @@ impl Mob for SquidEntity {
             );
             world.play_sound(self.squirt_sound(), SoundCategory::Neutral, &pos);
         })
+    }
+}
+
+/// `Squid.SquidRandomMovementGoal` (`animal/squid/Squid.java:294-317`).
+///
+/// The movement vector is shared with `SquidFleeGoal`; because neither goal claims a control, the
+/// flee goal can replace this vector in the same tick when the squid was recently hurt.
+pub struct SquidRandomMovementGoal;
+
+impl Goal for SquidRandomMovementGoal {
+    fn can_start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
+        Box::pin(async { true })
+    }
+
+    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async move {
+            let Some(movement) = mob.get_movement_vector() else {
+                return;
+            };
+            if mob.get_random().random_range(0..50) == 0 || movement.length_squared() <= 1.0e-5 {
+                let angle = mob.get_random().random_range(0.0..std::f64::consts::TAU);
+                mob.set_movement_vector(Vector3::new(
+                    angle.cos() * 0.2,
+                    -0.1 + mob.get_random().random_range(0.0..0.2),
+                    angle.sin() * 0.2,
+                ));
+            }
+        })
+    }
+
+    fn should_run_every_tick(&self) -> bool {
+        true
     }
 }

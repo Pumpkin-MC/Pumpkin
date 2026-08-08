@@ -1046,19 +1046,27 @@ impl LivingEntity {
             self.fall_distance.store(0.0);
         }
 
-        let touching_water = self.entity.touching_water.load(SeqCst);
-
-        // Strider is the only entity that has canWalkOnFluid = false
-
-        if (touching_water || self.entity.touching_lava.load(SeqCst))
-            && should_swim_in_fluids
-            && self.entity.entity_type != &EntityType::STRIDER
-        {
-            self.travel_in_fluid(caller, touching_water).await;
+        let custom_travel = if let Some(mob) = caller.get_mob() {
+            mob.custom_travel(caller).await
         } else {
-            // TODO: Gliding
+            false
+        };
 
-            self.travel_in_air(caller).await;
+        if !custom_travel {
+            let touching_water = self.entity.touching_water.load(SeqCst);
+
+            // Strider is the only entity that has canWalkOnFluid = false
+
+            if (touching_water || self.entity.touching_lava.load(SeqCst))
+                && should_swim_in_fluids
+                && self.entity.entity_type != &EntityType::STRIDER
+            {
+                self.travel_in_fluid(caller, touching_water).await;
+            } else {
+                // TODO: Gliding
+
+                self.travel_in_air(caller).await;
+            }
         }
 
         // TODO: Apply Soul Speed boot durability when tick_block_underneath is implemented.

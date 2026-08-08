@@ -669,6 +669,22 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
+    /// Hook for mobs whose vanilla `travel` implementation replaces the generic living-mob
+    /// movement path (for example `Squid.travel`, which moves with its current movement vector).
+    /// Returning `true` means the hook has already moved the entity for this tick.
+    fn custom_travel<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async { false })
+    }
+
+    /// Vanilla custom-travel goals can publish a movement vector without taking over the
+    /// navigator. The default is inert for ordinary mobs.
+    fn set_movement_vector(&self, _movement: Vector3<f64>) {}
+
+    #[must_use]
+    fn get_movement_vector(&self) -> Option<Vector3<f64>> {
+        None
+    }
+
     fn post_tick(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {})
     }
