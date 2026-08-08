@@ -86,7 +86,12 @@ impl TrackTargetGoal {
             return false;
         }
 
-        // TODO: isInPositionTargetRange (isWithinHome in Java) check
+        // Vanilla TargetGoal.isWithinHome(target.blockPosition()). Pumpkin's position target
+        // and range are the existing home/restriction representation; a range of -1 is
+        // unrestricted, matching vanilla's homeRadius sentinel.
+        if !mob_entity.is_in_position_target_range_pos(&target.entity.block_pos.load()) {
+            return false;
+        }
 
         if self.check_can_navigate {
             let cooldown = self
