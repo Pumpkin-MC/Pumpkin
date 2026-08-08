@@ -50,7 +50,9 @@ use crate::STOP_INTERRUPT;
 
 const RELIABLE_CHANNEL: &str = "ReliableDataChannel";
 const UNRELIABLE_CHANNEL: &str = "UnreliableDataChannel";
-const MAX_FRAGMENT_SIZE: usize = 262_143;
+// NetherNet splits encoded packets that exceed 10,000 bytes into application-level
+// segments. Larger SCTP messages are rejected by some Bedrock clients.
+const MAX_FRAGMENT_SIZE: usize = 10_000;
 const MAX_SDP_SIZE: usize = 1 << 20;
 
 type IncomingSession = (Arc<NetherNetSession>, SocketAddr);
@@ -725,6 +727,16 @@ mod tests {
         assert!(fragments.push(2, b"one").unwrap().is_none());
         assert!(fragments.push(1, b"two").unwrap().is_none());
         assert_eq!(fragments.push(0, b"three").unwrap().unwrap(), "onetwothree");
+    }
+
+    #[test]
+    fn outbound_payloads_are_split_at_the_nethernet_limit() {
+        let payload = vec![0; MAX_FRAGMENT_SIZE + 1];
+        let chunks = payload.chunks(MAX_FRAGMENT_SIZE).collect::<Vec<_>>();
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].len(), 10_000);
+        assert_eq!(chunks[1].len(), 1);
     }
 
     #[test]

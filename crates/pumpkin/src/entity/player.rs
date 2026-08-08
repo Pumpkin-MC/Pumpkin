@@ -552,6 +552,11 @@ use pumpkin_protocol::Property;
 use serde::Deserialize;
 use std::io::Read;
 
+// Bit masks for the Java skin pixels that Bedrock requires to be opaque.
+// Adapted from Geyser's SkinProvider under the MIT License.
+const SKIN_OPAQUE_MASK: &str = "AP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAADwD/D/D/8AAPAP8P8P/wAA8A/w/w//AADwD/D/D/8AAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwD/APAAAAAPAP8A8AAAAA8A/wDwAAAADwD/APAAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAA=";
+const LEGACY_SKIN_OPAQUE_MASK: &str = "AP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAADwD/D/D/APAPAP8P8P8A8A8A/w/w/wDwDwD/D/D/APAP////////8A/////////wD/////////AP////////8A/////////wD/////////AP////////8A/////////wD/////////AP////////8A/////////wD/////////AA==";
+
 #[derive(Deserialize)]
 struct TexturesProperty {
     textures: Textures,
@@ -606,18 +611,31 @@ impl Player {
 
         let mut rgba = img.into_rgba8().into_raw();
 
+        let opaque_mask = BASE64_STANDARD
+            .decode(if height == 32 {
+                LEGACY_SKIN_OPAQUE_MASK
+            } else {
+                SKIN_OPAQUE_MASK
+            })
+            .ok()?;
+        for pixel_index in 0..(width * height) as usize {
+            if opaque_mask[pixel_index >> 3] & (1 << (pixel_index & 7)) != 0 {
+                rgba[pixel_index * 4 + 3] = u8::MAX;
+            }
+        }
+
         if height == 32 {
             rgba.resize(64 * 64 * 4, 0);
             height = 64;
         }
 
         let mut skin = pumpkin_protocol::bedrock::client::Skin::steve();
-        if is_slim {
-            skin.arm_size = "slim".to_string();
-        }
+        skin.set_slim(is_slim);
         skin.image_width = width;
         skin.image_height = height;
         skin.skin_data = rgba;
+        skin.skin_id.clone_from(&url);
+        skin.full_id = url;
         Some(skin)
     }
 
@@ -668,12 +686,20 @@ impl Player {
         abilities.set_for_gamemode(gamemode);
 
         let properties = gameprofile.properties.load().clone();
-        let bedrock_skin = tokio::task::spawn_blocking(move || {
+        let mut bedrock_skin = tokio::task::spawn_blocking(move || {
             Self::fetch_skin(&properties)
                 .unwrap_or_else(pumpkin_protocol::bedrock::client::Skin::steve)
         })
         .await
         .unwrap_or_else(|_| pumpkin_protocol::bedrock::client::Skin::steve());
+
+        // Standard_Custom is a shared placeholder. Give fallback skins a stable,
+        // per-player identity so Bedrock never sees duplicate skin IDs.
+        if bedrock_skin.skin_id == "Standard_Custom" {
+            let skin_id = format!("pumpkin:{player_uuid}");
+            bedrock_skin.skin_id.clone_from(&skin_id);
+            bedrock_skin.full_id = skin_id;
+        }
 
         Self {
             living_entity,
