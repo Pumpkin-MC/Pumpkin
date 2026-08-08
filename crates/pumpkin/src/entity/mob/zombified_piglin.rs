@@ -208,13 +208,22 @@ impl ZombifiedPiglinEntity {
 
     async fn has_line_of_sight(&self, target: &Arc<dyn EntityBase>) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
-        let world = entity.world.load();
+        let target_entity = target.get_entity();
+        let from = entity.get_eye_pos();
+        let to = target_entity.get_eye_pos();
+        if from.squared_distance_to_vec(&to) > 128.0 * 128.0 {
+            return false;
+        }
+
+        let world = entity.world.load_full();
+        if !Arc::ptr_eq(&world, &target_entity.world.load_full()) {
+            return false;
+        }
+
         world
-            .raycast(
-                entity.get_eye_pos(),
-                target.get_entity().get_eye_pos(),
-                async |block_pos, world| world.get_block_state(block_pos).is_solid(),
-            )
+            .raycast_collision(from, to, async |block_pos, world| {
+                !world.get_block_state(block_pos).collision_shapes.is_empty()
+            })
             .await
             .is_none()
     }
