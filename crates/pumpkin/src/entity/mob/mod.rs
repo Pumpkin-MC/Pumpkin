@@ -153,8 +153,14 @@ impl MobEntity {
         if position_target_range == -1 {
             true
         } else {
-            self.position_target.load().squared_distance(block_pos)
-                < position_target_range * position_target_range
+            let target = self.position_target.load();
+            let dx = f64::from(target.0.x) - f64::from(block_pos.0.x);
+            let dy = f64::from(target.0.y) - f64::from(block_pos.0.y);
+            let dz = f64::from(target.0.z) - f64::from(block_pos.0.z);
+            // Java evaluates homeRadius * homeRadius as an int before comparing it to the
+            // double distance, so preserve its two's-complement overflow behavior.
+            let range_squared = position_target_range.wrapping_mul(position_target_range);
+            dx.mul_add(dx, dy.mul_add(dy, dz * dz)) < f64::from(range_squared)
         }
     }
 
