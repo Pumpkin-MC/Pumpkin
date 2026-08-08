@@ -498,7 +498,8 @@ impl WitherNearestTargetGoal {
             let Some(living) = candidate.get_living_entity() else {
                 continue;
             };
-            if mob.can_attack(candidate.get_entity())
+            if !TrackTargetGoal::is_allied(mob, candidate.as_ref()).await
+                && mob.can_attack(candidate.get_entity())
                 && self
                     .target_predicate
                     .test(&world, Some(&mob.get_mob_entity().living_entity), living)

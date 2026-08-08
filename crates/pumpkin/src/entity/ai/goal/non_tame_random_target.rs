@@ -120,6 +120,7 @@ impl NonTameRandomTargetGoal {
 
         if let Some(potential_entity) = potential_entity
             && let Some(living) = potential_entity.get_living_entity()
+            && !TrackTargetGoal::is_allied(mob, potential_entity.as_ref()).await
             && mob.can_attack(potential_entity.get_entity())
             && self
                 .target_predicate

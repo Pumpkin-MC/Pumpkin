@@ -145,6 +145,7 @@ impl NearestHostileTargetGoal {
             // Vanilla `TargetingConditions.test` (combat branch, `TargetingConditions.java:78`)
             // consults `targeter.canAttack(target)` before the rest of the predicate.
             if let Some(living) = entity.get_living_entity()
+                && !TrackTargetGoal::is_allied(mob, entity.as_ref()).await
                 && mob.can_attack(entity.get_entity())
                 && self
                     .target_predicate

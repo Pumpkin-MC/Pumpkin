@@ -119,7 +119,8 @@ impl ActiveTargetGoal {
             for player in candidates {
                 // Vanilla `TargetingConditions.test` (combat branch, `TargetingConditions.java:78`)
                 // consults `targeter.canAttack(target)` before the rest of the predicate.
-                if mob.can_attack(player.get_entity())
+                if !TrackTargetGoal::is_allied(mob, player.as_ref()).await
+                    && mob.can_attack(player.get_entity())
                     && self
                         .target_predicate
                         .test(
@@ -146,6 +147,7 @@ impl ActiveTargetGoal {
             let mut result = None;
             for entity in candidates {
                 if let Some(living) = entity.get_living_entity()
+                    && !TrackTargetGoal::is_allied(mob, entity.as_ref()).await
                     && mob.can_attack(entity.get_entity())
                     && self
                         .target_predicate

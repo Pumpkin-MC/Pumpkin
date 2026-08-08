@@ -118,6 +118,10 @@ impl Goal for RevengeGoal {
                 return false;
             }
 
+            if TrackTargetGoal::is_allied(mob, attacker.as_ref()).await {
+                return false;
+            }
+
             if !self
                 .target_predicate
                 .test(&world, Some(&mob_entity.living_entity), attacker_living)

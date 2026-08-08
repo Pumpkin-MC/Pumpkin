@@ -71,7 +71,8 @@ impl NearestAttackableWitchTargetGoal {
 
         self.target = None;
         for player in candidates {
-            if mob.can_attack(player.get_entity())
+            if !TrackTargetGoal::is_allied(mob, player.as_ref()).await
+                && mob.can_attack(player.get_entity())
                 && self
                     .target_predicate
                     .test(

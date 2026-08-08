@@ -1,15 +1,61 @@
 use super::{Controls, Goal, to_goal_ticks};
+use crate::entity::EntityBase;
 use crate::entity::ai::goal::GoalFuture;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
+use crate::world::World;
+use crate::world::scoreboard::entity_scoreboard_name;
 use pumpkin_data::attributes::Attributes;
 use rand::RngExt;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicI32, Ordering};
+use uuid::Uuid;
 
 const UNSET: i32 = 0;
 const CAN_TRACK: i32 = 1;
 const CANNOT_TRACK: i32 = 2;
+
+fn team_name(
+    world: &World,
+    scoreboard: &crate::world::scoreboard::Scoreboard,
+    entity: &dyn EntityBase,
+    visited: &mut HashSet<Uuid>,
+) -> Option<String> {
+    if !visited.insert(entity.get_entity().entity_uuid) {
+        return None;
+    }
+
+    if let Some(team) = scoreboard.get_team_for_scoreboard_name(&entity_scoreboard_name(entity)) {
+        return Some(team.name.clone());
+    }
+
+    let owner_uuid = entity.get_mob().and_then(Mob::get_owner_uuid)?;
+    let owner = world.get_entity_by_uuid(owner_uuid)?;
+    team_name(world, scoreboard, owner.as_ref(), visited)
+}
+
+fn owner_chain_contains(
+    world: &World,
+    entity: &dyn EntityBase,
+    wanted_uuid: Uuid,
+    visited: &mut HashSet<Uuid>,
+) -> bool {
+    if !visited.insert(entity.get_entity().entity_uuid) {
+        return false;
+    }
+
+    let Some(owner_uuid) = entity.get_mob().and_then(Mob::get_owner_uuid) else {
+        return false;
+    };
+    if owner_uuid == wanted_uuid {
+        return true;
+    }
+
+    world
+        .get_entity_by_uuid(owner_uuid)
+        .is_some_and(|owner| owner_chain_contains(world, owner.as_ref(), wanted_uuid, visited))
+}
 
 pub struct TrackTargetGoal {
     goal_control: Controls,
@@ -40,6 +86,31 @@ impl TrackTargetGoal {
 
     pub fn with_default(check_visibility: bool) -> Self {
         Self::new(check_visibility, false)
+    }
+
+    /// Vanilla `Entity.isAlliedTo`: scoreboard teams plus the owner alliance supplied by
+    /// `TamableAnimal.considersEntityAsAlly`.
+    pub async fn is_allied(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
+        let world = mob.get_entity().world.load();
+        let scoreboard = world.scoreboard.lock().await;
+        let mob_team = team_name(&world, &scoreboard, mob, &mut HashSet::new());
+        let target_team = team_name(&world, &scoreboard, target, &mut HashSet::new());
+        let same_team = mob_team.is_some() && mob_team == target_team;
+        drop(scoreboard);
+
+        same_team
+            || owner_chain_contains(
+                &world,
+                mob,
+                target.get_entity().entity_uuid,
+                &mut HashSet::new(),
+            )
+            || owner_chain_contains(
+                &world,
+                target,
+                mob.get_entity().entity_uuid,
+                &mut HashSet::new(),
+            )
     }
 
     pub const fn set_unseen_memory_ticks(mut self, ticks: i32) -> Self {
@@ -150,7 +221,9 @@ impl Goal for TrackTargetGoal {
                 return false;
             }
 
-            // TODO: Team checks (return false if on the same team)
+            if Self::is_allied(mob, target_base.as_ref()).await {
+                return false;
+            }
 
             let dist_sq = mob_entity
                 .living_entity

@@ -97,6 +97,7 @@ impl GhastNearestPlayerTargetGoal {
         let mut result = None;
         for player in candidates {
             if within_vertical_range(player.get_entity().pos.load().y, ghast_y)
+                && !TrackTargetGoal::is_allied(mob, player.as_ref()).await
                 && mob.can_attack(player.get_entity())
                 && self
                     .target_predicate
