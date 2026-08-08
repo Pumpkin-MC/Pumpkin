@@ -5,7 +5,7 @@ use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, NBTStorage,
     ai::goal::{
         Controls, Goal, GoalFuture, active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
@@ -29,7 +29,9 @@ impl SpiderAttackGoal {
 
 impl Goal for SpiderAttackGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        self.melee.can_start(mob)
+        Box::pin(
+            async move { self.melee.can_start(mob).await && !mob.get_entity().is_vehicle().await },
+        )
     }
 
     fn should_continue<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
