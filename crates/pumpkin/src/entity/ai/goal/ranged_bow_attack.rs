@@ -89,24 +89,20 @@ impl RangedBowAttackGoal {
         let mut arrow_pos = shooter.get_eye_pos();
         arrow_pos.y -= 0.1;
         let target_pos = target.get_entity().pos.load();
-        Self::target_vector_from_positions(
-            arrow_pos,
-            target_pos,
-            target.get_entity().get_eye_height(),
-        )
+        Self::target_vector_from_positions(arrow_pos, target_pos, target.get_entity().height())
     }
 
     fn target_vector_from_positions(
         arrow_pos: Vector3<f64>,
         target_pos: Vector3<f64>,
-        target_eye_height: f64,
+        target_height: f32,
     ) -> Vector3<f64> {
         let horizontal_distance = (target_pos.x - arrow_pos.x).hypot(target_pos.z - arrow_pos.z);
 
         // Vanilla: target.getY(1 / 3) - arrow.getY() + horizontalDistance * 0.2.
         Vector3::new(
             target_pos.x - arrow_pos.x,
-            target_pos.y + target_eye_height / 3.0 - arrow_pos.y + horizontal_distance * 0.2,
+            target_pos.y + f64::from(target_height) / 3.0 - arrow_pos.y + horizontal_distance * 0.2,
             target_pos.z - arrow_pos.z,
         )
     }
@@ -135,10 +131,11 @@ impl RangedBowAttackGoal {
             ArrowEntity::new_shot(arrow_entity, shooter, &arrow_item, ArrowPickup::Disallowed);
         let direction = Self::target_vector(shooter, target);
 
-        // `AbstractSkeleton#performRangedAttack`: power 1.6, inaccuracy 14 - difficulty * 4.
-        // Normal difficulty is the server default, so use its 10 degree inaccuracy until
-        // local difficulty is represented by the world API.
-        arrow.set_velocity(direction.x, direction.y, direction.z, 1.6, 10.0);
+        // `AbstractSkeleton#performRangedAttack`: power 1.6, inaccuracy
+        // `14 - level.getDifficulty().getId() * 4`.
+        let difficulty = world.level_info.load().difficulty as i32;
+        let inaccuracy = f64::from(14 - difficulty * 4);
+        arrow.set_velocity(direction.x, direction.y, direction.z, 1.6, inaccuracy);
         world.spawn_entity(Arc::new(arrow)).await;
 
         let sound = CSoundEffect::new(
@@ -268,6 +265,6 @@ mod tests {
         assert_eq!(direction.x, 3.0);
         assert_eq!(direction.z, 4.0);
         // target Y + targetEyeHeight / 3 - arrow Y + horizontalDistance * 0.2
-        assert!((direction.y - 0.08).abs() < f64::EPSILON);
+        assert!((direction.y - 0.08).abs() < 1.0e-6);
     }
 }
