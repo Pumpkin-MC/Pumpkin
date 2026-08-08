@@ -49,7 +49,7 @@ impl FollowParentGoal {
                 continue;
             }
             let dist_sq = pos.squared_distance_to_vec(&c_pos);
-            if closest.as_ref().is_none_or(|(d, _)| dist_sq < *d) {
+            if closest.as_ref().is_none_or(|(d, _)| dist_sq <= *d) {
                 closest = Some((dist_sq, candidate.clone()));
             }
         }
