@@ -258,7 +258,6 @@ pub struct AnvilScreenHandler {
 }
 
 impl AnvilScreenHandler {
-    #[expect(clippy::needless_pass_by_value)]
     pub fn new(
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,

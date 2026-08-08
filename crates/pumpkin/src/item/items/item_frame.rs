@@ -35,41 +35,6 @@ impl ItemFrameItem {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn placement_box_is_thin_along_the_facing_axis() {
-        let position = Vector3::new(10.0, 20.0, 30.0);
-
-        let north = ItemFrameEntity::pop_box(position, BlockDirection::North);
-        assert_eq!(north.max.x - north.min.x, 0.75);
-        assert_eq!(north.max.y - north.min.y, 0.75);
-        assert_eq!(north.max.z - north.min.z, 0.0625);
-
-        let east = ItemFrameEntity::pop_box(position, BlockDirection::East);
-        assert_eq!(east.max.x - east.min.x, 0.0625);
-        assert_eq!(east.max.y - east.min.y, 0.75);
-        assert_eq!(east.max.z - east.min.z, 0.75);
-
-        let up = ItemFrameEntity::pop_box(position, BlockDirection::Up);
-        assert_eq!(up.max.x - up.min.x, 0.75);
-        assert_eq!(up.max.y - up.min.y, 0.0625);
-        assert_eq!(up.max.z - up.min.z, 0.75);
-    }
-
-    #[test]
-    fn placement_box_is_centered_at_the_hanging_entity_position() {
-        let position = Vector3::new(10.0, 20.0, 30.0);
-        let bounding_box = ItemFrameEntity::pop_box(position, BlockDirection::South);
-
-        assert_eq!(bounding_box.min.x + bounding_box.max.x, 20.0);
-        assert_eq!(bounding_box.min.y + bounding_box.max.y, 40.0);
-        assert_eq!(bounding_box.min.z + bounding_box.max.z, 60.0);
-    }
-}
-
 impl ItemMetadata for ItemFrameItem {
     fn ids() -> Box<[u16]> {
         [Item::ITEM_FRAME.id, Item::GLOW_ITEM_FRAME.id].into()
@@ -172,5 +137,40 @@ impl ItemBehaviour for ItemFrameItem {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn placement_box_is_thin_along_the_facing_axis() {
+        let position = Vector3::new(10.0, 20.0, 30.0);
+
+        let north = ItemFrameEntity::pop_box(position, BlockDirection::North);
+        assert_eq!(north.max.x - north.min.x, 0.75);
+        assert_eq!(north.max.y - north.min.y, 0.75);
+        assert_eq!(north.max.z - north.min.z, 0.0625);
+
+        let east = ItemFrameEntity::pop_box(position, BlockDirection::East);
+        assert_eq!(east.max.x - east.min.x, 0.0625);
+        assert_eq!(east.max.y - east.min.y, 0.75);
+        assert_eq!(east.max.z - east.min.z, 0.75);
+
+        let up = ItemFrameEntity::pop_box(position, BlockDirection::Up);
+        assert_eq!(up.max.x - up.min.x, 0.75);
+        assert_eq!(up.max.y - up.min.y, 0.0625);
+        assert_eq!(up.max.z - up.min.z, 0.75);
+    }
+
+    #[test]
+    fn placement_box_is_centered_at_the_hanging_entity_position() {
+        let position = Vector3::new(10.0, 20.0, 30.0);
+        let bounding_box = ItemFrameEntity::pop_box(position, BlockDirection::South);
+
+        assert_eq!(bounding_box.min.x + bounding_box.max.x, 20.0);
+        assert_eq!(bounding_box.min.y + bounding_box.max.y, 40.0);
+        assert_eq!(bounding_box.min.z + bounding_box.max.z, 60.0);
     }
 }
