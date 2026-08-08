@@ -424,6 +424,13 @@ pub fn check_spawn_rules(
             && world.get_block(pos) == &Block::WATER;
     }
 
+    if uses_animal_spawn_rules(id) {
+        return world
+            .get_block(&pos.down())
+            .has_tag(&tag::Block::MINECRAFT_ANIMALS_SPAWNABLE_ON)
+            && world.get_raw_brightness(pos, 0) > 8;
+    }
+
     if entity_type.category == &MobCategory::MONSTER && uses_generic_monster_spawn_rules(id) {
         return mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering);
     }
@@ -462,6 +469,22 @@ pub fn check_spawn_rules(
     true
 }
 
+/// Entity types registered with `Animal.checkAnimalSpawnRules` in vanilla's `SpawnPlacements`.
+const fn uses_animal_spawn_rules(id: u16) -> bool {
+    id == EntityType::CAT.id
+        || id == EntityType::CHICKEN.id
+        || id == EntityType::COW.id
+        || id == EntityType::DONKEY.id
+        || id == EntityType::HAPPY_GHAST.id
+        || id == EntityType::HORSE.id
+        || id == EntityType::LLAMA.id
+        || id == EntityType::MULE.id
+        || id == EntityType::PANDA.id
+        || id == EntityType::PIG.id
+        || id == EntityType::SHEEP.id
+        || id == EntityType::TRADER_LLAMA.id
+}
+
 /// `MobCategory::MONSTER` members whose registered `SpawnPlacements` predicate is not
 /// `Monster.checkMonsterSpawnRules`. Slime registers `Slime.checkSlimeSpawnRules`
 /// (`Slime.java`, 1.21.4), which applies the swamp-band and slime-chunk gates instead of
@@ -479,6 +502,38 @@ const fn is_in_surface_squid_y_range(y: i32, sea_level: i32) -> bool {
 /// `GlowSquid.checkGlowSquidSpawnRules`'s Y gate: `pos.getY() <= level.getSeaLevel() - 33`.
 const fn is_below_glow_squid_y_threshold(y: i32, sea_level: i32) -> bool {
     y <= sea_level - 33
+}
+
+#[cfg(test)]
+mod animal_spawn_dispatch_tests {
+    use super::{EntityType, uses_animal_spawn_rules};
+
+    #[test]
+    fn vanilla_animal_placements_use_the_animal_predicate() {
+        for entity_type in [
+            EntityType::CAT,
+            EntityType::CHICKEN,
+            EntityType::COW,
+            EntityType::DONKEY,
+            EntityType::HAPPY_GHAST,
+            EntityType::HORSE,
+            EntityType::LLAMA,
+            EntityType::MULE,
+            EntityType::PANDA,
+            EntityType::PIG,
+            EntityType::SHEEP,
+            EntityType::TRADER_LLAMA,
+        ] {
+            assert!(uses_animal_spawn_rules(entity_type.id));
+        }
+    }
+
+    #[test]
+    fn unrelated_spawn_placements_do_not_use_the_animal_predicate() {
+        assert!(!uses_animal_spawn_rules(EntityType::ZOMBIE.id));
+        assert!(!uses_animal_spawn_rules(EntityType::BAT.id));
+        assert!(!uses_animal_spawn_rules(EntityType::SLIME.id));
+    }
 }
 
 #[cfg(test)]
