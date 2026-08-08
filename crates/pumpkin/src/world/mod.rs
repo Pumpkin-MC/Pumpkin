@@ -3,12 +3,10 @@ use dashmap::DashMap;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
+use pumpkin_protocol::bedrock::client::EntityProperties;
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemDefinition};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
-use pumpkin_protocol::bedrock::client::{CInventoryContent, EntityProperties};
-use pumpkin_protocol::bedrock::network_item::{
-    ContainerName, FullContainerName, NetworkItemDescriptor, NetworkItemStackDescriptor,
-};
+use pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor;
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
 use std::sync::atomic::Ordering::Relaxed;
@@ -2297,23 +2295,8 @@ impl World {
             })
             .await;
 
-        client
-            .send_game_packet(&CInventoryContent {
-                container_id: VarUInt(0), // player inventory,
-                slots: player
-                    .inventory()
-                    .main_inventory
-                    .read()
-                    .await
-                    .iter()
-                    .map(NetworkItemStackDescriptor::from)
-                    .collect(),
-                full_container_name: FullContainerName {
-                    container_name: ContainerName::Inventory,
-                    dynamic_id: None,
-                },
-                storage_item: NetworkItemStackDescriptor::default(),
-            })
+        player
+            .on_screen_handler_opened(player.player_screen_handler.clone())
             .await;
 
         {
@@ -3772,10 +3755,7 @@ impl World {
                         // stale data.
                         base_entity.velocity.store(Vector3::default());
 
-                        player
-                            .client
-                            .enqueue_packet(&base_entity.create_spawn_packet())
-                            .await;
+                        player.client.enqueue_spawn_packet(&entity).await;
                         entities_to_add.push(entity);
                     }
 
@@ -3793,10 +3773,7 @@ impl World {
                     for entity in world.entities.load().iter() {
                         let base_entity = entity.get_entity();
                         if base_entity.chunk_pos.load() == position {
-                            player
-                                .client
-                                .enqueue_packet(&base_entity.create_spawn_packet())
-                                .await;
+                            player.client.enqueue_spawn_packet(entity).await;
                         }
                     }
                 }
