@@ -1,5 +1,5 @@
 use pumpkin_util::identifier::Identifier;
-use std::{any::Any, ops::Deref};
+use std::{any::Any, marker::PhantomData, ops::Deref};
 use tokio::sync::RwLockReadGuard;
 
 use crate::builder::RegistryBuilder;
@@ -63,6 +63,29 @@ where
 
     fn deref(&self) -> &Self::Target {
         &*self.0
+    }
+}
+
+pub struct DataKeyRef<'a, T> {
+    // Keeps every registry/value lock guard alive.
+    pub(crate) _guards: Vec<ErasedRegistryRef<'a>>,
+
+    // Points into the last guard.
+    pub(crate) value: *const T,
+
+    pub(crate) marker: PhantomData<&'a T>,
+}
+
+impl<T> Deref for DataKeyRef<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        // SAFETY:
+        //
+        // `value` points into one of `guards`.
+        // That guard remains owned by this DataKeyRef for the entire
+        // lifetime of the returned reference.
+        unsafe { &*self.value }
     }
 }
 

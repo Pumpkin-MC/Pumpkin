@@ -48,6 +48,12 @@ pub enum RegistryTreeError {
 
     #[error("failed to insert: {0}")]
     Insert(#[from] RegistryInsertError),
+
+    #[error("failed to build key: {0}")]
+    KeyBuild(#[from] DataKeyBuildError),
+
+    #[error("failed to get: {0}")]
+    KeyGet(#[from] DataKeyGetError),
 }
 
 #[derive(Debug, thiserror::Error)]
