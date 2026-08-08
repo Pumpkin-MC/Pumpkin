@@ -329,21 +329,15 @@ impl MobEntity {
             return false;
         }
 
-        let current_brightness =
-            Self::monster_spawn_brightness(sky_light, block_light, is_thundering);
+        let current_brightness = if is_thundering {
+            world.get_raw_brightness(pos, 10)
+        } else {
+            world.get_max_local_raw_brightness(pos)
+        };
 
         // TODO
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
         current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
-    }
-
-    #[must_use]
-    fn monster_spawn_brightness(sky_light: u8, block_light: u8, is_thundering: bool) -> u8 {
-        if is_thundering {
-            sky_light.saturating_sub(10).max(block_light)
-        } else {
-            sky_light.max(block_light)
-        }
     }
 
     pub fn check_monster_spawn_rules(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
@@ -1316,14 +1310,7 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use super::{MobEntity, fire_aspect_ticks, knockback_enchantment_strength};
-
-    #[test]
-    fn thunderstorm_brightness_does_not_wrap_sky_light() {
-        assert_eq!(MobEntity::monster_spawn_brightness(4, 0, true), 0);
-        assert_eq!(MobEntity::monster_spawn_brightness(14, 3, true), 4);
-        assert_eq!(MobEntity::monster_spawn_brightness(4, 7, true), 7);
-    }
+    use super::{fire_aspect_ticks, knockback_enchantment_strength};
 
     #[test]
     fn fire_aspect_uses_eighty_ticks_per_level() {
