@@ -21,6 +21,7 @@ pub mod hoe;
 pub mod honeycomb;
 pub mod ignite;
 pub mod ink_sac;
+pub mod item_frame;
 pub mod mace;
 pub mod map;
 pub mod minecart;
@@ -72,6 +73,7 @@ use honeycomb::HoneyCombItem;
 use ignite::fire_charge::FireChargeItem;
 use ignite::flint_and_steel::FlintAndSteelItem;
 use ink_sac::InkSacItem;
+use item_frame::ItemFrameItem;
 use mace::MaceItem;
 use shears::ShearsItem;
 use shovel::ShovelItem;
@@ -162,6 +164,7 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(LeadItem);
     manager.register(SpyglassItem);
     manager.register(ShearsItem);
+    manager.register(ItemFrameItem);
 
     Arc::new(manager)
 }

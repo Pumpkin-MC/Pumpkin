@@ -23,6 +23,7 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 use tokio::sync::Mutex;
@@ -106,6 +107,46 @@ impl ItemFrameEntity {
             .unwrap_or(Self::DEFAULT_FACING)
     }
 
+    /// `ItemFrame.createBoundingBox` with `hasFramedMap = false` (`ItemFrame.java`).
+    pub(crate) fn pop_box(position: Vector3<f64>, facing: BlockDirection) -> BoundingBox {
+        let (half_x, half_y, half_z) = match facing {
+            BlockDirection::North | BlockDirection::South => (0.375, 0.375, 0.03125),
+            BlockDirection::West | BlockDirection::East => (0.03125, 0.375, 0.375),
+            BlockDirection::Down | BlockDirection::Up => (0.375, 0.03125, 0.375),
+        };
+        BoundingBox::new(
+            Vector3::new(
+                position.x - half_x,
+                position.y - half_y,
+                position.z - half_z,
+            ),
+            Vector3::new(
+                position.x + half_x,
+                position.y + half_y,
+                position.z + half_z,
+            ),
+        )
+    }
+
+    /// `ItemFrame.setDirection` (`ItemFrame.java`), used when a frame is freshly placed.
+    /// Unlike the base `HangingEntity` setter, `ItemFrame` preserves vertical directions and
+    /// points floor/ceiling frames with pitch rather than yaw.
+    pub fn set_facing(&self, facing: BlockDirection) {
+        let index = facing.to_index();
+        self.facing.store(index, Ordering::Relaxed);
+        self.entity.data.store(i32::from(index), Ordering::Relaxed);
+        // Direction.get2DDataValue() * 90 (Direction.java:33-37: SOUTH=0, WEST=1, NORTH=2, EAST=3).
+        let (yaw, pitch) = match facing {
+            BlockDirection::West => (90.0, 0.0),
+            BlockDirection::North => (180.0, 0.0),
+            BlockDirection::East => (270.0, 0.0),
+            BlockDirection::Up => (0.0, -90.0),
+            BlockDirection::Down => (0.0, 90.0),
+            BlockDirection::South => (0.0, 0.0),
+        };
+        self.entity.set_rotation(yaw, pitch);
+    }
+
     /// `GlowItemFrame` overrides every sound and the dropped frame item.
     fn is_glow(&self) -> bool {
         self.entity.entity_type == &EntityType::GLOW_ITEM_FRAME
@@ -176,19 +217,36 @@ impl ItemFrameEntity {
         self.update_output_signal().await;
     }
 
-    /// Vanilla `ItemFrame.survives`. The collision and `canCoexist` checks are
-    /// not modelled; only the support block is tested.
-    fn survives(&self) -> bool {
+    /// Vanilla `ItemFrame.survives`: fixed frames survive unconditionally; otherwise the
+    /// frame's pop box, same-direction hanging entities, and support block are checked.
+    pub(crate) fn survives(&self) -> bool {
         if self.fixed.load(Ordering::Relaxed) {
             return true;
         }
         let facing = self.get_facing();
+        let world = self.entity.world.load();
+        // `HangingEntity.hasLevelCollision` and `canCoexist(true)`.
+        let pop_box = Self::pop_box(self.entity.pos.load(), facing);
+        if !world.is_space_empty(pop_box) {
+            return false;
+        }
+        if world.get_entities_at_box(&pop_box).iter().any(|entity| {
+            let other = entity.get_entity();
+            let is_hanging_entity = other.entity_type == &EntityType::ITEM_FRAME
+                || other.entity_type == &EntityType::GLOW_ITEM_FRAME
+                || other.entity_type == &EntityType::PAINTING;
+            other.entity_id != self.entity.entity_id
+                && is_hanging_entity
+                && other.data.load(Ordering::Relaxed) == i32::from(facing.to_index())
+        }) {
+            return false;
+        }
+
         let support = self
             .entity
             .block_pos
             .load()
             .offset(facing.opposite().to_offset());
-        let world = self.entity.world.load();
         // An unloaded support block must not read as air, or the frame would be
         // destroyed for a chunk that simply is not there yet.
         let Some(state_id) = world.get_block_state_id_if_loaded(&support) else {
