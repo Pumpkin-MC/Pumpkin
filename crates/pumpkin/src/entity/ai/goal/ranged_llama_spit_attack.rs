@@ -64,9 +64,12 @@ impl RangedLlamaSpitAttackGoal {
             return false;
         }
 
-        entity
-            .world
-            .load_full()
+        let world = entity.world.load_full();
+        if !Arc::ptr_eq(&world, &target_entity.world.load_full()) {
+            return false;
+        }
+
+        world
             .raycast_collision(from, to, async |block_pos, world| {
                 !world.get_block_state(block_pos).collision_shapes.is_empty()
             })
