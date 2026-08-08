@@ -130,6 +130,9 @@ impl HorseBreedGoal {
 
         let parent_pos = entity.pos.load();
         let baby = from_type(offspring_type, parent_pos, &world, Uuid::new_v4());
+        if let Some(baby_mob) = baby.get_mob() {
+            baby_mob.set_persistence_required();
+        }
         baby.get_entity().set_age(-24000);
         world.spawn_entity(baby).await;
 

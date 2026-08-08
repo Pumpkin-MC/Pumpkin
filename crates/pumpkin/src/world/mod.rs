@@ -1142,6 +1142,7 @@ impl World {
 
                 tasks.spawn(async move {
                     e_clone.get_entity().age.fetch_add(1, Relaxed);
+                    e_clone.check_despawn().await;
                     e_clone.tick(&e_clone, &s_clone).await;
 
                     let entity_inner = e_clone.get_entity();

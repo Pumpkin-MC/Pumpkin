@@ -208,6 +208,13 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         })
     }
 
+    /// Vanilla calls `Entity.checkDespawn` from the server entity tick loop.
+    /// Non-mobs keep the default no-op; the blanket mob implementation below
+    /// supplies `Mob.checkDespawn`.
+    fn check_despawn(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async {})
+    }
+
     fn get_job_site_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
         None
     }
@@ -919,6 +926,9 @@ pub struct Entity {
     pub vehicle: Mutex<Option<Arc<dyn EntityBase>>>,
     /// The entity this entity is attached/leashed to (if any)
     pub leashed_to: Mutex<Option<Arc<dyn EntityBase>>>,
+    /// Vanilla `Mob.persistenceRequired`. Kept on the shared entity because
+    /// every mob's NBT path already delegates its base data here.
+    pub persistence_required: AtomicBool,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
     /// The age of the entity in ticks. Negative values indicate a baby.
@@ -1176,6 +1186,7 @@ impl Entity {
             passengers: Mutex::new(Vec::new()),
             vehicle: Mutex::new(None),
             leashed_to: Mutex::new(None),
+            persistence_required: AtomicBool::new(false),
 
             riding_cooldown: AtomicI32::new(0),
             age: AtomicI32::new(0),
@@ -3909,6 +3920,12 @@ impl NBTStorage for Entity {
                 nbt.put_string("CustomName", name_json);
             }
             nbt.put_bool("CustomNameVisible", self.custom_name_visible.load(Relaxed));
+            if self.entity_type.mob {
+                nbt.put_bool(
+                    "PersistenceRequired",
+                    self.persistence_required.load(Relaxed),
+                );
+            }
 
             let tags = self.scoreboard_tags.lock().await;
             if !tags.is_empty() {
@@ -3978,6 +3995,13 @@ impl NBTStorage for Entity {
             }
             self.custom_name_visible
                 .store(nbt.get_bool("CustomNameVisible").unwrap_or(false), Relaxed);
+
+            if self.entity_type.mob {
+                self.persistence_required.store(
+                    nbt.get_bool("PersistenceRequired").unwrap_or(false),
+                    Relaxed,
+                );
+            }
 
             if let Some(tag_list) = nbt.get_list("Tags") {
                 let mut tags = self.scoreboard_tags.lock().await;

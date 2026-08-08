@@ -11,6 +11,7 @@ use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::MobCategory;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
@@ -87,6 +88,10 @@ pub struct MobEntity {
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
+    /// Vanilla `Mob.noActionTime`, used by the random despawn check.
+    pub no_action_time: AtomicI32,
+    /// Vanilla `Entity.tickCount`, used by species-specific despawn rules.
+    pub tick_count: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
     pub owner: AtomicCell<Option<Uuid>>,
     pub ordered_to_sit: AtomicBool,
@@ -127,6 +132,8 @@ impl MobEntity {
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
+            no_action_time: AtomicI32::new(0),
+            tick_count: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
             owner: AtomicCell::new(None),
             ordered_to_sit: AtomicBool::new(false),
@@ -173,6 +180,17 @@ impl MobEntity {
 
     pub fn is_left_handed(&self) -> bool {
         (self.mob_flags.load(Relaxed) & Self::LEFT_HANDED_FLAG) != 0
+    }
+
+    pub fn set_persistence_required(&self) {
+        self.living_entity
+            .entity
+            .persistence_required
+            .store(true, Relaxed);
+    }
+
+    pub fn is_persistence_required(&self) -> bool {
+        self.living_entity.entity.persistence_required.load(Relaxed)
     }
 
     pub fn set_no_ai(&self, no_ai: bool) {
@@ -600,6 +618,125 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    /// Vanilla `Mob.setPersistenceRequired`.
+    fn set_persistence_required(&self) {
+        self.get_mob_entity().set_persistence_required();
+    }
+
+    /// Vanilla `Mob.isPersistenceRequired`.
+    fn is_persistence_required(&self) -> bool {
+        self.get_mob_entity().is_persistence_required()
+    }
+
+    /// Vanilla `Mob.removeWhenFarAway`, including the current species
+    /// overrides whose state is represented by Pumpkin.
+    fn remove_when_far_away(&self, _dist_sqr: f64) -> bool {
+        let category = self.get_entity().entity_type.category;
+        let mob_entity = self.get_mob_entity();
+        match self.get_entity().entity_type.id {
+            // Cat.java: untamed cats become removable after 120 seconds.
+            id if id == pumpkin_data::entity::EntityType::CAT.id => {
+                !mob_entity.is_tamed() && mob_entity.tick_count.load(Relaxed) > 2400
+            }
+            // Ocelot.java: Pumpkin has no trust state yet, so its spawned ocelots
+            // follow the vanilla untamed branch.
+            id if id == pumpkin_data::entity::EntityType::OCELOT.id => {
+                mob_entity.tick_count.load(Relaxed) > 2400
+            }
+            // AbstractFish.java: tadpoles are bucketable fish despite their
+            // CREATURE category.
+            id if id == pumpkin_data::entity::EntityType::TADPOLE.id => true,
+            // AbstractFish and Axolotl override Animal's non-despawning default.
+            // Bucketed/named variants are made persistent by their interaction/NBT paths.
+            id if id == pumpkin_data::entity::EntityType::AXOLOTL.id
+                || id == pumpkin_data::entity::EntityType::COD.id
+                || id == pumpkin_data::entity::EntityType::NAUTILUS.id
+                || id == pumpkin_data::entity::EntityType::PUFFERFISH.id
+                || id == pumpkin_data::entity::EntityType::SALMON.id
+                || id == pumpkin_data::entity::EntityType::TROPICAL_FISH.id
+                || id == pumpkin_data::entity::EntityType::ZOMBIE_HORSE.id =>
+            {
+                true
+            }
+            // Animal and non-despawning MISC mob implementations in the
+            // generated registry use the persistent far-away behavior.
+            _ if category == &MobCategory::CREATURE || category == &MobCategory::MISC => false,
+            _ => true,
+        }
+    }
+
+    /// Vanilla `Mob.requiresCustomPersistence`: passengers and leashed mobs
+    /// must not be removed by the normal despawn checks.
+    fn requires_custom_persistence(&self) -> EntityBaseFuture<'_, bool> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            entity.vehicle.lock().await.is_some() || entity.leashed_to.lock().await.is_some()
+        })
+    }
+
+    /// Vanilla `Mob.checkDespawn`, called by the server entity tick loop.
+    fn check_despawn(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob_entity = self.get_mob_entity();
+            let entity = self.get_entity();
+            if entity.is_removed() {
+                return;
+            }
+            let world = entity.world.load();
+
+            if world.level_info.load().difficulty == Difficulty::Peaceful
+                && !entity.entity_type.category.is_friendly
+            {
+                entity.remove().await;
+                return;
+            }
+
+            if self.is_persistence_required() || self.requires_custom_persistence().await {
+                mob_entity.no_action_time.store(0, Relaxed);
+                return;
+            }
+
+            let position = entity.pos.load();
+            let nearest_player_distance = world
+                .players
+                .load()
+                .iter()
+                .map(|player| {
+                    player
+                        .get_entity()
+                        .pos
+                        .load()
+                        .squared_distance_to_vec(&position)
+                })
+                .min_by(f64::total_cmp);
+
+            let Some(distance_sqr) = nearest_player_distance else {
+                return;
+            };
+
+            let despawn_distance = f64::from(entity.entity_type.category.despawn_distance);
+            if distance_sqr > despawn_distance * despawn_distance
+                && self.remove_when_far_away(distance_sqr)
+            {
+                entity.remove().await;
+                return;
+            }
+
+            let no_despawn_distance = f64::from(MobCategory::NO_DESPAWN_DISTANCE);
+            let no_despawn_distance_sqr = no_despawn_distance * no_despawn_distance;
+            let no_action_time = mob_entity.no_action_time.load(Relaxed);
+            if no_action_time > 600
+                && rand::random_range(0..800) == 0
+                && distance_sqr > no_despawn_distance_sqr
+                && self.remove_when_far_away(distance_sqr)
+            {
+                entity.remove().await;
+            } else if distance_sqr < no_despawn_distance_sqr {
+                mob_entity.no_action_time.store(0, Relaxed);
+            }
+        })
+    }
+
     /// `Raider.canBeLeader` default (all raiders except `Ravager`, which overrides to `false`).
     fn can_be_raid_leader(&self) -> bool {
         true
@@ -845,6 +982,8 @@ pub trait Mob: EntityBase + Send + Sync {
                     continue;
                 }
 
+                self.set_persistence_required();
+
                 let is_empty = {
                     let mut stack = item_entity.get_item_stack().lock().await;
                     stack.decrement(taken);
@@ -922,6 +1061,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Some(self)
     }
 
+    fn check_despawn(&self) -> EntityBaseFuture<'_, ()> {
+        Mob::check_despawn(self)
+    }
+
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             self.mob_init_data_tracker().await;
@@ -956,6 +1099,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
+            mob_entity.tick_count.fetch_add(1, Relaxed);
+            if !mob_entity.is_no_ai() {
+                mob_entity.no_action_time.fetch_add(1, Relaxed);
+            }
             mob_entity.living_entity.entity.tick_leash().await;
             mob_entity.tick_sun_burn().await;
 

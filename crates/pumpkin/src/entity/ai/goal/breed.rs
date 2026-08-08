@@ -105,6 +105,9 @@ impl BreedGoal {
 
         let parent_pos = entity.pos.load();
         if let Some(baby) = mob.create_offspring(mate, &world).await {
+            if let Some(baby_mob) = baby.get_mob() {
+                baby_mob.set_persistence_required();
+            }
             baby.get_entity().set_age(-24000);
             world.spawn_entity(baby).await;
         }
