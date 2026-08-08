@@ -3886,7 +3886,7 @@ impl TrackedData {
         v1_21_9: 20u8,
         v1_21_11: 20u8,
         v26_1: 20u8,
-        v26_2: 20u8,
+        v26_2: 19u8,
     };
     pub const VILLAGER_DATA_FINALIZED: TrackedId = TrackedId {
         v1_21: 255u8,
@@ -3898,7 +3898,7 @@ impl TrackedData {
         v1_21_9: 255u8,
         v1_21_11: 255u8,
         v26_1: 21u8,
-        v26_2: 21u8,
+        v26_2: 20u8,
     };
     pub const WAITING: TrackedId = TrackedId {
         v1_21: 9u8,
