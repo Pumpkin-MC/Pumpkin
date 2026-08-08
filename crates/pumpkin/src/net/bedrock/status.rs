@@ -78,6 +78,12 @@ impl StatusResponder {
                 if is_status_packet(packet) {
                     self.respond(server, &self.ipv4, packet, client).await
                 } else {
+                    trace!(
+                        %client,
+                        length,
+                        kind = ice_packet_kind(packet),
+                        "Received Bedrock ICE datagram"
+                    );
                     if self.ice_packets.try_send((Bytes::copy_from_slice(packet), client)).is_err() {
                         trace!(%client, "Dropped Bedrock ICE datagram because its queue is unavailable");
                     }
@@ -118,6 +124,16 @@ fn is_status_packet(packet: &[u8]) -> bool {
     matches!(packet.first(), Some(&id) if id == SUnconnectedPing::PACKET_ID as u8
         || id == SUnconnectedPingOpenConnections::PACKET_ID as u8)
         && packet.get(9..25) == Some(OFFLINE_MESSAGE_MAGIC.as_slice())
+}
+
+fn ice_packet_kind(packet: &[u8]) -> &'static str {
+    if packet.len() >= 20 && packet.get(4..8) == Some(&[0x21, 0x12, 0xa4, 0x42]) {
+        "STUN"
+    } else if matches!(packet.first(), Some(20..=63)) {
+        "DTLS"
+    } else {
+        "unknown"
+    }
 }
 
 impl IceSocket {
@@ -248,7 +264,9 @@ mod tests {
 
         let mut stun_success = [0; 32];
         stun_success[..2].copy_from_slice(&[0x01, 0x01]);
+        stun_success[4..8].copy_from_slice(&[0x21, 0x12, 0xa4, 0x42]);
         assert!(!is_status_packet(&stun_success));
+        assert_eq!(ice_packet_kind(&stun_success), "STUN");
     }
 
     #[tokio::test]

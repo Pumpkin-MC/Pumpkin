@@ -265,6 +265,11 @@ async fn negotiate(
         state.require_client_identity,
         state.oidc_verifier.as_deref(),
     )?;
+    trace!(
+        %address,
+        candidates = ?candidate_summary(&offer),
+        "Received NetherNet ICE candidates"
+    );
 
     let peer = Arc::new(
         state
@@ -317,6 +322,12 @@ async fn negotiate(
         })
     }));
 
+    peer.on_ice_connection_state_change(Box::new(move |connection_state| {
+        Box::pin(async move {
+            trace!(?connection_state, %address, "NetherNet ICE connection state changed");
+        })
+    }));
+
     let offer = RTCSessionDescription::offer(offer).map_err(|error| error.to_string())?;
     peer.set_remote_description(offer)
         .await
@@ -346,6 +357,11 @@ async fn negotiate(
         .local_description()
         .await
         .ok_or_else(|| "WebRTC did not produce a local description".to_string())?;
+    trace!(
+        %address,
+        candidates = ?candidate_summary(&answer.sdp),
+        "Gathered NetherNet ICE candidates"
+    );
     trace!("Completed NetherNet negotiation with {address}");
     Ok((
         add_server_identity(
@@ -354,6 +370,31 @@ async fn negotiate(
         )?,
         session,
     ))
+}
+
+fn candidate_summary(sdp: &str) -> Vec<String> {
+    sdp.lines()
+        .filter_map(|line| line.strip_prefix("a=candidate:"))
+        .map(|candidate| {
+            let fields = candidate.split_whitespace().collect::<Vec<_>>();
+            match fields.as_slice() {
+                [
+                    foundation,
+                    component,
+                    protocol,
+                    _,
+                    address,
+                    port,
+                    "typ",
+                    kind,
+                    ..,
+                ] => {
+                    format!("{foundation}/{component} {protocol} {address}:{port} {kind}")
+                }
+                _ => "malformed candidate".to_owned(),
+            }
+        })
+        .collect()
 }
 
 fn remove_component_two_candidates(sdp: &str) -> String {
@@ -864,6 +905,13 @@ mod tests {
             remove_component_two_candidates(sdp),
             "v=0\r\na=candidate:1 1 udp 1 192.0.2.1 19134 typ host\r\na=end-of-candidates\r\n"
         );
+    }
+
+    #[test]
+    fn summarizes_candidates_without_credentials() {
+        let sdp = "a=ice-ufrag:secret\r\na=ice-pwd:also-secret\r\n\
+                   a=candidate:123 1 udp 2130706431 192.0.2.1 19132 typ host\r\n";
+        assert_eq!(candidate_summary(sdp), ["123/1 udp 192.0.2.1:19132 host"]);
     }
 
     #[test]
