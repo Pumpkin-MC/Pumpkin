@@ -1174,12 +1174,15 @@ impl World {
             }
         }
 
-        // Vanilla's ServerChunkCache sends a light update whenever the light engine changes a
-        // section. This includes neighboring chunks when propagation crosses a chunk border; the
-        // runtime engine records those chunks while it updates the light arrays.
-        for chunk_pos in self.level.light_engine.take_dirty_chunks() {
+        // Vanilla's ServerChunkCache sends a light update for the sections the light engine
+        // marked, including neighboring chunks when propagation crosses a chunk border. The
+        // runtime engine records those section indices while it updates the light arrays.
+        for (chunk_pos, sections) in self.level.light_engine.take_dirty_sections() {
             self.level.read_chunk_sync(&chunk_pos, |chunk| {
-                self.broadcast_to_chunk(chunk_pos, &CLightUpdate(chunk.as_ref()));
+                self.broadcast_to_chunk(
+                    chunk_pos,
+                    &CLightUpdate::sections(chunk.as_ref(), &sections),
+                );
             });
         }
     }
@@ -4535,9 +4538,12 @@ impl World {
 
         let (_chunk_coordinate, _) = position.chunk_and_chunk_relative_position();
 
-        self.level
-            .light_engine
-            .update_lighting_at(&self.level, *position);
+        self.level.light_engine.update_lighting_at_with_states(
+            &self.level,
+            *position,
+            replaced_block_state_id.to_state(),
+            block_state_id.to_state(),
+        );
 
         replaced_block_state_id
     }

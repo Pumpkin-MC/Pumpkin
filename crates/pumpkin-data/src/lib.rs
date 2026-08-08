@@ -343,7 +343,7 @@ pub use block_direction::{BlockDirection, FacingExt, HorizontalFacingExt};
 #[cfg(feature = "block")]
 pub use block_rotation::{Mirror, Rotation};
 #[cfg(feature = "block")]
-pub use block_state::{BlockState, BlockStateId};
+pub use block_state::{BlockState, BlockStateId, light_shape_occludes};
 #[cfg(feature = "block")]
 pub use blocks::{Block, BlockId};
 

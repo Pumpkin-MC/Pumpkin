@@ -764,12 +764,317 @@ impl LightContainer {
     }
 
     pub fn fill(&mut self, value: u8) {
-        *self = Self::new_filled(value);
+        // Match vanilla DataLayer.fill: a uniform layer stays implicit rather
+        // than materializing a 2048-byte array. This matters for zero-filled
+        // layers, which must remain absent from the client's data mask.
+        *self = Self::new_empty(value);
     }
 }
 
 impl Default for LightContainer {
     fn default() -> Self {
         Self::new_empty(15)
+    }
+}
+#[cfg(test)]
+pub(crate) mod chunk_codec_tests {
+    use super::*;
+    use crate::chunk::ChunkHeightmapType;
+    use pumpkin_nbt::tag::NbtTag;
+
+    fn full_sky_light(value: u8) -> Box<[i8]> {
+        let byte = ((value << 4) | value) as i8;
+        vec![byte; LightContainer::ARRAY_SIZE].into_boxed_slice()
+    }
+
+    fn section(y: i8, sky_light: Option<u8>) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_byte("Y", y);
+        if let Some(value) = sky_light {
+            compound.put("SkyLight", NbtTag::ByteArray(full_sky_light(value)));
+        }
+        NbtTag::Compound(compound)
+    }
+
+    /// Encodes an overworld-shaped chunk whose lowest 8 sections are solid
+    /// stone and which carries a `Heightmaps` compound *without* a
+    /// `WORLD_SURFACE` entry - the shape vanilla writes for any chunk saved
+    /// below `minecraft:full` that already contains terrain.
+    pub fn encode_terrain_chunk_without_world_surface(chunk_x: i32, chunk_z: i32) -> Vec<u8> {
+        const MIN_SECTION: i8 = -4;
+        const MAX_SECTION: i8 = 19;
+        const TOP_STONE_SECTION: i8 = 3;
+
+        let stone = i32::from(Block::STONE.default_state.id.as_u16());
+
+        let mut sections = Vec::new();
+        for y in MIN_SECTION..=MAX_SECTION {
+            let mut compound = NbtCompound::new();
+            compound.put_byte("Y", y);
+            if y <= TOP_STONE_SECTION {
+                let mut block_states = NbtCompound::new();
+                // Single-entry palette and no `data`: a uniform section.
+                block_states.put("palette", NbtTag::IntArray(vec![stone]));
+                compound.put_compound("block_states", block_states);
+            }
+            sections.push(NbtTag::Compound(compound));
+        }
+
+        let mut root = NbtCompound::new();
+        root.put_int("xPos", chunk_x);
+        root.put_int("zPos", chunk_z);
+        root.put_int("yPos", i32::from(MIN_SECTION));
+        root.put_list("sections", sections);
+        root.put_string("Status", "minecraft:carvers".to_string());
+        // Present but empty, exactly as a pre-`full` vanilla chunk with no
+        // status-eligible heightmap types is written.
+        root.put_compound("Heightmaps", NbtCompound::new());
+
+        pumpkin_nbt::Nbt::from(root).write().to_vec()
+    }
+
+    #[test]
+    fn missing_world_surface_heightmap_is_recomputed_from_blocks() {
+        let bytes = encode_terrain_chunk_without_world_surface(0, 0);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let min_y = chunk.section.min_y;
+        let heightmap = chunk.heightmap.lock().unwrap();
+
+        // Stone fills sections -4..=3, so the topmost non-air block is y = 63.
+        // Without priming, `get` answers `min_y - 1` (-65), which reads as "this
+        // column has no terrain at all" and makes the sky light producer flood
+        // the entire column with 15.
+        for (x, z) in [(0, 0), (7, 9), (15, 15)] {
+            assert_eq!(
+                heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y),
+                63,
+                "column ({x}, {z}) must report its real surface, not the empty-column sentinel"
+            );
+        }
+    }
+
+    fn encode_chunk(min_y_section: i32, sections: Vec<NbtTag>) -> Vec<u8> {
+        let mut root = NbtCompound::new();
+        root.put_int("xPos", 0);
+        root.put_int("zPos", 0);
+        root.put_int("yPos", min_y_section);
+        root.put_list("sections", sections);
+        root.put_bool("isLightOn", true);
+
+        pumpkin_nbt::Nbt::from(root).write().to_vec()
+    }
+
+    #[test]
+    fn missing_sky_light_above_terrain_derives_open_sky() {
+        // Only the middle section carries a `SkyLight` tag, as a vanilla chunk
+        // would for terrain with air above it.
+        let sections = vec![
+            section(0, None),
+            section(1, Some(7)),
+            section(2, None),
+            section(3, None),
+        ];
+        let bytes = encode_chunk(0, sections);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let light = chunk.light_engine.lock().unwrap();
+
+        // Sections above the highest tagged section see open sky (15), not the
+        // buggy default of reading a missing tag as `Empty(0)`.
+        assert_eq!(light.sky_light[2].get(0, 0, 0), 15);
+        assert_eq!(light.sky_light[3].get(0, 0, 0), 15);
+
+        // A section below the highest tagged one with no tag of its own repeats
+        // the nearest tagged layer above it, not a fixed default.
+        assert_eq!(light.sky_light[0].get(0, 0, 0), 7);
+
+        // The tagged section itself round-trips unchanged.
+        assert_eq!(light.sky_light[1].get(0, 0, 0), 7);
+    }
+
+    /// Builds a `SkyLight` array whose value depends only on the local y layer,
+    /// via `layer(local_y)`.
+    fn graded_sky_light(layer: impl Fn(usize) -> u8) -> Box<[i8]> {
+        let mut container = LightContainer::new_filled(0);
+        for y in 0..16 {
+            let value = layer(y);
+            for z in 0..16 {
+                for x in 0..16 {
+                    container.set(x, y, z, value);
+                }
+            }
+        }
+        match container {
+            LightContainer::Full(data) => data.iter().map(|&b| b as i8).collect(),
+            LightContainer::Empty(_) => unreachable!(),
+        }
+    }
+
+    fn section_with_sky_light(y: i8, sky_light: Box<[i8]>) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_byte("Y", y);
+        compound.put("SkyLight", NbtTag::ByteArray(sky_light));
+        NbtTag::Compound(compound)
+    }
+
+    /// An omitted `SkyLight` array repeats the *bottom* 16x16 layer of the
+    /// section above, not a clone of that section's whole array.
+    ///
+    /// This is the ocean case. The section holding the water surface carries a
+    /// vertical 15..0 gradient, and every section beneath it is uniformly dark,
+    /// so the writer omits them. Cloning the gradient downwards re-lights the
+    /// deep water and the seabed with a repeating 15..0 stripe - broadly lit,
+    /// with no depth attenuation. Repeating the bottom layer carries the 0 down.
+    #[test]
+    fn omitted_sky_light_repeats_the_bottom_layer_not_the_whole_section() {
+        // Section 1 is a water surface: local y = 15 sees open sky at 15 and each
+        // block of water below costs one level, reaching 0 at local y = 0.
+        let gradient = graded_sky_light(|y| y as u8);
+        let sections = vec![
+            section(0, None),
+            section_with_sky_light(1, gradient),
+            section(2, None),
+        ];
+        let bytes = encode_chunk(0, sections);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let light = chunk.light_engine.lock().unwrap();
+
+        // The tagged section round-trips unchanged.
+        for y in 0..16 {
+            assert_eq!(light.sky_light[1].get(3, y, 9), y as u8, "tagged layer {y}");
+        }
+
+        // The omitted section below is dark at every layer, because the bottom
+        // layer of the section above is 0. Cloning the array instead would put
+        // 15 at local y = 15 and a full gradient underneath it.
+        for y in 0..16 {
+            assert_eq!(
+                light.sky_light[0].get(3, y, 9),
+                0,
+                "omitted section below the water surface must be dark at layer {y}"
+            );
+        }
+
+        // Above the highest tagged section is still open sky, so this test is not
+        // just asserting that everything is 0.
+        assert_eq!(light.sky_light[2].get(3, 0, 9), 15);
+    }
+
+    /// Non-vacuity for the rule above: a non-zero bottom layer really is carried
+    /// down, so `repeat_bottom_layer` is not just zeroing omitted sections.
+    #[test]
+    fn omitted_sky_light_carries_a_non_zero_bottom_layer_down() {
+        // Bottom layer is 6, everything above it in the section is brighter.
+        let gradient = graded_sky_light(|y| 6 + y as u8 / 2);
+        let sections = vec![
+            section(0, None),
+            section_with_sky_light(1, gradient),
+            section(2, None),
+        ];
+        let bytes = encode_chunk(0, sections);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let light = chunk.light_engine.lock().unwrap();
+
+        for y in 0..16 {
+            assert_eq!(
+                light.sky_light[0].get(11, y, 2),
+                6,
+                "omitted section must repeat the bottom layer value at layer {y}"
+            );
+        }
+    }
+
+    #[test]
+    fn no_sky_light_tags_reads_as_dark_dimension() {
+        // No section carries a `SkyLight` tag at all, as in a dimension without
+        // sky light (e.g. the Nether). This must not be lit up as open sky.
+        let sections = vec![section(0, None), section(1, None)];
+        let bytes = encode_chunk(0, sections);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let light = chunk.light_engine.lock().unwrap();
+
+        assert_eq!(light.sky_light[0].get(0, 0, 0), 0);
+        assert_eq!(light.sky_light[1].get(0, 0, 0), 0);
+    }
+
+    #[test]
+    fn preserves_unknown_root_tags_when_reserializing() {
+        let mut root = NbtCompound::new();
+        root.put_int("xPos", 0);
+        root.put_int("zPos", 0);
+        root.put_int("yPos", 0);
+        root.put_list("sections", vec![section(0, None)]);
+
+        let mut future_data = NbtCompound::new();
+        future_data.put_string("owner", "vanilla".to_string());
+        root.put_compound("FutureData", future_data.clone());
+
+        let bytes = pumpkin_nbt::Nbt::from(root).write();
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let encoded = chunk.internal_to_bytes();
+        let mut cursor = std::io::Cursor::new(encoded.as_ref());
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+        let decoded = pumpkin_nbt::Nbt::read(&mut reader).unwrap();
+
+        assert_eq!(
+            decoded.root_tag.get_compound("FutureData"),
+            Some(&future_data)
+        );
+        assert_eq!(
+            decoded.root_tag.get_int("DataVersion"),
+            Some(WORLD_DATA_VERSION)
+        );
+    }
+
+    #[test]
+    fn preserves_unknown_section_tags_when_reserializing() {
+        let mut section_compound = NbtCompound::new();
+        section_compound.put_byte("Y", 0);
+        section_compound.put_string("FutureSectionField", "retained".to_string());
+
+        let mut block_states = NbtCompound::new();
+        block_states.put_list("palette", vec![NbtTag::Int(0)]);
+        block_states.put_int("FutureBlockStatesField", 42);
+        section_compound.put_compound("block_states", block_states);
+
+        let mut biomes = NbtCompound::new();
+        biomes.put_list("palette", vec![NbtTag::Byte(0)]);
+        biomes.put_string("FutureBiomesField", "retained".to_string());
+        section_compound.put_compound("biomes", biomes);
+
+        let bytes = encode_chunk(0, vec![NbtTag::Compound(section_compound)]);
+        let chunk = ChunkData::internal_from_bytes(&bytes, Vector2::new(0, 0)).unwrap();
+        let encoded = chunk.internal_to_bytes();
+        let mut cursor = std::io::Cursor::new(encoded.as_ref());
+        let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+        let decoded = pumpkin_nbt::Nbt::read(&mut reader).unwrap();
+        let sections = decoded.root_tag.get_list("sections").unwrap();
+        let NbtTag::Compound(section) = &sections[0] else {
+            panic!("serialized section must be a compound");
+        };
+
+        assert_eq!(section.get_string("FutureSectionField"), Some("retained"));
+        assert_eq!(
+            section
+                .get_compound("block_states")
+                .and_then(|block_states| block_states.get_int("FutureBlockStatesField")),
+            Some(42)
+        );
+        assert_eq!(
+            section
+                .get_compound("biomes")
+                .and_then(|biomes| biomes.get_string("FutureBiomesField")),
+            Some("retained")
+        );
+    }
+
+    #[test]
+    fn fill_keeps_uniform_light_layers_implicit() {
+        let mut layer = LightContainer::new_filled(7);
+
+        layer.fill(0);
+        assert!(matches!(layer, LightContainer::Empty(0)));
+
+        layer.fill(15);
+        assert!(matches!(layer, LightContainer::Empty(15)));
     }
 }

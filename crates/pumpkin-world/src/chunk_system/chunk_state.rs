@@ -1,5 +1,6 @@
 use crate::chunk::{
     ChunkData, ChunkHeightmapType, ChunkHeightmaps, ChunkLight, ChunkSections,
+    format::LightContainer,
     palette::{BiomePalette, BlockPalette},
 };
 use crate::generation::biome_coords;
@@ -292,7 +293,31 @@ impl Chunk {
         // Move the light data instead of cloning it
         // By taking ownership of proto_chunk, we can move the light data directly
         // This prevents keeping duplicate lighting data in memory
-        let light_data = proto_chunk.light;
+        //
+        // The light engine only ever ran across the proto chunk's generated height (matching
+        // flat_block_map), same reasoning as build_level_sections above. `CChunkData`/
+        // `CLightUpdate` derive their section count directly from these arrays' length
+        // (`light_engine.sky_light.len()`), so if we don't pad them out to the full dimension
+        // height here too, the light portion of the packet ends up shorter than the block
+        // portion the client just computed from the dimension registry - the same network
+        // desync, just moved from the block data to the light data. Padding sections are
+        // full sky in a skylit dimension and empty in a dimension without skylight, matching
+        // the open-sky sections above the stored world.
+        let mut light_data = proto_chunk.light;
+        let total_sections = dimension.height as usize / BlockPalette::SIZE;
+        if light_data.sky_light.len() < total_sections {
+            let mut sky_light = light_data.sky_light.into_vec();
+            let mut block_light = light_data.block_light.into_vec();
+            sky_light.resize(
+                total_sections,
+                LightContainer::new_empty(u8::from(dimension.has_skylight) * 15),
+            );
+            block_light.resize(total_sections, LightContainer::new_empty(0));
+            light_data = ChunkLight {
+                sky_light: sky_light.into_boxed_slice(),
+                block_light: block_light.into_boxed_slice(),
+            };
+        }
 
         // Only mark lit if past the lighting stage, and the lighting config is "default" ("full" and "dark" modes skip proper lighting)
         let is_lit = proto_chunk.stage >= StagedChunkEnum::Lighting

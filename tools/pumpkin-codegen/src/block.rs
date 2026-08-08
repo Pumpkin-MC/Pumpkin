@@ -587,7 +587,7 @@ impl BlockState {
     }
 
     /// Emits the `BlockState { … }` struct literal token stream for code generation.
-    fn to_tokens(&self) -> TokenStream {
+    fn to_tokens(&self, block_name: &str) -> TokenStream {
         let mut tokens = TokenStream::new();
         let id = self.id;
         let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
@@ -601,6 +601,7 @@ impl BlockState {
         } else {
             quote! { 0 }
         };
+        let use_shape_for_light_occlusion = uses_shape_for_light_occlusion(block_name, self);
         let block_entity_type = if let Some(block_entity_type) = self.block_entity_type {
             let block_entity_type = LitInt::new(&block_entity_type.to_string(), Span::call_site());
             quote! { #block_entity_type }
@@ -630,11 +631,44 @@ impl BlockState {
                 collision_shapes: &[#(#collision_shapes),*],
                 outline_shapes: &[#(#outline_shapes),*],
                 opacity: #opacity,
+                use_shape_for_light_occlusion: #use_shape_for_light_occlusion,
                 block_entity_type: #block_entity_type,
             }
         });
         tokens
     }
+}
+
+/// Mirrors vanilla's explicit `useShapeForLightOcclusion` overrides. The generated
+/// state data already carries the vanilla light opacity, which distinguishes the
+/// state-dependent slab and piston-base overrides without allocating property
+/// objects during lighting.
+fn uses_shape_for_light_occlusion(block_name: &str, state: &BlockState) -> bool {
+    if block_name.ends_with("_stairs")
+        || matches!(
+            block_name,
+            "daylight_detector"
+                | "dirt_path"
+                | "enchanting_table"
+                | "end_portal_frame"
+                | "farmland"
+                | "lectern"
+                | "sculk_sensor"
+                | "sculk_shrieker"
+                | "snow"
+                | "stonecutter"
+                | "piston_head"
+        )
+        || block_name.ends_with("_shelf")
+    {
+        return true;
+    }
+
+    if block_name.ends_with("_slab") {
+        return state.opacity != Some(15);
+    }
+
+    matches!(block_name, "piston" | "sticky_piston") && state.opacity == Some(15)
 }
 
 #[derive(Deserialize, Copy, Clone)]
@@ -703,7 +737,10 @@ impl ToTokens for Block {
             quote! { None }
         };
         // Generate state tokens
-        let states = self.states.iter().map(BlockState::to_tokens);
+        let states = self
+            .states
+            .iter()
+            .map(|state| state.to_tokens(&self.name));
         let loot_table = if let Some(table) = &self.loot_table {
             let table_tokens = table.to_token_stream();
             quote! { Some(#table_tokens) }
@@ -718,7 +755,7 @@ impl ToTokens for Block {
             .unwrap();
         let mut default_state = default_state_ref.clone();
         default_state.id = default_state_ref.id;
-        let default_state = default_state.to_tokens();
+        let default_state = default_state.to_tokens(&self.name);
         let flammable = if let Some(flammable) = &self.flammable {
             let flammable_tokens = flammable.to_token_stream();
             quote! { Some(#flammable_tokens) }
