@@ -447,7 +447,12 @@ impl LightEngine {
         }
     }
 
-    pub fn initialize_light(&mut self, cache: &mut Cache, config: &LightingEngineConfig) {
+    pub fn initialize_light(
+        &mut self,
+        cache: &mut Cache,
+        config: &LightingEngineConfig,
+        has_skylight: bool,
+    ) {
         if *config != LightingEngineConfig::Default {
             return;
         }
@@ -460,7 +465,9 @@ impl LightEngine {
             return;
         }
 
-        self.sky_light.convert_light(cache);
+        if has_skylight {
+            self.sky_light.convert_light(cache);
+        }
         self.block_light.propagate_light(cache);
 
         self.block_light.clear();
@@ -518,5 +525,185 @@ impl LightEngine {
 impl Default for LightEngine {
     fn default() -> Self {
         Self::new()
+    }
+}
+#[cfg(test)]
+mod sky_light_heightmap_tests {
+    use super::*;
+    use crate::chunk::ChunkData;
+    use crate::chunk::format::chunk_codec_tests::encode_terrain_chunk_without_world_surface;
+    use crate::generation::get_world_gen;
+    use crate::generation::proto_chunk::ProtoChunk;
+    use pumpkin_data::Block;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::world_seed::Seed;
+
+    /// A 3x3 cache of chunks all loaded from disk NBT that carries terrain but
+    /// no `WORLD_SURFACE` heightmap, centered on chunk (0, 0).
+    fn cache_from_heightmapless_disk_chunks() -> Cache {
+        let world_gen = get_world_gen(
+            Seed(42),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+
+        let mut chunks = Vec::new();
+        for dx in -1..=1 {
+            for dz in -1..=1 {
+                let bytes = encode_terrain_chunk_without_world_surface(dx, dz);
+                let chunk_data = ChunkData::internal_from_bytes(&bytes, Vector2::new(dx, dz))
+                    .expect("test chunk must parse");
+                chunks.push(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
+                    &chunk_data,
+                    &world_gen,
+                ))));
+            }
+        }
+
+        Cache {
+            x: -1,
+            z: -1,
+            size: 3,
+            chunks,
+        }
+    }
+
+    /// A 3x3 cache of freshly generated proto chunks holding a synthetic ocean:
+    /// stone from the world bottom up to `seabed_y`, water from `seabed_y + 1`
+    /// up to `surface_y`, open air above.
+    fn ocean_cache(seabed_y: i32, surface_y: i32) -> Cache {
+        let world_gen = get_world_gen(
+            Seed(42),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+
+        let mut chunks = Vec::new();
+        for dx in -1..=1 {
+            for dz in -1..=1 {
+                let mut proto = ProtoChunk::new(dx, dz, &world_gen);
+                let bottom = proto.bottom_y() as i32;
+                for x in (dx * 16)..(dx * 16 + 16) {
+                    for z in (dz * 16)..(dz * 16 + 16) {
+                        for y in bottom..=seabed_y {
+                            proto.set_block_state(x, y, z, Block::STONE.default_state);
+                        }
+                        for y in (seabed_y + 1)..=surface_y {
+                            proto.set_block_state(x, y, z, Block::WATER.default_state);
+                        }
+                    }
+                }
+                chunks.push(Chunk::Proto(Box::new(proto)));
+            }
+        }
+
+        Cache {
+            x: -1,
+            z: -1,
+            size: 3,
+            chunks,
+        }
+    }
+
+    /// Vanilla: water's `getLightBlock` is 1, and the sky light engine charges
+    /// `max(1, opacity)` per step except straight down through a block that
+    /// propagates sky light (which water does not). So a water column loses
+    /// exactly one level per block: 15 in the air above the surface, 14 at the
+    /// topmost water block, and 0 fifteen blocks below that. A deep ocean floor
+    /// is genuinely pitch black. See <https://minecraft.wiki/w/Light>
+    /// ("Sunlight ... decreases by one level for each block of water").
+    #[test]
+    fn sky_light_attenuates_one_level_per_water_block() {
+        let surface_y = 62;
+        let seabed_y = 20;
+        let mut cache = ocean_cache(seabed_y, surface_y);
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, true);
+
+        let at = |cache: &Cache, y: i32| get_sky_light(cache, BlockPos(Vector3::new(8, y, 8)));
+
+        // Open air above the ocean surface.
+        assert_eq!(at(&cache, surface_y + 1), 15, "air above the water surface");
+
+        // One level per water block, down to darkness.
+        for depth in 0..=14i32 {
+            let y = surface_y - depth;
+            assert_eq!(
+                at(&cache, y),
+                14 - depth as u8,
+                "water at y={y} (depth {depth} below the surface)"
+            );
+        }
+
+        // Fifteen blocks below the surface and everything under it is dark,
+        // including the ocean floor.
+        for y in (seabed_y..=(surface_y - 15)).rev() {
+            assert_eq!(at(&cache, y), 0, "deep water / ocean floor at y={y}");
+        }
+    }
+
+    /// Non-vacuity: the assertions above are not "everything is 0" or
+    /// "everything is 15". A shallow pool lets a measurable, non-zero level
+    /// reach the floor, and the value there is the depth-derived one.
+    #[test]
+    fn shallow_water_leaves_a_measurable_level_on_the_floor() {
+        let surface_y = 62;
+        let seabed_y = 57; // 5 water blocks: 58..=62
+        let mut cache = ocean_cache(seabed_y, surface_y);
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, true);
+
+        let at = |cache: &Cache, y: i32| get_sky_light(cache, BlockPos(Vector3::new(8, y, 8)));
+
+        assert_eq!(at(&cache, surface_y + 1), 15);
+        assert_eq!(at(&cache, 62), 14);
+        assert_eq!(at(&cache, 58), 10, "lowest water block above the floor");
+        assert_eq!(at(&cache, seabed_y), 0, "opaque stone floor");
+    }
+
+    #[test]
+    fn deep_enclosed_block_stays_dark_without_a_world_surface_heightmap() {
+        let mut cache = cache_from_heightmapless_disk_chunks();
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, true);
+
+        // Sections -4..=3 are solid stone, so y = 0 is buried under 64 blocks of
+        // it with no sky access. A missing `WORLD_SURFACE` heightmap used to
+        // make `get_top_y` answer `min_y - 1`, i.e. "this column is empty", and
+        // the producer then filled the whole column with 15 - straight through
+        // the stone and out into neighbouring chunks.
+        for pos in [
+            BlockPos(Vector3::new(8, 0, 8)),
+            BlockPos(Vector3::new(0, -60, 0)),
+            BlockPos(Vector3::new(15, 32, 15)),
+        ] {
+            assert_eq!(
+                get_sky_light(&cache, pos),
+                0,
+                "enclosed position {pos:?} must be dark"
+            );
+        }
+
+        // The same run must still light open sky above the terrain, so the
+        // assertions above are not just "everything is 0".
+        assert_eq!(get_sky_light(&cache, BlockPos(Vector3::new(8, 100, 8))), 15);
+    }
+
+    #[test]
+    fn initialization_can_disable_sky_light_for_ceiling_dimensions() {
+        let mut cache = ocean_cache(20, 62);
+        let mut engine = LightEngine::new();
+        engine.initialize_light(&mut cache, &LightingEngineConfig::Default, false);
+
+        assert_eq!(get_sky_light(&cache, BlockPos(Vector3::new(8, 100, 8))), 0);
+        assert_eq!(
+            get_block_light(&cache, BlockPos(Vector3::new(8, 100, 8))),
+            0
+        );
     }
 }
