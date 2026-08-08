@@ -240,7 +240,12 @@ impl DataComponent {
     #[must_use]
     #[allow(clippy::too_many_lines)]
     pub fn try_from_name(name: &str) -> Option<Self> {
-        match name {
+        let name = if name.contains(':') {
+            std::borrow::Cow::Borrowed(name)
+        } else {
+            std::borrow::Cow::Owned(format!("minecraft:{name}"))
+        };
+        match name.as_ref() {
             "minecraft:custom_data" => Some(Self::CustomData),
             "minecraft:max_stack_size" => Some(Self::MaxStackSize),
             "minecraft:max_damage" => Some(Self::MaxDamage),

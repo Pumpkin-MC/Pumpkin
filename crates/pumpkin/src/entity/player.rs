@@ -105,7 +105,7 @@ use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::server::Server;
-use crate::world::World;
+use crate::world::{BlockBreakingProgress, World};
 use bytes::Bytes;
 
 use super::breath::BreathManager;
@@ -475,6 +475,8 @@ pub struct Player {
     pub stats: Mutex<statistics::Statistics>,
     /// The current stage of block destruction of the block the player is breaking.
     pub current_block_destroy_stage: AtomicI32,
+    /// The per-tick block destruction progress last sent to Bedrock clients.
+    pub current_block_breaking_speed: AtomicU32,
     /// Indicates if the player is currently mining a block.
     pub mining: AtomicBool,
     pub start_mining_time: AtomicI32,
@@ -689,6 +691,7 @@ impl Player {
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
+            current_block_breaking_speed: AtomicU32::new(0),
             enchantment_seed: AtomicI32::new(rand::random()),
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
@@ -2092,25 +2095,65 @@ impl Player {
         }
 
         if self.mining.load(Ordering::Relaxed) {
-            let pos = self.mining_pos.lock().await;
+            let pos = *self.mining_pos.lock().await;
             let world = self.world();
             let state = world.get_block_state(&pos);
             // Is the block broken?
             if state.is_air() {
                 world
-                    .set_block_breaking(&self.living_entity.entity, *pos, -1)
+                    .set_block_breaking(
+                        &self.living_entity.entity,
+                        pos,
+                        BlockBreakingProgress::Stop,
+                    )
                     .await;
                 self.current_block_destroy_stage
                     .store(-1, Ordering::Relaxed);
                 self.mining.store(false, Ordering::Relaxed);
             } else {
-                self.continue_mining(
-                    *pos,
-                    &world,
-                    state,
-                    self.start_mining_time.load(Ordering::Relaxed),
-                )
-                .await;
+                let finished = self
+                    .continue_mining(
+                        pos,
+                        &world,
+                        state,
+                        self.start_mining_time.load(Ordering::Relaxed),
+                    )
+                    .await;
+                if finished && matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) {
+                    self.mining.store(false, Ordering::Relaxed);
+                    self.current_block_destroy_stage
+                        .store(-1, Ordering::Relaxed);
+                    world
+                        .set_block_breaking(
+                            &self.living_entity.entity,
+                            pos,
+                            BlockBreakingProgress::Stop,
+                        )
+                        .await;
+
+                    let block = Block::from_state_id(state.id);
+                    let can_harvest = self.can_harvest(state, block).await;
+                    let flags = if can_harvest {
+                        pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
+                    } else {
+                        pumpkin_world::world::BlockFlags::SKIP_DROPS
+                            | pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
+                    };
+                    if world
+                        .break_block(&pos, Some(self.clone()), flags)
+                        .await
+                        .is_some()
+                    {
+                        server
+                            .block_registry
+                            .broken(&world, block, self, &pos, server, state)
+                            .await;
+                        self.apply_tool_damage_for_block_break(state).await;
+                        if can_harvest {
+                            self.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                        }
+                    }
+                }
             }
         }
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
@@ -2156,18 +2199,31 @@ impl Player {
         world: &World,
         state: &BlockState,
         starting_time: i32,
-    ) {
+    ) -> bool {
         let time = self.tick_counter.load(Ordering::Relaxed) - starting_time;
-        let speed = block::calc_block_breaking(self, state, Block::from_state_id(state.id)).await
-            * (time + 1) as f32;
-        let progress = (speed * 10.0) as i32;
-        if progress != self.current_block_destroy_stage.load(Ordering::Relaxed) {
+        let speed = block::calc_block_breaking(self, state, Block::from_state_id(state.id)).await;
+        let total_progress = speed * (time + 1) as f32;
+        let stage = (total_progress * 10.0) as i32;
+        let stage = stage.min(9);
+        let old_speed = self
+            .current_block_breaking_speed
+            .swap(speed.to_bits(), Ordering::Relaxed);
+        let speed_changed = old_speed != speed.to_bits();
+        if stage != self.current_block_destroy_stage.load(Ordering::Relaxed) || speed_changed {
             world
-                .set_block_breaking(&self.living_entity.entity, location, progress)
+                .set_block_breaking(
+                    &self.living_entity.entity,
+                    location,
+                    BlockBreakingProgress::Update {
+                        stage,
+                        speed: speed_changed.then_some(speed),
+                    },
+                )
                 .await;
             self.current_block_destroy_stage
-                .store(progress, Ordering::Relaxed);
+                .store(stage, Ordering::Relaxed);
         }
+        total_progress >= 1.0
     }
 
     pub async fn jump(&self) {

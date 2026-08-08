@@ -42,9 +42,11 @@ impl Clone for Box<dyn DataComponentImpl> {
 pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T {
     value.as_any().downcast_ref::<T>().unwrap_or_else(|| {
         panic!(
-            "you are trying to cast {} to {}",
+            "you are trying to cast {} ({}) to {} ({})",
             value.get_self_enum().to_name(),
-            T::get_enum().to_name()
+            std::any::type_name_of_val(value),
+            T::get_enum().to_name(),
+            std::any::type_name::<T>()
         )
     })
 }
@@ -52,10 +54,12 @@ pub fn get<T: DataComponentImpl + 'static>(value: &dyn DataComponentImpl) -> &T 
 #[inline]
 pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl) -> &mut T {
     let name = value.get_self_enum().to_name();
+    let val_type = std::any::type_name_of_val(value);
     value.as_mut_any().downcast_mut::<T>().unwrap_or_else(|| {
         panic!(
-            "you are trying to cast {name} to {}",
-            T::get_enum().to_name()
+            "you are trying to cast {name} ({val_type}) to {} ({})",
+            T::get_enum().to_name(),
+            std::any::type_name::<T>()
         )
     })
 }
@@ -63,7 +67,11 @@ pub fn get_mut<T: DataComponentImpl + 'static>(value: &mut dyn DataComponentImpl
 macro_rules! default_impl {
     ($t: ident) => {
         fn equal(&self, other: &dyn crate::data_component_impl::DataComponentImpl) -> bool {
-            self == crate::data_component_impl::get::<Self>(other)
+            if let Some(other) = other.as_any().downcast_ref::<Self>() {
+                self == other
+            } else {
+                false
+            }
         }
         #[inline]
         fn get_enum() -> crate::data_component::DataComponent
@@ -744,5 +752,34 @@ mod tests {
             CanPlaceOnImpl::read_data,
         );
         assert_round_trip(LockImpl { predicate }, LockImpl::read_data);
+    }
+
+    #[test]
+    fn equal_with_different_types_returns_false() {
+        let enc = EnchantmentsImpl {
+            enchantment: Cow::Borrowed(&[(&crate::Enchantment::SHARPNESS, 2)]),
+        };
+        let max_stack = MaxStackSizeImpl { size: 64 };
+        assert!(!enc.equal(&max_stack));
+    }
+
+    #[test]
+    fn enchantments_read_data_formats() {
+        let mut direct = NbtCompound::new();
+        direct.put_int("sharpness", 2);
+        let enc1 = EnchantmentsImpl::read_data(&NbtTag::Compound(direct)).unwrap();
+        assert!(enc1.enchantment[0].0 == &crate::Enchantment::SHARPNESS);
+        assert_eq!(enc1.enchantment[0].1, 2);
+
+        let mut levels = NbtCompound::new();
+        levels.put_int("minecraft:sharpness", 2);
+        let mut wrapped = NbtCompound::new();
+        wrapped
+            .child_tags
+            .insert("levels".into(), NbtTag::Compound(levels));
+        let enc2 = EnchantmentsImpl::read_data(&NbtTag::Compound(wrapped)).unwrap();
+        assert_eq!(enc2.enchantment.len(), 1);
+        assert!(enc2.enchantment[0].0 == &crate::Enchantment::SHARPNESS);
+        assert_eq!(enc2.enchantment[0].1, 2);
     }
 }
