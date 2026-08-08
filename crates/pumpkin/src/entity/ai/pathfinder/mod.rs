@@ -136,6 +136,15 @@ impl Navigator {
         self.evaluator.set_can_open_doors(can_open_doors);
     }
 
+    /// Selects the `FlyNodeEvaluator` behavior used by vanilla `FlyingPathNavigation`.
+    pub const fn set_flying(&mut self, flying: bool) {
+        self.evaluator.set_flying(flying);
+    }
+
+    pub fn set_can_float(&mut self, can_float: bool) {
+        self.evaluator.set_can_float(can_float);
+    }
+
     pub const fn set_mob_dimensions(&mut self, width: f32, height: f32) {
         self.mob_width = width;
         self.mob_height = height;

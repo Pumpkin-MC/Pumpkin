@@ -16,6 +16,7 @@ pub struct WalkNodeEvaluator {
     base: BaseNodeEvaluator,
     path_types_cache: FxHashMap<Vector3<i32>, PathType>,
     reusable_neighbors: [Option<Node>; 4],
+    flying: bool,
 }
 
 impl WalkNodeEvaluator {
@@ -25,7 +26,12 @@ impl WalkNodeEvaluator {
             base: BaseNodeEvaluator::new(),
             path_types_cache: FxHashMap::default(),
             reusable_neighbors: [None, None, None, None],
+            flying: false,
         }
+    }
+
+    pub const fn set_flying(&mut self, flying: bool) {
+        self.flying = flying;
     }
 
     const fn is_amphibious(&self) -> bool {
@@ -330,6 +336,245 @@ impl WalkNodeEvaluator {
 
         Some(node)
     }
+
+    /// `FlyNodeEvaluator.getStart`: flying mobs start at their current block height instead of
+    /// searching for a floor below them. The fallback candidates cover the same immediate
+    /// escape positions for a blocked start while keeping the evaluator's node cache intact.
+    async fn get_flying_start(&mut self) -> Option<Node> {
+        let mob_data = self.base.mob_data.as_ref()?;
+        let start = Vector3::new(
+            mob_data.position.x.floor() as i32,
+            (mob_data.position.y + 0.5).floor() as i32,
+            mob_data.position.z.floor() as i32,
+        );
+
+        if let Some(node) = self.get_flying_start_node(start).await {
+            return Some(node);
+        }
+
+        for y in -1..=1 {
+            for x in -1..=1 {
+                for z in -1..=1 {
+                    if x == 0 && y == 0 && z == 0 {
+                        continue;
+                    }
+                    if let Some(node) = self.get_flying_start_node(start.add_raw(x, y, z)).await {
+                        return Some(node);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    async fn get_flying_start_node(&mut self, pos: Vector3<i32>) -> Option<Node> {
+        let path_type = self.get_cached_path_type(pos).await;
+        let penalty = self.get_mob_penalty(path_type);
+        if penalty < 0.0 {
+            return None;
+        }
+
+        let mut node = self.base.get_node(pos.as_blockpos());
+        node.path_type = path_type;
+        node.cost_malus = penalty.max(node.cost_malus);
+        Some(node)
+    }
+
+    async fn find_flying_accepted_node(&mut self, pos: Vector3<i32>) -> Option<Node> {
+        let path_type = self.get_cached_path_type(pos).await;
+        let penalty = self.get_mob_penalty(path_type);
+        if penalty < 0.0 {
+            return None;
+        }
+
+        let mut node = self.base.get_node(pos.as_blockpos());
+        node.path_type = path_type;
+        node.cost_malus = penalty.max(node.cost_malus);
+        if path_type == PathType::Walkable {
+            // `FlyNodeEvaluator.findAcceptedNode` adds one to WALKABLE nodes after applying
+            // the mob malus. This affects the A* tie-breaking around ledges.
+            node.cost_malus += 1.0;
+        }
+        Some(node)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    async fn get_flying_neighbors(&mut self, current: &Node, out: &mut Vec<Node>) {
+        let pos = current.pos.0;
+
+        let south = self.find_flying_accepted_node(pos.add_raw(0, 0, 1)).await;
+        let west = self.find_flying_accepted_node(pos.add_raw(-1, 0, 0)).await;
+        let east = self.find_flying_accepted_node(pos.add_raw(1, 0, 0)).await;
+        let north = self.find_flying_accepted_node(pos.add_raw(0, 0, -1)).await;
+        let up = self.find_flying_accepted_node(pos.add_raw(0, 1, 0)).await;
+        let down = self.find_flying_accepted_node(pos.add_raw(0, -1, 0)).await;
+
+        push_flying_if_open(out, south);
+        push_flying_if_open(out, west);
+        push_flying_if_open(out, east);
+        push_flying_if_open(out, north);
+        push_flying_if_open(out, up);
+        push_flying_if_open(out, down);
+
+        let south_up = self.find_flying_accepted_node(pos.add_raw(0, 1, 1)).await;
+        if is_flying_open(&south_up) && has_flying_malus(&south) && has_flying_malus(&up) {
+            out.push(south_up.unwrap());
+        }
+        let west_up = self.find_flying_accepted_node(pos.add_raw(-1, 1, 0)).await;
+        if is_flying_open(&west_up) && has_flying_malus(&west) && has_flying_malus(&up) {
+            out.push(west_up.unwrap());
+        }
+        let east_up = self.find_flying_accepted_node(pos.add_raw(1, 1, 0)).await;
+        if is_flying_open(&east_up) && has_flying_malus(&east) && has_flying_malus(&up) {
+            out.push(east_up.unwrap());
+        }
+        let north_up = self.find_flying_accepted_node(pos.add_raw(0, 1, -1)).await;
+        if is_flying_open(&north_up) && has_flying_malus(&north) && has_flying_malus(&up) {
+            out.push(north_up.unwrap());
+        }
+
+        let south_down = self.find_flying_accepted_node(pos.add_raw(0, -1, 1)).await;
+        if is_flying_open(&south_down) && has_flying_malus(&south) && has_flying_malus(&down) {
+            out.push(south_down.unwrap());
+        }
+        let west_down = self.find_flying_accepted_node(pos.add_raw(-1, -1, 0)).await;
+        if is_flying_open(&west_down) && has_flying_malus(&west) && has_flying_malus(&down) {
+            out.push(west_down.unwrap());
+        }
+        let east_down = self.find_flying_accepted_node(pos.add_raw(1, -1, 0)).await;
+        if is_flying_open(&east_down) && has_flying_malus(&east) && has_flying_malus(&down) {
+            out.push(east_down.unwrap());
+        }
+        let north_down = self.find_flying_accepted_node(pos.add_raw(0, -1, -1)).await;
+        if is_flying_open(&north_down) && has_flying_malus(&north) && has_flying_malus(&down) {
+            out.push(north_down.unwrap());
+        }
+
+        let north_east = self.find_flying_accepted_node(pos.add_raw(1, 0, -1)).await;
+        if is_flying_open(&north_east) && has_flying_malus(&north) && has_flying_malus(&east) {
+            out.push(north_east.unwrap());
+        }
+        let south_east = self.find_flying_accepted_node(pos.add_raw(1, 0, 1)).await;
+        if is_flying_open(&south_east) && has_flying_malus(&south) && has_flying_malus(&east) {
+            out.push(south_east.unwrap());
+        }
+        let north_west = self.find_flying_accepted_node(pos.add_raw(-1, 0, -1)).await;
+        if is_flying_open(&north_west) && has_flying_malus(&north) && has_flying_malus(&west) {
+            out.push(north_west.unwrap());
+        }
+        let south_west = self.find_flying_accepted_node(pos.add_raw(-1, 0, 1)).await;
+        if is_flying_open(&south_west) && has_flying_malus(&south) && has_flying_malus(&west) {
+            out.push(south_west.unwrap());
+        }
+
+        let north_east_up = self.find_flying_accepted_node(pos.add_raw(1, 1, -1)).await;
+        if is_flying_open(&north_east_up)
+            && has_flying_malus(&north_east)
+            && has_flying_malus(&north)
+            && has_flying_malus(&east)
+            && has_flying_malus(&up)
+            && has_flying_malus(&north_up)
+            && has_flying_malus(&east_up)
+        {
+            out.push(north_east_up.unwrap());
+        }
+        let south_east_up = self.find_flying_accepted_node(pos.add_raw(1, 1, 1)).await;
+        if is_flying_open(&south_east_up)
+            && has_flying_malus(&south_east)
+            && has_flying_malus(&south)
+            && has_flying_malus(&east)
+            && has_flying_malus(&up)
+            && has_flying_malus(&south_up)
+            && has_flying_malus(&east_up)
+        {
+            out.push(south_east_up.unwrap());
+        }
+        let north_west_up = self.find_flying_accepted_node(pos.add_raw(-1, 1, -1)).await;
+        if is_flying_open(&north_west_up)
+            && has_flying_malus(&north_west)
+            && has_flying_malus(&north)
+            && has_flying_malus(&west)
+            && has_flying_malus(&up)
+            && has_flying_malus(&north_up)
+            && has_flying_malus(&west_up)
+        {
+            out.push(north_west_up.unwrap());
+        }
+        let south_west_up = self.find_flying_accepted_node(pos.add_raw(-1, 1, 1)).await;
+        if is_flying_open(&south_west_up)
+            && has_flying_malus(&south_west)
+            && has_flying_malus(&south)
+            && has_flying_malus(&west)
+            && has_flying_malus(&up)
+            && has_flying_malus(&south_up)
+            && has_flying_malus(&west_up)
+        {
+            out.push(south_west_up.unwrap());
+        }
+
+        let north_east_down = self.find_flying_accepted_node(pos.add_raw(1, -1, -1)).await;
+        if is_flying_open(&north_east_down)
+            && has_flying_malus(&north_east)
+            && has_flying_malus(&north)
+            && has_flying_malus(&east)
+            && has_flying_malus(&down)
+            && has_flying_malus(&north_down)
+            && has_flying_malus(&east_down)
+        {
+            out.push(north_east_down.unwrap());
+        }
+        let south_east_down = self.find_flying_accepted_node(pos.add_raw(1, -1, 1)).await;
+        if is_flying_open(&south_east_down)
+            && has_flying_malus(&south_east)
+            && has_flying_malus(&south)
+            && has_flying_malus(&east)
+            && has_flying_malus(&down)
+            && has_flying_malus(&south_down)
+            && has_flying_malus(&east_down)
+        {
+            out.push(south_east_down.unwrap());
+        }
+        let north_west_down = self
+            .find_flying_accepted_node(pos.add_raw(-1, -1, -1))
+            .await;
+        if is_flying_open(&north_west_down)
+            && has_flying_malus(&north_west)
+            && has_flying_malus(&north)
+            && has_flying_malus(&west)
+            && has_flying_malus(&down)
+            && has_flying_malus(&north_down)
+            && has_flying_malus(&west_down)
+        {
+            out.push(north_west_down.unwrap());
+        }
+        let south_west_down = self.find_flying_accepted_node(pos.add_raw(-1, -1, 1)).await;
+        if is_flying_open(&south_west_down)
+            && has_flying_malus(&south_west)
+            && has_flying_malus(&south)
+            && has_flying_malus(&west)
+            && has_flying_malus(&down)
+            && has_flying_malus(&south_down)
+            && has_flying_malus(&west_down)
+        {
+            out.push(south_west_down.unwrap());
+        }
+    }
+}
+
+#[allow(clippy::ref_option)]
+fn is_flying_open(node: &Option<Node>) -> bool {
+    node.as_ref().is_some_and(|node| !node.closed)
+}
+
+fn push_flying_if_open(out: &mut Vec<Node>, node: Option<Node>) {
+    if is_flying_open(&node) {
+        out.push(node.unwrap());
+    }
+}
+
+#[allow(clippy::ref_option)]
+fn has_flying_malus(node: &Option<Node>) -> bool {
+    node.as_ref().is_some_and(|node| node.cost_malus >= 0.0)
 }
 
 impl NodeEvaluator for WalkNodeEvaluator {
@@ -355,6 +600,10 @@ impl NodeEvaluator for WalkNodeEvaluator {
     }
 
     async fn get_start(&mut self) -> Option<Node> {
+        if self.flying {
+            return self.get_flying_start().await;
+        }
+
         let mob_data = self.base.mob_data.as_ref()?;
         let mob_x = mob_data.position.x;
         let mob_y_f64 = mob_data.position.y;
@@ -409,6 +658,11 @@ impl NodeEvaluator for WalkNodeEvaluator {
     }
 
     async fn get_neighbors(&mut self, current: &Node, out_neighbors: &mut Vec<Node>) {
+        if self.flying {
+            self.get_flying_neighbors(current, out_neighbors).await;
+            return;
+        }
+
         let headroom_type = self
             .get_cached_path_type(current.pos.0.add_raw(0, 1, 0))
             .await;

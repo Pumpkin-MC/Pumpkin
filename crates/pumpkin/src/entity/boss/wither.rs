@@ -10,11 +10,11 @@ use std::sync::{Arc, Weak};
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    ai::control::flying_move_control::FlyingMoveControl,
     ai::goal::{
         Controls, Goal, GoalFuture, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, revenge::RevengeGoal, track_target::TrackTargetGoal,
     },
-    ai::control::flying_move_control::FlyingMoveControl,
     ai::pathfinder::NavigatorGoal,
     ai::target_predicate::TargetPredicate,
     mob::{Mob, MobEntity},
@@ -32,6 +32,12 @@ impl WitherEntity {
         // `WitherBoss` installs `new FlyingMoveControl<>(this, 10, false)` in its
         // constructor. The controller is responsible for FLYING_SPEED and vertical input.
         *mob_entity.move_control.lock().unwrap() = Box::new(FlyingMoveControl::new(10.0, false));
+        {
+            let mut navigator = mob_entity.navigator.lock().unwrap();
+            navigator.set_flying(true);
+            navigator.set_can_float(true);
+            navigator.set_can_open_doors(false);
+        };
         let wither = Self {
             mob_entity,
             invulnerable_ticks: AtomicI32::new(0),
@@ -478,10 +484,10 @@ impl WitherNearestTargetGoal {
             .collect();
         candidates.sort_by(|a, b| {
             let distance = |candidate: &Arc<dyn EntityBase>| {
-                    candidate
-                        .get_entity()
-                        .pos
-                        .load()
+                candidate
+                    .get_entity()
+                    .pos
+                    .load()
                     .squared_distance_to_vec(&search_pos)
             };
             distance(a).partial_cmp(&distance(b)).unwrap()
