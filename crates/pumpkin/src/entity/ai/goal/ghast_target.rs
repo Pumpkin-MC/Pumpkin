@@ -65,17 +65,23 @@ impl GhastNearestPlayerTargetGoal {
         })
     }
 
-    async fn find_closest_target(&mut self, mob: &MobEntity) {
-        let follow_range = mob
+    async fn find_closest_target(&mut self, mob: &dyn Mob) {
+        let mob_entity = mob.get_mob_entity();
+        let follow_range = mob_entity
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
         self.target_predicate.base_max_distance = follow_range;
 
-        let world = mob.living_entity.entity.world.load();
-        let ghast_y = mob.living_entity.entity.pos.load().y;
+        let world = mob_entity.living_entity.entity.world.load();
+        let ghast_y = mob_entity.living_entity.entity.pos.load().y;
 
-        let mut search_pos = mob.living_entity.entity.pos.load();
-        search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
+        let mut search_pos = mob_entity.living_entity.entity.pos.load();
+        search_pos.y += mob_entity
+            .living_entity
+            .entity
+            .entity_dimension
+            .load()
+            .eye_height as f64;
 
         let mut candidates = world.get_nearby_players(search_pos, follow_range);
         candidates.sort_by(|a, b| {
@@ -91,9 +97,14 @@ impl GhastNearestPlayerTargetGoal {
         let mut result = None;
         for player in candidates {
             if within_vertical_range(player.get_entity().pos.load().y, ghast_y)
+                && mob.can_attack(player.get_entity())
                 && self
                     .target_predicate
-                    .test(&world, Some(&mob.living_entity), &player.living_entity)
+                    .test(
+                        &world,
+                        Some(&mob_entity.living_entity),
+                        &player.living_entity,
+                    )
                     .await
             {
                 result = Some(player as Arc<dyn EntityBase>);
@@ -112,7 +123,7 @@ impl Goal for GhastNearestPlayerTargetGoal {
             {
                 return false;
             }
-            self.find_closest_target(mob.get_mob_entity()).await;
+            self.find_closest_target(mob).await;
             self.target.is_some()
         })
     }

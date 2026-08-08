@@ -730,13 +730,8 @@ pub trait Mob: EntityBase + Send + Sync {
     /// (`TargetingConditions.java:78`). Defaults to `true`; species with a blanket "never
     /// target this" rule (Iron Golem's player-created and creeper exclusions) override it.
     ///
-    /// Consulted at initial acquisition by `ActiveTargetGoal::find_closest_target` and
-    /// `NearestHostileTargetGoal::find_closest_target`, and at continuation by
-    /// `RevengeGoal::can_start` and `TrackTargetGoal::can_track`. Not yet threaded through
-    /// `nearest_attackable_witch_target.rs`, `polar_bear_attack_players.rs`,
-    /// `defend_village_target.rs`, `ghast_target.rs`, or `non_tame_random_target.rs`, which
-    /// still call `TargetPredicate::test` directly against a `&MobEntity` with no `dyn Mob`
-    /// in scope.
+    /// Consulted at initial acquisition by the active, hostile, witch, ghast, and non-tame target
+    /// goals, and at continuation by `RevengeGoal` and `TrackTargetGoal`.
     fn can_attack(&self, _target: &Entity) -> bool {
         true
     }

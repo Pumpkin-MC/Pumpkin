@@ -38,7 +38,8 @@ impl NearestAttackableWitchTargetGoal {
         }
     }
 
-    async fn find_closest_player(&mut self, mob_entity: &MobEntity) {
+    async fn find_closest_player(&mut self, mob: &dyn Mob) {
+        let mob_entity = mob.get_mob_entity();
         let follow_range = mob_entity
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
@@ -70,14 +71,15 @@ impl NearestAttackableWitchTargetGoal {
 
         self.target = None;
         for player in candidates {
-            if self
-                .target_predicate
-                .test(
-                    &world,
-                    Some(&mob_entity.living_entity),
-                    &player.living_entity,
-                )
-                .await
+            if mob.can_attack(player.get_entity())
+                && self
+                    .target_predicate
+                    .test(
+                        &world,
+                        Some(&mob_entity.living_entity),
+                        &player.living_entity,
+                    )
+                    .await
             {
                 self.target = Some(player as Arc<dyn EntityBase>);
                 break;
@@ -98,7 +100,7 @@ impl Goal for NearestAttackableWitchTargetGoal {
             if rand::rng().random_range(0..to_goal_ticks(RANDOM_INTERVAL)) != 0 {
                 return false;
             }
-            self.find_closest_player(mob.get_mob_entity()).await;
+            self.find_closest_player(mob).await;
             self.target.is_some()
         })
     }

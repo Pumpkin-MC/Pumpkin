@@ -94,15 +94,21 @@ impl NonTameRandomTargetGoal {
         Self::new(mob, target_types, check_visibility, Some(always_true))
     }
 
-    async fn find_closest_target(&mut self, mob: &MobEntity) {
-        let follow_range = mob
+    async fn find_closest_target(&mut self, mob: &dyn Mob) {
+        let mob_entity = mob.get_mob_entity();
+        let follow_range = mob_entity
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
         self.target_predicate.base_max_distance = follow_range;
 
-        let world = mob.living_entity.entity.world.load();
-        let mut search_pos = mob.living_entity.entity.pos.load();
-        search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
+        let world = mob_entity.living_entity.entity.world.load();
+        let mut search_pos = mob_entity.living_entity.entity.pos.load();
+        search_pos.y += mob_entity
+            .living_entity
+            .entity
+            .entity_dimension
+            .load()
+            .eye_height as f64;
 
         let potential_entity = if self.target_types == [&EntityType::PLAYER].as_slice() {
             world
@@ -114,9 +120,10 @@ impl NonTameRandomTargetGoal {
 
         if let Some(potential_entity) = potential_entity
             && let Some(living) = potential_entity.get_living_entity()
+            && mob.can_attack(potential_entity.get_entity())
             && self
                 .target_predicate
-                .test(&world, Some(&mob.living_entity), living)
+                .test(&world, Some(&mob_entity.living_entity), living)
                 .await
         {
             self.target = Some(potential_entity);
@@ -140,7 +147,7 @@ impl Goal for NonTameRandomTargetGoal {
                 return false;
             }
 
-            self.find_closest_target(mob.get_mob_entity()).await;
+            self.find_closest_target(mob).await;
             self.target.is_some()
         })
     }
