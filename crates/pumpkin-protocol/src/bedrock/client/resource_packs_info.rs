@@ -1,6 +1,8 @@
 use crate::serial::PacketWrite;
 use pumpkin_macros::packet;
 use std::io::{Error, Write};
+
+#[derive(PacketWrite)]
 pub struct ResourcePackEntry {
     pub uuid: uuid::Uuid,
     pub version: String,
@@ -12,23 +14,6 @@ pub struct ResourcePackEntry {
     pub addon_pack: bool,
     pub rtx_enabled: bool,
     pub download_url: String,
-}
-
-impl PacketWrite for ResourcePackEntry {
-    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.uuid.write(writer)?;
-        self.version.write(writer)?;
-        // Bedrock uses Little Endian u64 for size
-        writer.write_all(&self.size.to_le_bytes())?;
-        self.content_key.write(writer)?;
-        self.sub_pack_name.write(writer)?;
-        self.content_id.write(writer)?;
-        self.has_scripts.write(writer)?;
-        self.addon_pack.write(writer)?;
-        self.rtx_enabled.write(writer)?;
-        self.download_url.write(writer)?;
-        Ok(())
-    }
 }
 
 #[packet(6)]
