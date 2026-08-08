@@ -2514,78 +2514,7 @@ impl World {
             &actor_data,
         );
 
-        // 2. Spawn existing players for our new Bedrock client
-        let players = self.players.load();
-
-        for existing_player in players
-            .iter()
-            .filter(|p| p.gameprofile.id != gameprofile.id)
-        {
-            let ex_profile = &existing_player.gameprofile;
-            let ex_entity = &existing_player.get_entity();
-            let ex_pos = ex_entity.pos.load();
-            let ex_vel = ex_entity.velocity.load();
-
-            let ex_player_list = CPlayerList {
-                action: CPlayerList::ACTION_ADD,
-                entries: vec![PlayerListEntry {
-                    uuid: ex_profile.id,
-                    entity_unique_id: VarLong(existing_player.entity_id() as i64),
-                    username: ex_profile.name.clone(),
-                    xuid: String::new(),
-                    platform_chat_id: String::new(),
-                    build_platform: 0,
-                    skin: (**existing_player.bedrock_skin.load()).clone(),
-                    is_teacher: false,
-                    is_host: false,
-                    is_sub_client: false,
-                    player_color: [0, 0, 0, 0],
-                }],
-            };
-            // Send PlayerList FIRST
-            client.send_game_packet(&ex_player_list).await;
-
-            let ex_add_player = CAddPlayer {
-                uuid: ex_profile.id,
-                username: ex_profile.name.clone(),
-                entity_runtime_id: VarULong(existing_player.entity_id() as u64),
-                platform_chat_id: String::new(),
-                position: Vector3::new(ex_pos.x as f32, ex_pos.y as f32, ex_pos.z as f32),
-                velocity: Vector3::new(ex_vel.x as f32, ex_vel.y as f32, ex_vel.z as f32),
-                pitch: ex_entity.pitch.load(),
-                yaw: ex_entity.yaw.load(),
-                head_yaw: ex_entity.head_yaw.load(),
-                held_item: NetworkItemDescriptor::default(),
-                game_mode: VarInt(match existing_player.gamemode.load() {
-                    GameMode::Survival => 0,
-                    GameMode::Creative => 1,
-                    GameMode::Adventure => 2,
-                    GameMode::Spectator => 6,
-                }),
-                metadata: ex_entity.bedrock_metadata(),
-                properties: EntityProperties::default(),
-                ability_data: pumpkin_protocol::bedrock::client::add_player::AbilityData {
-                    entity_unique_id: existing_player.entity_id() as i64,
-                    player_permissions: 0,
-                    command_permissions: 0,
-                    layers: vec![pumpkin_protocol::bedrock::client::AbilityLayer {
-                        serialized_layer: 0,
-                        abilities_set: 0,
-                        ability_value: 0,
-                        fly_speed: 0.05,
-                        vertical_fly_speed: 0.05,
-                        walk_speed: 0.1,
-                    }],
-                },
-                links: Vec::new(),
-                device_id: String::new(),
-                build_platform: 0,
-            };
-
-            client.send_game_packet(&ex_add_player).await;
-        }
-
-        // 3. Trigger Join Event and Broadcast Join Message
+        // 2. Trigger Join Event and Broadcast Join Message
         let msg_comp = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_PLAYER_JOINED,
             translation::bedrock::MULTIPLAYER_PLAYER_JOINED,
@@ -2600,6 +2529,84 @@ impl World {
             self.broadcast_system_message(&event.join_message, false)
                 .await;
             info!("{}", event.join_message.to_pretty_console());
+        }
+    }
+
+    /// Sends the current player list after a Bedrock client finishes loading.
+    pub(crate) async fn spawn_players_for_bedrock(&self, player: &Player) {
+        let Some(client) = player.client.bedrock() else {
+            return;
+        };
+
+        for existing_player in self
+            .players
+            .load()
+            .iter()
+            .filter(|existing| existing.gameprofile.id != player.gameprofile.id)
+        {
+            let gameprofile = &existing_player.gameprofile;
+            let entity = existing_player.get_entity();
+            let position = entity.pos.load();
+            let velocity = entity.velocity.load();
+
+            // Bedrock must receive the player-list entry before AddPlayer.
+            client
+                .send_game_packet(&CPlayerList {
+                    action: CPlayerList::ACTION_ADD,
+                    entries: vec![PlayerListEntry {
+                        uuid: gameprofile.id,
+                        entity_unique_id: VarLong(existing_player.entity_id() as i64),
+                        username: gameprofile.name.clone(),
+                        xuid: String::new(),
+                        platform_chat_id: String::new(),
+                        build_platform: 0,
+                        skin: (**existing_player.bedrock_skin.load()).clone(),
+                        is_teacher: false,
+                        is_host: false,
+                        is_sub_client: false,
+                        player_color: [0, 0, 0, 0],
+                    }],
+                })
+                .await;
+
+            client
+                .send_game_packet(&CAddPlayer {
+                    uuid: gameprofile.id,
+                    username: gameprofile.name.clone(),
+                    entity_runtime_id: VarULong(existing_player.entity_id() as u64),
+                    platform_chat_id: String::new(),
+                    position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
+                    velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+                    pitch: entity.pitch.load(),
+                    yaw: entity.yaw.load(),
+                    head_yaw: entity.head_yaw.load(),
+                    held_item: NetworkItemDescriptor::default(),
+                    game_mode: VarInt(match existing_player.gamemode.load() {
+                        GameMode::Survival => 0,
+                        GameMode::Creative => 1,
+                        GameMode::Adventure => 2,
+                        GameMode::Spectator => 6,
+                    }),
+                    metadata: entity.bedrock_metadata(),
+                    properties: EntityProperties::default(),
+                    ability_data: pumpkin_protocol::bedrock::client::add_player::AbilityData {
+                        entity_unique_id: existing_player.entity_id() as i64,
+                        player_permissions: 0,
+                        command_permissions: 0,
+                        layers: vec![pumpkin_protocol::bedrock::client::AbilityLayer {
+                            serialized_layer: 0,
+                            abilities_set: 0,
+                            ability_value: 0,
+                            fly_speed: 0.05,
+                            vertical_fly_speed: 0.05,
+                            walk_speed: 0.1,
+                        }],
+                    },
+                    links: Vec::new(),
+                    device_id: String::new(),
+                    build_platform: 0,
+                })
+                .await;
         }
     }
 
@@ -2947,11 +2954,12 @@ impl World {
             velocity,
         );
 
-        self.broadcast_packet_except_editioned_sync(
+        self.broadcast_packet_except_editioned(
             &[player.gameprofile.id],
             &spawn_entity,
             &bedrock_add_player,
-        );
+        )
+        .await;
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
