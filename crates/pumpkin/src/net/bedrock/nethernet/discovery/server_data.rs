@@ -1,4 +1,4 @@
-const VERSION: u8 = 5;
+const VERSION: u8 = 6;
 
 pub const TRANSPORT_LAYER_NETHERNET: i32 = 2;
 pub const CONNECTION_TYPE_LAN_SIGNALING: i32 = 4;
@@ -15,6 +15,8 @@ pub struct ServerData<'a> {
     pub hardcore: bool,
     pub accepts_online_auth: bool,
     pub accepts_self_signed_auth: bool,
+    /// Stable identifier of the world, sent as 16 lowercase hexadecimal digits.
+    pub world_id: &'a str,
     pub transport_layer: i32,
     pub connection_type: i32,
 }
@@ -32,6 +34,7 @@ impl ServerData<'_> {
         out.push(u8::from(self.hardcore));
         out.push(u8::from(self.accepts_online_auth));
         out.push(u8::from(self.accepts_self_signed_auth));
+        write_string(&mut out, self.world_id);
         write_var_int(&mut out, self.transport_layer);
         write_var_int(&mut out, self.connection_type);
         out
@@ -59,31 +62,28 @@ fn write_var_uint(out: &mut Vec<u8>, mut value: u32) {
 mod tests {
     use super::*;
 
+    /// Byte-for-byte reproduction of a `1.26.40` dedicated server response.
     #[test]
     fn encodes_the_vanilla_layout() {
         let data = ServerData {
-            server_name: "Pumpkin",
-            level_name: "world",
+            server_name: "Dedicated Server",
+            level_name: "Bedrock level",
             game_type: 0,
-            player_count: 1,
-            max_player_count: 20,
+            player_count: 0,
+            max_player_count: 10,
             editor_world: false,
             hardcore: false,
             accepts_online_auth: true,
             accepts_self_signed_auth: false,
+            world_id: "b9b3c028566627f7",
             transport_layer: TRANSPORT_LAYER_NETHERNET,
             connection_type: CONNECTION_TYPE_LAN_SIGNALING,
         };
-        let encoded = data.encode();
-        let mut expected = vec![VERSION, 7];
-        expected.extend_from_slice(b"Pumpkin");
-        expected.push(5);
-        expected.extend_from_slice(b"world");
-        expected.push(0);
-        expected.extend_from_slice(&1i32.to_le_bytes());
-        expected.extend_from_slice(&20i32.to_le_bytes());
-        expected.extend_from_slice(&[0, 0, 1, 0, 4, 8]);
-        assert_eq!(encoded, expected);
+        assert_eq!(
+            hex::encode(data.encode()),
+            "0610446564696361746564205365727665720d426564726f636b206c6576656c\
+             00000000000a0000000000010010623962336330323835363636323766370408"
+        );
     }
 
     #[test]

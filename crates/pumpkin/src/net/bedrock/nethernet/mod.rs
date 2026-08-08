@@ -40,6 +40,9 @@ use self::{
 };
 use crate::{STOP_INTERRUPT, server::Server};
 
+/// Liveness probe clients send before opening a connection.
+const PING_MESSAGE: &str = "Ping";
+
 const DATAGRAM_BUFFER_SIZE: usize = 65535;
 const NEGOTIATION_TIMEOUT: Duration = Duration::from_secs(15);
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(1);
@@ -68,6 +71,7 @@ impl NetherNetListener {
         let transport = Arc::new(Transport {
             socket,
             network_id,
+            world_id: format!("{:016x}", server.server_guid),
             identity_key,
             oidc_verifier,
             stun_servers: stun_servers.into(),
@@ -105,6 +109,7 @@ struct Negotiation {
 struct Transport {
     socket: UdpSocket,
     network_id: u64,
+    world_id: String,
     identity_key: Arc<SigningKey>,
     oidc_verifier: Option<Arc<(String, Jwks)>>,
     stun_servers: Arc<[String]>,
@@ -151,6 +156,10 @@ impl Transport {
             }
             DiscoveryPacket::Message { recipient_id, data } => {
                 if recipient_id != self.network_id {
+                    return;
+                }
+                // Clients probe a server with an empty or "Ping" message before connecting.
+                if data.is_empty() || data == PING_MESSAGE {
                     return;
                 }
                 let Some(signal) = Signal::parse(&data) else {
@@ -413,6 +422,7 @@ impl Transport {
             hardcore: self.server.basic_config.hardcore,
             accepts_online_auth: config.online_mode,
             accepts_self_signed_auth: !config.online_mode,
+            world_id: &self.world_id,
             transport_layer: TRANSPORT_LAYER_NETHERNET,
             connection_type: CONNECTION_TYPE_LAN_SIGNALING,
         }

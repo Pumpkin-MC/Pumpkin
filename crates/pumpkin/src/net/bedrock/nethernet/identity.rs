@@ -62,14 +62,19 @@ pub fn load_or_create_identity_key(path: &FsPath) -> std::io::Result<Arc<Signing
     }
 }
 
+/// Verifies the identity assertion of an SDP offer and strips it from the description.
+/// Clients connecting over LAN may omit the assertion entirely, in which case the offer is
+/// returned untouched and the connection stays unauthenticated at the transport level.
 pub fn verify_and_strip_identity(
     offer: &str,
     oidc_verifier: Option<&(String, Jwks)>,
-) -> Result<(String, PublicKey), String> {
-    let identity = offer
+) -> Result<(String, Option<PublicKey>), String> {
+    let Some(identity) = offer
         .lines()
         .find_map(|line| line.strip_prefix("a=identity:"))
-        .ok_or_else(|| "SDP offer is missing its identity assertion".to_string())?;
+    else {
+        return Ok((offer.to_string(), None));
+    };
     let identity = general_purpose::STANDARD
         .decode(identity.trim())
         .map_err(|error| format!("invalid identity encoding: {error}"))?;
@@ -107,7 +112,7 @@ pub fn verify_and_strip_identity(
         .collect::<Vec<_>>()
         .join("\r\n");
     stripped.push_str("\r\n");
-    Ok((stripped, public_key))
+    Ok((stripped, Some(public_key)))
 }
 
 fn validate_token_expiration(token: &str) -> Result<(), String> {
@@ -260,7 +265,15 @@ mod tests {
         let sdp = "v=0\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\na=fingerprint:sha-256 AA:BB\r\n";
         let answer = add_server_identity(sdp, &key).unwrap();
         let (_, public_key) = verify_and_strip_identity(&answer, None).unwrap();
-        assert_eq!(public_key, PublicKey::from(key.verifying_key()));
+        assert_eq!(public_key, Some(PublicKey::from(key.verifying_key())));
+    }
+
+    #[test]
+    fn offers_without_an_assertion_stay_unauthenticated() {
+        let sdp = "v=0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n";
+        let (offer, public_key) = verify_and_strip_identity(sdp, None).unwrap();
+        assert_eq!(offer, sdp);
+        assert!(public_key.is_none());
     }
 
     #[test]

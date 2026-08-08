@@ -36,7 +36,7 @@ pub struct NetherNetSession {
     packet_sender: mpsc::Sender<Bytes>,
     accepted: AtomicBool,
     closed: CancellationToken,
-    client_public_key: PublicKey,
+    client_public_key: Option<PublicKey>,
     address: SocketAddr,
     incoming: mpsc::Sender<IncomingSession>,
 }
@@ -44,7 +44,7 @@ pub struct NetherNetSession {
 impl NetherNetSession {
     pub fn new(
         peer: Arc<RTCPeerConnection>,
-        client_public_key: PublicKey,
+        client_public_key: Option<PublicKey>,
         address: SocketAddr,
         incoming: mpsc::Sender<IncomingSession>,
     ) -> Self {
@@ -227,8 +227,8 @@ impl NetherNetSession {
         Ok(())
     }
 
-    pub const fn client_public_key(&self) -> &PublicKey {
-        &self.client_public_key
+    pub const fn client_public_key(&self) -> Option<&PublicKey> {
+        self.client_public_key.as_ref()
     }
 
     pub fn is_closed(&self) -> bool {

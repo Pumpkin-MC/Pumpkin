@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 use aes::{
     Aes256,
-    cipher::{Array, BlockCipherDecrypt, BlockCipherEncrypt},
+    cipher::{Array, BlockCipherDecrypt, BlockCipherEncrypt, consts::U16},
 };
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::{Digest, Sha256};
@@ -22,9 +22,7 @@ fn cipher() -> Aes256 {
     Aes256::new(&Array(*KEY))
 }
 
-fn block(chunk: &mut [u8]) -> &mut Array<u8, aes::cipher::consts::U16> {
-    chunk.try_into().expect("chunks are one block long")
-}
+type Block = Array<u8, U16>;
 
 pub fn encrypt(payload: &[u8]) -> Vec<u8> {
     let padding = BLOCK_SIZE - payload.len() % BLOCK_SIZE;
@@ -34,7 +32,9 @@ pub fn encrypt(payload: &[u8]) -> Vec<u8> {
 
     let cipher = cipher();
     for chunk in buffer.chunks_exact_mut(BLOCK_SIZE) {
-        cipher.encrypt_block(block(chunk));
+        if let Ok(block) = <&mut Block>::try_from(chunk) {
+            cipher.encrypt_block(block);
+        }
     }
     buffer
 }
@@ -46,7 +46,9 @@ pub fn decrypt(ciphertext: &[u8]) -> Option<Vec<u8>> {
     let mut buffer = ciphertext.to_vec();
     let cipher = cipher();
     for chunk in buffer.chunks_exact_mut(BLOCK_SIZE) {
-        cipher.decrypt_block(block(chunk));
+        if let Ok(block) = <&mut Block>::try_from(chunk) {
+            cipher.decrypt_block(block);
+        }
     }
 
     let padding = *buffer.last()? as usize;
@@ -65,12 +67,12 @@ pub fn decrypt(ciphertext: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub fn checksum(payload: &[u8]) -> [u8; CHECKSUM_SIZE] {
-    let mut mac =
-        Hmac::<Sha256>::new_from_slice(KEY.as_slice()).expect("HMAC accepts keys of any size");
-    mac.update(payload);
-    let digest = mac.finalize().into_bytes();
     let mut checksum = [0; CHECKSUM_SIZE];
-    checksum.copy_from_slice(&digest);
+    // HMAC accepts keys of any size, so this never fails for our fixed key.
+    if let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(KEY.as_slice()) {
+        mac.update(payload);
+        checksum.copy_from_slice(&mac.finalize().into_bytes());
+    }
     checksum
 }
 
