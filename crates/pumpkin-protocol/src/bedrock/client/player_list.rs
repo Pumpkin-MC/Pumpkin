@@ -6,6 +6,8 @@ use pumpkin_macros::packet;
 use std::io::{Error, Write};
 use uuid::Uuid;
 
+use super::common::BuildPlatform;
+
 const WIDE_SKIN_RESOURCE_PATCH: &[u8] = br#"{"geometry":{"default":"geometry.humanoid.custom"}}"#;
 const SLIM_SKIN_RESOURCE_PATCH: &[u8] =
     br#"{"geometry":{"default":"geometry.humanoid.customSlim"}}"#;
@@ -53,7 +55,7 @@ pub struct PlayerListEntry {
     pub username: String,
     pub xuid: String,
     pub platform_chat_id: String,
-    pub build_platform: i32,
+    pub build_platform: BuildPlatform,
     pub skin: Skin,
     pub is_teacher: bool,
     pub is_host: bool,

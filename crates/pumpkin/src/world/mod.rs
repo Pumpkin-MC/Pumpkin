@@ -91,8 +91,8 @@ use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
     bedrock::{
         client::{
-            UNKNOWN_BUILD_PLATFORM,
             add_player::CAddPlayer,
+            common::BuildPlatform,
             creative_content::{CCreativeContent, CreativeCategory, Entry, Group},
             gamerules_changed::GameRules,
             player_list::{CPlayerList, PlayerListEntry, Skin},
@@ -2433,7 +2433,7 @@ impl World {
                 username: gameprofile.name.clone(),
                 xuid: String::new(),
                 platform_chat_id: String::new(),
-                build_platform: UNKNOWN_BUILD_PLATFORM,
+                build_platform: BuildPlatform::Unknown,
                 skin: (**player.bedrock_skin.load()).clone(),
                 is_teacher: false,
                 is_host: false,
@@ -2505,7 +2505,7 @@ impl World {
             },
             links: Vec::new(),
             device_id: String::new(),
-            build_platform: UNKNOWN_BUILD_PLATFORM,
+            build_platform: BuildPlatform::Unknown,
         };
 
         self.broadcast_packet_except_editioned_sync(
@@ -2554,7 +2554,7 @@ impl World {
                     username: ex_profile.name.clone(),
                     xuid: String::new(),
                     platform_chat_id: String::new(),
-                    build_platform: UNKNOWN_BUILD_PLATFORM,
+                    build_platform: BuildPlatform::Unknown,
                     skin: (**existing_player.bedrock_skin.load()).clone(),
                     is_teacher: false,
                     is_host: false,
@@ -2599,7 +2599,7 @@ impl World {
                 },
                 links: Vec::new(),
                 device_id: String::new(),
-                build_platform: UNKNOWN_BUILD_PLATFORM,
+                build_platform: BuildPlatform::Unknown,
             };
 
             client.send_game_packet(&ex_add_player).await;
@@ -2770,7 +2770,7 @@ impl World {
                 username: gameprofile.name.clone(),
                 xuid: String::new(),
                 platform_chat_id: String::new(),
-                build_platform: UNKNOWN_BUILD_PLATFORM,
+                build_platform: BuildPlatform::Unknown,
                 skin: (**player.bedrock_skin.load()).clone(),
                 is_teacher: false,
                 is_host: false,
@@ -2956,7 +2956,7 @@ impl World {
             },
             links: Vec::new(),
             device_id: String::new(),
-            build_platform: UNKNOWN_BUILD_PLATFORM,
+            build_platform: BuildPlatform::Unknown,
         };
 
         // Spawn the player for every client.
@@ -3045,7 +3045,7 @@ impl World {
                 },
                 links: Vec::new(),
                 device_id: String::new(),
-                build_platform: UNKNOWN_BUILD_PLATFORM,
+                build_platform: BuildPlatform::Unknown,
             };
 
             let bedrock_player_list = CPlayerList {
@@ -3056,7 +3056,7 @@ impl World {
                     username: gameprofile.name.clone(),
                     xuid: String::new(),
                     platform_chat_id: String::new(),
-                    build_platform: UNKNOWN_BUILD_PLATFORM,
+                    build_platform: BuildPlatform::Unknown,
                     skin: (**existing_player.bedrock_skin.load()).clone(),
                     is_teacher: false,
                     is_host: false,
@@ -4185,7 +4185,7 @@ impl World {
                     username: player.gameprofile.name.clone(),
                     xuid: String::new(),
                     platform_chat_id: String::new(),
-                    build_platform: UNKNOWN_BUILD_PLATFORM,
+                    build_platform: BuildPlatform::Unknown,
                     skin: Skin::steve(),
                     is_teacher: false,
                     is_host: false,
