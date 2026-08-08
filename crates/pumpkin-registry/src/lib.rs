@@ -117,26 +117,24 @@ mod tests {
     #[tokio::test]
     async fn ref_data_key_resolves_nested_values_before_and_after_locking() {
         let (owner, root) = nested_root().await;
-        let key = DataKeyBuilder::<u32>::new()
-            .child(id("test:numbers"))
+        let key = DataKeyBuilder::<u32>::new(id("test:numbers"))
             .child(id("test:two"))
             .build_ref(&*root)
             .await
             .unwrap();
 
         assert_eq!(key.ids(), &[0, 1]);
-        assert_eq!(key.with(|value| *value).await.unwrap(), 2);
+        assert_eq!(*key.get().await.unwrap(), 2);
 
         owner.lock().await;
-        assert_eq!(key.with(|value| *value).await.unwrap(), 2);
+        assert_eq!(*key.get().await.unwrap(), 2);
     }
 
     #[tokio::test]
     async fn arc_data_key_keeps_the_registry_tree_alive() {
         let (owner, root) = nested_root().await;
         let root: Arc<dyn Registry> = root;
-        let key = DataKeyBuilder::<u32>::new()
-            .child(id("test:numbers"))
+        let key = DataKeyBuilder::<u32>::new(id("test:numbers"))
             .child(id("test:one"))
             .build_arc(&root)
             .await
@@ -145,22 +143,16 @@ mod tests {
         drop(owner);
 
         assert_eq!(key.ids(), &[0, 0]);
-        assert_eq!(key.with(|value| *value).await.unwrap(), 1);
+        assert_eq!(*key.get().await.unwrap(), 1);
     }
 
     #[tokio::test]
     async fn data_key_builder_reports_structural_errors() {
         let (_owner, root) = nested_root().await;
 
-        assert!(matches!(
-            DataKeyBuilder::<u32>::new().build_ref(&*root).await,
-            Err(DataKeyBuildError::Empty)
-        ));
-
         let missing_registry = id("test:missing_registry");
         assert!(matches!(
-            DataKeyBuilder::<u32>::new()
-                .child(missing_registry.clone())
+            DataKeyBuilder::<u32>::new(missing_registry.clone())
                 .child(id("test:value"))
                 .build_ref(&*root)
                 .await,
@@ -169,8 +161,7 @@ mod tests {
 
         let missing_value = id("test:missing_value");
         assert!(matches!(
-            DataKeyBuilder::<u32>::new()
-                .child(id("test:numbers"))
+            DataKeyBuilder::<u32>::new(id("test:numbers"))
                 .child(missing_value.clone())
                 .build_ref(&*root)
                 .await,
@@ -181,15 +172,14 @@ mod tests {
     #[tokio::test]
     async fn data_key_get_reports_value_type_mismatch() {
         let (_owner, root) = nested_root().await;
-        let key = DataKeyBuilder::<u64>::new()
-            .child(id("test:numbers"))
+        let key = DataKeyBuilder::<u64>::new(id("test:numbers"))
             .child(id("test:one"))
             .build_ref(&*root)
             .await
             .unwrap();
 
         assert!(matches!(
-            key.with(|value| *value).await,
+            key.get().await,
             Err(DataKeyGetError::TypeMismatch { .. })
         ));
     }

@@ -1,9 +1,10 @@
 use crate::{
     BoxFuture, BoxedRegistry, Registry,
     error::{DataKeyBuildError, DataKeyGetError},
+    value::DataKeyRef,
 };
 use pumpkin_util::identifier::Identifier;
-use std::{any::type_name, marker::PhantomData, sync::Arc};
+use std::{any::type_name, marker::PhantomData, ptr, sync::Arc};
 
 pub trait DataKey<T>
 where
@@ -15,78 +16,81 @@ where
     /// Returns the root registry this key belongs to.
     fn root_registry(&self) -> &dyn Registry;
 
-    /// Runs `callback` while all registry guards needed to access the value
-    /// remain alive.
-    fn with<'a, V, F>(&'a self, callback: F) -> BoxFuture<'a, Result<V, DataKeyGetError>>
-    where
-        V: Send + 'a,
-        F: FnOnce(&T) -> V + Send + 'a,
-    {
-        with_from_key(self.root_registry(), self.ids(), callback)
+    fn get(&self) -> BoxFuture<'_, Result<DataKeyRef<'_, T>, DataKeyGetError>> {
+        get_from_key(self.root_registry(), self.ids())
     }
 }
 
-fn with_from_key<'a, T, V, F>(
+fn get_from_key<'a, T>(
     root: &'a dyn Registry,
     keys: &'a [usize],
-    callback: F,
-) -> BoxFuture<'a, Result<V, DataKeyGetError>>
+) -> BoxFuture<'a, Result<DataKeyRef<'a, T>, DataKeyGetError>>
 where
     T: Send + Sync + 'static,
-    V: Send + 'a,
-    F: FnOnce(&T) -> V + Send + 'a,
 {
     Box::pin(async move {
         let Some((&value_id, registry_path)) = keys.split_last() else {
             return Err(DataKeyGetError::InvalidKey);
         };
 
-        with_from_registry(root, registry_path, value_id, callback).await
-    })
-}
+        let mut guards = Vec::with_capacity(keys.len());
 
-fn with_from_registry<'a, T, V, F>(
-    current: &'a dyn Registry,
-    registry_path: &'a [usize],
-    value_id: usize,
-    callback: F,
-) -> BoxFuture<'a, Result<V, DataKeyGetError>>
-where
-    T: Send + Sync + 'static,
-    V: Send + 'a,
-    F: FnOnce(&T) -> V + Send + 'a,
-{
-    Box::pin(async move {
-        let Some((&registry_id, remaining_path)) = registry_path.split_first() else {
-            let value = current
-                .get_by_id(value_id)
+        // This pointer either points at `root`, which lives for `'a`,
+        // or at a registry kept alive by one of `guards`.
+        let mut current: *const dyn Registry = root;
+
+        for &registry_id in registry_path {
+            // SAFETY:
+            //
+            // `current` either:
+            // 1. points to `root`, which lives for `'a`, or
+            // 2. points into one of the guards already stored in `guards`.
+            //
+            // We never remove guards while traversing.
+            let registry = unsafe { &*current };
+
+            let value = registry
+                .get_by_id(registry_id)
                 .await
-                .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
+                .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
 
-            let value = value
-                .downcast_ref::<T>()
-                .ok_or(DataKeyGetError::TypeMismatch {
-                    expected: type_name::<T>(),
-                    actual: current.item_type_name(),
-                })?;
+            let nested = value
+                .downcast_ref::<BoxedRegistry>()
+                .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
 
-            return Ok(callback(value));
-        };
+            current = ptr::from_ref::<dyn Registry>(nested.as_ref());
 
-        let registry = current
-            .get_by_id(registry_id)
+            // Keep the storage containing `nested` alive.
+            guards.push(value);
+        }
+
+        // SAFETY: same invariant as above.
+        let registry = unsafe { &*current };
+
+        let value = registry
+            .get_by_id(value_id)
             .await
-            .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
+            .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
 
-        let registry = registry
-            .downcast_ref::<BoxedRegistry>()
-            .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
+        let typed = value
+            .downcast_ref::<T>()
+            .ok_or(DataKeyGetError::TypeMismatch {
+                expected: type_name::<T>(),
+                actual: registry.item_type_name(),
+            })?;
 
-        // `registry` borrows from `value`, so `value` and its lock guard
-        // remain alive throughout the recursive call.
-        with_from_registry(registry.as_ref(), remaining_path, value_id, callback).await
+        let value_ptr = ptr::from_ref::<T>(typed);
+
+        guards.push(value);
+
+        Ok(DataKeyRef {
+            _guards: guards,
+            value: value_ptr,
+            marker: PhantomData,
+        })
     })
 }
+
 pub struct ArcDataKey<T: Send + Sync + 'static> {
     keys: Box<[usize]>,
     root: Arc<dyn Registry>,
@@ -146,9 +150,9 @@ pub struct DataKeyBuilder<T: Send + Sync + 'static> {
 
 impl<T: Send + Sync + 'static> DataKeyBuilder<T> {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new(identifier: Identifier) -> Self {
         Self {
-            keys: Vec::new(),
+            keys: vec![identifier],
             marker: PhantomData,
         }
     }
@@ -195,12 +199,6 @@ impl<T: Send + Sync + 'static> DataKeyBuilder<T> {
             root: registry,
             marker: PhantomData,
         })
-    }
-}
-
-impl<T: Send + Sync + 'static> Default for DataKeyBuilder<T> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
