@@ -23,7 +23,9 @@ use crate::entity::{
 /// goal selector only allows one `Controls::MOVE`-flagged goal to run at a time.
 pub struct DrownedTridentAttackGoal {
     attack_interval: i32,
-    attack_cooldown: i32,
+    attack_time: i32,
+    see_time: i32,
+    speed: f64,
     range: f64,
 }
 
@@ -32,7 +34,9 @@ impl DrownedTridentAttackGoal {
     pub fn new(attack_interval: i32, range: f64) -> Box<Self> {
         Box::new(Self {
             attack_interval,
-            attack_cooldown: 0,
+            attack_time: -1,
+            see_time: 0,
+            speed: 1.0,
             range,
         })
     }
@@ -45,14 +49,22 @@ impl DrownedTridentAttackGoal {
 
     async fn has_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
         let entity = mob.get_entity();
-        entity
-            .world
-            .load_full()
-            .raycast(
-                entity.get_eye_pos(),
-                target.get_entity().get_eye_pos(),
-                async |block_pos, world| world.get_block_state(block_pos).is_solid(),
-            )
+        let target_entity = target.get_entity();
+        let from = entity.get_eye_pos();
+        let to = target_entity.get_eye_pos();
+        if from.squared_distance_to_vec(&to) > 128.0 * 128.0 {
+            return false;
+        }
+
+        let world = entity.world.load_full();
+        if !Arc::ptr_eq(&world, &target_entity.world.load_full()) {
+            return false;
+        }
+
+        world
+            .raycast_collision(from, to, async |block_pos, world| {
+                !world.get_block_state(block_pos).collision_shapes.is_empty()
+            })
             .await
             .is_none()
     }
@@ -151,21 +163,23 @@ impl Goal for DrownedTridentAttackGoal {
                 .await
                 .as_ref()
                 .is_some_and(|target| target.get_entity().is_alive());
-            has_target && Self::holding_trident(mob).await
+            let holding_trident = Self::holding_trident(mob).await;
+            let navigation_active = !mob.get_mob_entity().navigator.lock().unwrap().is_idle();
+            has_target && (holding_trident || navigation_active)
         })
     }
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            self.attack_cooldown = self.attack_interval;
             mob.get_mob_entity().set_attacking(true);
         })
     }
 
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            mob.get_mob_entity().navigator.lock().unwrap().stop();
             mob.get_mob_entity().set_attacking(false);
+            self.attack_time = -1;
+            self.see_time = 0;
         })
     }
 
@@ -177,29 +191,39 @@ impl Goal for DrownedTridentAttackGoal {
             let shooter = mob.get_entity();
             let target_pos = target.get_entity().pos.load();
             let distance_squared = shooter.pos.load().squared_distance_to_vec(&target_pos);
+            let has_line_of_sight = Self::has_line_of_sight(mob, target.as_ref()).await;
+            if has_line_of_sight {
+                self.see_time += 1;
+            } else {
+                self.see_time = 0;
+            }
 
             mob.get_mob_entity()
                 .look_control
                 .lock()
                 .unwrap()
                 .look_at_entity_with_range(&target, 30.0, 30.0);
-            self.attack_cooldown = (self.attack_cooldown - 1).max(0);
-
-            if distance_squared > self.range * self.range {
+            if distance_squared > self.range * self.range || self.see_time < 5 {
                 mob.get_mob_entity().navigator.lock().unwrap().set_progress(
                     crate::entity::ai::pathfinder::NavigatorGoal {
                         current_progress: shooter.pos.load(),
                         destination: target_pos,
-                        speed: 1.0,
+                        speed: self.speed,
                     },
                 );
-                return;
+            } else {
+                mob.get_mob_entity().navigator.lock().unwrap().stop();
             }
 
-            mob.get_mob_entity().navigator.lock().unwrap().stop();
-            if self.attack_cooldown == 0 && Self::has_line_of_sight(mob, target.as_ref()).await {
+            self.attack_time -= 1;
+            if self.attack_time == 0 {
+                if !has_line_of_sight {
+                    return;
+                }
                 self.shoot(mob, target.as_ref()).await;
-                self.attack_cooldown = self.attack_interval;
+                self.attack_time = self.attack_interval;
+            } else if self.attack_time < 0 {
+                self.attack_time = self.attack_interval;
             }
         })
     }
