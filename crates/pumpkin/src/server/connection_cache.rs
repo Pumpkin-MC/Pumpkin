@@ -90,7 +90,7 @@ impl CachedStatus {
         }
     }
 
-    pub fn get_status_packet(&self, client_protocol: i32) -> CStatusResponse {
+    pub fn get_status_response(&self, client_protocol: i32) -> StatusResponse {
         let mut response = self.status_response.clone();
 
         let supported_min = LOWEST_SUPPORTED_MC_VERSION.protocol_version();
@@ -103,8 +103,12 @@ impl CachedStatus {
             version.protocol = client_protocol as u32;
         }
 
-        let json = serde_json::to_string(&response).unwrap_or_default();
+        response
+    }
 
+    pub fn get_status_packet(&self, client_protocol: i32) -> CStatusResponse {
+        let response = self.get_status_response(client_protocol);
+        let json = serde_json::to_string(&response).unwrap_or_default();
         CStatusResponse::new(json)
     }
 
