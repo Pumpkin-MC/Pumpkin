@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
+use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use super::{Controls, Goal, GoalFuture, to_goal_ticks};
@@ -110,27 +111,71 @@ impl NonTameRandomTargetGoal {
             .load()
             .eye_height as f64;
 
-        let potential_entity = if self.target_types == [&EntityType::PLAYER].as_slice() {
-            world
-                .get_closest_player(search_pos, follow_range)
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
-        } else {
-            world.get_closest_entity(search_pos, follow_range, Some(self.target_types))
+        let sort_by_distance = |a: &Vector3<f64>, b: &Vector3<f64>| {
+            a.squared_distance_to_vec(&search_pos)
+                .partial_cmp(&b.squared_distance_to_vec(&search_pos))
+                .unwrap()
         };
 
-        if let Some(potential_entity) = potential_entity
-            && let Some(living) = potential_entity.get_living_entity()
-            && !TrackTargetGoal::is_allied(mob, potential_entity.as_ref()).await
-            && mob.can_attack(potential_entity.get_entity())
-            && self
-                .target_predicate
-                .test(&world, Some(&mob_entity.living_entity), living)
-                .await
-        {
-            self.target = Some(potential_entity);
-            return;
-        }
-        self.target = None;
+        // Vanilla passes the target conditions to getNearestEntity, so invalid candidates are
+        // filtered during selection. Testing only the nearest raw entity would let an allied or
+        // otherwise invalid candidate hide a valid target farther away.
+        self.target = if self.target_types == [&EntityType::PLAYER].as_slice() {
+            let mut candidates: Vec<Arc<Player>> = world.players.load().iter().cloned().collect();
+            candidates.sort_by(|a, b| {
+                sort_by_distance(&a.get_entity().pos.load(), &b.get_entity().pos.load())
+            });
+
+            let mut result = None;
+            for player in candidates {
+                if !TrackTargetGoal::is_allied(mob, player.as_ref()).await
+                    && mob.can_attack(player.get_entity())
+                    && self
+                        .target_predicate
+                        .test(
+                            &world,
+                            Some(&mob_entity.living_entity),
+                            &player.living_entity,
+                        )
+                        .await
+                {
+                    result = Some(player as Arc<dyn EntityBase>);
+                    break;
+                }
+            }
+            result
+        } else {
+            let search_box = mob_entity
+                .living_entity
+                .entity
+                .bounding_box
+                .load()
+                .expand_all(follow_range);
+            let mut candidates: Vec<Arc<dyn EntityBase>> = world
+                .get_entities_at_box(&search_box)
+                .into_iter()
+                .filter(|entity| self.target_types.contains(&entity.get_entity().entity_type))
+                .collect();
+            candidates.sort_by(|a, b| {
+                sort_by_distance(&a.get_entity().pos.load(), &b.get_entity().pos.load())
+            });
+
+            let mut result = None;
+            for entity in candidates {
+                if let Some(living) = entity.get_living_entity()
+                    && !TrackTargetGoal::is_allied(mob, entity.as_ref()).await
+                    && mob.can_attack(entity.get_entity())
+                    && self
+                        .target_predicate
+                        .test(&world, Some(&mob_entity.living_entity), living)
+                        .await
+                {
+                    result = Some(entity);
+                    break;
+                }
+            }
+            result
+        };
     }
 }
 
