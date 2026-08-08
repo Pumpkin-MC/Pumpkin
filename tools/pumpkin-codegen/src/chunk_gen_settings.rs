@@ -260,7 +260,7 @@ impl ToTokens for GenerationSettingsStruct {
                 shape: #shape,
                 surface_rule: #rule,
                 default_block: #block,
-            }
+            },
         ));
     }
 }
@@ -470,7 +470,9 @@ pub fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../../assets/chunk_gen_settings.json").unwrap())
             .expect("Failed to parse settings.json");
 
-    let mut const_defs = TokenStream::new();
+    let mut variants = TokenStream::new();
+    let mut identifiers = TokenStream::new();
+    let len = json.len();
 
     for (name, settings) in &json {
         let lower_name = name.to_lowercase();
@@ -481,37 +483,27 @@ pub fn build() -> TokenStream {
             format!("minecraft:{lower_name}")
         };
 
-        const_defs.extend(quote!(
-            registry.register(Identifier::parse_static(#minecraft_name), #settings)?;
-        ));
+        settings.to_tokens(&mut variants);
+
+        identifiers.extend(quote! {
+            Identifier::parse_static(#minecraft_name),
+        });
     }
 
     quote!(
-        use crate::BlockState;
-        use crate::biome::Biome;
-        use crate::chunk::DoublePerlinNoiseParameters;
         use crate::dimension::Dimension;
-        use crate::worldgen;
-        use pumpkin_registry::{Registry, error::RegistryInsertError};
-        use pumpkin_util::identifier::Identifier;
-        use pumpkin_util::random::RandomDeriver;
-        use pumpkin_util::y_offset::Absolute;
-        use pumpkin_util::y_offset::YOffset;
-        use std::sync::Arc;
-        use std::sync::LazyLock;
-        use std::{cell::RefCell, num::NonZeroUsize};
+        use crate::chunk::DoublePerlinNoiseParameters;
+        use crate::BlockState;
 
-        pub static GENERATION_SETTINGS: LazyLock<Arc<Registry<GenerationSettings>>> = LazyLock::new(|| {
-            let registry = Arc::new(Registry::new());
-            initialize(&registry).unwrap();
-            worldgen::WORLD_GEN
-                .register_arc(
-                    Identifier::vanilla_static("noise_settings"),
-                    registry.clone(),
-                )
-                .unwrap();
-            registry
-        });
+        use std::{cell::RefCell, num::NonZeroUsize, sync::Arc};
+        use pumpkin_util::random::RandomDeriver;
+        use pumpkin_util::y_offset::YOffset;
+        use crate::biome::Biome;
+        use pumpkin_util::y_offset::Absolute;
+
+        use pumpkin_registry::{BoxedRegistry, DataKey, DataKeyBuilder, MutableRegistry, Registry, RootRegistryReference};
+        use pumpkin_registry::error::RegistryTreeError;
+        use pumpkin_util::identifier::Identifier;
 
         pub struct GenerationSettings {
             pub aquifers_enabled: bool,
@@ -654,9 +646,22 @@ pub fn build() -> TokenStream {
             StoneDepth(StoneDepthMaterialCondition),
         }
 
-        fn initialize(registry: &Arc<Registry<GenerationSettings>>) -> Result<(), RegistryInsertError> {
-            #const_defs
+        const STATIC_ENTRIES: [GenerationSettings; #len] = [
+            #variants
+        ];
 
+        const STATIC_IDENTIFIERS: [Identifier; #len] = [
+            #identifiers
+        ];
+
+        pub async fn initialize(root: RootRegistryReference) -> Result<(), RegistryTreeError> {
+            let root: Arc<dyn Registry> = root;
+            let worldgen_key = DataKeyBuilder::<MutableRegistry<BoxedRegistry>>::new(Identifier::vanilla_static("worldgen"))
+                .build_arc(&root).await?;
+
+            let gen_settings = MutableRegistry::<GenerationSettings>::new(&STATIC_ENTRIES, &STATIC_IDENTIFIERS)?;
+
+            worldgen_key.get().await?.register(Identifier::vanilla_static("noise_settings"), Box::new(gen_settings)).await?;
             Ok(())
         }
     )

@@ -1,9 +1,8 @@
 use std::{collections::BTreeMap, fs};
 
 use crate::placed_feature::value_to_int_provider;
-use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{quote};
 use serde::Deserialize;
 
 /// Parses a CSS-style hex color string (e.g. `"#78a7ff"`) into a signed 32-bit integer.
@@ -58,17 +57,12 @@ pub fn build() -> TokenStream {
     .expect("Failed to parse dimension.json");
 
     let mut variants = TokenStream::new();
-    let mut name_to_type = TokenStream::new();
+    let mut identifiers = TokenStream::new();
+    let len = dimensions.len();
 
     // Iterate with index to generate a unique numeric ID
     for (id, (name, dim)) in dimensions.into_iter().enumerate() {
         let id = id as u8; // Overworld=0, Nether=1, End=2 (usually)
-        let format_name = format_ident!(
-            "{}",
-            name.strip_prefix("minecraft:")
-                .unwrap_or(&name)
-                .to_shouty_snake_case()
-        );
 
         // convert optional hex colors from attributes into ints
         let sky_color = dim
@@ -148,7 +142,7 @@ pub fn build() -> TokenStream {
         };
 
         variants.extend(quote! {
-            registry.register(Identifier::parse_static(#minecraft_name), Dimension {
+            Dimension {
                 id: #id,
                 fixed_time: #fixed_time,
                 has_skylight: #has_skylight,
@@ -165,11 +159,11 @@ pub fn build() -> TokenStream {
                 fog_color: #fog_color_literal,
                 cloud_color: #cloud_color_literal,
                 timelines: #timelines_literal,
-            })?;
+            },
         });
 
-        name_to_type.extend(quote! {
-            #minecraft_name => Some(&Self::#format_name),
+        identifiers.extend(quote! {
+            Identifier::parse_static(#minecraft_name),
         });
     }
 
@@ -179,19 +173,7 @@ pub fn build() -> TokenStream {
             IntProvider, NormalIntProvider, TrapezoidIntProvider, UniformIntProvider, WeightedEntry,
             WeightedListIntProvider,
         }};
-        use std::sync::{Arc, LazyLock};
-        use pumpkin_registry::{Registry, error::RegistryInsertError};
-
-        pub static DIMENSIONS: LazyLock<Arc<Registry<Dimension>>> =
-            LazyLock::new(|| {
-                let registry = Arc::new(Registry::new());
-                // This should never fail as the registry is empty
-                initialize(&registry).unwrap();
-                // This should never fail unless dimension_type got registered in another piece of code
-                pumpkin_registry::ROOT.register_arc(Identifier::vanilla_static("dimension_type"),registry.clone()).unwrap();
-                registry
-            });
-
+        use pumpkin_registry::{MutableRegistry, RootRegistryReference, error::RegistryTreeError};
 
         #[derive(Debug, Clone)]
         pub struct Dimension {
@@ -213,9 +195,17 @@ pub fn build() -> TokenStream {
             pub timelines: Option<&'static str>,
         }
 
-        fn initialize(registry: &Arc<Registry<Dimension>>) -> Result<(), RegistryInsertError> {
+        const STATIC_ENTRIES: [Dimension; #len] = [
             #variants
+        ];
 
+        const STATIC_IDENTIFIERS: [Identifier; #len] = [
+            #identifiers
+        ];
+
+        pub async fn initialize(root: RootRegistryReference) -> Result<(), RegistryTreeError> {
+            let dimensions = MutableRegistry::<Dimension>::new(&STATIC_ENTRIES, &STATIC_IDENTIFIERS)?;
+            root.register(Identifier::vanilla_static("dimension_type"), Box::new(dimensions)).await?;
             Ok(())
         }
 
