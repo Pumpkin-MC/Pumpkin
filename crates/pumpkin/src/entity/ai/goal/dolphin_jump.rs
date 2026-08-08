@@ -108,7 +108,7 @@ impl Goal for DolphinJumpGoal {
                 return false;
             }
 
-            if mob.get_random().random::<i32>().unsigned_abs() % self.interval as u32 != 0 {
+            if mob.get_random().random_range(0..self.interval) != 0 {
                 return false;
             }
 
