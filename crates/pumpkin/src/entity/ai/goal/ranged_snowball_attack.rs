@@ -111,16 +111,12 @@ impl Goal for RangedSnowballAttackGoal {
         })
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            mob.get_mob_entity().set_attacking(true);
-        })
+    fn start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+        Box::pin(async {})
     }
 
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
+    fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            mob.get_mob_entity().navigator.lock().unwrap().stop();
-            mob.get_mob_entity().set_attacking(false);
             self.attack_time = -1;
             self.see_time = 0;
         })
