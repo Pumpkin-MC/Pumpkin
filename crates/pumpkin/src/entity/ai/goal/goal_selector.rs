@@ -153,6 +153,17 @@ impl GoalSelector {
         self.disabled_controls.set(control, !enabled);
     }
 
+    /// Returns whether a vanilla panic goal is currently running.
+    ///
+    /// This is the `PathfinderMob.isPanicking` goal-selector half. The selector is only queried
+    /// at synchronous decision points, so callers do not need to hold it across an await.
+    #[must_use]
+    pub fn is_panic_running(&self) -> bool {
+        self.goals
+            .iter()
+            .any(|goal| goal.running && goal.is_panic_goal())
+    }
+
     fn get_goal_by_control(&mut self, control: Controls) -> Option<&mut PrioritizedGoal> {
         let i = self.goals_by_control[control.idx()];
         self.goals.get_mut(i)
@@ -178,6 +189,25 @@ mod tests {
 
     struct KeepMeGoal;
     impl Goal for KeepMeGoal {}
+
+    struct PanicGoal;
+    impl Goal for PanicGoal {
+        fn is_panic_goal(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn panic_query_only_matches_running_panic_goals() {
+        let mut selector = GoalSelector::default();
+        selector.add_goal(0, Box::new(PanicGoal));
+
+        assert!(!selector.is_panic_running());
+        selector.goals[0].running = true;
+        assert!(selector.is_panic_running());
+        selector.goals[0].running = false;
+        assert!(!selector.is_panic_running());
+    }
 
     #[test]
     fn remove_goals_of_type_remaps_goals_by_control_after_multi_remove() {

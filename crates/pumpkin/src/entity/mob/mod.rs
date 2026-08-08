@@ -1170,8 +1170,22 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 
     fn is_panicking(&self) -> bool {
-        self.get_path_aware_entity()
-            .is_some_and(PathAwareEntity::is_panicking)
+        // `PathfinderMob.isPanicking` (`PathfinderMob.java:37-48`) first checks the Brain
+        // memory and then the currently running goals. Pumpkin's concrete mobs are represented
+        // through `Mob` rather than a separate Java-style PathfinderMob subtype, so query both
+        // sources here instead of relying on the currently-unused optional PathAwareEntity
+        // adapter.
+        if self.get_mob_entity().brain.as_ref().is_some_and(|brain| {
+            brain.has_value::<crate::entity::ai::brain::memory::IsPanickingMemory>()
+        }) {
+            return true;
+        }
+
+        self.get_mob_entity()
+            .goals_selector
+            .lock()
+            .unwrap()
+            .is_panic_running()
     }
 
     fn get_job_site_pos(&self) -> Option<pumpkin_util::math::position::BlockPos> {
@@ -1247,9 +1261,18 @@ pub trait PathAwareEntity: Mob + Send + Sync {
         })
     }
 
-    // TODO: implement
     fn is_panicking(&self) -> bool {
-        false
+        if self.get_mob_entity().brain.as_ref().is_some_and(|brain| {
+            brain.has_value::<crate::entity::ai::brain::memory::IsPanickingMemory>()
+        }) {
+            return true;
+        }
+
+        self.get_mob_entity()
+            .goals_selector
+            .lock()
+            .unwrap()
+            .is_panic_running()
     }
 
     fn should_follow_leash(&self) -> bool {

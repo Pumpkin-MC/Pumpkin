@@ -58,6 +58,10 @@ impl EscapeDangerGoal {
 }
 
 impl Goal for EscapeDangerGoal {
+    fn is_panic_goal(&self) -> bool {
+        true
+    }
+
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             if !Self::is_in_danger(mob) {

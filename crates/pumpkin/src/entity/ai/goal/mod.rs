@@ -164,6 +164,14 @@ pub trait Goal: Send + Sync {
         true
     }
 
+    /// Whether this goal is the vanilla `PanicGoal` equivalent.
+    ///
+    /// `PathfinderMob.isPanicking` includes any currently-running panic goal in addition to
+    /// the Brain `IS_PANICKING` memory. Most goals are not panic goals, so the default is false.
+    fn is_panic_goal(&self) -> bool {
+        false
+    }
+
     fn get_tick_count(&self, ticks: i32) -> i32 {
         if self.should_run_every_tick() {
             ticks
@@ -286,6 +294,10 @@ impl Goal for PrioritizedGoal {
 
     fn should_run_every_tick(&self) -> bool {
         self.goal.should_run_every_tick()
+    }
+
+    fn is_panic_goal(&self) -> bool {
+        self.goal.is_panic_goal()
     }
 
     fn get_tick_count(&self, ticks: i32) -> i32 {
