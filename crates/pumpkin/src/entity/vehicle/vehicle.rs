@@ -8,6 +8,7 @@ use crate::entity::EntityBase;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::GameMode;
 
 pub struct VehicleEntity {
@@ -67,24 +68,41 @@ impl VehicleEntity {
         self.entity.send_meta_data(
             &[
                 Metadata::new(
-                    TrackedData::ID_HURT,
+                    TrackedData::DAMAGE_WOBBLE_TICKS,
                     MetaDataType::INTEGER,
-                    self.get_hurt_time(),
+                    VarInt(self.get_hurt_time()),
+                ),
+                Metadata::new(
+                    TrackedData::DAMAGE_WOBBLE_SIDE,
+                    MetaDataType::INTEGER,
+                    VarInt(self.get_hurt_dir()),
+                ),
+                Metadata::new(
+                    TrackedData::ID_HURT,
+                    MetaDataType::INT,
+                    VarInt(self.get_hurt_time()),
                 ),
                 Metadata::new(
                     TrackedData::ID_HURTDIR,
-                    MetaDataType::INTEGER,
-                    self.get_hurt_dir(),
+                    MetaDataType::INT,
+                    VarInt(self.get_hurt_dir()),
                 ),
             ],
             None,
         );
         self.entity.send_meta_data(
-            &[Metadata::new(
-                TrackedData::ID_DAMAGE,
-                MetaDataType::FLOAT,
-                self.get_damage(),
-            )],
+            &[
+                Metadata::new(
+                    TrackedData::DAMAGE_WOBBLE_STRENGTH,
+                    MetaDataType::FLOAT,
+                    self.get_damage(),
+                ),
+                Metadata::new(
+                    TrackedData::ID_DAMAGE,
+                    MetaDataType::FLOAT,
+                    self.get_damage(),
+                ),
+            ],
             None,
         );
     }
@@ -116,16 +134,7 @@ impl VehicleEntity {
             return true;
         }
 
-        let current_side = self.get_hurt_dir();
-        self.set_hurt_dir(-current_side);
-        self.set_hurt_time(10);
-        self.entity.velocity_dirty.store(true, Ordering::SeqCst);
-
-        let current_strength = self.get_damage();
-        let new_strength = current_strength + amount * 10.0;
-        self.set_damage(new_strength);
-
-        self.send_wobble_metadata();
+        let new_strength = self.apply_damage_wobble(amount);
 
         let is_creative = source
             .and_then(|s| s.get_player())
@@ -140,5 +149,65 @@ impl VehicleEntity {
         }
 
         true
+    }
+
+    /// Applies the standard minecart damage wobble without destroying the vehicle.
+    /// TNT minecarts use this before deciding whether damage primes or breaks them.
+    pub fn apply_damage_wobble(&self, amount: f32) -> f32 {
+        let current_side = self.get_hurt_dir();
+        self.set_hurt_dir(-current_side);
+        self.set_hurt_time(10);
+        self.entity.velocity_dirty.store(true, Ordering::SeqCst);
+
+        let current_strength = self.get_damage();
+        let new_strength = current_strength + amount * 10.0;
+        self.set_damage(new_strength);
+
+        self.send_wobble_metadata();
+        new_strength
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::meta_data_type::MetaDataType;
+    use pumpkin_data::tracked_data::TrackedData;
+    use pumpkin_protocol::codec::var_int::VarInt;
+    use pumpkin_protocol::java::client::play::Metadata;
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    fn wobble_integer_metadata(version: JavaMinecraftVersion) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for metadata in [
+            Metadata::new(
+                TrackedData::DAMAGE_WOBBLE_TICKS,
+                MetaDataType::INTEGER,
+                VarInt(10),
+            ),
+            Metadata::new(
+                TrackedData::DAMAGE_WOBBLE_SIDE,
+                MetaDataType::INTEGER,
+                VarInt(-1),
+            ),
+            Metadata::new(TrackedData::ID_HURT, MetaDataType::INT, VarInt(10)),
+            Metadata::new(TrackedData::ID_HURTDIR, MetaDataType::INT, VarInt(-1)),
+        ] {
+            metadata.write(&mut bytes, &version).unwrap();
+        }
+        bytes
+    }
+
+    #[test]
+    fn wobble_integers_serialize_for_legacy_and_current_clients() {
+        let expected = vec![8, 1, 10, 9, 1, 0xff, 0xff, 0xff, 0xff, 0x0f];
+
+        assert_eq!(
+            wobble_integer_metadata(JavaMinecraftVersion::V_1_21_11),
+            expected
+        );
+        assert_eq!(
+            wobble_integer_metadata(JavaMinecraftVersion::V_26_2),
+            expected
+        );
     }
 }
