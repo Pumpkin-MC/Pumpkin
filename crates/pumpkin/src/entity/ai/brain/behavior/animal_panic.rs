@@ -5,15 +5,14 @@
 //! outside the mob's own AI tick. If the memory store were taken out of its mutex for the tick
 //! the way `GoalSelector` is, those writes would land on a throwaway `Default` and be lost.
 //!
-//! DEVIATION: `getPanicPos` (`AnimalPanic.java:89-98`) first looks for nearby water when the mob
-//! is on fire and otherwise defers to `LandRandomPos.getPos(mob, 5, 4)`. Pumpkin has no
-//! `LandRandomPos`/`AirAndWaterRandomPos` port, so this picks a uniform random offset in the
-//! same +/-5 horizontal, +/-4 vertical box and lets the navigator reject unreachable
-//! destinations. The on-fire water search is not ported at all.
+//! DEVIATION: `LandRandomPos.getPos(mob, 5, 4)` is still represented by a uniform random offset
+//! in the same +/-5 horizontal, +/-4 vertical box and lets the navigator reject unreachable
+//! destinations. The source's on-fire water search is ported below.
 
 use rand::RngExt;
 
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::ai::brain::Brain;
@@ -23,10 +22,47 @@ use crate::entity::ai::brain::memory::{
     WalkTargetMemory,
 };
 use crate::entity::mob::Mob;
+use crate::world::World;
 
 /// `AnimalPanic.PANIC_DISTANCE_HORIZONTAL` / `PANIC_DISTANCE_VERTICAL` (`:29-30`).
 const PANIC_DISTANCE_HORIZONTAL: f64 = 5.0;
 const PANIC_DISTANCE_VERTICAL: f64 = 4.0;
+
+/// Vanilla `BlockPos.findClosestMatch(center, 5, 1, water)` using the same Manhattan traversal
+/// order as `BlockPos.withinManhattan`. The search is only used when the mob is on fire and its
+/// current block has no collision shape (`AnimalPanic.java:89-98`).
+fn nearest_water(world: &World, origin: BlockPos) -> Option<BlockPos> {
+    if !world.get_block_state(&origin).collision_shapes.is_empty() {
+        return None;
+    }
+
+    for depth in 0i32..=11 {
+        let max_x: i32 = 5.min(depth);
+        for x in -max_x..=max_x {
+            let max_y: i32 = 1.min(depth - x.abs());
+            for y in -max_y..=max_y {
+                let z = depth - x.abs() - y.abs();
+                if z > 5 {
+                    continue;
+                }
+
+                let candidate = BlockPos::new(origin.0.x + x, origin.0.y + y, origin.0.z + z);
+                let (fluid, _) = world.get_fluid_and_fluid_state(&candidate);
+                if fluid.has_tag(&tag::Fluid::MINECRAFT_WATER) {
+                    return Some(candidate);
+                }
+                if z != 0 {
+                    let candidate = BlockPos::new(origin.0.x + x, origin.0.y + y, origin.0.z - z);
+                    let (fluid, _) = world.get_fluid_and_fluid_state(&candidate);
+                    if fluid.has_tag(&tag::Fluid::MINECRAFT_WATER) {
+                        return Some(candidate);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
 
 pub struct AnimalPanic {
     speed_multiplier: f32,
@@ -91,13 +127,25 @@ impl TimedBehavior for AnimalPanic {
             return;
         }
 
-        let pos = mob.get_mob_entity().living_entity.entity.pos.load();
-        let mut rng = mob.get_random();
-        let panic_to = Vector3::new(
-            pos.x + rng.random_range(-PANIC_DISTANCE_HORIZONTAL..=PANIC_DISTANCE_HORIZONTAL),
-            pos.y + rng.random_range(-PANIC_DISTANCE_VERTICAL..=PANIC_DISTANCE_VERTICAL),
-            pos.z + rng.random_range(-PANIC_DISTANCE_HORIZONTAL..=PANIC_DISTANCE_HORIZONTAL),
-        );
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        let world = entity.world.load();
+        let panic_to = if entity
+            .has_visual_fire
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            nearest_water(&world, entity.block_pos.load()).map(|pos| pos.to_f64())
+        } else {
+            None
+        }
+        .unwrap_or_else(|| {
+            let pos = entity.pos.load();
+            let mut rng = mob.get_random();
+            Vector3::new(
+                pos.x + rng.random_range(-PANIC_DISTANCE_HORIZONTAL..=PANIC_DISTANCE_HORIZONTAL),
+                pos.y + rng.random_range(-PANIC_DISTANCE_VERTICAL..=PANIC_DISTANCE_VERTICAL),
+                pos.z + rng.random_range(-PANIC_DISTANCE_HORIZONTAL..=PANIC_DISTANCE_HORIZONTAL),
+            )
+        });
 
         brain.set::<WalkTargetMemory>(WalkTarget::new(
             PositionTracker::of_position(panic_to),
