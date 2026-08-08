@@ -140,8 +140,9 @@ impl Goal for RangedCrossbowAttackGoal {
 
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            mob.get_mob_entity().navigator.lock().unwrap().stop();
+            mob.get_mob_entity().set_target(None).await;
             mob.get_mob_entity().set_attacking(false);
+            self.see_time = 0;
             self.state = CrossbowState::Uncharged;
             mob.set_charging_crossbow(false);
         })
