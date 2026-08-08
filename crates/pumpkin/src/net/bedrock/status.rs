@@ -20,7 +20,7 @@ use tokio::{
     net::UdpSocket,
     sync::{Mutex, mpsc},
 };
-use tracing::trace;
+use tracing::{trace, warn};
 use webrtc::util::{Conn, Error as WebRtcError};
 
 use crate::server::Server;
@@ -76,6 +76,7 @@ impl StatusResponder {
                 let (length, client) = result?;
                 let packet = &ipv4_buffer[..length];
                 if is_status_packet(packet) {
+                    trace!(%client, length, "Received Bedrock server-list status ping");
                     self.respond(server, &self.ipv4, packet, client).await
                 } else {
                     trace!(
@@ -92,6 +93,7 @@ impl StatusResponder {
             }
             result = self.ipv6.recv_from(&mut ipv6_buffer) => {
                 let (length, client) = result?;
+                trace!(%client, length, "Received Bedrock IPv6 server-list status packet");
                 self.respond(server, &self.ipv6, &ipv6_buffer[..length], client).await
             }
         }
@@ -178,13 +180,26 @@ impl Conn for IceSocket {
     }
 
     async fn send_to(&self, buffer: &[u8], target: SocketAddr) -> Result<usize, WebRtcError> {
-        trace!(
-            %target,
-            length = buffer.len(),
-            kind = ice_packet_kind(buffer),
-            "Sending Bedrock ICE datagram"
-        );
-        Ok(self.socket.send_to(buffer, target).await?)
+        match self.socket.send_to(buffer, target).await {
+            Ok(length) => {
+                trace!(
+                    %target,
+                    length,
+                    kind = ice_packet_kind(buffer),
+                    "Sent Bedrock ICE datagram"
+                );
+                Ok(length)
+            }
+            Err(error) => {
+                warn!(
+                    %target,
+                    kind = ice_packet_kind(buffer),
+                    %error,
+                    "Failed to send Bedrock ICE datagram"
+                );
+                Err(error.into())
+            }
+        }
     }
 
     fn local_addr(&self) -> Result<SocketAddr, WebRtcError> {
@@ -254,6 +269,14 @@ pub async fn handle_packet(
     let mut response = vec![CUnconnectedPong::PACKET_ID as u8];
     pong.write_packet(&mut response)?;
     socket.send_to(&response, client).await?;
+    trace!(
+        %client,
+        players,
+        max_players = server.advanced_config.networking.bedrock.max_players,
+        protocol = CURRENT_BEDROCK_MC_PROTOCOL,
+        response_length = response.len(),
+        "Sent Bedrock server-list status pong"
+    );
     Ok(())
 }
 

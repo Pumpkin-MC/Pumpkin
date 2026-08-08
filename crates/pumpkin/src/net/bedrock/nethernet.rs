@@ -223,25 +223,30 @@ pub fn load_or_create_identity_key(path: &FsPath) -> std::io::Result<Arc<Signing
     }
 }
 
-async fn ping() -> StatusCode {
+async fn ping(ConnectInfo(address): ConnectInfo<SocketAddr>) -> StatusCode {
+    trace!(%address, "Accepted NetherNet capability probe");
     StatusCode::OK
 }
 
 async fn join(
     State(state): State<EndpointState>,
     ConnectInfo(address): ConnectInfo<SocketAddr>,
-    Path(_network_id): Path<String>,
+    Path(network_id): Path<String>,
     offer: Bytes,
 ) -> Response {
+    trace!(%address, %network_id, length = offer.len(), "Received NetherNet SDP offer");
     if offer.is_empty() {
+        debug!(%address, %network_id, "Rejected empty NetherNet SDP offer");
         return (StatusCode::BAD_REQUEST, "Missing SDP offer").into_response();
     }
     let Ok(offer) = String::from_utf8(offer.to_vec()) else {
+        debug!(%address, %network_id, "Rejected non-UTF-8 NetherNet SDP offer");
         return (StatusCode::BAD_REQUEST, "SDP offer must be UTF-8").into_response();
     };
 
     match negotiate(&state, address, &offer, None).await {
         Ok((answer, _session)) => {
+            trace!(%address, %network_id, length = answer.len(), "Returning NetherNet SDP answer");
             let mut response = (StatusCode::OK, answer).into_response();
             response
                 .headers_mut()
@@ -261,7 +266,8 @@ async fn negotiate(
     offer: &str,
     candidates: Option<mpsc::UnboundedReceiver<RTCIceCandidateInit>>,
 ) -> Result<(String, Arc<NetherNetSession>), String> {
-    trace!("Starting NetherNet negotiation with {address}");
+    let signaling = if candidates.is_some() { "LAN" } else { "HTTP" };
+    trace!(%address, signaling, "Starting NetherNet negotiation");
     let (offer, client_public_key) = authenticate_client_offer(
         offer,
         state.require_client_identity,
@@ -269,6 +275,8 @@ async fn negotiate(
     )?;
     trace!(
         %address,
+        signaling,
+        authenticated = client_public_key.is_some(),
         candidates = ?candidate_summary(&offer),
         "Received NetherNet ICE candidates"
     );
@@ -295,45 +303,13 @@ async fn negotiate(
         address,
         state.incoming.clone(),
     ));
-
-    let session_for_channels = session.clone();
-    peer.on_data_channel(Box::new(move |channel| {
-        let session = session_for_channels.clone();
-        Box::pin(async move {
-            trace!(label = channel.label(), "Received NetherNet data channel");
-            if let Err(error) = session.attach_channel(channel).await {
-                warn!("Rejected NetherNet data channel: {error}");
-                session.close().await;
-            }
-        })
-    }));
-
-    let session_for_state = session.clone();
-    peer.on_peer_connection_state_change(Box::new(move |connection_state| {
-        let session = session_for_state.clone();
-        Box::pin(async move {
-            trace!(?connection_state, "NetherNet peer connection state changed");
-            if matches!(
-                connection_state,
-                RTCPeerConnectionState::Failed
-                    | RTCPeerConnectionState::Disconnected
-                    | RTCPeerConnectionState::Closed
-            ) {
-                session.mark_closed();
-            }
-        })
-    }));
-
-    peer.on_ice_connection_state_change(Box::new(move |connection_state| {
-        Box::pin(async move {
-            trace!(?connection_state, %address, "NetherNet ICE connection state changed");
-        })
-    }));
+    register_peer_callbacks(&peer, &session, address);
 
     let offer = RTCSessionDescription::offer(offer).map_err(|error| error.to_string())?;
     peer.set_remote_description(offer)
         .await
         .map_err(|error| error.to_string())?;
+    trace!(%address, signaling, "Applied NetherNet remote description");
     if let Some(mut candidates) = candidates {
         let peer = peer.clone();
         tokio::spawn(async move {
@@ -352,6 +328,7 @@ async fn negotiate(
     peer.set_local_description(answer)
         .await
         .map_err(|error| error.to_string())?;
+    trace!(%address, signaling, "Gathering NetherNet ICE candidates");
     tokio::time::timeout(Duration::from_secs(10), gathering_complete.recv())
         .await
         .map_err(|_| "Timed out gathering ICE candidates".to_string())?;
@@ -359,19 +336,62 @@ async fn negotiate(
         .local_description()
         .await
         .ok_or_else(|| "WebRTC did not produce a local description".to_string())?;
+    let answer = remove_component_two_candidates(&answer.sdp);
     trace!(
         %address,
-        candidates = ?candidate_summary(&answer.sdp),
+        signaling,
+        candidates = ?candidate_summary(&answer),
         "Gathered NetherNet ICE candidates"
     );
-    trace!("Completed NetherNet negotiation with {address}");
-    Ok((
-        add_server_identity(
-            &remove_component_two_candidates(&answer.sdp),
-            &state.identity_key,
-        )?,
-        session,
-    ))
+    trace!(%address, signaling, "Completed NetherNet negotiation");
+    Ok((add_server_identity(&answer, &state.identity_key)?, session))
+}
+
+fn register_peer_callbacks(
+    peer: &RTCPeerConnection,
+    session: &Arc<NetherNetSession>,
+    address: SocketAddr,
+) {
+    let session_for_channels = session.clone();
+    peer.on_data_channel(Box::new(move |channel| {
+        let session = session_for_channels.clone();
+        Box::pin(async move {
+            trace!(
+                %address,
+                label = channel.label(),
+                ordered = channel.ordered(),
+                negotiated = channel.negotiated(),
+                max_retransmits = ?channel.max_retransmits(),
+                "Received NetherNet data channel"
+            );
+            if let Err(error) = session.attach_channel(channel).await {
+                warn!("Rejected NetherNet data channel: {error}");
+                session.close().await;
+            }
+        })
+    }));
+
+    let session_for_state = session.clone();
+    peer.on_peer_connection_state_change(Box::new(move |connection_state| {
+        let session = session_for_state.clone();
+        Box::pin(async move {
+            trace!(?connection_state, %address, "NetherNet peer connection state changed");
+            if matches!(
+                connection_state,
+                RTCPeerConnectionState::Failed
+                    | RTCPeerConnectionState::Disconnected
+                    | RTCPeerConnectionState::Closed
+            ) {
+                session.mark_closed();
+            }
+        })
+    }));
+
+    peer.on_ice_connection_state_change(Box::new(move |connection_state| {
+        Box::pin(async move {
+            trace!(?connection_state, %address, "NetherNet ICE connection state changed");
+        })
+    }));
 }
 
 fn candidate_summary(sdp: &str) -> Vec<String> {
@@ -502,6 +522,12 @@ impl NetherNetSession {
 
     async fn channel_opened(self: &Arc<Self>, bit: u8) {
         let open = self.open_channels.fetch_or(bit, Ordering::AcqRel) | bit;
+        trace!(
+            address = %self.address,
+            channel = if bit == 1 { "reliable" } else { "unreliable" },
+            both_open = open == 3,
+            "NetherNet data channel opened"
+        );
         if open == 3 && !self.accepted.swap(true, Ordering::AcqRel) {
             debug!(
                 "Accepted Bedrock NetherNet connection from {}",
@@ -615,7 +641,10 @@ impl NetherNetSession {
     }
 
     fn mark_closed(&self) {
-        self.closed.cancel();
+        if !self.closed.is_cancelled() {
+            trace!(address = %self.address, "NetherNet session closed");
+            self.closed.cancel();
+        }
     }
 
     #[allow(clippy::unused_async)]
