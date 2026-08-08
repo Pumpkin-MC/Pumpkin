@@ -126,9 +126,8 @@ impl GossipContainer {
     /// `GossipContainer::transferFrom` (`GossipContainer.java:98-106`) plus
     /// `selectGossipsForTransfer` (`GossipContainer.java:68-92`): picks `max_count`
     /// weighted-random entries from `source` (weight = `|value * type.weight|`) and merges
-    /// their decayed value into `self` via `max(old, new)`. Not currently invoked anywhere
-    /// (see module doc) -- Pumpkin has no brain/sensor system driving villagers to meet
-    /// and gossip periodically, so this is implemented and unit-tested but dormant.
+    /// their decayed value into `self` via `max(old, new)`. Invoked from
+    /// `VillagerEntity::gossip_with` (`entity/passive/villager/mod.rs`).
     pub fn transfer_from(&mut self, source: &Self, rng: &mut impl Rng, max_count: usize) {
         let flat: Vec<(Uuid, GossipType, i32)> = source
             .entries

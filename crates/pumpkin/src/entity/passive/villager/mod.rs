@@ -30,9 +30,13 @@ use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase, NBTStorage,
     ai::goal::{
-        avoid_entity::AvoidEntityGoal, interact_with_door::InteractWithDoorGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        villager_schedule::VillagerScheduleGoal, wander_around::WanderAroundGoal,
+        avoid_entity::AvoidEntityGoal,
+        interact_with_door::InteractWithDoorGoal,
+        look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal,
+        swim::SwimGoal,
+        villager_schedule::{self, VillagerScheduleGoal},
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -55,6 +59,9 @@ pub struct VillagerEntity {
     pub restocks_today: AtomicI32,
     pub gossips: Mutex<GossipContainer>,
     pub last_gossip_decay_time: AtomicI64,
+    /// Vanilla `lastGossipTime` (`Villager.java:814-819`): world-age tick of the
+    /// last successful gossip exchange, gating the 1200-tick per-side cooldown.
+    pub last_gossip_time: AtomicI64,
     /// Vanilla `LAST_SLEPT` brain memory (`Villager::golemSpawnConditionsMet`). World-age tick
     /// at which this villager last entered the sleeping pose; 0 == never slept.
     pub last_slept_time: AtomicI64,
@@ -96,6 +103,7 @@ impl VillagerEntity {
             restocks_today: AtomicI32::new(0),
             gossips: Mutex::new(GossipContainer::new()),
             last_gossip_decay_time: AtomicI64::new(0),
+            last_gossip_time: AtomicI64::new(0),
             last_slept_time: AtomicI64::new(0),
             golem_detected_until: AtomicI64::new(0),
             inventory,
@@ -414,18 +422,9 @@ impl VillagerEntity {
         )
     }
 
-    /// Vanilla `Villager::spawnGolemIfNeeded` (`Villager.java:834-848`).
-    ///
-    /// **Trigger deviation from vanilla, documented per repo standing rule:** vanilla only
-    /// reaches this method from `Villager::gossip`, itself only called by the panic-activity
-    /// brain package when two panicking villagers meet at close range. Pumpkin has neither a
-    /// brain/activity system nor any villager panic goal (confirmed absent from the goal
-    /// directory), so there is no faithful trigger to call this from. As the pragmatic
-    /// approximation documented in the design doc, this is called from `on_damage` (a
-    /// villager being attacked is the closest existing analogue to "a villager in a crisis"
-    /// this codebase can express without building a full panic-goal subsystem) rather than
-    /// from a gossip-transfer event. The summoning *mechanics* below (AABB scan, agreement
-    /// count, spawn, suppression) are ported faithfully from the cited vanilla lines.
+    /// Vanilla `Villager::spawnGolemIfNeeded` (`Villager.java:834-848`), called from
+    /// `Villager::gossip` after a successful exchange. `on_damage` also retains the existing
+    /// crisis-trigger approximation; removing that separate trigger is a follow-up.
     pub async fn spawn_golem_if_needed(
         &self,
         world: &Arc<World>,
@@ -513,6 +512,55 @@ impl VillagerEntity {
                     .store(world_age + 599, Ordering::Relaxed);
             }
         }
+    }
+
+    /// Vanilla `Villager::gossip` (`Villager.java:814-822`): transfer a weighted-random sample
+    /// of `target`'s gossip into `self`, gated by a 1200-tick cooldown on both villagers.
+    ///
+    /// Vanilla invokes this from `TradeWithVillager.tick` during the MEET activity after its
+    /// interaction target is within `distanceToSqr <= 5.0` and visible. Pumpkin does not yet
+    /// have the Brain interaction-target/sensor graph, so `mob_tick` supplies those conditions
+    /// with the existing MEET schedule, the same distance threshold, and a block raycast.
+    /// Gossip mutexes are acquired in entity-id order because both villagers can run this
+    /// symmetric check concurrently; neither mutex is held across an await.
+    pub async fn gossip_with(&self, world: &Arc<World>, target: &Self, timestamp: i64) {
+        let self_id = self.get_entity().entity_id;
+        let target_id = target.get_entity().entity_id;
+        if self_id == target_id {
+            return;
+        }
+
+        let self_last = self.last_gossip_time.load(Ordering::Relaxed);
+        let target_last = target.last_gossip_time.load(Ordering::Relaxed);
+        if !gossip_cooldown_ready(self_last, timestamp)
+            || !gossip_cooldown_ready(target_last, timestamp)
+        {
+            return;
+        }
+
+        // ThreadRng is !Send on this rand version. Keep it and both mutex guards inside a
+        // synchronous scope so the mob-tick future never carries them across the next await.
+        if self_id < target_id {
+            {
+                let mut self_gossips = self.gossips.lock().await;
+                let target_gossips = target.gossips.lock().await;
+                let mut rng = rand::rng();
+                self_gossips.transfer_from(&target_gossips, &mut rng, 10);
+            }
+        } else {
+            {
+                let target_gossips = target.gossips.lock().await;
+                let mut self_gossips = self.gossips.lock().await;
+                let mut rng = rand::rng();
+                self_gossips.transfer_from(&target_gossips, &mut rng, 10);
+            }
+        }
+
+        self.last_gossip_time.store(timestamp, Ordering::Relaxed);
+        target.last_gossip_time.store(timestamp, Ordering::Relaxed);
+
+        // `Villager::gossip` unconditionally follows a successful transfer with this call.
+        self.spawn_golem_if_needed(world, timestamp, 5).await;
     }
 
     /// Vanilla `Villager::restock` (`Villager.java:365-375`): recompute demand for every
@@ -1008,6 +1056,12 @@ fn close_to_poi(pos: Vector3<f64>, poi: BlockPos) -> bool {
     poi.to_centered_f64().squared_distance_to_vec(&pos) < 16.0 * 16.0
 }
 
+/// Vanilla `Villager::gossip`'s two cooldown predicates (`Villager.java:815-817`).
+#[must_use]
+const fn gossip_cooldown_ready(last_gossip: i64, timestamp: i64) -> bool {
+    timestamp < last_gossip || timestamp >= last_gossip + 1200
+}
+
 fn block_to_profession(block: &Block) -> Option<VillagerProfession> {
     if block == &Block::COMPOSTER {
         Some(VillagerProfession::Farmer)
@@ -1219,6 +1273,48 @@ impl Mob for VillagerEntity {
                 {
                     self.golem_detected_until
                         .store(world_age + 599, Ordering::Relaxed);
+                }
+            }
+
+            // `TradeWithVillager.tick` (`TradeWithVillager.java:44-62`) is brain-driven in
+            // vanilla. The existing schedule goal already models the MEET activity, so use it
+            // as the activity gate while the Brain interaction-target/sensor graph is absent.
+            if villager_schedule::villager_activity_for_time(world.get_time_of_day().await)
+                == villager_schedule::VillagerActivity::Meet
+            {
+                let pos = self.get_entity().pos.load();
+                let aabb = BoundingBox::new(
+                    Vector3::new(pos.x - 3.0, pos.y - 3.0, pos.z - 3.0),
+                    Vector3::new(pos.x + 3.0, pos.y + 3.0, pos.z + 3.0),
+                );
+                for entity in world.get_all_at_box(&aabb) {
+                    if entity.get_entity().entity_id == self.get_entity().entity_id
+                        || !entity.get_entity().is_alive()
+                        || entity.get_entity().entity_type != &EntityType::VILLAGER
+                    {
+                        continue;
+                    }
+                    let Some(other) = entity.cast_any().downcast_ref::<Self>() else {
+                        continue;
+                    };
+                    if pos.squared_distance_to_vec(&entity.get_entity().pos.load()) > 5.0 {
+                        continue;
+                    }
+
+                    // `BehaviorUtils.targetIsValid` requires the target to be in
+                    // `NEAREST_VISIBLE_LIVING_ENTITIES`; use the same raycast primitive as
+                    // the existing target-visibility goal for this sensor approximation.
+                    let visible = world
+                        .raycast(
+                            self.get_eye_pos(),
+                            entity.get_entity().get_eye_pos(),
+                            async |block_pos, world| world.get_block_state(block_pos).is_solid(),
+                        )
+                        .await
+                        .is_none();
+                    if visible {
+                        self.gossip_with(&world, other, world_age).await;
+                    }
                 }
             }
 
@@ -1511,7 +1607,9 @@ impl Mob for VillagerEntity {
 
 #[cfg(test)]
 mod villager_tick_logic_tests {
-    use super::{golem_spawn_conditions_met, is_new_restock_day, restock_is_due};
+    use super::{
+        golem_spawn_conditions_met, gossip_cooldown_ready, is_new_restock_day, restock_is_due,
+    };
 
     #[test]
     fn golem_conditions_require_recent_sleep() {
@@ -1540,5 +1638,13 @@ mod villager_tick_logic_tests {
         assert!(!restock_is_due(100, 0, 100 + 11999));
         assert!(restock_is_due(100, 0, 100 + 12000));
         assert!(!restock_is_due(100, 2, 100 + 24000));
+    }
+
+    #[test]
+    fn gossip_cooldown_matches_vanilla_boundary() {
+        assert!(!gossip_cooldown_ready(100, 100));
+        assert!(!gossip_cooldown_ready(100, 100 + 1199));
+        assert!(gossip_cooldown_ready(100, 100 + 1200));
+        assert!(gossip_cooldown_ready(1000, 500));
     }
 }
