@@ -34,6 +34,11 @@ impl WalkNodeEvaluator {
         self.flying = flying;
     }
 
+    #[must_use]
+    pub const fn is_flying(&self) -> bool {
+        self.flying
+    }
+
     const fn is_amphibious(&self) -> bool {
         self.base.can_float
     }

@@ -118,12 +118,19 @@ impl TrackTargetGoal {
         self
     }
 
-    fn can_navigate_to_entity(&self, mob: &dyn Mob, _target: &LivingEntity) -> bool {
+    async fn can_navigate_to_entity(&self, mob: &dyn Mob, target: &LivingEntity) -> bool {
         let cooldown = to_goal_ticks(10 + mob.get_random().random_range(0..5));
         self.check_can_navigate_cooldown
             .store(cooldown, Ordering::Relaxed);
-        // TODO: after implementing path
-        false
+
+        let mob_entity = mob.get_mob_entity();
+        let mut navigator = {
+            let navigator = mob_entity.navigator.lock().unwrap();
+            navigator.path_probe()
+        };
+        navigator
+            .can_reach_entity(&mob_entity.living_entity, target)
+            .await
     }
 
     fn remembers_visible_target(&self, has_line_of_sight: bool) -> bool {
@@ -180,7 +187,7 @@ impl TrackTargetGoal {
             }
 
             if self.can_navigate_flag.load(Ordering::Relaxed) == UNSET {
-                let can_reach = self.can_navigate_to_entity(mob, target);
+                let can_reach = self.can_navigate_to_entity(mob, target).await;
                 self.can_navigate_flag.store(
                     if can_reach { CAN_TRACK } else { CANNOT_TRACK },
                     Ordering::Relaxed,

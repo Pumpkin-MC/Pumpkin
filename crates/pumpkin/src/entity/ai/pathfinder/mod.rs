@@ -88,11 +88,6 @@ impl Default for Navigator {
     }
 }
 
-// If I counted correctly this should be equal to the number of iters that vanilla does for
-// a zombie (yes, vanilla does a different number of iterations based on the mob and some
-// other things)
-// TODO: Calculate from mob attributes like in vanilla
-const MAX_ITERS: usize = 560;
 const TARGET_DISTANCE_MULTIPLIER: f32 = 1.5;
 const NODE_REACH_XZ: f64 = 0.5;
 const NODE_REACH_Y: f64 = 1.0;
@@ -151,6 +146,63 @@ impl Navigator {
         self.mob_height = height;
     }
 
+    /// Vanilla `PathNavigation.createPath(Entity, 0)` as used by `TargetGoal.canReach`.
+    ///
+    /// This deliberately leaves the active path alone: `TargetGoal` only probes whether the
+    /// navigation graph can reach the target, while the target goal itself does not start moving
+    /// the mob.
+    pub(crate) fn path_probe(&self) -> Self {
+        // TargetGoal probes navigation without replacing the active navigation path. Keep the
+        // evaluator configuration (door, fluid, flying, and malus settings) but use fresh search
+        // scratch state for this independent query.
+        Self {
+            current_goal: None,
+            evaluator: {
+                let mut evaluator = WalkNodeEvaluator::default();
+                evaluator.set_can_pass_doors(self.evaluator.can_pass_doors());
+                evaluator.set_can_open_doors(self.evaluator.can_open_doors());
+                evaluator.set_can_float(self.evaluator.can_float());
+                evaluator.set_flying(self.evaluator.is_flying());
+                evaluator
+            },
+            current_path: None,
+            ticks_on_current_node: 0,
+            last_node_index: 0,
+            total_ticks: 0,
+            path_start_pos: None,
+            path_type_overrides: self.path_type_overrides.clone(),
+            mob_width: self.mob_width,
+            mob_height: self.mob_height,
+            repath_cooldown: 0,
+            open_set: BinaryHeap::new(),
+            neighbors_buf: Vec::new(),
+            is_idle: AtomicBool::new(true),
+        }
+    }
+
+    pub(crate) async fn can_reach_entity(
+        &mut self,
+        mob: &LivingEntity,
+        target: &LivingEntity,
+    ) -> bool {
+        let target_pos = target.entity.block_pos.load();
+        let destination = Vector3::new(
+            f64::from(target_pos.0.x),
+            f64::from(target_pos.0.y),
+            f64::from(target_pos.0.z),
+        );
+        let Some(path) = self.compute_path(mob, destination).await else {
+            return false;
+        };
+        let Some(last) = path.get_end_node() else {
+            return false;
+        };
+
+        let dx = last.pos.0.x - target_pos.0.x;
+        let dz = last.pos.0.z - target_pos.0.z;
+        dx * dx + dz * dz <= 2
+    }
+
     #[allow(clippy::too_many_lines)]
     pub(crate) async fn compute_path(
         &mut self,
@@ -158,8 +210,14 @@ impl Navigator {
         destination: Vector3<f64>,
     ) -> Option<Path> {
         let start_pos_f = entity.entity.pos.load();
-        let start_block_vec = start_pos_f.to_i32();
+        let start_block_vec = start_pos_f.floor_to_i32();
         let mob_position = Vector3::new(start_block_vec.x, start_block_vec.y, start_block_vec.z);
+
+        // PathNavigation.getMaxPathLength() is at least the required path length (16 blocks),
+        // even when FOLLOW_RANGE is smaller. PathFinder visits floor(maxPathLength * 16) nodes.
+        let max_path_length =
+            (entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32).max(16.0);
+        let max_iterations = (max_path_length * 16.0).floor() as usize;
 
         let context = PathfindingContext::new(mob_position, entity.entity.world.load_full());
         let mut mob_data = MobData::new(start_pos_f, self.mob_width, self.mob_height, 1.0);
@@ -207,7 +265,7 @@ impl Navigator {
 
         while !self.open_set.is_empty() {
             iterations += 1;
-            if iterations >= MAX_ITERS {
+            if iterations >= max_iterations {
                 break;
             }
 
@@ -229,8 +287,7 @@ impl Navigator {
                 (dx * dx + dy * dy + dz * dz).sqrt()
             };
 
-            let follow_range = entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32;
-            if euclidean_from_start >= follow_range {
+            if euclidean_from_start >= max_path_length {
                 closed_set.insert(current.pos.0, current);
                 continue;
             }
@@ -246,7 +303,7 @@ impl Navigator {
                 let tentative_g = current.g + step_cost + neighbor.cost_malus;
 
                 let in_heap = self.open_set.contains(&neighbor);
-                if neighbor.walked_dist < follow_range
+                if neighbor.walked_dist < max_path_length
                     && (!in_heap
                         || self
                             .open_set
