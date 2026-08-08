@@ -26,13 +26,8 @@ use crate::entity::player::Player;
 /// (`Attributes.FOLLOW_RANGE`, not overridden by this goal -- `TargetGoal.java:70-72`) gating
 /// whether the goal keeps running once started.
 ///
-/// `mustReach = true` in vanilla (`super(golem, false, true)`) would normally drop the target
-/// once `TargetGoal`'s reach-cache decides it's unreachable. Pumpkin's `can_navigate_to_entity`
-/// stub always answers "unreachable" (see `track_target.rs`), so passing that through as
-/// `check_can_navigate: true` would drop the target one tick after every `start()` -- inverting
-/// vanilla's normal-case outcome instead of approximating it. `false` is used instead, skipping
-/// the check entirely, matching the outcome in the common case (golem and player both pathable)
-/// until a real navigation hook exists for `TrackTargetGoal`.
+/// `mustReach = true` in vanilla (`super(golem, false, true)`), so the shared target goal now
+/// performs the same cached navigation reachability check.
 pub struct DefendVillageTargetGoal {
     track_target_goal: TrackTargetGoal,
     potential_target: Option<Arc<dyn EntityBase>>,
@@ -42,7 +37,7 @@ impl DefendVillageTargetGoal {
     #[must_use]
     pub fn new() -> Box<Self> {
         Box::new(Self {
-            track_target_goal: TrackTargetGoal::new(false, false),
+            track_target_goal: TrackTargetGoal::new(false, true),
             potential_target: None,
         })
     }
