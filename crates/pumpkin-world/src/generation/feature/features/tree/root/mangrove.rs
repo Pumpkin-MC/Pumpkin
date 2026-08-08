@@ -54,7 +54,7 @@ impl MangroveRootPlacer {
 
         roots.push(trunk_pos.down());
 
-        for dir in BlockDirection::horizontal() {
+        for dir in BlockDirection::horizontal_worldgen() {
             let start = trunk_pos.offset_dir(dir.to_offset(), 1);
             let mut offshoots: Vec<BlockPos> = Vec::new();
             if !self.can_grow(chunk, random, start, dir, trunk_pos, &mut offshoots, 0) {
