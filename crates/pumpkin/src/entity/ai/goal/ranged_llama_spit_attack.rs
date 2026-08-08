@@ -55,6 +55,25 @@ impl RangedLlamaSpitAttackGoal {
         Vector3::new(dx, dy, dz).normalize() * 1.5
     }
 
+    async fn has_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
+        let entity = mob.get_entity();
+        let target_entity = target.get_entity();
+        let from = entity.get_eye_pos();
+        let to = target_entity.get_eye_pos();
+        if from.squared_distance_to_vec(&to) > 128.0 * 128.0 {
+            return false;
+        }
+
+        entity
+            .world
+            .load_full()
+            .raycast_collision(from, to, async |block_pos, world| {
+                !world.get_block_state(block_pos).collision_shapes.is_empty()
+            })
+            .await
+            .is_none()
+    }
+
     async fn shoot(&self, mob: &dyn Mob, target: &dyn EntityBase) {
         let shooter = mob.get_entity();
         let world = shooter.world.load_full();
@@ -128,10 +147,12 @@ impl Goal for RangedLlamaSpitAttackGoal {
             let target_pos = target.get_entity().pos.load();
             let dist_sqr = shooter_pos.squared_distance_to_vec(&target_pos);
 
-            // Vanilla `hasLineOfSight` is approximated as "always visible" -- Pumpkin's
-            // `RangedSnowballAttackGoal` makes the same simplification for lack of a sensing/
-            // line-of-sight query on `Mob`.
-            self.see_time += 1;
+            let has_line_of_sight = Self::has_line_of_sight(mob, target.as_ref()).await;
+            if has_line_of_sight {
+                self.see_time += 1;
+            } else {
+                self.see_time = 0;
+            }
 
             let in_range = dist_sqr <= f64::from(self.attack_radius * self.attack_radius);
             if in_range && self.see_time >= 5 {
@@ -152,6 +173,9 @@ impl Goal for RangedLlamaSpitAttackGoal {
 
             self.attack_time -= 1;
             if self.attack_time == 0 {
+                if !has_line_of_sight {
+                    return;
+                }
                 let dist_ratio = (dist_sqr.sqrt() as f32 / self.attack_radius).clamp(0.1, 1.0);
                 self.shoot(mob, target.as_ref()).await;
                 self.attack_time = (dist_ratio
