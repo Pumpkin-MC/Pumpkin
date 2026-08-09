@@ -3424,6 +3424,7 @@ dependencies = [
  "base64 0.23.1",
  "bytes",
  "colored",
+ "criterion",
  "crypto-bigint 0.7.5",
  "ecdsa 0.17.0",
  "md5",
