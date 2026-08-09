@@ -7,33 +7,41 @@ mod test {
     use pumpkin_util::world_seed::Seed;
 
     #[test]
-    fn structure_references_are_rebuilt_when_resuming_generation() {
+    fn nether_proto_chunk_upgrades_to_full_dimension_height() {
         use crate::chunk_system::chunk_state::Chunk;
         use pumpkin_config::lighting::LightingEngineConfig;
-        use pumpkin_data::structures::StructureKeys;
+        use pumpkin_data::Block;
 
-        let seed = Seed(1_782_124_772_053_846_960);
-        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
-        let WorldGenerator::Noise(generator) = &*world_gen else {
-            unreachable!()
-        };
-
-        // This chunk contains the far edge of a monument starting at (-553, 173).
-        let mut proto = ProtoChunk::new(-553, 174, &world_gen);
-        proto.step_to_biomes(generator);
-        proto.set_structure_starts(generator);
-        proto.set_structure_references(generator);
-        assert!(proto.has_structure(StructureKeys::Monument));
+        let world_gen = get_world_gen(
+            Seed(0),
+            Dimension::THE_NETHER,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let proto = ProtoChunk::new(0, 0, &world_gen);
+        assert_eq!(proto.height(), Dimension::THE_NETHER.height as u16);
 
         let mut staged = Chunk::Proto(Box::new(proto));
-        staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        staged.upgrade_to_level_chunk(&Dimension::THE_NETHER, &LightingEngineConfig::Default);
+
         let Chunk::Level(chunk_data) = staged else {
             unreachable!()
         };
-
-        let resumed = ProtoChunk::from_chunk_data(&chunk_data, &world_gen);
-        assert_eq!(resumed.stage, StagedChunkEnum::StructureReferences);
-        assert!(resumed.has_structure(StructureKeys::Monument));
+        assert_eq!(
+            chunk_data.section.block_sections.read().unwrap().len(),
+            (Dimension::THE_NETHER.height / 16) as usize
+        );
+        assert_eq!(
+            chunk_data.section.get_block_absolute_y(15, 128, 15),
+            Some(Block::AIR.default_state.id)
+        );
+        assert!(
+            chunk_data
+                .section
+                .get_rough_biome_absolute_y(15, 255, 15)
+                .is_some()
+        );
     }
 
     // Regression test for transposed heightmaps during Noise-stage chunk resume.

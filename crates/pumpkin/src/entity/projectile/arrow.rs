@@ -77,6 +77,27 @@ impl ArrowEntity {
     const GRAVITY: f64 = 0.05;
     const DESPAWN_TIME: u32 = 1200;
 
+    async fn damage_target(
+        &self,
+        target: &dyn EntityBase,
+        hit_pos: Vector3<f64>,
+        damage: f32,
+    ) -> bool {
+        let world = self.entity.world.load();
+        let owner = self.owner_id.and_then(|id| world.get_entity_by_id(id));
+
+        target
+            .damage_with_context(
+                target,
+                damage,
+                DamageType::ARROW,
+                Some(hit_pos),
+                Some(self),
+                owner.as_deref(),
+            )
+            .await
+    }
+
     pub fn new(entity: Entity, owner_id: Option<i32>) -> Self {
         let item_stack = ItemStack::new(1, Self::default_item(entity.entity_type));
         Self::new_with_item(entity, owner_id, &item_stack, ArrowPickup::Disallowed)
@@ -408,7 +429,7 @@ impl EntityBase for ArrowEntity {
             }
 
             // Entity collisions
-            let candidates = world.get_entities_at_box(&search_box);
+            let candidates = world.get_all_at_box(&search_box);
             for cand in candidates {
                 if self.should_skip_collision(entity, &cand) {
                     continue;
@@ -507,8 +528,8 @@ impl EntityBase for ArrowEntity {
                         target.get_entity().set_on_fire_for_ticks(100);
                     }
 
-                    let damage_succeeded = target
-                        .damage(&*target, damage as f32, DamageType::ARROW)
+                    let damage_succeeded = self
+                        .damage_target(target.as_ref(), hit_pos, damage as f32)
                         .await;
 
                     if let Some(living) = target.get_living_entity() {
