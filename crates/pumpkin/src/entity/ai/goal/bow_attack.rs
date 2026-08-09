@@ -5,7 +5,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::Hand;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::entity::ai::goal::{Controls, Goal, GoalFuture};
 use crate::entity::ai::pathfinder::NavigatorGoal;
@@ -45,7 +44,7 @@ impl BowAttackGoal {
         }
     }
 
-    async fn main_hand_item(mob: &dyn Mob) -> Arc<Mutex<ItemStack>> {
+    async fn main_hand_item(mob: &dyn Mob) -> ItemStack {
         mob.get_mob_entity()
             .living_entity
             .entity_equipment
@@ -55,9 +54,7 @@ impl BowAttackGoal {
     }
 
     async fn is_holding_bow(mob: &dyn Mob) -> bool {
-        let held = Self::main_hand_item(mob).await;
-        let item = held.lock().await;
-        item.item.id == Item::BOW.id
+        Self::main_hand_item(mob).await.item.id == Item::BOW.id
     }
 
     async fn stop_drawing(&mut self, mob: &dyn Mob) {
@@ -142,7 +139,11 @@ impl Goal for BowAttackGoal {
         Box::pin(async move {
             self.stop_drawing(mob).await;
             self.cooldown = -1;
-            mob.get_mob_entity().navigator.lock().unwrap().stop();
+            mob.get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .stop();
         })
     }
 
@@ -160,12 +161,16 @@ impl Goal for BowAttackGoal {
             mob.get_mob_entity()
                 .look_control
                 .lock()
-                .unwrap()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .look_at_entity_with_range(&target, 30.0, 30.0);
 
             // Close the gap while out of shooting range, otherwise hold position.
             {
-                let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+                let mut navigator = mob
+                    .get_mob_entity()
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 if distance_sq > self.squared_range {
                     navigator.set_progress(NavigatorGoal {
                         current_progress: mob_pos,
@@ -189,8 +194,7 @@ impl Goal for BowAttackGoal {
 
             self.cooldown -= 1;
             if self.cooldown <= 0 && distance_sq <= self.squared_range {
-                let held = Self::main_hand_item(mob).await;
-                let stack = held.lock().await.clone();
+                let stack = Self::main_hand_item(mob).await;
                 mob.get_mob_entity()
                     .living_entity
                     .set_active_hand(Hand::Right, stack, i32::MAX)
