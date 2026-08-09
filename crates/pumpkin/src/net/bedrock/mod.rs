@@ -62,6 +62,10 @@ use pumpkin_protocol::bedrock::server::login::ClientData;
 use pumpkin_util::version::BedrockMinecraftVersion;
 use pumpkin_world::level::SyncChunk;
 
+/// How long a client may stay silent before it is dropped. Clients send nothing while they
+/// load the world, so this has to outlast a slow initial chunk load.
+const CONNECTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 pub struct OutgoingPacket {
     pub data: Bytes,
     pub completion: Option<oneshot::Sender<()>>,
@@ -217,7 +221,7 @@ impl BedrockClient {
     }
 
     async fn tick_connection(&self) -> bool {
-        if self.last_seen.load().elapsed() > std::time::Duration::from_secs(10) {
+        if self.last_seen.load().elapsed() > CONNECTION_TIMEOUT {
             debug!("Bedrock client {} timed out", self.address);
             self.close().await;
             return false;
@@ -240,7 +244,7 @@ impl BedrockClient {
         }
     }
 
-    pub fn nethernet_public_key(&self) -> &pumpkin_util::p384::PublicKey {
+    pub fn nethernet_public_key(&self) -> Option<&pumpkin_util::p384::PublicKey> {
         self.session.client_public_key()
     }
 

@@ -186,7 +186,11 @@ impl BedrockClient {
 
         let login_public_key = pumpkin_util::jwt::extract_cpk_from_token(&auth_payload.token)
             .map_err(LoginError::ChainValidationFailed)?;
-        if self.nethernet_public_key() != &login_public_key {
+        // Clients connecting over LAN negotiate without an identity assertion, so there is
+        // no transport identity to bind the login chain to.
+        if let Some(transport_public_key) = self.nethernet_public_key()
+            && transport_public_key != &login_public_key
+        {
             return Err(LoginError::ChainValidationFailed(
                 AuthError::PublicKeyBuild(
                     "NetherNet and Bedrock login identities do not match".into(),
