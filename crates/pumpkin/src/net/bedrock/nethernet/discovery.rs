@@ -362,9 +362,7 @@ fn push_string(buffer: &mut Vec<u8>, value: &str) -> Result<(), Error> {
 fn encrypt(data: &mut [u8]) {
     let (blocks, remainder) = Block::slice_as_chunks_mut(data);
     debug_assert!(remainder.is_empty());
-    Aes256::new_from_slice(KEY.as_slice())
-        .expect("AES-256 key has the correct length")
-        .encrypt_blocks(blocks);
+    Aes256::new((&*KEY).into()).encrypt_blocks(blocks);
 }
 
 fn decrypt(data: &mut [u8]) -> Option<()> {
@@ -372,9 +370,7 @@ fn decrypt(data: &mut [u8]) -> Option<()> {
     if !remainder.is_empty() {
         return None;
     }
-    Aes256::new_from_slice(KEY.as_slice())
-        .ok()?
-        .decrypt_blocks(blocks);
+    Aes256::new((&*KEY).into()).decrypt_blocks(blocks);
     Some(())
 }
 
