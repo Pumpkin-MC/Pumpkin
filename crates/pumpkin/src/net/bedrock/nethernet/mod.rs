@@ -47,6 +47,8 @@ const DATAGRAM_BUFFER_SIZE: usize = 65535;
 const NEGOTIATION_TIMEOUT: Duration = Duration::from_secs(15);
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(1);
 const GATHERING_TIMEOUT: Duration = Duration::from_secs(10);
+/// Largest SCTP message the data channels accept, advertised so clients size their sends.
+const MAX_MESSAGE_SIZE: usize = 65536;
 
 /// Accepts Bedrock `NetherNet` connections negotiated over the LAN discovery protocol.
 pub struct NetherNetListener {
@@ -337,13 +339,18 @@ impl Transport {
             .await
             .ok_or_else(|| "WebRTC did not produce a local description".to_string())?;
 
+        let answer_sdp = vanilla_shaped_answer(&answer.sdp);
         // The identity assertion is over a kilobyte, which pushes the answer past the MTU and
         // makes it rely on IP fragmentation. Only send it back to clients that asserted one.
         let answer_sdp = if negotiation.assert_identity {
-            add_server_identity(&answer.sdp, &self.identity_key)?
+            add_server_identity(&answer_sdp, &self.identity_key)?
         } else {
-            answer.sdp.clone()
+            answer_sdp
         };
+        debug!(
+            "Answering NetherNet connection {connection_id} with {} bytes of SDP",
+            answer_sdp.len()
+        );
         self.send_signal(
             &Signal::new(signal::TYPE_ANSWER, connection_id, answer_sdp),
             negotiation.network_id,
@@ -504,10 +511,39 @@ async fn add_candidate(peer: &RTCPeerConnection, candidate: String) {
 
 fn local_candidates(sdp: &str) -> Vec<String> {
     sdp.lines()
-        .filter_map(|line| line.trim_end().strip_prefix("a="))
+        .map(str::trim_end)
+        .filter(|line| !is_rtcp_candidate(line))
+        .filter_map(|line| line.strip_prefix("a="))
         .filter(|line| line.starts_with("candidate:"))
         .map(str::to_string)
         .collect()
+}
+
+/// Reshapes an answer into the form vanilla emits. Clients are known to reject descriptions
+/// that omit the attributes vanilla always sends, or that carry ones it never does. The
+/// second ICE component is unused because the data channel is bundled and RTCP-muxed.
+fn vanilla_shaped_answer(sdp: &str) -> String {
+    let mut lines = Vec::new();
+    for line in sdp.lines().map(str::trim_end) {
+        if line.is_empty() || line == "a=sendrecv" || is_rtcp_candidate(line) {
+            continue;
+        }
+        lines.push(line.to_string());
+        if line.starts_with("a=ice-pwd:") && !sdp.contains("a=ice-options:") {
+            lines.push("a=ice-options:trickle".to_string());
+        } else if line.starts_with("a=sctp-port:") && !sdp.contains("a=max-message-size:") {
+            lines.push(format!("a=max-message-size:{MAX_MESSAGE_SIZE}"));
+        }
+    }
+    let mut answer = lines.join("\r\n");
+    answer.push_str("\r\n");
+    answer
+}
+
+fn is_rtcp_candidate(line: &str) -> bool {
+    line.strip_prefix("a=candidate:")
+        .and_then(|candidate| candidate.split_whitespace().nth(1))
+        .is_some_and(|component| component == "2")
 }
 
 #[cfg(test)]
@@ -522,5 +558,28 @@ mod tests {
             local_candidates(sdp),
             vec!["candidate:1 1 udp 2 127.0.0.1 50000 typ host".to_string()]
         );
+    }
+
+    #[test]
+    fn the_second_ice_component_is_never_advertised() {
+        let sdp = "v=0\r\na=candidate:1 1 udp 2 127.0.0.1 50000 typ host\r\na=candidate:1 2 udp 2 127.0.0.1 50000 typ host\r\n";
+        assert_eq!(local_candidates(sdp).len(), 1);
+        assert!(!vanilla_shaped_answer(sdp).contains(" 2 udp "));
+    }
+
+    #[test]
+    fn the_answer_gains_the_attributes_vanilla_always_sends() {
+        let sdp = "v=0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\na=ice-ufrag:abcd\r\na=ice-pwd:efgh\r\na=sendrecv\r\na=sctp-port:5000\r\n";
+        let answer = vanilla_shaped_answer(sdp);
+        assert!(answer.contains("a=ice-pwd:efgh\r\na=ice-options:trickle\r\n"));
+        assert!(answer.contains("a=sctp-port:5000\r\na=max-message-size:65536\r\n"));
+        assert!(!answer.contains("a=sendrecv"));
+    }
+
+    #[test]
+    fn reshaping_an_answer_is_idempotent() {
+        let sdp = "v=0\r\na=ice-pwd:efgh\r\na=sctp-port:5000\r\n";
+        let once = vanilla_shaped_answer(sdp);
+        assert_eq!(vanilla_shaped_answer(&once), once);
     }
 }
