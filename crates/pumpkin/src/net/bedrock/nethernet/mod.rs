@@ -103,6 +103,8 @@ struct Negotiation {
     network_id: u64,
     /// Candidates buffered until the remote description is applied.
     candidates: Mutex<Option<Vec<String>>>,
+    /// Whether the client asserted an identity and therefore expects one back.
+    assert_identity: bool,
     started: Instant,
 }
 
@@ -156,6 +158,9 @@ impl Transport {
             }
             DiscoveryPacket::Message { recipient_id, data } => {
                 if recipient_id != self.network_id {
+                    debug!(
+                        "Ignoring NetherNet message from {address} addressed to network {recipient_id}"
+                    );
                     return;
                 }
                 // Clients probe a server with an empty or "Ping" message before connecting.
@@ -222,6 +227,7 @@ impl Transport {
                 }
             };
 
+        let assert_identity = client_public_key.is_some();
         let peer = match self.create_peer_connection().await {
             Ok(peer) => peer,
             Err(error) => {
@@ -270,6 +276,7 @@ impl Transport {
             address,
             network_id: sender_network_id,
             candidates: Mutex::new(Some(Vec::new())),
+            assert_identity,
             started: Instant::now(),
         });
         self.negotiations
@@ -330,12 +337,15 @@ impl Transport {
             .await
             .ok_or_else(|| "WebRTC did not produce a local description".to_string())?;
 
+        // The identity assertion is over a kilobyte, which pushes the answer past the MTU and
+        // makes it rely on IP fragmentation. Only send it back to clients that asserted one.
+        let answer_sdp = if negotiation.assert_identity {
+            add_server_identity(&answer.sdp, &self.identity_key)?
+        } else {
+            answer.sdp.clone()
+        };
         self.send_signal(
-            &Signal::new(
-                signal::TYPE_ANSWER,
-                connection_id,
-                add_server_identity(&answer.sdp, &self.identity_key)?,
-            ),
+            &Signal::new(signal::TYPE_ANSWER, connection_id, answer_sdp),
             negotiation.network_id,
             negotiation.address,
         )
