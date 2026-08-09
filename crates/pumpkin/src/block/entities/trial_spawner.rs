@@ -4,7 +4,7 @@ use pumpkin_data::block_properties::{
 };
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, world::WorldEvent};
+use pumpkin_data::{Block, BlockStateId, world::WorldEvent};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::GameMode;
@@ -15,10 +15,12 @@ use pumpkin_util::math::{
 use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering};
+use std::sync::Mutex as StdMutex;
+use std::sync::atomic::{AtomicI32, AtomicI64, Ordering};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+use crate::entity::NBTStorage;
 use crate::world::{BlockFlags, World};
 
 // TrialSpawnerConfig.java:92-97 (Builder defaults)
@@ -30,7 +32,7 @@ pub struct TrialSpawnerConfig {
     pub total_mobs_added_per_player: f32,
     pub simultaneous_mobs_added_per_player: f32,
     pub ticks_between_spawn: i64,
-    pub spawn_potentials: Vec<(&'static EntityType, i32)>,
+    pub spawn_potentials: Vec<(&'static EntityType, i32, NbtCompound)>,
 }
 
 impl Default for TrialSpawnerConfig {
@@ -98,7 +100,9 @@ impl TrialSpawnerConfig {
                 };
                 let name = id.strip_prefix("minecraft:").unwrap_or(id);
                 if let Some(entity_type) = EntityType::from_name(name) {
-                    config.spawn_potentials.push((entity_type, weight));
+                    config
+                        .spawn_potentials
+                        .push((entity_type, weight, data.clone()));
                 }
             }
         }
@@ -118,15 +122,18 @@ impl TrialSpawnerConfig {
             .floor() as i32
     }
 
-    fn pick_random_entity(&self) -> Option<&'static EntityType> {
-        let total_weight: i32 = self.spawn_potentials.iter().map(|(_, w)| *w).sum();
+    fn pick_random_spawn_data(&self) -> Option<(&'static EntityType, NbtCompound)> {
+        let total_weight: i32 = self.spawn_potentials.iter().map(|(_, w, _)| *w).sum();
         if total_weight <= 0 {
-            return self.spawn_potentials.first().map(|(e, _)| *e);
+            return self
+                .spawn_potentials
+                .first()
+                .map(|(entity, _, data)| (*entity, data.clone()));
         }
         let mut roll = rand::random_range(0..total_weight);
-        for (entity, weight) in &self.spawn_potentials {
+        for (entity, weight, data) in &self.spawn_potentials {
             if roll < *weight {
-                return Some(entity);
+                return Some((*entity, data.clone()));
             }
             roll -= weight;
         }
@@ -134,9 +141,9 @@ impl TrialSpawnerConfig {
     }
 }
 
-// TrialSpawnerConfigs.java:22-269 (bootstrap registry). Equipment loot tables and
-// per-mob NBT modifiers (baby zombie, slime size) are not carried through spawn_mob's
-// simple entity-type spawn, only the mob choice and pacing.
+// TrialSpawnerConfigs.java:22-269 (bootstrap registry). The entity compound is
+// retained because SpawnData carries more than the registry id (for example the
+// baby-zombie and slime-size modifiers).
 fn built_in_config(key: &str) -> Option<TrialSpawnerConfig> {
     const D_SIM: f32 = 2.0;
     const D_TOTAL: f32 = 6.0;
@@ -205,6 +212,46 @@ fn built_in_config(key: &str) -> Option<TrialSpawnerConfig> {
         };
 
     let entity_type = EntityType::from_name(mob)?;
+    let mut entity = NbtCompound::new();
+    entity.put_string("id", format!("minecraft:{mob}"));
+    let mut potentials = Vec::new();
+    if mob == "zombie" && path == "trial_chamber/small_melee/baby_zombie" {
+        entity.put_bool("IsBaby", true);
+        let mut data = NbtCompound::new();
+        data.put_compound("entity", entity);
+        potentials.push((entity_type, 1, data));
+    } else if mob == "slime" {
+        for (size, weight) in [(1_i8, 3_i32), (2_i8, 1_i32)] {
+            let mut entity = NbtCompound::new();
+            entity.put_string("id", "minecraft:slime".to_string());
+            entity.put_byte("Size", size);
+            let mut data = NbtCompound::new();
+            data.put_compound("entity", entity);
+            potentials.push((entity_type, weight, data));
+        }
+    } else {
+        let mut data = NbtCompound::new();
+        data.put_compound("entity", entity);
+        if is_ominous {
+            let equipment_table = if matches!(
+                path,
+                "trial_chamber/melee/husk"
+                    | "trial_chamber/melee/zombie"
+                    | "trial_chamber/small_melee/baby_zombie"
+            ) {
+                "minecraft:equipment/trial_chamber_melee"
+            } else if path.contains("ranged") {
+                "minecraft:equipment/trial_chamber_ranged"
+            } else {
+                "minecraft:equipment/trial_chamber"
+            };
+            let mut equipment = NbtCompound::new();
+            equipment.put_string("loot_table", equipment_table.to_string());
+            equipment.put_float("slot_drop_chances", 0.0);
+            data.put_compound("equipment", equipment);
+        }
+        potentials.push((entity_type, 1, data));
+    }
     Some(TrialSpawnerConfig {
         spawn_range: 4,
         total_mobs: total,
@@ -212,7 +259,7 @@ fn built_in_config(key: &str) -> Option<TrialSpawnerConfig> {
         total_mobs_added_per_player: total_add,
         simultaneous_mobs_added_per_player: sim_add,
         ticks_between_spawn: ticks,
-        spawn_potentials: vec![(entity_type, 1)],
+        spawn_potentials: potentials,
     })
 }
 
@@ -229,9 +276,9 @@ pub struct TrialSpawnerBlockEntity {
     cooldown_ends_at: AtomicI64,
     next_mob_spawns_at: AtomicI64,
     total_mobs_spawned: AtomicI32,
-    next_spawn_entity: Mutex<Option<&'static EntityType>>,
-    // 0 = none, 1 = consumables/key ejection in progress
-    ejecting_loot_table: AtomicU8,
+    next_spawn_entity: StdMutex<Option<&'static EntityType>>,
+    next_spawn_data: StdMutex<Option<NbtCompound>>,
+    ejecting_loot_table: StdMutex<Option<String>>,
 }
 
 // TrialSpawner.java:56-58
@@ -261,8 +308,9 @@ impl TrialSpawnerBlockEntity {
             cooldown_ends_at: AtomicI64::new(0),
             next_mob_spawns_at: AtomicI64::new(0),
             total_mobs_spawned: AtomicI32::new(0),
-            next_spawn_entity: Mutex::const_new(None),
-            ejecting_loot_table: AtomicU8::new(0),
+            next_spawn_entity: StdMutex::new(None),
+            next_spawn_data: StdMutex::new(None),
+            ejecting_loot_table: StdMutex::new(None),
         }
     }
 
@@ -283,7 +331,9 @@ impl TrialSpawnerBlockEntity {
 
     async fn reset(&self) {
         self.current_mobs.lock().await.clear();
-        *self.next_spawn_entity.lock().await = None;
+        *self.next_spawn_entity.lock().unwrap() = None;
+        *self.next_spawn_data.lock().unwrap() = None;
+        *self.ejecting_loot_table.lock().unwrap() = None;
         self.reset_statistics().await;
     }
 
@@ -339,7 +389,7 @@ impl TrialSpawnerBlockEntity {
     }
 
     async fn has_mob_to_spawn(&self, config: &TrialSpawnerConfig) -> bool {
-        if self.next_spawn_entity.lock().await.is_some() {
+        if self.next_spawn_entity.lock().unwrap().is_some() {
             return true;
         }
         !config.spawn_potentials.is_empty()
@@ -348,18 +398,29 @@ impl TrialSpawnerBlockEntity {
     async fn get_or_create_next_spawn_data(
         &self,
         config: &TrialSpawnerConfig,
-    ) -> Option<&'static EntityType> {
-        let mut next = self.next_spawn_entity.lock().await;
+    ) -> Option<(&'static EntityType, NbtCompound)> {
+        let mut next = self.next_spawn_entity.lock().unwrap();
+        let mut data = self.next_spawn_data.lock().unwrap();
         if next.is_none() {
-            *next = config.pick_random_entity();
+            let (entity, spawn_data) = config.pick_random_spawn_data()?;
+            *next = Some(entity);
+            *data = Some(spawn_data);
         }
-        *next
+        let entity = (*next)?;
+        let spawn_data = data.clone().unwrap_or_else(|| {
+            let mut entity_data = NbtCompound::new();
+            entity_data.put_string("id", format!("minecraft:{}", entity.resource_name));
+            let mut spawn_data = NbtCompound::new();
+            spawn_data.put_compound("entity", entity_data);
+            spawn_data
+        });
+        Some((entity, spawn_data))
     }
 
     // TrialSpawner.java:161-234, simplified: no custom spawn rules / equipment /
     // line-of-sight clip check (only collision + spawn placement rules kept)
     async fn spawn_mob(&self, world: &Arc<World>, config: &TrialSpawnerConfig) -> Option<Uuid> {
-        let entity_type = self.get_or_create_next_spawn_data(config).await?;
+        let (entity_type, spawn_data) = self.get_or_create_next_spawn_data(config).await?;
         let pos = self.position.0;
         let spawn_range = f64::from(config.spawn_range);
         let spawn_pos = pumpkin_util::math::vector3::Vector3::new(
@@ -379,15 +440,38 @@ impl TrialSpawnerBlockEntity {
         )) {
             return None;
         }
+        if !custom_spawn_rules_allow(
+            world,
+            &BlockPos::floored(spawn_pos.x, spawn_pos.y, spawn_pos.z),
+            &spawn_data,
+        ) {
+            return None;
+        }
         let uuid = uuid::Uuid::new_v4();
         let entity = crate::entity::r#type::from_type(entity_type, spawn_pos, world, uuid);
+        if let Some(entity_nbt) = spawn_data.get_compound("entity") {
+            if let Some(living) = entity.get_living_entity() {
+                living.read_nbt_non_mut(entity_nbt).await;
+            } else {
+                entity.get_entity().read_nbt_non_mut(entity_nbt).await;
+            }
+            entity.read_nbt_non_mut(entity_nbt).await;
+        }
         world.spawn_entity(entity).await;
         world.sync_world_event(
             WorldEvent::ParticlesTrialSpawnerSpawnMobAt,
             BlockPos::floored(spawn_pos.x, spawn_pos.y, spawn_pos.z),
             0,
         );
-        *self.next_spawn_entity.lock().await = config.pick_random_entity();
+        let mut next = self.next_spawn_entity.lock().unwrap();
+        let mut next_data = self.next_spawn_data.lock().unwrap();
+        if let Some((next_entity, spawn_data)) = config.pick_random_spawn_data() {
+            *next = Some(next_entity);
+            *next_data = Some(spawn_data);
+        } else {
+            *next = None;
+            *next_data = None;
+        }
         Some(uuid)
     }
 
@@ -411,7 +495,7 @@ impl TrialSpawnerBlockEntity {
 
     // Eject one item from the loot table picked for this reward cycle.
     // TrialSpawner.java:237-251
-    async fn eject_reward(&self, world: &Arc<World>, table: u8) {
+    async fn eject_reward(&self, world: &Arc<World>, table: &str) {
         if let Some(item) = spawner_ejection_item(table) {
             world.drop_stack(&self.position, item).await;
         }
@@ -494,8 +578,18 @@ impl TrialSpawnerBlockEntity {
                     // TrialSpawnerConfig.java:99-102: lootTablesToEject is a
                     // 1:1-weighted choice between the consumables and key tables,
                     // picked once per reward cycle.
-                    let table = if rand::random_range(0..2) == 0 { 1 } else { 2 };
-                    self.ejecting_loot_table.store(table, Ordering::Relaxed);
+                    let table = if is_ominous {
+                        if rand::random_range(0..10) < 3 {
+                            "minecraft:spawners/ominous/trial_chamber/key"
+                        } else {
+                            "minecraft:spawners/ominous/trial_chamber/consumables"
+                        }
+                    } else if rand::random_range(0..2) == 0 {
+                        "minecraft:spawners/trial_chamber/consumables"
+                    } else {
+                        "minecraft:spawners/trial_chamber/key"
+                    };
+                    *self.ejecting_loot_table.lock().unwrap() = Some(table.to_string());
                     world.play_block_sound(
                         Sound::BlockTrialSpawnerOpenShutter,
                         SoundCategory::Blocks,
@@ -513,7 +607,7 @@ impl TrialSpawnerBlockEntity {
                     return TrialSpawnerState::EjectingReward;
                 }
                 if self.detected_players.lock().await.is_empty() {
-                    self.ejecting_loot_table.store(0, Ordering::Relaxed);
+                    *self.ejecting_loot_table.lock().unwrap() = None;
                     world.play_block_sound(
                         Sound::BlockTrialSpawnerCloseShutter,
                         SoundCategory::Blocks,
@@ -521,8 +615,10 @@ impl TrialSpawnerBlockEntity {
                     );
                     TrialSpawnerState::Cooldown
                 } else {
-                    let table = self.ejecting_loot_table.load(Ordering::Relaxed);
-                    self.eject_reward(world, table).await;
+                    let table = self.ejecting_loot_table.lock().unwrap().clone();
+                    if let Some(table) = table.as_deref() {
+                        self.eject_reward(world, table).await;
+                    }
                     let mut detected = self.detected_players.lock().await;
                     if let Some(&first) = detected.iter().next() {
                         detected.remove(&first);
@@ -589,6 +685,31 @@ impl TrialSpawnerBlockEntity {
     }
 }
 
+fn custom_spawn_rules_allow(world: &World, pos: &BlockPos, spawn_data: &NbtCompound) -> bool {
+    let Some(rules) = spawn_data.get_compound("custom_spawn_rules") else {
+        return true;
+    };
+
+    let in_range = |name: &str, value: u8| {
+        let Some(range) = rules.get_compound(name) else {
+            return true;
+        };
+        let min = range.get_int("min_inclusive").unwrap_or(0).clamp(0, 15) as u8;
+        let max = range.get_int("max_inclusive").unwrap_or(15).clamp(0, 15) as u8;
+        (min..=max).contains(&value)
+    };
+
+    in_range(
+        "block_light_limit",
+        world.get_block_light_level(pos).unwrap_or(0),
+    ) && in_range(
+        "sky_light_limit",
+        world
+            .get_sky_light_level(pos)
+            .saturating_sub(world.sky_darken.load(Ordering::Relaxed)),
+    )
+}
+
 impl BlockEntity for TrialSpawnerBlockEntity {
     fn resource_location(&self) -> &'static str {
         Self::ID
@@ -617,24 +738,30 @@ impl BlockEntity for TrialSpawnerBlockEntity {
             .get_int("required_player_range")
             .map_or(DEFAULT_REQUIRED_PLAYER_RANGE, f64::from);
 
-        let spawner_data = nbt.get_compound("spawner_data");
-        let detected_players = spawner_data
-            .and_then(|data| data.get_list("registered_players"))
+        // 26.2 stores TrialSpawnerStateData.Packed directly at the block-entity
+        // root. Accept the old nested form so existing Pumpkin worlds upgrade
+        // without losing their cooldown or tracked entities.
+        let packed = nbt.get_compound("spawner_data").unwrap_or(nbt);
+        let detected_players = packed
+            .get_list("registered_players")
             .map(parse_uuid_list)
             .unwrap_or_default();
-        let current_mobs = spawner_data
-            .and_then(|data| data.get_list("current_mobs"))
+        let current_mobs = packed
+            .get_list("current_mobs")
             .map(parse_uuid_list)
             .unwrap_or_default();
-        let cooldown_ends_at = spawner_data
-            .and_then(|data| data.get_long("cooldown_ends_at"))
-            .unwrap_or(0);
-        let next_mob_spawns_at = spawner_data
-            .and_then(|data| data.get_long("next_mob_spawns_at"))
-            .unwrap_or(0);
-        let total_mobs_spawned = spawner_data
-            .and_then(|data| data.get_int("total_mobs_spawned"))
-            .unwrap_or(0);
+        let cooldown_ends_at = packed.get_long("cooldown_ends_at").unwrap_or(0);
+        let next_mob_spawns_at = packed.get_long("next_mob_spawns_at").unwrap_or(0);
+        let total_mobs_spawned = packed.get_int("total_mobs_spawned").unwrap_or(0);
+        let next_spawn_data = packed.get_compound("spawn_data").cloned();
+        let next_spawn_entity = next_spawn_data
+            .as_ref()
+            .and_then(|data| data.get_compound("entity"))
+            .and_then(|entity| entity.get_string("id"))
+            .and_then(|id| EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id)));
+        let ejecting_loot_table = packed
+            .get_string("ejecting_loot_table")
+            .map(ToOwned::to_owned);
 
         Self {
             position,
@@ -649,8 +776,9 @@ impl BlockEntity for TrialSpawnerBlockEntity {
             cooldown_ends_at: AtomicI64::new(cooldown_ends_at),
             next_mob_spawns_at: AtomicI64::new(next_mob_spawns_at),
             total_mobs_spawned: AtomicI32::new(total_mobs_spawned),
-            next_spawn_entity: Mutex::const_new(None),
-            ejecting_loot_table: AtomicU8::new(0),
+            next_spawn_entity: StdMutex::new(next_spawn_entity),
+            next_spawn_data: StdMutex::new(next_spawn_data),
+            ejecting_loot_table: StdMutex::new(ejecting_loot_table),
         }
     }
 
@@ -665,8 +793,12 @@ impl BlockEntity for TrialSpawnerBlockEntity {
             if let Some(cfg) = self.ominous_config_nbt.lock().await.as_ref() {
                 nbt.put("ominous_config", cfg.clone());
             }
+            nbt.put_int(
+                "target_cooldown_length",
+                i32::try_from(self.target_cooldown_length).unwrap_or(i32::MAX),
+            );
+            nbt.put_int("required_player_range", self.required_player_range as i32);
 
-            let mut data = NbtCompound::new();
             let players: Vec<NbtTag> = self
                 .detected_players
                 .lock()
@@ -674,7 +806,7 @@ impl BlockEntity for TrialSpawnerBlockEntity {
                 .iter()
                 .map(|u| uuid_to_int_array(*u))
                 .collect();
-            data.put_list("registered_players", players);
+            nbt.put_list("registered_players", players);
             let mobs: Vec<NbtTag> = self
                 .current_mobs
                 .lock()
@@ -682,34 +814,62 @@ impl BlockEntity for TrialSpawnerBlockEntity {
                 .iter()
                 .map(|u| uuid_to_int_array(*u))
                 .collect();
-            data.put_list("current_mobs", mobs);
-            data.put_long(
+            nbt.put_list("current_mobs", mobs);
+            nbt.put_long(
                 "cooldown_ends_at",
                 self.cooldown_ends_at.load(Ordering::Relaxed),
             );
-            data.put_long(
+            nbt.put_long(
                 "next_mob_spawns_at",
                 self.next_mob_spawns_at.load(Ordering::Relaxed),
             );
-            data.put_int(
+            nbt.put_int(
                 "total_mobs_spawned",
                 self.total_mobs_spawned.load(Ordering::Relaxed),
             );
-            nbt.put_compound("spawner_data", data);
+            if let Some(spawn_data) = self.next_spawn_data.lock().unwrap().as_ref() {
+                nbt.put_compound("spawn_data", spawn_data.clone());
+            }
+            if let Some(table) = self.ejecting_loot_table.lock().unwrap().as_ref() {
+                nbt.put_string("ejecting_loot_table", table.clone());
+            }
         })
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        Some(NbtCompound::new())
+    }
+
+    fn chunk_data_nbt_with_state(&self, block_state: BlockStateId) -> Option<NbtCompound> {
+        // TrialSpawnerBlockEntity.getUpdateTag sends TrialSpawnerStateData. The
+        // configs are server-save data and contain registry-backed codecs that
+        // the client must never decode from this update packet.
         let mut nbt = NbtCompound::new();
-        if let Ok(cfg) = self.normal_config_nbt.try_lock()
-            && let Some(ref cfg) = *cfg
+        let block = Block::from_state_id(block_state);
+        if TrialSpawnerLikeProperties::handles_block_id(block.id)
+            && TrialSpawnerLikeProperties::from_state_id(block_state, block).trial_spawner_state
+                == TrialSpawnerState::Active
         {
-            nbt.put("normal_config", cfg.clone());
+            nbt.put_long(
+                "next_mob_spawns_at",
+                self.next_mob_spawns_at.load(Ordering::Relaxed),
+            );
         }
-        if let Ok(cfg) = self.ominous_config_nbt.try_lock()
-            && let Some(ref cfg) = *cfg
-        {
-            nbt.put("ominous_config", cfg.clone());
+
+        let next_data = self.next_spawn_data.lock().unwrap();
+        if let Some(spawn_data) = next_data.as_ref() {
+            nbt.put_compound("spawn_data", spawn_data.clone());
+        } else {
+            drop(next_data);
+            let next = self.next_spawn_entity.lock().unwrap();
+            let Some(entity_type) = *next else {
+                return Some(nbt);
+            };
+            let mut entity = NbtCompound::new();
+            entity.put_string("id", format!("minecraft:{}", entity_type.resource_name));
+            let mut spawn_data = NbtCompound::new();
+            spawn_data.put_compound("entity", entity);
+            nbt.put_compound("spawn_data", spawn_data);
         }
         Some(nbt)
     }
@@ -744,39 +904,39 @@ fn potion_item(
 // "spawners/trial_chamber/*" namespace, only "chests/*" -- see report):
 // data/minecraft/loot_table/spawners/trial_chamber/consumables.json (table 1)
 // data/minecraft/loot_table/spawners/trial_chamber/key.json (table 2)
-fn spawner_ejection_item(table: u8) -> Option<pumpkin_data::item_stack::ItemStack> {
+fn spawner_ejection_item(table: &str) -> Option<pumpkin_data::item_stack::ItemStack> {
     use pumpkin_data::item::Item;
     use pumpkin_data::item_stack::ItemStack;
 
-    match table {
-        1 => {
-            let entries: [(i32, fn() -> ItemStack); 5] = [
-                (3, || {
-                    let mut s = ItemStack::new(1, &Item::COOKED_CHICKEN);
-                    s.item_count = 1;
-                    s
-                }),
-                (3, || {
-                    ItemStack::new(1u8 + rand::random_range(0..3u8), &Item::BREAD)
-                }),
-                (2, || {
-                    ItemStack::new(1u8 + rand::random_range(0..3u8), &Item::BAKED_POTATO)
-                }),
-                (1, || potion_item(&Item::POTION, "minecraft:regeneration")),
-                (1, || potion_item(&Item::POTION, "minecraft:swiftness")),
-            ];
-            let total: i32 = entries.iter().map(|(w, _)| *w).sum();
-            let mut roll = rand::random_range(0..total);
-            for (weight, make) in entries {
-                if roll < weight {
-                    return Some(make());
-                }
-                roll -= weight;
+    if table.ends_with("/consumables") {
+        let entries: [(i32, fn() -> ItemStack); 5] = [
+            (3, || {
+                let mut s = ItemStack::new(1, &Item::COOKED_CHICKEN);
+                s.item_count = 1;
+                s
+            }),
+            (3, || {
+                ItemStack::new(1u8 + rand::random_range(0..3u8), &Item::BREAD)
+            }),
+            (2, || {
+                ItemStack::new(1u8 + rand::random_range(0..3u8), &Item::BAKED_POTATO)
+            }),
+            (1, || potion_item(&Item::POTION, "minecraft:regeneration")),
+            (1, || potion_item(&Item::POTION, "minecraft:swiftness")),
+        ];
+        let total: i32 = entries.iter().map(|(w, _)| *w).sum();
+        let mut roll = rand::random_range(0..total);
+        for (weight, make) in entries {
+            if roll < weight {
+                return Some(make());
             }
-            None
+            roll -= weight;
         }
-        2 => Some(ItemStack::new(1, &Item::TRIAL_KEY)),
-        _ => None,
+        None
+    } else if table.ends_with("/key") {
+        Some(ItemStack::new(1, &Item::TRIAL_KEY))
+    } else {
+        None
     }
 }
 

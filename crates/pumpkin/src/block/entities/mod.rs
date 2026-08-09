@@ -128,6 +128,12 @@ pub trait BlockEntity: Any + Send + Sync {
         None
     }
 
+    /// Obtain the client update tag with the block state available when vanilla
+    /// derives state-dependent fields.
+    fn chunk_data_nbt_with_state(&self, _block_state: BlockStateId) -> Option<NbtCompound> {
+        self.chunk_data_nbt()
+    }
+
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
     }

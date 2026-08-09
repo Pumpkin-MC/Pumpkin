@@ -5986,7 +5986,8 @@ impl World {
     pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
-        let block_entity_nbt = block_entity.chunk_data_nbt();
+        let block_entity_nbt =
+            block_entity.chunk_data_nbt_with_state(self.get_block_state_id(&block_pos));
         let entity_id = block_entity.resource_location().to_string();
 
         if let Some(nbt) = &block_entity_nbt {
@@ -6077,7 +6078,8 @@ impl World {
     pub fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
-        let block_entity_nbt = block_entity.chunk_data_nbt();
+        let block_entity_nbt =
+            block_entity.chunk_data_nbt_with_state(self.get_block_state_id(&block_pos));
 
         if let Some(nbt) = &block_entity_nbt {
             let bytes = pumpkin_nbt::Nbt::from(nbt.clone()).write_unnamed();
