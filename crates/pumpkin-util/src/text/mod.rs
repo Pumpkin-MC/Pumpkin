@@ -1273,7 +1273,8 @@ pub enum TextContent {
 /// Tests for the text component implementations.
 #[cfg(test)]
 mod test {
-    use crate::text::{TextComponent, color::NamedColor};
+    use crate::text::{TextComponent, color::NamedColor, hover::HoverEvent};
+    use std::borrow::Cow;
 
     #[test]
     fn serialize_text_component() {
@@ -1292,5 +1293,56 @@ mod test {
         );
         let decoded = pumpkin_nbt::Nbt::read_unnamed(&mut reader).unwrap();
         assert_eq!(decoded, expected_compound.into());
+    }
+
+    /// The client expects the hover event payload to be inlined next to `action`.
+    /// Nesting it under `item`/`entity` makes the component fail to decode and
+    /// kicks the player off the server.
+    #[test]
+    fn hover_event_payload_is_inlined() {
+        let show_item = TextComponent::text("sword")
+            .hover_event(HoverEvent::ShowItem {
+                id: Cow::Borrowed("minecraft:diamond_sword"),
+                count: Some(1),
+            })
+            .0
+            .to_nbt_compound();
+        let hover = show_item.get_compound("hover_event").unwrap();
+        assert_eq!(hover.get_string("action"), Some("show_item"));
+        assert_eq!(hover.get_string("id"), Some("minecraft:diamond_sword"));
+        assert_eq!(hover.get_int("count"), Some(1));
+        assert!(hover.get_compound("item").is_none());
+
+        let show_entity = TextComponent::text("pig")
+            .hover_event(HoverEvent::show_entity(
+                "6ba1a740-9a3b-4b7c-8f2c-8f5a5c1a0a11",
+                "minecraft:pig",
+                None,
+            ))
+            .0
+            .to_nbt_compound();
+        let hover = show_entity.get_compound("hover_event").unwrap();
+        assert_eq!(hover.get_string("action"), Some("show_entity"));
+        assert_eq!(hover.get_string("id"), Some("minecraft:pig"));
+        assert_eq!(
+            hover.get_string("uuid"),
+            Some("6ba1a740-9a3b-4b7c-8f2c-8f5a5c1a0a11")
+        );
+        assert!(hover.get_compound("entity").is_none());
+    }
+
+    /// `count` is optional for the client, so it must stay out of the payload
+    /// when it was never set.
+    #[test]
+    fn hover_show_item_omits_unset_count() {
+        let compound = TextComponent::text("sword")
+            .hover_event(HoverEvent::ShowItem {
+                id: Cow::Borrowed("minecraft:diamond_sword"),
+                count: None,
+            })
+            .0
+            .to_nbt_compound();
+        let hover = compound.get_compound("hover_event").unwrap();
+        assert!(hover.get_int("count").is_none());
     }
 }
