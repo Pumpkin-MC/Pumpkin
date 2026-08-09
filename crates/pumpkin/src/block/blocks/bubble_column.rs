@@ -24,6 +24,7 @@ const SURFACE_UPWARD_ACCELERATION: f64 = 0.1;
 const SURFACE_UPWARD_MAX_SPEED: f64 = 1.8;
 const DOWNWARD_ACCELERATION: f64 = -0.03;
 const DOWNWARD_MIN_SPEED: f64 = -0.3;
+const SURFACE_DOWNWARD_MIN_SPEED: f64 = -0.9;
 
 pub struct BubbleColumnBlock;
 
@@ -142,9 +143,11 @@ fn bubble_column_vertical_velocity(
         (BubbleColumnKind::Upward, false) => {
             (current_y + UPWARD_ACCELERATION).min(UPWARD_MAX_SPEED)
         }
-        (BubbleColumnKind::Downward, _) => {
-            (current_y + DOWNWARD_ACCELERATION).max(DOWNWARD_MIN_SPEED)
-        }
+        (BubbleColumnKind::Downward, _) => (current_y + DOWNWARD_ACCELERATION).max(if at_surface {
+            SURFACE_DOWNWARD_MIN_SPEED
+        } else {
+            DOWNWARD_MIN_SPEED
+        }),
     }
 }
 
@@ -168,16 +171,20 @@ impl BlockBehaviour for BubbleColumnBlock {
             }
 
             let kind = kind_from_state(args.state.id);
-            let at_surface = args.world.get_block(&args.position.up()) == &Block::AIR;
+            let above = args.world.get_block_state_id(&args.position.up());
+            let above_state = pumpkin_data::BlockState::from_id(above);
+            let at_surface = above_state.get_block_collision_shapes().next().is_none()
+                && Fluid::from_state_id(above).is_none();
             let entity = args.entity.get_entity();
             entity.velocity.store(bubble_column_velocity(
                 entity.velocity.load(),
                 kind,
                 at_surface,
             ));
-
-            if let Some(player) = args.entity.get_player() {
-                player.breath_manager.reset(player);
+            if !at_surface
+                && let Some(living) = args.entity.get_living_entity()
+            {
+                living.fall_distance.store(0.0);
             }
         })
     }
@@ -223,7 +230,17 @@ impl BlockBehaviour for BubbleColumnBlock {
                     args.world
                         .set_block_state(args.position, new_state, BlockFlags::NOTIFY_ALL)
                         .await;
-                    schedule_reconcile(args.world, args.position.up(), CREATE_DELAY_TICKS);
+                    let mut position = args.position.up();
+                    while {
+                        let state = args.world.get_block_state_id(&position);
+                        let block = Block::from_state_id(state);
+                        block == &Block::BUBBLE_COLUMN || is_source_water_state(state)
+                    } {
+                        args.world
+                            .set_block_state(&position, new_state, BlockFlags::NOTIFY_ALL)
+                            .await;
+                        position = position.up();
+                    }
                 }
                 ReconcileAction::RestoreWater => {
                     args.world
