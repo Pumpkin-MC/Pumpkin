@@ -940,6 +940,8 @@ pub struct Entity {
     /// Vanilla `Mob.persistenceRequired`. Kept on the shared entity because
     /// every mob's NBT path already delegates its base data here.
     pub persistence_required: AtomicBool,
+    /// Vanilla `Mob.isNoAi`, shared with `LivingEntity` for subclass tick behavior.
+    pub no_ai: AtomicBool,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
     /// The age of the entity in ticks. Negative values indicate a baby.
@@ -1198,6 +1200,7 @@ impl Entity {
             vehicle: Mutex::new(None),
             leashed_to: Mutex::new(None),
             persistence_required: AtomicBool::new(false),
+            no_ai: AtomicBool::new(false),
 
             riding_cooldown: AtomicI32::new(0),
             age: AtomicI32::new(0),
@@ -3936,6 +3939,9 @@ impl NBTStorage for Entity {
                     "PersistenceRequired",
                     self.persistence_required.load(Relaxed),
                 );
+                if self.no_ai.load(Relaxed) {
+                    nbt.put_bool("NoAI", true);
+                }
             }
 
             let tags = self.scoreboard_tags.lock().await;
@@ -4012,6 +4018,18 @@ impl NBTStorage for Entity {
                     nbt.get_bool("PersistenceRequired").unwrap_or(false),
                     Relaxed,
                 );
+                let no_ai = nbt.get_bool("NoAI").unwrap_or(false);
+                self.no_ai.store(no_ai, Relaxed);
+                if no_ai {
+                    self.send_meta_data(
+                        &[Metadata::new(
+                            TrackedData::MOB_FLAGS_ID,
+                            MetaDataType::BYTE,
+                            1u8,
+                        )],
+                        None,
+                    );
+                }
             }
 
             if let Some(tag_list) = nbt.get_list("Tags") {

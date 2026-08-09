@@ -33,9 +33,12 @@ use crate::entity::combat::{breach_armor_fraction, knockback_after_resistance};
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::mob::sulfur_cube::SulfurCubeEntity;
+use crate::entity::passive::happy_ghast::HappyGhastEntity;
+use crate::entity::player::Player;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
+use crate::world::World;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
@@ -69,7 +72,7 @@ use pumpkin_protocol::{
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use rand::RngExt;
+use rand::{RngExt, SeedableRng, rngs::StdRng};
 use std::sync::RwLock;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -111,6 +114,8 @@ fn armor_resists_damage(stack: &ItemStack, damage_type: &DamageType) -> bool {
     }
 }
 
+const MAX_AIR_SUPPLY: i32 = 300;
+
 /// A raider's membership in an active `Raid`.
 ///
 /// Mirrors `Raider.wave`/`raid`/`isPatrolLeader` (`Raider.java`). Kept on `LivingEntity` rather
@@ -134,6 +139,12 @@ pub struct LivingEntity {
     pub last_damage_taken: AtomicCell<f32>,
     /// The current health level of the entity.
     pub health: AtomicCell<f32>,
+    /// The remaining air supply used by vanilla `LivingEntity.baseTick`.
+    pub air_supply: AtomicI32,
+    /// Entity-local random stream used by vanilla's air depletion roll.
+    air_random: std::sync::Mutex<StdRng>,
+    /// Whether the initial air value has been published to clients.
+    air_metadata_initialized: AtomicBool,
     /// The current absorption (yellow hearts) on the entity.
     pub absorption: AtomicCell<f32>,
     pub item_use_time: AtomicI32,
@@ -245,6 +256,13 @@ impl LivingEntity {
         };
         let mut max_health: f32 = 20.0; // Overridden by attribute base below
         let mut base_movement_speed = Attributes::MOVEMENT_SPEED.default_value;
+        let max_air_supply = if entity.entity_type == &EntityType::AXOLOTL {
+            6000
+        } else if entity.entity_type == &EntityType::DOLPHIN {
+            4800
+        } else {
+            MAX_AIR_SUPPLY
+        };
         Self {
             // Populate local attribute instances from the default registry and get initial vars
             attributes: {
@@ -262,6 +280,9 @@ impl LivingEntity {
                 std::sync::RwLock::new(m)
             },
             health: AtomicCell::new(max_health), // Initial health value from attributes
+            air_supply: AtomicI32::new(max_air_supply),
+            air_random: std::sync::Mutex::new(StdRng::seed_from_u64(rand::rng().random())),
+            air_metadata_initialized: AtomicBool::new(false),
             entity,
             hurt_cooldown: AtomicI32::new(0),
             last_damage_taken: AtomicCell::new(0.0),
@@ -2316,6 +2337,281 @@ impl LivingEntity {
         self.entity.movement.load()
     }
 
+    pub(crate) fn is_eye_in_water(&self, world: &World) -> bool {
+        let pos = self.entity.pos.load();
+        let eye_y = self.entity.get_eye_y();
+        let block_pos = BlockPos::floored(pos.x, eye_y, pos.z);
+        let (fluid, state) = world.get_fluid_and_fluid_state(&block_pos);
+
+        if !fluid.has_tag(&tag::Fluid::MINECRAFT_WATER) {
+            return false;
+        }
+
+        let surface_y = f64::from(block_pos.0.y) + world.get_fluid_height(&block_pos, fluid, state);
+
+        // EntityFluidInteraction.isEyeInFluid uses an inclusive top boundary:
+        // eyeY <= blockY + fluidState.getHeight(...).
+        surface_y >= eye_y
+    }
+
+    pub(crate) fn max_air_supply(&self) -> i32 {
+        if self.entity.entity_type == &EntityType::AXOLOTL {
+            6000
+        } else if self.entity.entity_type == &EntityType::DOLPHIN {
+            4800
+        } else {
+            MAX_AIR_SUPPLY
+        }
+    }
+
+    pub(crate) fn decrease_air_supply(&self, current_supply: i32) -> i32 {
+        let oxygen_bonus = self.get_attribute_value(&Attributes::OXYGEN_BONUS);
+        let mut random = self.air_random.lock().unwrap();
+        if oxygen_bonus > 0.0 && random.random::<f64>() >= 1.0 / (oxygen_bonus + 1.0) {
+            current_supply
+        } else {
+            current_supply - 1
+        }
+    }
+
+    pub(crate) fn send_air_supply(&self) {
+        let air = self.air_supply.load(Relaxed);
+        let mut bedrock_meta =
+            pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
+        bedrock_meta.set(
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::AIR_SUPPLY,
+            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Short(
+                air.clamp(0, i32::from(i16::MAX)) as i16,
+            ),
+        );
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::AIR_SUPPLY_ID,
+                MetaDataType::INT,
+                VarInt(air),
+            )],
+            Some(&bedrock_meta),
+        );
+    }
+
+    fn is_water_animal(&self) -> bool {
+        let id = self.entity.entity_type.id;
+        id == EntityType::AXOLOTL.id
+            || id == EntityType::COD.id
+            || id == EntityType::GLOW_SQUID.id
+            || id == EntityType::NAUTILUS.id
+            || id == EntityType::PUFFERFISH.id
+            || id == EntityType::SALMON.id
+            || id == EntityType::SQUID.id
+            || id == EntityType::TADPOLE.id
+            || id == EntityType::TROPICAL_FISH.id
+    }
+
+    async fn tick_water_animal_air_supply(
+        &self,
+        caller: &Arc<dyn EntityBase>,
+        pre_tick_air_supply: i32,
+    ) {
+        let world = self.entity.world.load();
+        let in_water_or_rain = if self.entity.entity_type == &EntityType::AXOLOTL {
+            let block_pos = self.entity.block_pos.load();
+            let max_y = self.entity.bounding_box.load().max.y;
+            let rain_pos =
+                BlockPos::floored(f64::from(block_pos.0.x), max_y, f64::from(block_pos.0.z));
+            self.entity.touching_water.load(SeqCst)
+                || world.is_raining_at(&block_pos).await
+                || world.is_raining_at(&rain_pos).await
+        } else {
+            self.entity.touching_water.load(SeqCst)
+        };
+        if self.entity.is_removed() {
+            return;
+        }
+        let max_air = self.max_air_supply();
+
+        if self.dead.load(Relaxed) || self.health.load() <= 0.0 {
+            if self.air_supply.swap(max_air, Relaxed) != max_air {
+                self.send_air_supply();
+            }
+            return;
+        }
+
+        if in_water_or_rain {
+            if self.air_supply.swap(max_air, Relaxed) != max_air {
+                self.send_air_supply();
+            }
+            return;
+        }
+
+        let air = pre_tick_air_supply - 1;
+        self.air_supply.store(air, Relaxed);
+        self.send_air_supply();
+        if air <= -20 {
+            self.air_supply.store(0, Relaxed);
+            self.send_air_supply();
+            let damage_type = if self.entity.entity_type == &EntityType::NAUTILUS
+                || self.entity.entity_type == &EntityType::AXOLOTL
+            {
+                DamageType::DRY_OUT
+            } else {
+                DamageType::DROWN
+            };
+            self.damage(caller.as_ref(), 2.0, damage_type).await;
+        }
+    }
+
+    async fn dismount_underwater_vehicle(&self, underwater: bool) {
+        if !underwater {
+            return;
+        }
+
+        let vehicle = self.entity.vehicle.lock().await.clone();
+        if let Some(vehicle) = vehicle
+            && vehicle
+                .get_entity()
+                .entity_type
+                .has_tag(&tag::EntityType::MINECRAFT_DISMOUNTS_UNDERWATER)
+            && !self.entity.is_removed()
+        {
+            vehicle
+                .get_entity()
+                .remove_passenger(self.entity.entity_id)
+                .await;
+        }
+    }
+
+    async fn tick_generic_air_supply(
+        &self,
+        caller: &Arc<dyn EntityBase>,
+        world: &World,
+        eye_in_water: bool,
+        in_bubble_column: bool,
+    ) {
+        if self.dead.load(Relaxed) || self.health.load() <= 0.0 {
+            return;
+        }
+
+        if eye_in_water && !in_bubble_column {
+            let can_breathe_underwater = self.can_breathe_underwater(caller).await;
+            let has_water_breathing = self.has_effect(&StatusEffect::WATER_BREATHING).await;
+            let has_conduit_power = self.has_effect(&StatusEffect::CONDUIT_POWER).await;
+            let has_breath_of_the_nautilus =
+                self.has_effect(&StatusEffect::BREATH_OF_THE_NAUTILUS).await;
+            if self.dead.load(Relaxed) || self.health.load() <= 0.0 || self.entity.is_removed() {
+                return;
+            }
+            let water_breathing =
+                has_water_breathing || has_conduit_power || has_breath_of_the_nautilus;
+            let refill_air =
+                !has_breath_of_the_nautilus || has_water_breathing || has_conduit_power;
+            let max_air = self.max_air_supply();
+
+            if !can_breathe_underwater && !water_breathing {
+                let previous_air = self.air_supply.load(Relaxed);
+                let air = self.decrease_air_supply(previous_air);
+                if air != previous_air {
+                    self.air_supply.store(air, Relaxed);
+                    self.send_air_supply();
+                }
+
+                if air <= -20 {
+                    self.air_supply.store(0, Relaxed);
+                    self.send_air_supply();
+                    world.send_entity_status(&self.entity, EntityStatus::DrownParticles);
+                    self.damage(caller.as_ref(), 2.0, DamageType::DROWN).await;
+                }
+            } else if refill_air && self.air_supply.load(Relaxed) < max_air {
+                if self.entity.entity_type == &EntityType::DOLPHIN {
+                    self.air_supply.store(max_air, Relaxed);
+                } else {
+                    self.air_supply
+                        .fetch_update(Relaxed, Relaxed, |air| Some((air + 4).min(max_air)))
+                        .ok();
+                }
+                self.send_air_supply();
+            }
+        } else if self.air_supply.load(Relaxed) < self.max_air_supply() {
+            let max_air = self.max_air_supply();
+            if self.entity.entity_type == &EntityType::DOLPHIN {
+                self.air_supply.store(max_air, Relaxed);
+            } else {
+                self.air_supply
+                    .fetch_update(Relaxed, Relaxed, |air| Some((air + 4).min(max_air)))
+                    .ok();
+            }
+            self.send_air_supply();
+        }
+
+        self.dismount_underwater_vehicle(eye_in_water && !in_bubble_column)
+            .await;
+    }
+
+    async fn tick_air_supply(&self, caller: &Arc<dyn EntityBase>, was_alive_before_air: bool) {
+        if self.entity.is_removed() {
+            return;
+        }
+        if self.entity.entity_type != &EntityType::PLAYER
+            && !self.air_metadata_initialized.swap(true, Relaxed)
+        {
+            self.send_air_supply();
+        }
+        let world = self.entity.world.load();
+        let pos = self.entity.pos.load();
+        let eye_block = BlockPos::floored(pos.x, self.entity.get_eye_y(), pos.z);
+        let eye_in_water = self.is_eye_in_water(&world);
+        let in_bubble_column = world.get_block(&eye_block) == &Block::BUBBLE_COLUMN;
+
+        // Players keep their ability/game-rule-aware BreathManager, but still use the
+        // LivingEntity underwater vehicle rule.
+        if self.entity.entity_type == &EntityType::PLAYER {
+            if !was_alive_before_air {
+                return;
+            }
+            self.dismount_underwater_vehicle(eye_in_water && !in_bubble_column)
+                .await;
+            return;
+        }
+
+        let custom_water_air = self.is_water_animal()
+            && (!self.entity.no_ai.load(Relaxed)
+                || (self.entity.entity_type != &EntityType::AXOLOTL
+                    && self.entity.entity_type != &EntityType::NAUTILUS));
+        if custom_water_air {
+            let pre_tick_air_supply = self.air_supply.load(Relaxed);
+            // WaterAnimal/Axolotl/Nautilus invoke their override after LivingEntity.baseTick.
+            // Run the superclass first so its generic air update and underwater dismount occur
+            // before the subclass-specific reset/dry-out logic.
+            self.tick_generic_air_supply(caller, &world, eye_in_water, in_bubble_column)
+                .await;
+            self.tick_water_animal_air_supply(caller, pre_tick_air_supply)
+                .await;
+            return;
+        }
+
+        self.tick_generic_air_supply(caller, &world, eye_in_water, in_bubble_column)
+            .await;
+    }
+
+    async fn can_breathe_underwater(&self, caller: &Arc<dyn EntityBase>) -> bool {
+        if self
+            .entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_CAN_BREATHE_UNDER_WATER)
+        {
+            return true;
+        }
+
+        if let Some(sulfur_cube) = caller.cast_any().downcast_ref::<SulfurCubeEntity>() {
+            return sulfur_cube.can_breathe_underwater().await;
+        }
+
+        if let Some(happy_ghast) = caller.cast_any().downcast_ref::<HappyGhastEntity>() {
+            return happy_ghast.can_breathe_underwater();
+        }
+
+        false
+    }
+
     fn hurt_sound(&self) -> Sound {
         if self.entity.entity_type == &EntityType::SLIME {
             SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
@@ -2334,6 +2630,9 @@ impl NBTStorage for LivingEntity {
         Box::pin(async move {
             self.entity.write_nbt(nbt).await;
             nbt.put("Health", NbtTag::Float(self.health.load()));
+            if self.entity.entity_type != &EntityType::PLAYER {
+                nbt.put_short("Air", self.air_supply.load(Relaxed) as i16);
+            }
             // Avoid persisting a lethal fall distance when the entity is dead to prevent death loops
             let fall_distance = if self.dead.load(Relaxed) {
                 0.0
@@ -2393,6 +2692,13 @@ impl NBTStorage for LivingEntity {
         Box::pin(async {
             self.entity.read_nbt_non_mut(nbt).await;
             self.health.store(nbt.get_float("Health").unwrap_or(0.0));
+            if self.entity.entity_type != &EntityType::PLAYER
+                && let Some(air) = nbt
+                    .get_int("Air")
+                    .or_else(|| nbt.get_short("Air").map(i32::from))
+            {
+                self.air_supply.store(air, Relaxed);
+            }
 
             // Clamp any persisted absorption to the entity's configured max
             let raw_abs = nbt.get_float("AbsorptionAmount").unwrap_or(0.0);
@@ -3076,6 +3382,15 @@ impl EntityBase for LivingEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             self.entity.tick(caller, server).await;
+            let was_alive_before_air =
+                !self.dead.load(Relaxed) && self.health.load() > 0.0 && !self.entity.is_removed();
+            if self.entity.entity_type == &EntityType::PLAYER
+                && was_alive_before_air
+                && let Some(player) = caller.cast_any().downcast_ref::<Player>()
+            {
+                player.breath_manager.tick(player).await;
+            }
+            self.tick_air_supply(caller, was_alive_before_air).await;
 
             // Only tick movement if the entity is alive. This prevents a dead "corpse"
             // from continuing to be simulated (accumulating fall_distance/velocity).

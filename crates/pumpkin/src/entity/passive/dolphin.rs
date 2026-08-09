@@ -1,9 +1,7 @@
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 use std::sync::{Arc, Weak};
 
-use pumpkin_data::Block;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -13,8 +11,7 @@ use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
-use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use rand::RngExt;
 
 use crate::entity::{
@@ -35,15 +32,6 @@ use crate::entity::{
 const TOTAL_MOISTNESS_LEVEL: i32 = 2400;
 /// `Dolphin.tick`: dry-out damage dealt once moistness hits 0, applied every tick while dry.
 const DRY_OUT_DAMAGE: f32 = 1.0;
-/// `Dolphin.TOTAL_AIR_SUPPLY` / `Dolphin.getMaxAirSupply` (`Dolphin.java:77,194-196`): dolphins
-/// hold far more air than the generic `LivingEntity` default of 300.
-const MAX_AIR_SUPPLY: i32 = 4800;
-/// `LivingEntity.baseTick` drowning threshold (`LivingEntity.java:444`): once air supply reaches
-/// this, air is clamped to 0 and drown damage is dealt.
-const DROWN_AIR_THRESHOLD: i32 = -20;
-/// `LivingEntity.baseTick` (`LivingEntity.java:447`): `hurtServer(level, damageSources().drown(), 2.0F)`.
-const DROWN_DAMAGE: f32 = 2.0;
-
 /// Represents a Dolphin, a neutral aquatic mob that can give players the Dolphin's Grace effect.
 ///
 /// Wiki: <https://minecraft.wiki/w/Dolphin>
@@ -51,7 +39,6 @@ pub struct DolphinEntity {
     pub mob_entity: MobEntity,
     got_fish: AtomicBool,
     moistness_level: AtomicI32,
-    air_supply: AtomicI32,
 }
 
 impl DolphinEntity {
@@ -61,7 +48,6 @@ impl DolphinEntity {
             mob_entity,
             got_fish: AtomicBool::new(false),
             moistness_level: AtomicI32::new(TOTAL_MOISTNESS_LEVEL),
-            air_supply: AtomicI32::new(MAX_AIR_SUPPLY),
         };
         let mob_arc = Arc::new(dolphin);
         let mob_weak: Weak<dyn Mob> = {
@@ -118,93 +104,7 @@ impl DolphinEntity {
 
     #[must_use]
     pub fn get_air_supply(&self) -> i32 {
-        self.air_supply.load(Relaxed)
-    }
-
-    /// `Entity::isEyeInFluid(FluidTags.WATER)` minus the bubble-column exclusion
-    /// (`LivingEntity.java:436`), ported locally for Dolphin rather than generalizing
-    /// `breath.rs`'s player-only `is_eye_in_water` (see the report for why the diff stays
-    /// scoped to Dolphin).
-    fn eye_in_breathable_water(entity: &Entity) -> bool {
-        let pos = entity.pos.load();
-        let eye_y = entity.get_eye_y();
-        let bp = BlockPos::new(
-            pos.x.floor() as i32,
-            eye_y.floor() as i32,
-            pos.z.floor() as i32,
-        );
-        let world = entity.world.load();
-
-        if world.get_block(&bp) == &Block::BUBBLE_COLUMN {
-            return false;
-        }
-
-        let (fluid, state) = world.get_fluid_and_fluid_state(&bp);
-        let mut in_water_fluid = fluid.has_tag(&tag::Fluid::MINECRAFT_WATER);
-
-        if !in_water_fluid {
-            let state_here = world.get_block_state(&bp);
-            if !state_here.is_solid() {
-                let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
-                let fluid_above_x = world.get_fluid(&above);
-                if fluid_above_x.has_tag(&tag::Fluid::MINECRAFT_WATER) {
-                    in_water_fluid = true;
-                }
-            }
-        }
-
-        if !in_water_fluid {
-            return false;
-        }
-
-        let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
-        let fluid_above = world.get_fluid(&above);
-
-        let surface_y = if fluid_above.has_tag(&tag::Fluid::MINECRAFT_WATER) || state.is_still {
-            f64::from(bp.0.y as f32 + 1.0)
-        } else {
-            let lvl = i32::from(state.level);
-            let height: f32 = if lvl >= 8 {
-                1.0
-            } else {
-                (8 - lvl).clamp(1, 8) as f32 / 8.0
-            };
-            f64::from(bp.0.y as f32 + height)
-        };
-
-        surface_y > eye_y
-    }
-
-    /// `LivingEntity::decreaseAirSupply`/`increaseAirSupply` driving `LivingEntity.baseTick`
-    /// (`LivingEntity.java:436-452,588-601`), with `Dolphin.increaseAirSupply` overridden to
-    /// restore to full instantly (`Dolphin.java:198-201`) and `Dolphin.handleAirSupply`
-    /// (`Dolphin.java:116-117`) a no-op, so the `AgeableWaterCreature`-specific extra drain
-    /// (`AgeableWaterCreature.java:37-47`) never runs for Dolphin.
-    async fn tick_air_supply(&self) {
-        let entity = &self.mob_entity.living_entity.entity;
-
-        if Self::eye_in_breathable_water(entity) {
-            if self
-                .mob_entity
-                .living_entity
-                .has_effect(&StatusEffect::WATER_BREATHING)
-                .await
-            {
-                if self.air_supply.load(Relaxed) < MAX_AIR_SUPPLY {
-                    self.air_supply.store(MAX_AIR_SUPPLY, Relaxed);
-                }
-                return;
-            }
-
-            let new_air = self.air_supply.fetch_sub(1, Relaxed) - 1;
-            if new_air <= DROWN_AIR_THRESHOLD {
-                self.air_supply.store(0, Relaxed);
-                self.damage_with_context(self, DROWN_DAMAGE, DamageType::DROWN, None, None, None)
-                    .await;
-            }
-        } else if self.air_supply.load(Relaxed) < MAX_AIR_SUPPLY {
-            self.air_supply.store(MAX_AIR_SUPPLY, Relaxed);
-        }
+        self.mob_entity.living_entity.air_supply.load(Relaxed)
     }
 
     #[must_use]
@@ -241,7 +141,15 @@ impl DolphinEntity {
     async fn tick_moistness(&self) {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
-        let in_water_or_rain = entity.touching_water.load(Relaxed) || world.is_raining().await;
+        let block_pos = entity.block_pos.load();
+        let rain_top = BlockPos::floored(
+            f64::from(block_pos.0.x),
+            entity.bounding_box.load().max.y,
+            f64::from(block_pos.0.z),
+        );
+        let in_water_or_rain = entity.touching_water.load(Relaxed)
+            || world.is_raining_at(&block_pos).await
+            || world.is_raining_at(&rain_top).await;
 
         if in_water_or_rain {
             if self.moistness_level.load(Relaxed) != TOTAL_MOISTNESS_LEVEL {
@@ -286,11 +194,6 @@ impl NBTStorage for DolphinEntity {
             self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_bool("GotFish", self.got_fish());
             nbt.put_int("Moistness", self.moistness_level.load(Relaxed));
-            // `Entity.saveWithoutId` (`Entity.java:2090`): `output.putShort("Air",
-            // (short)this.getAirSupply())`. Saved here rather than in the generic
-            // `LivingEntity`/`Entity` NBT path since no other mob in this codebase tracks air
-            // supply yet.
-            nbt.put_int("Air", self.air_supply.load(Relaxed));
         })
     }
 
@@ -303,8 +206,6 @@ impl NBTStorage for DolphinEntity {
                 nbt.get_int("Moistness").unwrap_or(TOTAL_MOISTNESS_LEVEL),
                 Relaxed,
             );
-            self.air_supply
-                .store(nbt.get_int("Air").unwrap_or(MAX_AIR_SUPPLY), Relaxed);
         })
     }
 }
@@ -333,8 +234,22 @@ impl Mob for DolphinEntity {
             if self.mob_entity.living_entity.dead.load(Relaxed) {
                 return;
             }
+            // Dolphin.tick restores its air after super.tick and skips the moistness/flopping
+            // branch entirely when NoAI is set.
+            if self.mob_entity.is_no_ai() {
+                let max_air = self.mob_entity.living_entity.max_air_supply();
+                if self
+                    .mob_entity
+                    .living_entity
+                    .air_supply
+                    .swap(max_air, Relaxed)
+                    != max_air
+                {
+                    self.mob_entity.living_entity.send_air_supply();
+                }
+                return;
+            }
             self.tick_moistness().await;
-            self.tick_air_supply().await;
         })
     }
 

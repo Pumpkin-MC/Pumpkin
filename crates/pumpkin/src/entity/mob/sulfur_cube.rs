@@ -184,11 +184,15 @@ impl SulfurCubeEntity {
         }
     }
 
-    async fn has_body_item(&self) -> bool {
+    pub(crate) async fn has_body_item(&self) -> bool {
         let equipment = self.entity.living_entity.entity_equipment.lock().await;
         let stack = equipment.get(&EquipmentSlot::BODY);
         let stack = stack.lock().await;
         !stack.is_empty()
+    }
+
+    pub(crate) async fn can_breathe_underwater(&self) -> bool {
+        self.has_body_item().await
     }
 
     async fn can_hold_item(&self, item_stack: &ItemStack) -> bool {

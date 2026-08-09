@@ -204,11 +204,47 @@ impl MobEntity {
     }
 
     pub fn set_no_ai(&self, no_ai: bool) {
-        self.set_mob_flag(Self::AI_DISABLED_FLAG, no_ai);
+        self.living_entity.entity.no_ai.store(no_ai, Relaxed);
+        let old_flags = self.mob_flags.load(Relaxed);
+        let new_flags = if no_ai {
+            old_flags | Self::AI_DISABLED_FLAG
+        } else {
+            old_flags & !Self::AI_DISABLED_FLAG
+        };
+        self.mob_flags.store(new_flags, Relaxed);
+        self.living_entity.entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::MOB_FLAGS_ID,
+                MetaDataType::BYTE,
+                new_flags,
+            )],
+            None,
+        );
+    }
+
+    pub fn sync_no_ai_flag(&self) {
+        let no_ai = self.living_entity.entity.no_ai.load(Relaxed);
+        let old_flags = self.mob_flags.load(Relaxed);
+        let new_flags = if no_ai {
+            old_flags | Self::AI_DISABLED_FLAG
+        } else {
+            old_flags & !Self::AI_DISABLED_FLAG
+        };
+        if new_flags != old_flags {
+            self.mob_flags.store(new_flags, Relaxed);
+            self.living_entity.entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::MOB_FLAGS_ID,
+                    MetaDataType::BYTE,
+                    new_flags,
+                )],
+                None,
+            );
+        }
     }
 
     pub fn is_no_ai(&self) -> bool {
-        (self.mob_flags.load(Relaxed) & Self::AI_DISABLED_FLAG) != 0
+        self.living_entity.entity.no_ai.load(Relaxed)
     }
 
     pub async fn clear_ai_goals(&self, mob: &dyn Mob) {
@@ -1225,6 +1261,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
+            mob_entity.sync_no_ai_flag();
             mob_entity.tick_count.fetch_add(1, Relaxed);
             if !mob_entity.is_no_ai() {
                 mob_entity.no_action_time.fetch_add(1, Relaxed);

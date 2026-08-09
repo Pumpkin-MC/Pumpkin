@@ -5747,8 +5747,8 @@ impl World {
                 for (name, value) in properties.to_props() {
                     if name == "waterlogged" {
                         if value == "true" {
-                            let state = &Fluid::FLOWING_WATER.states[0];
-                            return (&Fluid::FLOWING_WATER, state);
+                            let state = &Fluid::WATER.states[0];
+                            return (&Fluid::WATER, state);
                         }
 
                         break;
@@ -5760,10 +5760,17 @@ impl World {
             return (&Fluid::EMPTY, state);
         };
 
-        let fluid = raw_fluid.to_flowing();
-        let state = &fluid.states[0];
+        // Keep the state variant selected by the block state.  Converting source water/lava
+        // to its flowing registry entry and then taking states[0] loses the level/height of
+        // partial fluid blocks, which is observable by entity eye-fluid checks.
+        let state = if raw_fluid == &Fluid::WATER || raw_fluid == &Fluid::LAVA {
+            &raw_fluid.states[0]
+        } else {
+            let index = raw_fluid.properties(id).to_index() as usize;
+            &raw_fluid.states[index]
+        };
 
-        (fluid, state)
+        (raw_fluid, state)
     }
 
     // FlowingFluid.getHeight()

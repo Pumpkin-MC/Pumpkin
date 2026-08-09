@@ -42,6 +42,9 @@ pub struct HappyGhastEntity {
 }
 
 impl HappyGhastEntity {
+    pub(crate) fn can_breathe_underwater(&self) -> bool {
+        self.is_baby()
+    }
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let happy_ghast = Self {
