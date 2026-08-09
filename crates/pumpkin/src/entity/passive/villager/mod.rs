@@ -18,6 +18,7 @@ use pumpkin_inventory::screen_handler::{
     BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
@@ -282,10 +283,11 @@ impl VillagerEntity {
 
     pub fn set_unhappy(&self) {
         let entity = self.get_entity();
-        entity
-            .world
-            .load()
-            .send_entity_status(entity, pumpkin_data::entity::EntityStatus::VillagerAngry);
+        entity.world.load().send_entity_status(
+            entity,
+            pumpkin_data::entity::EntityStatus::VillagerAngry,
+            Some(ActorEventType::VillagerAngry),
+        );
         entity.play_sound(pumpkin_data::sound::Sound::EntityVillagerNo);
     }
 
@@ -379,6 +381,7 @@ impl ScreenHandlerFactory for VillagerEntity {
                                         entity.world.load().send_entity_status(
                                             entity,
                                             pumpkin_data::entity::EntityStatus::VillagerHappy,
+                                            Some(ActorEventType::VillagerHappy),
                                         );
                                         entity.play_sound(
                                             pumpkin_data::sound::Sound::EntityVillagerCelebrate,

@@ -11,14 +11,23 @@ use crate::{
         noise::router::multi_noise_sampler::MultiNoiseSampler,
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
-            buried_treasure::BuriedTreasureGenerator, create_chunk_random,
-            desert_pyramid::DesertPyramidGenerator, end_city::EndCityGenerator,
-            igloo::IglooGenerator, jigsaw::JigsawGenerator, jungle_temple::JungleTempleGenerator,
-            mansion::MansionGenerator, mineshaft::MineshaftGenerator,
-            nether_fortress::NetherFortressGenerator, nether_fossil::NetherFossilGenerator,
-            ocean_monument::OceanMonumentGenerator, ocean_ruin::OceanRuinGenerator,
-            ruined_portal::RuinedPortalGenerator, shipwreck::ShipwreckGenerator,
-            stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
+            buried_treasure::BuriedTreasureGenerator,
+            create_chunk_random,
+            desert_pyramid::DesertPyramidGenerator,
+            end_city::EndCityGenerator,
+            igloo::IglooGenerator,
+            jigsaw::JigsawGenerator,
+            jungle_temple::JungleTempleGenerator,
+            mansion::MansionGenerator,
+            mineshaft::MineshaftGenerator,
+            nether_fortress::NetherFortressGenerator,
+            nether_fossil::NetherFossilGenerator,
+            ocean_monument::{OceanMonumentGenerator, has_valid_biomes},
+            ocean_ruin::OceanRuinGenerator,
+            ruined_portal::RuinedPortalGenerator,
+            shipwreck::ShipwreckGenerator,
+            stronghold::StrongholdGenerator,
+            swamp_hut::SwampHutGenerator,
         },
     },
 };
@@ -180,10 +189,31 @@ pub fn try_generate_structure(
 pub fn lazily_generate_structure(
     key: &StructureKeys,
     structure: &Structure,
-    context: StructureGeneratorContext, // Replaces 5 separate arguments!
+    mut context: StructureGeneratorContext, // Replaces 5 separate arguments!
     biome_supplier: &dyn BiomeSupplier,
     multi_noise_sampler: &mut MultiNoiseSampler,
 ) -> Option<StructurePosition> {
+    if *key == StructureKeys::Monument {
+        let center_x = crate::generation::positions::chunk_pos::get_center_x(context.chunk_x);
+        let center_z = crate::generation::positions::chunk_pos::get_center_z(context.chunk_z);
+        let start_y = context
+            .height_sampler
+            .as_deref_mut()
+            .map_or(context.sea_level, |sampler| {
+                sampler.estimate_ocean_floor_height(center_x, center_z)
+            });
+        if !has_valid_biomes(
+            biome_supplier,
+            multi_noise_sampler,
+            context.chunk_x,
+            context.chunk_z,
+            context.sea_level,
+            start_y,
+        ) {
+            return None;
+        }
+    }
+
     let structure_pos = generate_structure_position(key, structure, context);
 
     if let Some(pos) = structure_pos {

@@ -149,7 +149,7 @@ impl StructurePiece {
         }
     }
 
-    const fn offset_pos(&self, x: i32, y: i32, z: i32) -> Vector3<i32> {
+    pub(crate) const fn offset_pos(&self, x: i32, y: i32, z: i32) -> Vector3<i32> {
         Vector3::new(
             self.apply_x_transform(x, z),
             self.apply_y_transform(y),
@@ -672,6 +672,10 @@ pub trait StructureGenerator {
 
 pub trait HeightSampler {
     fn estimate_height(&mut self, block_x: i32, block_z: i32) -> i32;
+
+    fn estimate_ocean_floor_height(&mut self, block_x: i32, block_z: i32) -> i32 {
+        self.estimate_height(block_x, block_z)
+    }
 }
 
 impl HeightSampler

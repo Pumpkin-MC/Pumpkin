@@ -1035,4 +1035,63 @@ mod tests {
     //         assert_eq!(y, *expected_iter.next().unwrap());
     //     }
     // }
+
+    /// Hashes raw f64 outputs from `PerlinNoiseSampler`/`OctavePerlinNoiseSampler`.
+    /// Performance changes to this file must not change any float value by a single
+    /// ULP. This test just helps confirm that there really hasn't been a change.
+    #[test]
+    fn perlin_and_octave_fingerprint_is_stable() {
+        fn fnv1a_hash_f64(values: impl Iterator<Item = f64>) -> u64 {
+            const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+            const FNV_PRIME: u64 = 0x0000_0100_0000_01B3;
+            let mut hash = FNV_OFFSET;
+            for value in values {
+                for byte in value.to_bits().to_le_bytes() {
+                    hash ^= u64::from(byte);
+                    hash = hash.wrapping_mul(FNV_PRIME);
+                }
+            }
+            hash
+        }
+
+        let mut coord_rand = Xoroshiro::from_seed(0x5EED_C0DE_1234_5678);
+        let coords: Vec<(f64, f64, f64)> = (0..2000)
+            .map(|_| {
+                (
+                    (coord_rand.next_f64() - 0.5) * 200_000.0,
+                    (coord_rand.next_f64() - 0.5) * 4_000.0,
+                    (coord_rand.next_f64() - 0.5) * 200_000.0,
+                )
+            })
+            .collect();
+
+        let mut results = Vec::new();
+
+        for seed in [1u64, 2, 42, 12345, 987_654_321] {
+            let mut rand = Xoroshiro::from_seed(seed);
+            let sampler = PerlinNoiseSampler::new(&mut rand);
+            for &(x, y, z) in &coords {
+                results.push(sampler.sample_no_fade(x, y, z, 0.0, 0.0));
+                results.push(sampler.sample_no_fade(x, y, z, 0.5, 100.0));
+            }
+        }
+
+        for seed in [7u64, 99, 555] {
+            for legacy in [false, true] {
+                let mut rand = Xoroshiro::from_seed(seed);
+                let (start, amplitudes) =
+                    OctavePerlinNoiseSampler::calculate_amplitudes(&(-4..=2).collect::<Vec<i32>>());
+                let sampler = OctavePerlinNoiseSampler::new(&mut rand, start, &amplitudes, legacy);
+                for &(x, y, z) in coords.iter().take(500) {
+                    results.push(sampler.sample(x, y, z));
+                }
+            }
+        }
+
+        let hash = fnv1a_hash_f64(results.into_iter());
+        assert_eq!(
+            hash, 0x2c36_e2de_2f21_9be7,
+            "Perlin/OctavePerlin fingerprint changed"
+        );
+    }
 }

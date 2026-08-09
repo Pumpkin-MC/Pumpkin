@@ -16,7 +16,7 @@ use pumpkin_protocol::java::server::play::{
     SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd, SCloseContainer,
     SCommandSuggestion, SConfirmTeleport, SContainerButtonClick,
     SCookieResponse as SPCookieResponse, SCustomPayload, SDebugSampleSubscription,
-    SDebugSubscriptionRequest, SInteract, SJigsawGenerate, SMoveVehicle, SPaddleBoat,
+    SDebugSubscriptionRequest, SEditBook, SInteract, SJigsawGenerate, SMoveVehicle, SPaddleBoat,
     SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
     SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
     SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SRenameItem,
@@ -893,6 +893,10 @@ impl JavaClient {
             }
             id if id == SUpdateSign::to_id(version) => {
                 self.handle_sign_update(player, SUpdateSign::read(&mut payload, &version)?)
+                    .await;
+            }
+            id if id == SEditBook::to_id(version) => {
+                self.handle_edit_book(player, SEditBook::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SUseItemOn::to_id(version) => {

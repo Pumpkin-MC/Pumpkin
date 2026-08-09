@@ -50,7 +50,9 @@ use crate::STOP_INTERRUPT;
 
 const RELIABLE_CHANNEL: &str = "ReliableDataChannel";
 const UNRELIABLE_CHANNEL: &str = "UnreliableDataChannel";
-const MAX_FRAGMENT_SIZE: usize = 262_143;
+// NetherNet splits encoded packets that exceed 10,000 bytes into application-level
+// segments. Larger SCTP messages are rejected by some Bedrock clients.
+const MAX_FRAGMENT_SIZE: usize = 10_000;
 const MAX_SDP_SIZE: usize = 1 << 20;
 
 type IncomingSession = (Arc<NetherNetSession>, SocketAddr);
@@ -539,11 +541,6 @@ fn verify_and_strip_identity(
         .map_err(|error| format!("invalid identity encoding: {error}"))?;
     let identity: Value = serde_json::from_slice(&identity)
         .map_err(|error| format!("invalid identity JSON: {error}"))?;
-    if identity["idp"]["protocol"] != "default"
-        || identity["idp"]["domain"].as_str().is_none_or(str::is_empty)
-    {
-        return Err("invalid identity provider".to_string());
-    }
     let assertion = identity["assertion"]
         .as_str()
         .ok_or_else(|| "identity assertion is missing".to_string())?;
@@ -553,6 +550,11 @@ fn verify_and_strip_identity(
         .as_str()
         .ok_or_else(|| "identity token is missing".to_string())?;
     if let Some((issuer, keys)) = oidc_verifier {
+        if identity["idp"]["protocol"] != "default"
+            || identity["idp"]["domain"].as_str().is_none_or(str::is_empty)
+        {
+            return Err("invalid identity provider".to_string());
+        }
         pumpkin_util::jwt::verify_oidc_token(token, issuer, keys)
             .map_err(|error| format!("invalid GameServerToken: {error}"))?;
     } else {
@@ -728,6 +730,16 @@ mod tests {
     }
 
     #[test]
+    fn outbound_payloads_are_split_at_the_nethernet_limit() {
+        let payload = vec![0; MAX_FRAGMENT_SIZE + 1];
+        let chunks = payload.chunks(MAX_FRAGMENT_SIZE).collect::<Vec<_>>();
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].len(), 10_000);
+        assert_eq!(chunks[1].len(), 1);
+    }
+
+    #[test]
     fn rejects_out_of_order_fragments_and_recovers() {
         let mut fragments = FragmentBuffer::default();
         assert!(fragments.push(2, b"one").unwrap().is_none());
@@ -763,6 +775,33 @@ mod tests {
             Jwks { keys: Vec::new() },
         );
         assert!(verify_and_strip_identity(&answer, Some(&verifier)).is_err());
+    }
+
+    #[test]
+    fn offline_mode_accepts_an_unverified_identity_provider() {
+        let key = SigningKey::from_slice(&[7; 48]).unwrap();
+        let sdp = "v=0\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\na=fingerprint:sha-256 AA:BB\r\n";
+        let answer = add_server_identity(sdp, &key).unwrap();
+        let encoded = answer
+            .lines()
+            .find_map(|line| line.strip_prefix("a=identity:"))
+            .unwrap();
+        let mut identity: Value =
+            serde_json::from_slice(&general_purpose::STANDARD.decode(encoded).unwrap()).unwrap();
+        identity["idp"] = json!({"domain": "", "protocol": "offline"});
+        let offline_identity =
+            general_purpose::STANDARD.encode(serde_json::to_vec(&identity).unwrap());
+        let offer = answer.replace(encoded, &offline_identity);
+
+        verify_and_strip_identity(&offer, None).unwrap();
+        let verifier = (
+            "https://issuer.example".to_string(),
+            Jwks { keys: Vec::new() },
+        );
+        assert_eq!(
+            verify_and_strip_identity(&offer, Some(&verifier)).unwrap_err(),
+            "invalid identity provider"
+        );
     }
 
     #[tokio::test]

@@ -411,7 +411,7 @@ impl EntityBase for ArmorStandEntity {
             let time = world.level_time.lock().await.query_gametime();
 
             if time - self.last_hit_time.load(Ordering::Relaxed) > 5 && !always_kills {
-                world.send_entity_status(entity, EntityStatus::ArmorstandWobble);
+                world.send_entity_status(entity, EntityStatus::ArmorstandWobble, None);
                 world.play_sound(
                     Sound::EntityArmorStandHit,
                     SoundCategory::Neutral,

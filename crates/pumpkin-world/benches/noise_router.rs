@@ -18,8 +18,10 @@ fn bench_noise_router_creation(c: &mut Criterion) {
     let proto_routers = ProtoNoiseRouters::generate(base_routers, &random_config);
     let proto_noise_router = proto_routers.noise;
 
+    // Production overworld cell geometry (384 block world height / 8 = 48 vertical
+    // cells). the previous vertical_cell_count of 4 under-measured by ~12x.
     let builder_options =
-        ChunkNoiseFunctionBuilderOptions::new(4, 8, 4, 4, 0, 0, 3, vec![], vec![], None);
+        ChunkNoiseFunctionBuilderOptions::new(4, 8, 48, 4, 0, 0, 4, vec![], vec![], None);
 
     // Benchmarking
     c.bench_function("noise_router_creation_with_pooling", |b| {

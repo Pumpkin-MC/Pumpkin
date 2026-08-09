@@ -25,12 +25,17 @@ const PIG_FOOD: &[&Item] = &[
     &Item::CARROT_ON_A_STICK,
 ];
 
+use crate::entity::EntityBase;
+use crate::entity::item_steerable::{ItemBasedSteering, ItemSteerable};
+
 /// Represents a Pig, a common passive mob that provides porkchops.
 ///
 /// Wiki: <https://minecraft.wiki/w/Pig>
 pub struct PigEntity {
     pub mob_entity: MobEntity,
     pub ageable_data: crate::entity::ageable::AgeableData,
+    pub steering: ItemBasedSteering,
+    pub saddled: std::sync::atomic::AtomicBool,
 }
 
 impl PigEntity {
@@ -39,6 +44,8 @@ impl PigEntity {
         let pig = Self {
             mob_entity,
             ageable_data: crate::entity::ageable::AgeableData::default(),
+            steering: ItemBasedSteering::default(),
+            saddled: std::sync::atomic::AtomicBool::new(false),
         };
         let mob_arc = Arc::new(pig);
         let mob_weak: Weak<dyn Mob> = {
@@ -82,6 +89,7 @@ impl NBTStorage for PigEntity {
             self.mob_entity.living_entity.write_nbt(nbt).await;
             self.write_ageable_nbt(nbt);
             self.write_animal_nbt(nbt);
+            nbt.put_bool("Saddle", self.is_saddled());
         })
     }
 
@@ -90,6 +98,9 @@ impl NBTStorage for PigEntity {
             self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             self.read_ageable_nbt(nbt);
             self.read_animal_nbt(nbt);
+            if let Some(saddle) = nbt.get_byte("Saddle") {
+                self.set_saddled(saddle == 1);
+            }
         })
     }
 }
@@ -105,12 +116,54 @@ impl Mob for PigEntity {
         &self.mob_entity
     }
 
+    fn get_item_steerable(&self) -> Option<&dyn ItemSteerable> {
+        Some(self)
+    }
+
+    fn is_saddled(&self) -> bool {
+        self.saddled.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn can_be_saddled(&self) -> bool {
+        use crate::entity::ageable::AgeableMob;
+        self.mob_entity.living_entity.entity.is_alive() && !self.is_baby()
+    }
+
+    fn set_saddled(&self, saddled: bool) {
+        self.saddled
+            .store(saddled, std::sync::atomic::Ordering::Relaxed);
+    }
+
     fn mob_interact<'a>(
         &'a self,
         player: &'a Arc<Player>,
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         use super::animal::Animal;
-        self.animal_interact(player, item_stack, Sound::EntityPigAmbient)
+        Box::pin(async move {
+            if self.is_saddled() && !self.is_food(item_stack) {
+                let world = player.world();
+                if let Some(vehicle) = world.get_entity_by_id(self.get_entity().entity_id)
+                    && let Some(passenger) = world.get_player_by_id(player.entity_id())
+                {
+                    self.get_entity()
+                        .add_passenger(vehicle, passenger as Arc<dyn EntityBase>)
+                        .await;
+                    return true;
+                }
+            }
+            self.animal_interact(player, item_stack, Sound::EntityPigAmbient)
+                .await
+        })
+    }
+}
+
+impl ItemSteerable for PigEntity {
+    fn boost(&self) -> bool {
+        self.steering.boost()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

@@ -22,6 +22,7 @@ use crate::world::World;
 
 pub struct EmptyBucketItem;
 pub struct FilledBucketItem;
+pub struct MilkBucketItem;
 
 impl ItemMetadata for EmptyBucketItem {
     fn ids() -> Box<[u16]> {
@@ -46,11 +47,11 @@ impl ItemMetadata for FilledBucketItem {
     }
 }
 
-// impl ItemMetadata for MilkBucketItem {
-//     fn ids() -> Box<[u16]> {
-//         [Item::MILK_BUCKET.id].into()
-//     }
-// }
+impl ItemMetadata for MilkBucketItem {
+    fn ids() -> Box<[u16]> {
+        [Item::MILK_BUCKET.id].into()
+    }
+}
 
 fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     let start_pos = player.eye_position();
@@ -399,4 +400,37 @@ impl ItemBehaviour for FilledBucketItem {
     }
 }
 
-//TODO: Implement MilkBucketItem
+impl ItemBehaviour for MilkBucketItem {
+    fn normal_use<'a>(
+        &'a self,
+        _item: &'a Item,
+        player: &'a Player,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let stack = player.inventory().held_item().await;
+            player
+                .living_entity
+                .set_active_hand(pumpkin_util::Hand::Right, stack, 32)
+                .await;
+        })
+    }
+
+    fn on_stopped_using<'a>(
+        &'a self,
+        _stack: &'a ItemStack,
+        player: &'a Player,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            player.living_entity.reset_effects_and_attributes().await;
+            give_player_bucket_item(player, &Item::BUCKET).await;
+        })
+    }
+
+    fn get_use_duration(&self) -> i32 {
+        32
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}

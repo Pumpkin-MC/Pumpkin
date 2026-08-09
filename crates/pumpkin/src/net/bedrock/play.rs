@@ -28,6 +28,7 @@ use pumpkin_protocol::{
             command_request::SCommandRequest,
             container_close::SContainerClose,
             emote::SEmote,
+            emote_list::SEmoteList,
             interaction::{Action, SInteraction},
             inventory_transaction::{SInventoryTransaction, TransactionData},
             mob_equipment::SMobEquipment,
@@ -463,10 +464,17 @@ impl BedrockClient {
             return;
         }
 
+        tracing::info!(
+            "handle_emote: player={} packet={:?}",
+            player.gameprofile.name,
+            packet
+        );
+
         let entity = &player.living_entity.entity;
         let world = entity.world.load();
 
         let mut broadcast_packet = packet;
+        broadcast_packet.runtime_entity_id = VarULong(entity.entity_id as u64);
         broadcast_packet.flags |= pumpkin_protocol::bedrock::server::emote::EMOTE_FLAG_SERVER_SIDE;
 
         world
@@ -481,17 +489,13 @@ impl BedrockClient {
             .await;
     }
 
-    // pub fn handle_emote_list(
-    //     &self,
-    //     player: &Arc<Player>,
-    //     _server: &Server,
-    //     packet: &SEmoteList,
-    // ) {
-    //     debug!(
-    //         "Player {} sent emote list: {:?}",
-    //         player.gameprofile.name, packet.emote_pieces
-    //     );
-    // }
+    pub fn handle_emote_list(&self, player: &Arc<Player>, _server: &Server, packet: &SEmoteList) {
+        tracing::info!(
+            "handle_emote_list: player={} packet={:?}",
+            player.gameprofile.name,
+            packet
+        );
+    }
 
     #[allow(clippy::too_many_lines, clippy::collapsible_if, clippy::unreachable)]
     pub async fn handle_inventory_action(

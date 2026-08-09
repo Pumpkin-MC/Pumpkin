@@ -3,12 +3,10 @@ use dashmap::DashMap;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
+use pumpkin_protocol::bedrock::client::EntityProperties;
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemDefinition};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
-use pumpkin_protocol::bedrock::client::{CInventoryContent, EntityProperties};
-use pumpkin_protocol::bedrock::network_item::{
-    ContainerName, FullContainerName, NetworkItemDescriptor, NetworkItemStackDescriptor,
-};
+use pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor;
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
 use std::sync::atomic::Ordering::Relaxed;
@@ -92,6 +90,7 @@ use pumpkin_protocol::{
     bedrock::{
         client::{
             add_player::CAddPlayer,
+            common::BuildPlatform,
             creative_content::{CCreativeContent, CreativeCategory, Entry, Group},
             gamerules_changed::GameRules,
             player_list::{CPlayerList, PlayerListEntry, Skin},
@@ -99,7 +98,10 @@ use pumpkin_protocol::{
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_attributes::{Attribute, CUpdateAttributes},
         },
-        server::text::SText,
+        server::{
+            actor_event::{ActorEventType, SActorEvent},
+            text::SText,
+        },
     },
     codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
     java::{
@@ -407,12 +409,25 @@ impl World {
     }
 
     /// Sends an entity status update to all players tracking the specified entity.
-    pub fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
+    pub fn send_entity_status(
+        &self,
+        entity: &Entity,
+        java_status: EntityStatus,
+        bedrock_status: Option<ActorEventType>,
+    ) {
         let chunk_pos = entity.chunk_pos.load();
-        self.broadcast_to_chunk(
-            chunk_pos,
-            &CEntityStatus::new(entity.entity_id, status as i8),
-        );
+        let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
+        if let Some(be_event) = bedrock_status {
+            let be_packet = SActorEvent {
+                entity_runtime_id: VarULong(entity.entity_id as u64),
+                event_type: be_event,
+                event_data: VarInt(0),
+                fire_at_position: None,
+            };
+            self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
+        } else {
+            self.broadcast_to_chunk(chunk_pos, &je_packet);
+        }
     }
 
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {
@@ -2304,23 +2319,8 @@ impl World {
             })
             .await;
 
-        client
-            .send_game_packet(&CInventoryContent {
-                container_id: VarUInt(0), // player inventory,
-                slots: player
-                    .inventory()
-                    .main_inventory
-                    .read()
-                    .await
-                    .iter()
-                    .map(NetworkItemStackDescriptor::from)
-                    .collect(),
-                full_container_name: FullContainerName {
-                    container_name: ContainerName::Inventory,
-                    dynamic_id: None,
-                },
-                storage_item: NetworkItemStackDescriptor::default(),
-            })
+        player
+            .on_screen_handler_opened(player.player_screen_handler.clone())
             .await;
 
         {
@@ -2432,7 +2432,7 @@ impl World {
                 username: gameprofile.name.clone(),
                 xuid: String::new(),
                 platform_chat_id: String::new(),
-                build_platform: 0,
+                build_platform: BuildPlatform::Unknown,
                 skin: (**player.bedrock_skin.load()).clone(),
                 is_teacher: false,
                 is_host: false,
@@ -2504,7 +2504,7 @@ impl World {
             },
             links: Vec::new(),
             device_id: String::new(),
-            build_platform: 0,
+            build_platform: BuildPlatform::Unknown,
         };
 
         self.broadcast_packet_except_editioned_sync(
@@ -2553,7 +2553,7 @@ impl World {
                     username: ex_profile.name.clone(),
                     xuid: String::new(),
                     platform_chat_id: String::new(),
-                    build_platform: 0,
+                    build_platform: BuildPlatform::Unknown,
                     skin: (**existing_player.bedrock_skin.load()).clone(),
                     is_teacher: false,
                     is_host: false,
@@ -2598,7 +2598,7 @@ impl World {
                 },
                 links: Vec::new(),
                 device_id: String::new(),
-                build_platform: 0,
+                build_platform: BuildPlatform::Unknown,
             };
 
             client.send_game_packet(&ex_add_player).await;
@@ -2769,7 +2769,7 @@ impl World {
                 username: gameprofile.name.clone(),
                 xuid: String::new(),
                 platform_chat_id: String::new(),
-                build_platform: 0,
+                build_platform: BuildPlatform::Unknown,
                 skin: (**player.bedrock_skin.load()).clone(),
                 is_teacher: false,
                 is_host: false,
@@ -2844,11 +2844,16 @@ impl World {
                 }];
 
                 if base_config.allow_chat_reports {
-                    player_actions.push(PlayerAction::InitializeChat(Some(InitChat {
-                        session_id: chat_session.session_id,
-                        expires_at: chat_session.expires_at,
-                        public_key: chat_session.public_key.clone(),
-                        signature: chat_session.signature.clone(),
+                    let initialized = chat_session.session_id != uuid::Uuid::nil()
+                        && !chat_session.public_key.is_empty()
+                        && !chat_session.signature.is_empty();
+                    player_actions.push(PlayerAction::InitializeChat(initialized.then(|| {
+                        InitChat {
+                            session_id: chat_session.session_id,
+                            expires_at: chat_session.expires_at,
+                            public_key: chat_session.public_key.clone(),
+                            signature: chat_session.signature.clone(),
+                        }
                     })));
                 }
 
@@ -2950,7 +2955,7 @@ impl World {
             },
             links: Vec::new(),
             device_id: String::new(),
-            build_platform: 0,
+            build_platform: BuildPlatform::Unknown,
         };
 
         // Spawn the player for every client.
@@ -3039,7 +3044,7 @@ impl World {
                 },
                 links: Vec::new(),
                 device_id: String::new(),
-                build_platform: 0,
+                build_platform: BuildPlatform::Unknown,
             };
 
             let bedrock_player_list = CPlayerList {
@@ -3050,7 +3055,7 @@ impl World {
                     username: gameprofile.name.clone(),
                     xuid: String::new(),
                     platform_chat_id: String::new(),
-                    build_platform: 0,
+                    build_platform: BuildPlatform::Unknown,
                     skin: (**existing_player.bedrock_skin.load()).clone(),
                     is_teacher: false,
                     is_host: false,
@@ -3779,10 +3784,7 @@ impl World {
                         // stale data.
                         base_entity.velocity.store(Vector3::default());
 
-                        player
-                            .client
-                            .enqueue_packet(&base_entity.create_spawn_packet())
-                            .await;
+                        player.client.enqueue_spawn_packet(&entity).await;
                         entities_to_add.push(entity);
                     }
 
@@ -3800,10 +3802,7 @@ impl World {
                     for entity in world.entities.load().iter() {
                         let base_entity = entity.get_entity();
                         if base_entity.chunk_pos.load() == position {
-                            player
-                                .client
-                                .enqueue_packet(&base_entity.create_spawn_packet())
-                                .await;
+                            player.client.enqueue_spawn_packet(entity).await;
                         }
                     }
                 }
@@ -4179,7 +4178,7 @@ impl World {
                     username: player.gameprofile.name.clone(),
                     xuid: String::new(),
                     platform_chat_id: String::new(),
-                    build_platform: 0,
+                    build_platform: BuildPlatform::Unknown,
                     skin: Skin::steve(),
                     is_teacher: false,
                     is_host: false,
