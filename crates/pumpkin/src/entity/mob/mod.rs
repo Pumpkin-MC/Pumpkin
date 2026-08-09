@@ -11,7 +11,7 @@ use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::entity::MobCategory;
+use pumpkin_data::entity::{EntityType, MobCategory};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
@@ -628,6 +628,19 @@ pub trait Mob: EntityBase + Send + Sync {
         rand::rng()
     }
 
+    /// Vanilla `Entity.getLightLevelDependentMagicValue` used by
+    /// `Monster.updateNoActionTime`.
+    fn light_level_dependent_magic_value(&self, world: &World) -> f32 {
+        let eye_pos = BlockPos::floored_v(self.get_entity().get_eye_pos());
+        if !world.level.is_chunk_loaded(&eye_pos.chunk_position()) {
+            return 0.0;
+        }
+
+        let brightness = f32::from(world.get_max_local_raw_brightness(&eye_pos)) / 15.0;
+        let curved_brightness = brightness / (4.0 - 3.0 * brightness);
+        curved_brightness + world.dimension.ambient_light * (1.0 - curved_brightness)
+    }
+
     fn get_max_look_yaw_change(&self) -> f32 {
         10.0
     }
@@ -1131,6 +1144,13 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             mob_entity.tick_count.fetch_add(1, Relaxed);
             if !mob_entity.is_no_ai() {
                 mob_entity.no_action_time.fetch_add(1, Relaxed);
+                if uses_monster_no_action_time(mob_entity.living_entity.entity.entity_type) {
+                    let world = mob_entity.living_entity.entity.world.load();
+                    if self.light_level_dependent_magic_value(&world) > 0.5 {
+                        // `Monster.updateNoActionTime` adds two more ticks in bright light.
+                        mob_entity.no_action_time.fetch_add(2, Relaxed);
+                    }
+                }
             }
             mob_entity.living_entity.entity.tick_leash().await;
             mob_entity.tick_sun_burn().await;
@@ -1442,6 +1462,26 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     }
 }
 
+/// Vanilla's bright-light no-action update is defined by `Monster.aiStep`, not by the
+/// `MONSTER` category. Slimes and cube mobs share that category but extend `Mob`/`AbstractCubeMob`
+/// instead of `Monster`; the ender dragon, ghast, phantom, hoglin, and shulker also extend other
+/// base classes directly. Camel husks and zombie mounts are also in the monster category without
+/// extending `Monster`.
+fn uses_monster_no_action_time(entity_type: &EntityType) -> bool {
+    entity_type.category == &MobCategory::MONSTER
+        && entity_type.id != EntityType::ENDER_DRAGON.id
+        && entity_type.id != EntityType::GHAST.id
+        && entity_type.id != EntityType::HOGLIN.id
+        && entity_type.id != EntityType::PHANTOM.id
+        && entity_type.id != EntityType::SHULKER.id
+        && entity_type.id != EntityType::SLIME.id
+        && entity_type.id != EntityType::MAGMA_CUBE.id
+        && entity_type.id != EntityType::SULFUR_CUBE.id
+        && entity_type.id != EntityType::CAMEL_HUSK.id
+        && entity_type.id != EntityType::ZOMBIE_HORSE.id
+        && entity_type.id != EntityType::ZOMBIE_NAUTILUS.id
+}
+
 #[expect(dead_code)]
 const DEFAULT_PATHFINDING_FAVOR: f32 = 0.0;
 
@@ -1506,7 +1546,9 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use super::{fire_aspect_ticks, knockback_enchantment_strength};
+    use super::{
+        EntityType, fire_aspect_ticks, knockback_enchantment_strength, uses_monster_no_action_time,
+    };
 
     #[test]
     fn fire_aspect_uses_eighty_ticks_per_level() {
@@ -1518,5 +1560,25 @@ mod tests {
     fn knockback_enchantment_adds_half_strength_per_level() {
         assert_eq!(knockback_enchantment_strength(1), 0.5);
         assert_eq!(knockback_enchantment_strength(2), 1.0);
+    }
+
+    #[test]
+    fn bright_monster_no_action_update_excludes_non_monster_mob_classes() {
+        for entity_type in [
+            EntityType::SLIME,
+            EntityType::MAGMA_CUBE,
+            EntityType::SULFUR_CUBE,
+            EntityType::ENDER_DRAGON,
+            EntityType::GHAST,
+            EntityType::HOGLIN,
+            EntityType::PHANTOM,
+            EntityType::SHULKER,
+            EntityType::CAMEL_HUSK,
+            EntityType::ZOMBIE_HORSE,
+            EntityType::ZOMBIE_NAUTILUS,
+        ] {
+            assert!(!uses_monster_no_action_time(&entity_type));
+        }
+        assert!(uses_monster_no_action_time(&EntityType::ZOMBIE));
     }
 }

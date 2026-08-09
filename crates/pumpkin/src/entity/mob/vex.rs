@@ -20,6 +20,7 @@ use crate::entity::{
     },
     mob::{Mob, MobEntity},
 };
+use crate::world::World;
 
 pub struct VexEntity {
     pub mob_entity: MobEntity,
@@ -145,6 +146,10 @@ impl NBTStorage for VexEntity {}
 impl Mob for VexEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn light_level_dependent_magic_value(&self, _world: &World) -> f32 {
+        1.0
     }
 
     /// Vanilla: `Vex#tick` -- while `hasLimitedLife`, deals 1 starvation damage every 20 ticks

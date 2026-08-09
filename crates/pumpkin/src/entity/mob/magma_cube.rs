@@ -4,6 +4,7 @@ use crate::entity::{
     Entity, NBTStorage,
     mob::{Mob, MobEntity, slime::SlimeEntity},
 };
+use crate::world::World;
 
 /// Wraps `SlimeEntity`, mirroring how `MagmaCube.java` extends `AbstractCubeMob` the same
 /// way `Slime.java` does.
@@ -33,6 +34,10 @@ impl NBTStorage for MagmaCubeEntity {}
 impl Mob for MagmaCubeEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         self.slime.get_mob_entity()
+    }
+
+    fn light_level_dependent_magic_value(&self, _world: &World) -> f32 {
+        1.0
     }
 
     fn mob_init_data_tracker(&self) -> crate::entity::EntityBaseFuture<'_, ()> {

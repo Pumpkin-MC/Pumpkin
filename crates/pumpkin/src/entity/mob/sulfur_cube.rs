@@ -25,6 +25,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     player::Player,
 };
+use crate::world::World;
 
 /// SulfurCube.java: a peaceful, ageable `AbstractCubeMob`.
 ///
@@ -388,6 +389,10 @@ impl NBTStorage for SulfurCubeEntity {
 impl Mob for SulfurCubeEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity
+    }
+
+    fn light_level_dependent_magic_value(&self, _world: &World) -> f32 {
+        1.0
     }
 
     /// `set_size` runs from `new` and from NBT load, both before the entity has any viewers,

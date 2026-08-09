@@ -19,6 +19,7 @@ use crate::entity::{
     ai::pathfinder::node::PathType,
     mob::{Mob, MobEntity},
 };
+use crate::world::World;
 
 pub struct BlazeEntity {
     pub entity: Arc<MobEntity>,
@@ -127,6 +128,10 @@ impl NBTStorage for BlazeEntity {}
 impl Mob for BlazeEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity
+    }
+
+    fn light_level_dependent_magic_value(&self, _world: &World) -> f32 {
+        1.0
     }
 
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
