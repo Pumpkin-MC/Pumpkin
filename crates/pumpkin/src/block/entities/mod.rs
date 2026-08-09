@@ -433,3 +433,40 @@ pub fn create_block_entity(
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::{BlockEntity, block_entity_from_nbt, furnace::FurnaceBlockEntity};
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_world::inventory::Inventory;
+    use std::sync::Arc;
+
+    /// A loaded block entity is serialized back into its chunk with
+    /// `write_internal`, so whatever it holds has to survive that round trip or
+    /// it is gone the next time the chunk is read.
+    #[tokio::test]
+    async fn furnace_contents_survive_a_chunk_round_trip() {
+        let position = BlockPos::new(0, 100, 0);
+        let furnace = Arc::new(FurnaceBlockEntity::new(position));
+        furnace
+            .set_stack(0, ItemStack::new(5, &Item::DIAMOND))
+            .await;
+
+        let mut nbt = NbtCompound::new();
+        furnace.write_internal(&mut nbt).await;
+
+        let inventory = block_entity_from_nbt(&nbt).and_then(BlockEntity::get_inventory);
+        assert!(
+            inventory.is_some(),
+            "furnace should be readable back from its own NBT"
+        );
+
+        if let Some(inventory) = inventory {
+            let stack = inventory.get_stack(0).await;
+            assert_eq!(stack.get_item().id, Item::DIAMOND.id);
+            assert_eq!(stack.item_count, 5);
+        }
+    }
+}

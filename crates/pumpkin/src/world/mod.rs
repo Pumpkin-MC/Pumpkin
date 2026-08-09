@@ -382,6 +382,15 @@ impl World {
             self.save_entity(entity).await;
         }
 
+        let chunks: Vec<Vector2<i32>> = self
+            .block_entities
+            .iter()
+            .map(|chunk_block_entities| *chunk_block_entities.key())
+            .collect();
+        for chunk_pos in chunks {
+            self.save_block_entities(&chunk_pos).await;
+        }
+
         // Save portal POI to disk
         let save_result = self.portal_poi.lock().await.save_all();
         if let Err(e) = save_result {
@@ -403,6 +412,27 @@ impl World {
         let chunk = self.level.get_entity_chunk(current_chunk).await;
         chunk.data.lock().await.push(nbt);
         chunk.mark_dirty(true);
+    }
+
+    /// Serializes the live block entities of a chunk back into that chunk's block
+    /// entity data. The live map is the source of truth while a chunk is loaded -
+    /// `get_block_entity` takes the saved NBT out of the chunk when it wakes an
+    /// entity up - so this has to run before the chunk is dropped, or everything
+    /// the entity did since it was loaded is lost.
+    async fn save_block_entities(&self, chunk_pos: &Vector2<i32>) {
+        let Some(block_entities) = self
+            .block_entities
+            .get(chunk_pos)
+            .map(|chunk_block_entities| chunk_block_entities.values().cloned().collect::<Vec<_>>())
+        else {
+            return;
+        };
+
+        for block_entity in block_entities {
+            let mut nbt = NbtCompound::new();
+            block_entity.write_internal(&mut nbt).await;
+            self.add_block_entity_nbt(block_entity.get_position(), &nbt);
+        }
     }
 
     /// Sends an entity status update to all players tracking the specified entity.
@@ -4314,6 +4344,7 @@ impl World {
         }
 
         for chunk_pos in &chunks_set {
+            self.save_block_entities(chunk_pos).await;
             self.block_entities.remove(chunk_pos);
         }
     }
