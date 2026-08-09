@@ -2,6 +2,7 @@ use crate::value::ErasedRegistryRef;
 use pumpkin_util::identifier::Identifier;
 use std::any::{Any, TypeId};
 use std::pin::Pin;
+use std::sync::LazyLock;
 
 mod builder;
 mod immutable;
@@ -31,6 +32,8 @@ pub trait Registry: Any + Send + Sync {
 }
 
 pub type BoxedRegistry = Box<dyn Registry>;
+
+pub const ROOT: LazyLock<RootRegistryOwner> = LazyLock::new(|| RootRegistryOwner::new(&[], &[]).unwrap());
 
 #[cfg(test)]
 mod tests {
