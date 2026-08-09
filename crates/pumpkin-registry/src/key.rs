@@ -233,7 +233,7 @@ impl<T: Send + Sync + 'static> DataKeyBuilder<T> {
 
         let mut numeric_keys = Vec::with_capacity(self.keys.len());
 
-        build_key_path::<T>(registry, registry_path, value_identifier, &mut numeric_keys).await?;
+        build_key_path(registry, registry_path, value_identifier, &mut numeric_keys).await?;
 
         Ok(numeric_keys.into_boxed_slice())
     }
@@ -268,7 +268,7 @@ impl<T: Send + Sync + 'static> DataKeyBuilder<T> {
         self,
         registry: &Arc<dyn Registry>,
     ) -> Result<ArcDataKey<T>, DataKeyBuildError> {
-        let keys = build_keys_blocking::<T>(&self.keys, registry.as_ref())?;
+        let keys = build_keys_blocking(&self.keys, registry.as_ref())?;
 
         Ok(ArcDataKey {
             keys,
@@ -281,7 +281,7 @@ impl<T: Send + Sync + 'static> DataKeyBuilder<T> {
         self,
         registry: &dyn Registry,
     ) -> Result<RefDataKey<'_, T>, DataKeyBuildError> {
-        let keys = build_keys_blocking::<T>(&self.keys, registry)?;
+        let keys = build_keys_blocking(&self.keys, registry)?;
 
         Ok(RefDataKey {
             keys,
@@ -291,19 +291,19 @@ impl<T: Send + Sync + 'static> DataKeyBuilder<T> {
     }
 }
 
-fn build_keys_blocking<T>(
+fn build_keys_blocking(
     keys: &[Identifier],
     registry: &dyn Registry,
-) -> Result<Box<[usize]>, DataKeyBuildError>
-where
-    T: Send + Sync + 'static,
-{
+) -> Result<Box<[usize]>, DataKeyBuildError> {
     let Some((value_identifier, registry_path)) = keys.split_last() else {
         return Err(DataKeyBuildError::Empty);
     };
 
     let mut numeric_keys = Vec::with_capacity(keys.len());
+
+    #[allow(clippy::collection_is_never_read)]
     let mut guards = Vec::with_capacity(registry_path.len());
+
     let mut current: *const dyn Registry = registry;
 
     for identifier in registry_path {
@@ -338,15 +338,12 @@ where
     Ok(numeric_keys.into_boxed_slice())
 }
 
-fn build_key_path<'a, T>(
+fn build_key_path<'a>(
     current: &'a dyn Registry,
     registry_path: &'a [Identifier],
     value_identifier: &'a Identifier,
     numeric_keys: &'a mut Vec<usize>,
-) -> BoxFuture<'a, Result<(), DataKeyBuildError>>
-where
-    T: Send + Sync + 'static,
-{
+) -> BoxFuture<'a, Result<(), DataKeyBuildError>> {
     Box::pin(async move {
         let Some((identifier, remaining_path)) = registry_path.split_first() else {
             let value_id = current
@@ -374,7 +371,7 @@ where
 
         numeric_keys.push(id);
 
-        build_key_path::<T>(
+        build_key_path(
             registry.as_ref(),
             remaining_path,
             value_identifier,

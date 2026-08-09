@@ -182,12 +182,8 @@ mod tests {
     #[test]
     fn blocking_access_works_without_a_tokio_runtime() {
         let numbers = MutableRegistry::new(&[], &[]).unwrap();
-        numbers
-            .register_blocking(id("test:one"), 1u32)
-            .unwrap();
-        numbers
-            .register_blocking(id("test:two"), 2u32)
-            .unwrap();
+        numbers.register_blocking(id("test:one"), 1u32).unwrap();
+        numbers.register_blocking(id("test:two"), 2u32).unwrap();
 
         assert_eq!(numbers.len_blocking(), 2);
         assert_eq!(*numbers.get_blocking(&id("test:two")).unwrap(), 2);
