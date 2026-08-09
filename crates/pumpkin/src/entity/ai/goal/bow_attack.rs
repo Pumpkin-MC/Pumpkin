@@ -131,7 +131,11 @@ impl Goal for BowAttackGoal {
 
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            mob.get_mob_entity().navigator.lock().unwrap().stop();
+            mob.get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .stop();
             mob.get_mob_entity().set_attacking(false);
             self.last_target_position = None;
         })
@@ -147,7 +151,7 @@ impl Goal for BowAttackGoal {
             mob.get_mob_entity()
                 .look_control
                 .lock()
-                .unwrap()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .look_at_entity_with_range(&target, 30.0, 30.0);
 
             let shooter_pos = mob.get_entity().pos.load();
@@ -159,7 +163,7 @@ impl Goal for BowAttackGoal {
                     mob.get_mob_entity()
                         .navigator
                         .lock()
-                        .unwrap()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .set_progress(NavigatorGoal {
                             current_progress: shooter_pos,
                             destination: target_pos,
@@ -168,7 +172,11 @@ impl Goal for BowAttackGoal {
                     self.last_target_position = Some(target_pos);
                 }
             } else {
-                mob.get_mob_entity().navigator.lock().unwrap().stop();
+                mob.get_mob_entity()
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .stop();
                 self.last_target_position = None;
             }
 
