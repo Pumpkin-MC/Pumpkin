@@ -863,7 +863,12 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             }
         }
         "minecraft:block_pile" => {
-            quote! { ConfiguredFeature::BlockPile(crate::generation::feature::features::block_pile::BlockPileFeature {}) }
+            let state_provider = value_to_block_state_provider(&config["state_provider"]);
+            quote! {
+                ConfiguredFeature::BlockPile(crate::generation::feature::features::block_pile::BlockPileFeature {
+                    state_provider: #state_provider,
+                })
+            }
         }
         "minecraft:replace_single_block" => {
             quote! { ConfiguredFeature::ReplaceSingleBlock(crate::generation::feature::features::replace_single_block::ReplaceSingleBlockFeature {}) }

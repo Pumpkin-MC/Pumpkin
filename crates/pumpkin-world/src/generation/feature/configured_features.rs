@@ -274,6 +274,15 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
+            Self::BlockPile(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::RandomBooleanSelector(feature) => feature.generate(
                 chunk,
                 block_registry,

@@ -3600,31 +3600,93 @@ fn build_configured_features()
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::PileHay,
         ConfiguredFeature::BlockPile(
-            crate::generation::feature::features::block_pile::BlockPileFeature {},
+            crate::generation::feature::features::block_pile::BlockPileFeature {
+                state_provider: BlockStateProvider::Pillar(PillarBlockStateProvider {
+                    state: {
+                        let mut props = std::collections::HashMap::new();
+                        props.insert("axis".to_string(), "y".to_string());
+                        BlockStateCodec {
+                            name: &pumpkin_data::Block::HAY_BLOCK,
+                            properties: Some(props),
+                        }
+                        .get_state()
+                    },
+                }),
+            },
         ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::PileIce,
         ConfiguredFeature::BlockPile(
-            crate::generation::feature::features::block_pile::BlockPileFeature {},
+            crate::generation::feature::features::block_pile::BlockPileFeature {
+                state_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::BLUE_ICE.default_state,
+                            weight: 1i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::PACKED_ICE.default_state,
+                            weight: 5i32,
+                        },
+                    ],
+                }),
+            },
         ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::PileMelon,
         ConfiguredFeature::BlockPile(
-            crate::generation::feature::features::block_pile::BlockPileFeature {},
+            crate::generation::feature::features::block_pile::BlockPileFeature {
+                state_provider: BlockStateProvider::Simple(SimpleStateProvider {
+                    state: pumpkin_data::Block::MELON.default_state,
+                }),
+            },
         ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::PilePumpkin,
         ConfiguredFeature::BlockPile(
-            crate::generation::feature::features::block_pile::BlockPileFeature {},
+            crate::generation::feature::features::block_pile::BlockPileFeature {
+                state_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::PUMPKIN.default_state,
+                            weight: 19i32,
+                        },
+                        Weighted {
+                            data: {
+                                let mut props = std::collections::HashMap::new();
+                                props.insert("facing".to_string(), "north".to_string());
+                                BlockStateCodec {
+                                    name: &pumpkin_data::Block::JACK_O_LANTERN,
+                                    properties: Some(props),
+                                }
+                                .get_state()
+                            },
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+            },
         ),
     );
     map.insert(
         pumpkin_data::configured_feature::ConfiguredFeature::PileSnow,
         ConfiguredFeature::BlockPile(
-            crate::generation::feature::features::block_pile::BlockPileFeature {},
+            crate::generation::feature::features::block_pile::BlockPileFeature {
+                state_provider: BlockStateProvider::Simple(SimpleStateProvider {
+                    state: {
+                        let mut props = std::collections::HashMap::new();
+                        props.insert("layers".to_string(), "1".to_string());
+                        BlockStateCodec {
+                            name: &pumpkin_data::Block::SNOW,
+                            properties: Some(props),
+                        }
+                        .get_state()
+                    },
+                }),
+            },
         ),
     );
     map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: Pine , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 6u8 , height_rand_a : 4u8 , height_rand_b : 0u8 , r#type : TrunkType :: Straight (StraightTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("distance" . to_string () , "7" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: SPRUCE_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (1i32) , offset : IntProvider :: Constant (1i32) , r#type : FoliageType :: Pine (PineFoliagePlacer { height : IntProvider :: Object (NormalIntProvider :: Uniform (UniformIntProvider { min_inclusive : 3i32 , max_inclusive : 4i32 })) }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 2u8 , lower_size : 0u8 , upper_size : 2u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [] , root_placer : None , }))) ;
