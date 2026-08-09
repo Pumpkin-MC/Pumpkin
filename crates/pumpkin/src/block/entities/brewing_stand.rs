@@ -18,7 +18,7 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::{Inventory, sync_write_items_to_nbt};
+use pumpkin_world::inventory::{Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
 use tokio::sync::RwLock;
 
 pub struct BrewingStandBlockEntity {
@@ -332,7 +332,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
     where
         Self: Sized,
     {
-        let entity = Self::new(position);
+        let mut entity = Self::new(position);
 
         // Load brew time / fuel if present in NBT
         if let Some(bt) = nbt.get_int("BrewTime") {
@@ -343,28 +343,28 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         }
 
         // Load inventory items from NBT
-        entity.read_data(nbt, &mut *futures::executor::block_on(entity.items.write()));
+        let items = entity.items.get_mut();
+        sync_read_items_from_nbt(nbt, items);
 
-        let items_guard = futures::executor::block_on(entity.items.read());
         // If there's an ingredient in slot 3, remember its base item for matching
-        if !items_guard[3].is_empty() {
-            *entity
-                .ingredient_item
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                Some(items_guard[3].get_item());
-        }
+        let ingredient_item = (!items[3].is_empty()).then(|| items[3].get_item());
 
         // Recompute last_potion_count so visuals are correct after load
         let mut current: [bool; 3] = [false; 3];
-        for (i, slot) in items_guard.iter().take(3).enumerate() {
+        for (i, slot) in items.iter().take(3).enumerate() {
             current[i] = !slot.is_empty()
                 && (slot
                     .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
                     .is_some()
                     || slot.get_item().id == pumpkin_data::item::Item::GLASS_BOTTLE.id);
         }
-        drop(items_guard);
+
+        if let Some(item) = ingredient_item {
+            *entity
+                .ingredient_item
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(item);
+        }
 
         *entity
             .last_potion_count
