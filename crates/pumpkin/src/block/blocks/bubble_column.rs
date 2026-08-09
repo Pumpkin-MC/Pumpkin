@@ -182,9 +182,7 @@ impl BlockBehaviour for BubbleColumnBlock {
                 kind,
                 at_surface,
             ));
-            if !at_surface
-                && let Some(living) = args.entity.get_living_entity()
-            {
+            if !at_surface && let Some(living) = args.entity.get_living_entity() {
                 living.fall_distance.store(0.0);
             }
         })
