@@ -28,7 +28,8 @@ use pumpkin_protocol::{
             client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
             container_close::SContainerClose, emote::SEmote, interaction::SInteraction,
             inventory_transaction::SInventoryTransaction, loading_screen::SLoadingScreen,
-            login::SLogin, mob_equipment::SMobEquipment, player_action::SPlayerAction,
+            login::SLogin, mob_equipment::SMobEquipment,
+            packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
@@ -716,6 +717,16 @@ impl BedrockClient {
             SMobEquipment::PACKET_ID => {
                 self.handle_mob_equipment(server, player, SMobEquipment::read(reader)?)
                     .await;
+            }
+            SPacketViolationWarning::PACKET_ID => {
+                let warning = SPacketViolationWarning::read(reader)?;
+                warn!(
+                    violation_type = warning.violation_type.0,
+                    severity = warning.severity.0,
+                    packet_id = warning.packet_id.0,
+                    context = %warning.context,
+                    "Bedrock client rejected a server packet"
+                );
             }
             _ => {
                 warn!("Bedrock: Received Unknown Game packet: {}", packet.id);

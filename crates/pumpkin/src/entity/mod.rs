@@ -1,6 +1,6 @@
 use crate::{
     entity::item::ItemEntity,
-    net::{ClientPlatform, bedrock::BedrockClient},
+    net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     server::Server,
     world::{
         World,
@@ -296,6 +296,14 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                 Vec::new(),
             );
             client.send_game_packet(&packet).await;
+        })
+    }
+
+    fn send_java_spawn_packet<'a>(&'a self, client: &'a JavaClient) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            client
+                .enqueue_packet(&self.get_entity().create_spawn_packet())
+                .await;
         })
     }
 
@@ -1775,6 +1783,36 @@ impl Entity {
             }
         }
         self.send_head_rot(yaw);
+    }
+
+    pub fn send_bedrock_pos(&self) {
+        let position = self.pos.load();
+        let chunk_pos = self.chunk_pos.load();
+        let mut flags =
+            MOVE_ACTOR_DELTA_FLAG_HAS_X | MOVE_ACTOR_DELTA_FLAG_HAS_Y | MOVE_ACTOR_DELTA_FLAG_HAS_Z;
+        if self.on_ground.load(Relaxed) {
+            flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
+        }
+        let packet = CMoveActorDelta::new(
+            VarULong(self.entity_id as u64),
+            flags,
+            position.x as f32,
+            position.y as f32,
+            position.z as f32,
+            0,
+            0,
+            0,
+        );
+        let world = self.world.load();
+        for player in world.players.load().iter() {
+            let center = player.get_entity().chunk_pos.load();
+            let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+            if is_within_view_distance(chunk_pos, center, view_distance)
+                && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+            {
+                client.try_enqueue_packet(&packet);
+            }
+        }
     }
 
     pub fn update_last_pos(&self) -> Vector3<f64> {
