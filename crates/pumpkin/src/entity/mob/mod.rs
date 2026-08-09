@@ -618,6 +618,12 @@ pub trait Mob: EntityBase + Send + Sync {
         self.get_entity().is_alive()
     }
 
+    /// Vanilla `Entity.canBeCollidedWith`; ordinary mobs do not collide with a
+    /// null-source collision query, while a few concrete mob types do.
+    fn can_be_collided_with(&self) -> bool {
+        false
+    }
+
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
     }
@@ -1078,6 +1084,10 @@ pub trait Mob: EntityBase + Send + Sync {
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
+    }
+
+    fn can_be_collided_with(&self) -> bool {
+        Mob::can_be_collided_with(self)
     }
 
     fn check_despawn(&self) -> EntityBaseFuture<'_, ()> {

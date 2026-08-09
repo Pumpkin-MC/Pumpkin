@@ -368,6 +368,10 @@ impl Mob for ShulkerEntity {
         &self.mob_entity
     }
 
+    fn can_be_collided_with(&self) -> bool {
+        true
+    }
+
     fn get_mob_gravity(&self) -> f64 {
         0.0
     }

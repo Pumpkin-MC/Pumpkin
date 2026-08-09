@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use pumpkin_data::fluid::Fluid;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::{
@@ -26,13 +24,14 @@ const ABSOLUTE_MAX_ATTEMPTS: i64 = 1024;
 /// returning the first position with a solid, unobstructed floor. Falls back
 /// to a vertical walk from `suggestion` (`fixupSpawnHeight`) if no candidate
 /// succeeds, matching vanilla's own fallback and its Adventure-mode shortcut.
-pub async fn find_safe_world_spawn(world: &Arc<World>, suggestion: BlockPos) -> Vector3<f64> {
+pub async fn find_safe_world_spawn(world: &World, suggestion: BlockPos) -> Vector3<f64> {
     let adventure_mode = if let Some(server) = world.server.upgrade() {
         server.defaultgamemode.lock().await.gamemode == GameMode::Adventure
     } else {
         false
     };
     if adventure_mode {
+        load_spawn_chunk(world, suggestion).await;
         return fixup_spawn_height(world, suggestion);
     }
 
@@ -76,7 +75,18 @@ pub async fn find_safe_world_spawn(world: &Arc<World>, suggestion: BlockPos) -> 
         }
     }
 
+    load_spawn_chunk(world, suggestion).await;
     fixup_spawn_height(world, suggestion)
+}
+
+async fn load_spawn_chunk(world: &World, suggestion: BlockPos) {
+    world
+        .level
+        .get_or_fetch_chunk(
+            Vector2::new(suggestion.0.x >> 4, suggestion.0.z >> 4),
+            |_| (),
+        )
+        .await;
 }
 
 /// Vanilla `PlayerSpawnFinder.getCoprime`.
@@ -94,10 +104,20 @@ const fn get_coprime(possible_origins: i64) -> i64 {
 fn get_level_respawn_pos(world: &World, x: i32, z: i32) -> Option<BlockPos> {
     let min_y = world.dimension.min_y;
 
-    // No per-generator getSpawnHeight; approximated as min_y + 32 (vanilla's
-    // default Nether spawn height), clamped to the dimension's top.
+    // ChunkGenerator.getSpawnHeight: noise generators return 64, while flat
+    // generators return minY plus the number of configured layers.
     let top_y = if world.dimension.has_ceiling {
-        (min_y + 32).min(min_y + world.dimension.height - 1)
+        match world.level.world_gen.as_ref() {
+            pumpkin_world::generation::generator::WorldGenerator::Noise(_) => 64,
+            pumpkin_world::generation::generator::WorldGenerator::Flat(generator) => {
+                min_y
+                    + generator
+                        .layers
+                        .iter()
+                        .map(|layer| layer.height)
+                        .sum::<i32>()
+            }
+        }
     } else {
         world.get_heightmap_height(ChunkHeightmapType::MotionBlocking, x, z)
     };
@@ -121,12 +141,8 @@ fn get_level_respawn_pos(world: &World, x: i32, z: i32) -> Option<BlockPos> {
         if Fluid::from_state_id(state.id).is_some() {
             break;
         }
-        if state.is_solid() {
-            let above = pos.up();
-            let above_state = world.get_block_state(&above);
-            if !above_state.is_solid() && Fluid::from_state_id(above_state.id).is_none() {
-                return Some(above);
-            }
+        if has_full_upward_face(&state) {
+            return Some(pos.up());
         }
         y -= 1;
     }
@@ -154,20 +170,88 @@ fn fixup_spawn_height(world: &World, spawn_pos: BlockPos) -> Vector3<f64> {
     at_bottom_center_of(pos)
 }
 
-/// Port of vanilla's `noCollisionNoLiquid`: the block at `pos` isn't a fluid,
-/// and a standing player's bounding box placed there has no collisions.
-fn no_collision_no_liquid(world: &World, pos: &BlockPos) -> bool {
-    let state = world.get_block_state(pos);
-    if Fluid::from_state_id(state.id).is_some() {
+/// Port of vanilla's `Block.isFaceFull(shape, UP)` for the collision shapes
+/// exposed by Pumpkin. The face may be covered by more than one shape.
+fn has_full_upward_face(state: &pumpkin_data::BlockState) -> bool {
+    let shapes: Vec<_> = state
+        .get_block_collision_shapes()
+        .filter(|shape| shape.min.y <= 1.0 && shape.max.y >= 1.0)
+        .collect();
+    if shapes.is_empty() {
         return false;
     }
+
+    let mut x_edges = vec![0.0, 1.0];
+    let mut z_edges = vec![0.0, 1.0];
+    for shape in &shapes {
+        x_edges.push(shape.min.x.clamp(0.0, 1.0));
+        x_edges.push(shape.max.x.clamp(0.0, 1.0));
+        z_edges.push(shape.min.z.clamp(0.0, 1.0));
+        z_edges.push(shape.max.z.clamp(0.0, 1.0));
+    }
+    x_edges.sort_by(f64::total_cmp);
+    x_edges.dedup();
+    z_edges.sort_by(f64::total_cmp);
+    z_edges.dedup();
+
+    x_edges.windows(2).all(|x| {
+        z_edges.windows(2).all(|z| {
+            let x = (x[0] + x[1]) * 0.5;
+            let z = (z[0] + z[1]) * 0.5;
+            shapes.iter().any(|shape| {
+                shape.min.x <= x && x <= shape.max.x && shape.min.z <= z && z <= shape.max.z
+            })
+        })
+    })
+}
+
+/// Port of vanilla's `noCollisionNoLiquid`: a standing player's bounding box
+/// has no block, fluid, or entity collisions.
+fn no_collision_no_liquid(world: &World, pos: &BlockPos) -> bool {
     let bb = BoundingBox::new_from_pos(
         f64::from(pos.0.x) + 0.5,
         f64::from(pos.0.y),
         f64::from(pos.0.z) + 0.5,
         &PLAYER_DIMENSIONS,
     );
-    world.is_space_empty(bb)
+    if has_block_collision(world, bb) || has_fluid_collision(world, bb) {
+        return false;
+    }
+
+    // CollisionGetter.noCollision(null, box, true) queries an epsilon-expanded
+    // box, then tests the actual entity boxes. Items and projectiles are not
+    // included because they cannot be collided with by a null source.
+    let query_box = bb.expand(1.0e-7, 1.0e-7, 1.0e-7);
+    !world.get_all_at_box(&query_box).iter().any(|entity| {
+        let entity = entity.as_ref();
+        !entity.is_spectator()
+            && entity.get_entity().is_alive()
+            && entity.can_be_collided_with()
+            && entity.get_entity().bounding_box.load().intersects(&bb)
+    })
+}
+
+fn has_block_collision(world: &World, bounding_box: BoundingBox) -> bool {
+    BlockPos::iterate(bounding_box.min_block_pos(), bounding_box.max_block_pos()).any(|pos| {
+        let state = world.get_block_state(&pos);
+        !state.is_air()
+            && state
+                .get_block_collision_shapes()
+                .any(|shape| shape.at_pos(pos).intersects(&bounding_box))
+    })
+}
+
+fn has_fluid_collision(world: &World, bounding_box: BoundingBox) -> bool {
+    BlockPos::iterate(bounding_box.min_block_pos(), bounding_box.max_block_pos()).any(|pos| {
+        let (fluid, state) = world.get_fluid_and_fluid_state(&pos);
+        if fluid.id == Fluid::EMPTY.id {
+            return false;
+        }
+
+        let fluid_min_y = f64::from(pos.0.y);
+        let fluid_max_y = fluid_min_y + world.get_fluid_height(&pos, fluid, state);
+        fluid_max_y > bounding_box.min.y && fluid_min_y < bounding_box.max.y
+    })
 }
 
 /// Vanilla `Vec3.atBottomCenterOf`.

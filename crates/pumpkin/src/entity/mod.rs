@@ -329,6 +329,12 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         false
     }
 
+    /// Vanilla `Entity.canBeCollidedWith` used by collision queries whose source
+    /// entity is null. Most entities, including ordinary mobs, return false.
+    fn can_be_collided_with(&self) -> bool {
+        false
+    }
+
     fn can_hit(&self) -> bool {
         false
     }

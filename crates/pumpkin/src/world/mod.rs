@@ -3123,16 +3123,11 @@ impl World {
             (position, yaw, pitch)
         } else {
             let info = &self.level_info.load();
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let pos_y = self.get_top_block(spawn_position) + 1; // +1 to spawn on top of the block
-
-            let position = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(info.spawn_z) + 0.5,
-            );
+            let position = spawn_finder::find_safe_world_spawn(
+                self,
+                BlockPos(Vector3::new(info.spawn_x, info.spawn_y, info.spawn_z)),
+            )
+            .await;
             (position, info.spawn_yaw, info.spawn_pitch)
         };
 
@@ -3867,10 +3862,11 @@ impl World {
         let data_kept = u8::from(alive);
 
         // Copy spawn info from level_info to avoid holding lock across await
-        let (spawn_x, spawn_z, spawn_yaw, spawn_pitch, keep_inventory) = {
+        let (spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch, keep_inventory) = {
             let info = self.level_info.load();
             (
                 info.spawn_x,
+                info.spawn_y,
                 info.spawn_z,
                 info.spawn_yaw,
                 info.spawn_pitch,
@@ -3896,7 +3892,7 @@ impl World {
 
                 let spawn_pos = spawn_finder::find_safe_world_spawn(
                     self,
-                    BlockPos(Vector3::new(spawn_x, self.dimension.min_y, spawn_z)),
+                    BlockPos(Vector3::new(spawn_x, spawn_y, spawn_z)),
                 )
                 .await;
 
@@ -3992,7 +3988,7 @@ impl World {
         } else if respawn_dimension != self.dimension {
             let fallback_pos = spawn_finder::find_safe_world_spawn(
                 self,
-                BlockPos(Vector3::new(spawn_x, self.dimension.min_y, spawn_z)),
+                BlockPos(Vector3::new(spawn_x, spawn_y, spawn_z)),
             )
             .await;
             (self.clone(), fallback_pos, spawn_yaw, spawn_pitch)

@@ -545,6 +545,10 @@ impl EntityBase for MinecartEntity {
         true
     }
 
+    fn can_be_collided_with(&self) -> bool {
+        true
+    }
+
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             self.vehicle.send_wobble_metadata();

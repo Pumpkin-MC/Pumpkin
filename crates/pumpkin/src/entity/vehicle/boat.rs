@@ -99,6 +99,10 @@ impl EntityBase for BoatEntity {
         true
     }
 
+    fn can_be_collided_with(&self) -> bool {
+        true
+    }
+
     fn damage_with_context<'a>(
         &'a self,
         _caller: &'a dyn EntityBase,
