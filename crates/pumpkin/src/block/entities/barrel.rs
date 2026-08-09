@@ -15,22 +15,19 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
-use tokio::sync::Mutex;
 
 use crate::block::viewer::{
     ViewerCountListener, ViewerCountTracker, ViewerCountTrackerExt, ViewerFuture,
 };
 use crate::world::{BlockFlags, World};
 use pumpkin_world::inventory::InventoryFuture;
-use pumpkin_world::inventory::{
-    split_stack, sync_write_items_to_nbt, {Clearable, Inventory},
-};
+use pumpkin_world::inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 
 use super::BlockEntity;
 
 pub struct BarrelBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
+    pub items: tokio::sync::RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
 
     // Viewer
@@ -50,14 +47,14 @@ impl BlockEntity for BarrelBlockEntity {
     where
         Self: Sized,
     {
-        let barrel = Self {
+        let mut barrel = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         };
 
-        barrel.read_data(nbt, &barrel.items);
+        pumpkin_world::inventory::sync_read_items_from_nbt(nbt, barrel.items.get_mut());
 
         barrel
     }
@@ -91,7 +88,9 @@ impl BlockEntity for BarrelBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        sync_write_items_to_nbt(&self.items, &mut nbt);
+        if let Ok(guard) = self.items.try_read() {
+            sync_write_items_to_nbt(&*guard, &mut nbt);
+        }
         Some(nbt)
     }
 
@@ -132,7 +131,7 @@ impl BarrelBlockEntity {
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         }
@@ -177,30 +176,27 @@ impl BarrelBlockEntity {
 
 impl Inventory for BarrelBlockEntity {
     fn size(&self) -> usize {
-        self.items.len()
+        Self::INVENTORY_SIZE
     }
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in &self.items {
-                if !slot.lock().await.is_empty() {
-                    return false;
-                }
-            }
-
-            true
+            let items = self.items.read().await;
+            items.iter().all(ItemStack::is_empty)
         })
     }
 
-    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
-        Box::pin(async move { self.items[slot].clone() })
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let items = self.items.read().await;
+            items[slot].clone()
+        })
     }
 
     fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let mut removed = ItemStack::EMPTY.clone();
-            let mut guard = self.items[slot].lock().await;
-            std::mem::swap(&mut removed, &mut *guard);
+            let mut items = self.items.write().await;
+            let removed = std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone());
             self.mark_dirty();
             removed
         })
@@ -208,7 +204,12 @@ impl Inventory for BarrelBlockEntity {
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let res = split_stack(&self.items, slot, amount).await;
+            let mut items = self.items.write().await;
+            let res = if !items[slot].is_empty() && amount > 0 {
+                items[slot].split(amount)
+            } else {
+                ItemStack::EMPTY.clone()
+            };
             self.mark_dirty();
             res
         })
@@ -216,7 +217,8 @@ impl Inventory for BarrelBlockEntity {
 
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
-            *self.items[slot].lock().await = stack;
+            let mut items = self.items.write().await;
+            items[slot] = stack;
             self.mark_dirty();
         })
     }
@@ -245,9 +247,8 @@ impl Inventory for BarrelBlockEntity {
 impl Clearable for BarrelBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in &self.items {
-                *slot.lock().await = ItemStack::EMPTY.clone();
-            }
+            let mut items = self.items.write().await;
+            items.fill_with(|| ItemStack::EMPTY.clone());
             self.mark_dirty();
         })
     }

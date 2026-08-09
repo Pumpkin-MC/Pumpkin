@@ -1,3 +1,8 @@
+//! Utility functions and shared types for the Pumpkin server.
+
+#![deny(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::panic))]
+
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
@@ -57,13 +62,12 @@ macro_rules! global_path {
     ($path:expr) => {{
         use std::path::Path;
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
+            .ancestors()
+            .nth(2)
+            .unwrap_or_else(|| Path::new("."))
             .join(file!())
             .parent()
-            .unwrap()
+            .unwrap_or_else(|| Path::new("."))
             .join($path)
     }};
 }
@@ -188,11 +192,12 @@ impl<'a, T> MutableSplitSlice<'a, T> {
     ///
     /// # Panics
     /// * if `index` is out of bounds of the base slice.
+    #[allow(clippy::expect_used, clippy::panic)]
     pub const fn extract_ith(base: &'a mut [T], index: usize) -> (&'a mut T, Self) {
         let (start, end_inclusive) = base.split_at_mut(index);
-        let (value, end) = end_inclusive
-            .split_first_mut()
-            .expect("Index is not in base slice");
+        let Some((value, end)) = end_inclusive.split_first_mut() else {
+            panic!("Index is not in base slice");
+        };
 
         (value, Self { start, end })
     }
@@ -214,6 +219,7 @@ impl<T> Index<usize> for MutableSplitSlice<'_, T> {
     type Output = T;
 
     #[expect(clippy::comparison_chain)]
+    #[allow(clippy::panic)]
     fn index(&self, index: usize) -> &Self::Output {
         if index < self.start.len() {
             &self.start[index]
@@ -239,6 +245,7 @@ pub struct DoublePerlinNoiseParametersCodec {
 
 impl<T> IndexMut<usize> for MutableSplitSlice<'_, T> {
     #[expect(clippy::comparison_chain)]
+    #[allow(clippy::panic)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         if index < self.start.len() {
             &mut self.start[index]

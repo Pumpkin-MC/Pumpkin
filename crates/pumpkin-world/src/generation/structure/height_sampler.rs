@@ -1,4 +1,4 @@
-use pumpkin_data::Block;
+use pumpkin_data::{Block, BlockId, block_properties::blocks_movement};
 use pumpkin_util::math::floor_div;
 use rustc_hash::FxHashMap;
 
@@ -21,6 +21,7 @@ pub struct NoiseHeightSampler<'a> {
     generator: &'a VanillaGenerator,
     preliminary: SurfaceHeightEstimateSampler<'a>,
     heights: FxHashMap<(i32, i32), i32>,
+    ocean_floor_heights: FxHashMap<(i32, i32), i32>,
 }
 
 impl<'a> NoiseHeightSampler<'a> {
@@ -42,10 +43,11 @@ impl<'a> NoiseHeightSampler<'a> {
             generator,
             preliminary,
             heights: FxHashMap::default(),
+            ocean_floor_heights: FxHashMap::default(),
         }
     }
 
-    fn sample_column(&mut self, x: i32, z: i32) -> i32 {
+    fn sample_column(&mut self, x: i32, z: i32, ocean_floor: bool) -> i32 {
         let settings = self.generator.settings;
         let shape = &settings.shape;
         let horizontal = i32::from(shape.horizontal_cell_block_count());
@@ -100,7 +102,11 @@ impl<'a> NoiseHeightSampler<'a> {
                         &mut self.preliminary,
                     )
                     .unwrap_or(self.generator.default_block);
-                if !state.is_air() {
+                if if ocean_floor {
+                    blocks_movement(state, BlockId::from_state_id(state.id))
+                } else {
+                    !state.is_air()
+                } {
                     return y + 1;
                 }
             }
@@ -116,8 +122,20 @@ impl HeightSampler for NoiseHeightSampler<'_> {
         if let Some(height) = self.heights.get(&key) {
             return *height;
         }
-        let height = self.sample_column(block_x, block_z);
+        let height = self.sample_column(block_x, block_z, false);
         self.heights.insert(key, height);
+        height
+    }
+
+    fn estimate_ocean_floor_height(&mut self, block_x: i32, block_z: i32) -> i32 {
+        let key = (block_x, block_z);
+        if let Some(height) = self.ocean_floor_heights.get(&key) {
+            return *height;
+        }
+        // Vanilla's structure helper asks for the highest occupied block, while
+        // heightmaps store the first free block above it.
+        let height = self.sample_column(block_x, block_z, true) - 1;
+        self.ocean_floor_heights.insert(key, height);
         height
     }
 }

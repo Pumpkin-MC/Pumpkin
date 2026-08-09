@@ -37,7 +37,7 @@ impl ItemBehaviour for EggItem {
             );
 
             // Capture the held item stack and pass it to the thrown egg entity
-            let item_stack: ItemStack = player.inventory.held_item().lock().await.clone();
+            let item_stack: ItemStack = player.inventory.held_item().await;
 
             let entity = Entity::new(world.clone(), position, &EntityType::EGG);
             let egg = EggEntity::new_shot(entity, player.get_entity());
@@ -51,22 +51,23 @@ impl ItemBehaviour for EggItem {
             world.spawn_entity(Arc::new(egg)).await;
 
             // Consume item
-            let held_item = player.inventory.held_item();
-            let consumed = {
-                let mut main_hand = held_item.lock().await;
-                if !main_hand.is_empty() && Self::ids().contains(&main_hand.item.id) {
-                    main_hand.decrement_unless_creative(player.gamemode.load(), 1);
-                    true
-                } else {
-                    false
-                }
+            let mut main_hand = player.inventory.held_item().await;
+            let consumed = if !main_hand.is_empty() && Self::ids().contains(&main_hand.item.id) {
+                main_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                player.inventory.set_held_item(main_hand).await;
+                true
+            } else {
+                false
             };
 
             if !consumed {
-                let off_hand_item = player.inventory.off_hand_item().await;
-                let mut off_hand = off_hand_item.lock().await;
+                let mut off_hand = player.inventory.off_hand_item().await;
                 if !off_hand.is_empty() && Self::ids().contains(&off_hand.item.id) {
                     off_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                    player
+                        .inventory
+                        .set_stack_in_hand(pumpkin_util::Hand::Left, off_hand)
+                        .await;
                 }
             }
         })

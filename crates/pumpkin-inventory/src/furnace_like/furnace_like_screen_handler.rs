@@ -179,10 +179,7 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
                 return stack_left;
             }
 
-            let slot_stack_lock = slot.get_stack().await;
-
-            // Acquire the lock to read/clone the stack
-            let mut stack = slot_stack_lock.lock().await;
+            let mut stack = slot.get_stack().await;
             stack_left = stack.clone();
 
             let success = if slot_index < 3 {
@@ -205,10 +202,9 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
             }
 
             if stack.is_empty() {
-                drop(stack); // Release lock before awaiting
                 slot.set_stack(ItemStack::EMPTY.clone()).await;
             } else {
-                slot.mark_dirty().await;
+                slot.set_stack(stack).await;
             }
 
             // Award XP when taking from output slot (slot 2)

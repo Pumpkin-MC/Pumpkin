@@ -225,7 +225,7 @@ impl BlockBehaviour for LecternBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let mut item_stack = args.item_stack.lock().await;
+            let item_stack = &mut *args.item_stack;
             if !item_stack.item.has_tag(&tag::Item::MINECRAFT_LECTERN_BOOKS) {
                 return BlockActionResult::Pass;
             }
@@ -247,7 +247,7 @@ impl BlockBehaviour for LecternBlock {
             };
 
             let book = item_stack.split_unless_creative(args.player.gamemode.load(), 1);
-            drop(item_stack);
+            let _ = item_stack;
             lectern.set_stack(0, book).await;
 
             Self::set_has_book(args.world, args.position, true).await;

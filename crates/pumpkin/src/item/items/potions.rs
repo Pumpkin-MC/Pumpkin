@@ -70,18 +70,16 @@ impl ItemBehaviour for SplashPotionItem {
             let splash = SplashPotionEntity::new_shot(entity, player.get_entity());
 
             // Copy the held item stack data into the projectile
-            let main = player.inventory.held_item();
+            let main_s = player.inventory.held_item().await;
             let mut used_main = true;
-            let mut stack = {
-                let s = main.lock().await.clone();
-                (!s.is_empty() && s.item.id == pumpkin_data::item::Item::SPLASH_POTION.id)
-                    .then_some(s)
-            };
+            let mut stack = (!main_s.is_empty()
+                && main_s.item.id == pumpkin_data::item::Item::SPLASH_POTION.id)
+                .then_some(main_s);
             if stack.is_none() {
-                let off = player.inventory.off_hand_item().await;
-                let s = off.lock().await.clone();
-                if !s.is_empty() && s.item.id == pumpkin_data::item::Item::SPLASH_POTION.id {
-                    stack = Some(s);
+                let off_s = player.inventory.off_hand_item().await;
+                if !off_s.is_empty() && off_s.item.id == pumpkin_data::item::Item::SPLASH_POTION.id
+                {
+                    stack = Some(off_s);
                     used_main = false;
                 }
             }
@@ -97,20 +95,16 @@ impl ItemBehaviour for SplashPotionItem {
 
             // Decrement the used stack (clear)
             if used_main {
-                player
-                    .inventory
-                    .held_item()
-                    .lock()
-                    .await
-                    .decrement_unless_creative(player.gamemode.load(), 1);
+                let mut s = player.inventory.held_item().await;
+                s.decrement_unless_creative(player.gamemode.load(), 1);
+                player.inventory.set_held_item(s).await;
             } else {
+                let mut s = player.inventory.off_hand_item().await;
+                s.decrement_unless_creative(player.gamemode.load(), 1);
                 player
                     .inventory
-                    .off_hand_item()
-                    .await
-                    .lock()
-                    .await
-                    .decrement_unless_creative(player.gamemode.load(), 1);
+                    .set_stack_in_hand(pumpkin_util::Hand::Left, s)
+                    .await;
             }
         })
     }
@@ -138,18 +132,17 @@ impl ItemBehaviour for LingeringPotionItem {
             let ling = LingeringPotionEntity::new_shot(entity, player.get_entity());
 
             // Copy the held item stack data into the projectile
-            let main = player.inventory.held_item();
+            let main_s = player.inventory.held_item().await;
             let mut used_main = true;
-            let mut stack = {
-                let s = main.lock().await.clone();
-                (!s.is_empty() && s.item.id == pumpkin_data::item::Item::LINGERING_POTION.id)
-                    .then_some(s)
-            };
+            let mut stack = (!main_s.is_empty()
+                && main_s.item.id == pumpkin_data::item::Item::LINGERING_POTION.id)
+                .then_some(main_s);
             if stack.is_none() {
-                let off = player.inventory.off_hand_item().await;
-                let s = off.lock().await.clone();
-                if !s.is_empty() && s.item.id == pumpkin_data::item::Item::LINGERING_POTION.id {
-                    stack = Some(s);
+                let off_s = player.inventory.off_hand_item().await;
+                if !off_s.is_empty()
+                    && off_s.item.id == pumpkin_data::item::Item::LINGERING_POTION.id
+                {
+                    stack = Some(off_s);
                     used_main = false;
                 }
             }
@@ -164,20 +157,16 @@ impl ItemBehaviour for LingeringPotionItem {
 
             // Decrement the used stack (clear)
             if used_main {
-                player
-                    .inventory
-                    .held_item()
-                    .lock()
-                    .await
-                    .decrement_unless_creative(player.gamemode.load(), 1);
+                let mut s = player.inventory.held_item().await;
+                s.decrement_unless_creative(player.gamemode.load(), 1);
+                player.inventory.set_held_item(s).await;
             } else {
+                let mut s = player.inventory.off_hand_item().await;
+                s.decrement_unless_creative(player.gamemode.load(), 1);
                 player
                     .inventory
-                    .off_hand_item()
-                    .await
-                    .lock()
-                    .await
-                    .decrement_unless_creative(player.gamemode.load(), 1);
+                    .set_stack_in_hand(pumpkin_util::Hand::Left, s)
+                    .await;
             }
         })
     }

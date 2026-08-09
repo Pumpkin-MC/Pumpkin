@@ -1,7 +1,7 @@
 /* This file is generated. Do not edit manually. */
 use crate::item::Item;
 use crate::tag::Taggable;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 #[derive(Clone, Debug, Serialize)]
 pub enum CraftingRecipeTypes {
     CraftingShaped {

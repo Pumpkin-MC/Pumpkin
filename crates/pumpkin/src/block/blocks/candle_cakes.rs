@@ -41,20 +41,14 @@ const CANDLE_MAP: [(&Item, &Block); 17] = [
 pub fn cake_from_candle(item: &Item) -> &'static Block {
     CANDLE_MAP
         .binary_search_by_key(&item.id, |(key, _)| key.id)
-        .map_or_else(
-            |_| panic!("Expected a candle item, got {}", item.id),
-            |index| CANDLE_MAP[index].1,
-        )
+        .map_or(&Block::CAKE, |index| CANDLE_MAP[index].1)
 }
 
 #[must_use]
 pub fn candle_from_cake(block: &Block) -> &'static Item {
     CANDLE_MAP
         .binary_search_by_key(&block.id, |(_, value)| value.id)
-        .map_or_else(
-            |_| panic!("Expected a candle cake block, got {}", block.id),
-            |index| CANDLE_MAP[index].0,
-        )
+        .map_or(&Item::CANDLE, |index| CANDLE_MAP[index].0)
 }
 
 #[pumpkin_block_from_tag("minecraft:candle_cakes")]
@@ -103,7 +97,7 @@ impl BlockBehaviour for CandleCakeBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let item_id = args.item_stack.lock().await.item.id;
+            let item_id = args.item_stack.item.id;
             match item_id {
                 id if id == Item::FIRE_CHARGE.id || id == Item::FLINT_AND_STEEL.id => {
                     BlockActionResult::Pass

@@ -11,7 +11,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::sound::Sound;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::inventory::Inventory;
@@ -32,8 +32,7 @@ impl ItemBehaviour for TridentItem {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let inventory = player.inventory();
-            let held = inventory.held_item();
-            let stack = held.lock().await.clone();
+            let stack = inventory.held_item().await;
 
             player
                 .living_entity
@@ -59,8 +58,7 @@ impl ItemBehaviour for TridentItem {
             }
 
             let world = player.world();
-            let held = player.inventory().held_item();
-            let stack_guard = held.lock().await.clone();
+            let stack_guard = player.inventory().held_item().await;
 
             // Check Riptide level
             let mut riptide_level = 0u32;
@@ -75,58 +73,52 @@ impl ItemBehaviour for TridentItem {
             }
 
             if riptide_level > 0 {
-                let is_touching_water = player
-                    .living_entity
-                    .entity
-                    .touching_water
-                    .load(std::sync::atomic::Ordering::Relaxed);
-                let is_raining = world.is_raining().await;
-
-                if is_touching_water || is_raining {
-                    let (yaw, pitch) = player.rotation();
-                    let look_vec = Vector3::rotation_vector(pitch as f64, yaw as f64);
-                    let speed = f64::from(riptide_level).mul_add(0.75, 1.5);
-                    let launch_velocity = look_vec.multiply(speed, speed, speed);
-
-                    player.get_entity().set_velocity(launch_velocity);
-                    player.get_entity().send_velocity();
-
-                    let sound = match riptide_level {
-                        1 => Sound::ItemTridentRiptide1,
-                        2 => Sound::ItemTridentRiptide2,
-                        _ => Sound::ItemTridentRiptide3,
-                    };
-                    world.play_sound(sound, SoundCategory::Players, &player.position());
-
+                let in_water = world.get_block_state(&player.position().to_block_pos()).id
+                    == pumpkin_data::Block::WATER.default_state.id;
+                if !in_water {
                     player.living_entity.clear_active_hand().await;
-
-                    if player.gamemode.load() != GameMode::Creative {
-                        player.damage_held_item(1).await;
-                    }
                     return;
                 }
+
+                let f = f64::from(riptide_level);
+                let (yaw, pitch) = player.rotation();
+                let f_yaw = f32::to_radians(yaw);
+                let f_pitch = f32::to_radians(pitch);
+
+                let vx = f64::from(-f32::sin(f_yaw) * f32::cos(f_pitch));
+                let vy = f64::from(-f32::sin(f_pitch));
+                let vz = f64::from(f32::cos(f_yaw) * f32::cos(f_pitch));
+
+                let sq = (vx * vx + vy * vy + vz * vz).sqrt();
+                if sq > 0.0 {
+                    let mult = (1.0 + f * 0.75) / sq;
+                    player.living_entity.entity.velocity.store(Vector3::new(
+                        vx * mult,
+                        vy * mult,
+                        vz * mult,
+                    ));
+                }
+
+                player.damage_held_item(1).await;
+                player.living_entity.clear_active_hand().await;
+                return;
             }
 
-            // Normal throw
-            let entity = Entity::new(world.clone(), player.position(), &EntityType::TRIDENT);
-            let pickup = if player.gamemode.load() == GameMode::Creative {
-                ArrowPickup::CreativeOnly
-            } else {
-                ArrowPickup::Allowed
-            };
-
-            let trident_entity =
-                TridentEntity::new_shot(entity, player.get_entity(), stack_guard, pickup);
-
+            // Normal throw - spawn thrown trident
             let (yaw, pitch) = player.rotation();
-            trident_entity.set_velocity_from_rotation(pitch, yaw, 0.0, 2.5, 1.0);
-
-            let trident_arc: Arc<dyn EntityBase> = Arc::new(trident_entity);
-            world.spawn_entity(trident_arc).await;
+            let entity = Entity::new(world.clone(), player.position(), &EntityType::TRIDENT);
+            let trident = TridentEntity::new_shot(
+                entity,
+                player.get_entity(),
+                stack_guard.clone(),
+                ArrowPickup::Allowed,
+            );
+            trident.set_velocity_from_rotation(pitch, yaw, 0.0, 2.5, 1.0);
+            world.spawn_entity(Arc::new(trident)).await;
 
             world.play_sound(
                 Sound::ItemTridentThrow,
-                SoundCategory::Players,
+                pumpkin_data::sound::SoundCategory::Players,
                 &player.position(),
             );
 
@@ -135,9 +127,10 @@ impl ItemBehaviour for TridentItem {
                 let selected_slot = inventory.get_selected_slot() as usize;
 
                 let main_hand_item = inventory.get_stack(selected_slot).await;
-                let mut stack_lock = main_hand_item.lock().await;
-                if stack_lock.item.id == Item::TRIDENT.id {
-                    *stack_lock = ItemStack::EMPTY.clone();
+                if main_hand_item.item.id == Item::TRIDENT.id {
+                    inventory
+                        .set_stack(selected_slot, ItemStack::EMPTY.clone())
+                        .await;
                     player
                         .sync_hand_slot(selected_slot, ItemStack::EMPTY.clone())
                         .await;
@@ -145,9 +138,10 @@ impl ItemBehaviour for TridentItem {
                     let off_hand_slot =
                         pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT;
                     let off_hand_item = inventory.get_stack(off_hand_slot).await;
-                    let mut off_stack_lock = off_hand_item.lock().await;
-                    if off_stack_lock.item.id == Item::TRIDENT.id {
-                        *off_stack_lock = ItemStack::EMPTY.clone();
+                    if off_hand_item.item.id == Item::TRIDENT.id {
+                        inventory
+                            .set_stack(off_hand_slot, ItemStack::EMPTY.clone())
+                            .await;
                         player
                             .sync_hand_slot(off_hand_slot, ItemStack::EMPTY.clone())
                             .await;

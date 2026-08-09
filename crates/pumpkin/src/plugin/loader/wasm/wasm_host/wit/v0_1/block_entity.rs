@@ -85,7 +85,7 @@ fn to_wasm_sign_text(text: &InternalText) -> SignText {
         messages: text
             .messages
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
             .map(str::into_string)
             .to_vec(),
@@ -300,8 +300,17 @@ impl HostSignBlockEntity for PluginHostState {
                         std::sync::atomic::Ordering::Relaxed,
                     );
                     sign.front_text.set_color(new_text.get_color());
-                    (*sign.front_text.messages.lock().unwrap())
-                        .clone_from(&new_text.messages.lock().unwrap());
+                    (*sign
+                        .front_text
+                        .messages
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner))
+                    .clone_from(
+                        &new_text
+                            .messages
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    );
                     Ok(())
                 },
             )
@@ -341,8 +350,17 @@ impl HostSignBlockEntity for PluginHostState {
                         std::sync::atomic::Ordering::Relaxed,
                     );
                     sign.back_text.set_color(new_text.get_color());
-                    (*sign.back_text.messages.lock().unwrap())
-                        .clone_from(&new_text.messages.lock().unwrap());
+                    (*sign
+                        .back_text
+                        .messages
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner))
+                    .clone_from(
+                        &new_text
+                            .messages
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    );
                     Ok(())
                 },
             )

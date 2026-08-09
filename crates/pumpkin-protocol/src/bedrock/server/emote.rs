@@ -1,4 +1,4 @@
-use crate::codec::var_ulong::VarULong;
+use crate::codec::{var_uint::VarUInt, var_ulong::VarULong};
 use crate::serial::{PacketRead, PacketReadSlice, PacketWrite, read_str_slice};
 use pumpkin_macros::packet;
 use std::borrow::Cow;
@@ -12,7 +12,7 @@ pub const EMOTE_FLAG_MUTE_CHAT: u8 = 1 << 1;
 pub struct SEmote<'a> {
     pub runtime_entity_id: VarULong,
     pub emote_id: Cow<'a, str>,
-    pub emote_length: u32,
+    pub emote_length: VarUInt,
     pub xuid: Cow<'a, str>,
     pub platform_id: Cow<'a, str>,
     pub flags: u8,
@@ -22,7 +22,7 @@ impl<'a> PacketReadSlice<'a> for SEmote<'a> {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error> {
         let runtime_entity_id = VarULong::read_slice(buf)?;
         let emote_id = Cow::Borrowed(read_str_slice(buf)?);
-        let emote_length = u32::read_slice(buf)?;
+        let emote_length = VarUInt::read_slice(buf)?;
         let xuid = Cow::Borrowed(read_str_slice(buf)?);
         let platform_id = Cow::Borrowed(read_str_slice(buf)?);
         let flags = u8::read_slice(buf)?;
@@ -42,7 +42,7 @@ impl PacketRead for SEmote<'static> {
         Ok(Self {
             runtime_entity_id: VarULong::read(reader)?,
             emote_id: Cow::Owned(String::read(reader)?),
-            emote_length: u32::read(reader)?,
+            emote_length: VarUInt::read(reader)?,
             xuid: Cow::Owned(String::read(reader)?),
             platform_id: Cow::Owned(String::read(reader)?),
             flags: u8::read(reader)?,

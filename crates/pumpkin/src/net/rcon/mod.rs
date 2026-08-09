@@ -18,7 +18,13 @@ pub struct RCONServer;
 
 impl RCONServer {
     pub async fn run(config: &RCONConfig, server: Arc<Server>) {
-        let listener = tokio::net::TcpListener::bind(config.address).await.unwrap();
+        let listener = match tokio::net::TcpListener::bind(config.address).await {
+            Ok(l) => l,
+            Err(e) => {
+                error!("Failed to bind RCON server on {}: {e}", config.address);
+                return;
+            }
+        };
 
         let password = Arc::new(config.password.clone());
 

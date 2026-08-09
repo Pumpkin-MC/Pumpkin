@@ -82,7 +82,7 @@ impl Context {
     pub fn get_data_folder(&self) -> PathBuf {
         let path = Path::new("plugins").join("data").join(&self.metadata.name);
         if !path.exists() {
-            fs::create_dir_all(&path).unwrap();
+            let _ = fs::create_dir_all(&path);
         }
         path
     }

@@ -313,9 +313,9 @@ impl Player {
 
                 if !self.has_advancement(Advancement::STORY_ENCHANT_ITEM).await {
                     let mut has_enchanted = false;
-                    for item in &self.inventory().main_inventory {
-                        let lock = item.lock().await;
-                        if !lock.is_empty() && lock.has_enchantments() {
+                    let main_inv = self.inventory().main_inventory.read().await;
+                    for stack in main_inv.iter() {
+                        if !stack.is_empty() && stack.has_enchantments() {
                             has_enchanted = true;
                             break;
                         }

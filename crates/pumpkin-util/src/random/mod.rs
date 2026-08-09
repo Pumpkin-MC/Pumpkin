@@ -18,12 +18,11 @@ pub fn get_seed() -> u64 {
         .try_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
             Some(val.wrapping_mul(1181783497276652981u64))
         })
-        .unwrap();
+        .unwrap_or(0);
 
     let nanos = time::SystemTime::now()
         .duration_since(time::SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
+        .map_or(0, |d| d.as_nanos());
 
     let nano_upper = (nanos >> 8) as u64;
     let nano_lower = nanos as u64;

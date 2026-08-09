@@ -10,20 +10,17 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::{
-    Clearable, Inventory, InventoryFuture, split_stack, sync_write_items_to_nbt,
-};
+use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, sync_write_items_to_nbt};
 use std::any::Any;
 use std::array::from_fn;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64};
-use tokio::sync::Mutex;
 
 pub struct HopperBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
+    pub items: tokio::sync::RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
     pub facing: FacingHopper,
     pub cooldown_time: AtomicI32,
@@ -60,16 +57,16 @@ impl BlockEntity for HopperBlockEntity {
     where
         Self: Sized,
     {
-        let hopper = Self {
+        let mut hopper = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             facing: FacingHopper::Down,
             cooldown_time: AtomicI32::from(nbt.get_int("TransferCooldown").unwrap_or(-1)),
             ticked_game_time: AtomicI64::new(0),
         };
 
-        hopper.read_data(nbt, &hopper.items);
+        pumpkin_world::inventory::sync_read_items_from_nbt(nbt, hopper.items.get_mut());
 
         hopper
     }
@@ -120,7 +117,8 @@ impl BlockEntity for HopperBlockEntity {
             "TransferCooldown",
             NbtTag::Int(self.cooldown_time.load(Ordering::Relaxed)),
         );
-        sync_write_items_to_nbt(&self.items, &mut nbt);
+        let items = futures::executor::block_on(self.items.read());
+        sync_write_items_to_nbt(items.as_slice(), &mut nbt);
         Some(nbt)
     }
 
@@ -137,7 +135,7 @@ impl HopperBlockEntity {
     pub fn new(position: BlockPos, facing: FacingHopper) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             facing,
             cooldown_time: AtomicI32::new(-1),
@@ -162,8 +160,8 @@ impl HopperBlockEntity {
     }
 
     async fn inventory_full(&self) -> bool {
-        for i in &self.items {
-            let item = i.lock().await;
+        let items = self.items.read().await;
+        for item in items.iter() {
             if item.is_empty() || item.item_count != item.get_max_stack_size() {
                 return false;
             }
@@ -179,16 +177,16 @@ impl HopperBlockEntity {
         {
             // TODO check WorldlyContainer
             for i in 0..container.size() {
-                let bind = container.get_stack(i).await;
-                let mut item = bind.lock().await;
+                let mut item = container.get_stack(i).await;
                 if !item.is_empty() && container.can_transfer_to(self, i, &item) {
                     //TODO WorldlyContainer
-                    let backup = item.clone();
+                    let _backup = item.clone();
                     let one_item = item.split(1);
                     if Self::add_one_item(container.as_ref(), self, one_item).await {
+                        container.set_stack(i, item).await;
                         // If extracting from furnace output slot (index 2), drop XP as orbs
-                        const FURNACE_OUTPUT_SLOT: usize = 2;
-                        if i == FURNACE_OUTPUT_SLOT
+                        let furnace_output_slot: usize = 2;
+                        if i == furnace_output_slot
                             && let Some(experience_container) =
                                 entity.clone().to_experience_container()
                         {
@@ -200,7 +198,6 @@ impl HopperBlockEntity {
                         }
                         return true;
                     }
-                    *item = backup;
                 }
             }
             return false;
@@ -242,8 +239,7 @@ impl HopperBlockEntity {
             // TODO check WorldlyContainer
             let mut is_full = true;
             for i in 0..container.size() {
-                let bind = container.get_stack(i).await;
-                let item = bind.lock().await;
+                let item = container.get_stack(i).await;
                 if item.item_count < item.get_max_stack_size() {
                     is_full = false;
                     break;
@@ -252,16 +248,14 @@ impl HopperBlockEntity {
             if is_full {
                 return false;
             }
-            for i in &self.items {
-                let mut item = i.lock().await;
+            let items = self.items.read().await;
+            for item in items.iter() {
                 if !item.is_empty() {
-                    //TODO WorldlyContainer
-                    let backup = item.clone();
-                    let one_item = item.split(1);
+                    let mut item_clone = item.clone();
+                    let one_item = item_clone.split(1);
                     if Self::add_one_item(self, container.as_ref(), one_item).await {
                         return true;
                     }
-                    *item = backup;
                 }
             }
         }
@@ -272,14 +266,15 @@ impl HopperBlockEntity {
         let to_empty = to.is_empty().await;
         for j in 0..to.size() {
             if to.is_valid_slot_for(j, &item) {
-                let bind = to.get_stack(j).await;
-                let mut dst = bind.lock().await;
+                let mut dst = to.get_stack(j).await;
                 if dst.is_empty() {
-                    *dst = item.clone();
+                    dst = item.clone();
+                    to.set_stack(j, dst).await;
                     success = true;
                 } else if dst.item_count < dst.get_max_stack_size() && dst.item == item.item {
                     // TODO check Components equal
                     dst.item_count += 1;
+                    to.set_stack(j, dst).await;
                     success = true;
                 }
                 if success {
@@ -310,30 +305,27 @@ impl HopperBlockEntity {
 
 impl Inventory for HopperBlockEntity {
     fn size(&self) -> usize {
-        self.items.len()
+        Self::INVENTORY_SIZE
     }
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in &self.items {
-                if !slot.lock().await.is_empty() {
-                    return false;
-                }
-            }
-
-            true
+            let items = self.items.read().await;
+            items.iter().all(ItemStack::is_empty)
         })
     }
 
-    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
-        Box::pin(async move { self.items[slot].clone() })
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let items = self.items.read().await;
+            items[slot].clone()
+        })
     }
 
     fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let mut removed = ItemStack::EMPTY.clone();
-            let mut guard = self.items[slot].lock().await;
-            std::mem::swap(&mut removed, &mut *guard);
+            let mut items = self.items.write().await;
+            let removed = std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone());
             self.mark_dirty();
             removed
         })
@@ -341,7 +333,12 @@ impl Inventory for HopperBlockEntity {
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let res = split_stack(&self.items, slot, amount).await;
+            let mut items = self.items.write().await;
+            let res = if !items[slot].is_empty() && amount > 0 {
+                items[slot].split(amount)
+            } else {
+                ItemStack::EMPTY.clone()
+            };
             self.mark_dirty();
             res
         })
@@ -349,7 +346,8 @@ impl Inventory for HopperBlockEntity {
 
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
-            *self.items[slot].lock().await = stack;
+            let mut items = self.items.write().await;
+            items[slot] = stack;
             self.mark_dirty();
         })
     }
@@ -366,9 +364,8 @@ impl Inventory for HopperBlockEntity {
 impl Clearable for HopperBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in &self.items {
-                *slot.lock().await = ItemStack::EMPTY.clone();
-            }
+            let mut items = self.items.write().await;
+            items.fill_with(|| ItemStack::EMPTY.clone());
             self.mark_dirty();
         })
     }

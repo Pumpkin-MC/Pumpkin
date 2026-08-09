@@ -108,6 +108,8 @@ wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
 hyper = { workspace = true }
+axum.workspace = true
+webrtc.workspace = true
 
 ordered-float.workspace = true
 

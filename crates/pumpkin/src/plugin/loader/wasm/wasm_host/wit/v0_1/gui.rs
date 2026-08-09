@@ -87,10 +87,11 @@ impl gui::HostGui for PluginHostState {
         item: Resource<WitHostItemStack>,
     ) -> wasmtime::Result<()> {
         let gui = self.get_gui_res(&res)?.provider.lock().await;
-        if (slot as usize) < gui.inventory.slots.len() {
+        let mut slots = gui.inventory.slots.write().await;
+        if (slot as usize) < slots.len() {
             let item_stack = self.get_item_stack(&item)?;
             let item_stack = item_stack.lock().await.clone();
-            *gui.inventory.slots[slot as usize].lock().await = item_stack;
+            slots[slot as usize] = item_stack;
         }
         Ok(())
     }
@@ -102,8 +103,9 @@ impl gui::HostGui for PluginHostState {
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
         let stack = {
             let gui = self.get_gui_res(&res)?.provider.lock().await;
-            if (slot as usize) < gui.inventory.slots.len() {
-                let stack = gui.inventory.slots[slot as usize].lock().await;
+            let slots = gui.inventory.slots.read().await;
+            if (slot as usize) < slots.len() {
+                let stack = &slots[slot as usize];
                 if stack.is_empty() {
                     None
                 } else {

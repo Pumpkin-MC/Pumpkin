@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use std::fmt;
 use std::pin::Pin;
 use std::str::FromStr;

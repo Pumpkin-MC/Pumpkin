@@ -114,7 +114,10 @@ pub fn schedule_delayed_task<F>(delay_ticks: u64, handler: F) -> u32
 where
     F: FnMut(Server) + Send + 'static,
 {
-    let handler_id = TASK_HANDLERS.lock().unwrap().register(Box::new(handler));
+    let handler_id = TASK_HANDLERS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .register(Box::new(handler));
     scheduler::schedule_delayed_task(handler_id, delay_ticks)
 }
 
@@ -124,7 +127,10 @@ pub fn schedule_repeating_task<F>(delay_ticks: u64, period_ticks: u64, handler: 
 where
     F: FnMut(Server) + Send + 'static,
 {
-    let handler_id = TASK_HANDLERS.lock().unwrap().register(Box::new(handler));
+    let handler_id = TASK_HANDLERS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .register(Box::new(handler));
     scheduler::schedule_repeating_task(handler_id, delay_ticks, period_ticks)
 }
 

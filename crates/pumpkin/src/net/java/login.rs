@@ -73,7 +73,7 @@ impl PendingConnection {
             let id = if server.advanced_config.networking.java.online_mode {
                 login_start.uuid
             } else {
-                offline_uuid(&login_start.name).expect("This is very not safe and bad")
+                offline_uuid(&login_start.name).unwrap_or_else(|_| uuid::Uuid::nil())
             };
 
             let profile = GameProfile {
@@ -157,7 +157,9 @@ impl PendingConnection {
             }
         }
 
-        let profile = self.gameprofile.clone().unwrap();
+        let Some(profile) = self.gameprofile.clone() else {
+            return;
+        };
 
         if let Some(online_player) = &server.get_player_by_uuid(profile.id) {
             debug!(
@@ -202,7 +204,7 @@ impl PendingConnection {
             .info
             .clone();
         self.send_packet_now(&CSetCompression::new(
-            compression.threshold.try_into().unwrap(),
+            pumpkin_protocol::codec::var_int::VarInt(compression.threshold as i32),
         ))
         .await;
         self.set_compression(&compression);

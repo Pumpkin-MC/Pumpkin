@@ -158,7 +158,7 @@ impl From<Text> for NbtTag {
             value
                 .messages
                 .lock()
-                .expect("Text messages mutex should not be poisoned")
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .iter()
                 .map(|s| Self::String(s.clone()))
                 .collect(),
@@ -167,18 +167,18 @@ impl From<Text> for NbtTag {
     }
 }
 
-#[allow(clippy::fallible_impl_from)]
 impl From<NbtTag> for Text {
     fn from(tag: NbtTag) -> Self {
-        let nbt = tag.extract_compound().unwrap();
+        let Some(nbt) = tag.extract_compound() else {
+            return Self::default();
+        };
         let has_glowing_text = nbt.get_bool("has_glowing_text").unwrap_or(false);
         let color = nbt.get_string("color").unwrap_or("black");
-        let messages: Vec<Box<str>> = nbt
-            .get_list("messages")
-            .unwrap()
-            .iter()
-            .filter_map(|tag| tag.extract_string().map(Box::from))
-            .collect();
+        let messages: Vec<Box<str>> = nbt.get_list("messages").map_or_else(Vec::new, |list| {
+            list.iter()
+                .filter_map(|tag| tag.extract_string().map(Box::from))
+                .collect()
+        });
         let get_message =
             |i: usize| -> Box<str> { messages.get(i).cloned().unwrap_or_else(|| Box::from("")) };
 

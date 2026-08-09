@@ -95,7 +95,6 @@ impl EnchantingTableScreenHandler {
 
     pub async fn update_enchantments(&mut self, _player: &dyn InventoryPlayer) {
         let item = self.inventory.get_stack(0).await;
-        let item = item.lock().await;
 
         if item.is_empty() || item.has_enchantments() {
             for i in 0..3 {
@@ -349,8 +348,7 @@ impl ScreenHandler for EnchantingTableScreenHandler {
                 return false;
             }
 
-            let lapis_slot = self.inventory.get_stack(1).await;
-            let mut lapis_stack = lapis_slot.lock().await;
+            let mut lapis_stack = self.inventory.get_stack(1).await;
             let lapis_cost = (id + 1) as u8;
 
             if !player.is_creative()
@@ -362,8 +360,7 @@ impl ScreenHandler for EnchantingTableScreenHandler {
             }
 
             // Perform enchantment
-            let item_slot = self.inventory.get_stack(0).await;
-            let mut item_stack = item_slot.lock().await;
+            let mut item_stack = self.inventory.get_stack(0).await;
 
             if item_stack.is_empty() || item_stack.has_enchantments() {
                 return false;
@@ -380,16 +377,13 @@ impl ScreenHandler for EnchantingTableScreenHandler {
             if !player.is_creative() {
                 player.add_experience_levels(-(id + 1)).await;
                 lapis_stack.decrement(lapis_cost);
+                self.inventory.set_stack(1, lapis_stack).await;
             }
 
             for (enchant, level) in enchantments {
                 item_stack.add_enchantment(enchant, level as u16);
             }
-
-            // CRITICAL FIX: Drop locks *before* calling `update_enchantments`
-            // Otherwise, update_enchantments will try to lock slot 0 again and deadlock!
-            drop(item_stack);
-            drop(lapis_stack);
+            self.inventory.set_stack(0, item_stack).await;
 
             // Update seed
             player.set_enchantment_seed(rand::random()).await;
@@ -420,18 +414,14 @@ impl ScreenHandler for EnchantingTableScreenHandler {
             let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
             if slot.has_stack().await {
-                let slot_stack_lock = slot.get_stack().await;
-                let slot_stack_guard = slot_stack_lock.lock().await;
-                stack_left = slot_stack_guard.clone();
-                drop(slot_stack_guard);
-
-                let mut slot_stack_mut = slot_stack_lock.lock().await;
+                let mut slot_stack = slot.get_stack().await;
+                stack_left = slot_stack.clone();
 
                 if slot_index < 2 {
                     // From enchanting to player
                     if !self
                         .insert_item(
-                            &mut slot_stack_mut,
+                            &mut slot_stack,
                             2,
                             self.get_behaviour().slots.len() as i32,
                             true,
@@ -443,21 +433,19 @@ impl ScreenHandler for EnchantingTableScreenHandler {
                 } else {
                     // From player to enchanting
                     // Lapis check
-                    if slot_stack_mut.item == &Item::LAPIS_LAZULI {
-                        if !self.insert_item(&mut slot_stack_mut, 1, 2, false).await {
+                    if slot_stack.item == &Item::LAPIS_LAZULI {
+                        if !self.insert_item(&mut slot_stack, 1, 2, false).await {
                             return ItemStack::EMPTY.clone();
                         }
-                    } else if !self.insert_item(&mut slot_stack_mut, 0, 1, false).await {
+                    } else if !self.insert_item(&mut slot_stack, 0, 1, false).await {
                         return ItemStack::EMPTY.clone();
                     }
                 }
 
-                if slot_stack_mut.is_empty() {
-                    drop(slot_stack_mut);
+                if slot_stack.is_empty() {
                     slot.set_stack(ItemStack::EMPTY.clone()).await;
                 } else {
-                    drop(slot_stack_mut);
-                    slot.mark_dirty().await;
+                    slot.set_stack(slot_stack).await;
                 }
 
                 // CRITICAL FIX: Ensure the client is notified when shift-clicking items into the slots

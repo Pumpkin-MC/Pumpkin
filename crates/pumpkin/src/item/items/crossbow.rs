@@ -3,7 +3,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use tokio::sync::Mutex;
 
 use crate::entity::player::Player;
 use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
@@ -33,14 +32,13 @@ impl ItemBehaviour for CrossbowItem {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let inventory = player.inventory();
-            let held = inventory.held_item();
-            let stack = held.lock().await.clone();
+            let stack = inventory.held_item().await;
 
             if stack
                 .get_data_component::<ChargedProjectilesImpl>()
                 .is_some()
             {
-                Self::fire_projectiles(player, &held).await;
+                Self::fire_projectiles(player).await;
                 return;
             }
 
@@ -66,8 +64,7 @@ impl ItemBehaviour for CrossbowItem {
             let use_ticks = 72000 - use_ticks;
 
             let mut charge_time = 25;
-            let held = player.inventory().held_item();
-            let stack = held.lock().await;
+            let mut stack = player.inventory().held_item().await;
 
             if let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
@@ -76,29 +73,24 @@ impl ItemBehaviour for CrossbowItem {
                     }
                 }
             }
-            drop(stack);
             charge_time = charge_time.max(0);
 
             if use_ticks >= charge_time {
                 let arrow_slot = player.find_arrow().await;
-                let mut stack = held.lock().await;
                 let (arrow_nbt_wrapper, slot) = {
                     if let Some(slot) = arrow_slot {
                         let inventory = player.inventory();
 
-                        let arrow_stack_arc = inventory.get_stack(slot).await;
-                        let arrow_stack = arrow_stack_arc.lock().await;
+                        let arrow_stack = inventory.get_stack(slot).await;
                         let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
                         arrow_stack
                             .copy_with_count(1)
                             .write_item_stack(&mut arrow_nbt);
-                        drop(arrow_stack);
                         (Some(arrow_nbt), slot)
                     } else if player.gamemode.load() == GameMode::Creative {
                         let mut arrow_nbt = pumpkin_nbt::compound::NbtCompound::new();
                         let arrow_stack = ItemStack::new(1, &Item::ARROW);
                         arrow_stack.write_item_stack(&mut arrow_nbt);
-                        drop(arrow_stack);
 
                         (Some(arrow_nbt), 0)
                     } else {
@@ -112,6 +104,7 @@ impl ItemBehaviour for CrossbowItem {
                             projectiles: vec![arrow_nbt],
                         })),
                     ));
+                    player.inventory().set_held_item(stack).await;
 
                     if player.gamemode.load() != GameMode::Creative {
                         player.consume_arrow(slot).await;
@@ -138,23 +131,17 @@ impl ItemBehaviour for CrossbowItem {
 }
 
 impl CrossbowItem {
-    async fn fire_projectiles(player: &Player, held: &Arc<Mutex<ItemStack>>) {
-        let (projectiles, has_multishot) = {
-            let stack = held.lock().await;
-            let projectiles = stack
-                .get_data_component::<ChargedProjectilesImpl>()
-                .cloned();
-            let has_multishot =
-                stack
-                    .get_data_component::<EnchantmentsImpl>()
-                    .is_some_and(|enchantments| {
-                        enchantments
-                            .enchantment
-                            .iter()
-                            .any(|(e, _)| **e == pumpkin_data::Enchantment::MULTISHOT)
-                    });
-            (projectiles, has_multishot)
-        };
+    async fn fire_projectiles(player: &Player) {
+        let mut held = player.inventory().held_item().await;
+        let projectiles = held.get_data_component::<ChargedProjectilesImpl>().cloned();
+        let has_multishot =
+            held.get_data_component::<EnchantmentsImpl>()
+                .is_some_and(|enchantments| {
+                    enchantments
+                        .enchantment
+                        .iter()
+                        .any(|(e, _)| **e == pumpkin_data::Enchantment::MULTISHOT)
+                });
 
         if let Some(charged) = projectiles {
             let world = player.world();
@@ -200,10 +187,9 @@ impl CrossbowItem {
                 }
             }
 
-            held.lock()
-                .await
-                .patch
+            held.patch
                 .retain(|(id, _)| *id != DataComponent::ChargedProjectiles);
+            player.inventory().set_held_item(held).await;
             player.damage_held_item(1).await;
         }
     }

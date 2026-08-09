@@ -185,7 +185,11 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
                 self.reached = false;
                 self.trying_time += 1;
                 if self.should_reset_path() {
-                    let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+                    let mut navigator = mob
+                        .get_mob_entity()
+                        .navigator
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
                     navigator.set_progress(NavigatorGoal {
                         current_progress: mob.get_entity().pos.load(),

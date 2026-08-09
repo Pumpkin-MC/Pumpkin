@@ -483,12 +483,13 @@ impl PluginManager {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
             })
-        } else {
-            let mut rl = DefaultEditor::new().expect("Failed to create rustyline editor");
+        } else if let Ok(mut rl) = DefaultEditor::new() {
             rl.readline(&prompt).is_ok_and(|line| {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
             })
+        } else {
+            false
         };
 
         if let Some((wrapper, rl)) = rl_taken {

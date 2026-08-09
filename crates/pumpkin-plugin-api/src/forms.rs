@@ -213,12 +213,12 @@ impl FormResponse {
             None => Self::Closed,
             Some(s) => {
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&s) {
-                    if val.is_u64() {
-                        Self::Simple(val.as_u64().unwrap() as u32)
-                    } else if val.is_boolean() {
-                        Self::Modal(val.as_bool().unwrap())
-                    } else if val.is_array() {
-                        Self::Custom(val.as_array().unwrap().clone())
+                    if let Some(num) = val.as_u64() {
+                        Self::Simple(num as u32)
+                    } else if let Some(b) = val.as_bool() {
+                        Self::Modal(b)
+                    } else if let Some(arr) = val.as_array() {
+                        Self::Custom(arr.clone())
                     } else {
                         Self::Closed // Or some error state
                     }

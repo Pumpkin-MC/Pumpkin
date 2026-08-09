@@ -13,7 +13,10 @@ use crate::{
 };
 
 pub fn get_view_distance(player: &Player) -> NonZeroU8 {
-    let server = player.world().server.upgrade().unwrap();
+    let fallback = NonZeroU8::new(2).unwrap_or(NonZeroU8::MIN);
+    let Some(server) = player.world().server.upgrade() else {
+        return fallback;
+    };
     let max_view_distance = match player.client.as_ref() {
         ClientPlatform::Java(_) => server.advanced_config.networking.java.view_distance,
         ClientPlatform::Bedrock(_) => server.advanced_config.networking.bedrock.view_distance,
@@ -22,7 +25,7 @@ pub fn get_view_distance(player: &Player) -> NonZeroU8 {
         .config
         .load()
         .view_distance
-        .clamp(NonZeroU8::new(2).unwrap(), max_view_distance)
+        .clamp(fallback, max_view_distance)
 }
 
 // Checks if the target chunk is within the view distance

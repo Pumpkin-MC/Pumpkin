@@ -22,6 +22,34 @@ struct BedrockRuntimeItemState {
     component_based: bool,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreativeItemsJson {
+    groups: Vec<CreativeGroupJson>,
+    items: Vec<CreativeItemJson>,
+}
+
+#[derive(Deserialize)]
+struct CreativeGroupJson {
+    name: String,
+    category: String,
+    icon: CreativeIconJson,
+}
+
+#[derive(Deserialize)]
+struct CreativeIconJson {
+    id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreativeItemJson {
+    id: String,
+    group_id: u32,
+    #[serde(default)]
+    damage: u32,
+}
+
 pub fn build() -> TokenStream {
     let be_runtime_item_states: Vec<BedrockRuntimeItemState> = serde_json::from_str(
         &fs::read_to_string("../../assets/bedrock/runtime_item_states.json").unwrap(),
@@ -32,6 +60,51 @@ pub fn build() -> TokenStream {
         .into_iter()
         .map(|item| (item.name, item.id))
         .collect();
+
+    let json_path = "../../assets/bedrock/creative_items.json";
+    if std::path::Path::new(json_path).exists() {
+        let creative: CreativeItemsJson = serde_json::from_str(
+            &fs::read_to_string(json_path).expect("Failed to read bedrock/creative_items.json"),
+        )
+        .expect("Failed to parse bedrock/creative_items.json");
+
+        let groups = creative.groups.into_iter().map(|group| {
+            let category = match group.category.as_str() {
+                "construction" => 1,
+                "nature" => 2,
+                "equipment" => 3,
+                "items" => 4,
+                "itemCommandOnly" => 5,
+                _ => 6,
+            };
+            let name = group.name;
+            let icon_item_id = bedrock_items_map
+                .get(&group.icon.id)
+                .copied()
+                .unwrap_or_default();
+            quote! {
+                CreativeGroup {
+                    category: #category,
+                    name: #name,
+                    icon_item_id: #icon_item_id,
+                    icon_item_aux_value: 0,
+                }
+            }
+        });
+        let entries = creative.items.into_iter().filter_map(|item| {
+            let item_id = bedrock_items_map.get(&item.id).copied()?;
+            let item_aux_value = item.damage;
+            let group_index = item.group_id;
+            Some(quote! {
+                CreativeEntry {
+                    item_id: #item_id,
+                    item_aux_value: #item_aux_value,
+                    group_index: #group_index,
+                }
+            })
+        });
+        return creative_tokens(groups.collect(), entries.collect());
+    }
 
     let nbt_path = "../../assets/bedrock/creative_items.nbt";
     if !std::path::Path::new(nbt_path).exists() {
@@ -102,9 +175,12 @@ pub fn build() -> TokenStream {
         }
     }
 
+    creative_tokens(group_tokens, entry_tokens)
+}
+
+fn creative_tokens(group_tokens: Vec<TokenStream>, entry_tokens: Vec<TokenStream>) -> TokenStream {
     let groups_len = group_tokens.len();
     let entries_len = entry_tokens.len();
-
     quote! {
         #[derive(Clone, Copy)]
         pub struct CreativeGroup {

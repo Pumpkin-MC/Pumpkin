@@ -41,7 +41,6 @@ impl CUpdateAdvancements {
 }
 
 impl ClientPacket for CUpdateAdvancements {
-    #[allow(clippy::unimplemented)]
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,

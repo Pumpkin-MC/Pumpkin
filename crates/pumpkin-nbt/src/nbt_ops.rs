@@ -141,14 +141,12 @@ impl DynamicOps for NbtOps {
             NbtTag::List(l) => {
                 // Check the type of this list.
                 // If the list contains compounds, we try unwrapping them.
-                if !l.is_empty()
-                    && let NbtTag::Compound(_) = l.first().unwrap()
-                {
+                if let Some(NbtTag::Compound(_)) = l.first() {
                     DataResult::new_success(NbtIter::CompoundList(l.into_iter().map(|c| {
                         if let NbtTag::Compound(compound) = c {
                             Self::try_unwrap(compound)
                         } else {
-                            c.clone()
+                            c
                         }
                     })))
                 } else {
@@ -242,8 +240,13 @@ impl DynamicOps for NbtOps {
             } else {
                 NbtCompound::new()
             };
-            compound.put(key.extract_string().unwrap(), value);
-            DataResult::new_success(compound.into())
+            key.extract_string().map_or_else(
+                || DataResult::new_error(format!("Key is not a string: {key}")),
+                |key_str| {
+                    compound.put(key_str, value);
+                    DataResult::new_success(compound.into())
+                },
+            )
         }
     }
 
@@ -334,7 +337,10 @@ impl NbtOps {
     fn try_unwrap(mut compound: NbtCompound) -> NbtTag {
         if compound.child_tags.len() == 1 && compound.has("") {
             // Remove the element to own the contained tag.
-            compound.child_tags.remove("").unwrap()
+            compound
+                .child_tags
+                .remove("")
+                .unwrap_or_else(|| NbtTag::from(compound))
         } else {
             NbtTag::from(compound)
         }

@@ -28,7 +28,7 @@ impl BlockBehaviour for SeaPickleBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if args.item_stack.lock().await.item != &Item::BONE_MEAL
+            if args.item_stack.item != &Item::BONE_MEAL
                 || !args
                     .world
                     .get_block(&args.position.down())

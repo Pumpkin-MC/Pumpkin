@@ -31,8 +31,16 @@ impl IronGolemEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .mob_entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut target_selector = mob_arc
+                .mob_entity
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(1, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(0.6)));

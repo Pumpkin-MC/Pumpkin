@@ -16,16 +16,15 @@ impl<'a> DialogNBT<'a> {
         Self(DialogNBTSource::Nbt(compound))
     }
 
-    #[allow(clippy::todo)]
     pub fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
         _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         match &self.0 {
-            DialogNBTSource::Struct(_dialog) => {
-                todo!("Serialize Dialog to NbtCompound manually")
-            }
+            DialogNBTSource::Struct(_dialog) => Err(crate::ser::WritingError::Message(
+                "Serializing Dialog struct to NBT is not supported".to_string(),
+            )),
             DialogNBTSource::Nbt(nbt) => {
                 let tag = pumpkin_nbt::tag::NbtTag::Compound((*nbt).clone());
                 write.write_nbt(tag)?;

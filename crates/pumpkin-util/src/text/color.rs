@@ -329,6 +329,35 @@ impl NamedColor {
             Self::White => 'f',
         }
     }
+
+    /// Returns the Minecraft string identifier of this named color (e.g. `"black"`, `"dark_blue"`).
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Black => "black",
+            Self::DarkBlue => "dark_blue",
+            Self::DarkGreen => "dark_green",
+            Self::DarkAqua => "dark_aqua",
+            Self::DarkRed => "dark_red",
+            Self::DarkPurple => "dark_purple",
+            Self::Gold => "gold",
+            Self::Gray => "gray",
+            Self::DarkGray => "dark_gray",
+            Self::Blue => "blue",
+            Self::Green => "green",
+            Self::Aqua => "aqua",
+            Self::Red => "red",
+            Self::LightPurple => "light_purple",
+            Self::Yellow => "yellow",
+            Self::White => "white",
+        }
+    }
+}
+
+impl std::fmt::Display for NamedColor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
 }
 
 impl TryFrom<&str> for NamedColor {
