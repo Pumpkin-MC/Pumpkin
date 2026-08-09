@@ -33,7 +33,8 @@ pub trait Registry: Any + Send + Sync {
 
 pub type BoxedRegistry = Box<dyn Registry>;
 
-pub const ROOT: LazyLock<RootRegistryOwner> = LazyLock::new(|| RootRegistryOwner::new(&[], &[]).unwrap());
+pub static ROOT: LazyLock<RootRegistryOwner> =
+    LazyLock::new(|| RootRegistryOwner::new(&[], &[]).unwrap());
 
 #[cfg(test)]
 mod tests {
