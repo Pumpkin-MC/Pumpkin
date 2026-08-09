@@ -44,31 +44,30 @@ impl FireworkRocketItem {
             return;
         }
 
-        let held_item = player.inventory.held_item();
-        let consumed_stack = {
-            let mut main_hand = held_item.lock().await;
+        let mut main_hand = player.inventory.held_item().await;
+        let consumed_stack =
             (!main_hand.is_empty() && main_hand.item.id == Item::FIREWORK_ROCKET.id).then(|| {
                 main_hand.decrement_unless_creative(player.gamemode.load(), 1);
-                main_hand.clone()
-            })
-        };
+                main_hand
+            });
 
         if let Some(stack) = consumed_stack {
+            player.inventory.set_held_item(stack.clone()).await;
             player
                 .sync_hand_slot(player.inventory.get_selected_slot() as usize, stack)
                 .await;
             return;
         }
 
-        let off_hand_item = player.inventory.off_hand_item().await;
-        let updated_stack = {
-            let mut off_hand = off_hand_item.lock().await;
-            if off_hand.is_empty() || off_hand.item.id != Item::FIREWORK_ROCKET.id {
-                return;
-            }
-            off_hand.decrement_unless_creative(player.gamemode.load(), 1);
-            off_hand.clone()
-        };
+        let mut updated_stack = player.inventory.off_hand_item().await;
+        if updated_stack.is_empty() || updated_stack.item.id != Item::FIREWORK_ROCKET.id {
+            return;
+        }
+        updated_stack.decrement_unless_creative(player.gamemode.load(), 1);
+        player
+            .inventory
+            .set_stack_in_hand(pumpkin_util::Hand::Left, updated_stack.clone())
+            .await;
         player
             .sync_hand_slot(PlayerInventory::OFF_HAND_SLOT, updated_stack)
             .await;
@@ -118,7 +117,7 @@ impl ItemBehaviour for FireworkRocketItem {
                     player.get_entity().pos.load(),
                     &EntityType::FIREWORK_ROCKET,
                 );
-                let item_stack = player.inventory.held_item().lock().await.clone();
+                let item_stack = player.inventory.held_item().await;
                 let entity =
                     FireworkRocketEntity::new_shot(entity, player.get_entity(), item_stack);
                 world.spawn_entity(Arc::new(entity)).await;

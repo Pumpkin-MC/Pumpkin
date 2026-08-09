@@ -1758,12 +1758,10 @@ impl Player {
 
     pub(crate) async fn usable_glider_slots(&self) -> Vec<EquipmentSlot> {
         let mut slots = Vec::new();
-        let main_hand = self.inventory.held_item();
-        let main_hand_stack = main_hand.lock().await;
+        let main_hand_stack = self.inventory.held_item().await;
         if LivingEntity::can_glide_using(&main_hand_stack, &EquipmentSlot::MAIN_HAND) {
             slots.push(EquipmentSlot::MAIN_HAND);
         }
-        drop(main_hand_stack);
 
         let equipped_items = {
             let equipment = self.inventory.entity_equipment.lock().await;
@@ -1775,7 +1773,6 @@ impl Player {
         };
 
         for (slot, stack) in equipped_items {
-            let stack = stack.lock().await;
             if LivingEntity::can_glide_using(&stack, &slot) && !slots.contains(&slot) {
                 slots.push(slot);
             }
@@ -5797,7 +5794,7 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::{EquipmentSlot, ItemStack, bedrock_inventory_slot, can_glide_using};
+    use super::{EquipmentSlot, ItemStack, LivingEntity, bedrock_inventory_slot};
     use pumpkin_data::item::Item;
 
     #[test]

@@ -1103,7 +1103,6 @@ impl LivingEntity {
         };
         let mut slots = Vec::new();
         for (slot, stack) in equipped_items {
-            let stack = stack.lock().await;
             if Self::can_glide_using(&stack, &slot) {
                 slots.push(slot);
             }
@@ -1117,11 +1116,14 @@ impl LivingEntity {
             return;
         }
 
-        let stack = self.entity_equipment.lock().await.get(slot);
         let (result, updated_stack) = {
-            let mut stack = stack.lock().await;
+            let mut equipment = self.entity_equipment.lock().await;
+            let mut stack = equipment.get(slot);
             let result = stack.damage_item(1);
-            (result, stack.clone())
+            if result != DamageResult::Untouched {
+                equipment.put(slot, stack.clone());
+            }
+            (result, stack)
         };
         if result == DamageResult::Untouched {
             return;
