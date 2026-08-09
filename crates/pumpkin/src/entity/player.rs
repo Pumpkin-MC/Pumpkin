@@ -1756,6 +1756,59 @@ impl Player {
         abilities.flying
     }
 
+    pub(crate) async fn usable_glider_slots(&self) -> Vec<EquipmentSlot> {
+        let mut slots = Vec::new();
+        let main_hand_stack = self.inventory.held_item().await;
+        if LivingEntity::can_glide_using(&main_hand_stack, &EquipmentSlot::MAIN_HAND) {
+            slots.push(EquipmentSlot::MAIN_HAND);
+        }
+
+        let equipped_items = {
+            let equipment = self.inventory.entity_equipment.lock().await;
+            equipment
+                .equipment
+                .iter()
+                .map(|(slot, stack)| (slot.clone(), stack.clone()))
+                .collect::<Vec<_>>()
+        };
+
+        for (slot, stack) in equipped_items {
+            if LivingEntity::can_glide_using(&stack, &slot) && !slots.contains(&slot) {
+                slots.push(slot);
+            }
+        }
+
+        slots
+    }
+
+    async fn has_usable_glider(&self) -> bool {
+        !self.usable_glider_slots().await.is_empty()
+    }
+
+    pub async fn try_to_start_fall_flying(&self) -> bool {
+        let entity = self.get_entity();
+        if entity.is_fall_flying()
+            || entity.on_ground.load(Ordering::Relaxed)
+            || entity.touching_water.load(Ordering::Relaxed)
+            || entity.has_vehicle().await
+            || self.is_flying().await
+            || self
+                .living_entity
+                .has_effect(&StatusEffect::LEVITATION)
+                .await
+            || !self.has_usable_glider().await
+        {
+            return false;
+        }
+
+        entity.set_fall_flying(true).await;
+        true
+    }
+
+    pub async fn stop_fall_flying(&self) {
+        self.living_entity.stop_fall_flying().await;
+    }
+
     fn is_sleeping(&self) -> bool {
         // TODO: Track sleeping position state explicitly (vanilla checks sleepingPosition.isPresent()).
         self.sleeping_since.load().is_some()
@@ -5741,7 +5794,8 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::bedrock_inventory_slot;
+    use super::{EquipmentSlot, ItemStack, LivingEntity, bedrock_inventory_slot};
+    use pumpkin_data::item::Item;
 
     #[test]
     fn player_screen_slots_map_to_bedrock_inventory() {
@@ -5751,5 +5805,38 @@ mod tests {
         assert_eq!(bedrock_inventory_slot(44), Some(8));
         assert_eq!(bedrock_inventory_slot(8), None);
         assert_eq!(bedrock_inventory_slot(45), None);
+    }
+
+    #[test]
+    fn elytra_can_glide_from_its_equipment_slot() {
+        let stack = ItemStack::new(1, &Item::ELYTRA);
+
+        assert!(LivingEntity::can_glide_using(&stack, &EquipmentSlot::CHEST));
+        assert!(!LivingEntity::can_glide_using(&stack, &EquipmentSlot::HEAD));
+    }
+
+    #[test]
+    fn items_without_the_glider_component_cannot_glide() {
+        let stack = ItemStack::new(1, &Item::DIAMOND_CHESTPLATE);
+
+        assert!(!LivingEntity::can_glide_using(
+            &stack,
+            &EquipmentSlot::CHEST
+        ));
+    }
+
+    #[test]
+    fn elytra_cannot_glide_when_the_next_damage_will_break_it() {
+        let mut stack = ItemStack::new(1, &Item::ELYTRA);
+        let max_damage = stack.get_max_damage().unwrap();
+
+        stack.set_damage(max_damage - 2);
+        assert!(LivingEntity::can_glide_using(&stack, &EquipmentSlot::CHEST));
+
+        stack.set_damage(max_damage - 1);
+        assert!(!LivingEntity::can_glide_using(
+            &stack,
+            &EquipmentSlot::CHEST
+        ));
     }
 }

@@ -1408,6 +1408,37 @@ impl Entity {
         adjusted_movement
     }
 
+    /// Resolves a client-reported player movement through the same collision
+    /// path used by server-driven entities before the network handler applies
+    /// the packet's final position and ground state.
+    pub(crate) async fn move_player_packet(
+        &self,
+        player: &dyn EntityBase,
+        movement: Vector3<f64>,
+    ) -> Vector3<f64> {
+        if self.no_clip.load(Ordering::Relaxed) {
+            self.move_pos(movement);
+            return movement;
+        }
+
+        let adjusted = self.adjust_movement_for_collisions(movement, player).await;
+        self.move_pos(adjusted);
+
+        let mut velocity = self.velocity.load();
+        if (movement.x - adjusted.x).abs() > 1.0e-7 {
+            velocity.x = 0.0;
+        }
+        if (movement.y - adjusted.y).abs() > 1.0e-7 {
+            velocity.y = 0.0;
+        }
+        if (movement.z - adjusted.z).abs() > 1.0e-7 {
+            velocity.z = 0.0;
+        }
+        self.velocity.store(velocity);
+
+        adjusted
+    }
+
     /// Applies knockback to the entity, following vanilla Minecraft's mechanics.
     /// `LivingEntity.takeKnockback()`
     /// This function calculates the entity's new velocity based on the specified knockback strength and direction.
@@ -2769,9 +2800,6 @@ impl Entity {
     pub fn is_sprinting(&self) -> bool {
         self.sprinting.load(Ordering::Relaxed)
     }
-    pub fn check_fall_flying(&self) -> bool {
-        !self.on_ground.load(Relaxed)
-    }
 
     pub async fn set_fall_flying(&self, fall_flying: bool) {
         assert_ne!(self.fall_flying.load(Relaxed), fall_flying);
@@ -2920,23 +2948,20 @@ impl Entity {
         let dimension = Self::get_entity_dimensions(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
-        if self.world.load().is_space_empty(aabb.contract_all(1.0E-7)) {
-            self.pose.store(pose);
-            let dimension = Self::get_entity_dimensions(pose);
-            self.bounding_box.store(aabb);
-            self.entity_dimension.store(dimension);
-            let pose = pose as i32;
-            let mut bedrock_meta = EntityMetadata::new();
-            bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
-            self.send_meta_data(
-                &[Metadata::new(
-                    TrackedData::POSE,
-                    MetaDataType::ENTITY_POSE,
-                    VarInt(pose),
-                )],
-                Some(&bedrock_meta),
-            );
-        }
+        self.pose.store(pose);
+        self.bounding_box.store(aabb);
+        self.entity_dimension.store(dimension);
+        let pose = pose as i32;
+        let mut bedrock_meta = EntityMetadata::new();
+        bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
+        self.send_meta_data(
+            &[Metadata::new(
+                TrackedData::POSE,
+                MetaDataType::ENTITY_POSE,
+                VarInt(pose),
+            )],
+            Some(&bedrock_meta),
+        );
     }
 
     /// Checks if the entity is invulnerable to the given damage type, considering both general invulnerability and specific immunities.

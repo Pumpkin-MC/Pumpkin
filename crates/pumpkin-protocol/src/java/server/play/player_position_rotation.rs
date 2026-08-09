@@ -9,14 +9,15 @@ use crate::{
 use pumpkin_util::version::JavaMinecraftVersion;
 
 pub const FLAG_ON_GROUND: u8 = 0x01;
-pub const FLAG_IN_WALL: u8 = 0x02;
+pub const FLAG_HORIZONTAL_COLLISION: u8 = 0x02;
+pub const FLAG_IN_WALL: u8 = FLAG_HORIZONTAL_COLLISION;
 
 #[java_packet(PLAY_MOVE_PLAYER_POS_ROT)]
 pub struct SPlayerPositionRotation {
     pub position: Vector3<f64>,
     pub yaw: f32,
     pub pitch: f32,
-    /// bit 0: [`FLAG_ON_GROUND`], bit 1: [`FLAG_IN_WALL`]
+    /// bit 0: [`FLAG_ON_GROUND`], bit 1: [`FLAG_HORIZONTAL_COLLISION`]
     pub collision: u8,
 }
 
