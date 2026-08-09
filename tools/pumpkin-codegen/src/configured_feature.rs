@@ -358,9 +358,21 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:fallen_tree" => {
             let trunk = value_to_block_state_provider(&config["trunk_provider"]);
+            let log_length = value_to_int_provider(&config["log_length"]);
+            let stump_decorators: Vec<TokenStream> = config["stump_decorators"]
+                .as_array()
+                .map(|arr| arr.iter().map(value_to_tree_decorator).collect())
+                .unwrap_or_default();
+            let log_decorators: Vec<TokenStream> = config["log_decorators"]
+                .as_array()
+                .map(|arr| arr.iter().map(value_to_tree_decorator).collect())
+                .unwrap_or_default();
             quote! {
                 ConfiguredFeature::FallenTree(FallenTreeFeature {
                     trunk_provider: #trunk,
+                    log_length: #log_length,
+                    stump_decorators: vec![#(#stump_decorators),*],
+                    log_decorators: vec![#(#log_decorators),*],
                 })
             }
         }

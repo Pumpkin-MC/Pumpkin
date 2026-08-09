@@ -1583,6 +1583,27 @@ fn build_configured_features()
                     .get_state()
                 },
             }),
+            log_length: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 5i32,
+                max_inclusive: 8i32,
+            })),
+            stump_decorators: vec![],
+            log_decorators: vec![TreeDecorator::AttachedToLogs(AttachedToLogsTreeDecorator {
+                probability: 0.1f32,
+                block_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::RED_MUSHROOM.default_state,
+                            weight: 2i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::BROWN_MUSHROOM.default_state,
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+                directions: vec![BlockDirection::Up],
+            })],
         }),
     );
     map.insert(
@@ -1599,6 +1620,27 @@ fn build_configured_features()
                     .get_state()
                 },
             }),
+            log_length: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 4i32,
+                max_inclusive: 11i32,
+            })),
+            stump_decorators: vec![TreeDecorator::TrunkVine(TrunkVineTreeDecorator)],
+            log_decorators: vec![TreeDecorator::AttachedToLogs(AttachedToLogsTreeDecorator {
+                probability: 0.1f32,
+                block_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::RED_MUSHROOM.default_state,
+                            weight: 2i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::BROWN_MUSHROOM.default_state,
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+                directions: vec![BlockDirection::Up],
+            })],
         }),
     );
     map.insert(
@@ -1615,6 +1657,27 @@ fn build_configured_features()
                     .get_state()
                 },
             }),
+            log_length: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 4i32,
+                max_inclusive: 7i32,
+            })),
+            stump_decorators: vec![TreeDecorator::TrunkVine(TrunkVineTreeDecorator)],
+            log_decorators: vec![TreeDecorator::AttachedToLogs(AttachedToLogsTreeDecorator {
+                probability: 0.1f32,
+                block_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::RED_MUSHROOM.default_state,
+                            weight: 2i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::BROWN_MUSHROOM.default_state,
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+                directions: vec![BlockDirection::Up],
+            })],
         }),
     );
     map.insert(
@@ -1631,6 +1694,27 @@ fn build_configured_features()
                     .get_state()
                 },
             }),
+            log_length: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 6i32,
+                max_inclusive: 10i32,
+            })),
+            stump_decorators: vec![],
+            log_decorators: vec![TreeDecorator::AttachedToLogs(AttachedToLogsTreeDecorator {
+                probability: 0.1f32,
+                block_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::RED_MUSHROOM.default_state,
+                            weight: 2i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::BROWN_MUSHROOM.default_state,
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+                directions: vec![BlockDirection::Up],
+            })],
         }),
     );
     map.insert(
@@ -1647,6 +1731,27 @@ fn build_configured_features()
                     .get_state()
                 },
             }),
+            log_length: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 5i32,
+                max_inclusive: 15i32,
+            })),
+            stump_decorators: vec![],
+            log_decorators: vec![TreeDecorator::AttachedToLogs(AttachedToLogsTreeDecorator {
+                probability: 0.1f32,
+                block_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
+                    entries: vec![
+                        Weighted {
+                            data: pumpkin_data::Block::RED_MUSHROOM.default_state,
+                            weight: 2i32,
+                        },
+                        Weighted {
+                            data: pumpkin_data::Block::BROWN_MUSHROOM.default_state,
+                            weight: 1i32,
+                        },
+                    ],
+                }),
+                directions: vec![BlockDirection::Up],
+            })],
         }),
     );
     map . insert (pumpkin_data :: configured_feature :: ConfiguredFeature :: FancyOak , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: OAK_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 3u8 , height_rand_a : 11u8 , height_rand_b : 0u8 , r#type : TrunkType :: Fancy (FancyTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("distance" . to_string () , "7" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: OAK_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (2i32) , offset : IntProvider :: Constant (4i32) , r#type : FoliageType :: Fancy (LargeOakFoliagePlacer { height : 4i32 }) } , minimum_size : FeatureSize { min_clipped_height : Some (4u8) , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 0u8 , lower_size : 0u8 , upper_size : 0u8 , }) } , ignore_vines : true , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [] , root_placer : None , }))) ;

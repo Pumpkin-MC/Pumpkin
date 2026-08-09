@@ -239,6 +239,15 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
+            Self::FallenTree(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::SpringFeature(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::SimpleBlock(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::RandomPatch(feature)
@@ -458,7 +467,7 @@ impl ConfiguredFeature {
             Self::WeepingVines(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
-            _ => false,
+            Self::NoOp => false,
         }
     }
 }
