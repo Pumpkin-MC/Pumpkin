@@ -296,8 +296,11 @@ impl GenerationCache for Cache {
             return 0;
         }
         match &self.chunks[(dx * self.size + dy) as usize] {
-            Chunk::Level(_data) => {
-                0 // todo missing
+            Chunk::Level(data) => {
+                let heightmap = data.heightmap.lock().unwrap();
+                let min_y = data.section.min_y;
+
+                heightmap.get(ChunkHeightmapType::OceanFloor, x, z, min_y)
             }
             Chunk::Proto(data) => data.ocean_floor_height_exclusive(x, z),
         }
