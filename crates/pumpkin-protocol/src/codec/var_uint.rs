@@ -20,6 +20,7 @@ pub struct VarUInt(pub VarUIntType);
 
 impl VarUInt {
     /// The maximum number of bytes a `VarUInt` can occupy.
+    #[allow(clippy::unwrap_used)]
     pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 
     #[must_use]

@@ -24,7 +24,7 @@ proc-macro2 = { workspace = true, optional = true }
 uuid.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 base64.workspace = true
-p384 = { workspace = true, features = ["ecdsa", "ecdh"] }
+p384 = { workspace = true, features = ["ecdsa"] }
 thiserror.workspace = true
 ecdsa.workspace = true
 rsa.workspace = true
@@ -32,9 +32,16 @@ sha2.workspace = true
 crypto-bigint.workspace = true
 ureq.workspace = true
 
+[dev-dependencies]
+criterion = { workspace = true, features = ["html_reports"] }
+
 [features]
 default = []
 codegen = ["dep:syn", "dep:quote", "dep:proc-macro2"]
+
+[[bench]]
+name = "perlin"
+harness = false
 
 [lints]
 workspace = true

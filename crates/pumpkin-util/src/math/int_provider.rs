@@ -645,7 +645,9 @@ impl WeightedListIntProvider {
         }
 
         // Fallback to the last entry.
-        self.distribution.last().unwrap().data.get(random)
+        self.distribution
+            .last()
+            .map_or(0, |entry| entry.data.get(random))
     }
 
     /// Returns the maximum possible value from all entries.

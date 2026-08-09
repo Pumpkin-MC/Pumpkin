@@ -353,7 +353,9 @@ impl PendingConnection {
                 Ok(None)
             }
             id if id == SAcknowledgeFinishConfig::to_id(version) => {
-                let profile = self.gameprofile.clone().expect("Profile must be set");
+                let Some(profile) = self.gameprofile.clone() else {
+                    return Ok(Some(PacketHandlerResult::Stop));
+                };
                 let config = self.config.clone().unwrap_or_default();
                 if let Some(reason) = can_not_join(&profile, &self.address, server).await {
                     self.kick(reason).await;
@@ -409,7 +411,8 @@ impl PendingConnection {
         ) {
             self.config = Some(PlayerConfig {
                 locale: client_information.locale.to_string(),
-                view_distance: NonZeroU8::new(client_information.view_distance as u8).unwrap(),
+                view_distance: NonZeroU8::new(client_information.view_distance as u8)
+                    .unwrap_or(NonZeroU8::MIN),
                 chat_mode,
                 chat_colors: client_information.chat_colors,
                 skin_parts: client_information.skin_parts,

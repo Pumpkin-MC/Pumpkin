@@ -7,6 +7,19 @@ use crate::{
 };
 use pumpkin_macros::packet;
 
+const MAX_COLLECTION_LENGTH: u32 = 1024;
+
+fn collection_length<R: Read>(reader: &mut R, name: &str) -> Result<usize, Error> {
+    let len = VarUInt::read(reader)?.0;
+    if len > MAX_COLLECTION_LENGTH {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            format!("{name} length {len} exceeds {MAX_COLLECTION_LENGTH}"),
+        ));
+    }
+    Ok(len as usize)
+}
+
 #[derive(Debug)]
 pub struct ItemStackRequestSlotInfo {
     pub container_name: FullContainerName,
@@ -14,11 +27,49 @@ pub struct ItemStackRequestSlotInfo {
     pub stack_id: VarInt,
 }
 
+#[derive(Debug)]
+pub struct StackRequestItem {
+    pub identifier: Option<String>,
+    pub metadata_value: VarInt,
+    pub count: u16,
+    pub block_runtime_id: VarUInt,
+    pub extra_data: Vec<u8>,
+}
+
+impl PacketRead for StackRequestItem {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let descriptor_type = VarUInt::read(reader)?.0;
+        let _legacy_type = u8::read(reader)?;
+        let (identifier, metadata_value) = match descriptor_type {
+            0 => (None, VarInt(0)),
+            1 => (Some(String::read(reader)?), VarInt::read(reader)?),
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("unknown stack request item descriptor type {descriptor_type}"),
+                ));
+            }
+        };
+        let count = i16::read(reader)? as u16;
+        let block_runtime_id = VarUInt::read(reader)?;
+        let data_len = VarUInt::read(reader)?.0 as usize;
+        let mut extra_data = vec![0; data_len];
+        reader.read_exact(&mut extra_data)?;
+        Ok(Self {
+            identifier,
+            metadata_value,
+            count,
+            block_runtime_id,
+            extra_data,
+        })
+    }
+}
+
 impl PacketRead for ItemStackRequestSlotInfo {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let container_name = FullContainerName::read(buf)?;
         let slot_id = u8::read(buf)?;
-        let stack_id = VarInt::read(buf)?;
+        let stack_id = VarInt(i32::read(buf)?);
         Ok(Self {
             container_name,
             slot_id,
@@ -31,7 +82,7 @@ impl PacketWrite for ItemStackRequestSlotInfo {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.container_name.write(writer)?;
         self.slot_id.write(writer)?;
-        self.stack_id.write(writer)?;
+        self.stack_id.0.write(writer)?;
         Ok(())
     }
 }
@@ -68,16 +119,6 @@ pub enum ItemStackRequestAction {
     Create {
         result_index: u8,
     },
-    PlaceInContainer {
-        count: u8,
-        source: ItemStackRequestSlotInfo,
-        destination: ItemStackRequestSlotInfo,
-    },
-    TakeOutContainer {
-        count: u8,
-        source: ItemStackRequestSlotInfo,
-        destination: ItemStackRequestSlotInfo,
-    },
     LabTableCombine,
     BeaconPayment {
         primary_effect_id: VarInt,
@@ -95,7 +136,6 @@ pub enum ItemStackRequestAction {
     CraftRecipeAuto {
         recipe_id: VarUInt,
         repetitions: u8,
-        repetitions2: u8,
     },
     CraftCreative {
         creative_item_id: VarUInt,
@@ -116,7 +156,7 @@ pub enum ItemStackRequestAction {
     },
     CraftNonImplemented,
     CraftResultsDeprecated {
-        result_items: Vec<crate::bedrock::network_item::NetworkItemStack>,
+        result_items: Vec<StackRequestItem>,
         times_crafted: u8,
     },
 }
@@ -124,7 +164,8 @@ pub enum ItemStackRequestAction {
 impl PacketRead for ItemStackRequestAction {
     #[allow(clippy::too_many_lines)]
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        let action_type = u8::read(buf)?;
+        let action_type = VarUInt::read(buf)?.0;
+        let _legacy_action_type = u8::read(buf)?;
         match action_type {
             0 => Ok(Self::Take {
                 count: u8::read(buf)?,
@@ -156,71 +197,55 @@ impl PacketRead for ItemStackRequestAction {
             6 => Ok(Self::Create {
                 result_index: u8::read(buf)?,
             }),
-            7 => Ok(Self::PlaceInContainer {
-                count: u8::read(buf)?,
-                source: ItemStackRequestSlotInfo::read(buf)?,
-                destination: ItemStackRequestSlotInfo::read(buf)?,
-            }),
-            8 => Ok(Self::TakeOutContainer {
-                count: u8::read(buf)?,
-                source: ItemStackRequestSlotInfo::read(buf)?,
-                destination: ItemStackRequestSlotInfo::read(buf)?,
-            }),
-            9 => Ok(Self::LabTableCombine),
-            10 => Ok(Self::BeaconPayment {
+            7 => Ok(Self::LabTableCombine),
+            8 => Ok(Self::BeaconPayment {
                 primary_effect_id: VarInt::read(buf)?,
                 secondary_effect_id: VarInt::read(buf)?,
             }),
-            11 => Ok(Self::MineBlock {
+            9 => Ok(Self::MineBlock {
                 hotbar_slot: VarInt::read(buf)?,
                 predicted_durability: VarInt::read(buf)?,
-                stack_id: VarInt::read(buf)?,
+                stack_id: VarInt(i32::read(buf)?),
             }),
-            12 => Ok(Self::CraftRecipe {
+            10 => Ok(Self::CraftRecipe {
                 recipe_id: VarUInt::read(buf)?,
                 repetitions: u8::read(buf)?,
             }),
-            13 => {
+            11 => {
                 let recipe_id = VarUInt::read(buf)?;
                 let repetitions = u8::read(buf)?;
-                let repetitions2 = u8::read(buf)?;
-                let count = u8::read(buf)?;
-                // Read and discard ingredients if present (we don't need them server-side)
-                if count > 0 {
-                    for _ in 0..count {
-                        // NetworkItemStack includes id, count, aux_value, block_runtime_id and extra_data
-                        let _ = crate::bedrock::network_item::NetworkItemStack::read(buf)?;
-                    }
+                let count = collection_length(buf, "auto-craft ingredients")?;
+                for _ in 0..count {
+                    skip_autocraft_ingredient(buf)?;
                 }
                 Ok(Self::CraftRecipeAuto {
                     recipe_id,
                     repetitions,
-                    repetitions2,
                 })
             }
-            14 => Ok(Self::CraftCreative {
+            12 => Ok(Self::CraftCreative {
                 creative_item_id: VarUInt::read(buf)?,
                 repetitions: u8::read(buf)?,
             }),
-            15 => Ok(Self::Optional {
+            13 => Ok(Self::Optional {
                 recipe_id: VarUInt::read(buf)?,
                 filter_string_index: i32::read(buf)?,
             }),
-            16 => Ok(Self::Grindstone {
-                recipe_id: VarUInt::read(buf)?,
-                repair_cost: VarInt::read(buf)?,
+            14 => Ok(Self::Grindstone {
+                recipe_id: VarUInt(i32::read(buf)? as u32),
                 repetitions: u8::read(buf)?,
+                repair_cost: VarInt::read(buf)?,
             }),
-            17 => Ok(Self::Loom {
+            15 => Ok(Self::Loom {
                 pattern_id: String::read(buf)?,
                 repetitions: u8::read(buf)?,
             }),
-            18 => Ok(Self::CraftNonImplemented),
-            19 => {
-                let result_items_len = VarUInt::read(buf)?.0;
-                let mut result_items = Vec::with_capacity(result_items_len as usize);
+            16 => Ok(Self::CraftNonImplemented),
+            17 => {
+                let result_items_len = collection_length(buf, "craft result items")?;
+                let mut result_items = Vec::with_capacity(result_items_len);
                 for _ in 0..result_items_len {
-                    result_items.push(crate::bedrock::network_item::NetworkItemStack::read(buf)?);
+                    result_items.push(StackRequestItem::read(buf)?);
                 }
                 let times_crafted = u8::read(buf)?;
                 Ok(Self::CraftResultsDeprecated {
@@ -236,6 +261,33 @@ impl PacketRead for ItemStackRequestAction {
     }
 }
 
+fn skip_autocraft_ingredient<R: Read>(reader: &mut R) -> Result<(), Error> {
+    let descriptor_type = VarUInt::read(reader)?.0;
+    let _legacy_type = u8::read(reader)?;
+    match descriptor_type {
+        0 => {}
+        1 => {
+            let _identifier = String::read(reader)?;
+            let _aux = VarInt::read(reader)?;
+        }
+        2 => {
+            let _expression = String::read(reader)?;
+            let _version = i16::read(reader)?;
+        }
+        3 => {
+            let _tag = String::read(reader)?;
+        }
+        _ => {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("unknown item descriptor type {descriptor_type}"),
+            ));
+        }
+    }
+    let _count = u16::read(reader)?;
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct ItemStackRequest {
     pub request_id: VarInt,
@@ -247,13 +299,13 @@ pub struct ItemStackRequest {
 impl PacketRead for ItemStackRequest {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let request_id = VarInt::read(buf)?;
-        let actions_len = VarUInt::read(buf)?.0;
-        let mut actions = Vec::with_capacity(actions_len as usize);
+        let actions_len = collection_length(buf, "item stack request actions")?;
+        let mut actions = Vec::with_capacity(actions_len);
         for _ in 0..actions_len {
             actions.push(ItemStackRequestAction::read(buf)?);
         }
-        let filter_strings_len = VarUInt::read(buf)?.0;
-        let mut filter_strings = Vec::with_capacity(filter_strings_len as usize);
+        let filter_strings_len = collection_length(buf, "item stack request filters")?;
+        let mut filter_strings = Vec::with_capacity(filter_strings_len);
         for _ in 0..filter_strings_len {
             filter_strings.push(String::read(buf)?);
         }
@@ -275,11 +327,63 @@ pub struct SItemStackRequest {
 
 impl PacketRead for SItemStackRequest {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        let requests_len = VarUInt::read(buf)?.0;
-        let mut requests = Vec::with_capacity(requests_len as usize);
+        let requests_len = collection_length(buf, "item stack requests")?;
+        let mut requests = Vec::with_capacity(requests_len);
         for _ in 0..requests_len {
             requests.push(ItemStackRequest::read(buf)?);
         }
         Ok(Self { requests })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bedrock::network_item::ContainerName;
+
+    #[test]
+    fn stack_request_slot_uses_raw_i32_network_id() {
+        let slot = ItemStackRequestSlotInfo {
+            container_name: FullContainerName {
+                container_name: ContainerName::Inventory,
+                dynamic_id: None,
+            },
+            slot_id: 4,
+            stack_id: VarInt(-2),
+        };
+        let mut encoded = Vec::new();
+        slot.write(&mut encoded).unwrap();
+
+        assert_eq!(&encoded[encoded.len() - 4..], &(-2i32).to_le_bytes());
+        let decoded = ItemStackRequestSlotInfo::read(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded.stack_id, VarInt(-2));
+    }
+
+    #[test]
+    fn craft_result_item_uses_descriptor_backed_cereal_format() {
+        let mut encoded = Vec::new();
+        VarUInt(1).write(&mut encoded).unwrap();
+        1u8.write(&mut encoded).unwrap();
+        "minecraft:stone".to_string().write(&mut encoded).unwrap();
+        VarInt(-1).write(&mut encoded).unwrap();
+        2i16.write(&mut encoded).unwrap();
+        VarUInt(3).write(&mut encoded).unwrap();
+        VarUInt(2).write(&mut encoded).unwrap();
+        encoded.extend_from_slice(&[0xaa, 0xbb]);
+
+        let item = StackRequestItem::read(&mut encoded.as_slice()).unwrap();
+        assert_eq!(item.identifier.as_deref(), Some("minecraft:stone"));
+        assert_eq!(item.metadata_value, VarInt(-1));
+        assert_eq!(item.count, 2);
+        assert_eq!(item.block_runtime_id, VarUInt(3));
+        assert_eq!(item.extra_data, [0xaa, 0xbb]);
+    }
+
+    #[test]
+    fn craft_result_item_rejects_non_default_descriptors() {
+        let mut encoded = Vec::new();
+        VarUInt(2).write(&mut encoded).unwrap();
+        2u8.write(&mut encoded).unwrap();
+        assert!(StackRequestItem::read(&mut encoded.as_slice()).is_err());
     }
 }

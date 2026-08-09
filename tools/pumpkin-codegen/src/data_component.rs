@@ -36,7 +36,7 @@ pub fn build() -> TokenStream {
 
         // TODO use phf
         name_to_enum.extend(quote! {
-            #raw_name => Some(Self::#pascal_case),
+            #raw_name | #strip_name => Some(Self::#pascal_case),
         });
 
         // Enum -> &str

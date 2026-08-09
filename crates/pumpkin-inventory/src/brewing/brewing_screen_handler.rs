@@ -142,8 +142,7 @@ impl ScreenHandler for BrewingScreenHandler {
                 return stack_left;
             }
 
-            let slot_stack_lock = slot.get_stack().await;
-            let mut stack = slot_stack_lock.lock().await;
+            let mut stack = slot.get_stack().await;
             stack_left = stack.clone();
 
             let success = if slot_index < 5 {
@@ -179,10 +178,9 @@ impl ScreenHandler for BrewingScreenHandler {
             }
 
             if stack.is_empty() {
-                drop(stack);
                 slot.set_stack(ItemStack::EMPTY.clone()).await;
             } else {
-                slot.mark_dirty().await;
+                slot.set_stack(stack).await;
             }
 
             stack_left

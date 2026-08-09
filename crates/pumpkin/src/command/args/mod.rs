@@ -41,6 +41,7 @@ pub mod entity;
 pub mod entity_anchor;
 pub mod gamemode;
 pub mod gameprofile;
+pub mod hex_color;
 pub mod message;
 pub mod players;
 pub mod position_2d;
@@ -54,6 +55,7 @@ pub mod slot;
 pub mod sound;
 pub mod sound_category;
 pub mod summonable_entities;
+pub mod team_color;
 pub mod textcomponent;
 pub mod time;
 
@@ -143,6 +145,8 @@ pub enum Arg<'a> {
     EntityAnchor(EntityAnchor),
     Slot(usize, String),
     Slots(&'static [usize], String),
+    TeamColor(pumpkin_util::text::color::NamedColor),
+    HexColor(u32),
 }
 
 /// see [`crate::command::tree::builder::argument`] and [`CommandTree::execute`]/[`crate::command::tree::builder::NonLeafNodeBuilder::execute`]

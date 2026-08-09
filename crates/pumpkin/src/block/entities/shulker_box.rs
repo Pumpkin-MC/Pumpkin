@@ -2,35 +2,27 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::random::xoroshiro128::Xoroshiro;
-use pumpkin_util::random::{RandomImpl, get_seed};
 use std::any::Any;
+use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::Ordering;
-use std::{
-    array::from_fn,
-    sync::{Arc, atomic::AtomicBool},
-};
-use tokio::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::{array::from_fn, sync::Arc};
+use tokio::sync::RwLock;
 
+use crate::block::entities::BlockEntity;
 use crate::block::viewer::{
     ViewerCountListener, ViewerCountTracker, ViewerCountTrackerExt, ViewerFuture,
 };
 use crate::world::World;
-use pumpkin_world::inventory::InventoryFuture;
-use pumpkin_world::inventory::{
-    split_stack, sync_write_items_to_nbt, {Clearable, Inventory},
-};
-
-use super::BlockEntity;
+use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, sync_write_items_to_nbt};
 
 pub struct ShulkerBoxBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
+    pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
 
     // Viewer
-    viewers: ViewerCountTracker,
+    pub viewers: ViewerCountTracker,
 }
 
 impl BlockEntity for ShulkerBoxBlockEntity {
@@ -46,14 +38,14 @@ impl BlockEntity for ShulkerBoxBlockEntity {
     where
         Self: Sized,
     {
-        let shulker_box = Self {
+        let mut shulker_box = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         };
 
-        shulker_box.read_data(nbt, &shulker_box.items);
+        pumpkin_world::inventory::sync_read_items_from_nbt(nbt, shulker_box.items.get_mut());
 
         shulker_box
     }
@@ -100,7 +92,8 @@ impl BlockEntity for ShulkerBoxBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        sync_write_items_to_nbt(&self.items, &mut nbt);
+        let items = futures::executor::block_on(self.items.read());
+        sync_write_items_to_nbt(items.as_slice(), &mut nbt);
         Some(nbt)
     }
 
@@ -116,7 +109,7 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
         position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            Self::play_sound(world, position, Sound::BlockShulkerBoxOpen);
+            Self::play_sound(world, position, 1);
             // TODO: this.world.emitGameEvent(player, GameEvent.CONTAINER_OPEN, this.pos);
         })
     }
@@ -127,7 +120,7 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
         position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            Self::play_sound(world, position, Sound::BlockShulkerBoxClose);
+            Self::play_sound(world, position, 0);
             // TODO: this.world.emitGameEvent(player, GameEvent.CONTAINER_CLOSE, this.pos);
         })
     }
@@ -150,57 +143,57 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
 impl ShulkerBoxBlockEntity {
     pub const INVENTORY_SIZE: usize = 27;
     pub const OPEN_ANIMATION_EVENT_TYPE: u8 = 1;
-    pub const ID: &'static str = "minecraft:shulker_box"; // TODO support multi IDs
+    pub const ID: &'static str = "minecraft:shulker_box";
 
     #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         }
     }
 
-    fn play_sound(world: &Arc<World>, position: &BlockPos, sound: Sound) {
-        let mut rng = Xoroshiro::from_seed(get_seed());
+    pub fn update_viewers(&self, world: &Arc<World>) {
+        let viewer_count = self.viewers.current.load(Ordering::Relaxed);
+        Self::play_sound(world, &self.position, i32::from(viewer_count));
+    }
 
-        world.play_sound_fine(
-            sound,
-            SoundCategory::Blocks,
-            &position.to_centered_f64(),
-            0.5,
-            rng.next_f32() * 0.1 + 0.9,
-        );
+    fn play_sound(world: &World, position: &BlockPos, viewer_count: i32) {
+        let sound = if viewer_count > 0 {
+            Sound::BlockShulkerBoxOpen
+        } else {
+            Sound::BlockShulkerBoxClose
+        };
+
+        world.play_sound(sound, SoundCategory::Blocks, &position.to_f64());
     }
 }
 
 impl Inventory for ShulkerBoxBlockEntity {
     fn size(&self) -> usize {
-        self.items.len()
+        Self::INVENTORY_SIZE
     }
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in &self.items {
-                if !slot.lock().await.is_empty() {
-                    return false;
-                }
-            }
-
-            true
+            let items = self.items.read().await;
+            items.iter().all(ItemStack::is_empty)
         })
     }
 
-    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
-        Box::pin(async move { self.items[slot].clone() })
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let items = self.items.read().await;
+            items[slot].clone()
+        })
     }
 
     fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let mut removed = ItemStack::EMPTY.clone();
-            let mut guard = self.items[slot].lock().await;
-            std::mem::swap(&mut removed, &mut *guard);
+            let mut items = self.items.write().await;
+            let removed = std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone());
             self.mark_dirty();
             removed
         })
@@ -208,7 +201,12 @@ impl Inventory for ShulkerBoxBlockEntity {
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let res = split_stack(&self.items, slot, amount).await;
+            let mut items = self.items.write().await;
+            let res = if !items[slot].is_empty() && amount > 0 {
+                items[slot].split(amount)
+            } else {
+                ItemStack::EMPTY.clone()
+            };
             self.mark_dirty();
             res
         })
@@ -216,7 +214,8 @@ impl Inventory for ShulkerBoxBlockEntity {
 
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
-            *self.items[slot].lock().await = stack;
+            let mut items = self.items.write().await;
+            items[slot] = stack;
             self.mark_dirty();
         })
     }
@@ -245,9 +244,8 @@ impl Inventory for ShulkerBoxBlockEntity {
 impl Clearable for ShulkerBoxBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in &self.items {
-                *slot.lock().await = ItemStack::EMPTY.clone();
-            }
+            let mut items = self.items.write().await;
+            items.fill_with(|| ItemStack::EMPTY.clone());
             self.mark_dirty();
         })
     }

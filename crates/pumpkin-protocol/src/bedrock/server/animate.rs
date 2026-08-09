@@ -1,7 +1,4 @@
-use std::{
-    io::{Error, Read, Write},
-    str::FromStr,
-};
+use std::io::{Error, Read, Write};
 
 use pumpkin_macros::packet;
 
@@ -11,10 +8,11 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum AnimateAction {
+    NoAction = 0,
     SwingArm = 1,
-    WakeUp = 2,
-    StopSleep = 3,
+    WakeUp = 3,
     CriticalHit = 4,
     MagicCriticalHit = 5,
 }
@@ -23,9 +21,9 @@ impl PacketRead for AnimateAction {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let action = u8::read(reader)?;
         match action {
+            0 => Ok(Self::NoAction),
             1 => Ok(Self::SwingArm),
-            2 => Ok(Self::WakeUp),
-            3 => Ok(Self::StopSleep),
+            3 => Ok(Self::WakeUp),
             4 => Ok(Self::CriticalHit),
             5 => Ok(Self::MagicCriticalHit),
             _ => Err(Error::other(format!("Invalid animate action ID: {action}"))),
@@ -40,6 +38,7 @@ impl PacketWrite for AnimateAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum AnimateSwingSource {
     None = 1,
     Build = 2,
@@ -52,11 +51,9 @@ pub enum AnimateSwingSource {
     Event = 9,
 }
 
-impl FromStr for AnimateSwingSource {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Error> {
-        match s {
+impl PacketRead for AnimateSwingSource {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        match String::read(reader)?.as_str() {
             "none" => Ok(Self::None),
             "build" => Ok(Self::Build),
             "mine" => Ok(Self::Mine),
@@ -66,14 +63,13 @@ impl FromStr for AnimateSwingSource {
             "throwitem" => Ok(Self::ThrowItem),
             "dropitem" => Ok(Self::DropItem),
             "event" => Ok(Self::Event),
-            _ => Err(Error::other(format!("Unknown swing source: {s}"))),
+            source => Err(Error::other(format!("Invalid swing source: {source}"))),
         }
     }
 }
 
-impl AnimateSwingSource {
-    #[must_use]
-    pub const fn as_str(&self) -> &'static str {
+impl PacketWrite for AnimateSwingSource {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         match self {
             Self::None => "none",
             Self::Build => "build",
@@ -85,6 +81,7 @@ impl AnimateSwingSource {
             Self::DropItem => "dropitem",
             Self::Event => "event",
         }
+        .write(writer)
     }
 }
 
@@ -103,11 +100,7 @@ impl PacketRead for SAnimate {
         let runtime_entity_id = VarULong::read(reader)?;
         let data = f32::read(reader)?;
 
-        let swing_source_str = Option::<String>::read(reader)?;
-        let swing_source = match swing_source_str {
-            Some(s) => Some(AnimateSwingSource::from_str(&s)?),
-            None => None,
-        };
+        let swing_source = Option::<AnimateSwingSource>::read(reader)?;
 
         Ok(Self {
             action,
@@ -124,9 +117,45 @@ impl PacketWrite for SAnimate {
         self.runtime_entity_id.write(writer)?;
         self.data.write(writer)?;
 
-        let swing_source_str: Option<String> = self.swing_source.map(|s| s.as_str().to_string());
-        swing_source_str.write(writer)?;
+        self.swing_source.write(writer)
+    }
+}
 
-        Ok(())
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn animate_uses_cereal_swing_source_encoding() {
+        let packet = SAnimate {
+            action: AnimateAction::SwingArm,
+            runtime_entity_id: VarULong(42),
+            data: 0.0,
+            swing_source: Some(AnimateSwingSource::Attack),
+        };
+        let mut encoded = Vec::new();
+        packet.write(&mut encoded).unwrap();
+
+        assert_eq!(encoded, b"\x01\x2a\0\0\0\0\x01\x06attack");
+
+        let decoded = SAnimate::read(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded.action, AnimateAction::SwingArm);
+        assert_eq!(decoded.runtime_entity_id, VarULong(42));
+        assert_eq!(decoded.data, 0.0);
+        assert_eq!(decoded.swing_source, Some(AnimateSwingSource::Attack));
+    }
+
+    #[test]
+    fn animate_omits_absent_swing_source_value() {
+        let packet = SAnimate {
+            action: AnimateAction::NoAction,
+            runtime_entity_id: VarULong(1),
+            data: 0.0,
+            swing_source: None,
+        };
+        let mut encoded = Vec::new();
+        packet.write(&mut encoded).unwrap();
+
+        assert_eq!(encoded, [0, 1, 0, 0, 0, 0, 0]);
     }
 }

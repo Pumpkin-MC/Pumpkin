@@ -186,8 +186,9 @@ mod tests {
 
     #[test]
     fn checked_in_tracker_table_matches_codegen() {
-        let checked_in = std::fs::read_to_string("../../crates/pumpkin-data/src/generated/tracked_data.rs")
-            .expect("checked-in tracked data");
+        let checked_in =
+            std::fs::read_to_string("../../crates/pumpkin-data/src/generated/tracked_data.rs")
+                .expect("checked-in tracked data");
         let parsed = syn::parse_file(&checked_in).expect("valid generated Rust");
 
         assert_eq!(quote!(#parsed).to_string(), build().to_string());

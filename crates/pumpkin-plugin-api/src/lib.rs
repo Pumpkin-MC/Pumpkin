@@ -1,5 +1,16 @@
 //! Pumpkin plugin API.
 #![warn(missing_docs)]
+#![allow(
+    clippy::undocumented_unsafe_blocks,
+    clippy::option_if_let_else,
+    clippy::collection_is_never_read,
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo,
+    clippy::panic
+)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 //!
 //! This crate provides everything needed to write a Pumpkin server plugin compiled
 //! to WebAssembly. A plugin consists of a type that implements [`Plugin`], registered
@@ -27,6 +38,32 @@
 //! }
 //!
 //! register_plugin!(MyPlugin);
+//! ```
+//!
+//! # Persisting data
+//!
+//! Plugins run as WebAssembly with WASI, so a plugin stores data that survives
+//! server restarts by reading and writing its own files with your language's
+//! normal file API (for example `std::fs` in Rust). There is no separate
+//! storage API; the file system is the storage.
+//!
+//! Each plugin has a private data folder. To use it:
+//!
+//! 1. Request the `fs.read.data` and/or `fs.write.data` permissions
+//!    (`permissions::FS_READ_DATA` / `permissions::FS_WRITE_DATA`) in your
+//!    [`PluginMetadata`]. Without them the folder is not accessible.
+//! 2. Get the folder path from the context's `get_data_folder` method inside
+//!    `on_load` or `on_unload`. The returned path is the folder as seen from
+//!    inside the WASI sandbox.
+//! 3. Read and write files under that path with your normal file API.
+//!
+//! ```rust,ignore
+//! fn on_load(&self, context: &Context) -> Result<(), String> {
+//!     let path = format!("{}/state.json", context.get_data_folder());
+//!     let saved = std::fs::read_to_string(&path).unwrap_or_default();
+//!     // ...parse and use `saved`, then later write it back...
+//!     Ok(())
+//! }
 //! ```
 
 use crate::{
@@ -140,7 +177,7 @@ impl wit::Guest for Component {
     ///
     /// Returns the event unchanged if no handler is registered for the given id.
     fn handle_event(event_id: u32, server: Server, event: events::Event) -> events::Event {
-        let handlers = EVENT_HANDLERS.lock().unwrap();
+        let handlers = EVENT_HANDLERS.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(handler) = handlers.get(&event_id) {
             handler.handle_erased(server, event)
         } else {
@@ -157,7 +194,7 @@ impl wit::Guest for Component {
         server: Server,
         args: command::ConsumedArgs,
     ) -> Result<i32, command::CommandError> {
-        let handlers = COMMAND_HANDLERS.lock().unwrap();
+        let handlers = COMMAND_HANDLERS.lock().unwrap_or_else(|e| e.into_inner());
         handlers.get(&command_id).map_or_else(
             || {
                 Err(command::CommandError::CommandFailed(TextComponent::text(
@@ -170,12 +207,14 @@ impl wit::Guest for Component {
 
     /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.
     fn handle_task(handler_id: u32, server: Server) {
-        let mut handlers = TASK_HANDLERS.lock().unwrap();
+        let mut handlers = TASK_HANDLERS.lock().unwrap_or_else(|e| e.into_inner());
         handlers.handle(handler_id, server);
     }
 
     fn handle_ai_goal_can_start(goal_id: u32, server: Server, entity: entity::Entity) -> bool {
-        let mut handlers = crate::ai::AI_GOAL_HANDLERS.lock().unwrap();
+        let mut handlers = crate::ai::AI_GOAL_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
             goal.can_start(server, entity)
         } else {
@@ -188,7 +227,9 @@ impl wit::Guest for Component {
         server: Server,
         entity: entity::Entity,
     ) -> bool {
-        let mut handlers = crate::ai::AI_GOAL_HANDLERS.lock().unwrap();
+        let mut handlers = crate::ai::AI_GOAL_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
             goal.should_continue(server, entity)
         } else {
@@ -197,21 +238,27 @@ impl wit::Guest for Component {
     }
 
     fn handle_ai_goal_start(goal_id: u32, server: Server, entity: entity::Entity) {
-        let mut handlers = crate::ai::AI_GOAL_HANDLERS.lock().unwrap();
+        let mut handlers = crate::ai::AI_GOAL_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
             goal.start(server, entity);
         }
     }
 
     fn handle_ai_goal_tick(goal_id: u32, server: Server, entity: entity::Entity) {
-        let mut handlers = crate::ai::AI_GOAL_HANDLERS.lock().unwrap();
+        let mut handlers = crate::ai::AI_GOAL_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
             goal.tick(server, entity);
         }
     }
 
     fn handle_ai_goal_stop(goal_id: u32, server: Server, entity: entity::Entity) {
-        let mut handlers = crate::ai::AI_GOAL_HANDLERS.lock().unwrap();
+        let mut handlers = crate::ai::AI_GOAL_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
             goal.stop(server, entity);
         }
@@ -262,6 +309,7 @@ pub fn register_plugin(build_plugin: fn() -> Box<dyn Plugin>) {
 /// If called before [`register_plugin`] has initialized `PLUGIN`.
 fn plugin() -> &'static mut dyn Plugin {
     #[expect(static_mut_refs)]
+    #[allow(clippy::unwrap_used)]
     unsafe {
         PLUGIN.as_deref_mut().unwrap()
     }

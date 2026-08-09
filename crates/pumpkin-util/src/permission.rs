@@ -107,6 +107,7 @@ impl PermissionRegistry {
     ///
     /// # Parameters
     /// - `permission`: The `Permission` instance to add.
+    #[allow(clippy::expect_used)]
     pub fn register_permission_or_panic(&mut self, permission: Permission) {
         self.register_permission(permission)
             .expect("Permission should have been registered successfully");
@@ -302,9 +303,9 @@ impl PermissionManager {
             // Check for inherited permissions from parent nodes
             for (node, value) in attachment.get_permissions() {
                 if let Some(permission) = reg.get_permission(node)
-                    && permission.children.contains_key(permission_node)
+                    && let Some(child_val) = permission.children.get(permission_node)
                 {
-                    return *value && *permission.children.get(permission_node).unwrap();
+                    return *value && *child_val;
                 }
             }
         }

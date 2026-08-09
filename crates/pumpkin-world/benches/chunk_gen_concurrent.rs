@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;

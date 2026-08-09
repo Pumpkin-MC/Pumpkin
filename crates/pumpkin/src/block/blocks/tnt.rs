@@ -48,7 +48,7 @@ impl BlockBehaviour for TNTBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let item = args.item_stack.lock().await.item;
+            let item = args.item_stack.item;
             if item != &Item::FLINT_AND_STEEL || item == &Item::FIRE_CHARGE {
                 return BlockActionResult::Pass;
             }

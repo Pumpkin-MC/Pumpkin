@@ -20,6 +20,7 @@ pub struct VarULong(pub VarULongType);
 
 impl VarULong {
     /// The maximum number of bytes a `VarULong` can occupy.
+    #[allow(clippy::unwrap_used)]
     pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
 
     #[must_use]

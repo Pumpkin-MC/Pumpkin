@@ -406,14 +406,31 @@ impl ChunkData {
             .load(std::sync::atomic::Ordering::Relaxed);
 
         let block_entities_nbt = {
-            let entities_guard = self.pending_block_entities.lock().unwrap();
+            let entities_guard = self
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             entities_guard.values().cloned().collect::<Vec<_>>()
         };
 
-        let light_lock = self.light_engine.lock().unwrap();
-        let heightmap_lock = self.heightmap.lock().unwrap();
-        let block_lock = self.section.block_sections.read().unwrap();
-        let biome_lock = self.section.biome_sections.read().unwrap();
+        let light_lock = self
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let heightmap_lock = self
+            .heightmap
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let block_lock = self
+            .section
+            .block_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let biome_lock = self
+            .section
+            .biome_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let min_section_y = (self.section.min_y >> 4) as i8;
 

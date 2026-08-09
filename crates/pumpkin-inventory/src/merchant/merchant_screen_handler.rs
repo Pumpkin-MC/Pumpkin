@@ -63,9 +63,7 @@ impl MerchantScreenHandler {
 
         let offer = &self.offers[self.selected_offer];
         let input_a = self.inventory.get_stack(0).await;
-        let input_a = input_a.lock().await;
         let input_b = self.inventory.get_stack(1).await;
-        let input_b = input_b.lock().await;
 
         let match_a = input_a.are_items_and_components_equal(&offer.base_cost_a.0)
             && input_a.item_count >= offer.base_cost_a.0.item_count;
@@ -130,18 +128,14 @@ impl ScreenHandler for MerchantScreenHandler {
             let slot = self.get_behaviour().slots[slot_index as usize].clone();
 
             if slot.has_stack().await {
-                let slot_stack_lock = slot.get_stack().await;
-                let slot_stack_guard = slot_stack_lock.lock().await;
-                stack_left = slot_stack_guard.clone();
-                drop(slot_stack_guard);
-
-                let mut slot_stack_mut = slot_stack_lock.lock().await;
+                let mut slot_stack = slot.get_stack().await;
+                stack_left = slot_stack.clone();
 
                 if slot_index < 3 {
                     // From merchant slots to player inventory
                     if !self
                         .insert_item(
-                            &mut slot_stack_mut,
+                            &mut slot_stack,
                             3,
                             self.get_behaviour().slots.len() as i32,
                             true,
@@ -151,18 +145,16 @@ impl ScreenHandler for MerchantScreenHandler {
                         return ItemStack::EMPTY.clone();
                     }
                 } else {
-                    // From player inventory to merchant inputs (0 and 1)
-                    if !self.insert_item(&mut slot_stack_mut, 0, 2, false).await {
+                    // From player inventory to merchant
+                    if !self.insert_item(&mut slot_stack, 0, 2, false).await {
                         return ItemStack::EMPTY.clone();
                     }
                 }
 
-                if slot_stack_mut.is_empty() {
-                    drop(slot_stack_mut);
+                if slot_stack.is_empty() {
                     slot.set_stack(ItemStack::EMPTY.clone()).await;
                 } else {
-                    drop(slot_stack_mut);
-                    slot.mark_dirty().await;
+                    slot.set_stack(slot_stack).await;
                 }
             }
 
@@ -192,24 +184,20 @@ impl ScreenHandler for MerchantScreenHandler {
                             (offer.base_cost_a.0.item_count, count_b, offer.xp)
                         };
 
-                        let input_a = self.inventory.get_stack(0).await;
-                        let mut input_a = input_a.lock().await;
+                        let mut input_a = self.inventory.get_stack(0).await;
                         input_a.decrement(count_a);
                         if input_a.is_empty() {
-                            *input_a = ItemStack::EMPTY.clone();
+                            input_a = ItemStack::EMPTY.clone();
                         }
-                        drop(input_a);
-                        self.get_behaviour().slots[0].mark_dirty().await;
+                        self.inventory.set_stack(0, input_a).await;
 
                         if let Some(count_b) = count_b {
-                            let input_b = self.inventory.get_stack(1).await;
-                            let mut input_b = input_b.lock().await;
+                            let mut input_b = self.inventory.get_stack(1).await;
                             input_b.decrement(count_b);
                             if input_b.is_empty() {
-                                *input_b = ItemStack::EMPTY.clone();
+                                input_b = ItemStack::EMPTY.clone();
                             }
-                            drop(input_b);
-                            self.get_behaviour().slots[1].mark_dirty().await;
+                            self.inventory.set_stack(1, input_b).await;
                         }
 
                         // Award XP

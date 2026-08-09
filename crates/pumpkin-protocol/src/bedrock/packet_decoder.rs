@@ -1,93 +1,33 @@
-use std::{
-    io::{Cursor, Read},
-    pin::Pin,
-    task::{Context, Poll},
-};
+use std::io::{Cursor, Read};
 
 use async_compression::tokio::bufread::DeflateDecoder;
-use tokio::io::{AsyncRead, BufReader, ReadBuf};
+use tokio::io::BufReader;
 
 use crate::{
-    Aes128Cfb8Dec, CompressionThreshold, MAX_PACKET_DATA_SIZE, PacketDecodeError, RawPacket,
-    StreamDecryptor, codec::var_uint::VarUInt, ser::ReadingError,
+    CompressionThreshold, MAX_PACKET_DATA_SIZE, PacketDecodeError, RawPacket,
+    bedrock::BEDROCK_GAME_PACKET, codec::var_uint::VarUInt, ser::ReadingError,
 };
 
-pub enum DecryptionReader<R: AsyncRead + Unpin> {
-    Decrypt(Box<StreamDecryptor<R>>),
-    None(R),
-}
-
-impl<R: AsyncRead + Unpin> DecryptionReader<R> {
-    #[must_use]
-    pub fn upgrade(self, cipher: Aes128Cfb8Dec) -> Self {
-        match self {
-            Self::None(stream) => Self::Decrypt(Box::new(StreamDecryptor::new(cipher, stream))),
-            Self::Decrypt(_) => self,
-        }
-    }
-}
-
-impl<R: AsyncRead + Unpin> AsyncRead for DecryptionReader<R> {
-    #[inline]
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Decrypt(reader) => {
-                let reader = Pin::new(reader);
-                reader.poll_read(cx, buf)
-            }
-            Self::None(reader) => {
-                let reader = Pin::new(reader);
-                reader.poll_read(cx, buf)
-            }
-        }
-    }
-}
-
-use crate::bedrock::crypto::BedrockDecryptor;
-
 /// Decoder: Client -> Server
-/// Supports `ZLib` decoding/decompression
-/// Supports Aes256 Encryption
-pub struct UDPNetworkDecoder {
+/// Supports Zlib decompression.
+pub struct BedrockBatchDecoder {
     compression: Option<CompressionThreshold>,
-    decryptor: Option<BedrockDecryptor>,
 }
 
-impl Default for UDPNetworkDecoder {
+impl Default for BedrockBatchDecoder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-#[error("Encryption already enabled")]
-pub struct EncryptionAlreadyEnabledError;
-
-impl UDPNetworkDecoder {
+impl BedrockBatchDecoder {
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            compression: None,
-            decryptor: None,
-        }
+        Self { compression: None }
     }
 
     pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
         self.compression = Some(threshold);
-    }
-
-    pub fn set_encryption(&mut self, key: &[u8; 32]) -> Result<(), EncryptionAlreadyEnabledError> {
-        if self.decryptor.is_some() {
-            return Err(EncryptionAlreadyEnabledError);
-        }
-        self.decryptor = Some(BedrockDecryptor::new(key));
-        Ok(())
     }
 
     pub async fn get_packet_payload(
@@ -98,27 +38,20 @@ impl UDPNetworkDecoder {
             return Err(PacketDecodeError::MalformedLength("Empty packet".into()));
         }
 
-        // If the first byte isn't 0xfe, it's likely a RakNet control packet or encrypted.
-        // Ensure your RakNet implementation is providing ONLY the payload here.
-        if full_packet[0] != 0xfe {
+        // NetherNet carries the batch without the Bedrock game-packet marker.
+        // The transport adapter restores it before decoding.
+        if full_packet[0] != BEDROCK_GAME_PACKET {
             return Err(PacketDecodeError::MalformedLength(format!(
                 "Missing 0xfe header (found 0x{:02x})",
                 full_packet[0]
             )));
         }
 
-        let mut data_to_decrypt = full_packet[1..].to_vec();
-        if let Some(decryptor) = &mut self.decryptor {
-            decryptor
-                .decrypt(&mut data_to_decrypt)
-                .map_err(PacketDecodeError::Message)?;
-        }
-
-        let full_packet_payload = data_to_decrypt;
+        let full_packet_payload = &full_packet[1..];
 
         // If compression is NOT enabled yet, the payload starts at index 0 of full_packet_payload
         if self.compression.is_none() {
-            let payload = &full_packet_payload[..];
+            let payload = full_packet_payload;
             if payload.len() > MAX_PACKET_DATA_SIZE {
                 return Err(PacketDecodeError::TooLong);
             }
@@ -217,7 +150,7 @@ impl UDPNetworkDecoder {
 mod tests {
     use std::io::Cursor;
 
-    use crate::bedrock::{SubClient, packet_encoder::UDPNetworkEncoder};
+    use crate::bedrock::{SubClient, packet_encoder::BedrockBatchEncoder};
 
     use super::*;
 
@@ -226,7 +159,7 @@ mod tests {
         const PAYLOAD_LEN: usize = 2 * 1024 * 1024 + 1;
         let payload = vec![0x2a; PAYLOAD_LEN];
         let mut wire_buf = Vec::new();
-        let network_encoder = UDPNetworkEncoder::new();
+        let network_encoder = BedrockBatchEncoder::new();
         network_encoder
             .write_game_packet(
                 0x01,
@@ -238,7 +171,7 @@ mod tests {
             .expect("encode Bedrock game packet");
 
         let mut cursor = Cursor::new(wire_buf[1..].to_vec());
-        let mut decoder = UDPNetworkDecoder::new();
+        let mut decoder = BedrockBatchDecoder::new();
 
         let packet = decoder
             .get_game_packet(&mut cursor)

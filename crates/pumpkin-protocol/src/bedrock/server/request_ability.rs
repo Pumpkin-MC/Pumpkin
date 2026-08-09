@@ -24,7 +24,7 @@ impl PacketRead for AbilityValue {
     }
 }
 
-#[packet(102)]
+#[packet(184)]
 pub struct SRequestAbility {
     pub ability: VarInt,
     pub value: AbilityValue,
@@ -35,5 +35,19 @@ impl PacketRead for SRequestAbility {
         let ability = VarInt::read(buf)?;
         let value = AbilityValue::read(buf)?;
         Ok(Self { ability, value })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_ability_uses_v2168_packet_id_and_payload() {
+        assert_eq!(<SRequestAbility as crate::Packet>::PACKET_ID, 184);
+
+        let packet = SRequestAbility::read(&mut [2, 1, 1, 0, 0, 0, 0].as_slice()).unwrap();
+        assert_eq!(packet.ability, VarInt(1));
+        assert!(matches!(packet.value, AbilityValue::Bool(true)));
     }
 }

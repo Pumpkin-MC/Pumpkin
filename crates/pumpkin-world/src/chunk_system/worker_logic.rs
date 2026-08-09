@@ -67,7 +67,12 @@ pub async fn io_read_work(
             // Lock handling
             loop {
                 let notified = lock.1.notified();
-                if !lock.0.lock().unwrap().contains_key(pos) {
+                if !lock
+                    .0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains_key(pos)
+                {
                     break;
                 }
                 notified.await;
@@ -197,7 +202,10 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
         }
 
         for i in positions {
-            let mut data = lock.0.lock().unwrap();
+            let mut data = lock
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             match data.entry(i) {
                 Entry::Occupied(mut entry) => {
                     let rc = entry.get_mut();

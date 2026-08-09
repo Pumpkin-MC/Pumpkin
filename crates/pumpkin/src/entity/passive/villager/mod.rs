@@ -58,6 +58,7 @@ pub struct VillagerEntity {
 }
 
 impl VillagerEntity {
+    #[allow(clippy::too_many_lines)]
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let villager_data = VillagerData::new(VillagerType::Plains, VillagerProfession::None, 1);
@@ -83,14 +84,21 @@ impl VillagerEntity {
             self_weak: std::sync::Mutex::new(None),
         };
         let mob_arc = Arc::new(villager);
-        *mob_arc.self_weak.lock().unwrap() = Some(Arc::downgrade(&mob_arc));
+        *mob_arc
+            .self_weak
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&mob_arc));
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .mob_entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             // Villagers avoid threats
@@ -314,7 +322,11 @@ impl ScreenHandlerFactory for VillagerEntity {
     ) -> BoxFuture<'a, Option<SharedScreenHandler>> {
         Box::pin(async move {
             let offers = self.offers.lock().await;
-            let self_weak = self.self_weak.lock().unwrap().clone().unwrap();
+            let self_weak = self
+                .self_weak
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()?;
             let player_uuid = player
                 .as_any()
                 .downcast_ref::<crate::entity::player::Player>()
@@ -429,14 +441,20 @@ impl NBTStorage for VillagerEntity {
             );
             nbt.put_int("RestocksToday", self.restocks_today.load(Ordering::Relaxed));
 
-            let job_site_pos = *self.job_site.lock().unwrap();
+            let job_site_pos = *self
+                .job_site
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(pos) = job_site_pos {
                 nbt.put_int("JobSiteX", pos.0.x);
                 nbt.put_int("JobSiteY", pos.0.y);
                 nbt.put_int("JobSiteZ", pos.0.z);
             }
 
-            let home_pos = *self.home_pos.lock().unwrap();
+            let home_pos = *self
+                .home_pos
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(pos) = home_pos {
                 nbt.put_int("HomeX", pos.0.x);
                 nbt.put_int("HomeY", pos.0.y);
@@ -558,9 +576,16 @@ impl NBTStorage for VillagerEntity {
                 nbt.get_int("JobSiteY"),
                 nbt.get_int("JobSiteZ"),
             ) {
-                *self.job_site.lock().unwrap() = Some(BlockPos::new(x, y, z));
+                *self
+                    .job_site
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    Some(BlockPos::new(x, y, z));
             } else {
-                *self.job_site.lock().unwrap() = None;
+                *self
+                    .job_site
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
             }
 
             if let (Some(x), Some(y), Some(z)) = (
@@ -568,9 +593,16 @@ impl NBTStorage for VillagerEntity {
                 nbt.get_int("HomeY").or_else(|| nbt.get_int("BedY")),
                 nbt.get_int("HomeZ").or_else(|| nbt.get_int("BedZ")),
             ) {
-                *self.home_pos.lock().unwrap() = Some(BlockPos::new(x, y, z));
+                *self
+                    .home_pos
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    Some(BlockPos::new(x, y, z));
             } else {
-                *self.home_pos.lock().unwrap() = None;
+                *self
+                    .home_pos
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
             }
 
             if let Some(offers_compound) = nbt.get_compound("Offers")
@@ -732,11 +764,17 @@ impl Mob for VillagerEntity {
     }
 
     fn get_job_site(&self) -> Option<BlockPos> {
-        *self.job_site.lock().unwrap()
+        *self
+            .job_site
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn get_home(&self) -> Option<BlockPos> {
-        *self.home_pos.lock().unwrap()
+        *self
+            .home_pos
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     #[expect(clippy::too_many_lines)]
@@ -766,7 +804,10 @@ impl Mob for VillagerEntity {
                 };
 
                 if !valid {
-                    *self.home_pos.lock().unwrap() = None;
+                    *self
+                        .home_pos
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
                     if is_sleeping {
                         // Wake up if bed was broken
                         self.get_entity().set_pose(EntityPose::Standing);
@@ -841,7 +882,10 @@ impl Mob for VillagerEntity {
                 }
 
                 if let Some(home) = best_home {
-                    *self.home_pos.lock().unwrap() = Some(home);
+                    *self
+                        .home_pos
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(home);
                 }
             }
 
@@ -924,7 +968,10 @@ impl Mob for VillagerEntity {
                 };
 
                 if !valid {
-                    *self.job_site.lock().unwrap() = None;
+                    *self
+                        .job_site
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
                     if xp == 0 && profession != VillagerProfession::None {
                         let r#type = self.villager_data.lock().await.type_enum();
                         self.set_villager_data(VillagerData::new(
@@ -995,7 +1042,10 @@ impl Mob for VillagerEntity {
                 }
 
                 if let Some(site) = best_site {
-                    *self.job_site.lock().unwrap() = Some(site);
+                    *self
+                        .job_site
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(site);
                     if profession == VillagerProfession::None {
                         let r#type = self.villager_data.lock().await.type_enum();
                         self.set_villager_data(VillagerData::new(r#type, best_profession, 1))

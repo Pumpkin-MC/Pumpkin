@@ -1,3 +1,19 @@
+#![allow(dead_code, unused)]
+#![allow(
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo,
+    clippy::print_stdout,
+    clippy::print_stderr,
+    clippy::empty_structs_with_brackets,
+    clippy::semicolon_outside_block,
+    clippy::unreachable,
+    clippy::undocumented_unsafe_blocks,
+    clippy::needless_return,
+    clippy::collapsible_if
+)]
+
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};

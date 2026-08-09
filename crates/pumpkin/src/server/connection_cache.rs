@@ -5,7 +5,6 @@ use pumpkin_config::BasicConfiguration;
 use pumpkin_data::packet::{CURRENT_MC_VERSION, LOWEST_SUPPORTED_MC_VERSION};
 use pumpkin_protocol::{
     Players, Sample, StatusResponse, Version,
-    codec::var_int::VarInt,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
 use std::{fs, path::Path};
@@ -42,27 +41,41 @@ pub struct CachedStatus {
 
 pub struct CachedBranding {
     /// Cached server brand buffer so we don't have to rebuild them every time a player joins
-    cached_server_brand: Box<[u8]>,
+    cached_server_brand: &'static [u8],
 }
 
-impl<'a> CachedBranding {
-    pub fn new() -> Self {
-        let cached_server_brand = Self::build_brand();
+impl Default for CachedBranding {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CachedBranding {
+    const BRAND: &'static str = "Pumpkin";
+    const BRAND_BYTES: &'static [u8] = &{
+        let brand = Self::BRAND.as_bytes();
+        let len = brand.len();
+        assert!(len < 128, "Brand length must fit in 1-byte VarInt");
+        let mut bytes = [0u8; 1 + Self::BRAND.len()];
+        bytes[0] = len as u8;
+        let mut i = 0;
+        while i < len {
+            bytes[i + 1] = brand[i];
+            i += 1;
+        }
+        bytes
+    };
+
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
-            cached_server_brand,
+            cached_server_brand: Self::BRAND_BYTES,
         }
     }
-    pub fn get_branding(&self) -> CPluginMessage<'_> {
-        CPluginMessage::new("minecraft:brand", &self.cached_server_brand)
-    }
-    const BRAND: &'a str = "Pumpkin";
-    const BRAND_BYTES: &'a [u8] = Self::BRAND.as_bytes();
 
-    fn build_brand() -> Box<[u8]> {
-        let mut buf = Vec::new();
-        VarInt(Self::BRAND.len() as i32).encode(&mut buf).unwrap();
-        buf.extend_from_slice(Self::BRAND_BYTES);
-        buf.into_boxed_slice()
+    #[must_use]
+    pub const fn get_branding(&self) -> CPluginMessage<'_> {
+        CPluginMessage::new("minecraft:brand", self.cached_server_brand)
     }
 }
 
@@ -90,7 +103,7 @@ impl CachedStatus {
             version.protocol = client_protocol as u32;
         }
 
-        let json = serde_json::to_string(&response).expect("Failed to serialize status response");
+        let json = serde_json::to_string(&response).unwrap_or_default();
 
         CStatusResponse::new(json)
     }

@@ -385,8 +385,12 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
                     })
             }
             Self::Item(item_entry) => {
-                let key = &item_entry.name.strip_prefix("minecraft:").unwrap();
-                vec![ItemStack::new(1, Item::from_registry_key(key).unwrap())]
+                let key = item_entry
+                    .name
+                    .strip_prefix("minecraft:")
+                    .unwrap_or(item_entry.name);
+                Item::from_registry_key(key)
+                    .map_or_else(Vec::new, |item| vec![ItemStack::new(1, item)])
             }
             Self::Tag(tag) => {
                 let key = tag.name.strip_prefix("minecraft:").unwrap_or(tag.name);
@@ -792,10 +796,9 @@ pub async fn fill_chest_inventory(
     }
 
     for item in items_to_place {
-        if available_slots.is_empty() {
+        let Some(slot) = available_slots.pop() else {
             break;
-        }
-        let slot = available_slots.pop().unwrap();
+        };
         inventory.set_stack(slot, item).await;
     }
 }

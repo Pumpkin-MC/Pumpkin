@@ -33,9 +33,10 @@ pub(crate) async fn can_entity_walk_on_powder_snow(entity: &dyn EntityBase) -> b
     };
 
     let equipment = living.entity_equipment.lock().await;
-    let boots = equipment.get(&EquipmentSlot::FEET);
-    let boots = boots.lock().await;
-    boots.item == &Item::LEATHER_BOOTS
+    equipment
+        .equipment
+        .get(&EquipmentSlot::FEET)
+        .is_some_and(|boots| boots.item == &Item::LEATHER_BOOTS)
 }
 
 fn is_entity_above_block(entity: &crate::entity::Entity, position: &BlockPos) -> bool {

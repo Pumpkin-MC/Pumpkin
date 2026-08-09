@@ -12,7 +12,6 @@ use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
-use tokio::sync::Mutex;
 
 /// A composite inventory combining two inventories.
 ///
@@ -49,7 +48,7 @@ impl Inventory for DoubleInventory {
         Box::pin(async move { self.first.is_empty().await && self.second.is_empty().await })
     }
 
-    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
             if slot >= self.first.size() {
                 self.second.get_stack(slot - self.first.size()).await

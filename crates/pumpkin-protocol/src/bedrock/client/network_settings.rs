@@ -9,7 +9,7 @@ pub struct CNetworkSettings {
     /// `ZLib` = 0, Snappy = 1, None = 255
     pub compression_method: u16,
     pub client_throttle_enabled: bool,
-    pub client_throttle_threshold: i8,
+    pub client_throttle_threshold: u8,
     pub client_throttle_scalar: f32,
 }
 
@@ -19,7 +19,7 @@ impl CNetworkSettings {
         compression_threshold: u16,
         compression_method: u16,
         client_throttle_enabled: bool,
-        client_throttle_threshold: i8,
+        client_throttle_threshold: u8,
         client_throttle_scalar: f32,
     ) -> Self {
         Self {

@@ -237,6 +237,11 @@ impl TextComponent {
             TextContent::Custom { key, with, .. } => {
                 text.push_str(&get_translation_text(key.clone(), locale, with.clone()));
             }
+            TextContent::PlayerSprite { profile, .. } => {
+                if let Some(name) = profile.0.get_string("name") {
+                    text.push_str(name);
+                }
+            }
         }
 
         // 4. Recursively append extra components

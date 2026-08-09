@@ -1,6 +1,6 @@
 use crate::{
     entity::item::ItemEntity,
-    net::{ClientPlatform, bedrock::BedrockClient},
+    net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     server::Server,
     world::{
         World,
@@ -296,6 +296,14 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                 Vec::new(),
             );
             client.send_game_packet(&packet).await;
+        })
+    }
+
+    fn send_java_spawn_packet<'a>(&'a self, client: &'a JavaClient) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            client
+                .enqueue_packet(&self.get_entity().create_spawn_packet())
+                .await;
         })
     }
 
@@ -1329,37 +1337,42 @@ impl Entity {
         if movement.get_axis(Axis::Y) != 0.0 {
             let mut max_time = 1.0;
             let mut positions = block_positions.into_iter();
-            let (mut collisions_len, mut position) = positions.next().unwrap();
-            let mut supporting_block_pos = None;
+            if let Some((mut collisions_len, mut position)) = positions.next() {
+                let mut supporting_block_pos = None;
 
-            for (i, inert_box) in collisions.iter().enumerate() {
-                if i == collisions_len {
-                    (collisions_len, position) = positions.next().unwrap();
-                }
+                for (i, inert_box) in collisions.iter().enumerate() {
+                    if i == collisions_len {
+                        let Some((next_len, next_pos)) = positions.next() else {
+                            break;
+                        };
+                        collisions_len = next_len;
+                        position = next_pos;
+                    }
 
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
-                    inert_box,
-                    adjusted_movement,
-                    Axis::Y,
-                    max_time,
-                ) {
-                    max_time = collision_time;
+                    if let Some(collision_time) = bounding_box.calculate_collision_time(
+                        inert_box,
+                        adjusted_movement,
+                        Axis::Y,
+                        max_time,
+                    ) {
+                        max_time = collision_time;
 
-                    // If the entity is moving downwards and collides, set the supporting block position
-                    if movement.get_axis(Axis::Y) < 0.0 {
-                        supporting_block_pos = Some(position);
+                        // If the entity is moving downwards and collides, set the supporting block position
+                        if movement.get_axis(Axis::Y) < 0.0 {
+                            supporting_block_pos = Some(position);
+                        }
                     }
                 }
-            }
 
-            if max_time != 1.0 {
-                let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
-                adjusted_movement.set_axis(Axis::Y, changed_component);
-            }
+                if max_time != 1.0 {
+                    let changed_component = adjusted_movement.get_axis(Axis::Y) * max_time;
+                    adjusted_movement.set_axis(Axis::Y, changed_component);
+                }
 
-            self.on_ground
-                .store(supporting_block_pos.is_some(), Ordering::SeqCst);
-            self.supporting_block_pos.store(supporting_block_pos);
+                self.on_ground
+                    .store(supporting_block_pos.is_some(), Ordering::SeqCst);
+                self.supporting_block_pos.store(supporting_block_pos);
+            }
         }
 
         let mut horizontal_collision = false;
@@ -1770,6 +1783,36 @@ impl Entity {
             }
         }
         self.send_head_rot(yaw);
+    }
+
+    pub fn send_bedrock_pos(&self) {
+        let position = self.pos.load();
+        let chunk_pos = self.chunk_pos.load();
+        let mut flags =
+            MOVE_ACTOR_DELTA_FLAG_HAS_X | MOVE_ACTOR_DELTA_FLAG_HAS_Y | MOVE_ACTOR_DELTA_FLAG_HAS_Z;
+        if self.on_ground.load(Relaxed) {
+            flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
+        }
+        let packet = CMoveActorDelta::new(
+            VarULong(self.entity_id as u64),
+            flags,
+            position.x as f32,
+            position.y as f32,
+            position.z as f32,
+            0,
+            0,
+            0,
+        );
+        let world = self.world.load();
+        for player in world.players.load().iter() {
+            let center = player.get_entity().chunk_pos.load();
+            let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+            if is_within_view_distance(chunk_pos, center, view_distance)
+                && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+            {
+                client.try_enqueue_packet(&packet);
+            }
+        }
     }
 
     pub fn update_last_pos(&self) -> Vector3<f64> {
@@ -2354,20 +2397,12 @@ impl Entity {
             return;
         }
 
-        if (portal_world.dimension == Dimension::THE_NETHER
-            && !portal_world
-                .server
-                .upgrade()
-                .unwrap()
-                .basic_config
-                .allow_nether)
-            || (portal_world.dimension == Dimension::THE_END
-                && !portal_world
-                    .server
-                    .upgrade()
-                    .unwrap()
-                    .basic_config
-                    .allow_end)
+        let Some(server) = portal_world.server.upgrade() else {
+            return;
+        };
+
+        if (portal_world.dimension == Dimension::THE_NETHER && !server.basic_config.allow_nether)
+            || (portal_world.dimension == Dimension::THE_END && !server.basic_config.allow_end)
         {
             return;
         }
@@ -2455,21 +2490,15 @@ impl Entity {
             return true;
         };
 
-        let armor = {
-            let equipment = living.entity_equipment.lock().await;
-            [
-                equipment.get(&EquipmentSlot::HEAD),
-                equipment.get(&EquipmentSlot::CHEST),
-                equipment.get(&EquipmentSlot::LEGS),
-                equipment.get(&EquipmentSlot::FEET),
-            ]
-        };
-
-        for stack in armor {
-            let stack = stack.lock().await;
-            if stack
-                .get_item()
-                .has_tag(&tag::Item::MINECRAFT_FREEZE_IMMUNE_WEARABLES)
+        let equipment = living.entity_equipment.lock().await;
+        for (slot, stack) in &equipment.equipment {
+            if (*slot == EquipmentSlot::HEAD
+                || *slot == EquipmentSlot::CHEST
+                || *slot == EquipmentSlot::LEGS
+                || *slot == EquipmentSlot::FEET)
+                && stack
+                    .get_item()
+                    .has_tag(&tag::Item::MINECRAFT_FREEZE_IMMUNE_WEARABLES)
             {
                 return false;
             }
@@ -2855,7 +2884,7 @@ impl Entity {
                     if is_within_view_distance(chunk_pos, center, view_distance) {
                         let mut buf = Vec::new();
                         for m in meta {
-                            m.write(&mut buf, &client.version.load()).unwrap();
+                            let _ = m.write(&mut buf, &client.version.load());
                         }
                         buf.put_u8(255);
                         player.client.try_enqueue_packet(&CSetEntityMetadata::new(
@@ -3428,31 +3457,33 @@ impl Entity {
             };
 
             if let Some(player) = passenger.get_player() {
-                let id = teleport_id.unwrap();
-                player.get_entity().set_pos(dismount_pos);
-                // Update awaiting_teleport with the real dismount position
-                *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
-                // Use enqueue_packet (not send_packet_now) so the teleport goes through
-                // the same packet queue as CSetPassengers, preserving send order.
-                // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
-                // With rotation relative and yaw/pitch=0, the client preserves its current look.
-                player
-                    .client
-                    .enqueue_packet(&CPlayerPosition::new(
-                        id.into(),
-                        dismount_pos,
-                        Vector3::new(0.0, 0.0, 0.0),
-                        0.0,
-                        0.0,
-                        vec![
-                            PositionFlag::DeltaX,
-                            PositionFlag::DeltaY,
-                            PositionFlag::DeltaZ,
-                            PositionFlag::YRot,
-                            PositionFlag::XRot,
-                        ],
-                    ))
-                    .await;
+                if let Some(id) = teleport_id {
+                    player.get_entity().set_pos(dismount_pos);
+                    // Update awaiting_teleport with the real dismount position
+                    *player.awaiting_teleport.lock().await = Some((id.into(), dismount_pos));
+                    // Use enqueue_packet (not send_packet_now) so the teleport goes through
+                    // the same packet queue as CSetPassengers, preserving send order.
+                    // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
+                    // With rotation relative and yaw/pitch=0, the client preserves its current look.
+                    player
+                        .client
+                        .enqueue_packet(&CPlayerPosition::new(
+                            id.into(),
+                            dismount_pos,
+                            Vector3::new(0.0, 0.0, 0.0),
+                            0.0,
+                            0.0,
+                            vec![
+                                PositionFlag::DeltaX,
+                                PositionFlag::DeltaY,
+                                PositionFlag::DeltaZ,
+                                PositionFlag::YRot,
+                                PositionFlag::XRot,
+                            ],
+                        ))
+                        .await;
+                }
+
                 // Vanilla: setSneaking(false) after dismount via sneak input
                 if passenger_entity.sneaking.load(Relaxed) {
                     passenger_entity.set_sneaking(false).await;

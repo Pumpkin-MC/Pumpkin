@@ -181,9 +181,11 @@ pub fn read_world_gen_settings(level_folder: &Path) -> Option<WorldGenSettings> 
             Ok(compound) => {
                 let seed = compound
                     .get_compound("data")
-                    .and_then(|c| c.get_long("seed"))
-                    .unwrap_or(0);
-                Some(WorldGenSettings {
+                    .and_then(|c| c.get_long("seed"));
+                if seed.is_none() {
+                    warn!("world_gen_settings.dat has no seed");
+                }
+                seed.map(|seed| WorldGenSettings {
                     seed,
                     dimensions: std::collections::HashMap::new(),
                 })

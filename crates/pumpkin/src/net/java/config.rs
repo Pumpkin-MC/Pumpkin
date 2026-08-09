@@ -46,7 +46,8 @@ impl JavaClient {
             self.config.store(Arc::new(PlayerConfig {
                 locale: client_information.locale.to_string(),
                 // client_information.view_distance was checked above to be > 0 so compiler should optimize this out.
-                view_distance: NonZeroU8::new(client_information.view_distance as u8).unwrap(),
+                view_distance: NonZeroU8::new(client_information.view_distance as u8)
+                    .unwrap_or(NonZeroU8::MIN),
                 chat_mode,
                 chat_colors: client_information.chat_colors,
                 skin_parts: client_information.skin_parts,

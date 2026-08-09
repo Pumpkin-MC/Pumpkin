@@ -908,12 +908,16 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
         let Some(chunk_data) = chunk_data.upgrade() else {
             return Err(wasmtime::Error::msg("Chunk unloaded"));
         };
-        Ok(chunk_data.heightmap.lock().unwrap().get(
-            ChunkHeightmapType::WorldSurface,
-            x,
-            z,
-            chunk_data.section.min_y,
-        ))
+        Ok(chunk_data
+            .heightmap
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(
+                ChunkHeightmapType::WorldSurface,
+                x,
+                z,
+                chunk_data.section.min_y,
+            ))
     }
 
     async fn get_sky_light(
@@ -930,7 +934,7 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
         Ok(chunk_data
             .light_engine
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .sky_light
             .get(section_index)
             .map_or(0, |c| {
@@ -952,7 +956,7 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
         Ok(chunk_data
             .light_engine
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .block_light
             .get(section_index)
             .map_or(0, |c| {

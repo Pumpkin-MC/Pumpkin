@@ -18,11 +18,11 @@ use tracing::{error, info};
 use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 
 pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
-    let socket = Arc::new(
-        UdpSocket::bind(query_addr)
-            .await
-            .expect("Unable to bind to address"),
-    );
+    let Ok(socket) = UdpSocket::bind(query_addr).await else {
+        error!("Unable to bind query UDP socket");
+        return;
+    };
+    let socket = Arc::new(socket);
 
     // Challenge tokens are bound to the IP address and port
     let valid_challenge_tokens = Arc::new(RwLock::new(HashMap::new()));
@@ -37,18 +37,14 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
         }
     });
 
-    info!(
-        "Server query running on port {}",
-        TextComponent::text(format!(
-            "{}",
-            socket
-                .local_addr()
-                .expect("Unable to find running address!")
-                .port()
-        ))
-        .color_named(NamedColor::DarkBlue)
-        .to_pretty_console()
-    );
+    if let Ok(local_addr) = socket.local_addr() {
+        info!(
+            "Server query running on port {}",
+            TextComponent::text(format!("{}", local_addr.port()))
+                .color_named(NamedColor::DarkBlue)
+                .to_pretty_console()
+        );
+    }
 
     while !SHOULD_STOP.load(Ordering::Relaxed) {
         let socket = socket.clone();
@@ -134,8 +130,8 @@ async fn handle_packet(
                                 // Although there is no documented limit, we will limit to 4 players
                                 .iter()
                                 .take(4 - players.len())
-                                .map(|player| {
-                                    CString::new(player.gameprofile.name.as_str()).unwrap()
+                                .filter_map(|player| {
+                                    CString::new(player.gameprofile.name.as_str()).ok()
                                 })
                                 .collect::<Vec<_>>();
 

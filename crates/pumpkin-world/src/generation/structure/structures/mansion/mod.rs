@@ -370,9 +370,9 @@ impl MansionTemplatePiece {
                 "minecraft:chest".to_string(),
                 vec![("facing".to_string(), target.name().to_string())],
             );
-            let state = BlockStateResolver::resolve_simple(&chest)
-                .expect("the vanilla chest state must resolve");
-            chunk.set_block_state(position.x, position.y, position.z, state);
+            if let Some(state) = BlockStateResolver::resolve_simple(&chest) {
+                chunk.set_block_state(position.x, position.y, position.z, state);
+            }
             let mut nbt = NbtCompound::new();
             nbt.put_string("id", "minecraft:chest".to_string());
             nbt.put_int("x", position.x);

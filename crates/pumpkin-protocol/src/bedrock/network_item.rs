@@ -29,60 +29,30 @@ pub struct NetworkItemDescriptor {
 
 impl PacketWrite for NetworkItemDescriptor {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.write_with_net_id(writer, None)
+        (self.id.0 as i16).write(writer)?;
+        self.write_stack_data(writer, None)
     }
 }
 
 impl PacketRead for NetworkItemDescriptor {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        let id = VarInt::read(buf)?;
-        if id.0 == 0 {
-            return Ok(Self::default());
-        }
+        let id = VarInt(i32::from(i16::read(buf)?));
         let stack_size = u16::read(buf)?;
         let aux_value = VarUInt::read(buf)?;
 
         let has_net_id = bool::read(buf)?;
         if has_net_id {
-            let _variant = VarUInt::read(buf)?;
             let _net_id = VarInt::read(buf)?;
         }
 
-        let block_runtime_id = VarInt::read(buf)?;
+        let block_runtime_id = VarInt(VarUInt::read(buf)?.0 as i32);
 
         let user_data_len = VarUInt::read(buf)?.0;
         let mut user_data = vec![0u8; user_data_len as usize];
         buf.read_exact(&mut user_data)?;
 
-        let mut nbt_data = Nbt::default();
-        let mut place_on_blocks = Vec::new();
-        let mut destroy_blocks = Vec::new();
-        let mut shield_blocking_tick = 0;
-
-        if !user_data.is_empty() {
-            let mut cursor = std::io::Cursor::new(user_data);
-            let nbt_version = i16::read(&mut cursor)?;
-            if nbt_version == -1 {
-                let _version = i8::read(&mut cursor)?;
-                let mut nbt_reader = NbtReadHelperBedrock::new(&mut cursor);
-                nbt_data = Nbt::read(&mut nbt_reader)
-                    .map_err(|e| Error::new(std::io::ErrorKind::InvalidData, e))?;
-            }
-
-            let place_on_len = VarUInt::read(&mut cursor)?.0;
-            for _ in 0..place_on_len {
-                place_on_blocks.push(String::read(&mut cursor)?);
-            }
-
-            let destroy_len = VarUInt::read(&mut cursor)?.0;
-            for _ in 0..destroy_len {
-                destroy_blocks.push(String::read(&mut cursor)?);
-            }
-
-            if id.0 == (BedrockItem::SHIELD.id as i32) {
-                shield_blocking_tick = i64::read(&mut cursor)?;
-            }
-        }
+        let (nbt_data, place_on_blocks, destroy_blocks, shield_blocking_tick) =
+            read_user_data(user_data, id.0 == i32::from(BedrockItem::SHIELD.id))?;
 
         Ok(Self {
             id,
@@ -98,48 +68,52 @@ impl PacketRead for NetworkItemDescriptor {
 }
 
 impl NetworkItemDescriptor {
-    #[allow(clippy::option_option)]
-    fn write_with_net_id<W: Write>(
+    fn write_stack_data<W: Write>(
         &self,
         writer: &mut W,
-        net_id: Option<Option<VarInt>>,
+        net_id: Option<VarInt>,
     ) -> Result<(), Error> {
-        self.id.write(writer)?;
-        if self.id.0 != 0 {
-            self.stack_size.write(writer)?;
-            self.aux_value.write(writer)?;
-
-            if let Some(id) = net_id {
-                id.write(writer)?;
-            }
-
-            self.block_runtime_id.write(writer)?;
-
-            let mut buf = Vec::new();
-
-            if self.nbt_data.is_empty() {
-                (0i16).write(&mut buf)?;
-            } else {
-                (-1i16).write(&mut buf)?;
-                (1i8).write(&mut buf)?;
-
-                self.nbt_data.clone().write_to_writer_bedrock(&mut buf)?;
-            }
-
-            (self.place_on_blocks.len() as u32).write(&mut buf)?;
-            self.place_on_blocks.write(&mut buf)?;
-
-            (self.destroy_blocks.len() as u32).write(&mut buf)?;
-            self.destroy_blocks.write(&mut buf)?;
-
-            if self.id.0 == (BedrockItem::SHIELD.id as i32) {
-                self.shield_blocking_tick.write(&mut buf)?;
-            }
-
-            VarUInt(buf.len() as u32).write(writer)?;
-            writer.write_all(&buf)?;
+        self.stack_size.write(writer)?;
+        self.aux_value.write(writer)?;
+        net_id.is_some().write(writer)?;
+        if let Some(net_id) = net_id {
+            net_id.write(writer)?;
         }
+        VarUInt(self.block_runtime_id.0 as u32).write(writer)?;
+        self.write_user_data(writer)?;
         Ok(())
+    }
+
+    /// Writes the 1.26.40 `NetworkItemInstanceDescriptor` used by creative and
+    /// crafting packets. Regular item fields use the stack descriptor instead.
+    pub fn write_item_instance<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.id.write(writer)?;
+        self.stack_size.write(writer)?;
+        self.aux_value.write(writer)?;
+        self.block_runtime_id.write(writer)?;
+        self.write_user_data(writer)
+    }
+
+    fn write_user_data<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        if self.id.0 == 0 {
+            return VarUInt(0).write(writer);
+        }
+
+        let mut buf = Vec::new();
+        if self.nbt_data.is_empty() {
+            (0i16).write(&mut buf)?;
+        } else {
+            (-1i16).write(&mut buf)?;
+            (1i8).write(&mut buf)?;
+            self.nbt_data.clone().write_to_writer_bedrock(&mut buf)?;
+        }
+        write_user_data_strings(&mut buf, &self.place_on_blocks)?;
+        write_user_data_strings(&mut buf, &self.destroy_blocks)?;
+        if self.id.0 == i32::from(BedrockItem::SHIELD.id) {
+            self.shield_blocking_tick.write(&mut buf)?;
+        }
+        VarUInt(buf.len() as u32).write(writer)?;
+        writer.write_all(&buf)
     }
 }
 
@@ -180,59 +154,32 @@ pub struct ItemStackWrapper {
 
 impl PacketWrite for ItemStackWrapper {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        VarInt(self.id as i32).write(writer)?;
-
-        if self.id != 0 {
-            self.stack_size.write(writer)?;
-
-            self.aux_value.write(writer)?;
-
-            self.net_id.is_some().write(writer)?;
-
-            if let Some(id) = self.net_id {
-                VarInt(id.get()).write(writer)?;
-            }
-
-            self.block_runtime_id.write(writer)?;
-
-            let mut buf = Vec::new();
-
-            if self.nbt_data.is_empty() {
-                (0i16).write(&mut buf)?;
-            } else {
-                (-1i16).write(&mut buf)?;
-                (1i8).write(&mut buf)?;
-
-                self.nbt_data.clone().write_to_writer_bedrock(&mut buf)?;
-            }
-
-            (self.place_on_blocks.len() as u32).write(&mut buf)?;
-            for block in &self.place_on_blocks {
-                block.write(&mut buf)?;
-            }
-
-            (self.destroy_blocks.len() as u32).write(&mut buf)?;
-            for block in &self.destroy_blocks {
-                block.write(&mut buf)?;
-            }
-
-            if self.id == BedrockItem::SHIELD.id {
-                self.shield_blocking_tick.write(&mut buf)?;
-            }
-
-            VarUInt(buf.len() as u32).write(writer)?;
-            writer.write_all(&buf)?;
+        self.id.write(writer)?;
+        self.stack_size.write(writer)?;
+        self.aux_value.write(writer)?;
+        self.net_id.is_some().write(writer)?;
+        if let Some(id) = self.net_id {
+            VarInt(id.get()).write(writer)?;
         }
-        Ok(())
+        VarUInt(self.block_runtime_id.0 as u32).write(writer)?;
+
+        let descriptor = NetworkItemDescriptor {
+            id: VarInt(i32::from(self.id)),
+            stack_size: self.stack_size,
+            aux_value: self.aux_value,
+            block_runtime_id: self.block_runtime_id,
+            nbt_data: self.nbt_data.clone(),
+            place_on_blocks: self.place_on_blocks.clone(),
+            destroy_blocks: self.destroy_blocks.clone(),
+            shield_blocking_tick: self.shield_blocking_tick,
+        };
+        descriptor.write_user_data(writer)
     }
 }
 
 impl PacketRead for ItemStackWrapper {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let id = i16::read(buf)?;
-        if id == 0 {
-            return Ok(Self::default());
-        }
         let stack_size = u16::read(buf)?;
         let aux_value = VarUInt::read(buf)?;
 
@@ -244,41 +191,14 @@ impl PacketRead for ItemStackWrapper {
             None
         };
 
-        let block_runtime_id = VarInt::read(buf)?;
+        let block_runtime_id = VarInt(VarUInt::read(buf)?.0 as i32);
 
         let user_data_len = VarUInt::read(buf)?.0;
         let mut user_data = vec![0u8; user_data_len as usize];
         buf.read_exact(&mut user_data)?;
 
-        let mut nbt_data = Nbt::default();
-        let mut place_on_blocks = Vec::new();
-        let mut destroy_blocks = Vec::new();
-        let mut shield_blocking_tick = 0;
-
-        if !user_data.is_empty() {
-            let mut cursor = std::io::Cursor::new(user_data);
-            let nbt_version = i16::read(&mut cursor)?;
-            if nbt_version == -1 {
-                let _version = i8::read(&mut cursor)?;
-                let mut nbt_reader = NbtReadHelperBedrock::new(&mut cursor);
-                nbt_data = Nbt::read(&mut nbt_reader)
-                    .map_err(|e| Error::new(std::io::ErrorKind::InvalidData, e))?;
-            }
-
-            let place_on_len = VarUInt::read(&mut cursor)?.0;
-            for _ in 0..place_on_len {
-                place_on_blocks.push(String::read(&mut cursor)?);
-            }
-
-            let destroy_len = VarUInt::read(&mut cursor)?.0;
-            for _ in 0..destroy_len {
-                destroy_blocks.push(String::read(&mut cursor)?);
-            }
-
-            if id == (BedrockItem::SHIELD.id) {
-                shield_blocking_tick = i64::read(&mut cursor)?;
-            }
-        }
+        let (nbt_data, place_on_blocks, destroy_blocks, shield_blocking_tick) =
+            read_user_data(user_data, id == BedrockItem::SHIELD.id)?;
 
         Ok(Self {
             id,
@@ -324,7 +244,6 @@ pub struct NetworkItemStackDescriptor {
     pub aux_value: VarUInt,
     pub block_runtime_id: VarUInt,
     pub extra_data: Vec<u8>,
-    pub net_id_variant: Option<VarUInt>,
     pub net_id: Option<NonZeroI32>,
 }
 
@@ -337,8 +256,6 @@ impl PacketWrite for NetworkItemStackDescriptor {
 
         self.net_id.is_some().write(writer)?;
         if let Some(id) = self.net_id {
-            let variant = self.net_id_variant.unwrap_or(VarUInt(0));
-            variant.write(writer)?;
             VarInt(id.get()).write(writer)?;
         }
 
@@ -359,12 +276,11 @@ impl PacketRead for NetworkItemStackDescriptor {
         let aux_value = VarUInt::read(buf)?;
 
         let has_net_id = bool::read(buf)?;
-        let (net_id_variant, net_id) = if has_net_id {
-            let variant = VarUInt::read(buf)?;
+        let net_id = if has_net_id {
             let stack_id = VarInt::read(buf)?;
-            (Some(variant), NonZeroI32::new(stack_id.0))
+            NonZeroI32::new(stack_id.0)
         } else {
-            (None, None)
+            None
         };
 
         let block_runtime_id = VarUInt::read(buf)?;
@@ -379,7 +295,6 @@ impl PacketRead for NetworkItemStackDescriptor {
             aux_value,
             block_runtime_id,
             extra_data,
-            net_id_variant,
             net_id,
         })
     }
@@ -393,7 +308,8 @@ impl From<&ItemStack> for NetworkItemStackDescriptor {
             JavaToBedrockItemMapping::from_java_item_id(stack.get_item().id).map_or(
                 Self::default(),
                 |mapping| {
-                    let extra_data = vec![0u8, 0u8];
+                    // Empty NBT followed by empty can-place and can-destroy lists.
+                    let extra_data = vec![0; 10];
 
                     Self {
                         id: mapping.bedrock_item.id,
@@ -401,7 +317,6 @@ impl From<&ItemStack> for NetworkItemStackDescriptor {
                         aux_value: VarUInt(mapping.bedrock_data),
                         block_runtime_id: VarUInt(mapping.bedrock_block_state as u32),
                         extra_data,
-                        net_id_variant: Some(VarUInt(0)),
                         net_id: Some(stack.uid),
                     }
                 },
@@ -594,15 +509,6 @@ pub struct NetworkItemStack {
 impl PacketRead for NetworkItemStack {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
         let id = VarInt::read(buf)?;
-        if id.0 == 0 {
-            return Ok(Self {
-                id,
-                count: 0,
-                aux_value: VarUInt(0),
-                block_runtime_id: VarInt(0),
-                extra_data: Vec::new(),
-            });
-        }
         let count = u16::read(buf)?;
         let aux_value = VarUInt::read(buf)?;
         let block_runtime_id = VarInt::read(buf)?;
@@ -619,4 +525,71 @@ impl PacketRead for NetworkItemStack {
             extra_data,
         })
     }
+}
+
+fn write_user_data_strings<W: Write>(writer: &mut W, values: &[String]) -> Result<(), Error> {
+    (values.len() as i32).write(writer)?;
+    for value in values {
+        let bytes = value.as_bytes();
+        let len = u16::try_from(bytes.len())
+            .map_err(|_| Error::new(std::io::ErrorKind::InvalidInput, "item string too long"))?;
+        writer.write_all(&len.to_be_bytes())?;
+        writer.write_all(bytes)?;
+    }
+    Ok(())
+}
+
+fn read_user_data_strings<R: Read>(reader: &mut R) -> Result<Vec<String>, Error> {
+    let len = i32::read(reader)?;
+    if len < 0 {
+        return Err(Error::new(
+            std::io::ErrorKind::InvalidData,
+            "negative item string array length",
+        ));
+    }
+    let mut values = Vec::with_capacity(len as usize);
+    for _ in 0..len {
+        let mut length = [0; 2];
+        reader.read_exact(&mut length)?;
+        let mut bytes = vec![0; usize::from(u16::from_be_bytes(length))];
+        reader.read_exact(&mut bytes)?;
+        values.push(
+            String::from_utf8(bytes)
+                .map_err(|error| Error::new(std::io::ErrorKind::InvalidData, error))?,
+        );
+    }
+    Ok(values)
+}
+
+fn read_user_data(
+    user_data: Vec<u8>,
+    is_shield: bool,
+) -> Result<(Nbt, Vec<String>, Vec<String>, i64), Error> {
+    if user_data.is_empty() {
+        return Ok((Nbt::default(), Vec::new(), Vec::new(), 0));
+    }
+
+    let mut cursor = std::io::Cursor::new(user_data);
+    let nbt_version = i16::read(&mut cursor)?;
+    let nbt_data = if nbt_version == -1 {
+        let _version = i8::read(&mut cursor)?;
+        let mut nbt_reader = NbtReadHelperBedrock::new(&mut cursor);
+        Nbt::read(&mut nbt_reader)
+            .map_err(|error| Error::new(std::io::ErrorKind::InvalidData, error))?
+    } else {
+        Nbt::default()
+    };
+    let place_on_blocks = read_user_data_strings(&mut cursor)?;
+    let destroy_blocks = read_user_data_strings(&mut cursor)?;
+    let shield_blocking_tick = if is_shield {
+        i64::read(&mut cursor)?
+    } else {
+        0
+    };
+    Ok((
+        nbt_data,
+        place_on_blocks,
+        destroy_blocks,
+        shield_blocking_tick,
+    ))
 }

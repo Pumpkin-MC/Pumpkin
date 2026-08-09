@@ -33,10 +33,7 @@ impl BlockBehaviour for LayeredSnowBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let item = {
-                let lock = args.item_stack.lock().await;
-                lock.item
-            };
+            let item = args.item_stack.item;
 
             if item == &Item::SNOW {
                 let pos = if args.hit.face.is_horizontal() {

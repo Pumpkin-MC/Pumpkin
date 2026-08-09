@@ -65,7 +65,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
         Box::pin(async move {
             let state_id = args.world.get_block_state_id(args.position);
             let props = NetherWartLikeProperties::from_state_id(state_id, &Block::SWEET_BERRY_BUSH);
-            if props.age != 3 && args.item_stack.lock().await.get_item() == &Item::BONE_MEAL {
+            if props.age != 3 && args.item_stack.get_item() == &Item::BONE_MEAL {
                 BlockActionResult::Pass
             } else {
                 BlockActionResult::PassToDefaultBlockAction
@@ -97,14 +97,12 @@ impl BlockBehaviour for SweetBerryBushBlock {
             let entity = args.entity.get_entity();
 
             let living_entity_opt = args.entity.get_living_entity();
-            if living_entity_opt.is_none()
-                || entity.entity_type == &EntityType::FOX
-                || entity.entity_type == &EntityType::BEE
-            {
+            let Some(living_entity) = living_entity_opt else {
+                return;
+            };
+            if entity.entity_type == &EntityType::FOX || entity.entity_type == &EntityType::BEE {
                 return;
             }
-
-            let living_entity = living_entity_opt.expect("Living entity should exist");
             entity
                 .slow_movement(args.state, Vector3::new(0.8, 0.75, 0.8))
                 .await;

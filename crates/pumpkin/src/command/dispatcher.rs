@@ -735,6 +735,22 @@ mod test {
         dispatcher.register(tree, "minecraft:test");
     }
 
+    #[tokio::test]
+    async fn pumpkin_command_aliases() {
+        let config = BasicConfiguration::default();
+        let registry = RwLock::new(PermissionRegistry::new());
+        let dispatcher = default_dispatcher(&registry, &config)
+            .await
+            .fallback_dispatcher;
+
+        let pumpkin_tree = dispatcher.get_tree("pumpkin").unwrap();
+        let version_tree = dispatcher.get_tree("version").unwrap();
+        let ver_tree = dispatcher.get_tree("ver").unwrap();
+
+        assert_eq!(pumpkin_tree.description, version_tree.description);
+        assert_eq!(pumpkin_tree.description, ver_tree.description);
+    }
+
     #[test]
     fn syntax_renderer_outputs_two_messages_with_context_styling() {
         let input = "0123456789abcdefghij";

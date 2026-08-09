@@ -28,7 +28,6 @@ use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
-use tokio::sync::Mutex;
 
 pub trait BlockMetadata {
     fn ids() -> Box<[BlockId]>;
@@ -247,7 +246,7 @@ pub struct UseWithItemArgs<'a> {
     pub position: &'a BlockPos,
     pub player: &'a Arc<Player>,
     pub hit: &'a BlockHitResult<'a>,
-    pub item_stack: &'a Arc<Mutex<ItemStack>>,
+    pub item_stack: &'a mut ItemStack,
     pub equipment_slot: &'a EquipmentSlot,
 }
 
@@ -512,8 +511,7 @@ pub async fn calculate_comparator_output(
     let mut fill_sum = 0.0;
     let mut non_empty_count = 0;
     for i in 0..size {
-        let stack_mutex = inventory.get_stack(i).await;
-        let stack = stack_mutex.lock().await;
+        let stack = inventory.get_stack(i).await;
         if !stack.is_empty() {
             let max_stack = stack.get_max_stack_size() as f32;
             let count = stack.item_count as f32;

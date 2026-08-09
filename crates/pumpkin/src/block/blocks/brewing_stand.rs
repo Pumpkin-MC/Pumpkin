@@ -91,7 +91,7 @@ impl BlockBehaviour for BrewingStandBlock {
                 // Bottle slots are 0, 1, 2 in brewing stands
                 for slot in 0..3 {
                     let stack = inventory.get_stack(slot).await;
-                    if !stack.lock().await.is_empty() {
+                    if !stack.is_empty() {
                         bottles += 1;
                     }
                 }

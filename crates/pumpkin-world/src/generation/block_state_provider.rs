@@ -1,4 +1,4 @@
-use pumpkin_data::BlockState;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{
     DoublePerlinNoiseParametersCodec,
     math::{
@@ -199,7 +199,9 @@ pub struct WeightedBlockStateProvider {
 
 impl WeightedBlockStateProvider {
     pub fn get(&self, random: &mut RandomGenerator) -> &'static BlockState {
-        Pool::get(&self.entries, random).unwrap()
+        Pool::get(&self.entries, random)
+            .copied()
+            .unwrap_or(Block::AIR.default_state)
     }
 }
 

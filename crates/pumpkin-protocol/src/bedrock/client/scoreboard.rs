@@ -1,6 +1,9 @@
 use std::io::{Error, Write};
 
-use crate::{codec::var_int::VarInt, serial::PacketWrite};
+use crate::{
+    codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt},
+    serial::PacketWrite,
+};
 use pumpkin_macros::packet;
 
 #[derive(PacketWrite)]
@@ -13,11 +16,33 @@ pub struct CSetDisplayObjective {
     pub sort_order: VarInt,
 }
 
-#[derive(PacketWrite)]
 #[packet(108)]
 pub struct CSetScore {
     pub action: VarInt, // 0 = change, 1 = remove
     pub entries: Vec<ScoreEntry>,
+}
+
+impl PacketWrite for CSetScore {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        VarUInt(self.entries.len() as u32).write(writer)?;
+        for entry in &self.entries {
+            let entry_type = if self.action.0 == 1 {
+                0
+            } else {
+                entry.entry_type.0
+            };
+            VarUInt(entry_type as u32).write(writer)?;
+            match entry_type {
+                0 => "remove".write(writer)?,
+                1 => "changeplayer".write(writer)?,
+                2 => "changeentity".write(writer)?,
+                3 => "changefakeplayer".write(writer)?,
+                _ => return Err(Error::other("Invalid scoreboard entry type")),
+            }
+            entry.write_for_type(writer, entry_type)?;
+        }
+        Ok(())
+    }
 }
 
 pub struct ScoreEntry {
@@ -31,16 +56,36 @@ pub struct ScoreEntry {
 
 impl PacketWrite for ScoreEntry {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.scoreboard_id.write(writer)?;
-        self.objective_name.write(writer)?;
-        self.score.write(writer)?;
-        self.entry_type.write(writer)?;
-        match self.entry_type.0 {
+        self.write_for_type(writer, self.entry_type.0)
+    }
+}
+
+impl ScoreEntry {
+    fn write_for_type<W: Write>(&self, writer: &mut W, entry_type: i32) -> Result<(), Error> {
+        VarLong(self.scoreboard_id).write(writer)?;
+        if entry_type == 0 {
+            (!self.objective_name.is_empty()).write(writer)?;
+            if !self.objective_name.is_empty() {
+                self.objective_name.write(writer)?;
+            }
+            return Ok(());
+        }
+        if self.objective_name.is_empty() {
+            " ".write(writer)?;
+        } else {
+            self.objective_name.write(writer)?;
+        }
+        self.score.0.write(writer)?;
+        match entry_type {
             1 | 2 => {
-                self.entity_unique_id.write(writer)?;
+                VarLong(self.entity_unique_id).write(writer)?;
             }
             3 => {
-                self.custom_name.write(writer)?;
+                if self.custom_name.is_empty() {
+                    " ".write(writer)?;
+                } else {
+                    self.custom_name.write(writer)?;
+                }
             }
             _ => {}
         }

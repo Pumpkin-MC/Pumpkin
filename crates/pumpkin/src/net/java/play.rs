@@ -38,7 +38,7 @@ use crate::block::entities::jigsaw_block::JigsawBlockEntity;
 use crate::block::entities::sign::SignBlockEntity;
 use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
-use crate::world::{World, chunker};
+use crate::world::{BlockBreakingProgress, World, chunker};
 use pumpkin_data::block_properties::{BlockProperties, CommandBlockLikeProperties};
 use pumpkin_data::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl,
@@ -1269,8 +1269,7 @@ impl JavaClient {
         let recipe_matches = {
             let mut ok = true;
             for (idx, ing) in ingredient_slots.iter().enumerate() {
-                let slot_arc = crafting_inv.get_stack(idx).await;
-                let stack = slot_arc.lock().await;
+                let stack = crafting_inv.get_stack(idx).await;
                 match ing {
                     None => {
                         if !stack.is_empty() {
@@ -1294,8 +1293,7 @@ impl JavaClient {
             let mut min = u8::MAX;
             for (idx, ing) in ingredient_slots.iter().enumerate() {
                 if ing.is_some() {
-                    let slot_arc = crafting_inv.get_stack(idx).await;
-                    let stack = slot_arc.lock().await;
+                    let stack = crafting_inv.get_stack(idx).await;
                     if !stack.is_empty() {
                         min = min.min(stack.item_count);
                     }
@@ -1336,7 +1334,7 @@ impl JavaClient {
             let Some(ingredient) = ing else { continue };
             let taken = take_n_ingredient(&player.inventory, ingredient, amount_to_craft).await;
             if !taken.is_empty() {
-                *crafting_inv.get_stack(idx).await.lock().await = taken;
+                crafting_inv.set_stack(idx, taken).await;
             }
         }
 
@@ -1876,8 +1874,7 @@ impl JavaClient {
                             player.attack(event.target).await;
                         }
                         ActionType::Interact | ActionType::InteractAt => {
-                            let held = player.inventory.held_item();
-                            let mut stack = held.lock().await.clone();
+                            let mut stack = player.inventory().held_item().await;
                             let target_entity = event.target.get_entity();
                             if target_entity.entity_type.resource_name == "zombie_villager"
                                 && stack.item.registry_key == "golden_apple"
@@ -1892,7 +1889,7 @@ impl JavaClient {
                                     .use_on_entity(&mut stack, player, event.target)
                                     .await;
                             }
-                            *held.lock().await = stack;
+                            player.inventory().set_held_item(stack).await;
                         }
                     }
                 }
@@ -1980,11 +1977,8 @@ impl JavaClient {
                     }
 
                     let inventory = player.inventory();
-                    let held = inventory.held_item();
-                    if !server
-                        .item_registry
-                        .can_mine(held.lock().await.item, player)
-                    {
+                    let held = inventory.held_item().await;
+                    if !server.item_registry.can_mine(held.item, player) {
                         self.enqueue_packet(&CBlockUpdate::new(
                             position,
                             VarInt(i32::from(state.id.as_u16())),
@@ -2041,7 +2035,7 @@ impl JavaClient {
                                 if can_harvest {
                                     player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
                                 }
-                                let item_id = player.inventory().held_item().lock().await.item.id;
+                                let item_id = player.inventory().held_item().await.item.id;
                                 player
                                     .increment_stat(StatisticCategory::Used, item_id as i32, 1)
                                     .await;
@@ -2058,7 +2052,19 @@ impl JavaClient {
                             player.mining.store(true, Ordering::Relaxed);
                             *player.mining_pos.lock().await = position;
                             let progress = (speed * 10.0) as i32;
-                            world.set_block_breaking(entity, position, progress).await;
+                            player
+                                .current_block_breaking_speed
+                                .store(speed.to_bits(), Ordering::Relaxed);
+                            world
+                                .set_block_breaking(
+                                    entity,
+                                    position,
+                                    BlockBreakingProgress::Start {
+                                        stage: progress,
+                                        speed,
+                                    },
+                                )
+                                .await;
                             player
                                 .current_block_destroy_stage
                                 .store(progress, Ordering::Relaxed);
@@ -2080,7 +2086,11 @@ impl JavaClient {
                     entity
                         .world
                         .load()
-                        .set_block_breaking(entity, player_action.position, -1)
+                        .set_block_breaking(
+                            entity,
+                            player_action.position,
+                            BlockBreakingProgress::Stop,
+                        )
                         .await;
                     self.update_sequence(player, player_action.sequence.0);
                 }
@@ -2101,7 +2111,9 @@ impl JavaClient {
                     let world = entity.world.load_full();
 
                     player.mining.store(false, Ordering::Relaxed);
-                    world.set_block_breaking(entity, location, -1).await;
+                    world
+                        .set_block_breaking(entity, location, BlockBreakingProgress::Stop)
+                        .await;
 
                     let (block, state) = world.get_block_and_state(&location);
                     let block_drop = player.gamemode.load() != GameMode::Creative
@@ -2128,7 +2140,7 @@ impl JavaClient {
                         if block_drop {
                             player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
                         }
-                        let item_id = player.inventory().held_item().lock().await.item.id;
+                        let item_id = player.inventory().held_item().await.item.id;
                         player
                             .increment_stat(StatisticCategory::Used, item_id as i32, 1)
                             .await;
@@ -2277,23 +2289,16 @@ impl JavaClient {
         }
 
         let inventory = player.inventory();
-        let held_item = inventory.held_item();
+        let held_item = inventory.held_item().await;
         let off_hand_item = inventory.off_hand_item().await;
-        let held_item_empty = held_item.lock().await.is_empty();
-        let off_hand_item_empty = off_hand_item.lock().await.is_empty();
+        let held_item_empty = held_item.is_empty();
+        let off_hand_item_empty = off_hand_item.is_empty();
 
-        let item = if matches!(hand, Hand::Left) {
-            held_item
+        let item_id = if matches!(hand, Hand::Left) {
+            held_item.item.id
         } else {
-            off_hand_item
+            off_hand_item.item.id
         };
-        let equipment_slot = if matches!(hand, Hand::Left) {
-            EquipmentSlot::MAIN_HAND
-        } else {
-            EquipmentSlot::OFF_HAND
-        };
-
-        let item_id = item.lock().await.item.id;
         player
             .increment_stat(StatisticCategory::Used, item_id as i32, 1)
             .await;
@@ -2323,6 +2328,17 @@ impl JavaClient {
             }
         }}
 
+        let mut item = if matches!(hand, Hand::Left) {
+            held_item
+        } else {
+            off_hand_item
+        };
+        let equipment_slot = if matches!(hand, Hand::Left) {
+            EquipmentSlot::MAIN_HAND
+        } else {
+            EquipmentSlot::OFF_HAND
+        };
+
         let sneaking = player.get_entity().is_sneaking();
 
         // Code based on the java class ServerPlayerInteractionManager
@@ -2333,7 +2349,7 @@ impl JavaClient {
                     &position,
                     &cursor_pos,
                     &face,
-                    &item,
+                    &mut item,
                     &equipment_slot,
                     &world,
                     block,
@@ -2356,25 +2372,21 @@ impl JavaClient {
             PlayerInventory::OFF_HAND_SLOT
         };
 
-        let mut stack = item.lock().await;
-
-        if stack.is_empty() {
+        if item.is_empty() {
             // TODO item cool down
             // If the hand is empty we stop here
             return Ok(());
         }
 
-        let before = stack.clone();
+        let before = item.clone();
 
         server
             .item_registry
-            .use_on_block(
-                &mut stack, player, position, face, cursor_pos, block, server,
-            )
+            .use_on_block(&mut item, player, position, face, cursor_pos, block, server)
             .await;
 
         // Check if the item is a block, because not every item can be placed :D
-        let item_id = stack.item.id;
+        let item_id = item.item.id;
         if let Some(block) = Block::from_item_id(item_id) {
             should_try_decrement = self
                 .run_is_block_place(player, block, server, use_item_on, position, face)
@@ -2385,12 +2397,11 @@ impl JavaClient {
             // TODO: Config
             // Decrease block count
             if player.gamemode.load() != GameMode::Creative {
-                stack.decrement(1);
+                item.decrement(1);
             }
         }
 
-        let after = stack.clone();
-        drop(stack);
+        let after = item.clone();
 
         // Broadcast the break entity status before the slot sync; the client
         // needs the old item texture in the slot for break particles.
@@ -2406,7 +2417,8 @@ impl JavaClient {
         }
 
         if !after.are_equal(&before) {
-            player.sync_hand_slot(slot_index, after).await;
+            player.sync_hand_slot(slot_index, after.clone()).await;
+            inventory.set_stack_in_hand(hand, after).await;
         }
 
         Ok(())
@@ -2419,7 +2431,7 @@ impl JavaClient {
         position: &BlockPos,
         cursor_pos: &Vector3<f32>,
         face: &BlockDirection,
-        held_item: &Arc<Mutex<ItemStack>>,
+        held_item: &mut ItemStack,
         equipment_slot: &EquipmentSlot,
         world: &Arc<World>,
         block: &Block,
@@ -2484,7 +2496,10 @@ impl JavaClient {
             &sign_entity.back_text
         };
 
-        *text.messages.lock().unwrap() = [
+        *text
+            .messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = [
             sign_data.line_1.into(),
             sign_data.line_2.into(),
             sign_data.line_3.into(),
@@ -2512,16 +2527,13 @@ impl JavaClient {
         };
         self.update_sequence(player, use_item.sequence.0);
 
-        let item_in_hand = if hand == Hand::Left {
-            inventory.held_item()
+        let mut item_in_hand = if hand == Hand::Left {
+            inventory.held_item().await
         } else {
             inventory.off_hand_item().await
         };
 
-        let (item_id, _item) = {
-            let guard = item_in_hand.lock().await;
-            (guard.item.id, guard.item)
-        };
+        let (item_id, _item) = (item_in_hand.item.id, item_in_hand.item);
         player
             .increment_stat(StatisticCategory::Used, item_id as i32, 1)
             .await;
@@ -2551,13 +2563,9 @@ impl JavaClient {
         } else {
             PlayerInteractEvent::new(player, InteractAction::RightClickAir, &Block::AIR, None)
         };
-        self.prepare_hand_item_for_use(player, hand, &item_in_hand)
+        let (item_for_use, stack_for_use) = (item_in_hand.item, item_in_hand.clone());
+        self.prepare_hand_item_for_use(player, hand, &mut item_in_hand)
             .await;
-
-        let (item_for_use, stack_for_use) = {
-            let held = item_in_hand.lock().await;
-            (held.item, held.clone())
-        };
 
         if !self
             .should_continue_use_after_fish_event(server, player, hand, item_for_use)
@@ -2579,10 +2587,9 @@ impl JavaClient {
         &self,
         player: &Arc<Player>,
         hand: Hand,
-        item_in_hand: &Arc<Mutex<ItemStack>>,
+        held: &mut ItemStack,
     ) {
         let inventory = player.inventory();
-        let mut held = item_in_hand.lock().await;
 
         if let Some(cooldown) = held.get_use_cooldown() {
             let group = cooldown
@@ -2616,35 +2623,27 @@ impl JavaClient {
             }
         }
         if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
-            // Skip if the item is already in the target equipment slot.
-            // This prevents a self-deadlock: `held` already locks the same
-            // Mutex<ItemStack> that `get_or_insert` would return, and
-            // Tokio's Mutex is not reentrant.
-            if inventory
-                .is_already_equipped(item_in_hand, equippable.slot)
-                .await
-            {
+            let mut equipment_guard = inventory.entity_equipment.lock().await;
+            let current_equipped = equipment_guard.get(equippable.slot);
+            if current_equipped.are_items_and_components_equal(held) {
                 return;
             }
 
-            // If it can be equipped we want to make sure we can actually equip it
-            player
-                .enqueue_equipment_change(equippable.slot, &held)
-                .await;
+            player.enqueue_equipment_change(equippable.slot, held).await;
 
-            let binding = {
-                let mut equipment = inventory.entity_equipment.lock().await;
-                equipment.get_or_insert(equippable.slot)
-            };
-            let mut equip_item = binding.lock().await;
+            let equip_item = equipment_guard
+                .equipment
+                .entry(equippable.slot.clone())
+                .or_insert_with(|| ItemStack::EMPTY.clone());
             if equip_item.is_empty() {
                 *equip_item = held.clone();
                 held.decrement_unless_creative(player.gamemode.load(), 1);
             } else {
-                let binding = held.clone();
+                let old_held = held.clone();
                 *held = equip_item.clone();
-                *equip_item = binding;
+                *equip_item = old_held;
             }
+            inventory.set_stack_in_hand(hand, held.clone()).await;
         }
     }
 
@@ -2703,7 +2702,7 @@ impl JavaClient {
 
         let inv = player.inventory();
         inv.set_selected_slot(slot);
-        let stack = inv.held_item().lock().await.clone();
+        let stack = inv.held_item().await;
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         player.living_entity.send_equipment_changes(equipment);
     }
@@ -2730,8 +2729,6 @@ impl JavaClient {
             let is_armor_equipped = player_screen_handler
                 .get_slot(packet.slot as usize)
                 .get_stack()
-                .await
-                .lock()
                 .await
                 .are_equal(&item_stack);
             if !is_armor_equipped {

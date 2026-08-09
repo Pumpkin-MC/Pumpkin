@@ -151,12 +151,11 @@ impl Goal for LookAtEntityGoal {
                 } else {
                     target_entity.get_eye_y()
                 };
-                mob_entity.look_control.lock().unwrap().look_at(
-                    mob,
-                    target_pos.x,
-                    look_y,
-                    target_pos.z,
-                );
+                mob_entity
+                    .look_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .look_at(mob, target_pos.x, look_y, target_pos.z);
                 self.look_time -= 1;
             }
         })

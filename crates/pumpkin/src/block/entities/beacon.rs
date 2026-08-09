@@ -300,12 +300,12 @@ impl Inventory for BeaconBlockEntity {
         Box::pin(async move { self.payment.lock().await.is_empty() })
     }
 
-    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
             if slot == 0 {
-                self.payment.clone()
+                self.payment.lock().await.clone()
             } else {
-                Arc::new(Mutex::new(ItemStack::EMPTY.clone()))
+                ItemStack::EMPTY.clone()
             }
         })
     }

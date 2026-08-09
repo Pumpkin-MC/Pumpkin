@@ -4,6 +4,9 @@
 //! NBT, Bedrock network NBT, and gzip-compressed NBT. Data is handled directly
 //! via [`Nbt`], [`NbtCompound`], and [`NbtTag`].
 
+#![deny(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+
 use std::{
     io::{self, Write},
     ops::Deref,
@@ -156,11 +159,13 @@ impl Nbt {
     pub fn write(self) -> Bytes {
         let mut bytes = Vec::new();
         let mut writer = NbtWriteHelperJava::new(&mut bytes);
-        writer.write_u8(COMPOUND_ID).unwrap();
-        NbtTag::String(self.name.into())
-            .serialize_data(&mut writer)
-            .unwrap();
-        self.root_tag.serialize_content(&mut writer).unwrap();
+        if writer.write_u8(COMPOUND_ID).is_ok()
+            && NbtTag::String(self.name.into())
+                .serialize_data(&mut writer)
+                .is_ok()
+        {
+            let _ = self.root_tag.serialize_content(&mut writer);
+        }
 
         bytes.into()
     }
@@ -170,11 +175,13 @@ impl Nbt {
     pub fn write_bedrock(self) -> Bytes {
         let mut bytes = Vec::new();
         let mut writer = NbtWriteHelperBedrock::new(&mut bytes);
-        writer.write_u8(COMPOUND_ID).unwrap();
-        NbtTag::String(self.name.into())
-            .serialize_data(&mut writer)
-            .unwrap();
-        self.root_tag.serialize_content(&mut writer).unwrap();
+        if writer.write_u8(COMPOUND_ID).is_ok()
+            && NbtTag::String(self.name.into())
+                .serialize_data(&mut writer)
+                .is_ok()
+        {
+            let _ = self.root_tag.serialize_content(&mut writer);
+        }
 
         bytes.into()
     }
@@ -197,8 +204,9 @@ impl Nbt {
         let mut bytes = Vec::new();
         let mut writer = NbtWriteHelperJava::new(&mut bytes);
 
-        writer.write_u8(COMPOUND_ID).unwrap();
-        self.root_tag.serialize_content(&mut writer).unwrap();
+        if writer.write_u8(COMPOUND_ID).is_ok() {
+            let _ = self.root_tag.serialize_content(&mut writer);
+        }
 
         bytes.into()
     }

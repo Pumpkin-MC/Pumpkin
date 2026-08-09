@@ -11,7 +11,7 @@ use pumpkin_protocol::bedrock::network_item::ItemStackWrapper;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::codec::var_ulong::VarULong;
-use pumpkin_protocol::java::client::play::Metadata;
+use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_util::math::atomic_f32::AtomicF32;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::atomic::Ordering::{AcqRel, Relaxed};
@@ -38,6 +38,8 @@ pub struct ItemEntity {
     never_despawn: AtomicBool,
     never_pickup: AtomicBool,
 }
+
+const ITEM_UPDATE_INTERVAL: u32 = 20;
 
 impl ItemEntity {
     pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
@@ -379,9 +381,19 @@ impl ItemEntity {
             || entity.touching_water.load(Ordering::SeqCst)
             || entity.touching_lava.load(Ordering::SeqCst)
             || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
+        let moved = entity.pos.load() != entity.last_sent_pos.load();
+        let position_dirty = moved
+            && self
+                .item_age
+                .load(Ordering::Relaxed)
+                .is_multiple_of(ITEM_UPDATE_INTERVAL);
 
-        if velocity_dirty {
+        if position_dirty || velocity_dirty {
             entity.send_pos_rot();
+        } else if moved {
+            entity.send_bedrock_pos();
+        }
+        if velocity_dirty {
             entity.send_velocity();
         }
     }
@@ -621,6 +633,33 @@ impl EntityBase for ItemEntity {
                 from_fishing: false,
             };
             client.send_game_packet(&packet).await;
+        })
+    }
+
+    fn send_java_spawn_packet<'a>(
+        &'a self,
+        client: &'a crate::net::java::JavaClient,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            client
+                .enqueue_packet(&self.entity.create_spawn_packet())
+                .await;
+
+            let metadata = Metadata::new(
+                TrackedData::ITEM,
+                MetaDataType::ITEM_STACK,
+                ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+            );
+            let mut data = Vec::new();
+            if metadata.write(&mut data, &client.version.load()).is_ok() {
+                data.push(255);
+                client
+                    .enqueue_packet(&CSetEntityMetadata::new(
+                        self.entity.entity_id.into(),
+                        data.into(),
+                    ))
+                    .await;
+            }
         })
     }
 }

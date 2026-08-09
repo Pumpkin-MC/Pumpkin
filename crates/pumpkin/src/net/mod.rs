@@ -98,7 +98,7 @@ impl Default for PlayerConfig {
     fn default() -> Self {
         Self {
             locale: "en_us".to_string(),
-            view_distance: NonZeroU8::new(8).unwrap(),
+            view_distance: NonZeroU8::new(8).unwrap_or(NonZeroU8::MIN),
             chat_mode: ChatMode::Enabled,
             chat_colors: true,
             skin_parts: 0x7F,
@@ -249,6 +249,13 @@ impl ClientPlatform {
         }
     }
 
+    pub async fn enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
+        match self {
+            Self::Java(java) => entity.send_java_spawn_packet(java).await,
+            Self::Bedrock(bedrock) => entity.send_bedrock_spawn_packet(bedrock).await,
+        }
+    }
+
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
         match self {
             Self::Java(java) => java.send_chunks(chunks).await,
@@ -315,7 +322,7 @@ pub async fn can_not_join(
                 translation::java::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
                 translation::java::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
                 [TextComponent::text(
-                    expires.format(FORMAT_DESCRIPTION).unwrap(),
+                    expires.format(FORMAT_DESCRIPTION).unwrap_or_default(),
                 )],
             )),
             None => text,
@@ -353,7 +360,7 @@ pub async fn can_not_join(
                 translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
                 translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
                 [TextComponent::text(
-                    expires.format(FORMAT_DESCRIPTION).unwrap(),
+                    expires.format(FORMAT_DESCRIPTION).unwrap_or_default(),
                 )],
             )),
             None => text,

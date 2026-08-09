@@ -297,8 +297,15 @@ impl OctaveSimplexNoiseSampler {
         let mut octaves = Vec::from_iter(octaves);
         octaves.sort();
 
-        let i = -**octaves.first().expect("Should have some octaves");
-        let j = **octaves.last().expect("Should have some octaves");
+        let (Some(&&first), Some(&&last)) = (octaves.first(), octaves.last()) else {
+            return Self {
+                octave_samplers: Vec::new(),
+                persistence: 0.0,
+                lacunarity: 0.0,
+            };
+        };
+        let i = -first;
+        let j = last;
         let k = i.wrapping_add(j).wrapping_add(1);
 
         let sampler = SimplexNoiseSampler::new(random);

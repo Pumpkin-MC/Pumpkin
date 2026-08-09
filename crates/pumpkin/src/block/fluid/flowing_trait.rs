@@ -88,9 +88,10 @@ pub trait FlowingFluid: Send + Sync {
             }
 
             let waterlogged = block.is_waterlogged(current_block_state_id);
-            let current_fluid_state = self
-                .get_effective_props(fluid, current_block_state_id)
-                .unwrap();
+            let Some(current_fluid_state) = self.get_effective_props(fluid, current_block_state_id)
+            else {
+                return;
+            };
             let is_source = current_fluid_state.level == Level::L8
                 && current_fluid_state.falling != Falling::True;
             let state_for_spreading: FlowingFluidProperties;

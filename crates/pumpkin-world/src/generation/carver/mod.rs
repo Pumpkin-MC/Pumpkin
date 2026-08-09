@@ -299,9 +299,10 @@ fn overworld_carve_state(
     y: i32,
     z: i32,
 ) -> Option<(&'static BlockState, bool)> {
-    let lava_y = config
-        .lava_level
-        .get_y(run.chunk.bottom_y() as i16, run.chunk.height());
+    let lava_y = config.lava_level.get_y(
+        run.chunk.generation_bottom_y() as i16,
+        run.chunk.generation_height(),
+    );
 
     if y <= lava_y {
         return Some((run.ids.lava, false));

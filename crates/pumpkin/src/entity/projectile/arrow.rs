@@ -440,6 +440,7 @@ impl EntityBase for ArrowEntity {
         })
     }
 
+    #[allow(clippy::too_many_lines)]
     fn on_hit(&self, hit: ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let entity = self.get_entity();
@@ -455,7 +456,10 @@ impl EntityBase for ArrowEntity {
                     // Arrow hit a block - stick into it
                     self.in_ground.store(true, Ordering::Relaxed);
                     self.shake_time.store(7, Ordering::Relaxed);
-                    *self.last_block_pos.write().unwrap() = Some(pos);
+                    *self
+                        .last_block_pos
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pos);
 
                     let block = world.get_block(&pos);
                     if block == &pumpkin_data::Block::TARGET {

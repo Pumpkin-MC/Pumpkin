@@ -4,8 +4,6 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::math::position::BlockPos;
 
-use tokio::sync::Mutex;
-
 use crate::{
     block::viewer::ViewerCountTracker, impl_block_entity_for_chest, impl_chest_helper_methods,
     impl_clearable_for_chest, impl_inventory_for_chest, impl_viewer_count_listener_for_chest,
@@ -13,7 +11,7 @@ use crate::{
 
 pub struct ChestBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
+    pub items: tokio::sync::RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
 
     // Viewer
