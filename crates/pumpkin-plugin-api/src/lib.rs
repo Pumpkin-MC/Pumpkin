@@ -39,6 +39,32 @@
 //!
 //! register_plugin!(MyPlugin);
 //! ```
+//!
+//! # Persisting data
+//!
+//! Plugins run as WebAssembly with WASI, so a plugin stores data that survives
+//! server restarts by reading and writing its own files with your language's
+//! normal file API (for example `std::fs` in Rust). There is no separate
+//! storage API; the file system is the storage.
+//!
+//! Each plugin has a private data folder. To use it:
+//!
+//! 1. Request the `fs.read.data` and/or `fs.write.data` permissions
+//!    (`permissions::FS_READ_DATA` / `permissions::FS_WRITE_DATA`) in your
+//!    [`PluginMetadata`]. Without them the folder is not accessible.
+//! 2. Get the folder path from the context's `get_data_folder` method inside
+//!    `on_load` or `on_unload`. The returned path is the folder as seen from
+//!    inside the WASI sandbox.
+//! 3. Read and write files under that path with your normal file API.
+//!
+//! ```rust,ignore
+//! fn on_load(&self, context: &Context) -> Result<(), String> {
+//!     let path = format!("{}/state.json", context.get_data_folder());
+//!     let saved = std::fs::read_to_string(&path).unwrap_or_default();
+//!     // ...parse and use `saved`, then later write it back...
+//!     Ok(())
+//! }
+//! ```
 
 use crate::{
     commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber,

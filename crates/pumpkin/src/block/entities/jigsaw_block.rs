@@ -144,6 +144,9 @@ impl JigsawBlockEntity {
                             pumpkin_world::generation::structure::template::PaletteEntry::from_string(
                                 final_state_str,
                             );
+                            if entry.name == "minecraft:structure_void" {
+                                continue;
+                            }
                             let final_state =
                             pumpkin_world::generation::structure::template::BlockStateResolver::resolve(
                                 &entry,

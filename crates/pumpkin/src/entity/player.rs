@@ -129,6 +129,14 @@ pub const DATA_VERSION: i32 = 4903; // 26.2
 /// must apply the same gating.
 pub const MINE_BLOCK_EXHAUSTION: f32 = 0.005; // Vanilla: 0.005F
 
+const fn bedrock_inventory_slot(player_screen_slot: i16) -> Option<u32> {
+    match player_screen_slot {
+        9..=35 => Some(player_screen_slot as u32),
+        36..=44 => Some((player_screen_slot - 36) as u32),
+        _ => None,
+    }
+}
+
 struct HeapNode(i32, Vector2<i32>, Weak<ChunkData>);
 
 impl Eq for HeapNode {}
@@ -552,6 +560,11 @@ use pumpkin_protocol::Property;
 use serde::Deserialize;
 use std::io::Read;
 
+// Bit masks for the Java skin pixels that Bedrock requires to be opaque.
+// Adapted from Geyser's SkinProvider under the MIT License.
+const SKIN_OPAQUE_MASK: &str = "AP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAADwD/D/D/8AAPAP8P8P/wAA8A/w/w//AADwD/D/D/8AAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAP///////w8A////////DwD///////8PAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwD/APAAAAAPAP8A8AAAAA8A/wDwAAAADwD/APAAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAA=";
+const LEGACY_SKIN_OPAQUE_MASK: &str = "AP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAADwD/D/D/APAPAP8P8P8A8A8A/w/w/wDwDwD/D/D/APAP////////8A/////////wD/////////AP////////8A/////////wD/////////AP////////8A/////////wD/////////AP////////8A/////////wD/////////AA==";
+
 #[derive(Deserialize)]
 struct TexturesProperty {
     textures: Textures,
@@ -598,7 +611,7 @@ impl Player {
         let img = image::load_from_memory(&buf).ok()?;
 
         let width = img.width();
-        let mut height = img.height();
+        let height = img.height();
 
         if width != 64 || (height != 32 && height != 64) {
             return None;
@@ -606,18 +619,26 @@ impl Player {
 
         let mut rgba = img.into_rgba8().into_raw();
 
-        if height == 32 {
-            rgba.resize(64 * 64 * 4, 0);
-            height = 64;
+        let opaque_mask = BASE64_STANDARD
+            .decode(if height == 32 {
+                LEGACY_SKIN_OPAQUE_MASK
+            } else {
+                SKIN_OPAQUE_MASK
+            })
+            .ok()?;
+        for pixel_index in 0..(width * height) as usize {
+            if opaque_mask[pixel_index >> 3] & (1 << (pixel_index & 7)) != 0 {
+                rgba[pixel_index * 4 + 3] = u8::MAX;
+            }
         }
 
         let mut skin = pumpkin_protocol::bedrock::client::Skin::steve();
-        if is_slim {
-            skin.arm_size = "slim".to_string();
-        }
+        skin.set_slim(is_slim);
         skin.image_width = width;
         skin.image_height = height;
         skin.skin_data = rgba;
+        skin.skin_id.clone_from(&url);
+        skin.full_id = url;
         Some(skin)
     }
 
@@ -668,12 +689,20 @@ impl Player {
         abilities.set_for_gamemode(gamemode);
 
         let properties = gameprofile.properties.load().clone();
-        let bedrock_skin = tokio::task::spawn_blocking(move || {
+        let mut bedrock_skin = tokio::task::spawn_blocking(move || {
             Self::fetch_skin(&properties)
                 .unwrap_or_else(pumpkin_protocol::bedrock::client::Skin::steve)
         })
         .await
         .unwrap_or_else(|_| pumpkin_protocol::bedrock::client::Skin::steve());
+
+        // Standard_Custom is a shared placeholder. Give fallback skins a stable,
+        // per-player identity so Bedrock never sees duplicate skin IDs.
+        if bedrock_skin.skin_id == "Standard_Custom" {
+            let skin_id = format!("pumpkin:{player_uuid}");
+            bedrock_skin.skin_id.clone_from(&skin_id);
+            bedrock_skin.full_id = skin_id;
+        }
 
         Self {
             living_entity,
@@ -5442,13 +5471,18 @@ impl InventoryPlayer for Player {
                     use pumpkin_protocol::codec::var_uint::VarUInt;
 
                     let window_id = packet.window_id.0 as u32;
-                    let slots: Vec<NetworkItemStackDescriptor> = packet
-                        .slot_data
-                        .iter()
-                        .map(|s| NetworkItemStackDescriptor::from(&*s.0))
-                        .collect();
-
                     if window_id == 0 {
+                        // Java's player screen also contains crafting, armor, and off-hand
+                        // slots. Bedrock container 0 contains only the 36-slot player
+                        // inventory in hotbar-first order.
+                        let slots = self
+                            .inventory
+                            .main_inventory
+                            .read()
+                            .await
+                            .iter()
+                            .map(NetworkItemStackDescriptor::from)
+                            .collect();
                         let bedrock_packet = CInventoryContent {
                             container_id: VarUInt(0),
                             slots,
@@ -5481,30 +5515,21 @@ impl InventoryPlayer for Player {
                     use pumpkin_protocol::codec::var_uint::VarUInt;
 
                     let window_id = packet.window_id;
-                    tracing::info!(
-                        "enqueue_slot_packet: window_id={}, slot={}",
-                        window_id,
-                        packet.slot
-                    );
-
                     if window_id == 0 {
-                        tracing::info!(
-                            "enqueue_slot_packet: window_id is 0, sending CInventorySlot to Bedrock client"
-                        );
-                        let slot_idx = packet.slot as usize;
-                        let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
-
-                        let bedrock_packet = CInventorySlot {
-                            window_id: VarUInt(0),
-                            inventory_slot: VarUInt(slot_idx as u32),
-                            container_name: Some(FullContainerName {
-                                container_name: ContainerName::Inventory,
-                                dynamic_id: None,
-                            }),
-                            storage: None,
-                            item: item_desc,
-                        };
-                        bedrock.enqueue_packet(&bedrock_packet).await;
+                        if let Some(slot_idx) = bedrock_inventory_slot(packet.slot) {
+                            let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
+                            let bedrock_packet = CInventorySlot {
+                                window_id: VarUInt(0),
+                                inventory_slot: VarUInt(slot_idx),
+                                container_name: Some(FullContainerName {
+                                    container_name: ContainerName::Inventory,
+                                    dynamic_id: None,
+                                }),
+                                storage: None,
+                                item: item_desc,
+                            };
+                            bedrock.enqueue_packet(&bedrock_packet).await;
+                        }
                     } else {
                         let slot_idx = packet.slot as usize;
                         let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
@@ -5711,5 +5736,20 @@ impl InventoryPlayer for Player {
         Box::pin(async move {
             self.increment_stat(category, stat_id, amount).await;
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bedrock_inventory_slot;
+
+    #[test]
+    fn player_screen_slots_map_to_bedrock_inventory() {
+        assert_eq!(bedrock_inventory_slot(9), Some(9));
+        assert_eq!(bedrock_inventory_slot(35), Some(35));
+        assert_eq!(bedrock_inventory_slot(36), Some(0));
+        assert_eq!(bedrock_inventory_slot(44), Some(8));
+        assert_eq!(bedrock_inventory_slot(8), None);
+        assert_eq!(bedrock_inventory_slot(45), None);
     }
 }
