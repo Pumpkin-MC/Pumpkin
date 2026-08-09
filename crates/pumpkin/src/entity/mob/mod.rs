@@ -1,4 +1,7 @@
-use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{
+    Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, equipment_break_status,
+    living::LivingEntity,
+};
 use crate::entity::EntityBaseFuture;
 use crate::entity::ai::brain::Brain;
 use crate::entity::ai::control::MoveControlTrait;
@@ -12,6 +15,7 @@ use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::{EntityType, MobCategory};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -21,7 +25,6 @@ use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata}
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
@@ -378,7 +381,7 @@ impl MobEntity {
         true
     }
 
-    pub fn check_any_light_monster_spawn_rules(_world: &World, _pos: &BlockPos) -> bool {
+    pub const fn check_any_light_monster_spawn_rules(_world: &World, _pos: &BlockPos) -> bool {
         // Vanilla delegates this predicate to Mob.checkMobSpawnRules. The
         // natural-spawn caller has already run is_spawn_position_ok, which is
         // Pumpkin's equivalent of that block-state predicate.
@@ -500,22 +503,7 @@ impl MobEntity {
         base_box.expand(attack_range, 0.0, attack_range)
     }
 
-    pub async fn tick_sun_burn(&self) {
-        if !self
-            .living_entity
-            .entity
-            .entity_type
-            .has_tag(&tag::EntityType::MINECRAFT_BURN_IN_DAYLIGHT)
-        {
-            return;
-        }
-        if !self.is_sun_burn_tick().await {
-            return;
-        }
-        self.apply_sun_burn();
-    }
-
-    async fn is_sun_burn_tick(&self) -> bool {
+    async fn is_sun_burn_tick(&self, brightness: f32) -> bool {
         let entity = &self.living_entity.entity;
 
         let world_arc = entity.world.load();
@@ -530,21 +518,17 @@ impl MobEntity {
             return false;
         }
 
-        // Vanilla: getLightLevelDependentMagicValue() — sky light at eye pos, scaled 0–1.
-        let eye_block_pos = entity.get_eye_pos();
-        let brightness = world
-            .level
-            .light_engine
-            .get_sky_light_level(&world.level, &eye_block_pos.to_block_pos())
-            as f32
-            / 15.0;
-
         if brightness <= 0.5 {
             return false;
         }
 
+        let pos = entity.pos.load();
+        let block_pos = BlockPos::floored(pos.x, pos.y, pos.z);
+        let head_pos = BlockPos::floored(pos.x, entity.bounding_box.load().max.y, pos.z);
+        let is_in_rain =
+            world.is_raining_at(&block_pos).await || world.is_raining_at(&head_pos).await;
         let is_in_non_burnable = entity.touching_water.load(Relaxed)
-            || world.weather.lock().await.raining
+            || is_in_rain
             || entity.is_in_powder_snow()
             || entity.was_in_powder_snow.load(Relaxed);
 
@@ -552,9 +536,8 @@ impl MobEntity {
             return false;
         }
 
-        let pos = entity.pos.load();
-        let top_y = world.get_top_block(Vector2::new(pos.x as i32, pos.z as i32));
-        if (entity.get_eye_y() as i32) < top_y {
+        let eye_block_pos = BlockPos::floored(pos.x, entity.get_eye_y(), pos.z);
+        if !world.can_see_sky(&eye_block_pos) {
             return false;
         }
 
@@ -655,6 +638,71 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn get_mob_entity(&self) -> &MobEntity;
+
+    /// Vanilla `Mob.sunProtectionSlot`; zombie horses use their body slot.
+    fn sun_protection_slot(&self) -> EquipmentSlot {
+        EquipmentSlot::HEAD
+    }
+
+    /// Vanilla `Mob.burnUndead`, called after `LivingEntity.aiStep`.
+    fn tick_sun_burn(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let mob_entity = self.get_mob_entity();
+            let living = &mob_entity.living_entity;
+            let entity = &living.entity;
+            if living.dead.load(Relaxed)
+                || living.health.load() <= 0.0
+                || entity.is_removed()
+                || !entity
+                    .entity_type
+                    .has_tag(&tag::EntityType::MINECRAFT_BURN_IN_DAYLIGHT)
+                || !mob_entity
+                    .is_sun_burn_tick(self.light_level_dependent_magic_value(&entity.world.load()))
+                    .await
+            {
+                return;
+            }
+            if living.dead.load(Relaxed) || living.health.load() <= 0.0 || entity.is_removed() {
+                return;
+            }
+
+            let slot = self.sun_protection_slot();
+            let item = {
+                let equipment = living.entity_equipment.lock().await;
+                equipment.get(&slot)
+            };
+            let mut stack = item.lock().await;
+            if living.dead.load(Relaxed) || living.health.load() <= 0.0 || entity.is_removed() {
+                return;
+            }
+            if !stack.is_empty() {
+                if stack.is_damageable() && !stack.is_unbreakable() && rand::random_range(0..2) != 0
+                {
+                    let new_damage = stack.get_damage() + 1;
+                    let broken = stack
+                        .get_max_damage()
+                        .is_some_and(|max_damage| new_damage >= max_damage);
+                    if broken {
+                        *stack = ItemStack::EMPTY.clone();
+                    } else {
+                        stack.set_damage(new_damage);
+                    }
+                    let updated_stack = stack.clone();
+                    drop(stack);
+                    if broken {
+                        entity
+                            .world
+                            .load()
+                            .send_entity_status(entity, equipment_break_status(&slot));
+                    }
+                    living.send_equipment_changes(&[(slot, updated_stack)]);
+                }
+                return;
+            }
+
+            mob_entity.apply_sun_burn();
+        })
+    }
 
     /// Vanilla `Mob.updateControlFlags`: a mob riding another controlling mob gives up its
     /// movement/look/jump goals, while a mob in a boat only gives up jump goals.
@@ -1189,7 +1237,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 }
             }
             mob_entity.living_entity.entity.tick_leash().await;
-            mob_entity.tick_sun_burn().await;
 
             if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
                 mob_entity.breeding_cooldown.fetch_sub(1, Relaxed);
@@ -1216,8 +1263,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             // and Mob.aiStep item pickup still run; only goals, brains, navigation, and
             // controllers belong to the skipped AI step.
             if !mob_entity.is_no_ai() {
-                self.mob_tick(caller).await;
-
                 // 1. "Take" selectors out of the mutexes
                 let mut target_selector = {
                     let mut guard = mob_entity.target_selector.lock().unwrap();
@@ -1314,6 +1359,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             }
 
             mob_entity.living_entity.tick(caller, server).await;
+            self.tick_sun_burn().await;
             self.mob_try_pick_up_items().await;
             self.post_tick().await;
 

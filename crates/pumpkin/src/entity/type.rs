@@ -348,6 +348,7 @@ pub fn from_type(
     mob
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn check_spawn_rules(
     entity_type: &'static EntityType,
     world: &World,

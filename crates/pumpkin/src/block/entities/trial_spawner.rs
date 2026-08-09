@@ -144,6 +144,7 @@ impl TrialSpawnerConfig {
 // TrialSpawnerConfigs.java:22-269 (bootstrap registry). The entity compound is
 // retained because SpawnData carries more than the registry id (for example the
 // baby-zombie and slime-size modifiers).
+#[allow(clippy::too_many_lines)]
 fn built_in_config(key: &str) -> Option<TrialSpawnerConfig> {
     const D_SIM: f32 = 2.0;
     const D_TOTAL: f32 = 6.0;
@@ -221,7 +222,7 @@ fn built_in_config(key: &str) -> Option<TrialSpawnerConfig> {
         data.put_compound("entity", entity);
         potentials.push((entity_type, 1, data));
     } else if mob == "slime" {
-        for (size, weight) in [(1_i8, 3_i32), (2_i8, 1_i32)] {
+        for (size, weight) in [(1i8, 3i32), (2i8, 1i32)] {
             let mut entity = NbtCompound::new();
             entity.put_string("id", "minecraft:slime".to_string());
             entity.put_byte("Size", size);
@@ -388,6 +389,7 @@ impl TrialSpawnerBlockEntity {
         }
     }
 
+    #[allow(clippy::unused_async)]
     async fn has_mob_to_spawn(&self, config: &TrialSpawnerConfig) -> bool {
         if self.next_spawn_entity.lock().unwrap().is_some() {
             return true;
@@ -395,6 +397,7 @@ impl TrialSpawnerBlockEntity {
         !config.spawn_potentials.is_empty()
     }
 
+    #[allow(clippy::unused_async)]
     async fn get_or_create_next_spawn_data(
         &self,
         config: &TrialSpawnerConfig,

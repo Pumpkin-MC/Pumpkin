@@ -141,7 +141,7 @@ fn get_level_respawn_pos(world: &World, x: i32, z: i32) -> Option<BlockPos> {
         if Fluid::from_state_id(state.id).is_some() {
             break;
         }
-        if has_full_upward_face(&state) {
+        if has_full_upward_face(state) {
             return Some(pos.up());
         }
         y -= 1;
