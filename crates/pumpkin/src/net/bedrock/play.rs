@@ -1100,6 +1100,12 @@ impl BedrockClient {
                 let world = entity.world.load_full();
                 let (block, state) = world.get_block_and_state(&location);
 
+                if player.mining.load(Ordering::Relaxed)
+                    && *player.mining_pos.lock().await != location
+                {
+                    player.stop_mining().await;
+                }
+
                 if player.gamemode.load() == GameMode::Creative {
                     let new_state = world
                         .break_block(
@@ -1117,6 +1123,7 @@ impl BedrockClient {
                 } else if !state.is_air() {
                     let speed = crate::block::calc_block_breaking(player, state, block).await;
                     if speed >= 1.0 {
+                        player.stop_mining().await;
                         let broken_state = world.get_block_state(&location);
                         let can_harvest = player.can_harvest(broken_state, block).await;
                         let new_state = world
@@ -1184,7 +1191,7 @@ impl BedrockClient {
                     }
                 }
             }
-            PlayerAction::PredictDestroyBlock | PlayerAction::StopBreak => {
+            action @ (PlayerAction::PredictDestroyBlock | PlayerAction::StopBreak) => {
                 let location = packet.block_pos;
                 if !player.can_interact_with_block_at(&location, 1.0) {
                     return;
@@ -1204,13 +1211,7 @@ impl BedrockClient {
                         && same_block
                         && speed * elapsed as f32 >= MIN_PREDICTED_BREAK_PROGRESS
                     {
-                        player.mining.store(false, Ordering::Relaxed);
-                        player
-                            .current_block_destroy_stage
-                            .store(-1, Ordering::Relaxed);
-                        world
-                            .set_block_breaking(entity, location, BlockBreakingProgress::Stop)
-                            .await;
+                        player.stop_mining().await;
 
                         let can_harvest = player.can_harvest(state, block).await;
                         let flags = if can_harvest {
@@ -1236,19 +1237,25 @@ impl BedrockClient {
                         let runtime_id = pumpkin_data::BlockState::to_be_network_id(state.id);
                         self.enqueue_packet(&CUpdateBlock::new(location, runtime_id as u32))
                             .await;
-                        world
-                            .set_block_breaking(
-                                entity,
-                                location,
-                                BlockBreakingProgress::Update {
-                                    stage: player
-                                        .current_block_destroy_stage
-                                        .load(Ordering::Relaxed),
-                                    speed: Some(speed),
-                                },
-                            )
-                            .await;
+                        if matches!(action, PlayerAction::StopBreak) {
+                            player.stop_mining().await;
+                        } else {
+                            world
+                                .set_block_breaking(
+                                    entity,
+                                    location,
+                                    BlockBreakingProgress::Update {
+                                        stage: player
+                                            .current_block_destroy_stage
+                                            .load(Ordering::Relaxed),
+                                        speed: Some(speed),
+                                    },
+                                )
+                                .await;
+                        }
                     }
+                } else if matches!(action, PlayerAction::StopBreak) {
+                    player.stop_mining().await;
                 }
             }
             PlayerAction::CrackBreak => {
@@ -1256,14 +1263,7 @@ impl BedrockClient {
                 // cracking is done fully server-side.
             }
             PlayerAction::AbortBreak => {
-                let location = packet.block_pos;
-                let entity = &player.get_entity();
-                let world = entity.world.load();
-
-                player.mining.store(false, Ordering::Relaxed);
-                world
-                    .set_block_breaking(entity, location, BlockBreakingProgress::Stop)
-                    .await;
+                player.stop_mining().await;
             }
             PlayerAction::DropItem => {
                 player.drop_held_item(false).await;
@@ -1353,6 +1353,7 @@ impl BedrockClient {
 
         for request in packet.requests {
             let mut created_item: Option<ItemStack> = None;
+            let mut crafting_inputs_consumed = false;
             let mut updates = Vec::new();
             let mut result = 0u8; // 0 = Success, 1 = Error
 
@@ -1564,6 +1565,22 @@ impl BedrockClient {
                     }
                     ItemStackRequestAction::Destroy { count, source }
                     | ItemStackRequestAction::Consume { count, source } => {
+                        if crafting_inputs_consumed
+                            && source.container_name.container_name == ContainerName::CraftingInput
+                        {
+                            let source_stack =
+                                get_slot_stack(&*screen_handler, &source, created_item.as_ref())
+                                    .await;
+                            record_update(
+                                &mut updates,
+                                source.container_name.clone(),
+                                source.slot_id,
+                                source_stack.item_count,
+                                source.stack_id,
+                            );
+                            continue;
+                        }
+
                         let mut source_stack =
                             get_slot_stack(&*screen_handler, &source, created_item.as_ref()).await;
                         if source_stack.is_empty() {
@@ -1625,8 +1642,10 @@ impl BedrockClient {
                             let output_slot = screen_handler.get_behaviour().slots[0].clone();
                             let output_stack = output_slot.get_cloned_stack().await;
 
-                            if output_stack.is_empty() {
-                                tracing::warn!("Client tried to craft, but output slot is empty!");
+                            if output_stack.is_empty()
+                                || repetitions > output_slot.get_max_item_count().await
+                            {
+                                tracing::warn!("Client sent an invalid crafting request");
                                 result = 1;
                                 break;
                             }
@@ -1641,6 +1660,7 @@ impl BedrockClient {
                                     .on_take_item(player.as_ref(), &output_stack)
                                     .await;
                             }
+                            crafting_inputs_consumed = true;
 
                             // Record updates for all grid slots so Bedrock client is notified of consumed ingredients!
                             let is_player = screen_handler.window_type().is_none();
