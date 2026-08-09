@@ -103,11 +103,14 @@ world/*
 logs/
 crash-reports/
 
+wepif.yml
+
 # docker-compose
 data/*
 
 # project's configurations
 pumpkin.toml
+nethernet-key.der
 
 
 *.local.nbt

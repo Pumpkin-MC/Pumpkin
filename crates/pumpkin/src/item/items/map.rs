@@ -26,20 +26,23 @@ impl ItemBehaviour for MapItem {
         player: &'a Player,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            let server = player.world().server.upgrade().unwrap();
+            let Some(server) = player.world().server.upgrade() else {
+                return;
+            };
 
             let inventory = player.inventory();
-            let main_hand_item = inventory.held_item();
-            let off_hand_item = inventory.off_hand_item().await;
-            let mut hand_stack = main_hand_item.lock().await;
-
-            let found = if !hand_stack.is_empty() && hand_stack.item.id == Item::MAP.id {
-                true
-            } else {
-                drop(hand_stack);
-                hand_stack = off_hand_item.lock().await;
-                !hand_stack.is_empty() && hand_stack.item.id == Item::MAP.id
-            };
+            let held_stack = inventory.held_item().await;
+            let (found, mut hand_stack, hand) =
+                if !held_stack.is_empty() && held_stack.item.id == Item::MAP.id {
+                    (true, held_stack, pumpkin_util::Hand::Right)
+                } else {
+                    let off_hand = inventory.off_hand_item().await;
+                    if !off_hand.is_empty() && off_hand.item.id == Item::MAP.id {
+                        (true, off_hand, pumpkin_util::Hand::Left)
+                    } else {
+                        (false, held_stack, pumpkin_util::Hand::Right)
+                    }
+                };
 
             if found {
                 let map_id = server.next_map_id();
@@ -59,10 +62,10 @@ impl ItemBehaviour for MapItem {
 
                 let gamemode = player.gamemode.load();
                 if hand_stack.item_count == 1 && gamemode != GameMode::Creative {
-                    *hand_stack = filled_map;
+                    inventory.set_stack_in_hand(hand, filled_map).await;
                 } else {
                     hand_stack.decrement_unless_creative(gamemode, 1);
-                    drop(hand_stack);
+                    inventory.set_stack_in_hand(hand, hand_stack).await;
                     inventory.offer_or_drop_stack(filled_map, player).await;
                 }
             }

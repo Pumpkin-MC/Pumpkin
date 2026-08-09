@@ -4,7 +4,6 @@ pub mod statistics;
 use core::f32;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
-use std::mem;
 use std::num::NonZeroU8;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI8, AtomicI32, AtomicU8, AtomicU32, Ordering};
@@ -106,7 +105,7 @@ use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::server::Server;
-use crate::world::World;
+use crate::world::{BlockBreakingProgress, World};
 use bytes::Bytes;
 
 use super::breath::BreathManager;
@@ -250,7 +249,10 @@ impl ChunkManager {
         let old_view_distance = self.view_distance;
 
         {
-            let mut lock = level.chunk_loading.lock().unwrap();
+            let mut lock = level
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let new_level = ChunkLoading::get_level_from_view_distance(view_distance);
             lock.add_ticket(center, new_level);
 
@@ -309,7 +311,10 @@ impl ChunkManager {
     }
 
     pub fn clean_up(&mut self, level: &Arc<Level>) {
-        let mut lock = level.chunk_loading.lock().unwrap();
+        let mut lock = level
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         lock.remove_ticket(
             self.center,
             ChunkLoading::get_level_from_view_distance(self.view_distance),
@@ -328,7 +333,10 @@ impl ChunkManager {
     }
 
     pub fn change_world(&mut self, old_level: &Arc<Level>, new_world: Arc<World>) {
-        let mut lock = old_level.chunk_loading.lock().unwrap();
+        let mut lock = old_level
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         lock.remove_ticket(
             self.center,
             ChunkLoading::get_level_from_view_distance(self.view_distance),
@@ -467,6 +475,8 @@ pub struct Player {
     pub stats: Mutex<statistics::Statistics>,
     /// The current stage of block destruction of the block the player is breaking.
     pub current_block_destroy_stage: AtomicI32,
+    /// The per-tick block destruction progress last sent to Bedrock clients.
+    pub current_block_breaking_speed: AtomicU32,
     /// Indicates if the player is currently mining a block.
     pub mining: AtomicBool,
     pub start_mining_time: AtomicI32,
@@ -623,7 +633,10 @@ impl Player {
 
         impl ScreenHandlerListener for ScreenListener {}
 
-        let server = world.server.upgrade().unwrap();
+        let server = world.server.upgrade().unwrap_or_else(|| {
+            tracing::error!("server inactive");
+            std::process::exit(1);
+        });
 
         let player_uuid = gameprofile.id;
 
@@ -646,13 +659,8 @@ impl Player {
         let ender_chest_inventory = Arc::new(EnderChestInventory::new());
 
         let player_screen_handler = Arc::new(Mutex::new(
-            PlayerScreenHandler::new(
-                &inventory,
-                None,
-                0,
-                Some(world.server.upgrade().unwrap().recipe_manager.clone()),
-            )
-            .await,
+            PlayerScreenHandler::new(&inventory, None, 0, Some(server.recipe_manager.clone()))
+                .await,
         ));
 
         // Initialize abilities based on gamemode (like vanilla's GameMode.setAbilities())
@@ -683,6 +691,7 @@ impl Player {
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
+            current_block_breaking_speed: AtomicU32::new(0),
             enchantment_seed: AtomicI32::new(rand::random()),
             open_container: AtomicCell::new(None),
             open_container_pos: AtomicCell::new(None),
@@ -708,7 +717,7 @@ impl Player {
             watched_section: AtomicCell::new(Cylindrical::new(
                 Vector2::new(0, 0),
                 // Since 1 is not possible in vanilla it is used as uninit
-                NonZeroU8::new(1).unwrap(),
+                NonZeroU8::new(1).unwrap_or(NonZeroU8::MIN),
             )),
             last_action_time: AtomicCell::new(std::time::Instant::now()),
             ping: AtomicU32::new(0),
@@ -967,13 +976,15 @@ impl Player {
     #[expect(clippy::too_many_lines)]
     pub async fn attack(&self, victim: Arc<dyn EntityBase>) {
         let world = self.world();
-        let server = world.server.upgrade().unwrap();
+        let Some(server) = world.server.upgrade() else {
+            return;
+        };
         let victim_entity = victim.get_entity();
         let attacker_entity = &self.living_entity.entity;
         let config = &server.advanced_config.pvp;
 
         let inventory = self.inventory();
-        let item_stack = inventory.held_item();
+        let item_stack = inventory.held_item().await;
 
         let base_damage = self
             .living_entity
@@ -987,7 +998,7 @@ impl Player {
         let mut knockback_level = 0u32;
 
         {
-            let stack = item_stack.lock().await;
+            let stack = &item_stack;
             if stack.is_empty() {
                 // Vanilla fist: base_attack_damage = -1.0, base_attack_speed = -2.4
                 add_damage = -1.0;
@@ -1118,11 +1129,7 @@ impl Player {
             self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::DealtOverkillDamage).await;
         }
 
-        if let Some(enchantments) = item_stack
-            .lock()
-            .await
-            .get_data_component::<EnchantmentsImpl>()
-        {
+        if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>() {
             for (enchantment, level) in enchantments.enchantment.iter() {
                 if **enchantment == Enchantment::FIRE_ASPECT {
                     victim_entity.set_on_fire_for_ticks(*level as u32 * 80);
@@ -1166,10 +1173,7 @@ impl Player {
                     combat::spawn_sweep_particle(attacker_entity, &world, &pos);
 
                     let mut sweep_damage = 1.0;
-                    if let Some(enchantments) = item_stack
-                        .lock()
-                        .await
-                        .get_data_component::<EnchantmentsImpl>()
+                    if let Some(enchantments) = item_stack.get_data_component::<EnchantmentsImpl>()
                     {
                         for (enchantment, level) in enchantments.enchantment.iter() {
                             if **enchantment == Enchantment::SWEEPING_EDGE {
@@ -1218,11 +1222,8 @@ impl Player {
         // 2. Refactor compute cost as a closure: damage_held_item(self, |stack| -> i32 { ... })
         // 3. In practice, single-player scenarios are safe (this is not multiplayer). Document
         //    as a known limitation if refactoring is deemed too invasive.
-        self.damage_held_item({
-            let stack = item_stack.lock().await;
-            Self::combat_weapon_durability_cost(&stack)
-        })
-        .await;
+        self.damage_held_item(Self::combat_weapon_durability_cost(&item_stack))
+            .await;
 
         // Vanilla `Player#attack` ends the successful-hit branch with
         // `causeFoodExhaustion(0.1F)`. Only landed hits exhaust; the miss/no-damage
@@ -1282,14 +1283,10 @@ impl Player {
             EquipmentSlot::Body(_) | EquipmentSlot::Saddle(_) => return false,
         };
 
-        let stack_arc = self.inventory.get_stack(slot_index).await;
-
-        let updated = {
-            let mut stack = stack_arc.lock().await;
-            let result = stack.damage_item(amount);
-            (result != pumpkin_data::item_stack::DamageResult::Untouched)
-                .then_some((result, stack.clone()))
-        };
+        let mut stack = self.inventory().get_stack(slot_index).await;
+        let result = stack.damage_item(amount);
+        let updated = (result != pumpkin_data::item_stack::DamageResult::Untouched)
+            .then_some((result, stack.clone()));
 
         if let Some((result, updated_stack)) = updated {
             if let Some(server) = self.world().server.upgrade()
@@ -1359,13 +1356,12 @@ impl Player {
             return;
         }
 
-        let damage = {
-            let stack = self.inventory.held_item();
-            let stack = stack.lock().await;
-            stack
-                .get_data_component::<ToolImpl>()
-                .map_or(0, |tool| tool.damage_per_block as i32)
-        };
+        let damage = self
+            .inventory()
+            .held_item()
+            .await
+            .get_data_component::<ToolImpl>()
+            .map_or(0, |tool| tool.damage_per_block as i32);
 
         if damage > 0 {
             self.damage_held_item(damage).await;
@@ -2099,25 +2095,65 @@ impl Player {
         }
 
         if self.mining.load(Ordering::Relaxed) {
-            let pos = self.mining_pos.lock().await;
+            let pos = *self.mining_pos.lock().await;
             let world = self.world();
             let state = world.get_block_state(&pos);
             // Is the block broken?
             if state.is_air() {
                 world
-                    .set_block_breaking(&self.living_entity.entity, *pos, -1)
+                    .set_block_breaking(
+                        &self.living_entity.entity,
+                        pos,
+                        BlockBreakingProgress::Stop,
+                    )
                     .await;
                 self.current_block_destroy_stage
                     .store(-1, Ordering::Relaxed);
                 self.mining.store(false, Ordering::Relaxed);
             } else {
-                self.continue_mining(
-                    *pos,
-                    &world,
-                    state,
-                    self.start_mining_time.load(Ordering::Relaxed),
-                )
-                .await;
+                let finished = self
+                    .continue_mining(
+                        pos,
+                        &world,
+                        state,
+                        self.start_mining_time.load(Ordering::Relaxed),
+                    )
+                    .await;
+                if finished && matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) {
+                    self.mining.store(false, Ordering::Relaxed);
+                    self.current_block_destroy_stage
+                        .store(-1, Ordering::Relaxed);
+                    world
+                        .set_block_breaking(
+                            &self.living_entity.entity,
+                            pos,
+                            BlockBreakingProgress::Stop,
+                        )
+                        .await;
+
+                    let block = Block::from_state_id(state.id);
+                    let can_harvest = self.can_harvest(state, block).await;
+                    let flags = if can_harvest {
+                        pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
+                    } else {
+                        pumpkin_world::world::BlockFlags::SKIP_DROPS
+                            | pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
+                    };
+                    if world
+                        .break_block(&pos, Some(self.clone()), flags)
+                        .await
+                        .is_some()
+                    {
+                        server
+                            .block_registry
+                            .broken(&world, block, self, &pos, server, state)
+                            .await;
+                        self.apply_tool_damage_for_block_break(state).await;
+                        if can_harvest {
+                            self.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                        }
+                    }
+                }
             }
         }
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
@@ -2163,18 +2199,31 @@ impl Player {
         world: &World,
         state: &BlockState,
         starting_time: i32,
-    ) {
+    ) -> bool {
         let time = self.tick_counter.load(Ordering::Relaxed) - starting_time;
-        let speed = block::calc_block_breaking(self, state, Block::from_state_id(state.id)).await
-            * (time + 1) as f32;
-        let progress = (speed * 10.0) as i32;
-        if progress != self.current_block_destroy_stage.load(Ordering::Relaxed) {
+        let speed = block::calc_block_breaking(self, state, Block::from_state_id(state.id)).await;
+        let total_progress = speed * (time + 1) as f32;
+        let stage = (total_progress * 10.0) as i32;
+        let stage = stage.min(9);
+        let old_speed = self
+            .current_block_breaking_speed
+            .swap(speed.to_bits(), Ordering::Relaxed);
+        let speed_changed = old_speed != speed.to_bits();
+        if stage != self.current_block_destroy_stage.load(Ordering::Relaxed) || speed_changed {
             world
-                .set_block_breaking(&self.living_entity.entity, location, progress)
+                .set_block_breaking(
+                    &self.living_entity.entity,
+                    location,
+                    BlockBreakingProgress::Update {
+                        stage,
+                        speed: speed_changed.then_some(speed),
+                    },
+                )
                 .await;
             self.current_block_destroy_stage
-                .store(progress, Ordering::Relaxed);
+                .store(stage, Ordering::Relaxed);
         }
+        total_progress >= 1.0
     }
 
     pub async fn jump(&self) {
@@ -2548,27 +2597,39 @@ impl Player {
 
     /// Sends the world time to only this player.
     pub async fn send_time(&self, world: &World) {
+        let advance_time = {
+            let lock = world.level_info.load();
+            lock.game_rules.advance_time
+        };
+
+        let l_world = world.level_time.lock().await;
         if let Some((custom_time, relative)) = self.per_player_time.load() {
             let time_of_day = if relative {
-                let l_world = world.level_time.lock().await;
                 (l_world.time_of_day as u64 + custom_time) as i64
             } else {
                 custom_time as i64
             };
-            let l_world = world.level_time.lock().await;
+            let paused = l_world.paused || !advance_time;
+            let rate = if paused { 0.0 } else { l_world.rate };
             self.client
                 .enqueue_packet_editioned(
-                    &CUpdateTime::new(l_world.world_age, time_of_day, true),
+                    &CUpdateTime::new_clock(
+                        l_world.world_age,
+                        0,
+                        time_of_day,
+                        l_world.partial_tick,
+                        rate,
+                    ),
                     &CSetTime::new(time_of_day as _),
                 )
                 .await;
             return;
         }
 
-        let l_world = world.level_time.lock().await;
+        let (total_ticks, partial_tick, rate) = l_world.pack_network_state(advance_time);
         self.client
             .enqueue_packet_editioned(
-                &CUpdateTime::new(l_world.world_age, l_world.time_of_day, true),
+                &CUpdateTime::new_clock(l_world.world_age, 0, total_ticks, partial_tick, rate),
                 &CSetTime::new(l_world.query_daytime() as _),
             )
             .await;
@@ -2678,7 +2739,7 @@ impl Player {
 
         self.watched_section.store(Cylindrical::new(
             Vector2::new(0, 0),
-            NonZeroU8::new(1).unwrap(),
+            NonZeroU8::new(1).unwrap_or(NonZeroU8::MIN),
         ));
     }
 
@@ -2694,7 +2755,9 @@ impl Player {
         let yaw = yaw.unwrap_or(new_world.level_info.load().spawn_yaw);
         let pitch = pitch.unwrap_or(new_world.level_info.load().spawn_pitch);
 
-        let server = new_world.server.upgrade().unwrap();
+        let Some(server) = new_world.server.upgrade() else {
+            return;
+        };
 
         send_cancellable! {{
             server;
@@ -2716,7 +2779,9 @@ impl Player {
                 let new_world = event.new_world;
 
                 self.set_client_loaded(false);
-                let player = current_world.remove_player(self, false).await.unwrap();
+                let Some(player) = current_world.remove_player(self, false).await else {
+                    return;
+                };
                new_world.players.rcu(|current_list| {
                     let mut new_list = (**current_list).clone();
                     new_list.push(player.clone());
@@ -2808,7 +2873,9 @@ impl Player {
         // This is the ultra special magic code used to create the teleport id
         // This returns the old value
         // This operation wraps around on overflow.
-        let server = self.world().server.upgrade().unwrap();
+        let Some(server) = self.world().server.upgrade() else {
+            return;
+        };
         send_cancellable! {{
             server;
             PlayerTeleportEvent {
@@ -3141,14 +3208,12 @@ impl Player {
         let keep_inventory = { self.world().level_info.load().game_rules.keep_inventory };
 
         if !keep_inventory {
-            for item in &self.inventory().main_inventory {
-                let mut lock = item.lock().await;
-                self.world()
-                    .drop_stack(
-                        &block_pos,
-                        mem::replace(&mut *lock, ItemStack::EMPTY.clone()),
-                    )
-                    .await;
+            let mut main_inv = self.inventory().main_inventory.write().await;
+            for item in main_inv.iter_mut() {
+                if !item.is_empty() {
+                    let stack = std::mem::replace(item, ItemStack::EMPTY.clone());
+                    self.world().drop_stack(&block_pos, stack).await;
+                }
             }
         }
 
@@ -3171,7 +3236,9 @@ impl Player {
         if self.gamemode.load() == gamemode {
             return false;
         }
-        let server = self.world().server.upgrade().unwrap();
+        let Some(server) = self.world().server.upgrade() else {
+            return false;
+        };
         send_cancellable! {{
             server;
             PlayerGamemodeChangeEvent {
@@ -3297,15 +3364,14 @@ impl Player {
     pub async fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {
         !state.tool_required()
             || self
-                .inventory
+                .inventory()
                 .held_item()
-                .lock()
                 .await
                 .is_correct_for_drops(block)
     }
 
     pub async fn get_mining_speed(&self, block: &'static Block) -> f32 {
-        let mut speed = self.inventory.held_item().lock().await.get_speed(block);
+        let mut speed = self.inventory().held_item().await.get_speed(block);
         // Haste
         if self.living_entity.has_effect(&StatusEffect::HASTE).await
             || self
@@ -3418,45 +3484,40 @@ impl Player {
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
-        // Do not hold both item stack and screen handler locks at the same time.
-        let (dropped_stack, updated_stack, selected_slot) = {
-            let binding = self.inventory.held_item();
-            let mut item_stack = binding.lock().await;
+        let mut item_stack = self.inventory().held_item().await;
 
-            if item_stack.is_empty() {
+        if item_stack.is_empty() {
+            return;
+        }
+
+        let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
+        let dropped_stack = item_stack.copy_with_count(drop_amount);
+
+        if let Some(server) = self.world().server.upgrade()
+            && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_drop_item::PlayerDropItemEvent::new(
+                    player_arc,
+                    dropped_stack.item.registry_key.to_string(),
+                    dropped_stack.item_count as u8,
+                );
+            server.plugin_manager.fire(&server, &mut event).await;
+            if event.cancelled {
                 return;
             }
+        }
 
-            let drop_amount = if drop_stack { item_stack.item_count } else { 1 };
-            let dropped_stack = item_stack.copy_with_count(drop_amount);
-
-            if let Some(server) = self.world().server.upgrade()
-                && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
-            {
-                let mut event =
-                    crate::plugin::api::events::player::player_drop_item::PlayerDropItemEvent::new(
-                        player_arc,
-                        dropped_stack.item.registry_key.to_string(),
-                        dropped_stack.item_count as u8,
-                    );
-                server.plugin_manager.fire(&server, &mut event).await;
-                if event.cancelled {
-                    return;
-                }
-            }
-
-            item_stack.decrement(drop_amount);
-            let updated_stack = item_stack.clone();
-            let selected_slot = self.inventory.get_selected_slot();
-
-            (dropped_stack, updated_stack, selected_slot)
-        };
+        item_stack.decrement(drop_amount);
+        let updated_stack = item_stack.clone();
+        self.inventory().set_held_item(updated_stack.clone()).await;
 
         self.drop_item(dropped_stack).await;
 
         let inv: Arc<dyn Inventory> = self.inventory.clone();
         let screen_binding = self.current_screen_handler.lock().await;
         let mut screen_handler = screen_binding.lock().await;
+        let selected_slot = self.inventory.get_selected_slot();
         if let Some(slot_index) = screen_handler
             .get_slot_index(&inv, selected_slot as usize)
             .await
@@ -3545,9 +3606,8 @@ impl Player {
         use pumpkin_data::item::Item;
 
         for hand in Hand::all() {
-            let item_in_hand = self.inventory.get_stack_in_hand(hand).await;
+            let stack = self.inventory().get_stack_in_hand(hand).await;
 
-            let stack = item_in_hand.lock().await;
             if stack.item.id == Item::FILLED_MAP.id
                 && let Some(map_id_comp) = stack.get_data_component::<MapIdImpl>()
             {
@@ -3806,7 +3866,7 @@ impl Player {
             return xp;
         }
 
-        let mut candidates: Vec<(usize, EquipmentSlot, Arc<Mutex<ItemStack>>)> = Vec::new();
+        let mut candidates: Vec<(usize, EquipmentSlot, ItemStack)> = Vec::new();
 
         let selected_slot = self.inventory.get_selected_slot() as usize;
         let mut slot_pairs: Vec<(usize, EquipmentSlot)> = vec![
@@ -3820,12 +3880,8 @@ impl Player {
         }
 
         for (slot_index, equipment_slot) in slot_pairs {
-            let stack = self.inventory.get_stack(slot_index).await;
-            let eligible = {
-                let s = stack.lock().await;
-                s.get_enchantment_level(&Enchantment::MENDING) > 0 && s.get_damage() > 0
-            };
-            if eligible {
+            let stack = self.inventory().get_stack(slot_index).await;
+            if stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0 {
                 candidates.push((slot_index, equipment_slot, stack));
             }
         }
@@ -3835,17 +3891,17 @@ impl Player {
         }
 
         let idx = rand::random::<u32>() as usize % candidates.len();
-        let (slot_index, equipment_slot, stack) = candidates.swap_remove(idx);
+        let (slot_index, equipment_slot, mut stack) = candidates.swap_remove(idx);
 
-        let (updated_stack, repaired) = {
-            let mut stack = stack.lock().await;
-            let repaired = stack.repair_item(xp.saturating_mul(2));
-            (stack.clone(), repaired)
-        };
-
+        let repaired = stack.repair_item(xp.saturating_mul(2));
         if repaired <= 0 {
             return xp;
         }
+
+        let updated_stack = stack.clone();
+        self.inventory()
+            .set_stack(slot_index, updated_stack.clone())
+            .await;
 
         let xp_used = (repaired + 1) / 2;
         xp = xp.saturating_sub(xp_used);
@@ -4009,9 +4065,7 @@ impl Player {
         {
             let screen_handler_temp = screen_handler.lock().await;
             let sync_id = screen_handler_temp.sync_id();
-            let window_type = screen_handler_temp
-                .window_type()
-                .expect("Can't open PlayerScreenHandler");
+            let window_type = screen_handler_temp.window_type()?;
 
             let display_name = screen_handler_factory.get_display_name();
             let java_packet =
@@ -4077,9 +4131,9 @@ impl Player {
 
         let screen_handler_temp = screen_handler.lock().await;
         let sync_id = screen_handler_temp.sync_id();
-        let window_type = screen_handler_temp
-            .window_type()
-            .expect("Can't open PlayerScreenHandler");
+        let Some(window_type) = screen_handler_temp.window_type() else {
+            return;
+        };
 
         let java_packet = COpenScreen::new(sync_id.into(), (window_type as i32).into(), &title);
 
@@ -4424,28 +4478,25 @@ impl Player {
 
         // Check offhand first
         let stack = inventory.get_stack(PlayerInventory::OFF_HAND_SLOT).await;
-        let item = stack.lock().await;
         if matches!(
-            item.item.id,
+            stack.item.id,
             id if id == Item::ARROW.id
                 || id == Item::TIPPED_ARROW.id
                 || id == Item::SPECTRAL_ARROW.id
-        ) && item.item_count > 0
+        ) && stack.item_count > 0
         {
             return Some(PlayerInventory::OFF_HAND_SLOT);
         }
-        drop(item);
 
         // Check hotbar and main inventory
         for slot in 0..PlayerInventory::MAIN_SIZE {
             let stack = inventory.get_stack(slot).await;
-            let item = stack.lock().await;
             if matches!(
-                item.item.id,
+                stack.item.id,
                 id if id == Item::ARROW.id
                     || id == Item::TIPPED_ARROW.id
                     || id == Item::SPECTRAL_ARROW.id
-            ) && item.item_count > 0
+            ) && stack.item_count > 0
             {
                 return Some(slot);
             }
@@ -4462,15 +4513,15 @@ impl Player {
         }
 
         let inventory = self.inventory();
-        let stack_arc = inventory.get_stack(slot).await;
-        let mut stack = stack_arc.lock().await;
+        let mut stack = inventory.get_stack(slot).await;
         match stack.item_count {
             2.. => {
                 stack.item_count -= 1;
+                inventory.set_stack(slot, stack).await;
                 true
             }
             1 => {
-                *stack = ItemStack::EMPTY.clone();
+                inventory.set_stack(slot, ItemStack::EMPTY.clone()).await;
                 true
             }
             _ => false,
@@ -4570,15 +4621,14 @@ impl Player {
     }
 
     pub async fn has_item_in_inventory(&self, item: &pumpkin_data::item::Item) -> bool {
-        for slot in &self.inventory.main_inventory {
-            let stack = slot.lock().await;
+        let main_inv = self.inventory.main_inventory.read().await;
+        for stack in main_inv.iter() {
             if !stack.is_empty() && stack.item.id == item.id {
                 return true;
             }
         }
         let equipment = self.inventory.entity_equipment.lock().await;
-        for slot_stack in equipment.equipment.values() {
-            let stack = slot_stack.lock().await;
+        for stack in equipment.equipment.values() {
             if !stack.is_empty() && stack.item.id == item.id {
                 return true;
             }
@@ -4752,25 +4802,24 @@ impl NBTStorage for PlayerInventory {
 
             // Create inventory list with the correct capacity (inventory size)
             let mut items: Vec<NbtTag> = Vec::with_capacity(41);
-            for (i, item) in self.main_inventory.iter().enumerate() {
-                let stack = item.lock().await;
+            let main_inv = self.main_inventory.read().await;
+            for (i, stack) in main_inv.iter().enumerate() {
                 if !stack.is_empty() {
                     let mut item_compound = NbtCompound::new();
                     item_compound.put_byte("Slot", i as i8);
                     stack.write_item_stack(&mut item_compound);
-                    drop(stack);
                     items.push(NbtTag::Compound(item_compound));
                 }
             }
 
             let mut equipment_compound = NbtCompound::new();
+            let equipment_guard = self.entity_equipment.lock().await;
             for slot in self.equipment_slots.values() {
-                let stack_binding = self.entity_equipment.lock().await.get(slot);
-                let stack = stack_binding.lock().await;
-                if !stack.is_empty() {
+                if let Some(stack) = equipment_guard.equipment.get(slot)
+                    && !stack.is_empty()
+                {
                     let mut item_compound = NbtCompound::new();
                     stack.write_item_stack(&mut item_compound);
-                    drop(stack);
                     match slot {
                         EquipmentSlot::OffHand(_) => {
                             equipment_compound.put_compound("offhand", item_compound);
@@ -4858,13 +4907,12 @@ impl NBTStorage for EnderChestInventory {
         Box::pin(async {
             // Create item list with the correct capacity (inventory size)
             let mut items: Vec<NbtTag> = Vec::with_capacity(Self::INVENTORY_SIZE);
-            for (i, item) in self.items.iter().enumerate() {
-                let stack = item.lock().await;
+            let ec_items = self.items.read().await;
+            for (i, stack) in ec_items.iter().enumerate() {
                 if !stack.is_empty() {
                     let mut item_compound = NbtCompound::new();
                     item_compound.put_byte("Slot", i as i8);
                     stack.write_item_stack(&mut item_compound);
-                    drop(stack);
                     items.push(NbtTag::Compound(item_compound));
                 }
             }
@@ -4940,7 +4988,9 @@ impl EntityBase for Player {
                 // Same world
                 let yaw = yaw.unwrap_or(self.living_entity.entity.yaw.load());
                 let pitch = pitch.unwrap_or(self.living_entity.entity.pitch.load());
-                let server = self.world().server.upgrade().unwrap();
+                let Some(server) = self.world().server.upgrade() else {
+                    return;
+                };
                 send_cancellable! {{
                     server;
                     PlayerTeleportEvent {

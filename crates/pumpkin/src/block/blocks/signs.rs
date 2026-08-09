@@ -474,7 +474,6 @@ impl BlockBehaviour for SignBlock {
     }
 
     /// Handles use with an item on the sign block.
-    #[expect(clippy::option_if_let_else)]
     fn use_with_item<'a>(
         &'a self,
         args: UseWithItemArgs<'a>,
@@ -508,9 +507,10 @@ impl BlockBehaviour for SignBlock {
                 &sign_entity.back_text
             };
 
-            let mut item = args.item_stack.lock().await;
-
-            let Some(pumpkin_item) = args.server.item_registry.get_pumpkin_item(item.item.id)
+            let Some(pumpkin_item) = args
+                .server
+                .item_registry
+                .get_pumpkin_item(args.item_stack.item.id)
             else {
                 return BlockActionResult::PassToDefaultBlockAction;
             };
@@ -532,8 +532,12 @@ impl BlockBehaviour for SignBlock {
                                     } else if let Some(dye) =
                                         pumpkin_item.as_any().downcast_ref::<DyeItem>()
                                     {
-                                        let color_name =
-                                            item.item.registry_key.strip_suffix("_dye").unwrap();
+                                        let color_name = args
+                                            .item_stack
+                                            .item
+                                            .registry_key
+                                            .strip_suffix("_dye")
+                                            .unwrap_or(args.item_stack.item.registry_key);
                                         dye.apply_to_sign(&args, &block_entity, text, color_name)
                                     } else {
                                         BlockActionResult::PassToDefaultBlockAction
@@ -558,7 +562,7 @@ impl BlockBehaviour for SignBlock {
                     args.player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::GlowedSign).await;
                 }
                 if !args.player.has_infinite_materials() {
-                    item.decrement(1);
+                    args.item_stack.decrement(1);
                 }
                 *currently_editing = None;
             }

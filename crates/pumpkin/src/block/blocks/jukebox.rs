@@ -128,7 +128,7 @@ impl BlockBehaviour for JukeboxBlock {
                 return BlockActionResult::PassToDefaultBlockAction;
             }
 
-            let mut item_stack = args.item_stack.lock().await;
+            let item_stack = &mut *args.item_stack;
 
             // Vanilla: JukeboxPlayableComponent lv = stack.get(DataComponentTypes.JUKEBOX_PLAYABLE)
             let jukebox_playable = item_stack

@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-use crate::tag::{RegistryKey, Tag, Taggable};
+use crate::tag::{RegistryKey, Taggable};
 #[derive(Clone, Copy, PartialEq)]
 pub struct DamageType {
     pub death_message_type: DeathMessageType,

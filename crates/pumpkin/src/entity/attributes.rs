@@ -111,7 +111,12 @@ pub async fn send_attribute_updates_for_living(
 
         // Pull modifiers for this attribute
         let mut modifiers = Vec::new();
-        if let Some(inst) = living.attributes.read().unwrap().get(&attribute.id) {
+        if let Some(inst) = living
+            .attributes
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&attribute.id)
+        {
             for mod_inst in &inst.modifiers {
                 modifiers.push(JeAttrMod::new(
                     mod_inst.id.clone(),
@@ -120,8 +125,6 @@ pub async fn send_attribute_updates_for_living(
                 ));
             }
         }
-
-        let modifiers_count = modifiers.len();
 
         // Move modifiers into the property
         je_properties.push(JeProperty::new(
@@ -152,7 +155,9 @@ pub async fn send_attribute_updates_for_living(
             default_max_value: 3.402_823_5E38,
             default_value: base_value as f32,
             name,
-            modifiers_list_size: VarUInt(modifiers_count as u32),
+            // Bedrock receives the already-computed effective value above. Do not advertise
+            // modifier entries until their payload is encoded as well.
+            modifiers_list_size: VarUInt(0),
         };
 
         be_attributes.push(be_attribute);

@@ -725,8 +725,7 @@ pub trait ScreenHandler: Send + Sync {
                     })
                 {
                     let slot = self.get_behaviour().slots[current_index as usize].clone();
-                    let slot_stack_lock = slot.get_stack().await;
-                    let mut slot_stack = slot_stack_lock.lock().await;
+                    let mut slot_stack = slot.get_stack().await;
 
                     if !slot_stack.is_empty() && slot_stack.are_items_and_components_equal(stack) {
                         let combined_count = slot_stack.item_count + stack.item_count;
@@ -734,14 +733,12 @@ pub trait ScreenHandler: Send + Sync {
                         if combined_count <= max_slot_count {
                             stack.set_count(0);
                             slot_stack.set_count(combined_count);
-                            drop(slot_stack);
-                            slot.mark_dirty().await;
+                            slot.set_stack(slot_stack).await;
                             success = true;
                         } else if slot_stack.item_count < max_slot_count {
                             stack.decrement(max_slot_count - slot_stack.item_count);
                             slot_stack.set_count(max_slot_count);
-                            drop(slot_stack);
-                            slot.mark_dirty().await;
+                            slot.set_stack(slot_stack).await;
                             success = true;
                         }
                     }
@@ -768,11 +765,9 @@ pub trait ScreenHandler: Send + Sync {
                 } {
                     let slot = self.get_behaviour().slots[current_index as usize].clone();
                     let slot_stack = slot.get_stack().await;
-                    let slot_stack = slot_stack.lock().await;
 
                     if slot_stack.is_empty() && slot.can_insert(stack).await {
                         let max_count = slot.get_max_item_count_for_stack(stack).await;
-                        drop(slot_stack);
                         slot.set_stack(stack.split(max_count.min(stack.item_count)))
                             .await;
                         slot.mark_dirty().await;
@@ -885,8 +880,7 @@ pub trait ScreenHandler: Send + Sync {
                     let cursor_stack = behaviour.cursor_stack.lock().await;
 
                     let slot = &behaviour.slots[slot_index as usize];
-                    let stack_lock = slot.get_stack().await;
-                    let stack = stack_lock.lock().await;
+                    let stack = slot.get_stack().await;
                     if !cursor_stack.is_empty()
                         && slot.can_insert(&cursor_stack).await
                         && (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
@@ -918,21 +912,19 @@ pub trait ScreenHandler: Send + Sync {
                     let initial_count = cursor_stack.item_count;
                     for slot_index in &behaviour.drag_slots {
                         let slot = behaviour.slots[*slot_index as usize].clone();
-                        let stack_lock = slot.get_stack().await;
-                        let stack = stack_lock.lock().await;
+                        let stack = slot.get_stack().await;
 
                         if (stack.are_items_and_components_equal(&cursor_stack) || stack.is_empty())
                             && slot.can_insert(&cursor_stack).await
                         {
-                            let mut inserting_count = if drag_button == 0 {
-                                initial_count / behaviour.drag_slots.len() as u8
-                            } else if drag_button == 1 {
-                                1
-                            } else if drag_button == 2 {
-                                cursor_stack.item_count = cursor_stack.get_max_stack_size();
-                                cursor_stack.item_count
-                            } else {
-                                panic!("Invalid drag button: {drag_button}");
+                            let mut inserting_count = match drag_button {
+                                0 => initial_count / behaviour.drag_slots.len() as u8,
+                                1 => 1,
+                                2 => {
+                                    cursor_stack.item_count = cursor_stack.get_max_stack_size();
+                                    cursor_stack.item_count
+                                }
+                                _ => 0,
                             };
                             inserting_count = inserting_count
                                 .min(max(
@@ -942,13 +934,12 @@ pub trait ScreenHandler: Send + Sync {
                                 ))
                                 .min(cursor_stack.item_count);
                             if inserting_count > 0 {
-                                let mut stack_clone = stack.clone();
-                                drop(stack);
-                                if stack_clone.is_empty() {
-                                    stack_clone = cursor_stack.copy_with_count(0);
+                                let mut new_stack = stack.clone();
+                                if new_stack.is_empty() {
+                                    new_stack = cursor_stack.copy_with_count(0);
                                 }
-                                stack_clone.increment(inserting_count);
-                                slot.set_stack(stack_clone).await;
+                                new_stack.increment(inserting_count);
+                                slot.set_stack(new_stack).await;
                                 if drag_button != 2 {
                                     cursor_stack.decrement(inserting_count);
                                 }
@@ -999,8 +990,7 @@ pub trait ScreenHandler: Send + Sync {
                         return;
                     }
                     let slot = behaviour.slots[slot_index as usize].clone();
-                    let stack_lock = slot.get_stack().await;
-                    let stack = stack_lock.lock().await;
+                    let stack = slot.get_stack().await;
                     *cursor_stack = stack.copy_with_count(stack.get_max_stack_size());
                 }
             } else if (action_type == SlotActionType::Pickup
@@ -1064,32 +1054,32 @@ pub trait ScreenHandler: Send + Sync {
                         let mut intercepted = false;
 
                         if !cursor_stack.is_empty() {
-                            let stack_guard = slot.get_stack().await;
-                            let mut inner_slot_stack = stack_guard.lock().await;
+                            let mut inner_slot_stack = slot.get_stack().await;
                             if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
                                 && bundle.try_insert(&mut cursor_stack) {
+                                    slot.set_stack(inner_slot_stack).await;
                                     intercepted = true;
                                 }
                         }
 
                         if !intercepted && !slot_stack.is_empty()
                             && let Some(bundle) = cursor_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>() {
-                                let stack_guard = slot.get_stack().await;
-                                let mut inner_slot_stack = stack_guard.lock().await;
+                                let mut inner_slot_stack = slot.get_stack().await;
                                 if bundle.try_insert(&mut inner_slot_stack) {
                                     if inner_slot_stack.item_count == 0 {
-                                        *inner_slot_stack = ItemStack::EMPTY.clone();
+                                        inner_slot_stack = ItemStack::EMPTY.clone();
                                     }
+                                    slot.set_stack(inner_slot_stack).await;
                                     intercepted = true;
                                 }
                             }
 
                         if !intercepted && cursor_stack.is_empty() {
-                            let stack_guard = slot.get_stack().await;
-                            let mut inner_slot_stack = stack_guard.lock().await;
+                            let mut inner_slot_stack = slot.get_stack().await;
                             if let Some(bundle) = inner_slot_stack.get_data_component_mut::<pumpkin_data::data_component_impl::BundleContentsImpl>()
                                 && let Some(extracted) = bundle.try_extract() {
                                     *cursor_stack = extracted;
+                                    slot.set_stack(inner_slot_stack).await;
                                     intercepted = true;
                                 }
                         }
@@ -1226,13 +1216,7 @@ pub trait ScreenHandler: Send + Sync {
                 if slot_index < 0 {
                     return;
                 }
-                let mut button_stack = player
-                    .get_inventory()
-                    .get_stack(button as usize)
-                    .await
-                    .lock()
-                    .await
-                    .clone();
+                let mut button_stack = player.get_inventory().get_stack(button as usize).await;
                 let source_slot = self.get_behaviour().slots[slot_index as usize].clone();
                 let source_stack = source_slot.get_cloned_stack().await;
 

@@ -598,7 +598,7 @@ impl pumpkin::plugin::command::HostCommandNode for PluginHostState {
             ArgumentType::EntityAnchor => argument(name, EntityAnchorArgumentConsumer),
             ArgumentType::Gamemode => argument(name, GamemodeArgumentConsumer),
             ArgumentType::Difficulty => argument(name, DifficultyArgumentConsumer),
-            ArgumentType::Time(_) => argument(name, TimeArgumentConsumer),
+            ArgumentType::Time(min) => argument(name, TimeArgumentConsumer::min(min.unwrap_or(0))),
             _ => {
                 return Err(wasmtime::Error::msg(format!(
                     "Unimplemented argument type: {arg_type:?}"

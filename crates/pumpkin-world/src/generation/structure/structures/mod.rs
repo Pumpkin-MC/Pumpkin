@@ -631,7 +631,7 @@ impl StructurePiecesCollector {
         }
 
         let bbox = BlockBox::encompass_all(self.pieces.iter().map(|p| p.bounding_box()))
-            .expect("Structure must have at least one piece to calculate a bounding box");
+            .unwrap_or_else(|| BlockBox::new(0, 0, 0, 0, 0, 0));
 
         self.cached_box = Some(bbox);
         bbox
@@ -656,7 +656,10 @@ pub struct StructurePosition {
 impl StructurePosition {
     #[must_use]
     pub fn get_bounding_box(&self) -> BlockBox {
-        self.collector.lock().unwrap().get_bounding_box()
+        self.collector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_bounding_box()
     }
 }
 

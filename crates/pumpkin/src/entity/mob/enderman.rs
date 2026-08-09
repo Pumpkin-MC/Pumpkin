@@ -80,14 +80,26 @@ impl EndermanEntity {
             Arc::downgrade(&mob_arc)
         };
 
-        let mut navigator = mob_arc.mob_entity.navigator.lock().unwrap();
+        let mut navigator = mob_arc
+            .mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         navigator.set_mob_dimensions(0.6, 2.9);
         navigator.set_pathfinding_malus(PathType::Water, -1.0);
         drop(navigator);
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .mob_entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut target_selector = mob_arc
+                .mob_entity
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(ChasePlayerGoal::new(mob_arc.clone())));
@@ -246,7 +258,11 @@ impl EndermanEntity {
             ),
         );
 
-        self.mob_entity.navigator.lock().unwrap().stop();
+        self.mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .stop();
 
         true
     }
@@ -343,15 +359,12 @@ impl EndermanEntity {
 
     pub async fn is_player_staring(&self, player: &Player) -> bool {
         let equipment = player.living_entity.entity_equipment.try_lock();
-        if let Ok(equipment) = equipment {
-            let head_item = equipment.get(&EquipmentSlot::HEAD);
-            let head_stack = head_item.try_lock();
-            if let Ok(head_stack) = head_stack
-                && !head_stack.is_empty()
-                && head_stack.item == &Item::CARVED_PUMPKIN
-            {
-                return false;
-            }
+        if let Ok(equipment) = equipment
+            && let Some(head_stack) = equipment.equipment.get(&EquipmentSlot::HEAD)
+            && !head_stack.is_empty()
+            && head_stack.item == &Item::CARVED_PUMPKIN
+        {
+            return false;
         }
 
         let entity = &self.mob_entity.living_entity.entity;

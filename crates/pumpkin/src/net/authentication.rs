@@ -125,7 +125,9 @@ pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<
 }
 
 pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), TextureError> {
-    let scheme = url.scheme().unwrap();
+    let Some(scheme) = url.scheme() else {
+        return Err(TextureError::InvalidURL);
+    };
     if !config
         .allowed_url_schemes
         .iter()
@@ -133,7 +135,9 @@ pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), Tex
     {
         return Err(TextureError::DisallowedUrlScheme(scheme.to_string()));
     }
-    let domain = url.authority().unwrap();
+    let Some(domain) = url.authority() else {
+        return Err(TextureError::InvalidURL);
+    };
     if !config
         .allowed_url_domains
         .iter()
@@ -212,6 +216,33 @@ pub fn lookup_profile_by_name(
 
     let parsed_uuid = Uuid::parse_str(&profile.id).map_err(|_| AuthError::FailedParse)?;
     Ok(Some((parsed_uuid, profile.name)))
+}
+
+pub fn fetch_profile_by_uuid(
+    uuid: Uuid,
+    _auth_config: &AuthenticationConfig,
+) -> Result<Option<GameProfile>, AuthError> {
+    let url = format!(
+        "https://sessionserver.mojang.com/session/minecraft/profile/{}?unsigned=false",
+        uuid.simple()
+    );
+
+    let mut response = ureq::get(&url)
+        .call()
+        .map_err(|_| AuthError::FailedResponse)?;
+
+    match response.status() {
+        StatusCode::OK => {}
+        StatusCode::NO_CONTENT | StatusCode::NOT_FOUND => return Ok(None),
+        other => Err(AuthError::UnknownStatusCode(other))?,
+    }
+
+    let profile: GameProfile = response
+        .body_mut()
+        .read_json()
+        .map_err(|_| AuthError::FailedParse)?;
+
+    Ok(Some(profile))
 }
 
 #[derive(Error, Debug)]

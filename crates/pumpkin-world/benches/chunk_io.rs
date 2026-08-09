@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_data::{BlockStateId, dimension::Dimension};
 use pumpkin_util::{math::vector2::Vector2, world_seed::Seed};

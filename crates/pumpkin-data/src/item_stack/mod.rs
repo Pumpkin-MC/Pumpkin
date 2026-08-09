@@ -133,7 +133,10 @@ impl ItemStack {
             item,
             patch: Vec::new(),
 
-            uid: NonZeroI32::new(1).unwrap(),
+            uid: match NonZeroI32::new(1) {
+                Some(v) => v,
+                None => panic!("1 is non-zero"),
+            },
         }
     }
 
@@ -176,8 +179,7 @@ impl ItemStack {
             self.patch.push((id, component));
             return self
                 .patch
-                .last_mut()
-                .unwrap()
+                .last_mut()?
                 .1
                 .as_mut()
                 .map(|c| get_mut::<T>(c.as_mut()));
@@ -209,7 +211,7 @@ impl ItemStack {
         item: &Item::AIR,
         patch: Vec::new(),
 
-        uid: NonZeroI32::new(i32::MIN).unwrap(), // white lie - Bedrock `uid` is never sent if the stack is empty
+        uid: NonZeroI32::MIN, // white lie - Bedrock `uid` is never sent if the stack is empty
     };
 
     #[must_use]
@@ -731,7 +733,7 @@ impl From<&RecipeResultStruct> for ItemStack {
         Self::new(
             value.count,
             Item::from_registry_key(value.id.strip_prefix("minecraft:").unwrap_or(value.id))
-                .expect("Crafting recipe gives invalid item"),
+                .unwrap_or(&Item::AIR),
         )
     }
 }

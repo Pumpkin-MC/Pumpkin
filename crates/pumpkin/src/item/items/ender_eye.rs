@@ -49,19 +49,25 @@ impl ItemBehaviour for EnderEyeItem {
             let world = player.world();
             let state_id = world.get_block_state_id(&location);
 
-            // Skip if the frame already holds an eye.
-            let props_raw = block.properties(state_id).unwrap().to_props();
-            if props_raw.iter().any(|(k, v)| *k == "eye" && *v == "true") {
-                return;
-            }
+            let new_state_id = {
+                // Skip if the frame already holds an eye.
+                let Some(props) = block.properties(state_id) else {
+                    return;
+                };
+                let props_raw = props.to_props();
+                if props_raw.iter().any(|(k, v)| *k == "eye" && *v == "true") {
+                    return;
+                }
 
-            // Build new state with eye=true.
-            let props: Vec<(&str, &str)> = props_raw
-                .iter()
-                .map(|(k, v)| if *k == "eye" { (*k, "true") } else { (*k, *v) })
-                .collect();
+                // Build new state with eye=true.
+                let props: Vec<(&str, &str)> = props_raw
+                    .iter()
+                    .map(|(k, v)| if *k == "eye" { (*k, "true") } else { (*k, *v) })
+                    .collect();
 
-            let new_state_id = block.from_properties(&props).to_state_id(block);
+                block.from_properties(&props).to_state_id(block)
+            };
+
             world
                 .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_LISTENERS)
                 .await;
@@ -128,7 +134,9 @@ impl ItemBehaviour for EnderEyeItem {
             );
 
             player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::LaunchedEyeOfEnder).await;
-            player.inventory.held_item().lock().await.decrement(1);
+            let mut stack = player.inventory.held_item().await;
+            stack.decrement(1);
+            player.inventory.set_held_item(stack).await;
         })
     }
 
@@ -144,9 +152,11 @@ fn find_stronghold(world: &Arc<World>, origin: BlockPos) -> Option<BlockPos> {
 
     let global_cache = generator.global_structure_cache()?;
 
+    let strongholds = StructureSet::get("strongholds")?;
+
     find_nearest_structure(
         origin,
-        &[&StructureSet::get("strongholds").unwrap().placement],
+        &[&strongholds.placement],
         100, // max search radius in chunks, matches vanilla default
         seed as i64,
         global_cache,

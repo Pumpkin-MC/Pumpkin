@@ -23,8 +23,8 @@ impl Carver for CaveCarver {
             CarverAdditionalConfig::Canyon(_) => return,
         };
 
-        let min_y = run.chunk.bottom_y() as i32;
-        let height = run.chunk.height();
+        let min_y = run.chunk.generation_bottom_y() as i32;
+        let height = run.chunk.generation_height();
 
         let max_distance = (4 * 2 - 1) << 4;
 
@@ -292,10 +292,13 @@ impl CaveCarver {
         let x_index_min = ((x - horizontal_radius).floor() as i32 - chunk_min_x - 1).max(0);
         let x_index_max = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
 
-        let min_y = ((y - vertical_radius).floor() as i32 - 1).max(run.chunk.bottom_y() as i32 + 1);
+        let min_y = ((y - vertical_radius).floor() as i32 - 1)
+            .max(run.chunk.generation_bottom_y() as i32 + 1);
         let protected_blocks_on_top = 7;
         let max_y = ((y + vertical_radius).floor() as i32 + 1).min(
-            run.chunk.bottom_y() as i32 + run.chunk.height() as i32 - 1 - protected_blocks_on_top,
+            run.chunk.generation_bottom_y() as i32 + run.chunk.generation_height() as i32
+                - 1
+                - protected_blocks_on_top,
         );
 
         let z_index_min = ((z - horizontal_radius).floor() as i32 - chunk_min_z - 1).max(0);
@@ -499,9 +502,10 @@ mod tests {
         run: &mut Run,
         predicate: impl Fn(&'static pumpkin_data::BlockState, bool) -> bool,
     ) -> Option<(i32, i32, i32, &'static pumpkin_data::BlockState)> {
-        let lava_y = CAVE
-            .lava_level
-            .get_y(run.chunk.bottom_y() as i16, run.chunk.height());
+        let lava_y = CAVE.lava_level.get_y(
+            run.chunk.generation_bottom_y() as i16,
+            run.chunk.generation_height(),
+        );
 
         for y in (lava_y + 1)..=63 {
             for x in 0..16 {

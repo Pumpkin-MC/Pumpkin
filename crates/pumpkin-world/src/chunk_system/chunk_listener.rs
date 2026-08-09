@@ -28,19 +28,28 @@ impl ChunkListener {
 
     pub fn add_single_chunk_listener(&self, pos: ChunkPos) -> oneshot::Receiver<SyncChunk> {
         let (tx, rx) = oneshot::channel();
-        self.single.lock().unwrap().push((pos, tx));
+        self.single
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((pos, tx));
         rx
     }
 
     pub fn add_global_chunk_listener(&self) -> Receiver<(ChunkPos, Weak<crate::chunk::ChunkData>)> {
         let (tx, rx) = crossbeam::channel::unbounded();
-        self.global.lock().unwrap().push(tx);
+        self.global
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(tx);
         rx
     }
 
     pub fn process_new_chunk(&self, pos: ChunkPos, chunk: &SyncChunk) {
         {
-            let mut single = self.single.lock().unwrap();
+            let mut single = self
+                .single
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut i = 0;
             let mut len = single.len();
             while i < len {
@@ -56,7 +65,10 @@ impl ChunkListener {
         }
         {
             let weak = Arc::downgrade(chunk);
-            let mut global = self.global.lock().unwrap();
+            let mut global = self
+                .global
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut i = 0;
             let mut len = global.len();
             while i < len {

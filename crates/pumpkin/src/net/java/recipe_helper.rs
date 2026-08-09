@@ -28,8 +28,8 @@ pub async fn take_n_ingredient(
     let mut taken = 0u8;
     let mut result: Option<ItemStack> = None;
 
-    for slot in &inventory.main_inventory {
-        let mut stack = slot.lock().await;
+    let mut main_inventory = inventory.main_inventory.write().await;
+    for stack in main_inventory.iter_mut() {
         if !stack.is_empty() && ingredient.match_item(stack.item) {
             let to_take = (count - taken).min(stack.item_count);
             let sub_stack = stack.split(to_take);
@@ -53,8 +53,8 @@ pub async fn compute_biggest_craftable(
     inventory: &PlayerInventory,
 ) -> u8 {
     let mut available: Vec<(&'static Item, u32)> = Vec::new();
-    for slot in &inventory.main_inventory {
-        let stack = slot.lock().await;
+    let main_inventory = inventory.main_inventory.read().await;
+    for stack in main_inventory.iter() {
         if !stack.is_empty() {
             if let Some(e) = available.iter_mut().find(|(i, _)| i.id == stack.item.id) {
                 e.1 += u32::from(stack.item_count);

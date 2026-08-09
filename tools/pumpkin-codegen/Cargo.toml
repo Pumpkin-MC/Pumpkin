@@ -27,8 +27,5 @@ syn = { version = "3.0", features = ["full", "extra-traits"] }
 pumpkin-util = { path = "../../crates/pumpkin-util", features = ["codegen"] }
 pumpkin-nbt = { path = "../../crates/pumpkin-nbt" }
 
-# [lints]
-# all = { level = "deny", priority = -1 }
-# nursery = { level = "deny", priority = -1 }
-# pedantic = { level = "deny", priority = -1 }
-# cargo = { level = "deny", priority = -1 }
+[lints]
+workspace = true

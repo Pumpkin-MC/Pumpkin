@@ -76,7 +76,9 @@ impl SubstitutionRange {
 /// * `translation`: The localized translation string.
 /// * `locale`: The locale the translation belongs to.
 pub fn add_translation<P: Into<String>>(namespace: P, key: P, translation: P, locale: Locale) {
-    let mut translations = TRANSLATIONS.lock().unwrap();
+    let mut translations = TRANSLATIONS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let namespaced_key = format!("{}:{}", namespace.into(), key.into()).to_lowercase();
     translations[locale as usize].insert(namespaced_key, translation.into());
 }
@@ -89,13 +91,15 @@ pub fn add_translation<P: Into<String>>(namespace: P, key: P, translation: P, lo
 /// * `locale`: The locale the translations belong to.
 pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale: Locale) {
     let translations_map: HashMap<String, String> =
-        serde_json::from_str(&file_path.into()).unwrap_or(HashMap::new());
+        serde_json::from_str(&file_path.into()).unwrap_or_default();
     if translations_map.is_empty() {
         // TODO: Handle the case where the file is empty or not found properly
         return;
     }
 
-    let mut translations = TRANSLATIONS.lock().unwrap();
+    let mut translations = TRANSLATIONS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let namespace = namespace.into();
     for (key, translation) in translations_map {
         let namespaced_key = format!("{namespace}:{key}").to_lowercase();
@@ -112,7 +116,9 @@ pub fn add_translation_file<P: Into<String>>(namespace: P, file_path: P, locale:
 /// # Returns
 /// The localized translation. Falls back to `en_us` or the key itself if not found.
 pub fn get_translation(key: &str, locale: Locale) -> String {
-    let translations = TRANSLATIONS.lock().unwrap();
+    let translations = TRANSLATIONS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let key = key.to_lowercase();
     translations[locale as usize].get(&key).map_or_else(
         || {
@@ -273,58 +279,35 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
     LazyLock::new(|| {
         let mut array: [HashMap<String, String>; Locale::COUNT] =
             std::array::from_fn(|_| HashMap::new());
-        let vanilla_en_us: HashMap<String, String> =
-            serde_json::from_str(VANILLA_EN_US_JSON).expect("Could not parse en_us_java.json.");
-        let pumpkin_en_us: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_EN_US_JSON).expect("Could not parse en_us.json.");
-        let pumpkin_brb: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_BRB_JSON).expect("Could not parse brb.json.");
-        let pumpkin_de_de: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_DE_DE_JSON).expect("Could not parse de_de.json.");
-        let pumpkin_es_es: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_ES_ES_JSON).expect("Could not parse es_es.json.");
-        let pumpkin_fr_fr: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_FR_FR_JSON).expect("Could not parse fr_fr.json.");
-        let pumpkin_hr_hr: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_HR_HR_JSON).expect("Could not parse hr_hr.json.");
-        let pumpkin_it_it: HashMap<String, String> =
-            serde_json::from_str(PUMPKING_IT_IT_JSON).expect("Could not parse it_it.json.");
-        let pumpkin_ja_jp: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_JA_JP_JSON).expect("Could not parse ja_jp.json.");
-        let pumpkin_ka_ge: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_KA_GE_JSON).expect("Could not parse ka_ge.json.");
-        let pumpkin_ko_kr: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_KO_KR_JSON).expect("Could not parse ko_kr.json.");
-        let pumpkin_nds_de: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_NDS_DE_JSON).expect("Could not parse nds_de.json.");
-        let pumpkin_nl_be: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_NL_BE_JSON).expect("Could not parse nl_be.json.");
-        let pumpkin_nl_nl: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_NL_NL_JSON).expect("Could not parse nl_nl.json.");
-        let pumpkin_ro_ro: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_RO_RO_JSON).expect("Could not parse ro_ro.json.");
-        let pumpkin_ru_ru: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_RU_RU_JSON).expect("Could not parse ru_ru.json.");
-        let pumpkin_sq_al: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_SQ_AL_JSON).expect("Could not parse sq_al.json.");
-        let pumpkin_zh_cn: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_ZH_CN_JSON).expect("Could not parse zh_cn.json.");
-        let pumpkin_zh_hk: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_ZH_HK_JSON).expect("Could not parse zh_hk.json.");
-        let pumpkin_zh_tw: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_ZH_TW_JSON).expect("Could not parse zh_tw.json.");
-        let pumpkin_lzh: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_LZH_JSON).expect("Could not parse lzh.json.");
-        let pumpkin_tr_tr: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_TR_TR_JSON).expect("Could not parse tr_tr.json.");
-        let pumpkin_uk_ua: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_UK_UA_JSON).expect("Could not parse uk_ua.json.");
-        let pumpkin_vi_vn: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_VI_VN_JSON).expect("Could not parse vi_vn.json.");
-        let pumpkin_pt_br: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_PT_BR_JSON).expect("Could not parse pt_br.json.");
-        let pumpkin_pl_pl: HashMap<String, String> =
-            serde_json::from_str(PUMPKIN_PL_PL_JSON).expect("Could not parse pl_pl.json.");
+        let parse_json = |json: &str| -> HashMap<String, String> {
+            serde_json::from_str(json).unwrap_or_default()
+        };
+        let vanilla_en_us = parse_json(VANILLA_EN_US_JSON);
+        let pumpkin_en_us = parse_json(PUMPKIN_EN_US_JSON);
+        let pumpkin_brb = parse_json(PUMPKIN_BRB_JSON);
+        let pumpkin_de_de = parse_json(PUMPKIN_DE_DE_JSON);
+        let pumpkin_es_es = parse_json(PUMPKIN_ES_ES_JSON);
+        let pumpkin_fr_fr = parse_json(PUMPKIN_FR_FR_JSON);
+        let pumpkin_hr_hr = parse_json(PUMPKIN_HR_HR_JSON);
+        let pumpkin_it_it = parse_json(PUMPKING_IT_IT_JSON);
+        let pumpkin_ja_jp = parse_json(PUMPKIN_JA_JP_JSON);
+        let pumpkin_ka_ge = parse_json(PUMPKIN_KA_GE_JSON);
+        let pumpkin_ko_kr = parse_json(PUMPKIN_KO_KR_JSON);
+        let pumpkin_nds_de = parse_json(PUMPKIN_NDS_DE_JSON);
+        let pumpkin_nl_be = parse_json(PUMPKIN_NL_BE_JSON);
+        let pumpkin_nl_nl = parse_json(PUMPKIN_NL_NL_JSON);
+        let pumpkin_ro_ro = parse_json(PUMPKIN_RO_RO_JSON);
+        let pumpkin_ru_ru = parse_json(PUMPKIN_RU_RU_JSON);
+        let pumpkin_sq_al = parse_json(PUMPKIN_SQ_AL_JSON);
+        let pumpkin_zh_cn = parse_json(PUMPKIN_ZH_CN_JSON);
+        let pumpkin_zh_hk = parse_json(PUMPKIN_ZH_HK_JSON);
+        let pumpkin_zh_tw = parse_json(PUMPKIN_ZH_TW_JSON);
+        let pumpkin_lzh = parse_json(PUMPKIN_LZH_JSON);
+        let pumpkin_tr_tr = parse_json(PUMPKIN_TR_TR_JSON);
+        let pumpkin_uk_ua = parse_json(PUMPKIN_UK_UA_JSON);
+        let pumpkin_vi_vn = parse_json(PUMPKIN_VI_VN_JSON);
+        let pumpkin_pt_br = parse_json(PUMPKIN_PT_BR_JSON);
+        let pumpkin_pl_pl = parse_json(PUMPKIN_PL_PL_JSON);
 
         for (key, value) in vanilla_en_us {
             array[Locale::EnUs as usize].insert(format!("minecraft:{key}"), value);

@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_data::{
     chunk_gen_settings::GenerationSettings, dimension::Dimension,

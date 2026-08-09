@@ -64,12 +64,10 @@ pub fn generate_structure_position(
         | StructureKeys::VillageSavanna
         | StructureKeys::VillageSnowy
         | StructureKeys::VillageTaiga => {
-            let generator = JigsawGenerator::new(
-                structure
-                    .start_pool
-                    .expect("Jigsaw structure must have a start pool"),
-                structure.size.expect("Jigsaw structure must have a size"),
-            );
+            let (Some(start_pool), Some(size)) = (structure.start_pool, structure.size) else {
+                return None;
+            };
+            let generator = JigsawGenerator::new(start_pool, size);
             generator.get_structure_position(context)
         }
         StructureKeys::AncientCity
@@ -77,12 +75,10 @@ pub fn generate_structure_position(
         | StructureKeys::PillagerOutpost
         | StructureKeys::TrailRuins
         | StructureKeys::TrialChambers => {
-            let mut generator = JigsawGenerator::new(
-                structure
-                    .start_pool
-                    .expect("Jigsaw structure must have a start pool"),
-                structure.size.expect("Jigsaw structure must have a size"),
-            );
+            let (Some(start_pool), Some(size)) = (structure.start_pool, structure.size) else {
+                return None;
+            };
+            let mut generator = JigsawGenerator::new(start_pool, size);
             if *key == StructureKeys::PillagerOutpost {
                 generator = generator.with_expansion_hack(true);
             }
@@ -169,8 +165,7 @@ pub fn try_generate_structure(
                 .biomes
                 .strip_prefix('#')
                 .unwrap_or(structure.biomes),
-        )
-        .unwrap();
+        )?;
 
         // Check if the biome is allowed for this structure
         if biomes.contains(&current_biome) {

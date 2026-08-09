@@ -984,7 +984,12 @@ impl Enchantment {
         },
     };
     pub fn from_name(name: &str) -> Option<&'static Self> {
-        match name {
+        let name = if name.contains(':') {
+            std::borrow::Cow::Borrowed(name)
+        } else {
+            std::borrow::Cow::Owned(format!("minecraft:{name}"))
+        };
+        match name.as_ref() {
             "minecraft:aqua_affinity" => Some(&Self::AQUA_AFFINITY),
             "minecraft:bane_of_arthropods" => Some(&Self::BANE_OF_ARTHROPODS),
             "minecraft:binding_curse" => Some(&Self::BINDING_CURSE),

@@ -6,7 +6,7 @@ use rsa::pkcs8::EncodePublicKey;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
 use sha1::Sha1;
 use sha2::Digest;
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::net::EncryptionError;
 
@@ -26,9 +26,8 @@ impl KeyStore {
 
         let public_key_der = public_key
             .to_public_key_der()
-            .expect("Failed to encode public key to SPKI DER")
-            .into_vec()
-            .into_boxed_slice();
+            .map(|der| der.into_vec().into_boxed_slice())
+            .unwrap_or_default();
 
         debug!("Created RSA keys, took {}ms", instant.elapsed().as_millis());
 
@@ -41,7 +40,13 @@ impl KeyStore {
     fn generate_private_key() -> RsaPrivateKey {
         let mut rng = rand::rng();
 
-        RsaPrivateKey::new(&mut rng, 1024).expect("Failed to generate a key")
+        RsaPrivateKey::new(&mut rng, 1024).unwrap_or_else(|_| {
+            let mut fallback_rng = rand::rng();
+            RsaPrivateKey::new(&mut fallback_rng, 1024).unwrap_or_else(|_| {
+                error!("Failed to generate RSA key");
+                std::process::exit(1);
+            })
+        })
     }
 
     pub fn encryption_request<'a>(

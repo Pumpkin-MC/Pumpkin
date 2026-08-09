@@ -21,8 +21,8 @@ impl Carver for CanyonCarver {
             return;
         };
 
-        let min_y = run.chunk.bottom_y() as i32;
-        let height = run.chunk.height();
+        let min_y = run.chunk.generation_bottom_y() as i32;
+        let height = run.chunk.generation_height();
 
         let max_distance = (4 * 2 - 1) * 16;
 
@@ -74,7 +74,7 @@ impl CanyonCarver {
     ) {
         let mut random = super::new_carver_random(tunnel_seed as u64, legacy_random_source);
         let width_factor_per_height =
-            Self::init_width_factors(run.chunk.height() as usize, config, &mut random);
+            Self::init_width_factors(run.chunk.generation_height() as usize, config, &mut random);
         let mut y_rota = 0.0f32;
         let mut x_rota = 0.0f32;
 
@@ -220,10 +220,13 @@ impl CanyonCarver {
         let x_index_min = ((x - horizontal_radius).floor() as i32 - chunk_min_x - 1).max(0);
         let x_index_max = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
 
-        let min_y = ((y - vertical_radius).floor() as i32 - 1).max(run.chunk.bottom_y() as i32 + 1);
+        let min_y = ((y - vertical_radius).floor() as i32 - 1)
+            .max(run.chunk.generation_bottom_y() as i32 + 1);
         let protected_blocks_on_top = 7;
         let max_y = ((y + vertical_radius).floor() as i32 + 1).min(
-            run.chunk.bottom_y() as i32 + run.chunk.height() as i32 - 1 - protected_blocks_on_top,
+            run.chunk.generation_bottom_y() as i32 + run.chunk.generation_height() as i32
+                - 1
+                - protected_blocks_on_top,
         );
 
         let z_index_min = ((z - horizontal_radius).floor() as i32 - chunk_min_z - 1).max(0);
@@ -249,7 +252,7 @@ impl CanyonCarver {
                             yd,
                             zd,
                             world_y,
-                            run.chunk.bottom_y() as i32,
+                            run.chunk.generation_bottom_y() as i32,
                         ) && !run.chunk.carving_mask.get(world_x, world_y, world_z)
                         {
                             run.chunk.carving_mask.set(world_x, world_y, world_z);

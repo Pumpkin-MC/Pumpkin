@@ -38,11 +38,12 @@ impl BlockBehaviour for CampfireBlock {
             {
                 let has_frost_walker_enchantment = {
                     let equipment = living_entity.entity_equipment.lock().await;
-                    let boots = equipment.get(&EquipmentSlot::FEET);
-
-                    let boots_stack = boots.lock().await;
-
-                    boots_stack.get_enchantment_level(&Enchantment::FROST_WALKER) != 0
+                    equipment
+                        .equipment
+                        .get(&EquipmentSlot::FEET)
+                        .is_some_and(|boots| {
+                            boots.get_enchantment_level(&Enchantment::FROST_WALKER) != 0
+                        })
                 };
                 let has_fire_res = living_entity
                     .get_effect(&StatusEffect::FIRE_RESISTANCE)

@@ -26,6 +26,20 @@ impl CUpdateTime {
             clock_updates: vec![(overworld_id, day_time, partial_tick, rate)],
         }
     }
+
+    #[must_use]
+    pub fn new_clock(
+        game_time: i64,
+        clock_id: i32,
+        total_ticks: i64,
+        partial_tick: f32,
+        rate: f32,
+    ) -> Self {
+        Self {
+            game_time,
+            clock_updates: vec![(clock_id, total_ticks, partial_tick, rate)],
+        }
+    }
 }
 
 impl ClientPacket for CUpdateTime {

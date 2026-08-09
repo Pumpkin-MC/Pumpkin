@@ -141,6 +141,8 @@ pub struct ProtoChunk {
 
     height: u16,
     bottom_y: i8,
+    generation_height: u16,
+    generation_bottom_y: i8,
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
     pub carving_mask: crate::generation::carver::mask::CarvingMask,
@@ -180,17 +182,21 @@ impl TerrainCache {
 impl ProtoChunk {
     #[must_use]
     pub fn new(x: i32, z: i32, generator: &super::generator::WorldGenerator) -> Self {
-        let (height, bottom_y) = match generator {
-            super::generator::WorldGenerator::Noise(noise_gen) => (
-                noise_gen.settings.shape.height,
-                noise_gen.settings.shape.min_y,
-            ),
-            super::generator::WorldGenerator::Flat(flat_gen) => (
-                flat_gen.dimension.logical_height as u16,
-                flat_gen.dimension.min_y as i8,
-            ),
-        };
+        let dimension = generator.dimension();
+        let height = dimension.height as u16;
+        let bottom_y = dimension.min_y as i8;
         let section_count = (height as usize) / 16;
+
+        let (generation_height, generation_bottom_y) = match generator {
+            super::generator::WorldGenerator::Noise(noise_gen) => {
+                let shape = noise_gen
+                    .settings
+                    .shape
+                    .trim_height(bottom_y, (dimension.min_y + dimension.height) as u16);
+                (shape.height, shape.min_y)
+            }
+            super::generator::WorldGenerator::Flat(_) => (height, bottom_y),
+        };
 
         let default_block = match generator {
             super::generator::WorldGenerator::Noise(noise_gen) => noise_gen.default_block,
@@ -225,6 +231,8 @@ impl ProtoChunk {
             structure_starts: FxHashMap::default(),
             height,
             bottom_y,
+            generation_height,
+            generation_bottom_y,
             stage: StagedChunkEnum::Empty,
             light: ChunkLight {
                 sky_light: (0..section_count)
@@ -252,16 +260,29 @@ impl ProtoChunk {
     ) -> Self {
         let mut proto_chunk = Self::new(chunk_data.x, chunk_data.z, generator);
 
-        proto_chunk.light = chunk_data.light_engine.lock().unwrap().clone();
+        proto_chunk.light = chunk_data
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         proto_chunk
             .blending_data
             .clone_from(&chunk_data.blending_data);
 
         let section_data = &chunk_data.section;
-        let heightmap_data = chunk_data.heightmap.lock().unwrap();
+        let heightmap_data = chunk_data
+            .heightmap
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let block_sections_guard = section_data.block_sections.read().unwrap();
-        let biome_sections_guard = section_data.biome_sections.read().unwrap();
+        let block_sections_guard = section_data
+            .block_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let biome_sections_guard = section_data
+            .biome_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         for (section_idx, block_palette) in block_sections_guard.iter().enumerate() {
             let section_base_y = section_idx as i32 * 16;
@@ -345,6 +366,16 @@ impl ProtoChunk {
     #[must_use]
     pub const fn bottom_y(&self) -> i8 {
         self.bottom_y
+    }
+
+    #[must_use]
+    pub const fn generation_height(&self) -> u16 {
+        self.generation_height
+    }
+
+    #[must_use]
+    pub const fn generation_bottom_y(&self) -> i8 {
+        self.generation_bottom_y
     }
 
     pub fn add_block_entity(&mut self, nbt: NbtCompound) {
@@ -515,7 +546,7 @@ impl ProtoChunk {
     #[inline]
     #[must_use]
     pub fn get_biome(&self, x: i32, y: i32, z: i32) -> &'static Biome {
-        Biome::from_id(self.get_biome_id(x, y, z)).unwrap()
+        Biome::from_id(self.get_biome_id(x, y, z)).unwrap_or(&Biome::PLAINS)
     }
 
     #[inline]
@@ -600,7 +631,9 @@ impl ProtoChunk {
                 StructureInstance::Reference(collector) => collector,
             };
 
-            let collector = collector.lock().unwrap();
+            let collector = collector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             for piece in &collector.pieces {
                 let bounding_box = piece.get_structure_piece().bounding_box;
 
@@ -915,7 +948,7 @@ impl ProtoChunk {
 
     #[must_use]
     pub fn get_terrain_gen_biome(&self, x: i32, y: i32, z: i32) -> &'static Biome {
-        Biome::from_id(self.get_terrain_gen_biome_id(x, y, z)).unwrap()
+        Biome::from_id(self.get_terrain_gen_biome_id(x, y, z)).unwrap_or(&Biome::PLAINS)
     }
 
     #[expect(clippy::too_many_lines)]
@@ -934,8 +967,8 @@ impl ProtoChunk {
 
         let random = &random_config.base_random_deriver;
         let mut context = MaterialRuleContext::new(
-            min_y,
-            self.height(),
+            self.generation_bottom_y(),
+            self.generation_height(),
             random,
             &terrain_cache.terrain_builder,
             &terrain_cache.surface_noise,
@@ -1053,7 +1086,7 @@ impl ProtoChunk {
         block_registry: &dyn WorldPortalExt,
         random_config: &GlobalRandomConfig,
     ) {
-        let (center_x, center_z, min_y, height, biomes_in_chunk) = {
+        let (center_x, center_z, min_y, generation_min_y, generation_height, biomes_in_chunk) = {
             let chunk = cache.get_center_chunk();
             let mut unique_biomes = Vec::with_capacity(4);
             for &biome_id in &chunk.flat_biome_map {
@@ -1065,7 +1098,8 @@ impl ProtoChunk {
                 chunk.x,
                 chunk.z,
                 chunk.bottom_y() as i32,
-                chunk.height() as i32,
+                chunk.generation_bottom_y(),
+                chunk.generation_height(),
                 unique_biomes,
             )
         };
@@ -1109,8 +1143,8 @@ impl ProtoChunk {
                     feature.generate(
                         cache,
                         block_registry,
-                        min_y as i8,
-                        height as u16,
+                        generation_min_y,
+                        generation_height,
                         feature_enum,
                         &mut random,
                         origin_pos,
@@ -1204,7 +1238,9 @@ impl ProtoChunk {
 
         let chunk = cache.get_center_chunk_mut();
         for collector_arc in tasks {
-            let mut collector = collector_arc.lock().unwrap();
+            let mut collector = collector_arc
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             collector.generate_in_chunk(chunk, block_registry, &mut random, world_seed);
         }
     }

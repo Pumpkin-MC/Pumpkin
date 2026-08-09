@@ -1,6 +1,4 @@
-use crate::data_component_impl::{
-    DataComponentImpl, default_impl, get_f32_hash, get_i32_hash, get_str_hash,
-};
+use crate::data_component_impl::{DataComponentImpl, get_i32_hash, get_str_hash};
 use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;

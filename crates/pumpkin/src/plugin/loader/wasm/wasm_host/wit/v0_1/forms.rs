@@ -27,8 +27,10 @@ impl PluginHostState {
             .into_iter()
             .map(|b| {
                 let mut obj = json!({ "text": self.translate_res(&b.text, locale) });
-                if let Some(image) = b.image {
-                    obj.as_object_mut().unwrap().insert(
+                if let Some(image) = b.image
+                    && let Some(obj) = obj.as_object_mut()
+                {
+                    obj.insert(
                         "image".to_string(),
                         json!({
                             "type": match image.type_ {

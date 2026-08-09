@@ -237,7 +237,10 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let heightmap = data.heightmap.lock().unwrap();
+                let heightmap = data
+                    .heightmap
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
 
                 heightmap.get(ChunkHeightmapType::MotionBlocking, x, z, min_y)
@@ -253,7 +256,10 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let heightmap = data.heightmap.lock().unwrap();
+                let heightmap = data
+                    .heightmap
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
                 heightmap.get(ChunkHeightmapType::MotionBlockingNoLeaves, x, z, min_y)
             }
@@ -268,7 +274,10 @@ impl GenerationCache for Cache {
         debug_assert!(dx >= 0 && dy >= 0);
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
-                let heightmap = data.heightmap.lock().unwrap();
+                let heightmap = data
+                    .heightmap
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let min_y = data.section.min_y;
                 heightmap.get(ChunkHeightmapType::WorldSurface, x, z, min_y) // can we return this?
             }
@@ -308,7 +317,7 @@ impl GenerationCache for Cache {
                         .get_rough_biome_absolute_y((x & 15) as usize, y, (z & 15) as usize)
                         .unwrap_or(0),
                 )
-                .unwrap()
+                .unwrap_or(&Biome::PLAINS)
             }
             Chunk::Proto(data) => data.get_terrain_gen_biome(x, y, z),
         }

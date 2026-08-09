@@ -127,5 +127,5 @@ harness = false
 [package.metadata.cargo-machete]
 ignored = ["phf"]
 
-# [lints]
-# workspace = true
+[lints]
+workspace = true

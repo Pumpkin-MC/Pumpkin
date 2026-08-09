@@ -50,10 +50,15 @@ pub struct DAG {
 
 impl DAG {
     pub fn fast_drop_node(&mut self, node: NodeKey) {
-        let mut edge = self.nodes.remove(node).unwrap().edge;
-        // debug!("drop node {node:?}");
-        while !edge.is_null() {
-            edge = self.edges.remove(edge).unwrap().next;
+        if let Some(removed_node) = self.nodes.remove(node) {
+            let mut edge = removed_node.edge;
+            while !edge.is_null() {
+                if let Some(removed_edge) = self.edges.remove(edge) {
+                    edge = removed_edge.next;
+                } else {
+                    break;
+                }
+            }
         }
     }
     pub fn add_edge(&mut self, from: NodeKey, to: NodeKey) {

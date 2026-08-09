@@ -178,7 +178,12 @@ impl JavaClient {
     }
 
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
-        let Some(mut network_reader) = self.network_reader.lock().unwrap().take() else {
+        let Some(mut network_reader) = self
+            .network_reader
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        else {
             return;
         };
 
@@ -532,16 +537,19 @@ impl JavaClient {
     pub fn start_outgoing_packet_task(&mut self) {
         const MAX_BATCH_SIZE: usize = 64;
 
-        let mut packet_receiver = self
-            .outgoing_packet_queue_recv
-            .take()
-            .expect("This was set in the new fn");
-        let mut priority_packet_receiver = self
-            .outgoing_packet_priority_recv
-            .take()
-            .expect("This was set in the new fn");
+        let Some(mut packet_receiver) = self.outgoing_packet_queue_recv.take() else {
+            return;
+        };
+        let Some(mut priority_packet_receiver) = self.outgoing_packet_priority_recv.take() else {
+            return;
+        };
         let close_token = self.close_token.clone();
-        let Some(mut writer) = self.network_writer.lock().unwrap().take() else {
+        let Some(mut writer) = self
+            .network_writer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        else {
             return;
         };
         let id = self.id;

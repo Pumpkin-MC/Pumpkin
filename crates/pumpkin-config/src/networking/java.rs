@@ -31,14 +31,19 @@ pub struct JavaConfig {
 
 impl Default for JavaConfig {
     fn default() -> Self {
+        let address = "0.0.0.0:25565"
+            .parse()
+            .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 25565)));
+        let view_distance = NonZeroU8::new(16).unwrap_or(NonZeroU8::MIN);
+        let simulation_distance = NonZeroU8::new(10).unwrap_or(NonZeroU8::MIN);
         Self {
             enabled: true,
-            address: "0.0.0.0:25565".parse().unwrap(),
+            address,
             encryption: true,
             online_mode: true,
             max_players: 1000,
-            view_distance: NonZeroU8::new(16).unwrap(),
-            simulation_distance: NonZeroU8::new(10).unwrap(),
+            view_distance,
+            simulation_distance,
             compression: CompressionConfig::default(),
             motd: "A blazingly fast Pumpkin server!".to_string(),
             authentication: AuthenticationConfig::default(),

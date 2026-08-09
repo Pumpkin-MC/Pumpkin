@@ -13,6 +13,9 @@
 //! - [`SyncHandler`] - Synchronizes inventory state between server and client
 //!
 //! # Module Structure
+
+#![deny(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 //!
 //! - [`player`] - Player inventory and screen handler implementations
 //! - [`crafting`] - Crafting table and inventory crafting mechanics

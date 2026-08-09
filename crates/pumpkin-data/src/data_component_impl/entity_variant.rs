@@ -1,4 +1,4 @@
-use crate::data_component_impl::{DataComponentImpl, default_impl};
+use crate::data_component_impl::DataComponentImpl;
 use pumpkin_nbt::tag::NbtTag;
 use std::borrow::Cow;
 

@@ -83,7 +83,10 @@ fn is_waterlogged(block: &Block, state: BlockStateId) -> bool {
 }
 
 fn set_waterlogged(block: &Block, state: BlockStateId, waterlogged: bool) -> BlockStateId {
-    let original_props = &block.properties(state).unwrap().to_props();
+    let Some(props) = block.properties(state) else {
+        return state;
+    };
+    let original_props = &props.to_props();
     let waterlogged = waterlogged.to_string();
     let props: Vec<(&str, &str)> = original_props
         .iter()
@@ -100,11 +103,13 @@ fn set_waterlogged(block: &Block, state: BlockStateId, waterlogged: bool) -> Blo
 
 async fn give_player_bucket_item(player: &Player, item: &'static Item) {
     if player.gamemode.load() == GameMode::Creative {
-        for i in 0..player.inventory.main_inventory.len() {
-            if player.inventory.main_inventory[i].lock().await.item.id == item.id {
+        let inv = player.inventory.main_inventory.read().await;
+        for stack in inv.iter() {
+            if stack.item.id == item.id {
                 return;
             }
         }
+        drop(inv);
         let mut item_stack = ItemStack::new(1, item);
         player
             .inventory
@@ -112,14 +117,13 @@ async fn give_player_bucket_item(player: &Player, item: &'static Item) {
             .await;
     } else {
         let item_stack = ItemStack::new(1, item);
-        let held_item = player.inventory.held_item();
-        let mut held_stack = held_item.lock().await;
+        let mut held_stack = player.inventory.held_item().await;
 
         if held_stack.item_count == 1 {
-            *held_stack = item_stack;
+            player.inventory.set_held_item(item_stack).await;
         } else {
             held_stack.decrement(1);
-            drop(held_stack);
+            player.inventory.set_held_item(held_stack).await;
             player
                 .inventory
                 .offer_or_drop_stack(item_stack, player)

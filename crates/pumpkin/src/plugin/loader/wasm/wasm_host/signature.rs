@@ -1,5 +1,6 @@
 use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 use tracing::warn;
 use wasm_encoder::{CustomSection, Encode};
 use wasmparser::{Parser, Payload};
@@ -8,6 +9,8 @@ pub const WASM_SIGNATURE_SECTION: &str = "wasm_signature";
 pub const PUMPKIN_METADATA_SECTION: &str = "pumpkin.metadata";
 pub const PUMPKIN_MARKET_PUBLIC_KEY_URL: &str =
     "https://market.pumpkinmc.org/api/v1/rest/public-key";
+
+static MARKET_PUBLIC_KEY_CACHE: Mutex<Option<String>> = Mutex::new(None);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PumpkinMetadata {
@@ -164,8 +167,21 @@ pub struct VerificationResult {
     pub public_key_hex: String,
 }
 
-/// Fetches public key from market REST API.
+/// Fetches public key from market REST API, returning cached key if previously fetched.
+///
+/// # Errors
+///
+/// Returns an error if the public key cache lock cannot be acquired, if the HTTP request fails,
+/// if the response body cannot be read, or if the returned key is empty.
 pub fn fetch_market_public_key() -> Result<String, String> {
+    let mut guard = MARKET_PUBLIC_KEY_CACHE
+        .lock()
+        .map_err(|e| format!("Failed to acquire public key cache lock: {e}"))?;
+
+    if let Some(ref cached_key) = *guard {
+        return Ok(cached_key.clone());
+    }
+
     let mut response = ureq::get(PUMPKIN_MARKET_PUBLIC_KEY_URL)
         .header("User-Agent", "Pumpkin-MC")
         .call()
@@ -180,6 +196,7 @@ pub fn fetch_market_public_key() -> Result<String, String> {
     if key.is_empty() {
         Err("Fetched public key is empty".into())
     } else {
+        *guard = Some(key.clone());
         Ok(key)
     }
 }
@@ -385,5 +402,26 @@ pub fn verify_wasm_plugin(wasm_bytes: &[u8], path_str: &str) {
             path_str,
             result.error.as_deref().unwrap_or("Unknown error")
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn market_public_key_caching() {
+        {
+            let mut guard = MARKET_PUBLIC_KEY_CACHE.lock().unwrap();
+            *guard = Some("cached_test_key_12345".to_string());
+        };
+
+        let key = fetch_market_public_key().expect("Should return cached key");
+        assert_eq!(key, "cached_test_key_12345");
+
+        {
+            let mut guard = MARKET_PUBLIC_KEY_CACHE.lock().unwrap();
+            *guard = None;
+        };
     }
 }

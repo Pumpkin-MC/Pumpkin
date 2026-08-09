@@ -125,7 +125,9 @@ impl TaskScheduler {
                     break;
                 }
 
-                let task = tasks.pop().unwrap();
+                let Some(task) = tasks.pop() else {
+                    break;
+                };
                 if cancelled.remove(&task.id) {
                     continue;
                 }

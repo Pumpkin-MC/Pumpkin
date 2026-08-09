@@ -251,7 +251,9 @@ impl ChunkNoiseFunctionComponent<'_> {
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f64 {
-        let (top_component, component_stack) = component_stack.split_last_mut().unwrap();
+        let Some((top_component, component_stack)) = component_stack.split_last_mut() else {
+            return 0.0;
+        };
         if !sample_options.populating_caches
             && let ChunkNoiseFunctionComponent::Chunk(
                 ChunkSpecificNoiseFunctionComponent::DensityInterpolator(interp),
@@ -268,8 +270,9 @@ impl ChunkNoiseFunctionComponent<'_> {
         mapper: &impl IndexToNoisePos,
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
-        let (top_component, component_stack) = component_stack.split_last_mut().unwrap();
-        top_component.fill(component_stack, array, mapper, sample_options);
+        if let Some((top_component, component_stack)) = component_stack.split_last_mut() {
+            top_component.fill(component_stack, array, mapper, sample_options);
+        }
     }
 }
 

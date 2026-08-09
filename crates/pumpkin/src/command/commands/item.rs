@@ -239,8 +239,7 @@ impl CommandExecutor for EntityReplaceExecutor {
                             .entity_equipment
                             .lock()
                             .await
-                            .put(&eq, item_stack.clone())
-                            .await;
+                            .put(&eq, item_stack.clone());
                         living.send_equipment_changes(&[(eq, item_stack.clone())]);
                         modified_count += 1;
                     }

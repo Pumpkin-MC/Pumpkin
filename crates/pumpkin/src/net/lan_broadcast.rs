@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::{select, time};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::{SHOULD_STOP, STOP_INTERRUPT};
 
@@ -52,22 +52,23 @@ impl LANBroadcast {
     /// # Panics
     /// Panics if the UDP socket cannot be bound or if broadcast permissions are denied
     pub async fn start(self, bound_addr: SocketAddr) {
-        let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.port))
-            .await
-            .expect("Unable to bind to address");
+        let Ok(socket) = UdpSocket::bind(format!("0.0.0.0:{}", self.port)).await else {
+            error!("Unable to bind LAN broadcast UDP socket");
+            return;
+        };
 
-        socket.set_broadcast(true).unwrap();
+        if let Err(err) = socket.set_broadcast(true) {
+            error!("Unable to set LAN broadcast: {err}");
+            return;
+        }
 
         let mut interval = time::interval(Duration::from_millis(1500));
 
         let advertisement = format!("[MOTD]{}[/MOTD][AD]{}[/AD]", self.motd, bound_addr.port());
 
-        info!(
-            "LAN broadcast running on {}",
-            socket
-                .local_addr()
-                .expect("Unable to find running address!")
-        );
+        if let Ok(local_addr) = socket.local_addr() {
+            info!("LAN broadcast running on {local_addr}");
+        }
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             let t1 = interval.tick();

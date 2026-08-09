@@ -158,7 +158,7 @@ impl BlockBehaviour for DropperBlock {
                     return;
                 };
 
-                if let Some(mut item) = dropper.get_random_slot().await {
+                if let Some((slot_index, mut item)) = dropper.get_random_slot().await {
                     let props = DispenserLikeProperties::from_state_id(
                         args.world.get_block_state(args.position).id,
                         args.block,
@@ -177,15 +177,17 @@ impl BlockBehaviour for DropperBlock {
                         if HopperBlockEntity::add_one_item(dropper, container.as_ref(), one_item)
                             .await
                         {
+                            dropper.set_stack(slot_index, item).await;
                             return;
                         }
 
-                        *item = backup;
+                        dropper.set_stack(slot_index, backup).await;
                         return;
                     }
 
                     // No container found, dispense item into the world
                     let drop_item = item.split(1);
+                    dropper.set_stack(slot_index, item).await;
                     let facing = to_normal(props.facing);
                     let mut position = args.position.to_centered_f64().add(&(facing * 0.7));
 

@@ -18,7 +18,6 @@ use serde_json::to_string_pretty;
 use std::collections::{HashMap, HashSet};
 use std::fs::{create_dir_all, read, write};
 use std::path::PathBuf;
-use std::str::from_utf8;
 use std::sync::{Arc, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::task::spawn_blocking;
@@ -271,14 +270,17 @@ impl PlayerAdvancement {
         let json = to_string_pretty(self).map_err(AdvancementDataError::Json)?;
         let path = self.path.clone();
         spawn_blocking(move || {
-            if let Err(e) = create_dir_all(path.parent().unwrap()) {
+            let Some(parent) = path.parent() else {
+                return Ok(());
+            };
+            if let Err(e) = create_dir_all(parent) {
                 error!("Failed to create player advancement directory : {e}");
                 return Err(AdvancementDataError::Io(e));
             }
             write(path, json).map_err(AdvancementDataError::Io)
         })
         .await
-        .expect("spawn_blocking task panicked")
+        .unwrap_or(Ok(()))
     }
 
     /// Loads the player's advancement progress from disk.
@@ -290,10 +292,12 @@ impl PlayerAdvancement {
         let path = self.path.clone();
         let json = spawn_blocking(|| read(path).map_err(AdvancementDataError::Io))
             .await
-            .expect("spawn_blocking task panicked")?;
+            .unwrap_or(Err(AdvancementDataError::Io(std::io::Error::from(
+                std::io::ErrorKind::Other,
+            ))))?;
 
         let loaded_data: HashMap<String, AdvancementProgress> =
-            serde_json::from_str(from_utf8(&json).unwrap()).map_err(AdvancementDataError::Json)?;
+            serde_json::from_slice(&json).map_err(AdvancementDataError::Json)?;
 
         self.progress.clear();
         for (advancement_id, mut progress) in loaded_data {
@@ -377,7 +381,8 @@ impl PlayerAdvancement {
                             .map(|(key, val)| Criteria {
                                 criterion_id: key.clone(),
                                 achieve_date: val.0.map(|time| {
-                                    time.duration_since(UNIX_EPOCH).unwrap().as_millis() as i64
+                                    time.duration_since(UNIX_EPOCH)
+                                        .map_or(0, |d| d.as_millis() as i64)
                                 }),
                             })
                             .collect(),
@@ -415,7 +420,9 @@ impl PlayerAdvancement {
     pub fn award(&mut self, advancement: &'static Advancement, criterion: &str) -> bool {
         //TODO call and creates Events for plugins
         let mut result = false;
-        let player = self.player.upgrade().unwrap();
+        let Some(player) = self.player.upgrade() else {
+            return false;
+        };
         let progress = self.progress.get_mut_or_start_progress(advancement);
         let was_done = progress.is_done();
         if progress.grant_progress(criterion) {

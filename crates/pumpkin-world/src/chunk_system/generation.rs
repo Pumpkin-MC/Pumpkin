@@ -152,6 +152,51 @@ mod tests {
     }
 
     #[test]
+    fn dimensions_taller_than_their_noise_settings_generate_all_sections() {
+        for (dimension, terrain_state) in [
+            (
+                Dimension::THE_NETHER,
+                pumpkin_data::Block::NETHERRACK.default_state.id,
+            ),
+            (
+                Dimension::THE_END,
+                pumpkin_data::Block::END_STONE.default_state.id,
+            ),
+        ] {
+            let seed = Seed(42);
+            let block_registry = Arc::new(BlockRegistry);
+            let world_gen =
+                get_world_gen(seed, dimension.clone(), false, Vec::new(), String::new());
+            let biome_mixer_seed = hash_seed(world_gen.seed());
+
+            let chunk = generate_single_chunk(
+                &dimension,
+                biome_mixer_seed,
+                &world_gen,
+                block_registry.as_ref(),
+                0,
+                0,
+                StagedChunkEnum::Full,
+            );
+            let Chunk::Level(chunk) = chunk else {
+                panic!("full generation must return a level chunk");
+            };
+
+            assert_eq!(chunk.section.min_y, dimension.min_y);
+            assert_eq!(chunk.section.count, dimension.height as usize / 16);
+            assert_eq!(
+                chunk.light_engine.lock().unwrap().sky_light.len(),
+                chunk.section.count
+            );
+
+            let dumped = chunk.section.dump_blocks();
+            assert!(dumped.contains(&terrain_state));
+            let top_section = &dumped[dumped.len() - 16 * 16 * 16..];
+            assert!(top_section.iter().all(|&state| state == BlockStateId::AIR));
+        }
+    }
+
+    #[test]
     fn generate_chunk_should_return() {
         let dimension = Dimension::OVERWORLD;
         let seed = Seed(42);
@@ -325,7 +370,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(non_air, 14);
+        assert_eq!(non_air, 59);
         assert!(chunk.pending_block_entities.iter().any(|nbt| {
             nbt.get_string("id") == Some("minecraft:skull")
                 && nbt.get_int("x") == Some(-4888)
