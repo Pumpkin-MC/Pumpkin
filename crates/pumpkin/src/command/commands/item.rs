@@ -186,7 +186,7 @@ impl CommandExecutor for EntityReplaceExecutor {
                             let stack_serializer = ItemStackSerializer::from(item_stack.clone());
                             let packet =
                                 CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
-                            player.enqueue_slot_packet(&packet).await;
+                            player.enqueue_slot_packet(&packet, None, 0).await;
 
                             let eq_slot = if slot == 36 {
                                 Some(EquipmentSlot::FEET)

@@ -9,7 +9,10 @@ use pumpkin_data::{
     },
     item_stack::ItemStack,
 };
-use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
+use pumpkin_inventory::{
+    player::player_inventory::PlayerInventory,
+    screen_handler::{InventoryPlayer, ScreenHandler},
+};
 use pumpkin_protocol::bedrock::{
     client::inventory_content::CInventoryContent,
     network_item::{
@@ -545,8 +548,7 @@ impl BedrockClient {
                                     dynamic_id: None,
                                 },
                                 slot_id,
-                                0,
-                                VarInt(0),
+                                ItemStack::EMPTY,
                             );
                             inventory_updated = true;
                         }
@@ -1438,26 +1440,11 @@ impl BedrockClient {
 
                             source_stack.decrement(count);
                             if source.container_name.container_name == ContainerName::CreatedOutput
+                                && let Some(ref mut stack) = created_item
                             {
-                                if let Some(ref mut stack) = created_item {
-                                    stack.decrement(count);
-                                    if stack.is_empty() {
-                                        created_item = None;
-                                    }
-                                }
-                            } else if source.container_name.container_name == ContainerName::Cursor
-                            {
-                                let cursor_is_empty = screen_handler
-                                    .get_behaviour()
-                                    .cursor_stack
-                                    .lock()
-                                    .await
-                                    .is_empty();
-                                if cursor_is_empty && let Some(ref mut stack) = created_item {
-                                    stack.decrement(count);
-                                    if stack.is_empty() {
-                                        created_item = None;
-                                    }
+                                stack.decrement(count);
+                                if stack.is_empty() {
+                                    created_item = None;
                                 }
                             }
                             let source_stack = if source_stack.is_empty() {
@@ -1485,15 +1472,13 @@ impl BedrockClient {
                                 &mut updates,
                                 source.container_name.clone(),
                                 source.slot_id,
-                                source_stack.item_count,
-                                source.stack_id,
+                                &source_stack,
                             );
                             record_update(
                                 &mut updates,
                                 destination.container_name.clone(),
                                 destination.slot_id,
-                                dest_stack.item_count,
-                                destination.stack_id,
+                                &dest_stack,
                             );
                         }
                     }
@@ -1512,15 +1497,13 @@ impl BedrockClient {
                             &mut updates,
                             slot1.container_name.clone(),
                             slot1.slot_id,
-                            stack2.item_count,
-                            slot2.stack_id,
+                            &stack2,
                         );
                         record_update(
                             &mut updates,
                             slot2.container_name.clone(),
                             slot2.slot_id,
-                            stack1.item_count,
-                            slot1.stack_id,
+                            &stack1,
                         );
                     }
                     ItemStackRequestAction::Drop {
@@ -1558,8 +1541,7 @@ impl BedrockClient {
                                 &mut updates,
                                 source.container_name.clone(),
                                 source.slot_id,
-                                source_stack.item_count,
-                                source.stack_id,
+                                &source_stack,
                             );
                         }
                     }
@@ -1575,8 +1557,7 @@ impl BedrockClient {
                                 &mut updates,
                                 source.container_name.clone(),
                                 source.slot_id,
-                                source_stack.item_count,
-                                source.stack_id,
+                                &source_stack,
                             );
                             continue;
                         }
@@ -1608,8 +1589,7 @@ impl BedrockClient {
                                 &mut updates,
                                 source.container_name.clone(),
                                 source.slot_id,
-                                source_stack.item_count,
-                                source.stack_id,
+                                &source_stack,
                             );
                         }
                     }
@@ -1627,6 +1607,7 @@ impl BedrockClient {
 
                             let is_player = screen_handler.window_type().is_none();
                             let grid_size = if is_player { 4 } else { 9 };
+                            let bedrock_grid_start = if is_player { 28 } else { 32 };
                             for i in 0..grid_size {
                                 let grid_slot_index = 1 + i;
                                 let grid_slot =
@@ -1676,9 +1657,8 @@ impl BedrockClient {
                                         container_name: ContainerName::CraftingInput,
                                         dynamic_id: None,
                                     },
-                                    i as u8,
-                                    grid_stack.item_count,
-                                    VarInt(0),
+                                    (bedrock_grid_start + i) as u8,
+                                    &grid_stack,
                                 );
                             }
                         }
@@ -1958,8 +1938,12 @@ fn map_bedrock_container_slot(
     container_name: ContainerName,
     slot_id: u8,
 ) -> Option<usize> {
-    let container_slots = screen_handler.get_behaviour().container_slots;
     let is_player_screen = screen_handler.window_type().is_none();
+    let container_slots = screen_handler
+        .get_behaviour()
+        .slots
+        .len()
+        .saturating_sub(PlayerInventory::MAIN_SIZE);
 
     match container_name {
         ContainerName::HotBar => {
@@ -2217,22 +2201,26 @@ fn record_update(
     updates: &mut Vec<SlotUpdate>,
     container_name: FullContainerName,
     slot_id: u8,
-    count: u8,
-    stack_id: VarInt,
+    stack: &ItemStack,
 ) {
-    let final_stack_id = if count == 0 { VarInt(0) } else { stack_id };
+    let count = stack.item_count;
+    let stack_id = if stack.is_empty() {
+        VarInt(0)
+    } else {
+        VarInt(stack.uid.get())
+    };
     if let Some(existing) = updates
         .iter_mut()
         .find(|u| u.container_name == container_name && u.slot_id == slot_id)
     {
         existing.count = count;
-        existing.stack_id = final_stack_id;
+        existing.stack_id = stack_id;
     } else {
         updates.push(SlotUpdate {
             container_name,
             slot_id,
             count,
-            stack_id: final_stack_id,
+            stack_id,
         });
     }
 }
@@ -2248,13 +2236,12 @@ async fn get_slot_stack(
         return stack.clone();
     }
     if slot_info.container_name.container_name == ContainerName::Cursor {
-        let cursor_lock = screen_handler.get_behaviour().cursor_stack.lock().await;
-        if cursor_lock.is_empty()
-            && let Some(stack) = created_item
-        {
-            return stack.clone();
-        }
-        return cursor_lock.clone();
+        return screen_handler
+            .get_behaviour()
+            .cursor_stack
+            .lock()
+            .await
+            .clone();
     }
     if let Some(screen_slot) = map_bedrock_container_slot(
         screen_handler,
@@ -2319,5 +2306,60 @@ async fn update_slot_stack(
             .set_stack(new_stack.clone())
             .await;
         screen_handler.set_received_stack(screen_slot, new_stack);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::item::Item;
+    use pumpkin_inventory::{
+        build_equipment_slots, crafting::crafting_screen_handler::CraftingTableScreenHandler,
+        entity_equipment::EntityEquipment,
+    };
+    use tokio::sync::Mutex;
+
+    #[tokio::test]
+    async fn crafting_table_maps_bedrock_player_inventory_after_its_ten_slots() {
+        let inventory = Arc::new(PlayerInventory::new(
+            Arc::new(Mutex::new(EntityEquipment::new())),
+            Arc::new(build_equipment_slots()),
+        ));
+        let handler = CraftingTableScreenHandler::new(1, &inventory, None).await;
+
+        assert_eq!(
+            map_bedrock_container_slot(&handler, ContainerName::Inventory, 26),
+            Some(27)
+        );
+        assert_eq!(
+            map_bedrock_container_slot(&handler, ContainerName::HotBar, 0),
+            Some(37)
+        );
+        assert_eq!(
+            map_bedrock_container_slot(&handler, ContainerName::CraftingInput, 32),
+            Some(1)
+        );
+        assert_eq!(
+            map_bedrock_container_slot(&handler, ContainerName::CraftingInput, 40),
+            Some(9)
+        );
+    }
+
+    #[test]
+    fn item_stack_response_uses_the_authoritative_stack_id() {
+        let stack = ItemStack::new(3, &Item::SPRUCE_DOOR);
+        let container = FullContainerName {
+            container_name: ContainerName::Cursor,
+            dynamic_id: None,
+        };
+        let mut updates = Vec::new();
+
+        record_update(&mut updates, container.clone(), 0, &stack);
+        assert_eq!(updates[0].count, 3);
+        assert_eq!(updates[0].stack_id, VarInt(stack.uid.get()));
+
+        record_update(&mut updates, container, 0, ItemStack::EMPTY);
+        assert_eq!(updates[0].count, 0);
+        assert_eq!(updates[0].stack_id, VarInt(0));
     }
 }

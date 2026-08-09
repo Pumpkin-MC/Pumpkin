@@ -5508,7 +5508,12 @@ impl InventoryPlayer for Player {
         })
     }
 
-    fn enqueue_slot_packet<'a>(&'a self, packet: &'a CSetContainerSlot) -> PlayerFuture<'a, ()> {
+    fn enqueue_slot_packet<'a>(
+        &'a self,
+        packet: &'a CSetContainerSlot,
+        window_type: Option<WindowType>,
+        total_slots: usize,
+    ) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
             match self.client.as_ref() {
                 ClientPlatform::Java(java) => {
@@ -5543,11 +5548,6 @@ impl InventoryPlayer for Player {
                         let slot_idx = packet.slot as usize;
                         let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
 
-                        // Container screen
-                        let current_handler = self.current_screen_handler.lock().await.clone();
-                        let handler = current_handler.lock().await;
-                        let window_type = handler.window_type();
-                        let total_slots = handler.get_behaviour().slots.len();
                         let bedrock_info = if total_slots >= 36 {
                             let container_slots = total_slots - 36;
                             if slot_idx < container_slots {
