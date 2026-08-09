@@ -409,12 +409,45 @@ pub fn check_spawn_rules(
 
     // `AgeableWaterCreature.checkSurfaceAgeableWaterCreatureSpawnRules`: only in a shallow
     // band just below sea level, directly under a water surface (block above is water).
-    if id == EntityType::SQUID.id {
-        return is_in_surface_squid_y_range(pos.0.y, world.sea_level)
+    if id == EntityType::COD.id
+        || id == EntityType::DOLPHIN.id
+        || id == EntityType::PUFFERFISH.id
+        || id == EntityType::SALMON.id
+        || id == EntityType::SQUID.id
+    {
+        return check_surface_water_creature_spawn_rules(world, pos);
+    }
+
+    // `TropicalFish.checkTropicalFishSpawnRules`: tropical fish can use the same surface
+    // placement, or any height in biomes carrying the special vanilla biome tag.
+    if id == EntityType::TROPICAL_FISH.id {
+        let water_placement = world
+            .get_fluid(&pos.down())
+            .has_tag(&tag::Fluid::MINECRAFT_WATER)
+            && world.get_block(&pos.up()) == &Block::WATER;
+        return water_placement
+            && (world.get_biome(pos).is_some_and(|biome| {
+                biome.has_tag(
+                    &tag::WorldgenBiome::MINECRAFT_ALLOWS_TROPICAL_FISH_SPAWNS_AT_ANY_HEIGHT,
+                )
+            }) || is_in_surface_water_y_range(pos.0.y, world.sea_level));
+    }
+
+    // `AbstractNautilus.checkNautilusSpawnRules`: five blocks below the surface through
+    // twenty-five blocks below it, with water immediately below and above the spawn position.
+    if id == EntityType::NAUTILUS.id {
+        return is_in_nautilus_y_range(pos.0.y, world.sea_level)
             && world
                 .get_fluid(&pos.down())
                 .has_tag(&tag::Fluid::MINECRAFT_WATER)
             && world.get_block(&pos.up()) == &Block::WATER;
+    }
+
+    // `Axolotl.checkAxolotlSpawnRules` only checks the block tag below the candidate.
+    if id == EntityType::AXOLOTL.id {
+        return world
+            .get_block(&pos.down())
+            .has_tag(&tag::Block::MINECRAFT_AXOLOTLS_SPAWNABLE_ON);
     }
 
     // `GlowSquid.checkGlowSquidSpawnRules`: only deep below sea level, in complete darkness.
@@ -505,8 +538,22 @@ const fn uses_any_light_monster_spawn_rules(id: u16) -> bool {
 
 /// `AgeableWaterCreature.checkSurfaceAgeableWaterCreatureSpawnRules`'s Y-range gate:
 /// `pos.getY() >= seaLevel - 13 && pos.getY() <= seaLevel`.
-const fn is_in_surface_squid_y_range(y: i32, sea_level: i32) -> bool {
+const fn is_in_surface_water_y_range(y: i32, sea_level: i32) -> bool {
     y >= sea_level - 13 && y <= sea_level
+}
+
+fn check_surface_water_creature_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+    is_in_surface_water_y_range(pos.0.y, world.sea_level)
+        && world
+            .get_fluid(&pos.down())
+            .has_tag(&tag::Fluid::MINECRAFT_WATER)
+        && world.get_block(&pos.up()) == &Block::WATER
+}
+
+/// `AbstractNautilus.checkNautilusSpawnRules`'s Y-range gate:
+/// `pos.getY() >= seaLevel - 25 && pos.getY() <= seaLevel - 5`.
+const fn is_in_nautilus_y_range(y: i32, sea_level: i32) -> bool {
+    y >= sea_level - 25 && y <= sea_level - 5
 }
 
 /// `GlowSquid.checkGlowSquidSpawnRules`'s Y gate: `pos.getY() <= level.getSeaLevel() - 33`.
@@ -617,15 +664,26 @@ mod slime_spawn_dispatch_tests {
 
 #[cfg(test)]
 mod squid_spawn_rule_tests {
-    use super::{is_below_glow_squid_y_threshold, is_in_surface_squid_y_range};
+    use super::{
+        is_below_glow_squid_y_threshold, is_in_nautilus_y_range, is_in_surface_water_y_range,
+    };
 
     #[test]
     fn surface_squid_range_matches_vanilla_bounds() {
         let sea_level = 63;
-        assert!(!is_in_surface_squid_y_range(sea_level - 14, sea_level));
-        assert!(is_in_surface_squid_y_range(sea_level - 13, sea_level));
-        assert!(is_in_surface_squid_y_range(sea_level, sea_level));
-        assert!(!is_in_surface_squid_y_range(sea_level + 1, sea_level));
+        assert!(!is_in_surface_water_y_range(sea_level - 14, sea_level));
+        assert!(is_in_surface_water_y_range(sea_level - 13, sea_level));
+        assert!(is_in_surface_water_y_range(sea_level, sea_level));
+        assert!(!is_in_surface_water_y_range(sea_level + 1, sea_level));
+    }
+
+    #[test]
+    fn nautilus_range_matches_vanilla_bounds() {
+        let sea_level = 63;
+        assert!(!is_in_nautilus_y_range(sea_level - 26, sea_level));
+        assert!(is_in_nautilus_y_range(sea_level - 25, sea_level));
+        assert!(is_in_nautilus_y_range(sea_level - 5, sea_level));
+        assert!(!is_in_nautilus_y_range(sea_level - 4, sea_level));
     }
 
     #[test]
