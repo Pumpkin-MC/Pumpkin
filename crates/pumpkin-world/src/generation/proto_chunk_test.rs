@@ -20,7 +20,7 @@ mod test {
             String::new(),
         );
         let proto = ProtoChunk::new(0, 0, &world_gen);
-        assert_eq!(proto.height(), Dimension::THE_NETHER.logical_height as u16);
+        assert_eq!(proto.height(), Dimension::THE_NETHER.height as u16);
 
         let mut staged = Chunk::Proto(Box::new(proto));
         staged.upgrade_to_level_chunk(&Dimension::THE_NETHER, &LightingEngineConfig::Default);
