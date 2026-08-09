@@ -96,6 +96,16 @@ impl<T: Send + Sync + 'static> Registry for ImmutableRegistry<T> {
         })
     }
 
+    fn get_id_blocking(&self, identifier: &Identifier) -> Option<usize> {
+        Self::get_id(self, identifier)
+    }
+
+    fn get_by_id_blocking(&self, id: usize) -> Option<ErasedRegistryRef<'_>> {
+        Self::get_by_id(self, id)
+            .map(RegistryRef::Borrowed)
+            .map(ErasedRegistryRef::new)
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

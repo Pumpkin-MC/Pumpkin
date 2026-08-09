@@ -29,6 +29,12 @@ pub trait Registry: Any + Send + Sync {
 
     fn get_id<'a>(&'a self, identifier: &'a Identifier) -> BoxFuture<'a, Option<usize>>;
     fn get_by_id(&self, id: usize) -> BoxFuture<'_, Option<ErasedRegistryRef<'_>>>;
+
+    /// Blocking lookup for synchronous callers. Do not call from a Tokio worker thread.
+    fn get_id_blocking(&self, identifier: &Identifier) -> Option<usize>;
+
+    /// Blocking lookup for synchronous callers. Do not call from a Tokio worker thread.
+    fn get_by_id_blocking(&self, id: usize) -> Option<ErasedRegistryRef<'_>>;
 }
 
 pub type BoxedRegistry = Box<dyn Registry>;
@@ -171,6 +177,47 @@ mod tests {
                 .await,
             Err(DataKeyBuildError::MissingValue(found)) if found == missing_value
         ));
+    }
+
+    #[test]
+    fn blocking_access_works_without_a_tokio_runtime() {
+        let numbers = MutableRegistry::new(&[], &[]).unwrap();
+        numbers
+            .register_blocking(id("test:one"), 1u32)
+            .unwrap();
+        numbers
+            .register_blocking(id("test:two"), 2u32)
+            .unwrap();
+
+        assert_eq!(numbers.len_blocking(), 2);
+        assert_eq!(*numbers.get_blocking(&id("test:two")).unwrap(), 2);
+
+        let owner = RootRegistryOwner::new(&[], &[]).unwrap();
+        let root = owner.get();
+        root.register_blocking(id("test:numbers"), Box::new(numbers))
+            .unwrap();
+
+        let root_dyn: Arc<dyn Registry> = root;
+        let key = DataKeyBuilder::<u32>::new(id("test:numbers"))
+            .child(id("test:two"))
+            .build_arc_blocking(&root_dyn)
+            .unwrap();
+
+        assert_eq!(*key.get_blocking().unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn async_access_still_uses_non_blocking_lock_acquisition() {
+        let registry = Arc::new(MutableRegistry::new(&[], &[]).unwrap());
+        registry.register(id("test:value"), 42u32).await.unwrap();
+
+        let reader = Arc::clone(&registry);
+        let task = tokio::spawn(async move {
+            let value = reader.get(&id("test:value")).await.unwrap();
+            *value
+        });
+
+        assert_eq!(task.await.unwrap(), 42);
     }
 
     #[tokio::test]

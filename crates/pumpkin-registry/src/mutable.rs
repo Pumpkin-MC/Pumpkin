@@ -28,9 +28,27 @@ impl<T: Send + Sync + 'static> MutableRegistry<T> {
         self.0.write().await.register(identifier, value)
     }
 
+    /// Blocking variant for callers that are not running on a Tokio worker.
+    ///
+    /// Do not call this from asynchronous code; use [`Self::register`] there.
+    pub fn register_blocking(
+        &self,
+        identifier: Identifier,
+        value: T,
+    ) -> Result<(), RegistryInsertError> {
+        self.0.blocking_write().register(identifier, value)
+    }
+
     #[must_use]
     pub async fn get(&self, identifier: &Identifier) -> Option<RegistryRef<'_, T>> {
         RwLockReadGuard::try_map(self.0.read().await, |registry| registry.get(identifier))
+            .map(RegistryRef::Locked)
+            .ok()
+    }
+
+    #[must_use]
+    pub fn get_blocking(&self, identifier: &Identifier) -> Option<RegistryRef<'_, T>> {
+        RwLockReadGuard::try_map(self.0.blocking_read(), |registry| registry.get(identifier))
             .map(RegistryRef::Locked)
             .ok()
     }
@@ -43,8 +61,20 @@ impl<T: Send + Sync + 'static> MutableRegistry<T> {
     }
 
     #[must_use]
+    pub fn get_by_id_blocking(&self, id: usize) -> Option<RegistryRef<'_, T>> {
+        RwLockReadGuard::try_map(self.0.blocking_read(), |registry| registry.get_by_id(id))
+            .map(RegistryRef::Locked)
+            .ok()
+    }
+
+    #[must_use]
     pub async fn get_id(&self, identifier: &Identifier) -> Option<usize> {
         self.0.read().await.get_id(identifier)
+    }
+
+    #[must_use]
+    pub fn get_id_blocking(&self, identifier: &Identifier) -> Option<usize> {
+        self.0.blocking_read().get_id(identifier)
     }
 
     #[must_use]
@@ -53,8 +83,18 @@ impl<T: Send + Sync + 'static> MutableRegistry<T> {
     }
 
     #[must_use]
+    pub fn contains_blocking(&self, identifier: &Identifier) -> bool {
+        self.0.blocking_read().contains(identifier)
+    }
+
+    #[must_use]
     pub async fn len(&self) -> usize {
         self.0.read().await.len()
+    }
+
+    #[must_use]
+    pub fn len_blocking(&self) -> usize {
+        self.0.blocking_read().len()
     }
 
     #[must_use]
@@ -62,9 +102,19 @@ impl<T: Send + Sync + 'static> MutableRegistry<T> {
         self.0.read().await.is_empty()
     }
 
+    #[must_use]
+    pub fn is_empty_blocking(&self) -> bool {
+        self.0.blocking_read().is_empty()
+    }
+
     #[allow(clippy::iter_not_returning_iterator)] // does clippy know how async works?
     pub async fn iter(&self) -> impl Iterator<Item = (&Identifier, &T)> {
         LockedIterator::new(self.0.read().await)
+    }
+
+    #[allow(clippy::iter_not_returning_iterator)]
+    pub fn iter_blocking(&self) -> impl Iterator<Item = (&Identifier, &T)> {
+        LockedIterator::new(self.0.blocking_read())
     }
 }
 
@@ -105,6 +155,14 @@ impl<T: Send + Sync + 'static> Registry for MutableRegistry<T> {
 
     fn get_by_id(&self, id: usize) -> BoxFuture<'_, Option<ErasedRegistryRef<'_>>> {
         Box::pin(async move { Self::get_by_id(self, id).await.map(ErasedRegistryRef::new) })
+    }
+
+    fn get_id_blocking(&self, identifier: &Identifier) -> Option<usize> {
+        Self::get_id_blocking(self, identifier)
+    }
+
+    fn get_by_id_blocking(&self, id: usize) -> Option<ErasedRegistryRef<'_>> {
+        Self::get_by_id_blocking(self, id).map(ErasedRegistryRef::new)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

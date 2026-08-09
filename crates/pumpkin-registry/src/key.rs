@@ -19,6 +19,14 @@ where
     fn get(&self) -> BoxFuture<'_, Result<DataKeyRef<'_, T>, DataKeyGetError>> {
         get_from_key(self.root_registry(), self.ids())
     }
+
+    /// Blocking lookup for synchronous callers.
+    ///
+    /// This parks the calling thread while a mutable registry is contended.
+    /// Do not call it from a Tokio worker; async callers should use [`Self::get`].
+    fn get_blocking(&self) -> Result<DataKeyRef<'_, T>, DataKeyGetError> {
+        get_from_key_blocking(self.root_registry(), self.ids())
+    }
 }
 
 fn get_from_key<'a, T>(
@@ -88,6 +96,61 @@ where
             value: value_ptr,
             marker: PhantomData,
         })
+    })
+}
+
+fn get_from_key_blocking<'a, T>(
+    root: &'a dyn Registry,
+    keys: &'a [usize],
+) -> Result<DataKeyRef<'a, T>, DataKeyGetError>
+where
+    T: Send + Sync + 'static,
+{
+    let Some((&value_id, registry_path)) = keys.split_last() else {
+        return Err(DataKeyGetError::InvalidKey);
+    };
+
+    let mut guards = Vec::with_capacity(keys.len());
+    let mut current: *const dyn Registry = root;
+
+    for &registry_id in registry_path {
+        // SAFETY: `current` points either to `root` or into storage kept alive
+        // by one of the guards retained in `guards`.
+        let registry = unsafe { &*current };
+
+        let value = registry
+            .get_by_id_blocking(registry_id)
+            .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
+
+        let nested = value
+            .downcast_ref::<BoxedRegistry>()
+            .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
+
+        current = ptr::from_ref::<dyn Registry>(nested.as_ref());
+        guards.push(value);
+    }
+
+    // SAFETY: same invariant as above.
+    let registry = unsafe { &*current };
+
+    let value = registry
+        .get_by_id_blocking(value_id)
+        .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
+
+    let typed = value
+        .downcast_ref::<T>()
+        .ok_or(DataKeyGetError::TypeMismatch {
+            expected: type_name::<T>(),
+            actual: registry.item_type_name(),
+        })?;
+
+    let value_ptr = ptr::from_ref::<T>(typed);
+    guards.push(value);
+
+    Ok(DataKeyRef {
+        _guards: guards,
+        value: value_ptr,
+        marker: PhantomData,
     })
 }
 
@@ -200,6 +263,79 @@ impl<T: Send + Sync + 'static> DataKeyBuilder<T> {
             marker: PhantomData,
         })
     }
+
+    pub fn build_arc_blocking(
+        self,
+        registry: &Arc<dyn Registry>,
+    ) -> Result<ArcDataKey<T>, DataKeyBuildError> {
+        let keys = build_keys_blocking::<T>(&self.keys, registry.as_ref())?;
+
+        Ok(ArcDataKey {
+            keys,
+            root: Arc::clone(registry),
+            marker: PhantomData,
+        })
+    }
+
+    pub fn build_ref_blocking(
+        self,
+        registry: &dyn Registry,
+    ) -> Result<RefDataKey<'_, T>, DataKeyBuildError> {
+        let keys = build_keys_blocking::<T>(&self.keys, registry)?;
+
+        Ok(RefDataKey {
+            keys,
+            root: registry,
+            marker: PhantomData,
+        })
+    }
+}
+
+fn build_keys_blocking<T>(
+    keys: &[Identifier],
+    registry: &dyn Registry,
+) -> Result<Box<[usize]>, DataKeyBuildError>
+where
+    T: Send + Sync + 'static,
+{
+    let Some((value_identifier, registry_path)) = keys.split_last() else {
+        return Err(DataKeyBuildError::Empty);
+    };
+
+    let mut numeric_keys = Vec::with_capacity(keys.len());
+    let mut guards = Vec::with_capacity(registry_path.len());
+    let mut current: *const dyn Registry = registry;
+
+    for identifier in registry_path {
+        // SAFETY: `current` points either to `registry` or into a value kept
+        // alive by a guard retained in `guards`.
+        let registry = unsafe { &*current };
+
+        let id = registry
+            .get_id_blocking(identifier)
+            .ok_or_else(|| DataKeyBuildError::MissingRegistry(identifier.clone()))?;
+
+        let value = registry
+            .get_by_id_blocking(id)
+            .ok_or_else(|| DataKeyBuildError::MissingRegistry(identifier.clone()))?;
+
+        let nested = value
+            .downcast_ref::<BoxedRegistry>()
+            .ok_or_else(|| DataKeyBuildError::NotARegistry(identifier.clone()))?;
+
+        numeric_keys.push(id);
+        current = ptr::from_ref::<dyn Registry>(nested.as_ref());
+        guards.push(value);
+    }
+
+    // SAFETY: same invariant as above.
+    let registry = unsafe { &*current };
+    let value_id = registry
+        .get_id_blocking(value_identifier)
+        .ok_or_else(|| DataKeyBuildError::MissingValue(value_identifier.clone()))?;
+
+    numeric_keys.push(value_id);
+    Ok(numeric_keys.into_boxed_slice())
 }
 
 fn build_key_path<'a, T>(
