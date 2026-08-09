@@ -1,6 +1,7 @@
 use std::{
     num::{NonZero, NonZeroI32},
     sync::{Arc, atomic::Ordering},
+    time::Duration,
 };
 
 use pumpkin_data::{
@@ -11,10 +12,15 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_protocol::bedrock::{
-    client::inventory_content::CInventoryContent,
+    client::{
+        inventory_content::CInventoryContent,
+        respawn::CRespawn,
+        set_actor_data::{CSetActorData, PropertySyncData},
+    },
     network_item::{
         ContainerName, FullContainerName, NetworkItemDescriptor, NetworkItemStackDescriptor,
     },
+    respawn::RespawnState,
 };
 use pumpkin_protocol::{
     bedrock::{
@@ -23,6 +29,7 @@ use pumpkin_protocol::{
             player_hotbar::CPlayerHotbar, update_block::CUpdateBlock,
         },
         server::{
+            actor_event::{ActorEventType, SActorEvent},
             animate::{AnimateAction, SAnimate},
             block_pick_request::SBlockPickRequest,
             command_request::SCommandRequest,
@@ -34,7 +41,9 @@ use pumpkin_protocol::{
             mob_equipment::SMobEquipment,
             player_action::{Action as PlayerAction, SPlayerAction},
             player_auth_input::{InputData, SPlayerAuthInput},
+            player_skin::SPlayerSkin,
             request_chunk_radius::SRequestChunkRadius,
+            respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             text::SText,
         },
@@ -53,7 +62,7 @@ use crate::{
         EntityBase,
         player::{MINE_BLOCK_EXHAUSTION, Player},
     },
-    net::{DisconnectReason, bedrock::BedrockClient},
+    net::{ClientPlatform, DisconnectReason, bedrock::BedrockClient},
     plugin::player::{
         item_held::PlayerItemHeldEvent,
         player_chat::PlayerChatEvent,
@@ -148,6 +157,55 @@ const fn map_bedrock_slot_to_screen_handler(window_id: i32, slot: u32) -> Option
 }
 
 impl BedrockClient {
+    pub async fn handle_player_skin(
+        &self,
+        player: &Arc<Player>,
+        server: &Server,
+        packet: SPlayerSkin,
+    ) {
+        if packet.uuid != player.gameprofile.id {
+            tracing::warn!(
+                player = %player.gameprofile.name,
+                claimed_uuid = %packet.uuid,
+                "Rejected a Bedrock skin update for another player"
+            );
+            return;
+        }
+
+        let config = &server.advanced_config.networking.bedrock.skins;
+        let (skin, changed) = server
+            .bedrock_skin_packs
+            .accept(
+                packet.uuid,
+                packet.skin,
+                config.trusted_only,
+                Duration::from_secs(config.change_cooldown_seconds),
+            )
+            .await;
+        if !changed {
+            return;
+        }
+
+        player.bedrock_skin.store(Arc::new(skin.clone()));
+        let _ = server
+            .bedrock_skin_packs
+            .register(player.gameprofile.id, &skin)
+            .await;
+        let update = pumpkin_protocol::bedrock::client::player_skin::CPlayerSkin {
+            uuid: player.gameprofile.id,
+            skin: &skin,
+            new_skin_name: &packet.new_skin_name,
+            old_skin_name: &packet.old_skin_name,
+        };
+        for recipient in player.world().players.load().iter() {
+            if recipient.gameprofile.id != player.gameprofile.id
+                && let ClientPlatform::Bedrock(client) = recipient.client.as_ref()
+            {
+                client.try_enqueue_packet(&update);
+            }
+        }
+    }
+
     pub async fn handle_request_chunk_radius(
         &self,
         player: &Arc<Player>,
@@ -218,6 +276,9 @@ impl BedrockClient {
         if !player.has_client_loaded() {
             return;
         }
+        if player.living_entity.dead.load(Ordering::Relaxed) {
+            return;
+        }
         let entity = player.get_entity();
         let on_ground = packet.input_data.get(InputData::VerticalCollision as usize)
             && packet.delta.y < 0.0
@@ -252,7 +313,6 @@ impl BedrockClient {
 
             let je_yaw = (new_yaw * 256.0 / 360.0).rem_euclid(256.0);
             let je_pitch = (new_pitch * 256.0 / 360.0).rem_euclid(256.0);
-
             let delta = pumpkin_util::math::vector3::Vector3::new(
                 new_pos.x - old_pos.x,
                 new_pos.y - old_pos.y,
@@ -277,44 +337,15 @@ impl BedrockClient {
                 pumpkin_protocol::codec::var_ulong::VarULong(0),
             );
 
-            if pos_changed && delta.length_squared() >= 64.0 {
-                world.broadcast_packet_except(
+            if pos_changed {
+                world.broadcast_packet_except_editioned_sync(
                     &[player.gameprofile.id],
                     &pumpkin_protocol::java::client::play::CEntityPositionSync::new(
                         player.entity_id().into(),
                         new_pos,
-                        pumpkin_util::math::vector3::Vector3::new(0.0, 0.0, 0.0),
-                        je_yaw,
-                        je_pitch,
-                        on_ground,
-                    ),
-                );
-            } else if pos_changed && rot_changed {
-                world.broadcast_packet_except_editioned_sync(
-                    &[player.gameprofile.id],
-                    &pumpkin_protocol::java::client::play::CUpdateEntityPosRot::new(
-                        player.entity_id().into(),
-                        pumpkin_util::math::vector3::Vector3::new(
-                            new_pos.x.mul_add(4096.0, -(old_pos.x * 4096.0)) as i16,
-                            new_pos.y.mul_add(4096.0, -(old_pos.y * 4096.0)) as i16,
-                            new_pos.z.mul_add(4096.0, -(old_pos.z * 4096.0)) as i16,
-                        ),
-                        je_yaw as u8,   // Use converted Java byte
-                        je_pitch as u8, // Use converted Java byte
-                        on_ground,
-                    ),
-                    &bedrock_move_packet,
-                );
-            } else if pos_changed {
-                world.broadcast_packet_except_editioned_sync(
-                    &[player.gameprofile.id],
-                    &pumpkin_protocol::java::client::play::CUpdateEntityPos::new(
-                        player.entity_id().into(),
-                        pumpkin_util::math::vector3::Vector3::new(
-                            new_pos.x.mul_add(4096.0, -(old_pos.x * 4096.0)) as i16,
-                            new_pos.y.mul_add(4096.0, -(old_pos.y * 4096.0)) as i16,
-                            new_pos.z.mul_add(4096.0, -(old_pos.z * 4096.0)) as i16,
-                        ),
+                        packet.delta.to_f64(),
+                        new_yaw,
+                        new_pitch,
                         on_ground,
                     ),
                     &bedrock_move_packet,
@@ -1082,7 +1113,10 @@ impl BedrockClient {
         server: &Server,
         packet: SPlayerAction,
     ) {
-        if !player.has_client_loaded() {
+        if !player.has_client_loaded()
+            || (player.living_entity.dead.load(Ordering::Relaxed)
+                && !matches!(packet.action, PlayerAction::Respawn))
+        {
             return;
         }
         player.update_last_action_time();
@@ -1268,9 +1302,55 @@ impl BedrockClient {
             PlayerAction::DropItem => {
                 player.drop_held_item(false).await;
             }
+            PlayerAction::Respawn => {
+                let entity = player.get_entity();
+                self.enqueue_packet(&SActorEvent {
+                    entity_runtime_id: VarULong(player.entity_id() as u64),
+                    event_type: ActorEventType::Respawn,
+                    event_data: VarInt(0),
+                    fire_at_position: None,
+                })
+                .await;
+                player.send_health().await;
+                self.enqueue_packet(&CSetActorData {
+                    actor_runtime_id: VarULong(player.entity_id() as u64),
+                    metadata: entity.bedrock_metadata(),
+                    synced_properties: PropertySyncData {
+                        int_properties: std::collections::HashMap::new(),
+                        float_properties: std::collections::HashMap::new(),
+                    },
+                    tick: VarULong(0),
+                })
+                .await;
+            }
             // TODO
             _ => {}
         }
+    }
+
+    pub async fn handle_respawn(&self, player: &Arc<Player>, packet: SRespawn) {
+        if packet.state != RespawnState::ClientReadyToSpawn {
+            return;
+        }
+
+        if player.living_entity.dead.load(Ordering::Relaxed)
+            || player.living_entity.health.load() <= 0.0
+        {
+            player.world().respawn_player(player, false).await;
+        }
+
+        let entity = player.get_entity();
+        let position = entity.pos.load();
+        self.enqueue_packet(&CRespawn::new(
+            pumpkin_util::math::vector3::Vector3::new(
+                position.x as f32,
+                position.y as f32 + entity.entity_type.eye_height,
+                position.z as f32,
+            ),
+            RespawnState::ReadyToSpawn,
+            VarULong(player.entity_id() as u64),
+        ))
+        .await;
     }
 
     pub async fn handle_chat_command(

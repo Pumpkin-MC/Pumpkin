@@ -1,5 +1,6 @@
 pub mod nethernet;
 pub mod play;
+pub mod skin_pack;
 pub mod status;
 use crossbeam::atomic::AtomicCell;
 use std::{
@@ -30,10 +31,10 @@ use pumpkin_protocol::{
             interaction::SInteraction, inventory_transaction::SInventoryTransaction,
             loading_screen::SLoadingScreen, login::SLogin, mob_equipment::SMobEquipment,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
-            player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
-            request_chunk_radius::SRequestChunkRadius,
+            player_auth_input::SPlayerAuthInput, player_skin::SPlayerSkin,
+            request_ability::SRequestAbility, request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
-            resource_pack_response::SResourcePackResponse,
+            resource_pack_response::SResourcePackResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
         },
@@ -631,6 +632,15 @@ impl BedrockClient {
         server: &Arc<Server>,
         packet: RawPacket,
     ) -> Result<(), Error> {
+        if player
+            .living_entity
+            .dead
+            .load(std::sync::atomic::Ordering::Relaxed)
+            && packet.id != SPlayerAction::PACKET_ID
+            && packet.id != SRespawn::PACKET_ID
+        {
+            return Ok(());
+        }
         let payload = &packet.payload[..];
         let reader = &mut &payload[..];
         match packet.id {
@@ -684,6 +694,13 @@ impl BedrockClient {
             SPlayerAction::PACKET_ID => {
                 self.handle_player_action(player, server, SPlayerAction::read(reader)?)
                     .await;
+            }
+            SPlayerSkin::PACKET_ID => {
+                self.handle_player_skin(player, server, SPlayerSkin::read(reader)?)
+                    .await;
+            }
+            SRespawn::PACKET_ID => {
+                self.handle_respawn(player, SRespawn::read(reader)?).await;
             }
             SAnimate::PACKET_ID => {
                 self.handle_animate(player, server, &SAnimate::read(reader)?).await;

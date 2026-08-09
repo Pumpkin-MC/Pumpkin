@@ -14,7 +14,10 @@ use axum::{
     Router,
     body::Bytes,
     extract::{ConnectInfo, DefaultBodyLimit, Path, State},
-    http::{HeaderValue, StatusCode, header::CONTENT_TYPE},
+    http::{
+        HeaderValue, StatusCode,
+        header::{CACHE_CONTROL, CONTENT_TYPE},
+    },
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -46,6 +49,7 @@ use webrtc::{
     },
 };
 
+use super::skin_pack::BedrockSkinPacks;
 use crate::STOP_INTERRUPT;
 
 const RELIABLE_CHANNEL: &str = "ReliableDataChannel";
@@ -69,6 +73,7 @@ struct EndpointState {
     identity_key: Arc<SigningKey>,
     oidc_verifier: Option<Arc<(String, Jwks)>>,
     stun_servers: Arc<[String]>,
+    skin_packs: Arc<BedrockSkinPacks>,
 }
 
 impl NetherNetListener {
@@ -77,6 +82,7 @@ impl NetherNetListener {
         identity_key: Arc<SigningKey>,
         oidc_verifier: Option<Arc<(String, Jwks)>>,
         stun_servers: Vec<String>,
+        skin_packs: Arc<BedrockSkinPacks>,
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(address).await?;
         let local_addr = listener.local_addr()?;
@@ -86,10 +92,12 @@ impl NetherNetListener {
             identity_key,
             oidc_verifier,
             stun_servers: stun_servers.into(),
+            skin_packs,
         };
         let router = Router::new()
             .route("/v1/join", get(ping))
             .route("/v1/join/{network_id}", post(join))
+            .route("/v1/skin-packs/{pack_id}", get(skin_pack))
             .layer(DefaultBodyLimit::max(MAX_SDP_SIZE))
             .with_state(state);
 
@@ -167,6 +175,24 @@ pub fn load_or_create_identity_key(path: &FsPath) -> std::io::Result<Arc<Signing
 
 async fn ping() -> StatusCode {
     StatusCode::OK
+}
+
+async fn skin_pack(
+    State(state): State<EndpointState>,
+    Path(pack_id): Path<uuid::Uuid>,
+) -> Response {
+    let Some(pack) = state.skin_packs.get(pack_id).await else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let mut response = (StatusCode::OK, pack.data.clone()).into_response();
+    response
+        .headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static("application/zip"));
+    response.headers_mut().insert(
+        CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=31536000, immutable"),
+    );
+    response
 }
 
 async fn join(
@@ -859,6 +885,7 @@ mod tests {
             identity_key: server_key.clone(),
             oidc_verifier: None,
             stun_servers: Arc::from([]),
+            skin_packs: Arc::new(BedrockSkinPacks::default()),
         };
         let (answer, server_session) =
             negotiate(&state, "127.0.0.1:19132".parse().unwrap(), &offer)

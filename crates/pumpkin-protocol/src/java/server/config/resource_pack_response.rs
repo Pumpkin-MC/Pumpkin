@@ -9,6 +9,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResourcePackResponseResult {
     DownloadSuccess,
     DownloadFail,
@@ -45,16 +46,23 @@ impl<'a> ServerPacket<'a> for SConfigResourcePack {
 impl SConfigResourcePack {
     #[must_use]
     pub const fn response_result(&self) -> ResourcePackResponseResult {
-        match self.result.0 {
-            0 => ResourcePackResponseResult::DownloadSuccess,
-            1 => ResourcePackResponseResult::Declined,
-            2 => ResourcePackResponseResult::DownloadFail,
-            3 => ResourcePackResponseResult::Accepted,
-            4 => ResourcePackResponseResult::Downloaded,
-            5 => ResourcePackResponseResult::InvalidUrl,
-            6 => ResourcePackResponseResult::ReloadFailed,
-            7 => ResourcePackResponseResult::Discarded,
-            x => ResourcePackResponseResult::Unknown(x),
+        ResourcePackResponseResult::from_id(self.result.0)
+    }
+}
+
+impl ResourcePackResponseResult {
+    #[must_use]
+    pub const fn from_id(id: i32) -> Self {
+        match id {
+            0 => Self::DownloadSuccess,
+            1 => Self::Declined,
+            2 => Self::DownloadFail,
+            3 => Self::Accepted,
+            4 => Self::Downloaded,
+            5 => Self::InvalidUrl,
+            6 => Self::ReloadFailed,
+            7 => Self::Discarded,
+            x => Self::Unknown(x),
         }
     }
 }

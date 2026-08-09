@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, num::NonZeroU8, sync::Arc};
+use std::{collections::HashSet, net::SocketAddr, num::NonZeroU8, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
@@ -52,6 +52,8 @@ pub struct PendingConnection {
     pub gameprofile: Option<GameProfile>,
     pub config: Option<PlayerConfig>,
     pub brand: Option<String>,
+    pub bedrock_skin_pack: Option<Arc<crate::net::bedrock::skin_pack::BedrockSkinPack>>,
+    pub pending_resource_packs: HashSet<uuid::Uuid>,
 }
 
 impl PendingConnection {
@@ -70,6 +72,8 @@ impl PendingConnection {
             gameprofile: None,
             config: None,
             brand: None,
+            bedrock_skin_pack: None,
+            pending_resource_packs: HashSet::new(),
         }
     }
 
@@ -442,13 +446,31 @@ impl PendingConnection {
         server: &Server,
         packet: SConfigResourcePack,
     ) {
+        use pumpkin_protocol::java::server::config::ResourcePackResponseResult;
+
+        let result = packet.response_result();
+        if matches!(
+            result,
+            ResourcePackResponseResult::Accepted | ResourcePackResponseResult::Downloaded
+        ) {
+            return;
+        }
+
+        let is_skin_pack = self
+            .bedrock_skin_pack
+            .as_ref()
+            .is_some_and(|pack| pack.id == packet.uuid);
         let resource_config = &server.advanced_config.resource_pack.java;
-        if resource_config.enabled {
-            use pumpkin_protocol::java::server::config::ResourcePackResponseResult;
-            match packet.response_result() {
-                ResourcePackResponseResult::Downloaded
-                | ResourcePackResponseResult::DownloadSuccess
-                | ResourcePackResponseResult::Accepted
+        let java_pack_id = resource_config.enabled.then(|| {
+            uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes())
+        });
+        if is_skin_pack {
+            if result != ResourcePackResponseResult::DownloadSuccess {
+                self.bedrock_skin_pack = None;
+            }
+        } else if java_pack_id == Some(packet.uuid) {
+            match result {
+                ResourcePackResponseResult::DownloadSuccess
                 | ResourcePackResponseResult::Discarded
                 | ResourcePackResponseResult::Unknown(_) => {}
                 ResourcePackResponseResult::Declined => {
@@ -471,7 +493,18 @@ impl PendingConnection {
                     self.kick(TextComponent::text("Failed to reload resource pack"))
                         .await;
                 }
+                ResourcePackResponseResult::Downloaded | ResourcePackResponseResult::Accepted => {
+                    return;
+                }
             }
+        } else {
+            warn!(pack = %packet.uuid, ?result, "Java client answered an unknown configuration resource pack");
+            return;
+        }
+
+        self.pending_resource_packs.remove(&packet.uuid);
+        if self.pending_resource_packs.is_empty() {
+            self.send_known_packs().await;
         }
     }
 

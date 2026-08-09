@@ -12,17 +12,17 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::server::play::{
-    SAttack, SBundleItemSelected, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch,
-    SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd, SCloseContainer,
-    SCommandSuggestion, SConfirmTeleport, SContainerButtonClick,
+    ResourcePackResponseResult, SAttack, SBundleItemSelected, SChangeGameMode, SChatCommand,
+    SChatMessage, SChunkBatch, SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd,
+    SCloseContainer, SCommandSuggestion, SConfirmTeleport, SContainerButtonClick,
     SCookieResponse as SPCookieResponse, SCustomPayload, SDebugSampleSubscription,
     SDebugSubscriptionRequest, SEditBook, SInteract, SJigsawGenerate, SMoveVehicle, SPaddleBoat,
-    SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
-    SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
-    SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SRenameItem,
-    SSeenAdvancement, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
-    SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
-    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
+    SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayResourcePack, SPlayerAbilities,
+    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
+    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
+    SRecipeBookSeenRecipe, SRenameItem, SSeenAdvancement, SSelectTrade, SSetCommandBlock,
+    SSetCreativeSlot, SSetHeldItem, SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm,
+    STeleportToEntity, STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -48,7 +48,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, trace, warn};
 
 pub mod config;
 pub mod handshake;
@@ -58,7 +58,7 @@ pub mod play;
 pub mod recipe_helper;
 pub mod status;
 
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use pending::PendingConnection;
 
 use crate::entity::player::Player;
@@ -84,6 +84,8 @@ pub struct JavaClient {
     pub brand: ArcSwap<Option<String>>,
     /// Associated player reference. Lock-free `ArcSwap`.
     pub player: ArcSwap<Option<Arc<Player>>>,
+    /// Aggregate Bedrock skin pack loaded for this Java session.
+    pub bedrock_skin_pack: ArcSwapOption<crate::net::bedrock::skin_pack::BedrockSkinPack>,
     /// A collection of tasks associated with this client. The tasks await completion when removing the client.
     tasks: TaskTracker,
     /// An notifier that is triggered when this client is closed.
@@ -166,6 +168,7 @@ impl JavaClient {
             network_reader: std::sync::Mutex::new(Some(pending.network_reader)),
             brand: ArcSwap::from_pointee(pending.brand),
             player: ArcSwap::from_pointee(None),
+            bedrock_skin_pack: ArcSwapOption::from(pending.bedrock_skin_pack),
             wait_for_keep_alive: AtomicBool::new(false),
             keep_alive_id: AtomicCell::new(0),
             last_keep_alive_time: AtomicCell::new(Instant::now()),
@@ -987,6 +990,40 @@ impl JavaClient {
             id if id == SSelectTrade::to_id(version) => {
                 self.handle_select_trade(player, SSelectTrade::read(&mut payload, &version)?)
                     .await;
+            }
+            id if id == SPlayResourcePack::to_id(version) => {
+                let packet = SPlayResourcePack::read(&mut payload, &version)?;
+                let result = packet.response_result();
+                if server.bedrock_skin_packs.get(packet.uuid).await.is_some() {
+                    trace!(
+                        player = %player.gameprofile.name,
+                        pack = %packet.uuid,
+                        result = ?result,
+                        "Java client updated a Bedrock skin resource pack"
+                    );
+                    if !matches!(
+                        result,
+                        ResourcePackResponseResult::DownloadSuccess
+                            | ResourcePackResponseResult::Accepted
+                            | ResourcePackResponseResult::Downloaded
+                    ) && self
+                        .bedrock_skin_pack
+                        .load_full()
+                        .is_some_and(|pack| pack.id == packet.uuid)
+                    {
+                        self.bedrock_skin_pack.store(None);
+                        player
+                            .world()
+                            .refresh_bedrock_players_for_java(player)
+                            .await;
+                    }
+                } else {
+                    warn!(
+                        player = %player.gameprofile.name,
+                        pack = %packet.uuid,
+                        "Java client answered an unknown play resource pack"
+                    );
+                }
             }
             id if id == SSeenAdvancement::to_id(version) => {
                 self.handle_seen_advancement(

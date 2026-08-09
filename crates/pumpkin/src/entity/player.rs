@@ -17,10 +17,16 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
-use pumpkin_protocol::bedrock::client::AbilityLayer;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
+use pumpkin_protocol::bedrock::client::{
+    AbilityLayer,
+    move_player::CMovePlayer as CBedrockMovePlayer,
+    respawn::CRespawn as CBedrockRespawn,
+    update_attributes::{Attribute as BedrockAttribute, CUpdateAttributes as CBedrockAttributes},
+};
+use pumpkin_protocol::bedrock::respawn::RespawnState;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
@@ -576,6 +582,8 @@ struct TexturesProperty {
 struct Textures {
     #[serde(rename = "SKIN")]
     skin: Option<SkinTexture>,
+    #[serde(rename = "CAPE")]
+    cape: Option<SkinTexture>,
 }
 
 #[derive(Deserialize)]
@@ -591,7 +599,161 @@ struct SkinMetadata {
     model: Option<String>,
 }
 
+fn fetch_texture(url: &str) -> Option<image::DynamicImage> {
+    let response = ureq::get(url).call().ok()?;
+    let mut data = Vec::new();
+    response
+        .into_body()
+        .into_reader()
+        .read_to_end(&mut data)
+        .ok()?;
+    image::load_from_memory(&data).ok()
+}
+
+fn persona_piece_type(value: &str) -> Option<i32> {
+    let value = value
+        .strip_prefix("persona_")
+        .unwrap_or(value)
+        .to_ascii_lowercase();
+    Some(match value.as_str() {
+        "skeleton" => 0,
+        "body" => 1,
+        "skin" => 2,
+        "bottom" => 3,
+        "feet" => 4,
+        "dress" => 5,
+        "top" => 6,
+        "high_pants" => 7,
+        "hands" | "hand" => 8,
+        "outerwear" => 9,
+        "facial_hair" | "facialhair" => 10,
+        "mouth" => 11,
+        "eyes" => 12,
+        "hair" => 13,
+        "hood" => 14,
+        "back" => 15,
+        "face_accessory" | "faceaccessory" => 16,
+        "head" => 17,
+        "legs" => 18,
+        "left_leg" | "leftleg" => 19,
+        "right_leg" | "rightleg" => 20,
+        "arms" => 21,
+        "left_arm" | "leftarm" => 22,
+        "right_arm" | "rightarm" => 23,
+        "capes" | "cape" => 24,
+        "classic_skin" | "classicskin" => 25,
+        "emote" => 26,
+        _ => return None,
+    })
+}
+
+fn skin_color(value: &str) -> i32 {
+    u32::from_str_radix(value.trim_start_matches('#'), 16).unwrap_or_default() as i32
+}
+
 impl Player {
+    fn fetch_bedrock_skin(
+        client_data: &pumpkin_protocol::bedrock::server::ClientData,
+    ) -> Option<pumpkin_protocol::bedrock::client::Skin> {
+        let width = u32::try_from(client_data.skin_image_width).ok()?;
+        let height = u32::try_from(client_data.skin_image_height).ok()?;
+        if width == 0 || height == 0 || width > 128 || height > 128 {
+            return None;
+        }
+        let expected_length = width as usize * height as usize * 4;
+        let skin_data = BASE64_STANDARD.decode(&client_data.skin_data).ok()?;
+        if skin_data.len() != expected_length {
+            return None;
+        }
+
+        let decode = |value: &str| BASE64_STANDARD.decode(value).unwrap_or_default();
+        let cape_width = u32::try_from(client_data.cape_image_width).unwrap_or_default();
+        let cape_height = u32::try_from(client_data.cape_image_height).unwrap_or_default();
+        let cape_data = decode(&client_data.cape_data);
+        let mut skin = pumpkin_protocol::bedrock::client::Skin::steve();
+        skin.skin_id.clone_from(&client_data.skin_id);
+        skin.full_id.clone_from(&client_data.skin_id);
+        skin.play_fab_id.clone_from(&client_data.play_fab_id);
+        skin.resource_patch = decode(&client_data.skin_resource_patch);
+        skin.image_width = width;
+        skin.image_height = height;
+        skin.skin_data = skin_data;
+        skin.cape_width = cape_width;
+        skin.cape_height = cape_height;
+        let valid_cape = cape_width <= 128
+            && cape_height <= 128
+            && (cape_width as usize)
+                .checked_mul(cape_height as usize)
+                .and_then(|pixels| pixels.checked_mul(4))
+                == Some(cape_data.len());
+        if valid_cape {
+            skin.cape_data = cape_data;
+        } else {
+            skin.cape_width = 0;
+            skin.cape_height = 0;
+        }
+        skin.geometry_data = decode(&client_data.skin_geometry);
+        skin.animation_data = decode(&client_data.skin_animation_data);
+        skin.geometry_data_engine_version = client_data.skin_geometry_version.as_bytes().to_vec();
+        skin.cape_id.clone_from(&client_data.cape_id);
+        skin.arm_size.clone_from(&client_data.arm_size);
+        skin.skin_color.clone_from(&client_data.skin_colour);
+        skin.is_premium = client_data.premium_skin;
+        skin.is_persona = client_data.persona_skin;
+        skin.persona_cape_on_classic = client_data.cape_on_classic_skin;
+        skin.override_appearance = client_data.override_skin;
+        skin.is_trusted = client_data.trusted_skin;
+        skin.profile_hash.clone_from(&client_data.profile_hash);
+        skin.animations = client_data
+            .animated_image_data
+            .iter()
+            .filter_map(|animation| {
+                let image_width = u32::try_from(animation.image_width).ok()?;
+                let image_height = u32::try_from(animation.image_height).ok()?;
+                if image_width == 0 || image_height == 0 || image_width > 128 || image_height > 128
+                {
+                    return None;
+                }
+                let image_data = decode(&animation.image);
+                if image_width as usize * image_height as usize * 4 != image_data.len() {
+                    return None;
+                }
+                Some(pumpkin_protocol::bedrock::client::SkinAnimation {
+                    image_width,
+                    image_height,
+                    image_data,
+                    animation_type: u32::try_from(animation.animation_type).ok()?,
+                    frames: animation.frames as f32,
+                    expression_type: u32::try_from(animation.animation_expression).ok()?,
+                })
+            })
+            .collect();
+        skin.persona_pieces = client_data
+            .persona_pieces
+            .iter()
+            .filter_map(|piece| {
+                Some(pumpkin_protocol::bedrock::client::PersonaPiece {
+                    piece_id: piece.piece_id.clone(),
+                    piece_type: persona_piece_type(&piece.piece_type)?,
+                    pack_id: Uuid::parse_str(&piece.pack_id).ok()?,
+                    is_default: piece.is_default,
+                    product_id: piece.product_id.clone(),
+                })
+            })
+            .collect();
+        skin.piece_tint_colors = client_data
+            .piece_tint_colours
+            .iter()
+            .filter_map(|tint| {
+                Some(pumpkin_protocol::bedrock::client::PieceTintColor {
+                    piece_type: persona_piece_type(&tint.piece_type)?,
+                    colors: tint.colours.each_ref().map(|color| skin_color(color)),
+                })
+            })
+            .collect();
+        Some(skin)
+    }
+
     #[must_use]
     pub fn fetch_skin(properties: &[Property]) -> Option<pumpkin_protocol::bedrock::client::Skin> {
         let textures_prop = properties.iter().find(|p| &*p.name == "textures")?;
@@ -607,10 +769,7 @@ impl Player {
             .and_then(|m| m.model.as_deref())
             .is_some_and(|model| model == "slim");
 
-        let resp = ureq::get(&url).call().ok()?;
-        let mut buf = Vec::new();
-        resp.into_body().into_reader().read_to_end(&mut buf).ok()?;
-        let img = image::load_from_memory(&buf).ok()?;
+        let img = fetch_texture(&url)?;
 
         let width = img.width();
         let height = img.height();
@@ -641,6 +800,17 @@ impl Player {
         skin.skin_data = rgba;
         skin.skin_id.clone_from(&url);
         skin.full_id = url;
+        if let Some(cape_texture) = textures.textures.cape
+            && let Some(cape) = fetch_texture(&cape_texture.url)
+            && cape.width() <= 128
+            && cape.height() <= 128
+        {
+            skin.cape_width = cape.width();
+            skin.cape_height = cape.height();
+            skin.cape_data = cape.into_rgba8().into_raw();
+            skin.cape_id = cape_texture.url;
+            skin.persona_cape_on_classic = true;
+        }
         Some(skin)
     }
 
@@ -690,9 +860,15 @@ impl Player {
         let mut abilities = Abilities::default();
         abilities.set_for_gamemode(gamemode);
 
+        let client_data = client
+            .bedrock()
+            .and_then(|client| client.client_data.load_full().as_ref().clone());
         let properties = gameprofile.properties.load().clone();
         let mut bedrock_skin = tokio::task::spawn_blocking(move || {
-            Self::fetch_skin(&properties)
+            client_data
+                .as_deref()
+                .and_then(Self::fetch_bedrock_skin)
+                .or_else(|| Self::fetch_skin(&properties))
                 .unwrap_or_else(pumpkin_protocol::bedrock::client::Skin::steve)
         })
         .await
@@ -705,6 +881,17 @@ impl Player {
             bedrock_skin.skin_id.clone_from(&skin_id);
             bedrock_skin.full_id = skin_id;
         }
+        let skin_config = &server.advanced_config.networking.bedrock.skins;
+        bedrock_skin = server
+            .bedrock_skin_packs
+            .accept(
+                player_uuid,
+                bedrock_skin,
+                skin_config.trusted_only,
+                Duration::from_secs(skin_config.change_cooldown_seconds),
+            )
+            .await
+            .0;
 
         Self {
             living_entity,
@@ -2927,17 +3114,48 @@ impl Player {
                 self.living_entity.entity.set_pos(position);
                 let entity = &self.living_entity.entity;
                 entity.set_rotation(yaw, pitch);
-                *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
-                self.client
-                    .send_packet_now(&CPlayerPosition::new(
-                        teleport_id.into(),
-                        position,
-                        Vector3::new(0.0, 0.0, 0.0),
-                        yaw,
-                        pitch,
-                        // TODO
-                        Vec::new(),
-                    )).await;
+                match self.client.as_ref() {
+                    ClientPlatform::Java(client) => {
+                        *self.awaiting_teleport.lock().await =
+                            Some((teleport_id.into(), position));
+                        client
+                            .send_packet_now(&CPlayerPosition::new(
+                                teleport_id.into(),
+                                position,
+                                Vector3::new(0.0, 0.0, 0.0),
+                                yaw,
+                                pitch,
+                                // TODO
+                                Vec::new(),
+                            ))
+                            .await;
+                    }
+                    ClientPlatform::Bedrock(client) => {
+                        client
+                            .send_game_packet(&CBedrockMovePlayer::new(
+                                pumpkin_protocol::codec::var_ulong::VarULong(
+                                    self.entity_id() as u64,
+                                ),
+                                Vector3::new(
+                                    position.x as f32,
+                                    position.y as f32 + entity.entity_type.eye_height,
+                                    position.z as f32,
+                                ),
+                                pitch,
+                                yaw,
+                                yaw,
+                                CBedrockMovePlayer::MODE_TELEPORT,
+                                false,
+                                pumpkin_protocol::codec::var_ulong::VarULong(0),
+                                0,
+                                0,
+                                pumpkin_protocol::codec::var_ulong::VarULong(
+                                    self.tick_counter.load(Ordering::Relaxed).max(0) as u64,
+                                ),
+                            ))
+                            .await;
+                    }
+                }
             }
         }}
     }
@@ -3030,18 +3248,61 @@ impl Player {
             return;
         }
 
-        self.client
-            .enqueue_packet_editioned(
-                &CSetHealth::new(
-                    self.living_entity.health.load(),
-                    self.hunger_manager.level.load().into(),
-                    self.hunger_manager.saturation.load(),
-                ),
-                &pumpkin_protocol::bedrock::client::set_health::CSetHealth::new(
-                    self.living_entity.health.load() as i32,
-                ),
-            )
-            .await;
+        match self.client.as_ref() {
+            ClientPlatform::Java(client) => {
+                client
+                    .enqueue_packet(&CSetHealth::new(
+                        self.living_entity.health.load(),
+                        self.hunger_manager.level.load().into(),
+                        self.hunger_manager.saturation.load(),
+                    ))
+                    .await;
+            }
+            ClientPlatform::Bedrock(client) => {
+                let max_health = self.living_entity.get_max_health();
+                let attribute =
+                    |name: &str, current_value, max_value, default_value| BedrockAttribute {
+                        min_value: 0.0,
+                        max_value,
+                        current_value,
+                        default_min_value: 0.0,
+                        default_max_value: max_value,
+                        default_value,
+                        name: name.to_string(),
+                        modifiers_list_size: pumpkin_protocol::codec::var_uint::VarUInt(0),
+                    };
+                client
+                    .enqueue_packet(&CBedrockAttributes {
+                        runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(
+                            self.entity_id() as u64
+                        ),
+                        attributes: vec![
+                            attribute(
+                                "minecraft:health",
+                                self.living_entity.health.load(),
+                                max_health,
+                                max_health,
+                            ),
+                            attribute(
+                                "minecraft:player.hunger",
+                                self.hunger_manager.level.load().into(),
+                                20.0,
+                                20.0,
+                            ),
+                            attribute(
+                                "minecraft:player.saturation",
+                                self.hunger_manager.saturation.load(),
+                                20.0,
+                                5.0,
+                            ),
+                        ],
+                        player_tick: pumpkin_protocol::codec::var_ulong::VarULong(
+                            self.tick_counter.load(Ordering::Relaxed).max(0) as u64,
+                        ),
+                    })
+                    .await;
+            }
+        }
     }
 
     pub async fn tick_health(&self) {
@@ -3235,7 +3496,6 @@ impl Player {
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilled,
         )
         .await;
-        self.set_client_loaded(false);
         let block_pos = self.position().to_block_pos();
 
         let keep_inventory = { self.world().level_info.load().game_rules.keep_inventory };
@@ -3253,6 +3513,9 @@ impl Player {
         // Reset air supply & drowning ticks on death
         self.breath_manager.reset(self);
 
+        if matches!(self.client.as_ref(), ClientPlatform::Java(_)) {
+            self.set_client_loaded(false);
+        }
         self.client
             .send_packet_now_editioned(
                 &CCombatDeath::new(self.entity_id().into(), &death_msg),
@@ -3265,6 +3528,22 @@ impl Player {
             )
             .await;
         self.send_health().await;
+
+        if let ClientPlatform::Bedrock(client) = self.client.as_ref() {
+            let entity = self.get_entity();
+            let position = entity.pos.load();
+            client
+                .send_game_packet(&CBedrockRespawn::new(
+                    Vector3::new(
+                        position.x as f32,
+                        position.y as f32 + entity.entity_type.eye_height,
+                        position.z as f32,
+                    ),
+                    RespawnState::SearchingForSpawn,
+                    pumpkin_protocol::codec::var_ulong::VarULong(self.entity_id() as u64),
+                ))
+                .await;
+        }
     }
 
     pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) -> bool {
@@ -5048,8 +5327,8 @@ impl EntityBase for Player {
                         let chunk_pos = entity.chunk_pos.load();
                         entity
                             .world
-                            .load()
-                            .broadcast_to_chunk_except(
+                            .load_full()
+                            .broadcast_to_chunk_except_editioned(
                                 chunk_pos,
                                 &[self.living_entity.entity.entity_uuid],
                                 &CEntityPositionSync::new(
@@ -5059,9 +5338,30 @@ impl EntityBase for Player {
                                     yaw,
                                     pitch,
                                     entity.on_ground.load(Ordering::SeqCst),
-                                )
+                                ),
+                                &CBedrockMovePlayer::new(
+                                    pumpkin_protocol::codec::var_ulong::VarULong(
+                                        self.entity_id() as u64,
+                                    ),
+                                    Vector3::new(
+                                        position.x as f32,
+                                        position.y as f32 + entity.entity_type.eye_height,
+                                        position.z as f32,
+                                    ),
+                                    pitch,
+                                    yaw,
+                                    yaw,
+                                    CBedrockMovePlayer::MODE_TELEPORT,
+                                    entity.on_ground.load(Ordering::SeqCst),
+                                    pumpkin_protocol::codec::var_ulong::VarULong(0),
+                                    0,
+                                    0,
+                                    pumpkin_protocol::codec::var_ulong::VarULong(
+                                        self.tick_counter.load(Ordering::Relaxed).max(0) as u64,
+                                    ),
+                                ),
                             )
-                            ;
+                            .await;
                     }
                 }}
             } else {

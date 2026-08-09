@@ -57,6 +57,31 @@ impl Default for BedrockAuthenticationConfig {
     }
 }
 
+/// Controls which Bedrock player skins Pumpkin accepts and rebroadcasts.
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(default)]
+pub struct BedrockSkinConfig {
+    /// Whether Java clients receive the generated Bedrock skin resource pack.
+    pub java_resource_pack: bool,
+    /// Optional public base URL for the generated skin-pack endpoint.
+    pub resource_pack_url: Option<String>,
+    /// Only accept skins the Bedrock client marks as trusted.
+    pub trusted_only: bool,
+    /// Minimum time between accepted skin changes from one player.
+    pub change_cooldown_seconds: u64,
+}
+
+impl Default for BedrockSkinConfig {
+    fn default() -> Self {
+        Self {
+            java_resource_pack: true,
+            resource_pack_url: None,
+            trusted_only: true,
+            change_cooldown_seconds: 5,
+        }
+    }
+}
+
 /// Configuration for Bedrock Edition client connections.
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
@@ -79,6 +104,8 @@ pub struct BedrockConfig {
     pub authentication: BedrockAuthenticationConfig,
     /// Bedrock `NetherNet` transport settings.
     pub nethernet: NetherNetConfig,
+    /// Player skin validation and rate-limit settings.
+    pub skins: BedrockSkinConfig,
 }
 
 impl Default for BedrockConfig {
@@ -95,6 +122,7 @@ impl Default for BedrockConfig {
             motd: "A blazingly fast Pumpkin server!".to_string(),
             authentication: BedrockAuthenticationConfig::default(),
             nethernet: NetherNetConfig::default(),
+            skins: BedrockSkinConfig::default(),
         }
     }
 }
