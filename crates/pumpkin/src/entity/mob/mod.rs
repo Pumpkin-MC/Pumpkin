@@ -857,6 +857,7 @@ pub trait Mob: EntityBase + Send + Sync {
                 .players
                 .load()
                 .iter()
+                .filter(|player| !player.is_spectator())
                 .map(|player| {
                     player
                         .get_entity()
