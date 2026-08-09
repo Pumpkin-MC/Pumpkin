@@ -4,6 +4,7 @@ use crate::entity::ai::brain::Brain;
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
+use crate::entity::ai::goal::Controls;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -655,6 +656,40 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    /// Vanilla `Mob.updateControlFlags`: a mob riding another controlling mob gives up its
+    /// movement/look/jump goals, while a mob in a boat only gives up jump goals.
+    fn update_control_flags(&self) -> EntityBaseFuture<'_, ()> {
+        Box::pin(async move {
+            let entity = self.get_entity();
+            let controlled_by_mob = {
+                let passengers = entity.passengers.lock().await;
+                !self.get_mob_entity().is_no_ai()
+                    && passengers
+                        .first()
+                        .and_then(|passenger| passenger.get_mob())
+                        .is_some_and(|mob| {
+                            !mob.get_entity()
+                                .entity_type
+                                .has_tag(&tag::EntityType::MINECRAFT_NON_CONTROLLING_RIDER)
+                        })
+            };
+            let not_in_boat = {
+                let vehicle = entity.vehicle.lock().await;
+                vehicle.as_ref().is_none_or(|vehicle| {
+                    !vehicle
+                        .get_entity()
+                        .entity_type
+                        .has_tag(&tag::EntityType::C_BOATS)
+                })
+            };
+
+            let mut goals = self.get_mob_entity().goals_selector.lock().unwrap();
+            goals.set_control_enabled(Controls::MOVE, !controlled_by_mob);
+            goals.set_control_enabled(Controls::JUMP, !controlled_by_mob && not_in_boat);
+            goals.set_control_enabled(Controls::LOOK, !controlled_by_mob);
+        })
+    }
+
     /// Vanilla `Mob.setPersistenceRequired`.
     fn set_persistence_required(&self) {
         self.get_mob_entity().set_persistence_required();
@@ -1276,6 +1311,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             mob_entity.living_entity.tick(caller, server).await;
             self.mob_try_pick_up_items().await;
             self.post_tick().await;
+
+            if mob_entity.tick_count.load(Relaxed) % 5 == 0 {
+                self.update_control_flags().await;
+            }
 
             // --- Packet logic remains the same ---
             let entity = &mob_entity.living_entity.entity;
