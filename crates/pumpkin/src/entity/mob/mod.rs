@@ -867,7 +867,8 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
-    /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
+    /// Per-mob tick hook called after selectors and navigation, before movement controls.
+    /// This is vanilla `Mob.customServerAiStep`'s position in `Mob.serverAiStep`.
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -1284,6 +1285,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 {
                     *mob_entity.navigator.lock().unwrap() = navigator;
                 };
+
+                // Vanilla runs `customServerAiStep` after selectors and navigation, immediately
+                // before the look, move, and jump controls.
+                self.mob_tick(caller).await;
 
                 // Controllers are synchronous, so we can just use normal blocks
                 {
