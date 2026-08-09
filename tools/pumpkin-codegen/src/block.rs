@@ -531,6 +531,10 @@ pub struct BlockState {
     pub outline_shapes: Vec<u16>,
     /// Opacity value for light propagation, if non-full.
     pub opacity: Option<u8>,
+    /// Vanilla `BlockBehaviour#useShapeForLightOcclusion` result for this state.
+    /// This is extracted alongside the other state properties rather than inferred
+    /// from the block name or opacity at code-generation time.
+    pub use_shape_for_light_occlusion: bool,
     /// Associated block-entity type ID, if any.
     pub block_entity_type: Option<u16>,
 }
@@ -587,7 +591,7 @@ impl BlockState {
     }
 
     /// Emits the `BlockState { … }` struct literal token stream for code generation.
-    fn to_tokens(&self, block_name: &str) -> TokenStream {
+    fn to_tokens(&self, _block_name: &str) -> TokenStream {
         let mut tokens = TokenStream::new();
         let id = self.id;
         let state_flags = LitInt::new(&self.state_flags.to_string(), Span::call_site());
@@ -601,7 +605,7 @@ impl BlockState {
         } else {
             quote! { 0 }
         };
-        let use_shape_for_light_occlusion = uses_shape_for_light_occlusion(block_name, self);
+        let use_shape_for_light_occlusion = self.use_shape_for_light_occlusion;
         let block_entity_type = if let Some(block_entity_type) = self.block_entity_type {
             let block_entity_type = LitInt::new(&block_entity_type.to_string(), Span::call_site());
             quote! { #block_entity_type }
@@ -637,38 +641,6 @@ impl BlockState {
         });
         tokens
     }
-}
-
-/// Mirrors vanilla's explicit `useShapeForLightOcclusion` overrides. The generated
-/// state data already carries the vanilla light opacity, which distinguishes the
-/// state-dependent slab and piston-base overrides without allocating property
-/// objects during lighting.
-fn uses_shape_for_light_occlusion(block_name: &str, state: &BlockState) -> bool {
-    if block_name.ends_with("_stairs")
-        || matches!(
-            block_name,
-            "daylight_detector"
-                | "dirt_path"
-                | "enchanting_table"
-                | "end_portal_frame"
-                | "farmland"
-                | "lectern"
-                | "sculk_sensor"
-                | "sculk_shrieker"
-                | "snow"
-                | "stonecutter"
-                | "piston_head"
-        )
-        || block_name.ends_with("_shelf")
-    {
-        return true;
-    }
-
-    if block_name.ends_with("_slab") {
-        return state.opacity != Some(15);
-    }
-
-    matches!(block_name, "piston" | "sticky_piston") && state.opacity == Some(15)
 }
 
 #[derive(Deserialize, Copy, Clone)]
