@@ -247,6 +247,15 @@ impl Mob for WitchEntity {
     /// potion-drinking state machine, and the ambient particle-puff roll.
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
+            // Vanilla `Witch.aiStep` gates this entire state machine on `isAlive()`.
+            let living = &self.mob_entity.living_entity;
+            if living.dead.load(Relaxed)
+                || living.health.load() <= 0.0
+                || self.get_entity().is_removed()
+            {
+                return;
+            }
+
             let cooldown = self.heal_cooldown.fetch_sub(1, Relaxed) - 1;
             self.can_attack_players.store(cooldown <= 0, Relaxed);
 
