@@ -40,6 +40,7 @@ pub mod random_selector;
 pub mod replace_single_block;
 pub mod root_system;
 pub mod scattered_ore;
+pub mod sculk;
 pub mod sculk_patch;
 pub mod sea_pickle;
 pub mod seagrass;
