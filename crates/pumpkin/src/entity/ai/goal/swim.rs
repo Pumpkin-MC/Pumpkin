@@ -39,8 +39,7 @@ impl Goal for SwimGoal {
         Box::pin(async move {
             if mob.get_random().random::<f32>() < 0.8 {
                 mob.get_mob_entity()
-                    .living_entity
-                    .jumping
+                    .jump_requested
                     .store(true, Ordering::SeqCst);
             }
         })

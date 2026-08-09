@@ -66,8 +66,7 @@ impl Goal for ClimbOnTopOfPowderSnowGoal {
             // Vanilla: `this.mob.getJumpControl().jump()`, which just arms the jump flag for the
             // next physics tick.
             mob.get_mob_entity()
-                .living_entity
-                .jumping
+                .jump_requested
                 .store(true, std::sync::atomic::Ordering::SeqCst);
         })
     }

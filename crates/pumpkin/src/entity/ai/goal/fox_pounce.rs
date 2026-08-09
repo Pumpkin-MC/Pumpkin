@@ -1,4 +1,4 @@
-use std::sync::atomic::Ordering::{Relaxed, SeqCst};
+use std::sync::atomic::Ordering::Relaxed;
 
 use pumpkin_util::math::vector3::Vector3;
 
@@ -87,10 +87,7 @@ impl Goal for FoxPounceGoal {
             let Some(fox) = mob.cast_any().downcast_ref::<FoxEntity>() else {
                 return;
             };
-            mob.get_mob_entity()
-                .living_entity
-                .jumping
-                .store(true, SeqCst);
+            fox.set_jumping(true);
             fox.set_is_pouncing(true);
             fox.set_is_interested(false);
 
@@ -129,6 +126,7 @@ impl Goal for FoxPounceGoal {
                 fox.set_is_crouching(false);
                 fox.set_is_interested(false);
                 fox.set_is_pouncing(false);
+                fox.set_jumping(false);
             }
         })
     }

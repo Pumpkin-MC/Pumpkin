@@ -29,6 +29,8 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
 use rand::RngExt;
+use std::collections::HashSet;
+use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
@@ -76,6 +78,11 @@ pub mod zombified_piglin;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
+    /// Vanilla `Mob.sensing`; the per-tick visibility caches are cleared at the start of
+    /// `serverAiStep` before selectors query them.
+    pub sensing: std::sync::Mutex<Sensing>,
+    /// Pending request consumed by the vanilla-equivalent `JumpControl` phase.
+    pub jump_requested: AtomicBool,
     /// `Mob.brain` -- present only for mobs migrated to the Brain/Memory/Activity system
     /// (`crate::entity::ai::brain`). `None` for every Goal-driven mob, which is still the vast
     /// majority; vanilla likewise holds a `goalSelector` and a `brain` on the same `Mob` and
@@ -105,6 +112,19 @@ pub struct MobEntity {
     last_sent_head_yaw: AtomicU8,
 }
 
+#[derive(Default)]
+pub struct Sensing {
+    seen: HashSet<i32>,
+    unseen: HashSet<i32>,
+}
+
+impl Sensing {
+    fn tick(&mut self) {
+        self.seen.clear();
+        self.unseen.clear();
+    }
+}
+
 /// Tick boundaries (both inclusive) when monsters do not burn in sunlight (26.1).
 ///
 /// Sourced from `data/minecraft/timeline/day.json` — `monsters_burn` keyframes:
@@ -125,6 +145,8 @@ impl MobEntity {
     pub fn new(entity: Entity) -> Self {
         Self {
             living_entity: LivingEntity::new(entity),
+            sensing: std::sync::Mutex::new(Sensing::default()),
+            jump_requested: AtomicBool::new(false),
             brain: None,
             goals_selector: std::sync::Mutex::new(GoalSelector::default()),
             target_selector: std::sync::Mutex::new(GoalSelector::default()),
@@ -146,6 +168,46 @@ impl MobEntity {
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
         }
+    }
+
+    /// Vanilla `Sensing.hasLineOfSight`: cache the result for this mob until the next
+    /// `serverAiStep`, and only perform the collision raycast on a cache miss.
+    pub async fn has_line_of_sight(&self, target: &dyn EntityBase) -> bool {
+        let target_id = target.get_entity().entity_id;
+        {
+            let sensing = self.sensing.lock().unwrap();
+            if sensing.seen.contains(&target_id) {
+                return true;
+            }
+            if sensing.unseen.contains(&target_id) {
+                return false;
+            }
+        }
+
+        let entity = &self.living_entity.entity;
+        let target_entity = target.get_entity();
+        let from = entity.get_eye_pos();
+        let to = target_entity.get_eye_pos();
+        let has_line_of_sight = if from.squared_distance_to_vec(&to) > 128.0 * 128.0 {
+            false
+        } else {
+            let world = entity.world.load_full();
+            Arc::ptr_eq(&world, &target_entity.world.load_full())
+                && world
+                    .raycast_collision(from, to, async |block_pos, world| {
+                        !world.get_block_state(block_pos).collision_shapes.is_empty()
+                    })
+                    .await
+                    .is_none()
+        };
+
+        let mut sensing = self.sensing.lock().unwrap();
+        if has_line_of_sight {
+            sensing.seen.insert(target_id);
+        } else {
+            sensing.unseen.insert(target_id);
+        }
+        has_line_of_sight
     }
 
     pub fn is_in_position_target_range(&self) -> bool {
@@ -633,6 +695,11 @@ impl MobEntity {
 }
 
 pub trait Mob: EntityBase + Send + Sync {
+    /// Vanilla `Entity.isAffectedByFluids`; ordinary mobs use the base `true` behavior.
+    fn is_affected_by_fluids(&self) -> bool {
+        true
+    }
+
     /// Vanilla `Mob` entities are pickable unless a concrete entity overrides it.
     fn is_pickable(&self) -> bool {
         self.get_entity().is_alive()
@@ -958,6 +1025,15 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
+    /// Vanilla `JumpControl.tick`; specialized mobs may preserve or translate the published
+    /// state, as `RabbitJumpControl` does.
+    fn jump_control_tick(&self, jump_requested: bool) {
+        self.get_mob_entity()
+            .living_entity
+            .jumping
+            .store(jump_requested, Relaxed);
+    }
+
     /// Hook for mobs whose vanilla `travel` implementation replaces the generic living-mob
     /// movement path (for example `Squid.travel`, which moves with its current movement vector).
     /// Returning `true` means the hook has already moved the entity for this tick.
@@ -1215,6 +1291,126 @@ pub trait Mob: EntityBase + Send + Sync {
     /// `hasEgg = true` (`Turtle.java:300-326`).
     fn on_bred(&self, _mate: &dyn EntityBase) {}
 }
+
+struct MutexTakeGuard<'a, T> {
+    mutex: &'a std::sync::Mutex<T>,
+    value: Option<T>,
+}
+
+impl<'a, T: Default> MutexTakeGuard<'a, T> {
+    fn new(mutex: &'a std::sync::Mutex<T>) -> Self {
+        let value = std::mem::take(&mut *mutex.lock().unwrap());
+        Self {
+            mutex,
+            value: Some(value),
+        }
+    }
+}
+
+impl<T> Deref for MutexTakeGuard<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.value.as_ref().unwrap()
+    }
+}
+
+impl<T> DerefMut for MutexTakeGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.value.as_mut().unwrap()
+    }
+}
+
+impl<T> Drop for MutexTakeGuard<'_, T> {
+    fn drop(&mut self) {
+        if let Some(value) = self.value.take() {
+            *self.mutex.lock().unwrap() = value;
+        }
+    }
+}
+
+/// Runs `Mob.serverAiStep` at the `LivingEntity` AI/movement boundary.
+///
+/// Vanilla reaches this after `LivingEntity.aiStep` has prepared input and before jump,
+/// travel, and collision effects. Keeping the selector/navigation/controller phase here
+/// lets the generic living tick place it correctly for every mob implementation.
+pub(crate) fn tick_mob_ai<'a>(
+    mob: &'a dyn Mob,
+    caller: &'a Arc<dyn EntityBase>,
+) -> EntityBaseFuture<'a, ()> {
+    Box::pin(async move {
+        let mob_entity = mob.get_mob_entity();
+        if mob_entity.is_no_ai() {
+            mob_entity.living_entity.jumping.store(false, Relaxed);
+            mob_entity.jump_requested.store(false, Relaxed);
+            return;
+        }
+
+        mob_entity.sensing.lock().unwrap().tick();
+
+        let mut target_selector = MutexTakeGuard::new(&mob_entity.target_selector);
+        let mut goals_selector = MutexTakeGuard::new(&mob_entity.goals_selector);
+
+        let tick_count = mob_entity.tick_count.load(Relaxed);
+        let run_all_goals = tick_count <= 1
+            || (tick_count.wrapping_add(mob_entity.living_entity.entity.entity_id)) % 2 == 0;
+        if run_all_goals {
+            target_selector.tick(mob).await;
+            goals_selector.tick(mob).await;
+        } else {
+            target_selector.tick_goals(mob, false).await;
+            goals_selector.tick_goals(mob, false).await;
+        }
+
+        drop(goals_selector);
+        drop(target_selector);
+
+        let mut navigator = MutexTakeGuard::new(&mob_entity.navigator);
+        navigator.tick(&mob_entity.living_entity).await;
+        let navigation_target = navigator.next_movement_target();
+        drop(navigator);
+
+        // Vanilla transfers the result of navigation before customServerAiStep and
+        // before the movement/look controls tick. This also lets a custom AI hook
+        // replace the wanted position without a stale navigation result being applied
+        // after the hook returns.
+        if let Some((target, speed)) = navigation_target {
+            mob_entity
+                .move_control
+                .lock()
+                .unwrap()
+                .set_wanted_position(target.x, target.y, target.z, speed);
+        }
+
+        if let Some(brain) = &mob_entity.brain {
+            let game_time = mob_entity
+                .living_entity
+                .entity
+                .world
+                .load_full()
+                .get_world_age()
+                .await;
+            brain.tick(mob, game_time).await;
+        }
+
+        mob.mob_tick(caller).await;
+
+        let mut move_control = mob_entity.move_control.lock().unwrap();
+        move_control.tick(mob);
+
+        {
+            let mut look_control = mob_entity.look_control.lock().unwrap();
+            look_control.tick(mob);
+        };
+
+        // Vanilla runs JumpControl after MoveControl and LookControl. Publish the request
+        // only after both controls have completed so the following LivingEntity movement
+        // phase sees exactly one tick's decision.
+        let jump_requested = mob_entity.jump_requested.swap(false, Relaxed);
+        mob.jump_control_tick(jump_requested);
+    })
+}
+
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
@@ -1264,7 +1460,11 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             let mob_entity = self.get_mob_entity();
             mob_entity.sync_no_ai_flag();
             mob_entity.tick_count.fetch_add(1, Relaxed);
-            if !mob_entity.is_no_ai() {
+            if !mob_entity.is_no_ai()
+                && !mob_entity.living_entity.dead.load(Relaxed)
+                && mob_entity.living_entity.health.load() > 0.0
+                && !mob_entity.living_entity.entity.is_removed()
+            {
                 mob_entity.no_action_time.fetch_add(1, Relaxed);
                 if uses_monster_no_action_time(mob_entity.living_entity.entity.entity_type) {
                     let world = mob_entity.living_entity.entity.world.load();
@@ -1293,106 +1493,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                         1,
                         pumpkin_data::particle::Particle::Heart,
                     );
-                }
-            }
-
-            // Vanilla `LivingEntity.isEffectiveAi()` suppresses the complete server AI step
-            // for mobs carrying the `NoAI` flag. Physics, leash updates, ageing, living effects,
-            // and Mob.aiStep item pickup still run; only goals, brains, navigation, and
-            // controllers belong to the skipped AI step.
-            if !mob_entity.is_no_ai() {
-                // 1. "Take" selectors out of the mutexes
-                let mut target_selector = {
-                    let mut guard = mob_entity.target_selector.lock().unwrap();
-                    std::mem::take(&mut *guard)
-                };
-                let mut goals_selector = {
-                    let mut guard = mob_entity.goals_selector.lock().unwrap();
-                    std::mem::take(&mut *guard)
-                };
-
-                // 2. Perform AI logic (No locks held, so .await is safe!). Vanilla only
-                // reevaluates selector membership on alternating ticks; on the other ticks it
-                // advances already-running goals that explicitly require every-tick updates.
-                // The phase is entity-specific so a mob swarm does not perform all expensive
-                // selector work on the same tick.
-                let tick_count = mob_entity.tick_count.load(Relaxed);
-                let run_all_goals = tick_count <= 1
-                    || (tick_count.wrapping_add(mob_entity.living_entity.entity.entity_id)) % 2
-                        == 0;
-                if run_all_goals {
-                    target_selector.tick(self).await;
-                    goals_selector.tick(self).await;
-                } else {
-                    target_selector.tick_goals(self, false).await;
-                    goals_selector.tick_goals(self, false).await;
-                }
-
-                // 3. "Put back" selectors
-                {
-                    *mob_entity.target_selector.lock().unwrap() = target_selector;
-                    *mob_entity.goals_selector.lock().unwrap() = goals_selector;
-                };
-
-                // 3b. Brain tick, for mobs migrated to the Brain/Memory/Activity system.
-                //
-                // Placement matters: this must run *after* the goal selectors are back in their
-                // mutexes and *before* the navigator is taken out, so that a `WALK_TARGET` written
-                // this tick reaches `Navigator::set_progress` and is consumed by the navigator in
-                // the same tick, matching vanilla where `Brain.tick` runs inside
-                // `Mob.customServerAiStep` ahead of navigation.
-                //
-                // `Brain::tick` takes only its own runtime out of its mutex; the memory store stays
-                // live so damage/game-event writes arriving mid-tick are not dropped.
-                if let Some(brain) = &mob_entity.brain {
-                    // Vanilla passes `level.getGameTime()`, which is shared by every entity in
-                    // the dimension and persists across entity reloads.
-                    let game_time = mob_entity
-                        .living_entity
-                        .entity
-                        .world
-                        .load_full()
-                        .get_world_age()
-                        .await;
-                    brain.tick(self, game_time).await;
-                }
-
-                // 4. Repeat for Navigator
-                let mut navigator = {
-                    let mut guard = mob_entity.navigator.lock().unwrap();
-                    std::mem::take(&mut *guard)
-                };
-
-                navigator.tick(&mob_entity.living_entity).await;
-
-                {
-                    *mob_entity.navigator.lock().unwrap() = navigator;
-                };
-
-                // Vanilla runs `customServerAiStep` after selectors and navigation, immediately
-                // before the look, move, and jump controls.
-                self.mob_tick(caller).await;
-
-                // Controllers are synchronous, so we can just use normal blocks
-                {
-                    let mut look_control = mob_entity.look_control.lock().unwrap();
-                    look_control.tick(self);
-                };
-
-                {
-                    let mut move_control = mob_entity.move_control.lock().unwrap();
-                    // Vanilla PathNavigation never writes movement input directly: after following
-                    // its path it calls MoveControl.setWantedPosition. The waypoint was computed
-                    // while the navigator was taken out above, so hand it to the controller only
-                    // after restoring the navigator lock. This is especially important for
-                    // FlyingMoveControl, whose vertical input and no-gravity state otherwise never
-                    // receive path targets.
-                    let navigation_target =
-                        mob_entity.navigator.lock().unwrap().next_movement_target();
-                    if let Some((target, speed)) = navigation_target {
-                        move_control.set_wanted_position(target.x, target.y, target.z, speed);
-                    }
-                    move_control.tick(self);
                 }
             }
 

@@ -352,6 +352,12 @@ impl Mob for RabbitEntity {
         &self.mob_entity
     }
 
+    fn jump_control_tick(&self, jump_requested: bool) {
+        if jump_requested {
+            self.start_jumping();
+        }
+    }
+
     /// Port of vanilla `Rabbit.customServerAiStep` (lines 177-223).
     ///
     /// This lives here, not in a goal, because vanilla's hop logic is not a goal: it runs

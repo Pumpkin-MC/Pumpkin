@@ -376,6 +376,13 @@ impl FoxEntity {
         self.set_flag(FLAG_POUNCING, value);
     }
 
+    pub fn set_jumping(&self, jumping: bool) {
+        self.mob_entity
+            .living_entity
+            .jumping
+            .store(jumping, Relaxed);
+    }
+
     #[must_use]
     pub fn is_sleeping(&self) -> bool {
         self.flag(FLAG_SLEEPING)
@@ -412,6 +419,7 @@ impl FoxEntity {
         self.set_sleeping(false);
         self.set_defending(false);
         self.set_faceplanted(false);
+        self.set_jumping(false);
     }
 
     pub fn wake_up(&self) {

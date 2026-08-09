@@ -1,6 +1,7 @@
 use crate::entity::ai::control::{Control, MoveControlTrait};
 use crate::entity::mob::Mob;
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::tag::Taggable;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::atomic::Ordering;
 
@@ -78,22 +79,32 @@ impl MoveControlTrait for MoveControl {
 
             let step_height = living_entity.get_attribute_value(&Attributes::STEP_HEIGHT);
             let horizontal_distance_sq = xd * xd + zd * zd;
+            let block_pos = entity.block_pos.load();
+            let world = entity.world.load();
+            let block = world.get_block(&block_pos);
+            let state = world.get_block_state(&block_pos);
+            let obstacle = state
+                .get_block_collision_shapes()
+                .any(|shape| entity.pos.load().y < f64::from(block_pos.0.y) + shape.max.y)
+                && !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_DOORS)
+                && !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES);
             if should_jump(
-                entity.horizontal_collision.load(Ordering::Relaxed),
-                entity.on_ground.load(Ordering::Relaxed),
+                obstacle,
                 yd,
                 step_height,
                 horizontal_distance_sq,
                 entity.entity_dimension.load().width as f64,
             ) {
-                living_entity.jumping.store(true, Ordering::SeqCst);
+                mob_entity.jump_requested.store(true, Ordering::SeqCst);
                 self.operation = Operation::Jumping;
             }
         } else if self.operation == Operation::Jumping {
             living_entity.set_speed(living_entity.speed_for_modifier(self.speed_modifier));
 
-            if entity.on_ground.load(Ordering::Relaxed) {
-                living_entity.jumping.store(false, Ordering::SeqCst);
+            let in_liquid = mob.is_affected_by_fluids()
+                && (entity.touching_water.load(Ordering::Relaxed)
+                    || entity.touching_lava.load(Ordering::Relaxed));
+            if entity.on_ground.load(Ordering::Relaxed) || in_liquid {
                 self.operation = Operation::Wait;
             }
         }
@@ -111,16 +122,13 @@ impl MoveControlTrait for MoveControl {
 }
 
 fn should_jump(
-    horizontal_collision: bool,
-    on_ground: bool,
+    obstacle: bool,
     vertical_delta: f64,
     step_height: f64,
     horizontal_distance_sq: f64,
     entity_width: f64,
 ) -> bool {
-    on_ground
-        && (horizontal_collision
-            || (vertical_delta > step_height && horizontal_distance_sq < 1.0f64.max(entity_width)))
+    obstacle || (vertical_delta > step_height && horizontal_distance_sq < 1.0f64.max(entity_width))
 }
 
 impl MoveControl {
@@ -158,13 +166,12 @@ mod tests {
 
     #[test]
     fn grounded_collision_requests_a_jump_without_a_height_delta() {
-        assert!(should_jump(true, true, 0.0, 0.6, 4.0, 0.6));
-        assert!(!should_jump(true, false, 0.0, 0.6, 4.0, 0.6));
+        assert!(should_jump(true, 0.0, 0.6, 4.0, 0.6));
     }
 
     #[test]
     fn nearby_higher_path_node_requests_a_jump() {
-        assert!(should_jump(false, true, 1.0, 0.6, 0.5, 0.6));
-        assert!(!should_jump(false, true, 1.0, 0.6, 2.0, 0.6));
+        assert!(should_jump(false, 1.0, 0.6, 0.5, 0.6));
+        assert!(!should_jump(false, 1.0, 0.6, 2.0, 0.6));
     }
 }

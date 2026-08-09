@@ -604,7 +604,7 @@ impl MoveControlTrait for SulfurCubeMoveControl {
                 if current_delay <= 0 {
                     let next_delay = SulfurCubeEntity::get_jump_delay();
                     cube.jump_delay.store(next_delay, Ordering::Relaxed);
-                    living_entity.jumping.store(true, Ordering::SeqCst);
+                    mob_entity.jump_requested.store(true, Ordering::SeqCst);
                     let world = entity.world.load();
                     world.play_sound_fine(
                         cube.get_jump_sound(),
@@ -616,16 +616,10 @@ impl MoveControlTrait for SulfurCubeMoveControl {
                     movement_input.z = scaled_speed;
                 } else {
                     cube.jump_delay.store(current_delay - 1, Ordering::Relaxed);
-                    living_entity.jumping.store(false, Ordering::SeqCst);
                 }
-            } else {
-                living_entity.jumping.store(false, Ordering::SeqCst);
             }
-        } else {
-            if speed_modifier > 0.0 {
-                movement_input.z = scaled_speed;
-            }
-            living_entity.jumping.store(false, Ordering::SeqCst);
+        } else if speed_modifier > 0.0 {
+            movement_input.z = scaled_speed;
         }
         living_entity.speed.store(movement_input.z);
         living_entity.movement_input.store(movement_input);
@@ -656,8 +650,7 @@ impl Goal for SulfurCubeFloatGoal {
             if rand::random_range(0.0..1.0) < 0.8 {
                 self.cube
                     .entity
-                    .living_entity
-                    .jumping
+                    .jump_requested
                     .store(true, Ordering::SeqCst);
             }
             self.cube.speed_modifier.store(1.2);

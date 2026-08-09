@@ -998,6 +998,11 @@ impl LivingEntity {
     }
 
     async fn tick_movement<'a>(&'a self, server: &'a Server, caller: &'a Arc<dyn EntityBase>) {
+        // `LivingEntity.aiStep` does not call travel when `Mob.isEffectiveAi()` is false.
+        // Keep the rest of this method running so block collisions and frozen-state updates
+        // still happen for NoAI entities.
+        let no_ai = self.entity.no_ai.load(Relaxed);
+
         if self.jumping_cooldown.load(Relaxed) != 0 {
             self.jumping_cooldown.fetch_sub(1, Relaxed);
         }
@@ -1025,7 +1030,28 @@ impl LivingEntity {
 
         self.movement_input.store(movement_input);
 
-        // TODO: Tick AI
+        // Vanilla runs Mob.serverAiStep from LivingEntity.aiStep after applyInput has damped
+        // the current movement input, but before jump handling and travel.
+        let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
+        if is_alive
+            && !no_ai
+            && let Some(mob) = caller.get_mob()
+            && mob.get_entity().entity_id == self.entity.entity_id
+        {
+            crate::entity::mob::tick_mob_ai(mob, caller).await;
+        }
+
+        // `LivingEntity.aiStep` clears input and jumping for dead/dying entities through
+        // `isImmobile`, but still lets the later travel phase apply existing knockback.
+        if !is_alive {
+            self.jumping.store(false, SeqCst);
+            self.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+            if let Some(mob) = caller.get_mob()
+                && mob.get_entity().entity_id == self.entity.entity_id
+            {
+                mob.get_mob_entity().jump_requested.store(false, Relaxed);
+            }
+        }
 
         if self.jumping.load(SeqCst) && should_swim_in_fluids {
             let in_lava = self.entity.touching_lava.load(SeqCst);
@@ -1067,13 +1093,17 @@ impl LivingEntity {
             self.fall_distance.store(0.0);
         }
 
-        let custom_travel = if let Some(mob) = caller.get_mob() {
+        let custom_travel = if no_ai {
+            false
+        } else if let Some(mob) = caller.get_mob()
+            && mob.get_entity().entity_id == self.entity.entity_id
+        {
             mob.custom_travel(caller).await
         } else {
             false
         };
 
-        if !custom_travel {
+        if !no_ai && !custom_travel {
             let touching_water = self.entity.touching_water.load(SeqCst);
 
             // Strider is the only entity that has canWalkOnFluid = false
@@ -2394,7 +2424,7 @@ impl LivingEntity {
         );
     }
 
-    fn is_water_animal(&self) -> bool {
+    const fn is_water_animal(&self) -> bool {
         let id = self.entity.entity_type.id;
         id == EntityType::AXOLOTL.id
             || id == EntityType::COD.id
@@ -3398,10 +3428,14 @@ impl EntityBase for LivingEntity {
             let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
             let in_death_animation =
                 self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
-            if is_alive || (in_death_animation && self.entity.entity_type != &EntityType::PLAYER) {
+            if !self.entity.is_removed()
+                && (is_alive
+                    || (in_death_animation && self.entity.entity_type != &EntityType::PLAYER))
+            {
                 self.tick_movement(server, caller).await;
                 // Vanilla-like order: freeze logic runs after movement/collisions.
                 self.entity.tick_frozen(caller.as_ref()).await;
+                self.push_entities(caller).await;
             }
 
             // TODO

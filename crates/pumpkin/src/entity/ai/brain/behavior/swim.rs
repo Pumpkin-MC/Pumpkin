@@ -54,8 +54,7 @@ impl TimedBehavior for Swim {
     fn tick(&mut self, mob: &dyn Mob, _brain: &Brain, _game_time: i64) {
         if mob.get_random().random::<f32>() < self.chance {
             mob.get_mob_entity()
-                .living_entity
-                .jumping
+                .jump_requested
                 .store(true, Ordering::SeqCst);
         }
     }

@@ -517,23 +517,6 @@ impl Navigator {
                 let speed = entity.speed_for_modifier(goal.speed);
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
                 entity.set_speed(speed);
-
-                let bbox = entity.entity.bounding_box.load();
-                let width = bbox.max.x - bbox.min.x;
-                let jump_distance = 1.0f64.max(width);
-
-                // Jump when the next node is above step height and we're close enough horizontally
-                if dy > entity.get_attribute_value(&Attributes::STEP_HEIGHT)
-                    && horizontal_dist_sq < jump_distance
-                {
-                    entity
-                        .jumping
-                        .store(true, std::sync::atomic::Ordering::SeqCst);
-                } else {
-                    entity
-                        .jumping
-                        .store(false, std::sync::atomic::Ordering::SeqCst);
-                }
             } else {
                 self.is_idle.store(true, Ordering::Relaxed);
                 self.current_path = None;

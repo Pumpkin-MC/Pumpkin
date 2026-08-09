@@ -250,17 +250,7 @@ impl WitherRangedAttackGoal {
     }
 
     async fn has_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
-        let entity = mob.get_entity();
-        entity
-            .world
-            .load_full()
-            .raycast(
-                entity.get_eye_pos(),
-                target.get_entity().get_eye_pos(),
-                async |block_pos, world| world.get_block_state(block_pos).is_solid(),
-            )
-            .await
-            .is_none()
+        mob.get_mob_entity().has_line_of_sight(target).await
     }
 
     async fn shoot(mob: &dyn Mob, target: &dyn EntityBase) {

@@ -120,7 +120,7 @@ impl BreathManager {
             if !can_breathe && new_air <= -20 {
                 self.air_supply.store(0, Ordering::Relaxed);
                 self.send_air_supply(player);
-                world.send_entity_status(&player.get_entity(), EntityStatus::DrownParticles);
+                world.send_entity_status(player.get_entity(), EntityStatus::DrownParticles);
                 player
                     .living_entity
                     .damage(player, DROWNING_DAMAGE, DamageType::DROWN)

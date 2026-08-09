@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
@@ -81,25 +79,7 @@ impl GuardianAttackGoal {
     }
 
     async fn has_line_of_sight(mob: &dyn Mob, target: &dyn EntityBase) -> bool {
-        let entity = mob.get_entity();
-        let target_entity = target.get_entity();
-        let from = entity.get_eye_pos();
-        let to = target_entity.get_eye_pos();
-        if from.squared_distance_to_vec(&to) > 128.0 * 128.0 {
-            return false;
-        }
-
-        let world = entity.world.load_full();
-        if !Arc::ptr_eq(&world, &target_entity.world.load_full()) {
-            return false;
-        }
-
-        world
-            .raycast_collision(from, to, async |block_pos, world| {
-                !world.get_block_state(block_pos).collision_shapes.is_empty()
-            })
-            .await
-            .is_none()
+        mob.get_mob_entity().has_line_of_sight(target).await
     }
 
     fn distance_sq(mob: &dyn Mob, target: &dyn EntityBase) -> f64 {

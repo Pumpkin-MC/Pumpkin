@@ -33,15 +33,15 @@
 //!   (`entity/mob/mod.rs:967-985`), because it genuinely has a single owner during a tick.
 //!
 //! Lock order, leaf-last: `runtime` -> `memory`, and `memory` is never held while taking the
-//! mob's `navigator` / `look_control` / `move_control` locks. No guard crosses an `.await`:
-//! `Behavior` is a synchronous trait for exactly that reason, and `Sensor` (which is async
-//! because entity/item-stack reads are) must copy out what it needs before locking memory.
+//! mob's `navigator` / `look_control` / `move_control` locks. The runtime take is guarded so
+//! an interrupted sensor await restores the live runtime instead of losing it.
 
 pub mod behavior;
 pub mod memory;
 pub mod sensor;
 
 use std::collections::BTreeMap;
+use std::ops::{Deref, DerefMut};
 use std::sync::Mutex;
 
 use crate::entity::mob::Mob;
@@ -112,6 +112,43 @@ pub struct Brain {
     activity_requirements: Vec<(Activity, Vec<(MemoryKeyId, MemoryStatus)>)>,
     activity_memories_to_erase: Vec<(Activity, Vec<MemoryKeyId>)>,
     default_activity: Activity,
+}
+
+struct RuntimeTakeGuard<'a> {
+    mutex: &'a Mutex<BrainRuntime>,
+    runtime: Option<BrainRuntime>,
+}
+
+impl RuntimeTakeGuard<'_> {
+    fn new(mutex: &Mutex<BrainRuntime>) -> RuntimeTakeGuard<'_> {
+        let runtime = std::mem::take(&mut *mutex.lock().unwrap());
+        RuntimeTakeGuard {
+            mutex,
+            runtime: Some(runtime),
+        }
+    }
+}
+
+impl Deref for RuntimeTakeGuard<'_> {
+    type Target = BrainRuntime;
+
+    fn deref(&self) -> &Self::Target {
+        self.runtime.as_ref().unwrap()
+    }
+}
+
+impl DerefMut for RuntimeTakeGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.runtime.as_mut().unwrap()
+    }
+}
+
+impl Drop for RuntimeTakeGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(runtime) = self.runtime.take() {
+            *self.mutex.lock().unwrap() = runtime;
+        }
+    }
 }
 
 impl Brain {
@@ -331,26 +368,18 @@ impl Brain {
         // Take the runtime out of its mutex so sensor `.await`s hold no lock. The memory half
         // deliberately stays behind, live, accepting writes from damage/game-event code that
         // lands during this window.
-        let mut runtime = {
-            let mut guard = self.runtime.lock().unwrap();
-            std::mem::take(&mut *guard)
-        };
+        let mut runtime = RuntimeTakeGuard::new(&self.runtime);
 
         for sensor in &mut runtime.sensors {
             sensor.tick(mob, self).await;
         }
         runtime.start_each_non_running_behavior(mob, self, game_time);
         runtime.tick_each_running_behavior(mob, self, game_time);
-
-        *self.runtime.lock().unwrap() = runtime;
     }
 
     /// `Brain.stopAll` (`Brain.java:401-407`).
     pub fn stop_all(&self, mob: &dyn Mob, game_time: i64) {
-        let mut runtime = {
-            let mut guard = self.runtime.lock().unwrap();
-            std::mem::take(&mut *guard)
-        };
+        let mut runtime = RuntimeTakeGuard::new(&self.runtime);
         for behaviors in runtime.behaviors_by_priority.values_mut() {
             for (_, behavior) in behaviors.iter_mut() {
                 if behavior.status() == BehaviorStatus::Running {
@@ -358,7 +387,6 @@ impl Brain {
                 }
             }
         }
-        *self.runtime.lock().unwrap() = runtime;
     }
 }
 
