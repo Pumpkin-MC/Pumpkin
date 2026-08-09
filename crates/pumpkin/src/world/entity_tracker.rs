@@ -102,7 +102,10 @@ impl World {
             && (entity_position.x - player_position.x).abs() <= tracking_range
             && (entity_position.z - player_position.z).abs() <= tracking_range;
         let player_id = player.gameprofile.id;
-        let mut viewers = tracker.viewers.lock().unwrap();
+        let mut viewers = tracker
+            .viewers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         if should_track {
             if viewers.insert(player_id) {
@@ -118,7 +121,10 @@ impl World {
             return;
         };
 
-        let viewers = tracker.viewers.into_inner().unwrap();
+        let viewers = tracker
+            .viewers
+            .into_inner()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for player_id in viewers {
             if let Some(player) = self.get_player_by_uuid(player_id) {
                 send_remove_entity(&player, entity_id);
@@ -129,7 +135,11 @@ impl World {
     pub fn remove_player_from_entity_tracking(&self, player: &Player) {
         let player_id = player.gameprofile.id;
         for tracker in &self.entity_trackers {
-            tracker.viewers.lock().unwrap().remove(&player_id);
+            tracker
+                .viewers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(&player_id);
         }
     }
 }
