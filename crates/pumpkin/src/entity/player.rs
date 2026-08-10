@@ -864,20 +864,27 @@ impl Player {
             .bedrock()
             .and_then(|client| client.client_data.load_full().as_ref().clone());
         let properties = gameprofile.properties.load().clone();
-        let mut bedrock_skin = tokio::task::spawn_blocking(move || {
+        let (mut bedrock_skin, fallback) = tokio::task::spawn_blocking(move || {
             client_data
                 .as_deref()
                 .and_then(Self::fetch_bedrock_skin)
                 .or_else(|| Self::fetch_skin(&properties))
-                .unwrap_or_else(pumpkin_protocol::bedrock::client::Skin::steve)
+                .map_or_else(
+                    || (pumpkin_protocol::bedrock::client::Skin::steve(), true),
+                    |skin| (skin, false),
+                )
         })
         .await
-        .unwrap_or_else(|_| pumpkin_protocol::bedrock::client::Skin::steve());
+        .unwrap_or_else(|_| (pumpkin_protocol::bedrock::client::Skin::steve(), true));
 
         // Standard_Custom is a shared placeholder. Give fallback skins a stable,
         // per-player identity so Bedrock never sees duplicate skin IDs.
         if bedrock_skin.skin_id == "Standard_Custom" {
-            let skin_id = format!("pumpkin:{player_uuid}");
+            let skin_id = if fallback {
+                format!("pumpkin:fallback:{player_uuid}")
+            } else {
+                format!("pumpkin:{player_uuid}")
+            };
             bedrock_skin.skin_id.clone_from(&skin_id);
             bedrock_skin.full_id = skin_id;
         }

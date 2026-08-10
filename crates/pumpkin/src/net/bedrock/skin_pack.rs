@@ -113,6 +113,16 @@ impl BedrockSkinPacks {
     }
 
     pub async fn register(&self, player_id: Uuid, skin: &Skin) -> Option<BedrockSkin> {
+        if is_fallback_skin(player_id, skin) {
+            return self
+                .registry
+                .read()
+                .await
+                .current
+                .as_ref()
+                .and_then(|pack| pack.skin(player_id))
+                .cloned();
+        }
         let cached_skin = CachedSkin::new(skin)?;
         let mut registry = self.registry.write().await;
         if !registry.dirty
@@ -385,10 +395,18 @@ fn load_registry(cache_dir: &Path) -> io::Result<SkinPackRegistry> {
 
 fn fallback_skin(player_id: Uuid) -> Skin {
     let mut skin = Skin::steve();
-    let skin_id = format!("pumpkin:{player_id}");
+    let skin_id = fallback_skin_id(player_id);
     skin.skin_id.clone_from(&skin_id);
     skin.full_id = skin_id;
     skin
+}
+
+fn fallback_skin_id(player_id: Uuid) -> String {
+    format!("pumpkin:fallback:{player_id}")
+}
+
+fn is_fallback_skin(player_id: Uuid, skin: &Skin) -> bool {
+    skin.skin_id == fallback_skin_id(player_id)
 }
 
 fn skin_fingerprint(skin: &Skin) -> [u8; 20] {
@@ -690,6 +708,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn fallback_does_not_replace_a_cached_skin() {
+        let directory = tempfile::tempdir().unwrap();
+        let packs = BedrockSkinPacks::load(directory.path().to_owned());
+        let player_id = Uuid::new_v4();
+        let mut skin = Skin::steve();
+        skin.skin_data.fill(0x7f);
+        skin.cape_width = 64;
+        skin.cape_height = 32;
+        skin.cape_data = vec![0x7f; 64 * 32 * 4];
+
+        let registered = packs.register(player_id, &skin).await.unwrap();
+        let pack = packs.current().await.unwrap();
+        let pack_id = pack.id;
+        drop(pack);
+        drop(packs);
+
+        let packs = BedrockSkinPacks::load(directory.path().to_owned());
+        let fallback = fallback_skin(player_id);
+        let preserved = packs.register(player_id, &fallback).await.unwrap();
+
+        assert_eq!(preserved.asset, registered.asset);
+        assert_eq!(preserved.cape_asset, registered.cape_asset);
+        assert_eq!(packs.current().await.unwrap().id, pack_id);
+    }
+
+    #[tokio::test]
     async fn rejects_non_classic_java_geometry() {
         let packs = BedrockSkinPacks::default();
         let mut skin = Skin::steve();
@@ -743,7 +787,7 @@ mod tests {
             .accept(player_id, untrusted, true, Duration::from_mins(1))
             .await;
         assert!(changed);
-        assert_eq!(fallback.skin_id, format!("pumpkin:{player_id}"));
+        assert_eq!(fallback.skin_id, fallback_skin_id(player_id));
         assert!(fallback.is_trusted);
     }
 
