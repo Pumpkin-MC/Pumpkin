@@ -11,9 +11,20 @@
     clippy::panic
 )]
 
+#[cfg(feature = "chunk_view_lut")]
 #[rustfmt::skip]
 #[path = "generated/chunk_view_lut.rs"]
 pub mod chunk_view_lut;
+
+#[cfg(feature = "block_id_map")]
+#[rustfmt::skip]
+#[path = "generated/block_id_map.rs"]
+pub mod block_id_map;
+
+#[cfg(feature = "block_tags")]
+#[rustfmt::skip]
+#[path = "generated/block_tag.rs"]
+pub mod block_tag;
 
 #[cfg(feature = "chest_loot")]
 #[rustfmt::skip]
@@ -217,10 +228,12 @@ pub mod world {
     pub use super::world_event::*;
 }
 
+#[cfg(feature = "placed_feature")]
 #[rustfmt::skip]
 #[path = "generated/placed_feature.rs"]
 pub mod placed_feature;
 
+#[cfg(feature = "configured_feature")]
 #[rustfmt::skip]
 #[path = "generated/configured_feature.rs"]
 pub mod configured_feature;

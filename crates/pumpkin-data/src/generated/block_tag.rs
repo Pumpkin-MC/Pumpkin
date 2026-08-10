@@ -1,4 +1,6 @@
 /* This file is generated. Do not edit manually. */
+type Tag = (&'static [&'static str], &'static [u16]);
+pub const BLOCK: &phf::Map<&'static str, &'static Tag> = &BLOCK_TAGS;
 #[allow(non_snake_case)]
 pub mod Block {
     use super::Tag;

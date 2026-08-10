@@ -672,6 +672,8 @@ pub(crate) fn build() -> (TokenStream, TokenStream) {
         }
     };
     let b = quote! {
+        type Tag = (&'static [&'static str], &'static [u16]);
+        pub const BLOCK: &phf::Map<&'static str, &'static Tag> = &BLOCK_TAGS;
         #macro_block_tags
     };
     (a, b)
