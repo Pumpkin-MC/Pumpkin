@@ -3243,7 +3243,6 @@ version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "aes 0.9.1",
  "arc-swap",
- "async-trait",
  "axum",
  "base64 0.23.1",
  "bitflags 2.13.1",
