@@ -8,20 +8,20 @@ struct Block(usize);
 static BLOCK_REGISTRY: Identifier = Identifier::parse_static("test:blocks");
 
 bootstrap_provider! {
-    PROVIDER_ONE: Block => &BLOCK_REGISTRY => {
+    PROVIDER_ONE: Block => "test:blocks" => {
         "test:one" => Block(1),
         "test:two" => Block(2),
     }
 }
 
 bootstrap_provider! {
-    PROVIDER_TWO: Block => &BLOCK_REGISTRY => {
+    PROVIDER_TWO: Block => "test:blocks" => {
         "test:three" => Block(3),
     }
 }
 
 bootstrap_provider! {
-    PROVIDER_THREE: Block => &BLOCK_REGISTRY,
+    PROVIDER_THREE: Block => "test:blocks",
     || {
         vec![RegistryEntry::new(Identifier::parse_static("test:four"), Block(4))]
     }

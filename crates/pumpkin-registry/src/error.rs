@@ -46,7 +46,7 @@ pub enum DataKeyGetError {
 pub enum BootstrapError {
     #[error("bootstrap provider for registry {registry} returned the wrong entry type")]
     TypeMismatch {
-        registry: &'static Identifier,
+        registry: Identifier,
         expected: TypeId,
         actual: TypeId,
     },

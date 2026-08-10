@@ -84,18 +84,18 @@ impl ErasedVec {
 
 #[repr(C)]
 pub struct BootstrapProvider {
-    registry: &'static Identifier,
+    registry: &'static str,
     populate: fn() -> ErasedVec,
 }
 
 impl BootstrapProvider {
-    pub const fn new(registry: &'static Identifier, populate: fn() -> ErasedVec) -> Self {
+    pub const fn new(registry: &'static str, populate: fn() -> ErasedVec) -> Self {
         Self { registry, populate }
     }
 
     #[must_use]
-    pub const fn registry(&self) -> &'static Identifier {
-        self.registry
+    pub const fn registry(&self) -> Identifier {
+        Identifier::parse_static(self.registry)
     }
 
     #[must_use]
@@ -213,7 +213,7 @@ impl<'a> BootstrapManager<'a> {
         registry: &'b Identifier,
     ) -> impl Iterator<Item = &'b BootstrapProvider> {
         self.providers()
-            .filter(move |provider| provider.registry() == registry)
+            .filter(move |provider| provider.registry() == *registry)
     }
 
     pub fn populate<T>(
@@ -273,7 +273,7 @@ where
     sources
         .par_iter()
         .flat_map_iter(|source| source.iter())
-        .filter(|provider| provider.registry() == registry)
+        .filter(|provider| provider.registry() == *registry)
         .map(|provider| {
             let erased = provider.populate();
             let actual = erased.type_id();
