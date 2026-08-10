@@ -1,6 +1,10 @@
 use crate::{BoxFuture, Registry, error::DataKeyGetError, value::DataKeyRef};
 use pumpkin_util::identifier::Identifier;
-use std::{any::type_name, marker::PhantomData, sync::{Arc, OnceLock}};
+use std::{
+    any::type_name,
+    marker::PhantomData,
+    sync::{Arc, OnceLock},
+};
 
 pub struct DataKey<T: Send + Sync + 'static> {
     path: &'static str,
@@ -23,17 +27,15 @@ impl<T: Send + Sync + 'static> DataKey<T> {
         &'a self,
         root: &'a dyn Registry,
     ) -> Result<DataKeyRef<'a, T>, DataKeyGetError> {
-        let ids = match self.ids.get() {
-            Some(ids) => ids,
-            None => {
-                let ids = resolve_key_path(root, self.path).await?;
-
-                // Another caller may have resolved it concurrently.
-                let _ = self.ids.set(ids);
-
-                // Either ours or the concurrently initialized value.
-                self.ids.get().expect("DataKey ids were initialized")
-            }
+        let ids = if let Some(ids) = self.ids.get() {
+            ids
+        } else {
+            let ids = resolve_key_path(root, self.path).await?;
+            // Another caller may have resolved it concurrently.
+            let _ = self.ids.set(ids);
+            // Either ours or the concurrently initialized value.
+            #[allow(clippy::expect_used)]
+            self.ids.get().expect("DataKey ids were initialized")
         };
 
         get_from_key(root, ids).await
@@ -43,18 +45,15 @@ impl<T: Send + Sync + 'static> DataKey<T> {
         &self,
         root: &'a dyn Registry,
     ) -> Result<DataKeyRef<'a, T>, DataKeyGetError> {
-        let ids = match self.ids.get() {
-            Some(ids) => ids,
-            None => {
-                let ids = resolve_key_path_blocking(root, self.path)?;
-
-                // Another thread may have initialized it concurrently.
-                let _ = self.ids.set(ids);
-
-                self.ids
-                    .get()
-                    .expect("DataKey ids were initialized")
-            }
+        let ids = if let Some(ids) = self.ids.get() {
+            ids
+        } else {
+            let ids = resolve_key_path_blocking(root, self.path)?;
+            // Another caller may have resolved it concurrently.
+            let _ = self.ids.set(ids);
+            // Either ours or the concurrently initialized value.
+            #[allow(clippy::expect_used)]
+            self.ids.get().expect("DataKey ids were initialized")
         };
 
         get_from_key_blocking(root, ids)
@@ -119,7 +118,7 @@ fn resolve_key_path<'a>(
             let id = registry
                 .get_id_async(&identifier)
                 .await
-                .ok_or_else(|| DataKeyGetError::MissingIdentifier { identifier })?;
+                .ok_or(DataKeyGetError::MissingIdentifier { identifier })?;
 
             ids.push(id);
 
@@ -166,15 +165,11 @@ where
                 .as_ref()
                 .by_id_erased_async(registry_id)
                 .await
-                .ok_or(DataKeyGetError::MissingRegistry {
-                    id: registry_id,
-                })?;
+                .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
 
             let nested = value
                 .downcast_ref::<Arc<dyn Registry>>()
-                .ok_or(DataKeyGetError::MissingRegistry {
-                    id: registry_id,
-                })?;
+                .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
 
             let nested = Arc::clone(nested);
 
@@ -190,9 +185,7 @@ where
                 let value = registry
                     .by_id_erased_async(value_id)
                     .await
-                    .ok_or(DataKeyGetError::MissingValue {
-                        id: value_id,
-                    })?;
+                    .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
 
                 let typed = value
                     .downcast_ref::<T>()
@@ -213,9 +206,7 @@ where
                 let value = registry
                     .by_id_erased_async(value_id)
                     .await
-                    .ok_or(DataKeyGetError::MissingValue {
-                        id: value_id,
-                    })?;
+                    .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
 
                 let typed = value
                     .downcast_ref::<T>()
@@ -266,9 +257,7 @@ fn resolve_key_path_blocking(
 
         let id = registry
             .get_id(&identifier)
-            .ok_or_else(|| {
-                DataKeyGetError::MissingIdentifier { identifier }
-            })?;
+            .ok_or(DataKeyGetError::MissingIdentifier { identifier })?;
 
         ids.push(id);
 
@@ -312,15 +301,11 @@ where
         let value = current
             .as_ref()
             .by_id_erased(registry_id)
-            .ok_or(DataKeyGetError::MissingRegistry {
-                id: registry_id,
-            })?;
+            .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
 
         let nested = value
             .downcast_ref::<Arc<dyn Registry>>()
-            .ok_or(DataKeyGetError::MissingRegistry {
-                id: registry_id,
-            })?;
+            .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
 
         let nested = Arc::clone(nested);
 
@@ -333,9 +318,7 @@ where
         RegistryCursor::Borrowed(registry) => {
             let value = registry
                 .by_id_erased(value_id)
-                .ok_or(DataKeyGetError::MissingValue {
-                    id: value_id,
-                })?;
+                .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
 
             let typed = value
                 .downcast_ref::<T>()
@@ -355,9 +338,7 @@ where
         RegistryCursor::Owned(registry) => {
             let value = registry
                 .by_id_erased(value_id)
-                .ok_or(DataKeyGetError::MissingValue {
-                    id: value_id,
-                })?;
+                .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
 
             let typed = value
                 .downcast_ref::<T>()

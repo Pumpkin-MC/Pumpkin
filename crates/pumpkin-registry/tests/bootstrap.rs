@@ -1,5 +1,6 @@
-use pumpkin_registry::{BOOTSTRAP, bootstrap::RegistryEntry, bootstrap_provider};
+#![allow(clippy::unwrap_used)]
 
+use pumpkin_registry::{BOOTSTRAP, bootstrap::RegistryEntry, bootstrap_provider};
 use pumpkin_util::identifier::Identifier;
 
 #[derive(Debug, PartialEq, Eq)]

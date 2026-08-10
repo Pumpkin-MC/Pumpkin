@@ -9,19 +9,13 @@ pub enum DataKeyGetError {
     InvalidKey,
 
     #[error("identifier `{identifier}` does not exist")]
-    MissingIdentifier {
-        identifier: Identifier,
-    },
+    MissingIdentifier { identifier: Identifier },
 
     #[error("registry with id {id} does not exist")]
-    MissingRegistry {
-        id: usize,
-    },
+    MissingRegistry { id: usize },
 
     #[error("value with id {id} does not exist")]
-    MissingValue {
-        id: usize,
-    },
+    MissingValue { id: usize },
 
     #[error("expected `{expected}`, found `{actual}`")]
     TypeMismatch {
