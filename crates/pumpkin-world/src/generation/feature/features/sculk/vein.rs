@@ -3,18 +3,18 @@
 //! Reference: `net.minecraft.world.level.block.SculkVeinBlock` and
 //! `net.minecraft.world.level.block.MultifaceSpreader` (mc-26_2).
 
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::GlowLichenLikeProperties;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::GlowLichenLikeProperties;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::RandomGenerator;
+use pumpkin_util::random::RandomImpl;
 
 use super::SculkLevel;
-use super::is_sculk_behaviour;
 use super::is_sculk_replaceable;
 
 /// Multiface spread positions — same three types as vanilla.
@@ -40,7 +40,8 @@ impl SpreadType {
             Self::SamePosition => (pos, spread_direction),
             Self::SamePlane => (pos.offset(spread_direction.to_offset()), from_face),
             Self::WrapAround => (
-                pos.offset(spread_direction.to_offset()).offset(from_face.to_offset()),
+                pos.offset(spread_direction.to_offset())
+                    .offset(from_face.to_offset()),
                 spread_direction.opposite(),
             ),
         }
@@ -60,17 +61,25 @@ pub struct VeinRules;
 impl VeinRules {
     /// Attempts to place sculk at a support block adjacent to `pos`.
     /// Mirrors vanilla `SculkVeinBlock.attemptPlaceSculk`.
-    #[allow(dead_code)]
     pub fn attempt_place_sculk(
         level: &mut dyn SculkLevel,
         pos: BlockPos,
+        random: &mut RandomGenerator,
         replaceable: impl Fn(BlockId) -> bool,
     ) -> bool {
         let Some(state) = level.sculk_get(pos) else {
             return false;
         };
 
-        for support in BlockDirection::all() {
+        // Vanilla shuffles the support directions with the level random
+        // source (`Direction.allShuffled(random)`).
+        let mut support_order = BlockDirection::all();
+        for i in (1..support_order.len()).rev() {
+            let j = random.next_bounded_i32((i + 1) as i32) as usize;
+            support_order.swap(i, j);
+        }
+
+        for support in support_order {
             if !Self::has_face(state, support) {
                 continue;
             }
@@ -84,7 +93,10 @@ impl VeinRules {
             }
             // Place sculk at the support position.
             level.sculk_set(support_pos, Block::SCULK.default_state);
-            // Spread veins from the new sculk block.
+            // Spread veins from the new sculk block first (vanilla order:
+            // setBlock → veinSpreader.spreadAll → discharge surrounding veins).
+            Self::spread_all(level, support_pos);
+            // Then discharge the surrounding veins.
             let skip = support.opposite();
             for vein_dir in BlockDirection::all() {
                 if vein_dir == skip {
@@ -97,8 +109,6 @@ impl VeinRules {
                     }
                 }
             }
-            // Also spread veins from the new sculk (via spreadAll).
-            Self::spread_all(level, support_pos);
             return true;
         }
         false
@@ -108,33 +118,40 @@ impl VeinRules {
     pub fn attempt_spread_vein(
         level: &mut dyn SculkLevel,
         pos: BlockPos,
-        _state: Option<BlockStateId>,
-        faces: &[BlockDirection],
+        state: Option<BlockStateId>,
+        faces: Option<u8>,
     ) -> bool {
-        if faces.is_empty() {
-            // No faces — same-space spreader.
-            return Self::spread_all(level, pos);
+        match faces {
+            // Vanilla: `facings == null` → the same-space spreader
+            // (SAME_POSITION only).
+            None => Self::spread_same_space(level, pos),
+            // Vanilla: empty (non-null) facings → the interface default → the
+            // multiface spreader with the full DEFAULT_SPREAD_ORDER.
+            Some(0) => Self::spread_all(level, pos),
+            // Vanilla: non-empty facings → `regrow`, gated on the block being
+            // air or holding water.
+            Some(faces_bits) => {
+                let Some(existing) = state.or_else(|| level.sculk_get(pos)) else {
+                    return false;
+                };
+                if !Self::state_is_air_or_water(level, existing, pos) {
+                    return false;
+                }
+                let faces: Vec<BlockDirection> = BlockDirection::all()
+                    .into_iter()
+                    .filter(|dir| faces_bits & (1 << dir.to_index()) != 0)
+                    .collect();
+                Self::regrow(level, pos, &faces)
+            }
         }
-        // Has faces — regrow.
-        Self::regrow(level, pos, faces)
     }
 
     /// Vanilla `SculkVeinBlock.regrow`.
-    pub fn regrow(
-        level: &mut dyn SculkLevel,
-        pos: BlockPos,
-        faces: &[BlockDirection],
-    ) -> bool {
+    pub fn regrow(level: &mut dyn SculkLevel, pos: BlockPos, faces: &[BlockDirection]) -> bool {
         let mut has_any = false;
-        // Initialize from the existing state at pos to preserve waterlogged
-        // and already-enabled faces; fall back to a fresh sculk_vein default.
-        let mut new_state = match level.sculk_get(pos) {
-            Some(s) if s.to_block_id() == BlockId::SCULK_VEIN => s,
-            Some(s) if s.to_block_id() == BlockId::WATER => {
-                Self::with_waterlogged(Block::SCULK_VEIN.default_state.id, true)
-            }
-            _ => Block::SCULK_VEIN.default_state.id,
-        };
+        // Vanilla always starts from a fresh sculk_vein default state,
+        // discarding any stale face properties of a previous state.
+        let mut new_state = Block::SCULK_VEIN.default_state.id;
         for face in faces {
             if Self::can_attach_to(level, pos, *face) {
                 new_state = Self::with_face(new_state, *face, true);
@@ -143,6 +160,12 @@ impl VeinRules {
         }
         if !has_any {
             return false;
+        }
+        // Preserve waterlogging from the existing block's fluid state.
+        if let Some(existing) = level.sculk_get(pos) {
+            if Self::state_has_water(level, existing, pos) {
+                new_state = Self::with_waterlogged(new_state, true);
+            }
         }
         level.sculk_set(pos, new_state.to_state());
         true
@@ -177,25 +200,22 @@ impl VeinRules {
             return;
         }
         let mut new_state = state;
-        // Remove faces that point to non-sculk neighbours.
+        // Vanilla removes faces whose neighbour became sculk, preserving
+        // faces attached to non-sculk supports.
         for dir in BlockDirection::all() {
             if Self::has_face(new_state, dir) {
                 let neighbour = pos.offset(dir.to_offset());
-                // If the neighbour is unavailable (out of bounds) or is not
-                // sculk, clear the face. This prevents veins from hanging
-                // onto non-existent or non-sculk blocks.
                 let is_sculk = level
                     .sculk_get(neighbour)
                     .is_some_and(|ns| ns.to_block_id() == BlockId::SCULK);
-                if !is_sculk {
+                if is_sculk {
                     new_state = Self::with_face(new_state, dir, false);
                 }
             }
         }
         // If no faces remain, replace with air (or water).
         if !Self::has_any_face(new_state) {
-            // Check if water should go here.
-            new_state = if level.sculk_is_water_source(pos) {
+            new_state = if level.sculk_is_water(pos) {
                 Block::WATER.default_state.id
             } else {
                 Block::AIR.default_state.id
@@ -206,10 +226,24 @@ impl VeinRules {
 
     /// Vanilla `MultifaceSpreader.spreadAll` — spreads from all faces.
     pub fn spread_all(level: &mut dyn SculkLevel, pos: BlockPos) -> bool {
+        Self::spread_with_types(level, pos, &DEFAULT_SPREAD_ORDER)
+    }
+
+    /// Vanilla `getSameSpaceSpreader().spreadAll` — only `SAME_POSITION`
+    /// spreads are attempted.
+    fn spread_same_space(level: &mut dyn SculkLevel, pos: BlockPos) -> bool {
+        Self::spread_with_types(level, pos, &[SpreadType::SamePosition])
+    }
+
+    fn spread_with_types(
+        level: &mut dyn SculkLevel,
+        pos: BlockPos,
+        spread_types: &[SpreadType],
+    ) -> bool {
         let mut any = false;
         for face in BlockDirection::all() {
             if Self::can_spread_from_face(level, pos, face)
-                && Self::spread_from_face(level, pos, face)
+                && Self::spread_from_face(level, pos, face, spread_types)
             {
                 any = true;
             }
@@ -234,12 +268,33 @@ impl VeinRules {
         level: &mut dyn SculkLevel,
         pos: BlockPos,
         from_face: BlockDirection,
+        spread_types: &[SpreadType],
     ) -> bool {
-        for spread_type in DEFAULT_SPREAD_ORDER {
-            for spread_dir in BlockDirection::all() {
-                if spread_dir.to_axis() == from_face.to_axis() {
+        // Vanilla iterates directions in the outer loop and spread types in
+        // the inner loop (`MultifaceSpreader.getSpreadFromFaceTowardDirection`),
+        // placing at most one vein per (face, direction) pair.
+        let source_state = level.sculk_get(pos);
+        let source_id = source_state
+            .map(|s| s.to_block_id())
+            .unwrap_or(BlockId::AIR);
+        let is_vein = source_id == BlockId::SCULK_VEIN;
+        let mut any = false;
+
+        for spread_dir in BlockDirection::all() {
+            if spread_dir.to_axis() == from_face.to_axis() {
+                continue;
+            }
+            // Vanilla: for sculk-vein sources, the spread direction must not
+            // already have a face set.
+            if is_vein {
+                let Some(state) = source_state else {
+                    continue;
+                };
+                if Self::has_face(state, spread_dir) {
                     continue;
                 }
+            }
+            for spread_type in spread_types {
                 let (target_pos, target_face) = spread_type.spread_pos(pos, spread_dir, from_face);
                 if Self::can_spread_into(level, pos, target_pos, target_face) {
                     let old_state = level.sculk_get(target_pos);
@@ -247,12 +302,13 @@ impl VeinRules {
                         Self::get_state_for_placement(level, target_pos, target_face, old_state)
                     {
                         level.sculk_set(target_pos, placed);
-                        return true;
+                        any = true;
+                        break;
                     }
                 }
             }
         }
-        false
+        any
     }
 
     /// Vanilla `stateCanBeReplaced` for sculk vein.
@@ -266,20 +322,25 @@ impl VeinRules {
             return false;
         };
         let existing_id = existing.to_block_id();
-        // Can't spread into sculk, sculk_catalyst, moving_piston.
-        if existing_id == BlockId::SCULK
-            || existing_id == BlockId::SCULK_CATALYST
-            || existing_id == BlockId::MOVING_PISTON
-        {
-            return false;
+        // Vanilla rejects when the SUPPORT block behind the placement face is
+        // sculk / sculk_catalyst / moving_piston.
+        let against_pos = placement_pos.offset(placement_face.to_offset());
+        if let Some(against) = level.sculk_get(against_pos) {
+            let against_id = against.to_block_id();
+            if against_id == BlockId::SCULK
+                || against_id == BlockId::SCULK_CATALYST
+                || against_id == BlockId::MOVING_PISTON
+            {
+                return false;
+            }
         }
         // Manhattan distance 2 check.
         let manhattan = (placement_pos.0.x - source_pos.0.x).abs()
             + (placement_pos.0.y - source_pos.0.y).abs()
             + (placement_pos.0.z - source_pos.0.z).abs();
         if manhattan == 2 {
-            let neighour_pos = source_pos.offset(placement_face.opposite().to_offset());
-            if level.sculk_is_face_sturdy(neighour_pos, placement_face) {
+            let neighbor_pos = source_pos.offset(placement_face.opposite().to_offset());
+            if level.sculk_is_face_sturdy(neighbor_pos, placement_face) {
                 return false;
             }
         }
@@ -287,19 +348,38 @@ impl VeinRules {
         if existing_id == Block::FIRE.id {
             return false;
         }
-        // Replaceable check: air, water source, or sculk_vein.
-        existing_id == BlockId::AIR
+        // Non-water fluids can't be replaced (vanilla checks the existing
+        // fluid state is empty or water).
+        if existing.to_state().is_liquid()
+            && !(existing_id == BlockId::WATER && level.sculk_is_water(placement_pos))
+        {
+            return false;
+        }
+        // Vanilla: `existingState.canBeReplaced() || super.stateCanBeReplaced()`
+        // where the default accepts air, the same multiface block, or a water
+        // source.
+        existing.to_state().replaceable()
+            || existing_id == BlockId::AIR
             || existing_id == BlockId::SCULK_VEIN
             || (existing_id == BlockId::WATER && level.sculk_is_water_source(placement_pos))
-            || is_sculk_replaceable(existing_id)
     }
 
     fn get_state_for_placement(
-        _level: &dyn SculkLevel,
-        _placement_pos: BlockPos,
+        level: &dyn SculkLevel,
+        placement_pos: BlockPos,
         face: BlockDirection,
         old_state: Option<BlockStateId>,
     ) -> Option<&'static BlockState> {
+        // Vanilla `MultifaceBlock.isValidStateForPlacement`: the support
+        // behind the face must be sturdy and the face must not already be set.
+        if !Self::can_attach_to(level, placement_pos, face) {
+            return None;
+        }
+        if let Some(old) = old_state {
+            if old.to_block_id() == BlockId::SCULK_VEIN && Self::has_face(old, face) {
+                return None;
+            }
+        }
         // Determine base state: if already sculk_vein, extend it;
         // otherwise start from a fresh sculk_vein default state.
         let mut base = if let Some(s) = old_state {
@@ -312,9 +392,9 @@ impl VeinRules {
             Block::SCULK_VEIN.default_state.id
         };
         base = Self::with_face(base, face, true);
-        // Preserve waterlogging.
+        // Vanilla: `oldState.getFluidState().isSourceOfType(Fluids.WATER)`.
         if let Some(s) = old_state {
-            if s.to_block_id() == BlockId::WATER {
+            if Self::old_state_is_water_source(level, s, placement_pos) {
                 base = Self::with_waterlogged(base, true);
             }
         }
@@ -326,6 +406,40 @@ impl VeinRules {
     fn can_attach_to(level: &dyn SculkLevel, pos: BlockPos, face: BlockDirection) -> bool {
         let support_pos = pos.offset(face.to_offset());
         level.sculk_is_face_sturdy(support_pos, face.opposite())
+    }
+
+    /// Vanilla `fluidState.is(Fluids.WATER)` for the given state.
+    fn state_has_water(level: &dyn SculkLevel, state: BlockStateId, pos: BlockPos) -> bool {
+        match state.to_block_id() {
+            BlockId::WATER => level.sculk_is_water(pos),
+            BlockId::SCULK_VEIN => {
+                let props = GlowLichenLikeProperties::from_state_id(state, &Block::SCULK_VEIN);
+                props.r#waterlogged
+            }
+            _ => false,
+        }
+    }
+
+    /// Vanilla `state.isAir() || state.getFluidState().is(Fluids.WATER)` —
+    /// the gate before `regrow`.
+    fn state_is_air_or_water(level: &dyn SculkLevel, state: BlockStateId, pos: BlockPos) -> bool {
+        state.to_state().is_air() || Self::state_has_water(level, state, pos)
+    }
+
+    /// Vanilla `oldState.getFluidState().isSourceOfType(Fluids.WATER)`.
+    fn old_state_is_water_source(
+        level: &dyn SculkLevel,
+        state: BlockStateId,
+        pos: BlockPos,
+    ) -> bool {
+        match state.to_block_id() {
+            BlockId::WATER => level.sculk_is_water_source(pos),
+            BlockId::SCULK_VEIN => {
+                let props = GlowLichenLikeProperties::from_state_id(state, &Block::SCULK_VEIN);
+                props.r#waterlogged
+            }
+            _ => false,
+        }
     }
 
     /// Returns whether `state` has the given face bit set.
@@ -346,7 +460,9 @@ impl VeinRules {
 
     /// Returns whether any face bit is set.
     pub fn has_any_face(state: BlockStateId) -> bool {
-        BlockDirection::all().into_iter().any(|dir| Self::has_face(state, dir))
+        BlockDirection::all()
+            .into_iter()
+            .any(|dir| Self::has_face(state, dir))
     }
 
     /// Returns a new state with the given face set to `value`.
@@ -373,11 +489,13 @@ impl VeinRules {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pumpkin_util::math::vector3::Vector3;
 
     #[test]
     fn spread_type_same_position() {
         let pos = BlockPos::new(10, 60, 10);
-        let (p, f) = SpreadType::SamePosition.spread_pos(pos, BlockDirection::Up, BlockDirection::North);
+        let (p, f) =
+            SpreadType::SamePosition.spread_pos(pos, BlockDirection::Up, BlockDirection::North);
         assert_eq!(p, pos);
         assert_eq!(f, BlockDirection::Up);
     }
@@ -385,7 +503,8 @@ mod tests {
     #[test]
     fn spread_type_same_plane() {
         let pos = BlockPos::new(10, 60, 10);
-        let (p, f) = SpreadType::SamePlane.spread_pos(pos, BlockDirection::East, BlockDirection::North);
+        let (p, f) =
+            SpreadType::SamePlane.spread_pos(pos, BlockDirection::East, BlockDirection::North);
         assert_eq!(p.0, Vector3::new(11, 60, 10));
         assert_eq!(f, BlockDirection::North);
     }
@@ -393,7 +512,8 @@ mod tests {
     #[test]
     fn spread_type_wrap_around() {
         let pos = BlockPos::new(10, 60, 10);
-        let (p, f) = SpreadType::WrapAround.spread_pos(pos, BlockDirection::East, BlockDirection::North);
+        let (p, f) =
+            SpreadType::WrapAround.spread_pos(pos, BlockDirection::East, BlockDirection::North);
         assert_eq!(p.0, Vector3::new(11, 60, 9));
         assert_eq!(f, BlockDirection::West);
     }

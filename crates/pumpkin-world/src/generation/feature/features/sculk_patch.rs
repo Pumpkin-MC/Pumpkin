@@ -14,9 +14,9 @@ use pumpkin_util::random::RandomGenerator;
 use pumpkin_util::random::RandomImpl;
 
 use crate::generation::feature::features::sculk;
-use crate::generation::feature::features::sculk::spreader::SculkSpreader;
 use crate::generation::feature::features::sculk::ProtoChunkSculkView;
 use crate::generation::feature::features::sculk::SculkLevel;
+use crate::generation::feature::features::sculk::spreader::SculkSpreader;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::WorldPortalExt;
 
@@ -60,9 +60,7 @@ impl SculkPatchFeature {
         }
 
         // Catalyst placement (vanilla: block below must be a full cube).
-        if random.next_f32() <= self.catalyst_chance
-            && chunk.sculk_is_full_cube(pos.down())
-        {
+        if random.next_f32() <= self.catalyst_chance && chunk.sculk_is_full_cube(pos.down()) {
             chunk.sculk_set(pos, Block::SCULK_CATALYST.default_state);
         }
 
@@ -96,9 +94,7 @@ impl SculkPatchFeature {
             spreader.clear();
         }
 
-        if random.next_f32() <= self.catalyst_chance
-            && view.sculk_is_full_cube(pos.down())
-        {
+        if random.next_f32() <= self.catalyst_chance && view.sculk_is_full_cube(pos.down()) {
             view.sculk_set(pos, Block::SCULK_CATALYST.default_state);
         }
 
@@ -122,10 +118,7 @@ impl SculkPatchFeature {
                 random.next_bounded_i32(5) - 2,
             ));
             if level.sculk_is_air(candidate)
-                && level.sculk_is_face_sturdy(
-                    candidate.down(),
-                    pumpkin_data::BlockDirection::Up,
-                )
+                && level.sculk_is_face_sturdy(candidate.down(), pumpkin_data::BlockDirection::Up)
             {
                 level.sculk_set(candidate, sculk::shrieker_state(true));
             }

@@ -6,26 +6,21 @@
 //! - [`vein`]     — multiface (sculk vein) spreading via support faces.
 //! - [`growth`]   — sculk sensor / shrieker placement rules.
 
-use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE;
-use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN;
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::is_air;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::is_air;
+use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE;
+use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
 pub mod growth;
 pub mod spreader;
 pub mod vein;
-
-use growth::GrowthRules;
-use spreader::ChargeCursor;
-use spreader::SculkSpreader;
-use vein::VeinRules;
 
 /// The 18 non-corner neighbours of a block: every offset in the 3×3×3 cube
 /// that shares at least one zero-axis (i.e. is NOT a corner) and is not the
@@ -72,6 +67,10 @@ pub trait SculkLevel {
 
     /// Whether the position holds water (source).
     fn sculk_is_water_source(&self, pos: BlockPos) -> bool;
+
+    /// Whether the position holds water (any water fluid state, matching
+    /// vanilla `FluidState.is(Fluids.WATER)`).
+    fn sculk_is_water(&self, pos: BlockPos) -> bool;
 
     /// Whether the face of the block at `pos` in the given direction is
     /// sturdy (equivalent to Java `isFaceSturdy`).
@@ -128,10 +127,9 @@ pub fn can_spread_from(level: &dyn SculkLevel, pos: BlockPos) -> bool {
 /// Builds the shrieker block state used by the extra-rare-growths pass
 /// (with `can_summon` set when world-gen).
 pub fn shrieker_state(can_summon: bool) -> &'static BlockState {
-    let mut properties =
-        pumpkin_data::block_properties::SculkShriekerLikeProperties::default(
-            &Block::SCULK_SHRIEKER,
-        );
+    let mut properties = pumpkin_data::block_properties::SculkShriekerLikeProperties::default(
+        &Block::SCULK_SHRIEKER,
+    );
     properties.r#can_summon = can_summon;
     BlockState::from_id(properties.to_state_id(&Block::SCULK_SHRIEKER))
 }
@@ -168,9 +166,13 @@ impl<T: GenerationCache> SculkLevel for T {
     }
 
     fn sculk_is_water_source(&self, pos: BlockPos) -> bool {
-        let (fluid, fluid_state) =
-            GenerationCache::get_fluid_and_fluid_state(self, &pos.0);
+        let (fluid, fluid_state) = GenerationCache::get_fluid_and_fluid_state(self, &pos.0);
         fluid.id == 2 && fluid_state.is_source
+    }
+
+    fn sculk_is_water(&self, pos: BlockPos) -> bool {
+        let (fluid, _fluid_state) = GenerationCache::get_fluid_and_fluid_state(self, &pos.0);
+        fluid.id == 2
     }
 
     fn sculk_is_face_sturdy(&self, pos: BlockPos, face: BlockDirection) -> bool {
@@ -237,20 +239,25 @@ impl SculkLevel for ProtoChunkSculkView<'_> {
         }
         let local_x = pos.0.x & 15;
         let local_z = pos.0.z & 15;
-        self.chunk
-            .set_block_state(local_x, pos.0.y, local_z, state);
+        self.chunk.set_block_state(local_x, pos.0.y, local_z, state);
     }
 
     fn sculk_is_air(&self, pos: BlockPos) -> bool {
-        self.sculk_get(pos)
-            .map(|s| is_air(s))
-            .unwrap_or(true)
+        self.sculk_get(pos).map(|s| is_air(s)).unwrap_or(true)
     }
 
     fn sculk_is_water_source(&self, pos: BlockPos) -> bool {
-        let _ = pos;
-        // ProtoChunk has no fluid simulation; treat as non-water.
-        false
+        // Proto chunks have no fluid simulation; water is stored as a block
+        // state. Vanilla derives the fluid from the block state during
+        // world-gen, where water blocks are (by convention) sources, so a
+        // WATER block state is treated as a water source.
+        self.sculk_get(pos)
+            .is_some_and(|s| s.to_block_id() == BlockId::WATER)
+    }
+
+    fn sculk_is_water(&self, pos: BlockPos) -> bool {
+        self.sculk_get(pos)
+            .is_some_and(|s| s.to_block_id() == BlockId::WATER)
     }
 
     fn sculk_is_face_sturdy(&self, pos: BlockPos, face: BlockDirection) -> bool {
@@ -263,5 +270,93 @@ impl SculkLevel for ProtoChunkSculkView<'_> {
         self.sculk_get(pos)
             .map(|s| s.to_state().is_full_cube())
             .unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test_utils {
+    use super::*;
+    use std::collections::HashMap;
+
+    /// In-memory [`SculkLevel`] used by the unit tests of the sculk
+    /// sub-modules. Mirrors the proto-chunk view: water is detected from the
+    /// block state, and missing positions read as air.
+    pub(crate) struct MockSculkLevel {
+        pub(crate) blocks: HashMap<BlockPos, BlockStateId>,
+    }
+
+    impl MockSculkLevel {
+        pub(crate) fn new() -> Self {
+            Self {
+                blocks: HashMap::new(),
+            }
+        }
+
+        pub(crate) fn set_id(&mut self, pos: BlockPos, id: BlockStateId) {
+            self.blocks.insert(pos, id);
+        }
+    }
+
+    impl SculkLevel for MockSculkLevel {
+        fn sculk_get(&self, pos: BlockPos) -> Option<BlockStateId> {
+            self.blocks.get(&pos).copied()
+        }
+
+        fn sculk_set(&mut self, pos: BlockPos, state: &'static BlockState) {
+            self.blocks.insert(pos, state.id);
+        }
+
+        fn sculk_is_air(&self, pos: BlockPos) -> bool {
+            self.sculk_get(pos)
+                .map(|s| s.to_state().is_air())
+                .unwrap_or(true)
+        }
+
+        fn sculk_is_water_source(&self, pos: BlockPos) -> bool {
+            self.sculk_get(pos)
+                .is_some_and(|s| s.to_block_id() == BlockId::WATER)
+        }
+
+        fn sculk_is_water(&self, pos: BlockPos) -> bool {
+            self.sculk_get(pos)
+                .is_some_and(|s| s.to_block_id() == BlockId::WATER)
+        }
+
+        fn sculk_is_face_sturdy(&self, pos: BlockPos, face: BlockDirection) -> bool {
+            self.sculk_get(pos)
+                .map(|s| s.to_state().is_side_solid(face))
+                .unwrap_or(false)
+        }
+
+        fn sculk_is_full_cube(&self, pos: BlockPos) -> bool {
+            self.sculk_get(pos)
+                .map(|s| s.to_state().is_full_cube())
+                .unwrap_or(false)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_utils::MockSculkLevel;
+
+    #[test]
+    fn can_spread_from_water_source_origin() {
+        // A water-source origin with a full-cube neighbour is a valid spread
+        // origin (regression: proto-chunk view must detect water).
+        let mut level = MockSculkLevel::new();
+        let origin = BlockPos::new(0, 60, 0);
+        level.set_id(origin, Block::WATER.default_state.id);
+        level.set_id(origin.up(), Block::STONE.default_state.id);
+        assert!(can_spread_from(&level, origin));
+    }
+
+    #[test]
+    fn can_spread_from_rejects_solid_origin() {
+        let mut level = MockSculkLevel::new();
+        let origin = BlockPos::new(0, 60, 0);
+        level.set_id(origin, Block::STONE.default_state.id);
+        assert!(!can_spread_from(&level, origin));
     }
 }
