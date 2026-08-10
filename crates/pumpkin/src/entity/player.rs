@@ -15,6 +15,7 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::packet::serverbound::PLAY_PLAYER_LOADED;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
@@ -2482,6 +2483,21 @@ impl Player {
     pub fn has_client_loaded(&self) -> bool {
         self.client_loaded.load(Ordering::Relaxed)
             || self.client_loaded_timeout.load(Ordering::Relaxed) == 0
+    }
+
+    /// Whether the client is ready to receive updates that reference entities in its world.
+    ///
+    /// Modern Java clients explicitly report this after creating their client level. Older
+    /// protocol versions lack that packet and retain the existing timeout fallback.
+    pub fn can_receive_realtime_updates(&self) -> bool {
+        match self.client.as_ref() {
+            ClientPlatform::Java(client)
+                if PLAY_PLAYER_LOADED.to_id(client.version.load()) >= 0 =>
+            {
+                self.client_loaded.load(Ordering::Relaxed)
+            }
+            _ => self.has_client_loaded(),
+        }
     }
 
     pub fn set_client_loaded(&self, loaded: bool) {

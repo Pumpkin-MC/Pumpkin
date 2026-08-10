@@ -715,6 +715,31 @@ impl World {
         Self::broadcast_java_grouped(je_packet, recipients_by_version);
     }
 
+    /// Broadcasts a real-time entity update only to clients whose world is ready.
+    pub fn broadcast_realtime_packet_except_editioned_sync<J: ClientPacket, B: BClientPacket>(
+        &self,
+        except: &[uuid::Uuid],
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        let players = self.players.load();
+        let mut java_recipients = Vec::new();
+
+        for player in players.iter() {
+            if except.contains(&player.gameprofile.id) || !player.can_receive_realtime_updates() {
+                continue;
+            }
+            match player.client.as_ref() {
+                ClientPlatform::Java(_) => java_recipients.push(player),
+                ClientPlatform::Bedrock(client) => client.try_enqueue_packet(be_packet),
+            }
+        }
+
+        let recipients_by_version =
+            Self::collect_java_recipients_by_version(java_recipients.into_iter());
+        Self::broadcast_java_grouped(je_packet, recipients_by_version);
+    }
+
     /// Broadcasts the skin layers of a player, encoding the metadata for each Java client's own
     /// protocol version since the tracked data index differs between versions.
     fn broadcast_skin_parts_sync<B: BClientPacket>(
@@ -796,6 +821,21 @@ impl World {
                 .iter()
                 .filter(|candidate| !except.contains(&candidate.gameprofile.id)),
         );
+        Self::broadcast_java_grouped(packet, recipients_by_version);
+    }
+
+    /// Broadcasts a real-time Java entity update only to clients whose world is ready.
+    pub fn broadcast_realtime_packet_except<P: ClientPacket>(
+        &self,
+        except: &[uuid::Uuid],
+        packet: &P,
+    ) {
+        let players = self.players.load();
+        let recipients_by_version =
+            Self::collect_java_recipients_by_version(players.iter().filter(|candidate| {
+                !except.contains(&candidate.gameprofile.id)
+                    && candidate.can_receive_realtime_updates()
+            }));
         Self::broadcast_java_grouped(packet, recipients_by_version);
     }
 

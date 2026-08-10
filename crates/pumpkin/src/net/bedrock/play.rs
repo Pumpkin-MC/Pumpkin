@@ -347,7 +347,7 @@ impl BedrockClient {
             );
 
             if pos_changed {
-                world.broadcast_packet_except_editioned_sync(
+                world.broadcast_realtime_packet_except_editioned_sync(
                     &[player.gameprofile.id],
                     &pumpkin_protocol::java::client::play::CEntityPositionSync::new(
                         player.entity_id().into(),
@@ -360,7 +360,7 @@ impl BedrockClient {
                     &bedrock_move_packet,
                 );
             } else if rot_changed {
-                world.broadcast_packet_except_editioned_sync(
+                world.broadcast_realtime_packet_except_editioned_sync(
                     &[player.gameprofile.id],
                     &pumpkin_protocol::java::client::play::CUpdateEntityRot::new(
                         player.entity_id().into(),
@@ -373,7 +373,7 @@ impl BedrockClient {
             }
 
             if head_rot_changed {
-                world.broadcast_packet_except(
+                world.broadcast_realtime_packet_except(
                     &[player.gameprofile.id],
                     &pumpkin_protocol::java::client::play::CHeadRot::new(
                         player.entity_id().into(),
