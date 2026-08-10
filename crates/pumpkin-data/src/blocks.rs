@@ -359,6 +359,9 @@ mod tests {
 
         let pointed_dripstone = Block::POINTED_DRIPSTONE.shape_offset().unwrap();
         assert_eq!(pointed_dripstone.max_horizontal, 0.125);
+
+        let small_dripleaf = Block::SMALL_DRIPLEAF.shape_offset().unwrap();
+        assert_eq!(small_dripleaf.max_vertical, 0.1);
     }
 
     #[test]

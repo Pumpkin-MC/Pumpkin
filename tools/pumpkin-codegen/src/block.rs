@@ -681,6 +681,8 @@ pub struct Block {
     pub states: Vec<BlockState>,
     /// Experience points dropped when the block is mined, if any.
     pub experience: Option<Experience>,
+    /// Position-derived shape offset applied by vanilla, if any.
+    shape_offset: Option<BlockShapeOffset>,
 }
 
 impl ToTokens for Block {
@@ -838,19 +840,11 @@ pub struct BlockAssets {
 }
 
 #[derive(Deserialize)]
-struct BlockShapeOffsetAssets {
-    default_max_horizontal: f32,
-    default_max_vertical: f32,
-    blocks: Vec<BlockShapeOffset>,
-}
-
-#[derive(Deserialize)]
 struct BlockShapeOffset {
-    name: String,
     #[serde(rename = "type")]
     offset_type: BlockShapeOffsetType,
-    max_horizontal: Option<f32>,
-    max_vertical: Option<f32>,
+    max_horizontal: f32,
+    max_vertical: f32,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -877,50 +871,26 @@ pub fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
 
-    let shape_offset_assets: BlockShapeOffsetAssets =
-        serde_json::from_str(&fs::read_to_string("../assets/block_shape_offsets.json").unwrap())
-            .expect("Failed to parse block_shape_offsets.json");
-
-    let block_names = blocks_assets
+    let shape_offset_arms = blocks_assets
         .blocks
         .iter()
-        .map(|block| block.name.clone())
-        .collect::<HashSet<_>>();
-    let mut seen_offset_blocks = HashSet::new();
-    let shape_offset_arms = shape_offset_assets
-        .blocks
-        .iter()
-        .map(|offset| {
-            assert!(
-                block_names.contains(offset.name.as_str()),
-                "Unknown block in block_shape_offsets.json: {}",
-                offset.name
-            );
-            assert!(
-                seen_offset_blocks.insert(offset.name.as_str()),
-                "Duplicate block in block_shape_offsets.json: {}",
-                offset.name
-            );
-
-            let block = format_ident!("{}", const_block_name_from_block_name(&offset.name));
+        .filter_map(|block| {
+            let offset = block.shape_offset.as_ref()?;
+            let block = format_ident!("{}", const_block_name_from_block_name(&block.name));
             let offset_type = match offset.offset_type {
                 BlockShapeOffsetType::Xz => quote! { ShapeOffsetType::Xz },
                 BlockShapeOffsetType::Xyz => quote! { ShapeOffsetType::Xyz },
             };
-            let max_horizontal = offset
-                .max_horizontal
-                .unwrap_or(shape_offset_assets.default_max_horizontal);
-            let max_vertical = offset
-                .max_vertical
-                .unwrap_or(shape_offset_assets.default_max_vertical);
+            let max_horizontal = offset.max_horizontal;
+            let max_vertical = offset.max_vertical;
 
-            quote! {
+            Some(quote! {
                 BlockId::#block => Some(ShapeOffset {
                     offset_type: #offset_type,
                     max_horizontal: #max_horizontal,
                     max_vertical: #max_vertical,
                 }),
-            }
+            })
         })
         .collect::<Vec<_>>();
 
