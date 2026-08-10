@@ -59,6 +59,7 @@ struct SkinPackRegistry {
 
 struct AcceptedSkin {
     fingerprint: [u8; 20],
+    body_fingerprint: [u8; 20],
     changed_at: Instant,
     skin: Skin,
 }
@@ -197,6 +198,7 @@ impl BedrockSkinPacks {
             skin
         };
         let fingerprint = skin_fingerprint(&skin);
+        let body_fingerprint = skin_body_fingerprint(&skin);
         let now = Instant::now();
         let mut registry = self.registry.write().await;
 
@@ -204,7 +206,19 @@ impl BedrockSkinPacks {
             if previous.fingerprint == fingerprint {
                 return (previous.skin.clone(), false);
             }
-            if !rejected_skin && now.duration_since(previous.changed_at) < change_cooldown {
+            let same_body = previous.body_fingerprint == body_fingerprint;
+            let previous_has_cape = has_cape(&previous.skin);
+            let has_cape = has_cape(&skin);
+            // Bedrock may complete the login skin with a PlayerSkin packet that
+            // carries its cape. This is not a second skin change and must not be
+            // rejected by the user-facing skin-change cooldown. Conversely,
+            // preserve a known cape when a later login omits it.
+            if same_body && previous_has_cape && !has_cape {
+                return (previous.skin.clone(), false);
+            }
+            if !(rejected_skin || same_body && !previous_has_cape && has_cape)
+                && now.duration_since(previous.changed_at) < change_cooldown
+            {
                 return (previous.skin.clone(), false);
             }
         }
@@ -213,6 +227,7 @@ impl BedrockSkinPacks {
             player_id,
             AcceptedSkin {
                 fingerprint,
+                body_fingerprint,
                 changed_at: now,
                 skin: skin.clone(),
             },
@@ -415,6 +430,23 @@ fn skin_fingerprint(skin: &Skin) -> [u8; 20] {
     // fingerprint for the bytes written before the error.
     let _ = skin.write(&mut serialized);
     Sha1::digest(serialized).into()
+}
+
+fn skin_body_fingerprint(skin: &Skin) -> [u8; 20] {
+    let mut skin = skin.clone();
+    skin.cape_width = 0;
+    skin.cape_height = 0;
+    skin.cape_data.clear();
+    skin.cape_id.clear();
+    skin.persona_cape_on_classic = false;
+    // Bedrock's profile hash covers the complete appearance, including the
+    // cape, and therefore cannot be used to decide whether the body changed.
+    skin.profile_hash.clear();
+    skin_fingerprint(&skin)
+}
+
+const fn has_cape(skin: &Skin) -> bool {
+    skin.cape_width != 0 && skin.cape_height != 0 && !skin.cape_data.is_empty()
 }
 
 fn build_pack(skins: &HashMap<Uuid, CachedSkin>) -> io::Result<Arc<BedrockSkinPack>> {
@@ -789,6 +821,41 @@ mod tests {
         assert!(changed);
         assert_eq!(fallback.skin_id, fallback_skin_id(player_id));
         assert!(fallback.is_trusted);
+    }
+
+    #[tokio::test]
+    async fn completes_and_preserves_a_delayed_cape() {
+        let packs = BedrockSkinPacks::default();
+        let player_id = Uuid::new_v4();
+        let skin = Skin::steve();
+        let (_, changed) = packs
+            .accept(player_id, skin.clone(), true, Duration::from_mins(1))
+            .await;
+        assert!(changed);
+
+        let mut with_cape = skin.clone();
+        with_cape.cape_width = 64;
+        with_cape.cape_height = 32;
+        with_cape.cape_data = vec![0x7f; 64 * 32 * 4];
+        with_cape.cape_id = "delayed-cape".to_string();
+        with_cape.profile_hash = "appearance-with-cape".to_string();
+        let (accepted, changed) = packs
+            .accept(player_id, with_cape, true, Duration::from_mins(1))
+            .await;
+        assert!(changed);
+        assert!(has_cape(&accepted));
+        assert!(
+            packs
+                .register(player_id, &accepted)
+                .await
+                .unwrap()
+                .cape_asset
+                .is_some()
+        );
+
+        let (preserved, changed) = packs.accept(player_id, skin, true, Duration::ZERO).await;
+        assert!(!changed);
+        assert!(has_cape(&preserved));
     }
 
     #[test]
