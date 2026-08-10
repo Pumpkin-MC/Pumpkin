@@ -3,17 +3,12 @@
 use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site};
+use pumpkin_data::block_id_map::BLOCK_ID_FROM_NAME_MAP;
+use pumpkin_data::block_tag;
 use quote::{format_ident, quote};
 use syn::spanned::Spanned;
 use syn::{self, Attribute, DeriveInput, LitStr, Type, parse_quote};
 use syn::{Block as SynBlock, Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
-
-mod tag {
-    type Tag = (&'static [&'static str], &'static [u16]);
-    pub const BLOCK: &phf::Map<&'static str, &'static Tag> = &BLOCK_TAGS;
-    include!("../../pumpkin-data/src/generated/block_tag.rs");
-}
-include!("../../pumpkin-data/src/generated/block_id_map.rs");
 
 /// Derives the `Payload` trait for an event struct, enabling it to be used in the plugin system.
 ///
@@ -292,7 +287,7 @@ pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStre
 
     let full_tag = arg_lit.value();
 
-    let Some((_, values)) = tag::BLOCK.get(&full_tag) else {
+    let Some((_, values)) = block_tag::BLOCK.get(&full_tag) else {
         return syn::Error::new(arg_lit.span(), format!("Failed to get tag IDs: {full_tag}"))
             .to_compile_error()
             .into();

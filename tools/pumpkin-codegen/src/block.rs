@@ -1497,7 +1497,7 @@ pub fn build() -> (TokenStream, TokenStream) {
     };
 
     let b = quote! {
-        static BLOCK_ID_FROM_NAME_MAP: phf::Map<&'static str, u16> = phf::phf_map!{
+        pub static BLOCK_ID_FROM_NAME_MAP: phf::Map<&'static str, u16> = phf::phf_map!{
             #(#id_from_name_entries)*
         };
     };

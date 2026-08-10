@@ -53,17 +53,17 @@ default = [
     "map_color",
     "map_decoration",
     "dye_color",
+    "chunk_view_lut",
     "chest_loot"
 ]
 
-pumpkin-macros = []
 
 map_color = []
 map_decoration = []
 dye_color = []
-bedrock_biome = []
 advancement = ["dep:pumpkin-util", "dep:serde"]
 bedrock_creative = []
+bedrock_biome = []
 item = ["dep:pumpkin-util", "dep:pumpkin-nbt"]
 packet = ["dep:pumpkin-util"]
 jukebox_song = []
@@ -102,7 +102,11 @@ carver = ["dep:pumpkin-util"]
 villager = ["item", "sound", "dep:serde"]
 slot_ranges = []
 chest_loot = ["dep:pumpkin-util"]
+block_id_map = ["dep:phf"]
+block_tags = ["dep:phf"]
 
+
+chunk_view_lut = []
 noise_parameter = []
 biome = ["dep:pumpkin-util", "dep:phf", "dep:serde"]
 chunk_status = ["dep:serde"]
@@ -112,8 +116,8 @@ entity_type = ["sound", "dep:pumpkin-util"]
 spawn_egg = []
 world_event = []
 message_type = []
-placed_feature = []
-configured_feature = []
+placed_feature = ["configured_feature"]
+configured_feature = ["placed_feature"]
 block = ["dep:pumpkin-util", "dep:phf", "dep:serde"]
 item_id_remap = ["dep:pumpkin-util"]
 entity_id_remap = ["dep:pumpkin-util"]
