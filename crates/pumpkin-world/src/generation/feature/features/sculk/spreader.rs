@@ -51,9 +51,6 @@ impl SculkSpreader {
     }
 }
 
-/// Shrieker placement rate divisor (vanilla: `SHRIEKER_PLACEMENT_RATE = 11`).
-const SHRIEKER_PLACEMENT_RATE: i32 = 11;
-
 /// Drives sculk spreading for a single patch.
 pub struct SculkSpreader {
     /// Whether this spreader runs during world generation (vs. catalyst-driven).
@@ -208,7 +205,7 @@ impl SculkSpreader {
                 merge_index.iter().find(|&&(pos, _)| pos == cursor.pos)
             {
                 let existing = &mut processed[idx];
-                if !self.is_world_generation {
+                if !config.is_world_generation {
                     let combined = existing.charge as u32 + cursor.charge as u32;
                     if combined <= MAX_CHARGE as u32 {
                         existing.charge = combined as u16;
@@ -222,6 +219,8 @@ impl SculkSpreader {
                     merge_index.push((cursor.pos, processed.len()));
                     processed.push(cursor);
                 }
+                // Do NOT add to merge_index: the position is already indexed
+                // to the original cursor, so future merges find it correctly.
             } else {
                 merge_index.push((cursor.pos, processed.len()));
                 processed.push(cursor);

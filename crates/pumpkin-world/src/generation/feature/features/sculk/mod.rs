@@ -203,6 +203,10 @@ pub struct ProtoChunkSculkView<'a> {
 }
 
 impl<'a> ProtoChunkSculkView<'a> {
+    /// Creates an exclusive, bounds-aware view over the supplied
+    /// [`ProtoChunk`]. Out-of-bounds positions return `None` from reads
+    /// and are no-ops on writes, modelling them as solid obstacles for
+    /// the spreader.
     pub fn new(chunk: &'a mut ProtoChunk) -> Self {
         Self { chunk }
     }
