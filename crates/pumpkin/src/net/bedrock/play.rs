@@ -187,10 +187,16 @@ impl BedrockClient {
         }
 
         player.bedrock_skin.store(Arc::new(skin.clone()));
+        let previous_pack = server.bedrock_skin_packs.current().await;
         let _ = server
             .bedrock_skin_packs
             .register(player.gameprofile.id, &skin)
             .await;
+        if let Some(pack) = server.bedrock_skin_packs.current().await
+            && previous_pack.as_ref().map(|pack| pack.id) != Some(pack.id)
+        {
+            server.push_bedrock_skin_pack(pack).await;
+        }
         let update = pumpkin_protocol::bedrock::client::player_skin::CPlayerSkin {
             uuid: player.gameprofile.id,
             skin: &skin,

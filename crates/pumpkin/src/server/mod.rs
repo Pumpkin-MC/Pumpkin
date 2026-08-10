@@ -150,6 +150,19 @@ pub struct Server {
 }
 
 impl Server {
+    pub async fn push_bedrock_skin_pack(
+        &self,
+        pack: Arc<crate::net::bedrock::skin_pack::BedrockSkinPack>,
+    ) {
+        for world in self.worlds.load().iter() {
+            for player in world.players.load().iter() {
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    client.push_bedrock_skin_pack(self, pack.clone()).await;
+                }
+            }
+        }
+    }
+
     #[expect(clippy::too_many_lines)]
     #[must_use]
     pub async fn new(

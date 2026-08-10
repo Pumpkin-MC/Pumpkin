@@ -2178,10 +2178,16 @@ impl World {
         let level_info = server.level_info.load();
         let weather = self.weather.lock().await;
         let runtime_id = player.entity_id() as u64;
+        let previous_skin_pack = server.bedrock_skin_packs.current().await;
         let _ = server
             .bedrock_skin_packs
             .register(player.gameprofile.id, &player.bedrock_skin.load())
             .await;
+        if let Some(pack) = server.bedrock_skin_packs.current().await
+            && previous_skin_pack.as_ref().map(|pack| pack.id) != Some(pack.id)
+        {
+            server.push_bedrock_skin_pack(pack).await;
+        }
 
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
             let position = player.position();
