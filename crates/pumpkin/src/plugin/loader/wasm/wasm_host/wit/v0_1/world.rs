@@ -333,11 +333,11 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             block_entity_type: state.block_entity_type,
             instrument: to_wit_noteblock_instrument(state.instrument),
             collision_shapes: state
-                .get_block_collision_shapes()
+                .get_block_collision_shapes_at(&internal_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             outline_shapes: state
-                .get_block_outline_shapes()
+                .get_block_outline_shapes_at(&internal_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             down_side_solid: state.is_side_solid(InternalBlockDirection::Down),
@@ -883,6 +883,7 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
             .get_block_absolute_y(pos.x as usize, pos.y, pos.z as usize)
             .unwrap_or(BlockStateId::AIR);
         let state = id.to_state();
+        let world_pos = BlockPos::new(chunk_data.x * 16 + pos.x, pos.y, chunk_data.z * 16 + pos.z);
 
         Ok(WitBlockState {
             id: id.as_u16(),
@@ -909,11 +910,11 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
             block_entity_type: state.block_entity_type,
             instrument: to_wit_noteblock_instrument(state.instrument),
             collision_shapes: state
-                .get_block_collision_shapes()
+                .get_block_collision_shapes_at(&world_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             outline_shapes: state
-                .get_block_outline_shapes()
+                .get_block_outline_shapes_at(&world_pos)
                 .map(to_wit_bounding_box)
                 .collect(),
             down_side_solid: state.is_side_solid(InternalBlockDirection::Down),

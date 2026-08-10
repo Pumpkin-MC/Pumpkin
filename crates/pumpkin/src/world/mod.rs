@@ -1562,7 +1562,7 @@ impl World {
         }
 
         let mut inside = false;
-        'shapes: for shape in state.get_block_outline_shapes() {
+        'shapes: for shape in state.get_block_outline_shapes_at(&pos) {
             let outline_shape = shape.at_pos(pos);
 
             if outline_shape.intersects(bounding_box) {
@@ -1594,7 +1594,7 @@ impl World {
         }
 
         let mut shapes = state
-            .get_block_collision_shapes()
+            .get_block_collision_shapes_at(&pos)
             .map(|shape| shape.at_pos(pos));
 
         if use_collision_shape {
@@ -1648,7 +1648,7 @@ impl World {
                     }
                 }
             } else {
-                for shape in state.get_block_collision_shapes() {
+                for shape in state.get_block_collision_shapes_at(&pos) {
                     let shape = shape.at_pos(pos);
                     if shape.intersects(&bounding_box) {
                         collided = true;
@@ -1686,7 +1686,7 @@ impl World {
     pub fn get_dismount_height(&self, pos: &BlockPos) -> f64 {
         let state = self.get_block_state(pos);
         let max_y = state
-            .get_block_collision_shapes()
+            .get_block_collision_shapes_at(pos)
             .map(|s| s.max.y)
             .fold(f64::NEG_INFINITY, f64::max);
         if max_y != f64::NEG_INFINITY {
@@ -1696,7 +1696,7 @@ impl World {
         let below = BlockPos(Vector3::new(pos.0.x, pos.0.y - 1, pos.0.z));
         let below_state = self.get_block_state(&below);
         let below_max_y = below_state
-            .get_block_collision_shapes()
+            .get_block_collision_shapes_at(&below)
             .map(|s| s.max.y)
             .fold(f64::NEG_INFINITY, f64::max);
         if below_max_y >= 1.0 {
@@ -5401,7 +5401,7 @@ impl World {
             return (true, None);
         }
 
-        let bounding_boxes = state.get_block_outline_shapes();
+        let bounding_boxes = state.get_block_outline_shapes_at(block_pos);
 
         for shape in bounding_boxes {
             let world_min = shape.min.add(&block_pos.0.to_f64());

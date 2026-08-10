@@ -3000,7 +3000,7 @@ impl Entity {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
                     let (block, state) = world.get_block_and_state(&pos);
-                    let block_outlines = state.get_block_outline_shapes();
+                    let block_outlines = state.get_block_outline_shapes_at(&pos);
 
                     if state.outline_shapes.is_empty() {
                         world
