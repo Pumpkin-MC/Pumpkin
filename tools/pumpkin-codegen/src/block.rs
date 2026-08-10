@@ -855,7 +855,8 @@ enum BlockShapeOffsetType {
 }
 
 /// Reads all block assets and generates the complete block registry `TokenStream`.
-pub fn build() -> TokenStream {
+/// Also generates a separate file for pumpkin-macros to include.
+pub fn build() -> (TokenStream, TokenStream) {
     let be_blocks_data = fs::read("../../assets/bedrock/block_states.nbt").unwrap();
     let mut be_blocks_cursor = Cursor::new(be_blocks_data);
     let be_blocks = get_be_data_from_nbt(&mut be_blocks_cursor);
@@ -910,6 +911,7 @@ pub fn build() -> TokenStream {
     let mut constants_list = Vec::new();
     let mut block_id_constants = Vec::new();
     let mut block_from_name_entries = Vec::new();
+    let mut id_from_name_entries = Vec::new();
     let mut block_from_item_id_arms = Vec::new();
     let mut block_state_to_bedrock = Vec::new();
 
@@ -985,6 +987,7 @@ pub fn build() -> TokenStream {
         let name_str = &block.name;
         let item_id = block.item_id;
         let block_id = block.id;
+        let block_id_lit = block.id.0;
 
         // let mut block_with_descriptors = block.clone();
         // block_with_descriptors.property_descriptors = property_descriptors;
@@ -1001,6 +1004,10 @@ pub fn build() -> TokenStream {
 
         block_from_name_entries.push(quote! {
             #name_str => Block::#const_ident,
+        });
+
+        id_from_name_entries.push(quote! {
+            #name_str => #block_id_lit,
         });
 
         for (i, state) in block.states.iter().enumerate() {
@@ -1144,7 +1151,7 @@ pub fn build() -> TokenStream {
             .collect::<Vec<u16>>(),
     );
 
-    quote! {
+    let a = quote! {
         #[allow(clippy::wildcard_imports, clippy::enum_glob_use, clippy::too_many_lines, clippy::match_same_arms)]
         use pumpkin_util::math::boundingbox::BoundingBox;
 
@@ -1157,7 +1164,6 @@ pub fn build() -> TokenStream {
         use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
-        use std::collections::BTreeMap;
 
         #items
 
@@ -1270,7 +1276,7 @@ pub fn build() -> TokenStream {
         }
 
         mod mappings {
-            use crate::{Block, BlockId, BlockState, BlockStateId};
+            use crate::{Block, BlockId, BlockState};
             use phf;
 
             pub(super) static BLOCK_FROM_NAME_MAP: phf::Map<&'static str, Block> = phf::phf_map!{
@@ -1488,7 +1494,14 @@ pub fn build() -> TokenStream {
                 matches!(self, Self::AscendingEast | Self::AscendingWest | Self::AscendingNorth | Self::AscendingSouth)
             }
         }
-    }
+    };
+
+    let b = quote! {
+        static BLOCK_ID_FROM_NAME_MAP: phf::Map<&'static str, u16> = phf::phf_map!{
+            #(#id_from_name_entries)*
+        };
+    };
+    (a, b)
 }
 
 /// Parses the Bedrock Edition block palette NBT file into a map of block names to their state variants.

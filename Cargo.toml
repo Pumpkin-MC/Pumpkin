@@ -15,6 +15,7 @@ members = [
     "crates/pumpkin-world",
     "tools/pumpkin-codegen",
 ]
+default-members = ["crates/pumpkin"]
 
 # [workspace.lints.rust]
 # missing_docs = "warn"
@@ -168,7 +169,7 @@ num-bigint = { version = "0.5", default-features = false, features = ["std"] }
 num-derive = { version = "0.5", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["std"] }
 p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8"] }
-phf = { version = "0.14.0", default-features = false, features = ["std"] }
+phf = { version = "0.14.0", default-features = false, features = ["std", "macros"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
 pumpkin-codecs = { path = "crates/pumpkin-codecs", default-features = false }
 pumpkin-config = { path = "crates/pumpkin-config", default-features = false }
