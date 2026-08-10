@@ -69,6 +69,7 @@ pub struct PluginHostState {
     pub plugin: Option<Weak<WasmPlugin>>,
     pub server: Option<Arc<Server>>,
     pub permissions: Vec<String>,
+    pub name: Option<String>,
 }
 
 impl Default for PluginHostState {
@@ -92,6 +93,7 @@ impl PluginHostState {
             plugin: None,
             server: None,
             permissions: Vec::new(),
+            name: None,
         }
     }
 

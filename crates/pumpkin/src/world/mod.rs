@@ -35,7 +35,7 @@ use crate::{
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
-    entity::{Entity, EntityBase, NBTStorage, player::Player, r#type::from_type},
+    entity::{Entity, EntityBase, NBTStorage, RemovalReason, player::Player, r#type::from_type},
     error::PumpkinError,
     net::{ClientPlatform, java::JavaClient},
     plugin::{
@@ -98,7 +98,10 @@ use pumpkin_protocol::{
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_attributes::{Attribute, CUpdateAttributes},
         },
-        server::text::SText,
+        server::{
+            actor_event::{ActorEventType, SActorEvent},
+            text::SText,
+        },
     },
     codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
     java::{
@@ -397,7 +400,11 @@ impl World {
     /// currently in; the chunk is rewritten from scratch every unload cycle, so
     /// there is nothing stale to deduplicate.
     async fn save_entity(&self, entity: &Arc<dyn EntityBase>) {
-        let current_chunk = entity.get_entity().block_pos.load().chunk_position();
+        let base_entity = entity.get_entity();
+        if base_entity.is_removed() {
+            return;
+        }
+        let current_chunk = base_entity.block_pos.load().chunk_position();
         let mut nbt = NbtCompound::new();
         entity.write_nbt(&mut nbt).await;
         let chunk = self.level.get_entity_chunk(current_chunk).await;
@@ -406,12 +413,25 @@ impl World {
     }
 
     /// Sends an entity status update to all players tracking the specified entity.
-    pub fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
+    pub fn send_entity_status(
+        &self,
+        entity: &Entity,
+        java_status: EntityStatus,
+        bedrock_status: Option<ActorEventType>,
+    ) {
         let chunk_pos = entity.chunk_pos.load();
-        self.broadcast_to_chunk(
-            chunk_pos,
-            &CEntityStatus::new(entity.entity_id, status as i8),
-        );
+        let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
+        if let Some(be_event) = bedrock_status {
+            let be_packet = SActorEvent {
+                entity_runtime_id: VarULong(entity.entity_id as u64),
+                event_type: be_event,
+                event_data: VarInt(0),
+                fire_at_position: None,
+            };
+            self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
+        } else {
+            self.broadcast_to_chunk(chunk_pos, &je_packet);
+        }
     }
 
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {
@@ -3341,6 +3361,20 @@ impl World {
 
     pub async fn explode(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
         let explosion = Explosion::new(power, position);
+        self.run_explosion(explosion, position, power).await;
+    }
+
+    pub async fn explode_tnt_minecart(self: &Arc<Self>, position: Vector3<f64>, power: f32) {
+        let explosion = Explosion::new(power, position).preserving_rails();
+        self.run_explosion(explosion, position, power).await;
+    }
+
+    async fn run_explosion(
+        self: &Arc<Self>,
+        explosion: Explosion,
+        position: Vector3<f64>,
+        power: f32,
+    ) {
         let block_count = explosion.explode(self).await;
         let particle = if power < 2.0 {
             Particle::Explosion
@@ -3769,6 +3803,7 @@ impl World {
                         base_entity.velocity.store(Vector3::default());
 
                         player.client.enqueue_spawn_packet(&entity).await;
+                        player.try_restore_vehicle(&entity).await;
                         entities_to_add.push(entity);
                     }
 
@@ -3787,6 +3822,7 @@ impl World {
                         let base_entity = entity.get_entity();
                         if base_entity.chunk_pos.load() == position {
                             player.client.enqueue_spawn_packet(entity).await;
+                            player.try_restore_vehicle(entity).await;
                         }
                     }
                 }
@@ -4268,6 +4304,15 @@ impl World {
     #[allow(clippy::unused_async)]
     pub async fn remove_entity(&self, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
+        if base_entity
+            .removal_reason
+            .swap(Some(RemovalReason::Discarded))
+            .is_some()
+        {
+            return;
+        }
+        base_entity.removed.store(true, Ordering::Release);
+
         self.spawn_state.load().remove_entity(self, entity);
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();

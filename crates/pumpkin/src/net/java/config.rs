@@ -250,9 +250,9 @@ impl JavaClient {
         {
             self.wait_for_keep_alive.store(false, Ordering::Relaxed);
         } else {
-            self.kick(TextComponent::translate(
+            self.kick(pumpkin_macros::translate_cross!(
                 translation::java::DISCONNECT_TIMEOUT,
-                [],
+                translation::bedrock::DISCONNECT_TIMEOUT
             ))
             .await;
         }

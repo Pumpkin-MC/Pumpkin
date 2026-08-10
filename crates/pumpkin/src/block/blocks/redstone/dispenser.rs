@@ -64,10 +64,9 @@ impl ScreenHandlerFactory for DispenserScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate_cross(
+        pumpkin_macros::translate_cross!(
             translation::java::CONTAINER_DISPENSER,
-            translation::bedrock::CONTAINER_DISPENSER,
-            &[],
+            translation::bedrock::CONTAINER_DISPENSER
         )
     }
 }

@@ -279,7 +279,23 @@ impl LivingEntity {
             && item.get_data_component::<BlocksAttacksImpl>().is_some()
         {
             let use_time = self.item_use_time.load(Ordering::Relaxed);
-            return item.get_max_use_time() - use_time >= 5;
+            let required_time = if let Some(dyn_self) = self
+                .entity
+                .world
+                .load()
+                .get_entity_by_id(self.entity.entity_id)
+                && let Some(player) = dyn_self
+                    .cast_any()
+                    .downcast_ref::<crate::entity::player::Player>()
+                && matches!(
+                    player.client.as_ref(),
+                    crate::net::ClientPlatform::Bedrock(_)
+                ) {
+                0
+            } else {
+                5
+            };
+            return item.get_max_use_time() - use_time >= required_time;
         }
         false
     }
@@ -1355,7 +1371,11 @@ impl LivingEntity {
             self.update_death_stats(&*dyn_self, cause).await;
 
             // Plays the death sound
-            world.send_entity_status(&self.entity, EntityStatus::Death);
+            world.send_entity_status(
+                &self.entity,
+                EntityStatus::Death,
+                Some(ActorEventType::Death),
+            );
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
                 if let Some(player) = cause_ent
@@ -1747,10 +1767,11 @@ impl LivingEntity {
                         .insert(slot, stack);
                 }
                 self.set_health(1.0);
-                self.entity
-                    .world
-                    .load()
-                    .send_entity_status(&self.entity, EntityStatus::ProtectedFromDeath);
+                self.entity.world.load().send_entity_status(
+                    &self.entity,
+                    EntityStatus::ProtectedFromDeath,
+                    Some(ActorEventType::InstantDeath),
+                );
 
                 // Set Absorption, Regeneration, and Fire Resistance effects
                 self.add_effect(Effect {
@@ -1828,8 +1849,11 @@ impl LivingEntity {
                 if slot_result != pumpkin_data::item_stack::DamageResult::Untouched {
                     if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
                         let world = self.entity.world.load();
-                        world
-                            .send_entity_status(&self.entity, super::equipment_break_status(&slot));
+                        world.send_entity_status(
+                            &self.entity,
+                            super::equipment_break_status(&slot),
+                            None,
+                        );
                     }
                     equipment_updates.push((slot.clone(), stack.clone()));
                     if let Some(player) = caller.get_player() {
@@ -2358,6 +2382,7 @@ impl EntityBase for LivingEntity {
                                 world.send_entity_status(
                                     &self.entity,
                                     crate::entity::equipment_break_status(&slot),
+                                    None,
                                 );
                                 *stack = ItemStack::EMPTY.clone();
                                 let broken_stack = stack.clone();
@@ -2759,10 +2784,11 @@ impl EntityBase for LivingEntity {
                 // Only send death particles once (on the exact tick death_time reaches 20)
                 // and then remove the entity, preventing entity_event spam.
                 if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
-                    self.entity
-                        .world
-                        .load()
-                        .send_entity_status(&self.entity, EntityStatus::Death);
+                    self.entity.world.load().send_entity_status(
+                        &self.entity,
+                        EntityStatus::Death,
+                        Some(ActorEventType::Death),
+                    );
                     self.entity.remove().await;
                 }
             }
@@ -2799,31 +2825,57 @@ impl LivingEntity {
         };
 
         for consume_effect in consumable.effects.iter() {
-            let ConsumeEffect::ApplyEffects((effects, probability)) = consume_effect else {
-                continue;
-            };
-            if !consume_effect_probability_applies(*probability, rand::random()) {
-                continue;
-            }
+            match consume_effect {
+                ConsumeEffect::ApplyEffects((effects, probability)) => {
+                    if !consume_effect_probability_applies(*probability, rand::random()) {
+                        continue;
+                    }
 
-            for effect in effects.iter() {
-                let Some(effect_type) = StatusEffect::from_minecraft_name(&effect.effect_id) else {
-                    continue;
-                };
-                let Ok(amplifier) = u8::try_from(effect.amplifier) else {
-                    continue;
-                };
+                    for effect in effects.iter() {
+                        let Some(effect_type) =
+                            StatusEffect::from_minecraft_name(&effect.effect_id)
+                        else {
+                            continue;
+                        };
+                        let Ok(amplifier) = u8::try_from(effect.amplifier) else {
+                            continue;
+                        };
 
-                self.add_effect(Effect {
-                    effect_type,
-                    duration: effect.duration,
-                    amplifier,
-                    ambient: effect.ambient,
-                    show_particles: effect.show_particles,
-                    show_icon: effect.show_icon,
-                    blend: false,
-                })
-                .await;
+                        self.add_effect(Effect {
+                            effect_type,
+                            duration: effect.duration,
+                            amplifier,
+                            ambient: effect.ambient,
+                            show_particles: effect.show_particles,
+                            show_icon: effect.show_icon,
+                            blend: false,
+                        })
+                        .await;
+                    }
+                }
+                ConsumeEffect::ClearAllEffects => {
+                    self.reset_effects_and_attributes().await;
+                }
+                ConsumeEffect::RemoveEffects(idset) => {
+                    if let pumpkin_data::data_component_impl::IDSet::IDs(ids) = idset {
+                        for effect_type in ids.iter() {
+                            self.remove_effect(effect_type).await;
+                        }
+                    }
+                }
+                ConsumeEffect::TeleportRandomly(diameter) => {
+                    let center = self.entity.pos.load();
+                    let radius = f64::from(*diameter) / 2.0;
+                    let target_x = center.x + (rand::random::<f64>() - 0.5) * radius * 2.0;
+                    let target_y = center.y + (rand::random::<f64>() - 0.5) * radius;
+                    let target_z = center.z + (rand::random::<f64>() - 0.5) * radius * 2.0;
+                    let pos =
+                        pumpkin_util::math::vector3::Vector3::new(target_x, target_y, target_z);
+                    let (yaw, pitch) = (self.entity.yaw.load(), self.entity.pitch.load());
+                    let world = self.entity.world.load().clone();
+                    self.entity.teleport(pos, Some(yaw), Some(pitch), world);
+                }
+                ConsumeEffect::PlaySound(_) => {}
             }
         }
     }

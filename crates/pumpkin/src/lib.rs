@@ -1,7 +1,7 @@
 #![deny(clippy::unwrap_used)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 // Not warn event sending macros
-#![allow(unused_labels)]
+#![allow(unused_labels, deprecated)]
 
 #[macro_use]
 extern crate pumpkin_macros;

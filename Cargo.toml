@@ -13,8 +13,8 @@ members = [
     "crates/pumpkin-protocol",
     "crates/pumpkin-util",
     "crates/pumpkin-world",
+    "tools/pumpkin-codegen",
 ]
-exclude = ["tools/pumpkin-codegen"]
 
 # [workspace.lints.rust]
 # missing_docs = "warn"
@@ -204,7 +204,7 @@ time = { version = "0.3", default-features = false, features = ["std"] }
 arc-swap = { version = "1.9", default-features = false }
 tokio-util = { version = "0.7.19", default-features = false }
 toml = { version = "1.1", default-features = false, features = ["parse", "display", "serde"] }
-ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
+ureq = { version = "3.4.0", default-features = false, features = ["rustls"] }
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }

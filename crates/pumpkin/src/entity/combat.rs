@@ -13,6 +13,8 @@ use crate::{
     world::World,
 };
 
+use crate::net::ClientPlatform;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttackType {
     Knockback,
@@ -38,6 +40,7 @@ impl AttackType {
         }
 
         let sword = held_item.is_sword();
+        let is_bedrock = matches!(player.client.as_ref(), ClientPlatform::Bedrock(_));
 
         let is_strong = attack_cooldown_progress > 0.9;
         if sprinting && is_strong {
@@ -48,7 +51,7 @@ impl AttackType {
             return Self::Critical;
         }
 
-        if sword && is_strong {
+        if sword && is_strong && !is_bedrock {
             return Self::Sweeping;
         }
 

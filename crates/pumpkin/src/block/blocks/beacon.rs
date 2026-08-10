@@ -37,10 +37,9 @@ impl ScreenHandlerFactory for BeaconScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate_cross(
+        pumpkin_macros::translate_cross!(
             translation::java::CONTAINER_BEACON,
-            translation::bedrock::CONTAINER_BEACON,
-            &[],
+            translation::bedrock::CONTAINER_BEACON
         )
     }
 }

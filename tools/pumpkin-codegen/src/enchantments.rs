@@ -314,6 +314,7 @@ pub fn build() -> TokenStream {
                 }
                 true
             }
+            #[allow(deprecated)]
             pub fn get_fullname(&self, level: i32) -> TextComponent {
                 let mut ret = TextComponent::translate(self.description, []).color_named(
                     if self.has_tag(&EnchantmentTag::MINECRAFT_CURSE) {

@@ -5,6 +5,7 @@ use tokio::sync::RwLock;
 
 pub struct SimpleInventory {
     pub stacks: RwLock<Vec<ItemStack>>,
+    size: usize,
 }
 
 impl SimpleInventory {
@@ -12,6 +13,7 @@ impl SimpleInventory {
     pub fn new(size: usize) -> Self {
         Self {
             stacks: RwLock::new(vec![ItemStack::EMPTY.clone(); size]),
+            size,
         }
     }
 }
@@ -27,7 +29,7 @@ impl Clearable for SimpleInventory {
 
 impl Inventory for SimpleInventory {
     fn size(&self) -> usize {
-        self.stacks.blocking_read().len()
+        self.size
     }
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {

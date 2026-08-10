@@ -148,6 +148,10 @@ impl Mob for SheepEntity {
         })
     }
 
+    fn get_sheep(&self) -> Option<&SheepEntity> {
+        Some(self)
+    }
+
     fn mob_interact<'a>(
         &'a self,
         player: &'a Arc<Player>,

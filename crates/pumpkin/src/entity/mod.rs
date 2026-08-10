@@ -92,6 +92,7 @@ pub mod experience_orb;
 pub mod falling;
 pub mod hunger;
 pub mod item;
+pub mod item_steerable;
 pub mod living;
 pub mod mob;
 pub mod passive;
@@ -163,6 +164,10 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Self: Sized,
     {
         self
+    }
+
+    fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        None
     }
 
     fn get_eye_pos(&self) -> Vector3<f64> {
@@ -3217,6 +3222,28 @@ impl Entity {
         let chunk_pos = self.chunk_pos.load();
         world.broadcast_to_chunk(
             chunk_pos,
+            &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+        );
+    }
+
+    pub(crate) async fn remove_passenger_on_disconnect(&self, passenger_id: i32) {
+        let mut passengers = self.passengers.lock().await;
+        if let Some(index) = passengers
+            .iter()
+            .position(|passenger| passenger.get_entity().entity_id == passenger_id)
+        {
+            let passenger = passengers.remove(index);
+            *passenger.get_entity().vehicle.lock().await = None;
+        }
+
+        let passenger_ids: Vec<VarInt> = passengers
+            .iter()
+            .map(|passenger| VarInt(passenger.get_entity().entity_id))
+            .collect();
+        drop(passengers);
+
+        self.world.load().broadcast_to_chunk(
+            self.chunk_pos.load(),
             &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
         );
     }

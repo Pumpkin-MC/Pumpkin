@@ -29,6 +29,21 @@ impl Plugin for WasmPlugin {
                 .flatten()
         })
     }
+
+    fn on_ipc_message(
+        &self,
+        sender: &str,
+        message: &[u8],
+    ) -> PluginFuture<'_, Result<Vec<u8>, String>> {
+        let sender_own = sender.to_owned();
+        let message_own = message.to_owned();
+        Box::pin(async move {
+            self.handle_ipc_message(&sender_own, &message_own)
+                .await
+                .map_err(|err| err.to_string())
+                .flatten()
+        })
+    }
 }
 
 pub struct WasmPluginLoader;

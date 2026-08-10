@@ -74,10 +74,9 @@ impl ArgumentConsumer for HexColorArgumentConsumer {
         let result = parse_hex_color(raw_arg.value)
             .map(|color| Some(Arg::HexColor(color)))
             .ok_or_else(|| {
-                INVALID_HEX_ERROR_TYPE.create_without_context(TextComponent::translate(
-                    translation::java::ARGUMENT_HEXCOLOR_INVALID,
-                    [TextComponent::text(raw_arg.value.to_string())],
-                ))
+                INVALID_HEX_ERROR_TYPE.create_without_context_args_slice(&[TextComponent::text(
+                    raw_arg.value.to_string(),
+                )])
             });
 
         Box::pin(async move { result })

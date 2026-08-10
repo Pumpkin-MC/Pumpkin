@@ -10,16 +10,16 @@ crates/pumpkin/src/net/ @Snowiiii @xRookieFight
 
 # Bedrock related changes
 assets/bedrock/ @ZlordHUN @xRookieFight
-crates/pumpkin-protocol/src/bedrock/ @ZlordHUN @xRookieFight
-crates/pumpkin/src/net/bedrock/ @ZlordHUN @xRookieFight
+crates/pumpkin-protocol/src/bedrock/ @ZlordHUN @xRookieFight @QuantumSegfault
+crates/pumpkin/src/net/bedrock/ @ZlordHUN @xRookieFight @QuantumSegfault
 
 # Command related changes
 crates/pumpkin/src/command/ @aure31
 
 # Plugin related changes & WASM Host
-crates/pumpkin-plugin-api/ @vyPal @yunuservices @QuantumSegfault
+crates/pumpkin-plugin-api/ @vyPal @yunuservices
 crates/pumpkin-plugin-wit/ @vyPal @yunuservices @QuantumSegfault
-crates/pumpkin-api-macros/ @vyPal @yunuservices @QuantumSegfault
+crates/pumpkin-api-macros/ @vyPal @yunuservices
 crates/pumpkin/src/plugin/ @vyPal @yunuservices @QuantumSegfault
 
 # Documentation related changes

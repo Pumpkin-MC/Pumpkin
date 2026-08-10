@@ -271,6 +271,21 @@ impl Hand {
     pub const fn all() -> [Self; 2] {
         [Self::Right, Self::Left]
     }
+
+    /// Converts the `hand` field of a play packet, where `0` is the main hand.
+    ///
+    /// This is the opposite of [`TryFrom<i32>`], which reads the dominant hand
+    /// out of the client settings, where `0` is the left hand.
+    ///
+    /// # Errors
+    /// Returns `InvalidHand` if the value is not 0 or 1.
+    pub const fn from_packet_id(value: i32) -> Result<Self, InvalidHand> {
+        match value {
+            0 => Ok(Self::Right),
+            1 => Ok(Self::Left),
+            _ => Err(InvalidHand),
+        }
+    }
 }
 
 /// Error type for invalid hand conversion.

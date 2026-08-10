@@ -81,9 +81,10 @@ impl CommandExecutor for QueryExecutor {
                 QueryMode::GameTime => {
                     let game_time = level_time.query_gametime();
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_QUERY_GAMETIME,
-                            [TextComponent::text(game_time.to_string())],
+                            translation::bedrock::COMMANDS_TIME_QUERY_GAMETIME,
+                            TextComponent::text(game_time.to_string())
                         ))
                         .await;
                     Ok(wrap_time(game_time))
@@ -91,12 +92,11 @@ impl CommandExecutor for QueryExecutor {
                 QueryMode::Time => {
                     let total_ticks = level_time.time_of_day;
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_QUERY_ABSOLUTE,
-                            [
-                                TextComponent::text(clock_name.to_string()),
-                                TextComponent::text(total_ticks.to_string()),
-                            ],
+                            translation::bedrock::COMMANDS_TIME_QUERY_DAYTIME,
+                            TextComponent::text(clock_name.to_string()),
+                            TextComponent::text(total_ticks.to_string())
                         ))
                         .await;
                     Ok(wrap_time(total_ticks))
@@ -104,21 +104,21 @@ impl CommandExecutor for QueryExecutor {
                 QueryMode::DayTime => {
                     let curr_time = level_time.query_daytime();
                     sender
-                        .send_message(TextComponent::translate_cross(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_QUERY,
                             translation::bedrock::COMMANDS_TIME_QUERY_DAYTIME,
-                            [TextComponent::text(curr_time.to_string())],
+                            TextComponent::text(curr_time.to_string())
                         ))
                         .await;
-                    Ok(curr_time as i32)
+                    Ok(wrap_time(curr_time))
                 }
                 QueryMode::Day => {
                     let curr_time = level_time.query_day();
                     sender
-                        .send_message(TextComponent::translate_cross(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_QUERY,
                             translation::bedrock::COMMANDS_TIME_QUERY_DAY,
-                            [TextComponent::text(curr_time.to_string())],
+                            TextComponent::text(curr_time.to_string())
                         ))
                         .await;
                     Ok(curr_time as i32)
@@ -161,12 +161,11 @@ impl CommandExecutor for ActionExecutor {
                     level_time.set_time(time_count.into());
                     level_time.send_time(world).await;
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_SET_ABSOLUTE,
-                            [
-                                TextComponent::text(clock_name.to_string()),
-                                TextComponent::text(time_count.to_string()),
-                            ],
+                            translation::bedrock::COMMANDS_TIME_SET,
+                            TextComponent::text(clock_name.to_string()),
+                            TextComponent::text(time_count.to_string())
                         ))
                         .await;
                     Ok(time_count)
@@ -177,12 +176,11 @@ impl CommandExecutor for ActionExecutor {
                     level_time.send_time(world).await;
                     let total_ticks = level_time.time_of_day;
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_SET_ABSOLUTE,
-                            [
-                                TextComponent::text(clock_name.to_string()),
-                                TextComponent::text(total_ticks.to_string()),
-                            ],
+                            translation::bedrock::COMMANDS_TIME_ADDED,
+                            TextComponent::text(clock_name.to_string()),
+                            TextComponent::text(total_ticks.to_string())
                         ))
                         .await;
                     Ok(wrap_time(total_ticks))
@@ -191,9 +189,10 @@ impl CommandExecutor for ActionExecutor {
                     level_time.set_paused(true);
                     level_time.send_time(world).await;
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_PAUSE,
-                            [TextComponent::text(clock_name.to_string())],
+                            translation::bedrock::COMMANDS_TIME_STOP,
+                            TextComponent::text(clock_name.to_string())
                         ))
                         .await;
                     Ok(1)
@@ -202,9 +201,10 @@ impl CommandExecutor for ActionExecutor {
                     level_time.set_paused(false);
                     level_time.send_time(world).await;
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_RESUME,
-                            [TextComponent::text(clock_name.to_string())],
+                            translation::bedrock::COMMANDS_TIME_SET,
+                            TextComponent::text(clock_name.to_string())
                         ))
                         .await;
                     Ok(1)
@@ -218,12 +218,11 @@ impl CommandExecutor for ActionExecutor {
                     level_time.set_rate(rate);
                     level_time.send_time(world).await;
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(pumpkin_macros::translate_cross!(
                             translation::java::COMMANDS_TIME_RATE,
-                            [
-                                TextComponent::text(clock_name.to_string()),
-                                TextComponent::text(rate.to_string()),
-                            ],
+                            translation::bedrock::COMMANDS_TIME_SET,
+                            TextComponent::text(clock_name.to_string()),
+                            TextComponent::text(rate.to_string())
                         ))
                         .await;
                     Ok(1)

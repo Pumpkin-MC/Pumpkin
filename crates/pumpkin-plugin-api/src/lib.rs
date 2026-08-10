@@ -99,8 +99,8 @@ pub use wit::pumpkin::plugin::{
     data_components, entity,
     entity_types::EntityType,
     event::{self as events_wit, EventType},
-    gui, i18n, item_stack, java_dialogs, java_packets, particles, permission, player, scoreboard,
-    server, text, uuid, world,
+    gui, i18n, ipc, item_stack, java_dialogs, java_packets, particles, permission, player,
+    scoreboard, server, text, uuid, world,
 };
 
 // Convenience re-exports of commonly-used plugin types so plugin authors can
@@ -263,6 +263,13 @@ impl wit::Guest for Component {
             goal.stop(server, entity);
         }
     }
+
+    fn handle_ipc_message(
+        sender: wit::PluginId,
+        message: wit::IpcMessage,
+    ) -> Result<wit::IpcMessage, String> {
+        plugin().handle_ipc_message(sender, message)
+    }
 }
 
 /// Convenience alias for `core::result::Result<T, String>` used throughout the plugin API.
@@ -294,6 +301,15 @@ pub trait Plugin: Send + Sync {
     /// Use this to clean up any resources acquired during [`on_load`](Plugin::on_load).
     fn on_unload(&mut self, _context: Context) -> Result<()> {
         Ok(())
+    }
+
+    /// Called when the plugin receives a message from another plugin.
+    fn handle_ipc_message(
+        &mut self,
+        _sender: wit::PluginId,
+        _message: wit::IpcMessage,
+    ) -> Result<wit::IpcMessage, String> {
+        Err("This plugin cannot receive messages.".to_string())
     }
 }
 
