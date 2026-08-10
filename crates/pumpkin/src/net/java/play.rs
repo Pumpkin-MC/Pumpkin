@@ -2205,10 +2205,8 @@ impl JavaClient {
         if sequence < 0 {
             error!("Expected packet sequence >= 0");
         }
-        self.packet_sequence.store(
-            self.packet_sequence.load(Ordering::Relaxed).max(sequence),
-            Ordering::Relaxed,
-        );
+        self.pending_packet_sequence
+            .fetch_max(sequence, Ordering::Relaxed);
     }
 
     async fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {

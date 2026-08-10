@@ -2097,6 +2097,10 @@ impl Player {
 
     #[expect(clippy::too_many_lines)]
     pub async fn tick(self: &Arc<Self>, server: &Server) {
+        if let ClientPlatform::Java(client) = self.client.as_ref() {
+            client.acknowledge_block_changes().await;
+        }
+
         if let Some(camera_id) = self.camera_target_id.load() {
             if camera_id == self.entity_id() {
                 self.camera_target_id.store(None);
