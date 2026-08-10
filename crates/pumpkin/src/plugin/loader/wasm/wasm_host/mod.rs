@@ -266,6 +266,8 @@ impl WasmPlugin {
 
         store.data_mut().server = Some(context.server.clone());
 
+        store.data_mut().name = Some(metadata.name.clone());
+
         match self.plugin_instance {
             PluginInstance::V0_1(ref plugin) => {
                 let context = store.data_mut().add_context(context)?;
@@ -294,6 +296,22 @@ impl WasmPlugin {
             PluginInstance::V0_1(ref plugin) => {
                 let context = store.data_mut().add_context(context)?;
                 plugin.call_on_unload(&mut *store, context).await
+            }
+        }
+    }
+
+    pub async fn handle_ipc_message(
+        &self,
+        sender: &String,
+        message: &Vec<u8>,
+    ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
+        let mut store = self.store.lock().await;
+
+        match self.plugin_instance {
+            PluginInstance::V0_1(ref plugin) => {
+                plugin
+                    .call_handle_ipc_message(&mut *store, sender, message)
+                    .await
             }
         }
     }

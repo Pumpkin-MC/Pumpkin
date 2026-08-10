@@ -1032,6 +1032,28 @@ impl PluginManager {
             }
         }
     }
+
+    pub async fn send_message(
+        &self,
+        sender: &str,
+        recipient: &str,
+        message: &[u8],
+    ) -> Result<Result<Vec<u8>, String>, ()> {
+        if sender == recipient {
+            return Err(());
+        }
+
+        let plugins = self.plugins.read().await;
+        let target_plugin = &plugins
+            .iter()
+            .find(|p| p.metadata.name == recipient)
+            .ok_or(())?;
+        if let Some(instance) = &target_plugin.instance {
+            Ok(instance.on_ipc_message(sender, message).await)
+        } else {
+            Err(())
+        }
+    }
 }
 
 #[cfg(test)]
