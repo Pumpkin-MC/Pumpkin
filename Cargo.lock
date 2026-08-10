@@ -3463,7 +3463,7 @@ dependencies = [
  "pumpkin-util",
  "rayon",
  "rustc-hash",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
  "tokio",
 ]
 

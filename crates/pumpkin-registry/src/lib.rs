@@ -15,7 +15,7 @@ mod value;
 pub mod bootstrap;
 pub mod error;
 pub use crate::immutable::FrozenRegistry;
-pub use crate::key::{ArcDataKey, DataKey, DataKeyBuilder, RefDataKey};
+pub use crate::key::{DataKey};
 pub use crate::mutable::ReloadableRegistry;
 pub use crate::r#static::StaticRegistry;
 pub use builder::RegistryBuilder;
