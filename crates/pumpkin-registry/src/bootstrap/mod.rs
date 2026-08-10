@@ -83,7 +83,6 @@ impl ErasedVec {
 }
 
 #[repr(C)]
-#[allow(improper_ctypes)]
 pub struct BootstrapProvider {
     registry: &'static str,
     populate: fn() -> ErasedVec,

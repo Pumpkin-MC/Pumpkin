@@ -23,6 +23,9 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
+use pumpkin_registry::RegistryBuilder;
+use pumpkin_registry::error::RootInitError;
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
@@ -353,7 +356,11 @@ impl Server {
 
         // TODO: Move worldgen after plugin load to allow plugin registry initialization
 
-        pumpkin_registry::ROOT.lock().await;
+        #[allow(clippy::unwrap_used)]
+        pumpkin_registry::ROOT
+            .set(RegistryBuilder::frozen(&Identifier::vanilla_static("root")).unwrap())
+            .map_err(|_| RootInitError)
+            .unwrap();
 
         info!("Starting parallel world load...");
         let mut world_futures = Vec::new();

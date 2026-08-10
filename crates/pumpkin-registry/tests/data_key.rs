@@ -3,56 +3,88 @@
 use std::any::type_name;
 use std::sync::Arc;
 
-use pumpkin_registry::{DataKey, Registry, RegistryBuilder, error::DataKeyGetError};
+use pumpkin_registry::{
+    DataKey, Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider,
+    error::DataKeyGetError,
+};
 use pumpkin_util::identifier::Identifier;
 
 const fn id(value: &'static str) -> Identifier {
     Identifier::parse_static(value)
 }
 
-fn frozen_registry<T>(
-    name: &'static str,
-    entries: Vec<T>,
-    identifiers: &[Identifier],
-) -> Arc<dyn Registry>
-where
-    T: Send + Sync + 'static,
-{
-    RegistryBuilder::frozen(&id(name), entries, identifiers)
+bootstrap_provider! {
+    NUMBERS: u32 => "test:numbers_registry" => {
+        "test:one" => 10,
+        "test:two" => 20,
+    }
+}
+
+bootstrap_provider! {
+    DEEP_NUMBERS: u32 => "test:deep_numbers_registry" => {
+        "test:value" => 99,
+    }
+}
+
+bootstrap_provider! {
+    ROOT: Arc<dyn Registry> => "test:root_registry",
+    || {
+        vec![RegistryEntry::new(
+            id("test:numbers"),
+            RegistryBuilder::<u32>::frozen(&id("test:numbers_registry"))
+                .unwrap()
+                .arc_dyn(),
+        )]
+    }
+}
+
+bootstrap_provider! {
+    BRANCH: Arc<dyn Registry> => "test:branch_registry",
+    || {
+        vec![RegistryEntry::new(
+            id("test:numbers"),
+            RegistryBuilder::<u32>::frozen(&id("test:deep_numbers_registry"))
+                .unwrap()
+                .arc_dyn(),
+        )]
+    }
+}
+
+bootstrap_provider! {
+    DEEP_ROOT: Arc<dyn Registry> => "test:deep_root_registry",
+    || {
+        vec![RegistryEntry::new(
+            id("test:branch"),
+            RegistryBuilder::<Arc<dyn Registry>>::frozen(
+                &id("test:branch_registry"),
+            )
+            .unwrap()
+            .arc_dyn(),
+        )]
+    }
+}
+
+bootstrap_provider! {
+    NON_REGISTRY_ROOT: u32 => "test:non_registry_root" => {
+        "test:not_a_registry" => 123,
+    }
+}
+
+fn nested_root() -> Arc<dyn Registry> {
+    RegistryBuilder::<Arc<dyn Registry>>::frozen(&id("test:root_registry"))
         .unwrap()
         .arc_dyn()
 }
 
-fn nested_root() -> Arc<dyn Registry> {
-    let numbers = frozen_registry(
-        "test:numbers_registry",
-        vec![10u32, 20u32],
-        &[id("test:one"), id("test:two")],
-    );
-
-    frozen_registry("test:root_registry", vec![numbers], &[id("test:numbers")])
-}
-
 fn deeply_nested_root() -> Arc<dyn Registry> {
-    let numbers = frozen_registry(
-        "test:deep_numbers_registry",
-        vec![99u32],
-        &[id("test:value")],
-    );
-
-    let branch = frozen_registry("test:branch_registry", vec![numbers], &[id("test:numbers")]);
-
-    frozen_registry(
-        "test:deep_root_registry",
-        vec![branch],
-        &[id("test:branch")],
-    )
+    RegistryBuilder::<Arc<dyn Registry>>::frozen(&id("test:deep_root_registry"))
+        .unwrap()
+        .arc_dyn()
 }
 
 #[tokio::test]
 async fn data_key_resolves_value() {
     let root = nested_root();
-
     let key = DataKey::<u32>::new("test:numbers/test:two");
 
     assert_eq!(*key.get(root.as_ref()).await.unwrap(), 20);
@@ -61,20 +93,15 @@ async fn data_key_resolves_value() {
 #[tokio::test]
 async fn data_key_can_be_reused_after_initial_resolution() {
     let root = nested_root();
-
     let key = DataKey::<u32>::new("test:numbers/test:two");
 
-    // First lookup resolves and caches the numeric path.
     assert_eq!(*key.get(root.as_ref()).await.unwrap(), 20);
-
-    // Subsequent lookup uses the cached numeric path.
     assert_eq!(*key.get(root.as_ref()).await.unwrap(), 20);
 }
 
 #[tokio::test]
 async fn data_key_walks_multiple_nested_registry_levels() {
     let root = deeply_nested_root();
-
     let key = DataKey::<u32>::new("test:branch/test:numbers/test:value");
 
     assert_eq!(*key.get(root.as_ref()).await.unwrap(), 99);
@@ -83,7 +110,6 @@ async fn data_key_walks_multiple_nested_registry_levels() {
 #[tokio::test]
 async fn get_reports_missing_registry_identifier() {
     let root = nested_root();
-
     let key = DataKey::<u32>::new("test:missing/test:value");
 
     let result = key.get(root.as_ref()).await;
@@ -97,11 +123,9 @@ async fn get_reports_missing_registry_identifier() {
 
 #[tokio::test]
 async fn get_reports_non_registry_path_entry() {
-    let root = frozen_registry(
-        "test:non_registry_root",
-        vec![123u32],
-        &[id("test:not_a_registry")],
-    );
+    let root = RegistryBuilder::<u32>::frozen(&id("test:non_registry_root"))
+        .unwrap()
+        .arc_dyn();
 
     let key = DataKey::<u32>::new("test:not_a_registry/test:value");
 
@@ -109,15 +133,13 @@ async fn get_reports_non_registry_path_entry() {
 
     assert!(matches!(
         result,
-        Err(DataKeyGetError::MissingRegistry { id })
-            if id == 0
+        Err(DataKeyGetError::MissingRegistry { id }) if id == 0
     ));
 }
 
 #[tokio::test]
 async fn get_reports_missing_value_identifier() {
     let root = nested_root();
-
     let key = DataKey::<u32>::new("test:numbers/test:missing_value");
 
     let result = key.get(root.as_ref()).await;
@@ -132,7 +154,6 @@ async fn get_reports_missing_value_identifier() {
 #[tokio::test]
 async fn get_reports_value_type_mismatch() {
     let root = nested_root();
-
     let key = DataKey::<u64>::new("test:numbers/test:one");
 
     assert!(matches!(
@@ -146,7 +167,6 @@ async fn get_reports_value_type_mismatch() {
 #[test]
 fn blocking_data_key_resolves_value_without_runtime() {
     let root = nested_root();
-
     let key = DataKey::<u32>::new("test:numbers/test:two");
 
     assert_eq!(*key.get_blocking(root.as_ref()).unwrap(), 20);
@@ -155,18 +175,15 @@ fn blocking_data_key_resolves_value_without_runtime() {
 #[test]
 fn blocking_data_key_can_be_reused_after_initial_resolution() {
     let root = nested_root();
-
     let key = DataKey::<u32>::new("test:numbers/test:one");
 
     assert_eq!(*key.get_blocking(root.as_ref()).unwrap(), 10);
-
     assert_eq!(*key.get_blocking(root.as_ref()).unwrap(), 10);
 }
 
 #[test]
 fn blocking_get_reports_missing_registry_identifier() {
     let root = nested_root();
-
     let key = DataKey::<u32>::new("test:missing_registry/test:value");
 
     let result = key.get_blocking(root.as_ref());
@@ -181,7 +198,6 @@ fn blocking_get_reports_missing_registry_identifier() {
 #[test]
 fn blocking_get_reports_missing_value_identifier() {
     let root = nested_root();
-
     let key = DataKey::<u32>::new("test:numbers/test:missing_value");
 
     let result = key.get_blocking(root.as_ref());

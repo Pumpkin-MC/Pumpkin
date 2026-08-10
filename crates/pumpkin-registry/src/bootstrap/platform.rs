@@ -3,38 +3,31 @@ mod imp {
     use crate::bootstrap::BootstrapProvider;
 
     unsafe extern "C" {
-        static __start_pumpkin_bootstrap: BootstrapProvider;
-        static __stop_pumpkin_bootstrap: BootstrapProvider;
+        static __start_pumpkin_bootstrap: u8;
+        static __stop_pumpkin_bootstrap: u8;
     }
 
     #[must_use]
     pub fn builtin_providers() -> &'static [BootstrapProvider] {
         unsafe {
             // SAFETY:
-            // `__start_pumpkin_bootstrap` and `__stop_pumpkin_bootstrap` are
-            // linker-provided symbols marking the beginning and end of the
+            // `__start_pumpkin_bootstrap` and `__stop_pumpkin_bootstrap`
+            // are linker-provided boundary symbols for the
             // `pumpkin_bootstrap` section.
             //
-            // All objects placed in that section are `BootstrapProvider`
-            // values with the alignment required by `BootstrapProvider`.
-            // Consequently:
+            // The registration mechanism guarantees that the section
+            // contains contiguous, properly aligned, initialized
+            // `BootstrapProvider` values.
             //
-            // - `start` points to the first `BootstrapProvider`;
-            // - `end` points immediately after the last provider;
-            // - the region `[start, end)` consists entirely of initialized
-            //   `BootstrapProvider` values;
-            // - its length is a multiple of `size_of::<BootstrapProvider>()`;
-            // - the section is part of the loaded executable and therefore
-            //   remains valid for the entire duration of the program.
-            //
-            // These invariants are established by the linker script/section
-            // registration mechanism used by `BootstrapProvider`.
-            let start = &raw const __start_pumpkin_bootstrap;
+            // The section remains mapped for the lifetime of the process.
+            let start = (&raw const __start_pumpkin_bootstrap).cast::<BootstrapProvider>();
             let end = &raw const __stop_pumpkin_bootstrap;
 
-            let len = end.offset_from(start) as usize;
+            let bytes = end.byte_offset_from(start.cast::<u8>()) as usize;
 
-            std::slice::from_raw_parts(start, len)
+            debug_assert_eq!(bytes % size_of::<BootstrapProvider>(), 0);
+
+            std::slice::from_raw_parts(start, bytes / size_of::<BootstrapProvider>())
         }
     }
 }

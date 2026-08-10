@@ -39,3 +39,7 @@ pub enum BootstrapError {
         identifier: Identifier,
     },
 }
+
+#[derive(Debug, Error)]
+#[error("root registry was already initialized")]
+pub struct RootInitError;
