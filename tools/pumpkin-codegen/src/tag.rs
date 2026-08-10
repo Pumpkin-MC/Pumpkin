@@ -315,7 +315,7 @@ fn load_datapack_tags(
 
 /// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, tag
 /// modules, and the `Taggable` trait with its lookup helpers.
-pub(crate) fn build() -> TokenStream {
+pub(crate) fn build() -> (TokenStream, TokenStream) {
     let versions = [
         ("1_13", "V_1_13"),
         ("1_14", "V_1_14"),
@@ -477,6 +477,7 @@ pub(crate) fn build() -> TokenStream {
     let mut latest_match_arms = Vec::new();
     let mut all_version_code = Vec::new();
     let mut version_fn_match_arms = Vec::new();
+    let mut macro_block_tags = None;
 
     for (ver_folder, ver_ident_str) in versions {
         let datapack_data_dir = std::path::Path::new("../../assets/datapacks")
@@ -545,7 +546,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             if is_latest {
-                latest_tag_modules.push(quote! {
+                let tokens = quote! {
                     #[allow(non_snake_case)]
                     pub mod #key_pascal {
                         use super::Tag;
@@ -554,7 +555,12 @@ pub(crate) fn build() -> TokenStream {
                     static #dict_name: phf::Map<&'static str, &'static Tag> = phf::phf_map! {
                         #(#tag_map_entries),*
                     };
-                });
+                };
+                if key == "block" {
+                    macro_block_tags = Some(tokens.clone());
+                }
+
+                latest_tag_modules.push(tokens);
                 latest_match_arms.push(quote! { RegistryKey::#key_pascal => Some(&#dict_name) });
             } else {
                 all_version_code.push(quote! {
@@ -600,7 +606,7 @@ pub(crate) fn build() -> TokenStream {
     }
     .to_token_stream();
 
-    quote! {
+    let a = quote! {
         use pumpkin_util::version::JavaMinecraftVersion;
 
         pub type Tag = (&'static [&'static str], &'static [u16]);
@@ -664,5 +670,9 @@ pub(crate) fn build() -> TokenStream {
                 get_tag_values(Self::tag_key(), tag)
             }
         }
-    }
+    };
+    let b = quote! {
+        #macro_block_tags
+    };
+    (a, b)
 }

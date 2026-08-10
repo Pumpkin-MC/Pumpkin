@@ -15,6 +15,7 @@
 #[path = "generated/chunk_view_lut.rs"]
 pub mod chunk_view_lut;
 
+#[cfg(feature = "chest_loot")]
 #[rustfmt::skip]
 #[path = "generated/chest_loot.rs"]
 pub mod chest_loot_table;

@@ -3,12 +3,17 @@
 use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site};
-use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use pumpkin_data::{Block, BlockId};
 use quote::{format_ident, quote};
 use syn::spanned::Spanned;
 use syn::{self, Attribute, DeriveInput, LitStr, Type, parse_quote};
 use syn::{Block as SynBlock, Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
+
+mod tag {
+    type Tag = (&'static [&'static str], &'static [u16]);
+    pub const BLOCK: &phf::Map<&'static str, &'static Tag> = &BLOCK_TAGS;
+    include!("../../pumpkin-data/src/generated/block_tag.rs");
+}
+include!("../../pumpkin-data/src/generated/block_id_map.rs");
 
 /// Derives the `Payload` trait for an event struct, enabling it to be used in the plugin system.
 ///
@@ -245,12 +250,12 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
     let arg_value = arg_lit.value();
 
     let block_name = arg_value.strip_prefix("minecraft:").unwrap_or(&arg_value);
-    let Some(block) = Block::from_name(block_name) else {
+    let Some(_) = BLOCK_ID_FROM_NAME_MAP.get(block_name) else {
         return syn::Error::new(arg_lit.span(), "Invalid block name")
             .to_compile_error()
             .into();
     };
-    let const_ident = format_ident!("{}", block.name.to_shouty_snake_case());
+    let const_ident = format_ident!("{}", block_name.to_shouty_snake_case());
 
     let ast = parse_macro_input!(item as DeriveInput);
     let name = &ast.ident;
@@ -287,23 +292,16 @@ pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStre
 
     let full_tag = arg_lit.value();
 
-    let Some(values) = get_tag_ids(RegistryKey::Block, &full_tag) else {
+    let Some((_, values)) = tag::BLOCK.get(&full_tag) else {
         return syn::Error::new(arg_lit.span(), format!("Failed to get tag IDs: {full_tag}"))
             .to_compile_error()
             .into();
     };
-    let const_values: Vec<_> = values
-        .iter()
-        .map(|v| {
-            let block = BlockId::new_or_air(*v).to_block();
-            format_ident!("{}", block.name.to_shouty_snake_case())
-        })
-        .collect();
 
     let expanded = quote! {
         impl #impl_generics crate::block::BlockMetadata for #name #ty_generics #where_clause {
             fn ids() -> Box<[pumpkin_data::BlockId]> {
-                Box::new([ #(pumpkin_data::BlockId::#const_values),* ])
+                Box::new([ #(pumpkin_data::BlockId::new(#values).unwrap()),* ])
             }
         }
     };
