@@ -6,7 +6,6 @@
 //! algorithm lives in the [`sculk`] sub-module.
 
 use pumpkin_data::Block;
-use pumpkin_data::BlockState;
 use pumpkin_util::math::int_provider::IntProvider;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;

@@ -384,8 +384,10 @@ impl ChargeCursor {
     /// this tick. Dispatches on the block at the cursor position, mirroring
     /// `ChargeCursor.getBlockBehaviour`:
     /// - sculk vein → `SculkVeinBlock.attemptUseCharge`
-    /// - other sculk blocks → `SculkBlock.attemptUseCharge`
-    /// - everything else → `SculkBehaviour.DEFAULT.attemptUseCharge`
+    /// - sculk → `SculkBlock.attemptUseCharge`
+    /// - everything else (including sensors, shriekers and catalysts, which
+    ///   do not implement `SculkBehaviour`) →
+    ///   `SculkBehaviour.DEFAULT.attemptUseCharge`
     fn attempt_use_charge(
         &self,
         current_id: BlockId,
@@ -421,11 +423,7 @@ impl ChargeCursor {
                     charge
                 }
             }
-            BlockId::SCULK
-            | BlockId::SCULK_CATALYST
-            | BlockId::SCULK_SHRIEKER
-            | BlockId::SCULK_SENSOR
-            | BlockId::CALIBRATED_SCULK_SENSOR => {
+            BlockId::SCULK => {
                 Self::sculk_block_use_charge(self.pos, level, origin_pos, random, config, charge)
             }
             // Vanilla `SculkBehaviour.DEFAULT.attemptUseCharge`:
@@ -633,6 +631,9 @@ impl ChargeCursor {
 mod tests {
     use super::*;
     use pumpkin_data::Block;
+    use pumpkin_util::random::legacy_rand::LegacyRand;
+
+    use crate::generation::feature::features::sculk::test_utils::MockSculkLevel;
 
     #[test]
     fn non_corner_neighbours_count() {
@@ -733,6 +734,35 @@ mod tests {
         assert_eq!(
             ChargeCursor::available_faces(Block::SCULK.default_state.id, BlockId::SCULK,),
             0,
+        );
+    }
+
+    #[test]
+    fn cursor_does_not_move_onto_sensor() {
+        // Vanilla `getValidMovementPos` only accepts `SculkBehaviour` blocks;
+        // a lone sensor neighbour is not a valid movement target.
+        let mut level = MockSculkLevel::new();
+        let pos = BlockPos::new(0, 60, 0);
+        level.set_id(pos, Block::SCULK.default_state.id);
+        level.set_id(pos.up(), Block::SCULK_SENSOR.default_state.id);
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(1));
+        assert_eq!(
+            ChargeCursor::valid_movement_position(&level, pos, &mut random),
+            None,
+        );
+    }
+
+    #[test]
+    fn cursor_moves_onto_sculk_not_sensor() {
+        let mut level = MockSculkLevel::new();
+        let pos = BlockPos::new(0, 60, 0);
+        level.set_id(pos, Block::SCULK.default_state.id);
+        level.set_id(pos.up(), Block::SCULK_SENSOR.default_state.id);
+        level.set_id(pos.east(), Block::SCULK.default_state.id);
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(1));
+        assert_eq!(
+            ChargeCursor::valid_movement_position(&level, pos, &mut random),
+            Some(pos.east()),
         );
     }
 }

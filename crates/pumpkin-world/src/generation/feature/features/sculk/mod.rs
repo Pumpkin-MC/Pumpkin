@@ -81,17 +81,14 @@ pub trait SculkLevel {
     fn sculk_is_full_cube(&self, pos: BlockPos) -> bool;
 }
 
-/// Returns `true` if the block id participates in sculk behaviour.
+/// Returns `true` if the block id implements vanilla `SculkBehaviour`.
+///
+/// Only `sculk` and `sculk_vein` implement `SculkBehaviour` in vanilla
+/// (`SculkBlock` / `SculkVeinBlock`). Sensors, shriekers and catalysts are
+/// plain blocks and therefore use `SculkBehaviour.DEFAULT` when a cursor
+/// visits them.
 pub const fn is_sculk_behaviour(id: BlockId) -> bool {
-    matches!(
-        id,
-        BlockId::SCULK
-            | BlockId::SCULK_VEIN
-            | BlockId::SCULK_CATALYST
-            | BlockId::SCULK_SHRIEKER
-            | BlockId::SCULK_SENSOR
-            | BlockId::CALIBRATED_SCULK_SENSOR
-    )
+    matches!(id, BlockId::SCULK | BlockId::SCULK_VEIN)
 }
 
 /// Returns `true` if the block id is tagged `minecraft:sculk_replaceable`.
@@ -357,6 +354,28 @@ mod tests {
         let mut level = MockSculkLevel::new();
         let origin = BlockPos::new(0, 60, 0);
         level.set_id(origin, Block::STONE.default_state.id);
+        assert!(!can_spread_from(&level, origin));
+    }
+
+    #[test]
+    fn sculk_behaviour_matches_vanilla_implementations() {
+        // Vanilla: only sculk and sculk vein implement `SculkBehaviour`.
+        // Sensors, shriekers and catalysts use `SculkBehaviour.DEFAULT`.
+        assert!(is_sculk_behaviour(BlockId::SCULK));
+        assert!(is_sculk_behaviour(BlockId::SCULK_VEIN));
+        assert!(!is_sculk_behaviour(BlockId::SCULK_CATALYST));
+        assert!(!is_sculk_behaviour(BlockId::SCULK_SENSOR));
+        assert!(!is_sculk_behaviour(BlockId::CALIBRATED_SCULK_SENSOR));
+        assert!(!is_sculk_behaviour(BlockId::SCULK_SHRIEKER));
+    }
+
+    #[test]
+    fn can_spread_from_rejects_sensor_origin() {
+        // Vanilla `SculkPatchFeature.canSpreadFrom`: a sensor is not a
+        // `SculkBehaviour` and not air/water, so spreading cannot start at it.
+        let mut level = MockSculkLevel::new();
+        let origin = BlockPos::new(0, 60, 0);
+        level.set_id(origin, Block::SCULK_SENSOR.default_state.id);
         assert!(!can_spread_from(&level, origin));
     }
 }
