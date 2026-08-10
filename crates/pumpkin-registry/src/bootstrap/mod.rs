@@ -82,6 +82,7 @@ impl ErasedVec {
     }
 }
 
+#[repr(C)]
 pub struct BootstrapProvider {
     registry: &'static Identifier,
     populate: fn() -> ErasedVec,

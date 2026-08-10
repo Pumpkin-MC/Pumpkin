@@ -29,8 +29,8 @@ mod imp {
             //
             // These invariants are established by the linker script/section
             // registration mechanism used by `BootstrapProvider`.
-            let start = &__start_pumpkin_bootstrap as *const BootstrapProvider;
-            let end = &__stop_pumpkin_bootstrap as *const BootstrapProvider;
+            let start = &raw const __start_pumpkin_bootstrap;
+            let end = &raw const __stop_pumpkin_bootstrap;
 
             let len = end.offset_from(start) as usize;
 
