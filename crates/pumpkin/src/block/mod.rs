@@ -65,6 +65,18 @@ pub(crate) fn bounce_entity_after_fall(entity: &dyn EntityBase, bounce_multiplie
 }
 
 pub trait BlockBehaviour: Send + Sync {
+    fn is_valid_bonemeal_target(&self, _args: BonemealArgs<'_>) -> bool {
+        false
+    }
+
+    fn is_bonemeal_success(&self, _args: BonemealArgs<'_>) -> bool {
+        true
+    }
+
+    fn perform_bonemeal<'a>(&'a self, _args: BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
     fn normal_use<'a>(&'a self, _args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move { BlockActionResult::Pass })
     }
@@ -228,6 +240,14 @@ pub trait BlockBehaviour: Send + Sync {
     ) -> &'static BlockState {
         block.rotate(state_id, rotation)
     }
+}
+
+#[derive(Clone, Copy)]
+pub struct BonemealArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub position: &'a BlockPos,
+    pub state_id: BlockStateId,
 }
 
 pub struct NormalUseArgs<'a> {

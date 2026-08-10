@@ -89,6 +89,7 @@ pub mod falling;
 pub mod grass_block;
 pub mod infested;
 pub mod powder_snow;
+pub mod rooted_dirt;
 pub mod snow;
 pub mod sponge;
 

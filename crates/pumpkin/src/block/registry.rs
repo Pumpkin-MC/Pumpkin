@@ -139,9 +139,9 @@ use crate::block::blocks::wither_skull::WitherSkeletonSkullBlock;
 use crate::block::fluid::lava::FlowingLava;
 use crate::block::fluid::water::FlowingWater;
 use crate::block::{
-    BlockBehaviour, BlockHitResult, BlockMetadata, FluidMetadata, GetInsideCollisionShapeArgs,
-    OnEntityCollisionArgs, OnLandedUponArgs, UpdateEntityMovementAfterFallOnArgs,
-    stop_vertical_movement_after_fall,
+    BlockBehaviour, BlockHitResult, BlockMetadata, BonemealArgs, FluidMetadata,
+    GetInsideCollisionShapeArgs, OnEntityCollisionArgs, OnLandedUponArgs,
+    UpdateEntityMovementAfterFallOnArgs, stop_vertical_movement_after_fall,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -186,6 +186,7 @@ use crate::block::blocks::ladder::LadderBlock;
 use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::lectern::LecternBlock;
 use crate::block::blocks::respawn_anchor::RespawnAnchorBlock;
+use crate::block::blocks::rooted_dirt::RootedDirtBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
@@ -320,6 +321,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CoralBlock);
     manager.register(AmethystBlock);
     manager.register(GrassBlock);
+    manager.register(RootedDirtBlock);
     manager.register(BubbleColumnBlock);
 
     manager.register(FallingBlock);
@@ -414,6 +416,31 @@ pub enum BlockPlacingError {
 }
 
 impl BlockRegistry {
+    pub async fn bone_meal(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        position: &BlockPos,
+        state_id: BlockStateId,
+    ) -> bool {
+        let Some(behaviour) = self.get_pumpkin_block(block.id) else {
+            return false;
+        };
+        let args = BonemealArgs {
+            world,
+            block,
+            position,
+            state_id,
+        };
+        if !behaviour.is_valid_bonemeal_target(args) {
+            return false;
+        }
+        if behaviour.is_bonemeal_success(args) {
+            behaviour.perform_bonemeal(args).await;
+        }
+        true
+    }
+
     fn entity_blocks_block_placement(entity: &dyn EntityBase) -> bool {
         let base_entity = entity.get_entity();
         if base_entity.is_removed()
