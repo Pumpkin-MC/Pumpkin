@@ -36,6 +36,9 @@ const fn get_exits(
     }
 }
 
+const GRAVITY: f64 = 0.04;
+const RAIL_HEIGHT_OFFSET: f64 = 0.0625;
+
 pub struct MinecartEntity {
     pub vehicle: VehicleEntity,
     pub active: AtomicBool,
@@ -308,7 +311,13 @@ impl EntityBase for MinecartEntity {
                     }
                 }
 
-                target_position.y = pos.y;
+                target_position.y = match shape {
+                    RailShape::AscendingEast
+                    | RailShape::AscendingWest
+                    | RailShape::AscendingNorth
+                    | RailShape::AscendingSouth => pos.y,
+                    _ => f64::from(block_pos.0.y) + RAIL_HEIGHT_OFFSET,
+                };
                 self.vehicle.entity.pos.store(target_position);
 
                 let horizontal_in_direction = Vector3::new(exit1.x, 0.0, exit1.z);
@@ -334,6 +343,10 @@ impl EntityBase for MinecartEntity {
                     velocity = towards_out.multiply(speed, speed, speed);
                 }
 
+                velocity.y = 0.0;
+                self.vehicle.entity.velocity.store(velocity);
+            } else if !self.vehicle.entity.on_ground.load(Ordering::Relaxed) {
+                velocity.y -= GRAVITY;
                 self.vehicle.entity.velocity.store(velocity);
             }
 
@@ -384,6 +397,9 @@ impl EntityBase for MinecartEntity {
                     next_vel = Vector3::new(0.0, 0.0, 0.0);
                 }
                 self.vehicle.entity.velocity.store(next_vel);
+                if next_vel.length_squared() == 0.0 {
+                    self.vehicle.entity.send_velocity();
+                }
             }
         })
     }

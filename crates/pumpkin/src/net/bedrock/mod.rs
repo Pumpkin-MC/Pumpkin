@@ -26,9 +26,9 @@ use pumpkin_protocol::{
         server::{
             animate::SAnimate, block_pick_request::SBlockPickRequest,
             client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
-            container_close::SContainerClose, emote::SEmote, interaction::SInteraction,
-            inventory_transaction::SInventoryTransaction, loading_screen::SLoadingScreen,
-            login::SLogin, mob_equipment::SMobEquipment,
+            container_close::SContainerClose, emote::SEmote, emote_list::SEmoteList,
+            interaction::SInteraction, inventory_transaction::SInventoryTransaction,
+            loading_screen::SLoadingScreen, login::SLogin, mob_equipment::SMobEquipment,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
@@ -624,6 +624,7 @@ impl BedrockClient {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn handle_play_packet(
         &self,
         player: &Arc<Player>,
@@ -690,9 +691,9 @@ impl BedrockClient {
             SEmote::PACKET_ID => {
                 self.handle_emote(player, server, SEmote::read_slice(reader)?).await;
             }
-            // SEmoteList::PACKET_ID => {
-            //     self.handle_emote_list(player, server, SEmoteList::read(reader)?);
-            // }
+            SEmoteList::PACKET_ID => {
+                self.handle_emote_list(player, server, &SEmoteList::read(reader)?);
+            }
             pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse::PACKET_ID => {
                 self.handle_modal_form_response(
                     player,

@@ -227,7 +227,7 @@ impl BlockBehaviour for LecternBlock {
         Box::pin(async move {
             let item_stack = &mut *args.item_stack;
             if !item_stack.item.has_tag(&tag::Item::MINECRAFT_LECTERN_BOOKS) {
-                return BlockActionResult::Pass;
+                return BlockActionResult::PassToDefaultBlockAction;
             }
 
             let props = LecternLikeProperties::from_state_id(
@@ -236,14 +236,14 @@ impl BlockBehaviour for LecternBlock {
             );
             if props.has_book {
                 // Fall through so `normal_use` opens the reading screen.
-                return BlockActionResult::Pass;
+                return BlockActionResult::PassToDefaultBlockAction;
             }
 
             let Some(lectern) = args.world.get_block_entity(args.position) else {
-                return BlockActionResult::Pass;
+                return BlockActionResult::PassToDefaultBlockAction;
             };
             let Some(lectern) = lectern.as_any().downcast_ref::<LecternBlockEntity>() else {
-                return BlockActionResult::Pass;
+                return BlockActionResult::PassToDefaultBlockAction;
             };
 
             let book = item_stack.split_unless_creative(args.player.gamemode.load(), 1);

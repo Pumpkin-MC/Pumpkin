@@ -157,7 +157,12 @@ pub trait InventoryPlayer: Send + Sync {
     ) -> PlayerFuture<'a, ()>;
 
     /// Sends a single slot update packet.
-    fn enqueue_slot_packet<'a>(&'a self, packet: &'a CSetContainerSlot) -> PlayerFuture<'a, ()>;
+    fn enqueue_slot_packet<'a>(
+        &'a self,
+        packet: &'a CSetContainerSlot,
+        window_type: Option<WindowType>,
+        total_slots: usize,
+    ) -> PlayerFuture<'a, ()>;
 
     /// Sends a cursor item update packet.
     fn enqueue_cursor_packet<'a>(&'a self, packet: &'a CSetCursorItem) -> PlayerFuture<'a, ()>;

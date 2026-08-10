@@ -59,8 +59,10 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::SoundEvent;
 use pumpkin_protocol::bedrock::client::container_open::CContainerOpen;
+use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
+use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
     Animation, CActionBar, CAwardStats, CChangeDifficulty, CCloseContainer, CCombatDeath,
     CCustomPayload, CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent,
@@ -1085,11 +1087,12 @@ impl Player {
 
         let attack_speed = base_attack_speed + add_speed;
 
-        let attack_cooldown_progress = self.get_attack_cooldown_progress(
-            f64::from(server.basic_config.tps),
-            0.5,
-            attack_speed,
-        );
+        let is_bedrock = matches!(self.client.as_ref(), ClientPlatform::Bedrock(_));
+        let attack_cooldown_progress = if is_bedrock {
+            1.0
+        } else {
+            self.get_attack_cooldown_progress(f64::from(server.basic_config.tps), 0.5, attack_speed)
+        };
         self.last_attacked_ticks.store(0, Ordering::Relaxed);
 
         // Only reduce attack damage if in cooldown
@@ -1349,6 +1352,7 @@ impl Player {
                 self.world().send_entity_status(
                     &self.living_entity.entity,
                     super::equipment_break_status(slot),
+                    None,
                 );
             }
 
@@ -2129,16 +2133,7 @@ impl Player {
             let state = world.get_block_state(&pos);
             // Is the block broken?
             if state.is_air() {
-                world
-                    .set_block_breaking(
-                        &self.living_entity.entity,
-                        pos,
-                        BlockBreakingProgress::Stop,
-                    )
-                    .await;
-                self.current_block_destroy_stage
-                    .store(-1, Ordering::Relaxed);
-                self.mining.store(false, Ordering::Relaxed);
+                self.stop_mining().await;
             } else {
                 let finished = self
                     .continue_mining(
@@ -2149,16 +2144,7 @@ impl Player {
                     )
                     .await;
                 if finished && matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) {
-                    self.mining.store(false, Ordering::Relaxed);
-                    self.current_block_destroy_stage
-                        .store(-1, Ordering::Relaxed);
-                    world
-                        .set_block_breaking(
-                            &self.living_entity.entity,
-                            pos,
-                            BlockBreakingProgress::Stop,
-                        )
-                        .await;
+                    self.stop_mining().await;
 
                     let block = Block::from_state_id(state.id);
                     let can_harvest = self.can_harvest(state, block).await;
@@ -2253,6 +2239,20 @@ impl Player {
                 .store(stage, Ordering::Relaxed);
         }
         total_progress >= 1.0
+    }
+
+    pub(crate) async fn stop_mining(&self) {
+        let was_mining = self.mining.swap(false, Ordering::Relaxed);
+        let stage = self.current_block_destroy_stage.swap(-1, Ordering::Relaxed);
+        self.current_block_breaking_speed
+            .store(0, Ordering::Relaxed);
+
+        if was_mining || stage >= 0 {
+            let pos = *self.mining_pos.lock().await;
+            self.world()
+                .set_block_breaking(&self.living_entity.entity, pos, BlockBreakingProgress::Stop)
+                .await;
+        }
     }
 
     pub async fn jump(&self) {
@@ -2589,7 +2589,7 @@ impl Player {
             PermissionLvl::Four => EntityStatus::PermissionLevelOwners,
         };
         self.world()
-            .send_entity_status(&self.living_entity.entity, status);
+            .send_entity_status(&self.living_entity.entity, status, None);
     }
 
     /// Sets the player's difficulty level.
@@ -3250,8 +3250,17 @@ impl Player {
         self.breath_manager.reset(self);
 
         self.client
-            .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
+            .send_packet_now_editioned(
+                &CCombatDeath::new(self.entity_id().into(), &death_msg),
+                &SActorEvent {
+                    entity_runtime_id: VarULong(self.entity_id() as u64),
+                    event_type: ActorEventType::Death,
+                    event_data: VarInt(0),
+                    fire_at_position: None,
+                },
+            )
             .await;
+        self.send_health().await;
     }
 
     pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) -> bool {
@@ -5499,7 +5508,12 @@ impl InventoryPlayer for Player {
         })
     }
 
-    fn enqueue_slot_packet<'a>(&'a self, packet: &'a CSetContainerSlot) -> PlayerFuture<'a, ()> {
+    fn enqueue_slot_packet<'a>(
+        &'a self,
+        packet: &'a CSetContainerSlot,
+        window_type: Option<WindowType>,
+        total_slots: usize,
+    ) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
             match self.client.as_ref() {
                 ClientPlatform::Java(java) => {
@@ -5534,11 +5548,6 @@ impl InventoryPlayer for Player {
                         let slot_idx = packet.slot as usize;
                         let item_desc = NetworkItemStackDescriptor::from(&*packet.slot_data.0);
 
-                        // Container screen
-                        let current_handler = self.current_screen_handler.lock().await.clone();
-                        let handler = current_handler.lock().await;
-                        let window_type = handler.window_type();
-                        let total_slots = handler.get_behaviour().slots.len();
                         let bedrock_info = if total_slots >= 36 {
                             let container_slots = total_slots - 36;
                             if slot_idx < container_slots {

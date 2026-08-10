@@ -34,9 +34,12 @@ impl ItemBehaviour for CrossbowItem {
             let inventory = player.inventory();
             let stack = inventory.held_item().await;
 
+            // Every crossbow carries a ChargedProjectiles component by default, so its mere
+            // presence does not mean the crossbow is loaded. Vanilla checks the list is also
+            // non-empty (CrossbowItem.java:68).
             if stack
                 .get_data_component::<ChargedProjectilesImpl>()
-                .is_some()
+                .is_some_and(|charged| !charged.projectiles.is_empty())
             {
                 Self::fire_projectiles(player).await;
                 return;

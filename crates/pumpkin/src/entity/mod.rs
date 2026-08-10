@@ -92,6 +92,7 @@ pub mod experience_orb;
 pub mod falling;
 pub mod hunger;
 pub mod item;
+pub mod item_steerable;
 pub mod living;
 pub mod mob;
 pub mod passive;
@@ -163,6 +164,10 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Self: Sized,
     {
         self
+    }
+
+    fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        None
     }
 
     fn get_eye_pos(&self) -> Vector3<f64> {

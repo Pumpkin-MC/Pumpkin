@@ -508,6 +508,20 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        None
+    }
+
+    fn is_saddled(&self) -> bool {
+        false
+    }
+
+    fn can_be_saddled(&self) -> bool {
+        false
+    }
+
+    fn set_saddled(&self, _saddled: bool) {}
+
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
@@ -605,10 +619,18 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_set_variant_name(&self, _name: &str) {}
+
+    fn get_sheep(&self) -> Option<&crate::entity::passive::sheep::SheepEntity> {
+        None
+    }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
+    }
+
+    fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        Mob::get_item_steerable(self)
     }
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {

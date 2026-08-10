@@ -40,8 +40,10 @@ use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{BlockBreakingProgress, World, chunker};
 use pumpkin_data::block_properties::{BlockProperties, CommandBlockLikeProperties};
+use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    BlocksAttacksImpl, ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+    BlocksAttacksImpl, ConsumableImpl, DataComponentImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+    WritableBookContentImpl, WrittenBookContentImpl,
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -64,13 +66,14 @@ use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SBundleItemSelected,
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClientCommand,
     SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SInteract, SJigsawGenerate, SKeepAlive, SMoveVehicle,
-    SPaddleBoat, SPickItemFromBlock, SPickItemFromEntity, SPlaceRecipe, SPlayPingRequest,
-    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
-    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
-    SRecipeBookSeenRecipe, SSeenAdvancement, SSelectTrade, SSetCommandBlock, SSetCreativeSlot,
-    SSetHeldItem, SSetJigsawBlock, SSetPlayerGround, SSetTestBlock, SSwingArm, STeleportToEntity,
-    STestInstanceBlockAction, SUpdateSign, SUseItem, SUseItemOn, Status,
+    SCookieResponse as SPCookieResponse, SEditBook, SInteract, SJigsawGenerate, SKeepAlive,
+    SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPickItemFromEntity, SPlaceRecipe,
+    SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput,
+    SPlayerPosition, SPlayerPositionRotation, SPlayerRotation, SPlayerSession,
+    SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SSeenAdvancement, SSelectTrade,
+    SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetJigsawBlock, SSetPlayerGround,
+    SSetTestBlock, SSwingArm, STeleportToEntity, STestInstanceBlockAction, SUpdateSign, SUseItem,
+    SUseItemOn, Status,
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
@@ -2411,9 +2414,11 @@ impl JavaClient {
             } else {
                 &EquipmentSlot::OFF_HAND
             };
-            player
-                .world()
-                .send_entity_status(player.get_entity(), equipment_break_status(slot));
+            player.world().send_entity_status(
+                player.get_entity(),
+                equipment_break_status(slot),
+                None,
+            );
         }
 
         if !after.are_equal(&before) {
@@ -2509,6 +2514,38 @@ impl JavaClient {
         world.update_block_entity(&block_entity);
     }
 
+    pub async fn handle_edit_book(&self, player: &Player, packet: SEditBook<'_>) {
+        let held_stack = player.inventory().held_item().await;
+        if held_stack.item.id != Item::WRITABLE_BOOK.id {
+            return;
+        }
+
+        let pages: Vec<String> = packet.pages.iter().map(|p| (*p).to_string()).collect();
+
+        if let Some(title) = packet.title {
+            let mut written_book = ItemStack::new(1, &Item::WRITTEN_BOOK);
+            let content = WrittenBookContentImpl {
+                title: title.to_string(),
+                author: player.gameprofile.name.clone(),
+                pages,
+            };
+            written_book
+                .patch
+                .push((DataComponent::WrittenBookContent, Some(content.to_dyn())));
+            player.inventory().set_held_item(written_book).await;
+        } else {
+            let mut writable_book = held_stack;
+            let content = WritableBookContentImpl { pages };
+            writable_book
+                .patch
+                .retain(|(component, _)| *component != DataComponent::WritableBookContent);
+            writable_book
+                .patch
+                .push((DataComponent::WritableBookContent, Some(content.to_dyn())));
+            player.inventory().set_held_item(writable_book).await;
+        }
+    }
+
     pub async fn handle_use_item(
         &self,
         player: &Arc<Player>,
@@ -2521,17 +2558,13 @@ impl JavaClient {
         player.update_last_action_time();
 
         let inventory = player.inventory();
-        let Ok(hand) = Hand::try_from(use_item.hand.0) else {
+        let Ok(hand) = Hand::from_packet_id(use_item.hand.0) else {
             self.kick(TextComponent::text("InvalidHand")).await;
             return;
         };
         self.update_sequence(player, use_item.sequence.0);
 
-        let mut item_in_hand = if hand == Hand::Left {
-            inventory.held_item().await
-        } else {
-            inventory.off_hand_item().await
-        };
+        let mut item_in_hand = inventory.get_stack_in_hand(hand).await;
 
         let (item_id, _item) = (item_in_hand.item.id, item_in_hand.item);
         player
@@ -2622,27 +2655,27 @@ impl JavaClient {
                     .await;
             }
         }
-        if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
-            let mut equipment_guard = inventory.entity_equipment.lock().await;
-            let current_equipped = equipment_guard.get(equippable.slot);
+        let equipment_slot = held
+            .get_data_component::<EquippableImpl>()
+            .map(|equippable| equippable.slot.clone());
+        if let Some(slot) = equipment_slot {
+            // The equipment lock has to be released before touching the hand again:
+            // the off hand lives in the same map, so holding it here would deadlock.
+            let current_equipped = inventory.entity_equipment.lock().await.get(&slot);
             if current_equipped.are_items_and_components_equal(held) {
                 return;
             }
 
-            player.enqueue_equipment_change(equippable.slot, held).await;
+            player.enqueue_equipment_change(&slot, held).await;
 
-            let equip_item = equipment_guard
-                .equipment
-                .entry(equippable.slot.clone())
-                .or_insert_with(|| ItemStack::EMPTY.clone());
-            if equip_item.is_empty() {
-                *equip_item = held.clone();
+            let equipped = if current_equipped.is_empty() {
+                let equipped = held.clone();
                 held.decrement_unless_creative(player.gamemode.load(), 1);
+                equipped
             } else {
-                let old_held = held.clone();
-                *held = equip_item.clone();
-                *equip_item = old_held;
-            }
+                std::mem::replace(held, current_equipped)
+            };
+            inventory.entity_equipment.lock().await.put(&slot, equipped);
             inventory.set_stack_in_hand(hand, held.clone()).await;
         }
     }

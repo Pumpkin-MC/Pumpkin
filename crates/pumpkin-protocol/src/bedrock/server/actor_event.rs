@@ -15,7 +15,7 @@ pub struct SActorEvent {
     pub fire_at_position: Option<Vector3<f32>>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ActorEventType {
     Jump = 1,

@@ -98,7 +98,10 @@ use pumpkin_protocol::{
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_attributes::{Attribute, CUpdateAttributes},
         },
-        server::text::SText,
+        server::{
+            actor_event::{ActorEventType, SActorEvent},
+            text::SText,
+        },
     },
     codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
     java::{
@@ -406,12 +409,25 @@ impl World {
     }
 
     /// Sends an entity status update to all players tracking the specified entity.
-    pub fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
+    pub fn send_entity_status(
+        &self,
+        entity: &Entity,
+        java_status: EntityStatus,
+        bedrock_status: Option<ActorEventType>,
+    ) {
         let chunk_pos = entity.chunk_pos.load();
-        self.broadcast_to_chunk(
-            chunk_pos,
-            &CEntityStatus::new(entity.entity_id, status as i8),
-        );
+        let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
+        if let Some(be_event) = bedrock_status {
+            let be_packet = SActorEvent {
+                entity_runtime_id: VarULong(entity.entity_id as u64),
+                event_type: be_event,
+                event_data: VarInt(0),
+                fire_at_position: None,
+            };
+            self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
+        } else {
+            self.broadcast_to_chunk(chunk_pos, &je_packet);
+        }
     }
 
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {

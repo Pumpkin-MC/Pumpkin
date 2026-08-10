@@ -108,6 +108,10 @@ impl Gradient {
     #[inline]
     #[must_use]
     pub const fn dot(&self, x: f64, y: f64, z: f64) -> f64 {
-        self.z.mul_add(z, self.x.mul_add(x, self.y * y))
+        // When using mul_add without target-feature=+fma, you get a huge performance cost
+        // because it lowers into a libm call 16x per Perlin sample.
+        //
+        // This improves performance by something crazy like 15%
+        self.x * x + self.y * y + self.z * z
     }
 }

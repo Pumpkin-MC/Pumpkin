@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 use pumpkin_data::noise_router::WrapperType;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -68,108 +66,9 @@ pub trait MutableChunkNoiseFunctionComponentImpl {
 pub enum ChunkNoiseFunctionComponent<'a> {
     Independent(&'a IndependentProtoNoiseFunctionComponent),
     Dependent(&'a DependentProtoNoiseFunctionComponent),
-    // NOTE: The box here is intentional: we want to bring down the size to keep the component stack
-    // smaller
     Chunk(ChunkSpecificNoiseFunctionComponent),
     PassThrough(PassThrough),
-    //Panic(String),
 }
-
-/*
-impl ChunkNoiseFunctionComponent<'_> {
-    pub fn display_test(&self, stack: &[ChunkNoiseFunctionComponent<'_>]) -> String {
-        match self {
-            Self::Independent(independent) => match independent {
-                IndependentProtoNoiseFunctionComponent::ClampedYGradient(_) => {
-                    "ClampedYGradient".into()
-                }
-                IndependentProtoNoiseFunctionComponent::InterpolatedNoise(_) => {
-                    "InterpolatedNoise".into()
-                }
-                IndependentProtoNoiseFunctionComponent::EndIsland(_) => "EndIsland".into(),
-                IndependentProtoNoiseFunctionComponent::Constant(_) => "Constant".into(),
-                IndependentProtoNoiseFunctionComponent::Noise(_) => "Noise".into(),
-                IndependentProtoNoiseFunctionComponent::ShiftA(_) => "ShiftA".into(),
-                IndependentProtoNoiseFunctionComponent::ShiftB(_) => "ShiftB".into(),
-            },
-            Self::Dependent(dependent) => match dependent {
-                DependentProtoNoiseFunctionComponent::Spline(spine) => {
-                    let a = stack[spine.spline.input_index].display_test(stack);
-                    format!("Spline({})", a)
-                }
-                DependentProtoNoiseFunctionComponent::Unary(x) => {
-                    let a = stack[x.input_index].display_test(stack);
-                    format!("Unary({})", a)
-                }
-                DependentProtoNoiseFunctionComponent::ShiftedNoise(x) => {
-                    let a = stack[x.input_x_index].display_test(stack);
-                    let b = stack[x.input_y_index].display_test(stack);
-                    let c = stack[x.input_z_index].display_test(stack);
-                    format!("ShiftedNoise({}, {}, {})", a, b, c)
-                }
-                DependentProtoNoiseFunctionComponent::Linear(x) => {
-                    let a = stack[x.input_index].display_test(stack);
-                    format!("Linear({})", a)
-                }
-                DependentProtoNoiseFunctionComponent::Binary(x) => {
-                    let a = stack[x.input1_index].display_test(stack);
-                    let b = stack[x.input2_index].display_test(stack);
-                    format!("Binary({}, {})", a, b)
-                }
-                DependentProtoNoiseFunctionComponent::IntervalSelect(x) => {
-                    let a = stack[x.input_index].display_test(stack);
-                    format!("IntervalSelect({})", a)
-                }
-                DependentProtoNoiseFunctionComponent::Clamp(x) => {
-                    let a = stack[x.input_index].display_test(stack);
-                    format!("Clamp({})", a)
-                }
-                DependentProtoNoiseFunctionComponent::RangeChoice(x) => {
-                    let when_in = stack[x.when_in_index].display_test(stack);
-                    let when_out = stack[x.when_out_index].display_test(stack);
-                    format!("RangeChoice({}, {})", when_in, when_out)
-                }
-                DependentProtoNoiseFunctionComponent::FindTopSurface(_) => {
-                    format!("FindTopSurface")
-                }
-            },
-            Self::Chunk(chunk) => match &**chunk {
-                ChunkSpecificNoiseFunctionComponent::CellCache(x) => {
-                    let input = &stack[x.input_index];
-                    let input_display = input.display_test(stack);
-                    format!("CellCache({})", input_display)
-                }
-                ChunkSpecificNoiseFunctionComponent::Cache2D(x) => {
-                    let input = &stack[x.input_index];
-                    let input_display = input.display_test(stack);
-                    format!("Cache2D({})", input_display)
-                }
-                ChunkSpecificNoiseFunctionComponent::DensityInterpolator(x) => {
-                    let input = &stack[x.input_index];
-                    let input_display = input.display_test(stack);
-                    format!("DensityInterpolator({})", input_display)
-                }
-                ChunkSpecificNoiseFunctionComponent::FlatCache(x) => {
-                    let input = &stack[x.input_index];
-                    let input_display = input.display_test(stack);
-                    format!("FlatCache({})", input_display)
-                }
-                ChunkSpecificNoiseFunctionComponent::CacheOnce(x) => {
-                    let input = &stack[x.input_index];
-                    let input_display = input.display_test(stack);
-                    format!("CacheOnce({})", input_display)
-                }
-            },
-            Self::PassThrough(x) => {
-                let input = &stack[x.input_index()];
-                let input_display = input.display_test(stack);
-                format!("PassThrough({})", input_display)
-            }
-            Self::Panic(_) => unreachable!(),
-        }
-    }
-}
-*/
 
 impl NoiseFunctionComponentRange for ChunkNoiseFunctionComponent<'_> {
     #[inline]
@@ -179,7 +78,6 @@ impl NoiseFunctionComponentRange for ChunkNoiseFunctionComponent<'_> {
             Self::Dependent(dependent) => dependent.min(),
             Self::Chunk(chunk) => chunk.min(),
             Self::PassThrough(pass_through) => pass_through.min(),
-            //Self::Panic(message) => panic!("{}", message),
         }
     }
 
@@ -190,7 +88,6 @@ impl NoiseFunctionComponentRange for ChunkNoiseFunctionComponent<'_> {
             Self::Dependent(dependent) => dependent.max(),
             Self::Chunk(chunk) => chunk.max(),
             Self::PassThrough(pass_through) => pass_through.max(),
-            //Self::Panic(message) => panic!("{}", message),
         }
     }
 }
@@ -212,7 +109,6 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
                 pos,
                 sample_options,
             ),
-            //Self::Panic(message) => panic!("{}", message),
         }
     }
 
@@ -238,10 +134,6 @@ impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> 
             ),
         }
     }
-}
-
-thread_local! {
-    static TOPO_FILL_BUFFERS: RefCell<Vec<Vec<f64>>> = const { RefCell::new(Vec::new()) };
 }
 
 impl ChunkNoiseFunctionComponent<'_> {
