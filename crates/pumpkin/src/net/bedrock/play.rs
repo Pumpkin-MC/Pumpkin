@@ -12,11 +12,7 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_protocol::bedrock::{
-    client::{
-        inventory_content::CInventoryContent,
-        respawn::CRespawn,
-        set_actor_data::{CSetActorData, PropertySyncData},
-    },
+    client::{inventory_content::CInventoryContent, respawn::CRespawn},
     network_item::{
         ContainerName, FullContainerName, NetworkItemDescriptor, NetworkItemStackDescriptor,
     },
@@ -29,7 +25,6 @@ use pumpkin_protocol::{
             player_hotbar::CPlayerHotbar, update_block::CUpdateBlock,
         },
         server::{
-            actor_event::{ActorEventType, SActorEvent},
             animate::{AnimateAction, SAnimate},
             block_pick_request::SBlockPickRequest,
             command_request::SCommandRequest,
@@ -299,12 +294,16 @@ impl BedrockClient {
 
         let new_pitch = packet.pitch;
         let new_yaw = packet.yaw;
+        let new_head_yaw = packet.head_yaw;
 
         let old_pitch = entity.pitch.load();
         let old_yaw = entity.yaw.load();
+        let old_head_yaw = entity.head_yaw.load();
 
         let pos_changed = new_pos != old_pos;
-        let rot_changed = new_pitch != old_pitch || new_yaw != old_yaw;
+        let body_rot_changed = new_pitch != old_pitch || new_yaw != old_yaw;
+        let head_rot_changed = new_head_yaw != old_head_yaw;
+        let rot_changed = body_rot_changed || head_rot_changed;
 
         if pos_changed || rot_changed {
             let world = player.world();
@@ -312,13 +311,17 @@ impl BedrockClient {
             if pos_changed {
                 player.get_entity().set_pos(new_pos);
             }
-            if rot_changed {
+            if body_rot_changed {
                 entity.pitch.store(new_pitch);
                 entity.yaw.store(new_yaw);
+            }
+            if head_rot_changed {
+                entity.head_yaw.store(new_head_yaw);
             }
 
             let je_yaw = (new_yaw * 256.0 / 360.0).rem_euclid(256.0);
             let je_pitch = (new_pitch * 256.0 / 360.0).rem_euclid(256.0);
+            let je_head_yaw = (new_head_yaw * 256.0 / 360.0).rem_euclid(256.0);
             let delta = pumpkin_util::math::vector3::Vector3::new(
                 new_pos.x - old_pos.x,
                 new_pos.y - old_pos.y,
@@ -334,7 +337,7 @@ impl BedrockClient {
                 ),
                 new_pitch,
                 new_yaw,
-                new_yaw, // Head yaw
+                new_head_yaw,
                 pumpkin_protocol::bedrock::client::CMovePlayer::MODE_NORMAL,
                 on_ground,
                 pumpkin_protocol::codec::var_ulong::VarULong(0),
@@ -369,13 +372,12 @@ impl BedrockClient {
                 );
             }
 
-            if rot_changed {
+            if head_rot_changed {
                 world.broadcast_packet_except(
                     &[player.gameprofile.id],
-                    // Adjust to `CHeadRot` if that is what your crate currently calls it
                     &pumpkin_protocol::java::client::play::CHeadRot::new(
                         player.entity_id().into(),
-                        je_yaw as u8,
+                        je_head_yaw as u8,
                     ),
                 );
             }
@@ -1308,26 +1310,11 @@ impl BedrockClient {
             PlayerAction::DropItem => {
                 player.drop_held_item(false).await;
             }
-            PlayerAction::Respawn => {
-                let entity = player.get_entity();
-                self.enqueue_packet(&SActorEvent {
-                    entity_runtime_id: VarULong(player.entity_id() as u64),
-                    event_type: ActorEventType::Respawn,
-                    event_data: VarInt(0),
-                    fire_at_position: None,
-                })
-                .await;
-                player.send_health().await;
-                self.enqueue_packet(&CSetActorData {
-                    actor_runtime_id: VarULong(player.entity_id() as u64),
-                    metadata: entity.bedrock_metadata(),
-                    synced_properties: PropertySyncData {
-                        int_properties: std::collections::HashMap::new(),
-                        float_properties: std::collections::HashMap::new(),
-                    },
-                    tick: VarULong(0),
-                })
-                .await;
+            PlayerAction::Respawn
+                if player.living_entity.dead.load(Ordering::Relaxed)
+                    || player.living_entity.health.load() <= 0.0 =>
+            {
+                player.world().respawn_player(player, false).await;
             }
             // TODO
             _ => {}
@@ -1339,10 +1326,10 @@ impl BedrockClient {
             return;
         }
 
-        if player.living_entity.dead.load(Ordering::Relaxed)
-            || player.living_entity.health.load() <= 0.0
+        if !player.living_entity.dead.load(Ordering::Relaxed)
+            && player.living_entity.health.load() > 0.0
         {
-            player.world().respawn_player(player, false).await;
+            return;
         }
 
         let entity = player.get_entity();

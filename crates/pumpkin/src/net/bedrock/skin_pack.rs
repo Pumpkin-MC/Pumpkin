@@ -14,7 +14,7 @@ use pumpkin_protocol::serial::PacketWrite;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use tokio::sync::RwLock;
-use tracing::warn;
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 const CACHE_VERSION: u8 = 4;
@@ -124,7 +124,29 @@ impl BedrockSkinPacks {
                 .and_then(|pack| pack.skin(player_id))
                 .cloned();
         }
-        let cached_skin = CachedSkin::new(skin)?;
+        let Some(cached_skin) = CachedSkin::new(skin) else {
+            debug!(
+                %player_id,
+                skin_width = skin.image_width,
+                skin_height = skin.image_height,
+                cape_width = skin.cape_width,
+                cape_height = skin.cape_height,
+                cape_bytes = skin.cape_data.len(),
+                persona = skin.is_persona,
+                "Bedrock skin cannot be represented by a Java mannequin"
+            );
+            return None;
+        };
+        debug!(
+            %player_id,
+            skin_width = skin.image_width,
+            skin_height = skin.image_height,
+            cape_width = skin.cape_width,
+            cape_height = skin.cape_height,
+            cape_bytes = skin.cape_data.len(),
+            cape_exported = cached_skin.cape_png.is_some(),
+            "Prepared Bedrock skin for the Java resource pack"
+        );
         let mut registry = self.registry.write().await;
         if !registry.dirty
             && registry.skins.get(&player_id).is_some_and(|cached| {
@@ -315,12 +337,11 @@ impl CachedSkin {
                 skin.cape_height,
                 skin.cape_data.clone(),
             )?;
-            if cape.width() == cape.height() * 2 {
-                let cape = image::imageops::resize(&cape, 64, 32, FilterType::Nearest);
-                Some(encode_png(&cape, 64, 32)?)
-            } else {
-                None
-            }
+            // Bedrock permits cape atlases other than the classic 2:1 layout.
+            // Mannequins consume Java's fixed 64x32 UV layout, so normalize the
+            // validated source rather than silently dropping those capes.
+            let cape = image::imageops::resize(&cape, 64, 32, FilterType::Nearest);
+            Some(encode_png(&cape, 64, 32)?)
         };
         Some(Self {
             slim,
@@ -736,6 +757,23 @@ mod tests {
         let body = image::load_from_memory(&cached.png).unwrap();
         assert_eq!((body.width(), body.height()), (64, 64));
         let cape = image::load_from_memory(cached.cape_png.as_ref().unwrap()).unwrap();
+        assert_eq!((cape.width(), cape.height()), (64, 32));
+    }
+
+    #[tokio::test]
+    async fn normalizes_nonstandard_bedrock_cape_atlases() {
+        let packs = BedrockSkinPacks::default();
+        let player_id = Uuid::new_v4();
+        let mut skin = Skin::steve();
+        skin.cape_width = 64;
+        skin.cape_height = 64;
+        skin.cape_data = vec![0x7f; 64 * 64 * 4];
+
+        let registered = packs.register(player_id, &skin).await.unwrap();
+        assert!(registered.cape_asset.is_some());
+        let registry = packs.registry.read().await;
+        let cape =
+            image::load_from_memory(registry.skins[&player_id].cape_png.as_ref().unwrap()).unwrap();
         assert_eq!((cape.width(), cape.height()), (64, 32));
     }
 
