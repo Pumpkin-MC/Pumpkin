@@ -134,12 +134,16 @@ impl SyncHandler {
     ) {
         if let Some(player) = self.player.lock().await.as_ref() {
             player
-                .enqueue_slot_packet(&CSetContainerSlot::new(
-                    screen_handler.sync_id as i8,
-                    next_revision as i32,
-                    slot as i16,
-                    &ItemStackSerializer::from(stack.clone()),
-                ))
+                .enqueue_slot_packet(
+                    &CSetContainerSlot::new(
+                        screen_handler.sync_id as i8,
+                        next_revision as i32,
+                        slot as i16,
+                        &ItemStackSerializer::from(stack.clone()),
+                    ),
+                    screen_handler.window_type,
+                    screen_handler.slots.len(),
+                )
                 .await;
         }
     }

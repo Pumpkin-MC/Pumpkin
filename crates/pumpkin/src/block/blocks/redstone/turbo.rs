@@ -262,9 +262,12 @@ impl RedstoneWireTurbo {
             self.identify_neighbors(world, upd1);
         }
 
-        let neighbors: [NodeId; 24] = self.nodes[upd1.index].neighbors.as_ref().unwrap()[0..24]
-            .try_into()
-            .unwrap();
+        let Some(neighbors_ref) = self.nodes[upd1.index].neighbors.as_ref() else {
+            return;
+        };
+        let Ok(neighbors): Result<[NodeId; 24], _> = neighbors_ref[0..24].try_into() else {
+            return;
+        };
 
         let layer1 = layer + 1;
 
@@ -380,7 +383,9 @@ impl RedstoneWireTurbo {
         }
 
         if wire_power < 15 {
-            let neighbors = self.nodes[upd.index].neighbors.as_ref().unwrap();
+            let Some(neighbors) = self.nodes[upd.index].neighbors.as_ref() else {
+                return wire;
+            };
 
             let center_up = self.nodes[neighbors[1].index].state;
 

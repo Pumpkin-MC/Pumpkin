@@ -194,7 +194,12 @@ struct PotentialCalculator(std::sync::Mutex<Vec<PointCharge>>);
 
 impl Clone for PotentialCalculator {
     fn clone(&self) -> Self {
-        Self(std::sync::Mutex::new(self.0.lock().unwrap().clone()))
+        Self(std::sync::Mutex::new(
+            self.0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
+        ))
     }
 }
 
@@ -203,14 +208,17 @@ impl PotentialCalculator {
         if charge != 0. {
             self.0
                 .lock()
-                .unwrap()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .push(PointCharge(pos.to_f64(), charge));
         }
     }
 
     pub fn remove_charge(&self, pos: &BlockPos, charge: f64) {
         if charge != 0. {
-            let mut charges = self.0.lock().unwrap();
+            let mut charges = self
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let pos_f64 = pos.to_f64();
             if let Some(idx) = charges.iter().position(|c| c.0 == pos_f64 && c.1 == charge) {
                 charges.swap_remove(idx);
@@ -222,7 +230,10 @@ impl PotentialCalculator {
             return 0.;
         }
         let mut sum: f64 = 0.;
-        let charges = self.0.lock().unwrap();
+        let charges = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for i in charges.iter() {
             sum += i.get_potential_change(pos);
         }
@@ -500,12 +511,12 @@ pub fn get_random_pos_within(
 
     let x = (chunk_pos.x << 4) + rng.next_bounded_i32(16);
     let z = (chunk_pos.y << 4) + rng.next_bounded_i32(16);
-    let temp_y = chunk.heightmap.lock().unwrap().get(
-        ChunkHeightmapType::WorldSurface,
-        x,
-        z,
-        chunk.section.min_y,
-    ) + 1;
+    let temp_y = chunk
+        .heightmap
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(ChunkHeightmapType::WorldSurface, x, z, chunk.section.min_y)
+        + 1;
     let y = rng.next_inbetween_i32(min_y, temp_y);
     BlockPos::new(x, y, z)
 }
@@ -534,13 +545,13 @@ pub fn spawn_mobs_for_chunk_generation(
 
         let count = spawner_data.min_count
             + rand::random_range(0..(1 + spawner_data.max_count - spawner_data.min_count).max(1));
-        let entity_type = EntityType::from_name(
-            spawner_data
-                .r#type
-                .strip_prefix("minecraft:")
-                .unwrap_or(spawner_data.r#type),
-        )
-        .unwrap();
+        let name = spawner_data
+            .r#type
+            .strip_prefix("minecraft:")
+            .unwrap_or(spawner_data.r#type);
+        let Some(entity_type) = EntityType::from_name(name) else {
+            return;
+        };
 
         let mut x = xo + rand::random_range(0..16);
         let mut z = zo + rand::random_range(0..16);
@@ -663,9 +674,16 @@ pub fn spawn_category_for_position(
                 random_group_size = rng().random_range(spawner.min_count..=spawner.max_count);
             }
 
-            let spawner = current_spawner.unwrap();
-            let entity_type =
-                &EntityType::from_name(spawner.r#type.strip_prefix("minecraft:").unwrap()).unwrap();
+            let Some(spawner) = current_spawner else {
+                break 'spawn_loop;
+            };
+            let name = spawner
+                .r#type
+                .strip_prefix("minecraft:")
+                .unwrap_or(spawner.r#type);
+            let Some(entity_type) = EntityType::from_name(name) else {
+                break 'spawn_loop;
+            };
 
             new_pos = adjust_spawn_position(world, new_pos, entity_type);
 
@@ -774,7 +792,7 @@ pub fn get_random_spawn_mob_at(
             id if id == MobCategory::WATER_CREATURE.id => biome.spawners.water_creature,
             id if id == MobCategory::WATER_AMBIENT.id => biome.spawners.water_ambient,
             id if id == MobCategory::MISC.id => biome.spawners.misc,
-            _ => panic!(),
+            _ => biome.spawners.misc,
         }
         .choose(&mut rng())
     }

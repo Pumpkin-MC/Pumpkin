@@ -14,6 +14,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
@@ -114,7 +115,11 @@ impl EntityBase for EggEntity {
             let spawn_pos = hit_pos.add(&normal.multiply(0.5, 0.5, 0.5));
 
             // Play egg break particles
-            world.send_entity_status(self.get_entity(), EntityStatus::Death);
+            world.send_entity_status(
+                self.get_entity(),
+                EntityStatus::Death,
+                Some(ActorEventType::Death),
+            );
 
             // Decide spawn count per probabilities:
             // r == 0 -> spawn 4 (1/256)

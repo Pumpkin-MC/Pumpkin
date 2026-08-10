@@ -5,11 +5,9 @@ use crate::translation::java::{
 };
 use crate::{ADVANCEMENT_TREE, Advancement};
 use pumpkin_util::identifier::Identifier;
-use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::color::{Color, NamedColor};
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use pumpkin_util::text::color::NamedColor;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
@@ -30,10 +28,12 @@ pub struct AdvancementDisplay {
 }
 
 impl AdvancementDisplay {
+    #[allow(deprecated)]
     pub fn get_title(&self) -> TextComponent {
         TextComponent::translate(self.title, [])
     }
 
+    #[allow(deprecated)]
     pub fn get_description(&self) -> TextComponent {
         TextComponent::translate(self.description, [])
     }

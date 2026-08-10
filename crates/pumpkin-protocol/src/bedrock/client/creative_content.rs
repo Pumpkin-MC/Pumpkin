@@ -41,21 +41,34 @@ pub enum CreativeCategory {
 
 impl PacketWrite for CreativeCategory {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        (*self as i32).write(writer)?;
-        Ok(())
+        (*self as u8).write(writer)
     }
 }
 
-#[derive(PacketWrite)]
 pub struct Group {
     pub creative_category: CreativeCategory,
     pub name: String,
     pub icon_item: NetworkItemDescriptor,
 }
 
-#[derive(PacketWrite)]
+impl PacketWrite for Group {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.creative_category.write(writer)?;
+        self.name.write(writer)?;
+        self.icon_item.write_item_instance(writer)
+    }
+}
+
 pub struct Entry {
     pub id: VarUInt,
     pub item: NetworkItemDescriptor,
     pub group_index: VarUInt,
+}
+
+impl PacketWrite for Entry {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.id.write(writer)?;
+        self.item.write_item_instance(writer)?;
+        self.group_index.write(writer)
+    }
 }

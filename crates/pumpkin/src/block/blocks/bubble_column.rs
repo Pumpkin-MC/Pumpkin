@@ -51,8 +51,7 @@ fn source_water_state() -> BlockStateId {
         .states
         .iter()
         .find(|state| state.is_still && state.is_source)
-        .expect("water must have a still source state")
-        .block_state_id
+        .map_or(BlockStateId::new_or_air(0), |state| state.block_state_id)
 }
 
 fn bubble_column_state(kind: BubbleColumnKind) -> BlockStateId {

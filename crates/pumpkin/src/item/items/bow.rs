@@ -41,8 +41,7 @@ impl ItemBehaviour for BowItem {
 
             // Get the held item stack
             let inventory = player.inventory();
-            let held = inventory.held_item();
-            let stack = held.lock().await.clone();
+            let stack = inventory.held_item().await;
 
             // Start the bow drawing animation
             player
@@ -98,7 +97,7 @@ impl BowItem {
 
         let projectile = if let Some(slot) = arrow_slot {
             let stack = player.inventory().get_stack(slot).await;
-            stack.lock().await.copy_with_count(1)
+            stack.copy_with_count(1)
         } else {
             ItemStack::new(1, &Item::ARROW)
         };
@@ -109,11 +108,9 @@ impl BowItem {
 
         // Check for Infinity enchantment
         let mut has_infinity = false;
-        let held = player.inventory().held_item();
+        let held = player.inventory().held_item().await;
         if let Some(enchantments) =
-            held.lock()
-                .await
-                .get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
+            held.get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
         {
             has_infinity = enchantments
                 .enchantment
@@ -179,8 +176,7 @@ impl BowItem {
             ArrowEntity::new_shot(arrow_entity, player.get_entity(), &projectile, pickup);
 
         // Read enchantments of the held item (bow)
-        let held = player.inventory().held_item();
-        let stack = held.lock().await;
+        let stack = player.inventory().held_item().await;
         if let Some(enchantments) =
             stack.get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
         {

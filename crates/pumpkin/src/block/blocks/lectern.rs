@@ -97,10 +97,9 @@ impl ScreenHandlerFactory for LecternScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate_cross(
+        pumpkin_macros::translate_cross!(
             translation::java::CONTAINER_LECTERN,
-            translation::bedrock::TILE_LECTERN_NAME,
-            &[],
+            translation::bedrock::TILE_LECTERN_NAME
         )
     }
 }
@@ -225,9 +224,9 @@ impl BlockBehaviour for LecternBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let mut item_stack = args.item_stack.lock().await;
+            let item_stack = &mut *args.item_stack;
             if !item_stack.item.has_tag(&tag::Item::MINECRAFT_LECTERN_BOOKS) {
-                return BlockActionResult::Pass;
+                return BlockActionResult::PassToDefaultBlockAction;
             }
 
             let props = LecternLikeProperties::from_state_id(
@@ -236,18 +235,18 @@ impl BlockBehaviour for LecternBlock {
             );
             if props.has_book {
                 // Fall through so `normal_use` opens the reading screen.
-                return BlockActionResult::Pass;
+                return BlockActionResult::PassToDefaultBlockAction;
             }
 
             let Some(lectern) = args.world.get_block_entity(args.position) else {
-                return BlockActionResult::Pass;
+                return BlockActionResult::PassToDefaultBlockAction;
             };
             let Some(lectern) = lectern.as_any().downcast_ref::<LecternBlockEntity>() else {
-                return BlockActionResult::Pass;
+                return BlockActionResult::PassToDefaultBlockAction;
             };
 
             let book = item_stack.split_unless_creative(args.player.gamemode.load(), 1);
-            drop(item_stack);
+            let _ = item_stack;
             lectern.set_stack(0, book).await;
 
             Self::set_has_book(args.world, args.position, true).await;

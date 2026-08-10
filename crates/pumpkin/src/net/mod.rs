@@ -98,7 +98,7 @@ impl Default for PlayerConfig {
     fn default() -> Self {
         Self {
             locale: "en_us".to_string(),
-            view_distance: NonZeroU8::new(8).unwrap(),
+            view_distance: NonZeroU8::new(8).unwrap_or(NonZeroU8::MIN),
             chat_mode: ChatMode::Enabled,
             chat_colors: true,
             skin_parts: 0x7F,
@@ -249,6 +249,13 @@ impl ClientPlatform {
         }
     }
 
+    pub async fn enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
+        match self {
+            Self::Java(java) => entity.send_java_spawn_packet(java).await,
+            Self::Bedrock(bedrock) => entity.send_bedrock_spawn_packet(bedrock).await,
+        }
+    }
+
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
         match self {
             Self::Java(java) => java.send_chunks(chunks).await,
@@ -315,7 +322,7 @@ pub async fn can_not_join(
                 translation::java::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
                 translation::java::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
                 [TextComponent::text(
-                    expires.format(FORMAT_DESCRIPTION).unwrap(),
+                    expires.format(FORMAT_DESCRIPTION).unwrap_or_default(),
                 )],
             )),
             None => text,
@@ -353,7 +360,7 @@ pub async fn can_not_join(
                 translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
                 translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
                 [TextComponent::text(
-                    expires.format(FORMAT_DESCRIPTION).unwrap(),
+                    expires.format(FORMAT_DESCRIPTION).unwrap_or_default(),
                 )],
             )),
             None => text,
@@ -444,14 +451,14 @@ pub enum DisconnectReason {
     IncompatiblePack = 59,
     OutOfStorage = 60,
     InvalidLevel = 61,
-    DisconnectPacketDeprecated = 62,
+    DisconnectPacket = 62,
     BlockMismatch = 63,
     InvalidHeights = 64,
     InvalidWidths = 65,
-    ConnectionLostDeprecated = 66,
+    ConnectionLost = 66,
     ZombieConnection = 67,
     Shutdown = 68,
-    ReasonNotSetDeprecated = 69,
+    ReasonNotSet = 69,
     LoadingStateTimeout = 70,
     ResourcePackLoadingFailed = 71,
     SearchingForSessionLoadingScreenFailed = 72,
@@ -471,7 +478,7 @@ pub enum DisconnectReason {
     NetherNetNegotiationTimeout = 86,
     NetherNetInactivityTimeout = 87,
     StaleConnectionBeingReplaced = 88,
-    RealmsSessionNotFoundDeprecated = 89,
+    RealmsSessionNotFound = 89,
     BadPacket = 90,
     NetherNetFailedToCreateOffer = 91,
     NetherNetFailedToCreateAnswer = 92,
@@ -504,6 +511,32 @@ pub enum DisconnectReason {
     RealmsTimelineRequired = 119,
     GuestWithoutHost = 120,
     FailedToJoinExperience = 121,
+    NetherNetDataChannelClosed = 122,
+    DiscoveryEnvironmentMismatch = 123,
+    HostWithoutKeys = 124,
+    HostSignedOut = 125,
+    ScriptWatchdogException = 126,
+    ScriptMemoryLimitExceeded = 127,
+    StorageLowDuringGameplay = 128,
+    StorageFullDuringGameplay = 129,
+    LevelStorageCorruption = 130,
+    EditionMismatchVanillaToEdu = 131,
+    EditionMismatchEduToVanilla = 132,
+    EditorMismatchEditorToVanilla = 133,
+    EditorMismatchVanillaToEditor = 134,
+    DenyListed = 135,
+    NonceMissing = 136,
+    NonceNotFound = 137,
+    NonceExpired = 138,
+    NonceNotValid = 139,
+    HostDisconnected = 140,
+    EditorJoinIntentPolicyFailure = 141,
+    NetherNetIdentityNotAllowed = 142,
+    InvalidName = 143,
+    ExpiredToken = 144,
+    HostAcceptsNoTypeOfAuth = 145,
+    NotAuthenticatedFastFail = 146,
+    EditorNotAllowed = 147,
 }
 
 #[cfg(test)]

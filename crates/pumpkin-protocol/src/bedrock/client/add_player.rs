@@ -9,7 +9,7 @@ use std::io::{Error, Write};
 use uuid::Uuid;
 
 use super::{
-    common::{AbilityLayer, EntityLink},
+    common::{AbilityLayer, BuildPlatform, EntityLink},
     set_actor_data::EntityMetadata,
 };
 
@@ -31,7 +31,7 @@ pub struct CAddPlayer {
     pub ability_data: AbilityData,
     pub links: Vec<EntityLink>,
     pub device_id: String,
-    pub build_platform: i32,
+    pub build_platform: BuildPlatform,
 }
 
 impl PacketWrite for CAddPlayer {
@@ -79,7 +79,7 @@ impl CAddPlayer {
         ability_data: AbilityData,
         links: Vec<EntityLink>,
         device_id: String,
-        build_platform: i32,
+        build_platform: BuildPlatform,
     ) -> Self {
         Self {
             uuid,

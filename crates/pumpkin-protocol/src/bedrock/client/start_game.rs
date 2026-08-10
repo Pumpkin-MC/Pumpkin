@@ -55,7 +55,6 @@ pub struct CStartGame {
     pub enable_clientside_generation: bool,
     pub blocknetwork_ids_are_hashed: bool,
     pub server_auth_sounds: bool,
-    pub is_logging_chat: bool,
 
     // 2 Optionals is what we need Mojang :cap:
     pub server_join_information: Option<ServerJoinInformation>,
@@ -123,7 +122,7 @@ pub struct LevelSettings {
     pub is_created_in_editor: bool,
     pub is_exported_from_editor: bool,
     pub day_cycle_stop_time: VarInt,
-    pub education_edition_offer: VarInt,
+    pub education_edition_offer: VarUInt,
     pub has_education_features_enabled: bool,
     pub education_product_id: String,
     pub rain_level: f32,
@@ -141,7 +140,7 @@ pub struct LevelSettings {
 
     pub bonus_chest: bool,
     pub has_start_with_map_enabled: bool,
-    pub permission_level: VarInt,
+    pub permission_level: u8,
     pub server_simulation_distance: i32,
     pub has_locked_behavior_pack: bool,
     pub has_locked_resource_pack: bool,

@@ -157,7 +157,10 @@ impl FancyTrunkPlacer {
 
                 if TreeFeature::can_replace(block.to_state(), block.to_block_id()) {
                     let block = Block::from_state_id(trunk_provider.id);
-                    let original_props = &block.properties(trunk_provider.id).unwrap().to_props();
+                    let Some(properties) = block.properties(trunk_provider.id) else {
+                        continue;
+                    };
+                    let original_props = &properties.to_props();
                     let axis = axis.to_value();
                     // Set the right Axis
                     let props: Vec<(&'static str, &'static str)> = original_props

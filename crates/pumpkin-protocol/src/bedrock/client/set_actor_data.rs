@@ -79,6 +79,7 @@ impl PacketWrite for EntityMetadata {
         for (key, value) in &self.0 {
             VarUInt(*key).write(writer)?;
             VarUInt(value.type_id()).write(writer)?;
+            (value.type_id() as u8).write(writer)?;
             value.write(writer)?;
         }
         Ok(())

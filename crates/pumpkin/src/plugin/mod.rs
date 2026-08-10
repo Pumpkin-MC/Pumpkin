@@ -483,12 +483,13 @@ impl PluginManager {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
             })
-        } else {
-            let mut rl = DefaultEditor::new().expect("Failed to create rustyline editor");
+        } else if let Ok(mut rl) = DefaultEditor::new() {
             rl.readline(&prompt).is_ok_and(|line| {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
             })
+        } else {
+            false
         };
 
         if let Some((wrapper, rl)) = rl_taken {
@@ -1029,6 +1030,28 @@ impl PluginManager {
             if !handler.is_blocking() {
                 handler.handle_dyn(server, event).await;
             }
+        }
+    }
+
+    pub async fn send_message(
+        &self,
+        sender: &str,
+        recipient: &str,
+        message: &[u8],
+    ) -> Result<Result<Vec<u8>, String>, ()> {
+        if sender == recipient {
+            return Err(());
+        }
+
+        let plugins = self.plugins.read().await;
+        let target_plugin = &plugins
+            .iter()
+            .find(|p| p.metadata.name == recipient)
+            .ok_or(())?;
+        if let Some(instance) = &target_plugin.instance {
+            Ok(instance.on_ipc_message(sender, message).await)
+        } else {
+            Err(())
         }
     }
 }

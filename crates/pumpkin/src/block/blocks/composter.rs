@@ -56,7 +56,7 @@ impl BlockBehaviour for ComposterBlock {
                 return BlockActionResult::Consume;
             }
 
-            let mut item_stack = args.item_stack.lock().await;
+            let item_stack = &mut *args.item_stack;
             let item_id = item_stack.item.id;
 
             // Check if the item is consumable by the composter

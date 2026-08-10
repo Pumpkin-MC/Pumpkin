@@ -22,10 +22,10 @@ pub const BYTES_PER_MEBIBYTE: u64 = 1024 * 1024;
 /// Writes to a string which cannot fail.
 macro_rules! writeln_output {
     ($dst:expr $(,)?) => {
-        writeln!($dst).unwrap();
+        let _ = writeln!($dst);
     };
     ($dst:expr, $($arg:tt)*) => {
-        writeln!($dst, $($arg)*).unwrap();
+        let _ = writeln!($dst, $($arg)*);
     };
 }
 

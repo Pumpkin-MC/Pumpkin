@@ -33,12 +33,12 @@ impl TemptGoal {
     }
 
     async fn is_holding_tempt_item(&self, player: &Player) -> bool {
-        let main = player.inventory.held_item();
-        if self.is_tempt_item(&*main.lock().await) {
+        let main = player.inventory().held_item().await;
+        if self.is_tempt_item(&main) {
             return true;
         }
-        let off = player.inventory.off_hand_item().await;
-        self.is_tempt_item(&*off.lock().await)
+        let off = player.inventory().off_hand_item().await;
+        self.is_tempt_item(&off)
     }
 
     async fn find_tempting_player(&self, mob: &dyn Mob) -> Option<Arc<Player>> {
@@ -92,16 +92,23 @@ impl Goal for TemptGoal {
                 let mob_entity = mob.get_mob_entity();
                 let player_pos = player.get_entity().pos.load();
 
-                mob_entity.look_control.lock().unwrap().look_at(
-                    mob,
-                    player_pos.x,
-                    player.get_entity().get_eye_y(),
-                    player_pos.z,
-                );
+                mob_entity
+                    .look_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .look_at(
+                        mob,
+                        player_pos.x,
+                        player.get_entity().get_eye_y(),
+                        player_pos.z,
+                    );
 
                 let mob_pos = mob_entity.living_entity.entity.pos.load();
                 if mob_pos.squared_distance_to_vec(&player_pos) > STOP_DISTANCE * STOP_DISTANCE {
-                    let mut navigator = mob_entity.navigator.lock().unwrap();
+                    let mut navigator = mob_entity
+                        .navigator
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     navigator.set_progress(NavigatorGoal::new(mob_pos, player_pos, self.speed));
                 }
             }

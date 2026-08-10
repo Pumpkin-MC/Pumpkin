@@ -165,14 +165,13 @@ impl CommandExecutor for PlaceTemplateExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
+                    pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_PLACE_TEMPLATE_SUCCESS,
-                        [
-                            TextComponent::text(template_name.clone()),
-                            TextComponent::text(block_pos.0.x.to_string()),
-                            TextComponent::text(block_pos.0.y.to_string()),
-                            TextComponent::text(block_pos.0.z.to_string()),
-                        ],
+                        translation::bedrock::COMMANDS_PLACE_SUCCESS,
+                        TextComponent::text(template_name.clone()),
+                        TextComponent::text(block_pos.0.x.to_string()),
+                        TextComponent::text(block_pos.0.y.to_string()),
+                        TextComponent::text(block_pos.0.z.to_string())
                     ),
                     true,
                 )
@@ -198,7 +197,7 @@ impl CommandExecutor for PlaceJigsawExecutor {
                     BlockPos::new(p.x as i32, p.y as i32, p.z as i32)
                 });
 
-            let (piece_count, placer) = {
+            let (_piece_count, placer) = {
                 let seed = hash_block_pos(block_pos.0.x, block_pos.0.y, block_pos.0.z) as u64;
                 let random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
                 let world_gen = &context.world().level.world_gen;
@@ -231,7 +230,10 @@ impl CommandExecutor for PlaceJigsawExecutor {
                     JIGSAW_FAILED.create_without_context(TextComponent::text(pool.clone()))
                 })?;
 
-                let collector = position.collector.lock().unwrap();
+                let collector = position
+                    .collector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let piece_count = collector.pieces.len();
 
                 let mut placer = WorldBlockPlacer::new(context.world());
@@ -256,14 +258,12 @@ impl CommandExecutor for PlaceJigsawExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
+                    pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_PLACE_JIGSAW_SUCCESS,
-                        [
-                            TextComponent::text(piece_count.to_string()),
-                            TextComponent::text(block_pos.0.x.to_string()),
-                            TextComponent::text(block_pos.0.y.to_string()),
-                            TextComponent::text(block_pos.0.z.to_string()),
-                        ],
+                        translation::bedrock::COMMANDS_PLACE_SUCCESS,
+                        TextComponent::text(block_pos.0.x.to_string()),
+                        TextComponent::text(block_pos.0.y.to_string()),
+                        TextComponent::text(block_pos.0.z.to_string())
                     ),
                     true,
                 )
@@ -341,7 +341,10 @@ impl CommandExecutor for PlaceStructureExecutor {
                             .create_without_context(TextComponent::text(structure_name.clone()))
                     })?;
 
-                    let collector = position.collector.lock().unwrap();
+                    let collector = position
+                        .collector
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     let piece_count = collector.pieces.len();
 
                     let mut placer = WorldBlockPlacer::new(context.world());
@@ -377,7 +380,10 @@ impl CommandExecutor for PlaceStructureExecutor {
                                 .create_without_context(TextComponent::text(structure_name.clone()))
                         })?;
 
-                    let mut collector = position.collector.lock().unwrap();
+                    let mut collector = position
+                        .collector
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     let piece_count = collector.pieces.len();
 
                     let mut placer = WorldBlockPlacer::new(context.world());
@@ -516,14 +522,13 @@ impl CommandExecutor for PlaceStructureExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
+                    pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_PLACE_STRUCTURE_SUCCESS,
-                        [
-                            TextComponent::text(structure_name),
-                            TextComponent::text(block_pos.0.x.to_string()),
-                            TextComponent::text(block_pos.0.y.to_string()),
-                            TextComponent::text(block_pos.0.z.to_string()),
-                        ],
+                        translation::bedrock::COMMANDS_PLACE_SUCCESS,
+                        TextComponent::text(structure_name),
+                        TextComponent::text(block_pos.0.x.to_string()),
+                        TextComponent::text(block_pos.0.y.to_string()),
+                        TextComponent::text(block_pos.0.z.to_string())
                     ),
                     true,
                 )
@@ -568,10 +573,10 @@ impl CommandExecutor for PlaceFeatureExecutor {
             let cx = block_pos.0.x >> 4;
             let cz = block_pos.0.z >> 4;
             let mut chunk = ProtoChunk::new(cx, cz, &world_gen);
-            let bottom_y = chunk.bottom_y();
-            let height = chunk.height();
-            let chunk_min_y = bottom_y as i32;
-            let chunk_height = height as i32;
+            let generation_bottom_y = chunk.generation_bottom_y();
+            let generation_height = chunk.generation_height();
+            let chunk_min_y = chunk.bottom_y() as i32;
+            let chunk_height = chunk.height() as i32;
             let surface_y = ground_y(block_pos.0.y, chunk_min_y, chunk_height);
 
             let ground = surface_y as i16;
@@ -601,8 +606,8 @@ impl CommandExecutor for PlaceFeatureExecutor {
             configured.generate(
                 &mut chunk,
                 &reg,
-                bottom_y,
-                height,
+                generation_bottom_y,
+                generation_height,
                 key,
                 &mut random,
                 block_pos,
@@ -633,14 +638,13 @@ impl CommandExecutor for PlaceFeatureExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
+                    pumpkin_macros::translate_cross!(
                         translation::java::COMMANDS_PLACE_FEATURE_SUCCESS,
-                        [
-                            TextComponent::text(feature_name),
-                            TextComponent::text(block_pos.0.x.to_string()),
-                            TextComponent::text(block_pos.0.y.to_string()),
-                            TextComponent::text(block_pos.0.z.to_string()),
-                        ],
+                        translation::bedrock::COMMANDS_PLACE_SUCCESS,
+                        TextComponent::text(feature_name),
+                        TextComponent::text(block_pos.0.x.to_string()),
+                        TextComponent::text(block_pos.0.y.to_string()),
+                        TextComponent::text(block_pos.0.z.to_string())
                     ),
                     true,
                 )

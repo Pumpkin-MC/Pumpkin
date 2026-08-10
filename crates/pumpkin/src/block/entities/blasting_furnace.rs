@@ -12,7 +12,6 @@ use std::{
 
 use pumpkin_data::recipes::CookingRecipeKind;
 use pumpkin_util::math::position::BlockPos;
-use tokio::sync::Mutex;
 
 use crate::{
     block::entities::furnace_like_block_entity::CookingBlockEntityBase,
@@ -30,7 +29,7 @@ pub struct BlastingFurnaceBlockEntity {
     pub lit_time_remaining: AtomicU16,
     pub lit_total_time: AtomicU16,
 
-    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
+    pub items: tokio::sync::RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
 
     /// Tracks recipes used for XP calculation (vanilla `RecipesUsed` NBT format)
     /// Maps result item ID -> craft count
@@ -46,7 +45,7 @@ impl BlastingFurnaceBlockEntity {
         Self {
             position,
             dirty: AtomicBool::new(false),
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             cooking_total_time: AtomicU16::new(0),
             cooking_time_spent: AtomicU16::new(0),
             lit_total_time: AtomicU16::new(0),

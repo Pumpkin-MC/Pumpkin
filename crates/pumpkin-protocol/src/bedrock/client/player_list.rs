@@ -6,6 +6,16 @@ use pumpkin_macros::packet;
 use std::io::{Error, Write};
 use uuid::Uuid;
 
+use super::common::BuildPlatform;
+
+const WIDE_SKIN_RESOURCE_PATCH: &[u8] = br#"{"geometry":{"default":"geometry.humanoid.custom"}}"#;
+const SLIM_SKIN_RESOURCE_PATCH: &[u8] =
+    br#"{"geometry":{"default":"geometry.humanoid.customSlim"}}"#;
+const DEFAULT_SKIN_GEOMETRY: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../assets/bedrock/player_geometry.json"
+));
+
 #[packet(63)]
 pub struct CPlayerList {
     pub action: u8,
@@ -14,23 +24,21 @@ pub struct CPlayerList {
 
 impl PacketWrite for CPlayerList {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.action.write(writer)?;
         VarUInt(self.entries.len() as u32).write(writer)?;
-        match self.action {
-            Self::ACTION_ADD => {
-                for entry in &self.entries {
+        for entry in &self.entries {
+            match self.action {
+                Self::ACTION_ADD => {
+                    VarUInt(1).write(writer)?;
+                    Self::ACTION_ADD.write(writer)?;
                     entry.write(writer)?;
                 }
-                for entry in &self.entries {
-                    entry.skin.is_trusted.write(writer)?;
-                }
-            }
-            Self::ACTION_REMOVE => {
-                for entry in &self.entries {
+                Self::ACTION_REMOVE => {
+                    VarUInt(0).write(writer)?;
+                    Self::ACTION_REMOVE.write(writer)?;
                     entry.uuid.write(writer)?;
                 }
+                _ => return Err(Error::other("Invalid PlayerList action")),
             }
-            _ => return Err(Error::other("Invalid PlayerList action")),
         }
         Ok(())
     }
@@ -47,7 +55,7 @@ pub struct PlayerListEntry {
     pub username: String,
     pub xuid: String,
     pub platform_chat_id: String,
-    pub build_platform: i32,
+    pub build_platform: BuildPlatform,
     pub skin: Skin,
     pub is_teacher: bool,
     pub is_host: bool,
@@ -67,7 +75,7 @@ impl PacketWrite for PlayerListEntry {
         self.is_teacher.write(writer)?;
         self.is_host.write(writer)?;
         self.is_sub_client.write(writer)?;
-        self.player_color.write(writer)
+        u32::from_be_bytes(self.player_color).write(writer)
     }
 }
 
@@ -98,6 +106,7 @@ pub struct Skin {
     pub is_primary_user: bool,
     pub override_appearance: bool,
     pub is_trusted: bool,
+    pub profile_hash: String,
 }
 
 impl Skin {
@@ -106,7 +115,7 @@ impl Skin {
         Self {
             skin_id: "Standard_Custom".to_string(),
             play_fab_id: String::new(),
-            resource_patch: r#"{"geometry":{"default":"geometry.humanoid"}}"#.into(),
+            resource_patch: WIDE_SKIN_RESOURCE_PATCH.to_vec(),
             image_width: 64,
             image_height: 64,
             // 64 * 64 * 4 = 16384 bytes of raw RGBA data
@@ -116,22 +125,35 @@ impl Skin {
             cape_width: 0,
             cape_height: 0,
             cape_data: Vec::new(),
-            geometry_data: Vec::new(),
+            geometry_data: DEFAULT_SKIN_GEOMETRY.to_vec(),
             animation_data: Vec::new(),
-            geometry_data_engine_version: Vec::new(),
+            geometry_data_engine_version: b"1.26.40".to_vec(),
             cape_id: String::new(),
             full_id: "Standard_Custom".to_string(),
             arm_size: "wide".to_string(),
             skin_color: "#0".to_string(),
             persona_pieces: Vec::new(),
             piece_tint_colors: Vec::new(),
-            is_premium: false,
+            is_premium: true,
             is_persona: false,
             persona_cape_on_classic: false,
             is_primary_user: false,
-            override_appearance: false,
+            override_appearance: true,
             is_trusted: true,
+            profile_hash: String::new(),
         }
+    }
+
+    /// Selects the standard wide or slim player geometry while preserving the
+    /// rest of the serialized skin.
+    pub fn set_slim(&mut self, slim: bool) {
+        self.arm_size = if slim { "slim" } else { "wide" }.to_string();
+        self.resource_patch = if slim {
+            SLIM_SKIN_RESOURCE_PATCH
+        } else {
+            WIDE_SKIN_RESOURCE_PATCH
+        }
+        .to_vec();
     }
 }
 
@@ -145,7 +167,7 @@ impl PacketWrite for Skin {
         self.image_height.write(writer)?;
         VarUInt(self.skin_data.len() as u32).write(writer)?;
         writer.write_all(&self.skin_data)?;
-        (self.animations.len() as u32).write(writer)?;
+        VarUInt(self.animations.len() as u32).write(writer)?;
         for anim in &self.animations {
             anim.write(writer)?;
         }
@@ -155,19 +177,19 @@ impl PacketWrite for Skin {
         writer.write_all(&self.cape_data)?;
         VarUInt(self.geometry_data.len() as u32).write(writer)?;
         writer.write_all(&self.geometry_data)?;
-        VarUInt(self.animation_data.len() as u32).write(writer)?;
-        writer.write_all(&self.animation_data)?;
         VarUInt(self.geometry_data_engine_version.len() as u32).write(writer)?;
         writer.write_all(&self.geometry_data_engine_version)?;
+        VarUInt(self.animation_data.len() as u32).write(writer)?;
+        writer.write_all(&self.animation_data)?;
         self.cape_id.write(writer)?;
         self.full_id.write(writer)?;
-        self.arm_size.write(writer)?;
-        self.skin_color.write(writer)?;
-        (self.persona_pieces.len() as u32).write(writer)?;
+        u8::from(!self.arm_size.eq_ignore_ascii_case("slim")).write(writer)?;
+        parse_color(&self.skin_color).write(writer)?;
+        VarUInt(self.persona_pieces.len() as u32).write(writer)?;
         for piece in &self.persona_pieces {
             piece.write(writer)?;
         }
-        (self.piece_tint_colors.len() as u32).write(writer)?;
+        VarUInt(self.piece_tint_colors.len() as u32).write(writer)?;
         for color in &self.piece_tint_colors {
             color.write(writer)?;
         }
@@ -175,11 +197,13 @@ impl PacketWrite for Skin {
         self.is_persona.write(writer)?;
         self.persona_cape_on_classic.write(writer)?;
         self.is_primary_user.write(writer)?;
-        self.override_appearance.write(writer)
+        self.override_appearance.write(writer)?;
+        self.is_trusted.to_string().write(writer)?;
+        self.profile_hash.write(writer)
     }
 }
 
-#[derive(Clone, PacketWrite)]
+#[derive(Clone)]
 pub struct SkinAnimation {
     pub image_width: u32,
     pub image_height: u32,
@@ -189,17 +213,83 @@ pub struct SkinAnimation {
     pub expression_type: u32,
 }
 
+impl PacketWrite for SkinAnimation {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.image_width.write(writer)?;
+        self.image_height.write(writer)?;
+        VarUInt(self.image_data.len() as u32).write(writer)?;
+        writer.write_all(&self.image_data)?;
+        VarUInt(self.animation_type).write(writer)?;
+        self.frames.write(writer)?;
+        VarUInt(self.expression_type).write(writer)
+    }
+}
+
 #[derive(Clone, PacketWrite)]
 pub struct PersonaPiece {
     pub piece_id: String,
-    pub piece_type: String,
-    pub pack_id: String,
+    pub piece_type: i32,
+    pub pack_id: Uuid,
     pub is_default: bool,
     pub product_id: String,
 }
 
-#[derive(Clone, PacketWrite)]
+#[derive(Clone)]
 pub struct PieceTintColor {
     pub piece_type: String,
-    pub colors: Vec<String>,
+    pub colors: [i32; 4],
+}
+
+impl PacketWrite for PieceTintColor {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        let piece_type = if self.piece_type == "persona_hand" {
+            "hands"
+        } else {
+            self.piece_type
+                .strip_prefix("persona_")
+                .unwrap_or(&self.piece_type)
+        };
+        piece_type.write(writer)?;
+        for color in self.colors {
+            color.write(writer)?;
+        }
+        Ok(())
+    }
+}
+
+fn parse_color(color: &str) -> i32 {
+    let value = color.trim_start_matches('#');
+    u32::from_str_radix(value, 16).unwrap_or_default() as i32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DEFAULT_SKIN_GEOMETRY, SLIM_SKIN_RESOURCE_PATCH, Skin, WIDE_SKIN_RESOURCE_PATCH};
+
+    #[test]
+    fn fallback_skin_contains_the_geometry_it_references() {
+        let skin = Skin::steve();
+
+        assert_eq!(skin.resource_patch, WIDE_SKIN_RESOURCE_PATCH);
+        assert_eq!(skin.geometry_data, DEFAULT_SKIN_GEOMETRY);
+        assert!(
+            String::from_utf8_lossy(&skin.geometry_data)
+                .contains(r#""identifier":"geometry.humanoid.custom""#)
+        );
+        assert!(skin.override_appearance);
+        assert!(skin.is_trusted);
+    }
+
+    #[test]
+    fn slim_fallback_skin_references_the_slim_geometry() {
+        let mut skin = Skin::steve();
+        skin.set_slim(true);
+
+        assert_eq!(skin.arm_size, "slim");
+        assert_eq!(skin.resource_patch, SLIM_SKIN_RESOURCE_PATCH);
+        assert!(
+            String::from_utf8_lossy(&skin.geometry_data)
+                .contains(r#""identifier":"geometry.humanoid.customSlim""#)
+        );
+    }
 }

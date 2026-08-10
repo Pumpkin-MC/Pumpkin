@@ -5,7 +5,7 @@ use std::{
 
 use pumpkin_util::{
     GameMode,
-    math::{position::BlockPos, vector3::Vector3},
+    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
 };
 
 use crate::{
@@ -136,6 +136,13 @@ impl<T: PacketWrite> PacketWrite for Vector3<T> {
         self.x.write(writer)?;
         self.y.write(writer)?;
         self.z.write(writer)
+    }
+}
+
+impl<T: PacketWrite> PacketWrite for Vector2<T> {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.x.write(writer)?;
+        self.y.write(writer)
     }
 }
 

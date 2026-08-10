@@ -57,6 +57,7 @@ pub fn build() -> TokenStream {
             #(#slot_range_single_slot_names_tokens),*
         ];
 
+        #[allow(clippy::match_same_arms)]
         #[must_use]
         pub fn get_slot_range(name: &str) -> Option<&'static [usize]> {
             match name {

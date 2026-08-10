@@ -74,7 +74,7 @@ impl AdvancementManager {
             Ok(())
         })
         .await
-        .expect("spawn_blocking task panicked")
+        .unwrap_or(Ok(()))
     }
 
     /// Saves the advancements of a specific player.

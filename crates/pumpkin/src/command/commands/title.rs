@@ -187,12 +187,15 @@ pub fn init_command_tree() -> CommandTree {
                         .execute(TitleExecutor(TitleMode::ActionBar)),
                 ),
             )
-            .then(literal("times").then(
-                argument(ARG_FADE_IN, TimeArgumentConsumer).then(
-                    argument(ARG_STAY, TimeArgumentConsumer).then(
-                        argument(ARG_FADE_OUT, TimeArgumentConsumer).execute(TimesTitleExecutor),
+            .then(
+                literal("times").then(
+                    argument(ARG_FADE_IN, TimeArgumentConsumer::new()).then(
+                        argument(ARG_STAY, TimeArgumentConsumer::new()).then(
+                            argument(ARG_FADE_OUT, TimeArgumentConsumer::new())
+                                .execute(TimesTitleExecutor),
+                        ),
                     ),
                 ),
-            )),
+            ),
     )
 }

@@ -227,8 +227,8 @@ impl XoroshiroSplitter {
     #[must_use]
     pub fn split_string(&self, seed: &str) -> Xoroshiro {
         let bytes = md5::compute(seed.as_bytes());
-        let l = u64::from_be_bytes(bytes[0..8].try_into().expect("incorrect length"));
-        let m = u64::from_be_bytes(bytes[8..16].try_into().expect("incorrect length"));
+        let l = u64::from_be_bytes(bytes[0..8].try_into().unwrap_or([0; 8]));
+        let m = u64::from_be_bytes(bytes[8..16].try_into().unwrap_or([0; 8]));
 
         Xoroshiro::new(l ^ self.lo, m ^ self.hi)
     }

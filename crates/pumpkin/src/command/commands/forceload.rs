@@ -74,7 +74,10 @@ impl CommandExecutor for ForceloadAddExecutor {
             }
 
             {
-                let mut forced = world.forced_chunks.lock().unwrap();
+                let mut forced = world
+                    .forced_chunks
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 for x in min_x..=max_x {
                     for z in min_z..=max_z {
                         forced.insert(Vector2::new(x, z));
@@ -158,7 +161,10 @@ impl CommandExecutor for ForceloadRemoveExecutor {
             }
 
             {
-                let mut forced = world.forced_chunks.lock().unwrap();
+                let mut forced = world
+                    .forced_chunks
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 for x in min_x..=max_x {
                     for z in min_z..=max_z {
                         forced.remove(&Vector2::new(x, z));
@@ -212,7 +218,10 @@ impl CommandExecutor for ForceloadRemoveAllExecutor {
                 .ok_or_else(|| ERROR_FAILED_REMOVE.create_without_context())?;
 
             let removed_count = {
-                let mut forced = world.forced_chunks.lock().unwrap();
+                let mut forced = world
+                    .forced_chunks
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let count = forced.len();
                 forced.clear();
                 count
@@ -256,7 +265,10 @@ impl CommandExecutor for ForceloadQueryExecutor {
             };
 
             let is_forced = {
-                let forced = world.forced_chunks.lock().unwrap();
+                let forced = world
+                    .forced_chunks
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 forced.contains(&chunk_pos)
             };
 
@@ -289,7 +301,10 @@ impl CommandExecutor for ForceloadQueryExecutor {
             }
 
             let all_forced = {
-                let forced = world.forced_chunks.lock().unwrap();
+                let forced = world
+                    .forced_chunks
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 forced
                     .iter()
                     .map(|pos| format!("[{}, {}]", pos.x, pos.y))

@@ -395,14 +395,7 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
 
         let mut chunks = indices
             .into_iter()
-            .map(|index| {
-                (
-                    index,
-                    self.chunks_data[index]
-                        .as_ref()
-                        .expect("We are trying to write a chunk, but it does not exist!"),
-                )
-            })
+            .filter_map(|index| self.chunks_data[index].as_ref().map(|c| (index, c)))
             .collect::<Vec<_>>();
 
         // Sort such that writes are in order
@@ -619,7 +612,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
     ) -> Result<(), ChunkWritingError> {
         let epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs() as u32;
 
         let index = Self::get_chunk_index(chunk.position().0, chunk.position().1);
@@ -726,13 +719,9 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
                                     timestamp: epoch,
                                     file_sector_offset: 0,
                                 });
-                            } else {
+                            } else if let Some(swap) = chunks_to_shift.pop() {
                                 // swap last element of the chunks to shift (the first because we
                                 // reversed it) and shift the rest down
-                                let swap = chunks_to_shift
-                                    .pop()
-                                    .expect("We just checked that this exists");
-
                                 let indices_to_shift = chunks_to_shift
                                     .iter()
                                     .map(|(index, _)| index)
@@ -749,10 +738,9 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
                                 });
                                 write_action.maybe_update_chunk_index(index);
 
-                                self.chunks_data[swapped_index]
-                                    .as_mut()
-                                    .expect("We checked if this was none")
-                                    .file_sector_offset = old_offset;
+                                if let Some(swapped) = self.chunks_data[swapped_index].as_mut() {
+                                    swapped.file_sector_offset = old_offset;
+                                }
                                 write_action.maybe_update_chunk_index(swapped_index);
 
                                 // Then offset everything else
@@ -765,12 +753,13 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
                                 );
 
                                 for shift_index in indices_to_shift {
-                                    let chunk_data = self.chunks_data[shift_index]
-                                        .as_mut()
-                                        .expect("We checked if this was none");
-                                    let new_offset = chunk_data.file_sector_offset as i64 + offset;
-                                    chunk_data.file_sector_offset = new_offset as u32;
-                                    write_action.maybe_update_chunk_index(shift_index);
+                                    if let Some(chunk_data) = self.chunks_data[shift_index].as_mut()
+                                    {
+                                        let new_offset =
+                                            chunk_data.file_sector_offset as i64 + offset;
+                                        chunk_data.file_sector_offset = new_offset as u32;
+                                        write_action.maybe_update_chunk_index(shift_index);
+                                    }
                                 }
 
                                 // If the shift is negative then there will be trailing data, but i

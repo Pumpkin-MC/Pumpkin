@@ -59,16 +59,14 @@ impl ScreenHandlerFactory for ChestScreenFactory {
 
     fn get_display_name(&self) -> TextComponent {
         if self.0.size() > 27 {
-            TextComponent::translate_cross(
+            pumpkin_macros::translate_cross!(
                 translation::java::CONTAINER_CHESTDOUBLE,
-                translation::bedrock::CONTAINER_CHESTDOUBLE,
-                &[],
+                translation::bedrock::CONTAINER_CHESTDOUBLE
             )
         } else {
-            TextComponent::translate_cross(
+            pumpkin_macros::translate_cross!(
                 translation::java::CONTAINER_CHEST,
-                translation::bedrock::CONTAINER_CHEST,
-                &[],
+                translation::bedrock::CONTAINER_CHEST
             )
         }
     }

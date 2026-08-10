@@ -290,7 +290,10 @@ impl<'a> crate::serial::PacketReadSlice<'a> for i16 {
         }
         let (bytes, rest) = buf.split_at(2);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid i16 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
@@ -301,7 +304,10 @@ impl<'a> crate::serial::PacketReadSlice<'a> for i32 {
         }
         let (bytes, rest) = buf.split_at(4);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid i32 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
@@ -312,7 +318,10 @@ impl<'a> crate::serial::PacketReadSlice<'a> for i64 {
         }
         let (bytes, rest) = buf.split_at(8);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid i64 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
@@ -323,7 +332,10 @@ impl<'a> crate::serial::PacketReadSlice<'a> for u16 {
         }
         let (bytes, rest) = buf.split_at(2);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid u16 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
@@ -334,7 +346,10 @@ impl<'a> crate::serial::PacketReadSlice<'a> for u32 {
         }
         let (bytes, rest) = buf.split_at(4);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid u32 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
@@ -345,7 +360,10 @@ impl<'a> crate::serial::PacketReadSlice<'a> for u64 {
         }
         let (bytes, rest) = buf.split_at(8);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid u64 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
@@ -356,7 +374,10 @@ impl<'a> crate::serial::PacketReadSlice<'a> for f32 {
         }
         let (bytes, rest) = buf.split_at(4);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid f32 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
@@ -367,7 +388,10 @@ impl<'a> crate::serial::PacketReadSlice<'a> for f64 {
         }
         let (bytes, rest) = buf.split_at(8);
         *buf = rest;
-        Ok(Self::from_le_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid f64 slice"))?;
+        Ok(Self::from_le_bytes(arr))
     }
 }
 
@@ -392,7 +416,10 @@ impl<'a> crate::serial::PacketReadSlice<'a> for uuid::Uuid {
         }
         let (bytes, rest) = buf.split_at(16);
         *buf = rest;
-        Ok(Self::from_bytes(bytes.try_into().unwrap()))
+        let arr = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid Uuid slice"))?;
+        Ok(Self::from_bytes(arr))
     }
 }
 

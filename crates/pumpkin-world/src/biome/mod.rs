@@ -43,7 +43,9 @@ pub fn hash_seed(seed: u64) -> i64 {
     let mut hasher = Sha256::new();
     hasher.update(seed.to_le_bytes());
     let result = hasher.finalize();
-    i64::from_le_bytes(result[..8].try_into().unwrap())
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&result[..8]);
+    i64::from_le_bytes(bytes)
 }
 
 #[cfg(test)]

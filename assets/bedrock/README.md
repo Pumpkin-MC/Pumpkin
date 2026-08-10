@@ -19,3 +19,9 @@ This directory contains a number of different data files used to help support co
 - `biomes.json`
     - downloaded from [GeyserMC/mappings](https://github.com/GeyserMC/mappings)
     - Maps Java Edition biome identifiers to their corresponding Bedrock Edition biome ID. Used in code generation to translate Java biomes to Bedrock counterparts.
+- `player_geometry.json`
+    - adapted from [GeyserMC/Geyser](https://github.com/GeyserMC/Geyser/blob/master/core/src/main/resources/bedrock/geometries/geo.json) (MIT License)
+    - Provides valid standard wide and slim Bedrock player geometry for Java Edition player skins.
+    - See `LICENSE-GEYSER` for the source license and copyright notice.
+
+The Java-to-Bedrock skin conversion also uses Geyser's required-opacity masks under the same license.

@@ -1614,13 +1614,20 @@ pub fn build() -> TokenStream {
             #constants
 
             #[must_use]
+            #[allow(deprecated)]
             pub fn translated_name(&self) -> TextComponent {
-                TextComponent::translate(
-                    self.components
-                        .iter()
-                        .find_map(|(id, data)| (id == &ItemName).then(|| data.as_any().downcast_ref::<ItemNameImpl>().unwrap().name)).unwrap(),
-                    &[],
-                )
+                let name = self
+                    .components
+                    .iter()
+                    .find_map(|(id, data)| {
+                        if id == &ItemName {
+                            data.as_any().downcast_ref::<ItemNameImpl>().map(|n| n.name)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(self.registry_key);
+                TextComponent::translate(name, &[])
             }
 
             #[doc = "Try to parse an item from a resource location string."]

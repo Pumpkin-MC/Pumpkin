@@ -14,3 +14,6 @@ serde_json = { workspace = true }
 
 [package.metadata.component]
 target = { path = "../pumpkin-plugin-wit" }
+
+[lints]
+workspace = true

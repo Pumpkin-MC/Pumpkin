@@ -176,6 +176,18 @@ macro_rules! local_y {
     };
 }
 
+macro_rules! from_grid_xz {
+    ($grid:expr, $offset:expr) => {
+        ($grid << 4) + $offset
+    };
+}
+
+macro_rules! from_grid_y {
+    ($grid:expr, $offset:expr) => {
+        $grid * 12 + $offset
+    };
+}
+
 pub struct WorldAquiferSampler {
     fluid_level_sampler: StandardChunkFluidLevelSampler,
     start_x: i32,
@@ -185,6 +197,11 @@ pub struct WorldAquiferSampler {
     size_z: usize,
     levels: Box<[Option<FluidLevel>]>,
     packed_positions: Box<[i64]>,
+    surface_level_sample_min_x: i32,
+    surface_level_sample_min_z: i32,
+    surface_level_sample_max_x: i32,
+    surface_level_sample_max_z: i32,
+    skip_sampling_above_y: Option<i32>,
 }
 
 impl WorldAquiferSampler {
@@ -225,6 +242,11 @@ impl WorldAquiferSampler {
         let end_z = local_xz!(chunk_pos::end_block_z(chunk_z)) + 1;
         let size_z = (end_z - start_z) as usize + 1;
 
+        let surface_level_sample_min_x = from_grid_xz!(start_x, 0);
+        let surface_level_sample_min_z = from_grid_xz!(start_z, 0);
+        let surface_level_sample_max_x = from_grid_xz!(end_x, 9);
+        let surface_level_sample_max_z = from_grid_xz!(end_z, 9);
+
         let cache_size = size_x * size_y * size_z;
 
         let mut packed_positions = vec![0; cache_size];
@@ -258,7 +280,46 @@ impl WorldAquiferSampler {
             size_z,
             levels: vec![None; cache_size as usize].into(),
             packed_positions: packed_positions.into(),
+            surface_level_sample_min_x,
+            surface_level_sample_min_z,
+            surface_level_sample_max_x,
+            surface_level_sample_max_z,
+            skip_sampling_above_y: None,
         }
+    }
+
+    fn skip_sampling_above_y(
+        cache: &mut Option<i32>,
+        surface_level_sample_min_x: i32,
+        surface_level_sample_min_z: i32,
+        surface_level_sample_max_x: i32,
+        surface_level_sample_max_z: i32,
+        height_estimator: &mut SurfaceHeightEstimateSampler,
+    ) -> i32 {
+        if let Some(y) = *cache {
+            return y;
+        }
+
+        let mut max_surface_level = i32::MIN;
+        let mut z = surface_level_sample_min_z;
+        while z <= surface_level_sample_max_z {
+            let mut x = surface_level_sample_min_x;
+            while x <= surface_level_sample_max_x {
+                let level = height_estimator.estimate_height(x, z);
+                if level > max_surface_level {
+                    max_surface_level = level;
+                }
+                x += 4;
+            }
+            z += 4;
+        }
+
+        let adjusted_surface_level = max_surface_level + 8;
+        let skip_sampling_above_grid_y = local_y!(adjusted_surface_level + 12) + 1;
+        let y = from_grid_y!(skip_sampling_above_grid_y, 11) - 1;
+
+        *cache = Some(y);
+        y
     }
 
     fn checked_packed_position_index(&self, x: i32, y: i32, z: i32) -> Option<usize> {
@@ -584,6 +645,19 @@ impl WorldAquiferSampler {
         let fluid_level = self
             .fluid_level_sampler
             .get_fluid_level(sample_x, sample_y, sample_z);
+        let skip_sampling_above_y = Self::skip_sampling_above_y(
+            &mut self.skip_sampling_above_y,
+            self.surface_level_sample_min_x,
+            self.surface_level_sample_min_z,
+            self.surface_level_sample_max_x,
+            self.surface_level_sample_max_z,
+            height_estimator,
+        );
+
+        if sample_y > skip_sampling_above_y {
+            return (Some(fluid_level.get_block(sample_y).default_state), false);
+        }
+
         if fluid_level.get_block(sample_y) == &LAVA_BLOCK {
             return (Some(LAVA_BLOCK.default_state), false);
         }
@@ -606,20 +680,21 @@ impl WorldAquiferSampler {
                 let dy = block_pos::unpack_y(packed) - sample_y;
                 let dz = block_pos::unpack_z(packed) - sample_z;
                 let h = dx * dx + dy * dy + dz * dz;
+
                 if nearest[3].1 > h {
                     nearest[3] = (packed, h);
-                }
-                if nearest[2].1 > h {
-                    nearest[3] = nearest[2];
-                    nearest[2] = (packed, h);
-                }
-                if nearest[1].1 > h {
-                    nearest[2] = nearest[1];
-                    nearest[1] = (packed, h);
-                }
-                if nearest[0].1 > h {
-                    nearest[1] = nearest[0];
-                    nearest[0] = (packed, h);
+                    if nearest[2].1 > h {
+                        nearest[3] = nearest[2];
+                        nearest[2] = (packed, h);
+                    }
+                    if nearest[1].1 > h {
+                        nearest[2] = nearest[1];
+                        nearest[1] = (packed, h);
+                    }
+                    if nearest[0].1 > h {
+                        nearest[1] = nearest[0];
+                        nearest[0] = (packed, h);
+                    }
                 }
             }};
         }

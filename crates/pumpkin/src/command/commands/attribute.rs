@@ -76,7 +76,7 @@ impl CommandExecutor for GetExecutor {
             let has_attr = living
                 .attributes
                 .read()
-                .unwrap()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .contains_key(&attribute.id);
             if !has_attr {
                 return Err(NO_ATTRIBUTE_ERROR.create_without_context(
@@ -148,7 +148,7 @@ impl CommandExecutor for BaseSetExecutor {
             let has_attr = living
                 .attributes
                 .read()
-                .unwrap()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .contains_key(&attribute.id);
             if !has_attr {
                 return Err(NO_ATTRIBUTE_ERROR.create_without_context(
@@ -200,7 +200,7 @@ impl CommandExecutor for BaseResetExecutor {
             let has_attr = living
                 .attributes
                 .read()
-                .unwrap()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .contains_key(&attribute.id);
             if !has_attr {
                 return Err(NO_ATTRIBUTE_ERROR.create_without_context(
@@ -258,7 +258,10 @@ impl CommandExecutor for ModifierAddExecutor {
             let modifier_id = uuid.to_string();
 
             let res = {
-                let mut map = living.attributes.write().unwrap();
+                let mut map = living
+                    .attributes
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let inst = map.get_mut(&attribute.id).ok_or_else(|| {
                     NO_ATTRIBUTE_ERROR.create_without_context(
                         target.get_name(),
@@ -327,7 +330,10 @@ impl CommandExecutor for ModifierRemoveExecutor {
             let modifier_id = uuid.to_string();
 
             let res = {
-                let mut map = living.attributes.write().unwrap();
+                let mut map = living
+                    .attributes
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let inst = map.get_mut(&attribute.id).ok_or_else(|| {
                     NO_ATTRIBUTE_ERROR.create_without_context(
                         target.get_name(),
@@ -396,7 +402,10 @@ impl CommandExecutor for ModifierGetExecutor {
             let modifier_id = uuid.to_string();
 
             let val = {
-                let map = living.attributes.read().unwrap();
+                let map = living
+                    .attributes
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let inst = map.get(&attribute.id).ok_or_else(|| {
                     NO_ATTRIBUTE_ERROR.create_without_context(
                         target.get_name(),

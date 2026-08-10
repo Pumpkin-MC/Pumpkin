@@ -11,11 +11,32 @@ use crate::command::{
 };
 use crate::server::Server;
 
-pub struct TimeArgumentConsumer;
+#[derive(Clone, Copy, Debug)]
+pub struct TimeArgumentConsumer {
+    min: i32,
+}
+
+impl Default for TimeArgumentConsumer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TimeArgumentConsumer {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self { min: 0 }
+    }
+
+    #[must_use]
+    pub const fn min(min: i32) -> Self {
+        Self { min }
+    }
+}
 
 impl GetClientSideArgParser for TimeArgumentConsumer {
     fn get_client_side_parser(&self) -> ArgumentType {
-        ArgumentType::Time { min: 0 }
+        ArgumentType::Time { min: self.min }
     }
 
     fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
@@ -34,23 +55,23 @@ impl ArgumentConsumer for TimeArgumentConsumer {
 
         let result: Option<Arg<'a>> = s_opt.and_then(|s| {
             let (num_str, unit) = s
-                .find(|c: char| c.is_alphabetic())
+                .find(|c: char| c.is_alphabetic() && c != '-')
                 .map_or((s, "t"), |pos| (&s[..pos], &s[pos..]));
 
-            let number = num_str.parse::<f32>().ok()?; // Replaces .ok()?
+            let number = num_str.parse::<f32>().ok()?;
 
-            if number < 0.0 {
-                return None;
-            }
-
-            let ticks = match unit {
-                "d" => number * 24000.0,
-                "s" => number * 20.0,
-                "t" => number,
+            let factor = match unit {
+                "d" => 24000.0,
+                "s" => 20.0,
+                "t" | "" => 1.0,
                 _ => return None,
             };
 
-            let ticks = ticks.round() as i32;
+            let ticks = (number * factor).round() as i32;
+
+            if ticks < self.min {
+                return None;
+            }
 
             Some(Arg::Time(ticks))
         });

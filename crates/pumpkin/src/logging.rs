@@ -198,7 +198,10 @@ impl GzipRollingLogger {
 
     fn rotate_log(&self) -> Result<(), Box<dyn std::error::Error>> {
         let now = time::OffsetDateTime::now_utc();
-        let mut data = self.data.lock().unwrap();
+        let mut data = self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let new_gz_path = Self::new_filename(true)?;
         let latest_path = PathBuf::from(LOG_DIR).join(&data.latest_filename);

@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockStateId;

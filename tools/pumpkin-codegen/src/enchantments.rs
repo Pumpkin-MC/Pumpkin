@@ -187,7 +187,7 @@ pub fn build() -> TokenStream {
             }]);
         }
 
-        name_to_type.extend(quote! { #name => Some(&Self::#format_name), });
+        name_to_type.extend(quote! { #name | #raw_name => Some(&Self::#format_name), });
         id_to_type.extend(quote! { #id => Some(&Self::#format_name), });
     }
 
@@ -314,6 +314,7 @@ pub fn build() -> TokenStream {
                 }
                 true
             }
+            #[allow(deprecated)]
             pub fn get_fullname(&self, level: i32) -> TextComponent {
                 let mut ret = TextComponent::translate(self.description, []).color_named(
                     if self.has_tag(&EnchantmentTag::MINECRAFT_CURSE) {

@@ -8,6 +8,7 @@ use crate::{
 };
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
 use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::{Vector2, to_chunk_pos};
@@ -116,7 +117,11 @@ impl EntityBase for LingeringPotionEntity {
             extinguish_fire_if_water_potion(&world, hit_pos, &stack).await;
 
             // Play impact particles
-            world.send_entity_status(self.get_entity(), EntityStatus::Death);
+            world.send_entity_status(
+                self.get_entity(),
+                EntityStatus::Death,
+                Some(ActorEventType::Death),
+            );
 
             // Read stored item stack and compute potion effects
             let stack = self.item_stack.read().await.clone();

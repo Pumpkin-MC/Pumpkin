@@ -1,6 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use pumpkin_protocol::bedrock::packet_decoder::UDPNetworkDecoder;
+use pumpkin_protocol::bedrock::packet_decoder::BedrockBatchDecoder;
 use pumpkin_protocol::bedrock::server::{
     client_cache_status::SClientCacheStatus,
     command_request::SCommandRequest,
@@ -9,11 +9,6 @@ use pumpkin_protocol::bedrock::server::{
     loading_screen::SLoadingScreen,
     login::SLogin,
     player_auth_input::SPlayerAuthInput,
-    raknet::{
-        connection::SConnectionRequest,
-        open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
-        unconnected_ping::{SUnconnectedPing, SUnconnectedPingOpenConnections},
-    },
     request_chunk_radius::SRequestChunkRadius,
     request_network_settings::SRequestNetworkSettings,
     text::SText,
@@ -50,42 +45,27 @@ fn fuzz_serverbound_packets(payload: &[u8]) {
         SRequestNetworkSettings,
         SText,
     );
-
-    // RakNet Handshake Packets (Usually read without version)
-    cursor.set_position(0);
-    let _ = SConnectionRequest::read(&mut cursor);
-    cursor.set_position(0);
-    let _ = SOpenConnectionRequest1::read(&mut cursor);
-    cursor.set_position(0);
-    let _ = SOpenConnectionRequest2::read(&mut cursor);
-    cursor.set_position(0);
-    let _ = SUnconnectedPing::read(&mut cursor);
-    cursor.set_position(0);
-    let _ = SUnconnectedPingOpenConnections::read(&mut cursor);
 }
 
 // ---------------------------------------------------------------------------
 // Fuzz Target
 // ---------------------------------------------------------------------------
 fuzz_target!(|data: &[u8]| {
-    if data.len() < 20 {
+    if data.len() < 2 {
         return;
     }
 
     // Split data for decoder configuration vs raw payload
     let threshold_raw = data[0];
-    let key: [u8; 16] = data[1..17].try_into().unwrap();
-    let stream_data = &data[17..];
+    let stream_data = &data[1..];
 
-    let mut decoder = UDPNetworkDecoder::new();
+    let mut decoder = BedrockBatchDecoder::new();
 
     // Setup Decoder
     if threshold_raw > 0 {
         // Assuming your CompressionThreshold is a wrapper around u32
         decoder.set_compression((threshold_raw as u32).try_into().unwrap());
     }
-    decoder.set_encryption(&key);
-
     // 1. Fuzz the Decoder (Framing/VarInts/Bitmasks)
     let decoder_cursor = Cursor::new(stream_data.to_vec());
     if let Ok(raw_packet) = decoder.get_game_packet(decoder_cursor) {

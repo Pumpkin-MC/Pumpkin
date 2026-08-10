@@ -11,7 +11,6 @@ use pumpkin_data::translation;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;
@@ -247,10 +246,9 @@ impl BlockBehaviour for BedBlock {
             {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate_cross(
+                        &pumpkin_macros::translate_cross!(
                             translation::java::BLOCK_MINECRAFT_BED_OBSTRUCTED,
-                            translation::java::BLOCK_MINECRAFT_BED_OBSTRUCTED,
-                            [],
+                            translation::bedrock::TILE_BED_OBSTRUCTED
                         ),
                         true,
                     )
@@ -264,10 +262,9 @@ impl BlockBehaviour for BedBlock {
 
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate_cross(
+                        &pumpkin_macros::translate_cross!(
                             translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
-                            translation::bedrock::TILE_BED_OCCUPIED,
-                            [],
+                            translation::bedrock::TILE_BED_OCCUPIED
                         ),
                         true,
                     )
@@ -287,10 +284,9 @@ impl BlockBehaviour for BedBlock {
             {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate_cross(
+                        &pumpkin_macros::translate_cross!(
                             translation::java::BLOCK_MINECRAFT_BED_TOO_FAR_AWAY,
-                            translation::java::BLOCK_MINECRAFT_BED_TOO_FAR_AWAY,
-                            [],
+                            translation::bedrock::TILE_BED_TOOFAR
                         ),
                         true,
                     )
@@ -311,10 +307,9 @@ impl BlockBehaviour for BedBlock {
                 .await
             {
                 args.player
-                    .send_system_message(&TextComponent::translate_cross(
+                    .send_system_message(&pumpkin_macros::translate_cross!(
                         translation::java::BLOCK_MINECRAFT_SET_SPAWN,
-                        translation::bedrock::TILE_BED_RESPAWNSET,
-                        [],
+                        translation::bedrock::TILE_BED_RESPAWNSET
                     ))
                     .await;
             }
@@ -323,10 +318,9 @@ impl BlockBehaviour for BedBlock {
             if !can_sleep(args.world).await {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate_cross(
+                        &pumpkin_macros::translate_cross!(
                             translation::java::BLOCK_MINECRAFT_BED_NO_SLEEP,
-                            translation::java::BLOCK_MINECRAFT_BED_NO_SLEEP,
-                            [],
+                            translation::bedrock::TILE_BED_NOSLEEP
                         ),
                         true,
                     )
@@ -346,10 +340,9 @@ impl BlockBehaviour for BedBlock {
                 {
                     args.player
                         .send_system_message_raw(
-                            &TextComponent::translate_cross(
+                            &pumpkin_macros::translate_cross!(
                                 translation::java::BLOCK_MINECRAFT_BED_NOT_SAFE,
-                                translation::java::BLOCK_MINECRAFT_BED_NOT_SAFE,
-                                [],
+                                translation::bedrock::TILE_BED_NOTSAFE
                             ),
                             true,
                         )

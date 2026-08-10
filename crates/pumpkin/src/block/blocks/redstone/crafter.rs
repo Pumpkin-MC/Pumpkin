@@ -44,10 +44,9 @@ impl ScreenHandlerFactory for CrafterScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate_cross(
+        pumpkin_macros::translate_cross!(
             translation::java::CONTAINER_CRAFTER,
-            translation::bedrock::CONTAINER_CRAFTER,
-            &[],
+            translation::bedrock::CONTAINER_CRAFTER
         )
     }
 }
@@ -202,7 +201,7 @@ impl BlockBehaviour for CrafterBlock {
                 let mut occupied = 0u8;
                 for i in 0..9 {
                     let stack = crafter.get_stack(i).await;
-                    if !stack.lock().await.is_empty() {
+                    if !stack.is_empty() {
                         occupied += 1;
                     }
                 }

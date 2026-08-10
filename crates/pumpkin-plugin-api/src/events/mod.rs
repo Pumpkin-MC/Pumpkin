@@ -1,3 +1,5 @@
+#![allow(clippy::panic)]
+
 use std::{
     collections::BTreeMap,
     marker::PhantomData,

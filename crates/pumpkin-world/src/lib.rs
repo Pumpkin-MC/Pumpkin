@@ -1,4 +1,5 @@
 #![allow(clippy::unreachable)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use pumpkin_data::{
     Block, BlockState, chunk_gen_settings::GenerationSettings, dimension::Dimension,
