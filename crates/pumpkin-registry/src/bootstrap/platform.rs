@@ -2,9 +2,12 @@
 mod imp {
     use crate::bootstrap::BootstrapProvider;
 
+    #[repr(C, align(8))]
+    struct SectionBoundary;
+
     unsafe extern "C" {
-        static __start_pumpkin_bootstrap: u8;
-        static __stop_pumpkin_bootstrap: u8;
+        static __start_pumpkin_bootstrap: SectionBoundary;
+        static __stop_pumpkin_bootstrap: SectionBoundary;
     }
 
     #[must_use]
@@ -21,7 +24,7 @@ mod imp {
             //
             // The section remains mapped for the lifetime of the process.
             let start = (&raw const __start_pumpkin_bootstrap).cast::<BootstrapProvider>();
-            let end = &raw const __stop_pumpkin_bootstrap;
+            let end = (&raw const __stop_pumpkin_bootstrap).cast::<u8>();
 
             let bytes = end.byte_offset_from(start.cast::<u8>()) as usize;
 
