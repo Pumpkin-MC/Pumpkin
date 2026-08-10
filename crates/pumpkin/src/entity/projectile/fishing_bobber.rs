@@ -77,8 +77,16 @@ impl FishingBobberEntity {
                 .await;
 
             // TODO: Use actual loot tables. For now, just give a raw cod.
-            let _item_stack = ItemStack::new(1, &Item::COD);
+            let item_stack = ItemStack::new(1, &Item::COD);
             // player.inventory().add_item(item_stack).await; // Need public add_item
+
+            player
+                .trigger_advancement(
+                    crate::entity::player::advancement::trigger::AdvancementTrigger::FishedItem {
+                        item_id: format!("minecraft:{}", item_stack.item.registry_key),
+                    },
+                )
+                .await;
 
             world.play_sound(
                 Sound::EntityExperienceOrbPickup,

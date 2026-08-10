@@ -2558,17 +2558,13 @@ impl JavaClient {
         player.update_last_action_time();
 
         let inventory = player.inventory();
-        let Ok(hand) = Hand::try_from(use_item.hand.0) else {
+        let Ok(hand) = Hand::from_packet_id(use_item.hand.0) else {
             self.kick(TextComponent::text("InvalidHand")).await;
             return;
         };
         self.update_sequence(player, use_item.sequence.0);
 
-        let mut item_in_hand = if hand == Hand::Left {
-            inventory.held_item().await
-        } else {
-            inventory.off_hand_item().await
-        };
+        let mut item_in_hand = inventory.get_stack_in_hand(hand).await;
 
         let (item_id, _item) = (item_in_hand.item.id, item_in_hand.item);
         player
@@ -2659,27 +2655,27 @@ impl JavaClient {
                     .await;
             }
         }
-        if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
-            let mut equipment_guard = inventory.entity_equipment.lock().await;
-            let current_equipped = equipment_guard.get(equippable.slot);
+        let equipment_slot = held
+            .get_data_component::<EquippableImpl>()
+            .map(|equippable| equippable.slot.clone());
+        if let Some(slot) = equipment_slot {
+            // The equipment lock has to be released before touching the hand again:
+            // the off hand lives in the same map, so holding it here would deadlock.
+            let current_equipped = inventory.entity_equipment.lock().await.get(&slot);
             if current_equipped.are_items_and_components_equal(held) {
                 return;
             }
 
-            player.enqueue_equipment_change(equippable.slot, held).await;
+            player.enqueue_equipment_change(&slot, held).await;
 
-            let equip_item = equipment_guard
-                .equipment
-                .entry(equippable.slot.clone())
-                .or_insert_with(|| ItemStack::EMPTY.clone());
-            if equip_item.is_empty() {
-                *equip_item = held.clone();
+            let equipped = if current_equipped.is_empty() {
+                let equipped = held.clone();
                 held.decrement_unless_creative(player.gamemode.load(), 1);
+                equipped
             } else {
-                let old_held = held.clone();
-                *held = equip_item.clone();
-                *equip_item = old_held;
-            }
+                std::mem::replace(held, current_equipped)
+            };
+            inventory.entity_equipment.lock().await.put(&slot, equipped);
             inventory.set_stack_in_hand(hand, held.clone()).await;
         }
     }

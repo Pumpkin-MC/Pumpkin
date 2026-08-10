@@ -47,6 +47,16 @@ pub trait ToFromWasmEvent {
         event: wit::v0_1::pumpkin::plugin::event::Event,
         state: &mut PluginHostState,
     ) -> Self;
+
+    fn apply_wasm_event(
+        &mut self,
+        event: wit::v0_1::pumpkin::plugin::event::Event,
+        state: &mut PluginHostState,
+    ) where
+        Self: Sized,
+    {
+        *self = Self::from_wasm_event(event, state);
+    }
 }
 
 pub(super) const fn to_wasm_position(position: Vector3<f64>) -> pumpkin::plugin::common::Position {
@@ -244,7 +254,7 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
                         .call_handle_event(&mut *store, self.handler_id, server, &wasm_event)
                         .await
                     {
-                        *event = E::from_wasm_event(returned_event, store.data_mut());
+                        event.apply_wasm_event(returned_event, store.data_mut());
                     }
                 }
             }

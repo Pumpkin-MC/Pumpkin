@@ -508,7 +508,14 @@ impl EntityBase for ArrowEntity {
                     }
 
                     let damage_succeeded = target
-                        .damage(&*target, damage as f32, DamageType::ARROW)
+                        .damage_with_context(
+                            &*target,
+                            damage as f32,
+                            DamageType::ARROW,
+                            Some(hit_pos),
+                            None,
+                            Some(self),
+                        )
                         .await;
 
                     if let Some(living) = target.get_living_entity() {
