@@ -15,7 +15,7 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 use tracing::debug;
 use uuid::Uuid;
 
@@ -314,6 +314,38 @@ impl PendingConnection {
         }
     }
 
+    async fn send_bedrock_skin_pack(&mut self, server: &Server) {
+        let skin_config = &server.advanced_config.networking.bedrock.skins;
+        if !skin_config.java_resource_pack
+            || !server.bedrock_skin_pack_endpoint.load(Ordering::Acquire)
+            || self.version.load() < JavaMinecraftVersion::V_26_1
+        {
+            return;
+        }
+        let Some(pack) = server.bedrock_skin_packs.current().await else {
+            return;
+        };
+        let port = server
+            .advanced_config
+            .networking
+            .bedrock
+            .nethernet
+            .address
+            .port();
+        let url = crate::net::bedrock::skin_pack::resource_url(
+            &self.server_address,
+            port,
+            skin_config.resource_pack_url.as_deref(),
+            pack.id,
+        );
+        self.send_packet_now(&CConfigAddResourcePack::new(
+            &pack.id, &url, &pack.hash, false, None,
+        ))
+        .await;
+        self.pending_resource_packs.insert(pack.id);
+        self.bedrock_skin_pack = Some(pack);
+    }
+
     pub async fn handle_login_acknowledged(&mut self, server: &Server) {
         debug!("Handling login acknowledgement");
         self.connection_state.store(ConnectionState::Config);
@@ -398,9 +430,16 @@ impl PendingConnection {
             );
 
             self.send_packet_now(&resource_pack).await;
-        } else if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
+            self.pending_resource_packs.insert(uuid);
+        }
+
+        self.send_bedrock_skin_pack(server).await;
+
+        if self.pending_resource_packs.is_empty()
+            && self.version.load() >= JavaMinecraftVersion::V_1_20_5
+        {
             self.send_known_packs().await;
-        } else {
+        } else if self.pending_resource_packs.is_empty() {
             self.handle_known_packs(
                 SKnownPacks {
                     known_packs: Vec::new(),

@@ -6,6 +6,7 @@ use crate::data::player_server::ServerPlayerData;
 use crate::entity::{EntityBase, NBTStorage};
 use crate::item::registry::ItemRegistry;
 use crate::net::authentication::fetch_mojang_public_keys;
+use crate::net::bedrock::skin_pack::BedrockSkinPacks;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
 use crate::plugin::PluginManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
@@ -86,6 +87,10 @@ pub struct Server {
     key_store: OnceCell<Arc<KeyStore>>,
     /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
     pub bedrock_oidc_keys: OnceCell<(String, pumpkin_util::jwt::Jwks)>,
+    /// Persistent aggregate skin packs exposed to Java mannequins.
+    pub bedrock_skin_packs: Arc<BedrockSkinPacks>,
+    /// Whether the HTTP endpoint serving generated Bedrock skin packs is bound.
+    pub bedrock_skin_pack_endpoint: AtomicBool,
     /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
     pub bedrock_private_key: OnceCell<Arc<pumpkin_util::p384::ecdsa::SigningKey>>,
     /// Manages server status information.
@@ -145,6 +150,19 @@ pub struct Server {
 }
 
 impl Server {
+    pub async fn push_bedrock_skin_pack(
+        &self,
+        pack: Arc<crate::net::bedrock::skin_pack::BedrockSkinPack>,
+    ) {
+        for world in self.worlds.load().iter() {
+            for player in world.players.load().iter() {
+                if let ClientPlatform::Java(client) = player.client.as_ref() {
+                    client.push_bedrock_skin_pack(self, pack.clone()).await;
+                }
+            }
+        }
+    }
+
     #[expect(clippy::too_many_lines)]
     #[must_use]
     pub async fn new(
@@ -285,6 +303,8 @@ impl Server {
             item_registry: super::item::items::default_registry(),
             key_store: OnceCell::new(),
             bedrock_oidc_keys: OnceCell::new(),
+            bedrock_skin_packs: Arc::new(BedrockSkinPacks::load(world_path.join("bedrock_skins"))),
+            bedrock_skin_pack_endpoint: AtomicBool::new(false),
             bedrock_private_key: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),

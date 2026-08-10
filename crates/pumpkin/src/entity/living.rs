@@ -2780,7 +2780,23 @@ impl EntityBase for LivingEntity {
                 self.hurt_cooldown.fetch_sub(1, Relaxed);
             }
             if self.health.load() <= 0.0 {
-                let time = self.death_time.fetch_add(1, Relaxed);
+                let time = self
+                    .death_time
+                    .fetch_update(Relaxed, Relaxed, |time| Some(time.saturating_add(1)))
+                    .unwrap_or_else(|time| time)
+                    .saturating_add(1);
+                if self.entity.entity_type == &EntityType::PLAYER {
+                    // Bedrock removes a dead remote player's actor after its death
+                    // animation, while retaining the player-list entry and skin for
+                    // the replacement actor created on respawn.
+                    if time == 10 {
+                        self.entity
+                            .world
+                            .load()
+                            .despawn_dead_java_player_for_bedrock(&self.entity);
+                    }
+                    return;
+                }
                 // Only send death particles once (on the exact tick death_time reaches 20)
                 // and then remove the entity, preventing entity_event spam.
                 if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {

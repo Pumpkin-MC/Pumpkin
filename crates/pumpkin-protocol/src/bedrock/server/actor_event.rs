@@ -35,7 +35,7 @@ pub enum ActorEventType {
     SquidFleeing = 15,
     ZombieConverting = 16,
     PlayAmbient = 17,
-    SpawnAlive = 18,
+    Respawn = 18,
     StartOfferFlower = 19,
     StopOfferFlower = 20,
     LoveHearts = 21,
