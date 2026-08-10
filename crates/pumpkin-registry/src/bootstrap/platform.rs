@@ -3,7 +3,7 @@ mod imp {
     use crate::bootstrap::BootstrapProvider;
 
     #[repr(C, align(8))]
-    struct SectionBoundary;
+    struct SectionBoundary(u8);
 
     unsafe extern "C" {
         static __start_pumpkin_bootstrap: SectionBoundary;
