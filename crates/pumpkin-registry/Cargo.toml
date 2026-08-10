@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 pumpkin-util.workspace = true
 tokio.workspace = true
+rayon.workspace = true
 thiserror.workspace = true
 rustc-hash.workspace = true
 

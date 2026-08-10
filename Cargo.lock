@@ -2796,6 +2796,7 @@ name = "pumpkin-registry"
 version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "pumpkin-util",
+ "rayon",
  "rustc-hash",
  "thiserror 2.0.19",
  "tokio",

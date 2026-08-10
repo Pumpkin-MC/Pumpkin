@@ -1,5 +1,5 @@
 use crate::{
-    BoxFuture, BoxedRegistry, Registry,
+    BoxFuture, Registry,
     error::{DataKeyBuildError, DataKeyGetError},
     value::DataKeyRef,
 };
@@ -41,61 +41,81 @@ where
             return Err(DataKeyGetError::InvalidKey);
         };
 
-        let mut guards = Vec::with_capacity(keys.len());
-
-        // This pointer either points at `root`, which lives for `'a`,
-        // or at a registry kept alive by one of `guards`.
-        let mut current: *const dyn Registry = root;
+        let mut current = RegistryCursor::Borrowed(root);
 
         for &registry_id in registry_path {
-            // SAFETY:
-            //
-            // `current` either:
-            // 1. points to `root`, which lives for `'a`, or
-            // 2. points into one of the guards already stored in `guards`.
-            //
-            // We never remove guards while traversing.
-            let registry = unsafe { &*current };
-
-            let value = registry
-                .get_by_id(registry_id)
+            let value = current
+                .as_ref()
+                .by_id_erased_async(registry_id)
                 .await
                 .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
 
             let nested = value
-                .downcast_ref::<BoxedRegistry>()
+                .downcast_ref::<Arc<dyn Registry>>()
                 .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
 
-            current = ptr::from_ref::<dyn Registry>(nested.as_ref());
+            let nested = Arc::clone(nested);
 
-            // Keep the storage containing `nested` alive.
-            guards.push(value);
+            // `value` may borrow from `current`, so release it before
+            // replacing `current`.
+            drop(value);
+
+            current = RegistryCursor::Owned(nested);
         }
 
-        // SAFETY: same invariant as above.
-        let registry = unsafe { &*current };
+        match current {
+            RegistryCursor::Borrowed(registry) => {
+                let value = registry
+                    .by_id_erased_async(value_id)
+                    .await
+                    .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
 
-        let value = registry
-            .get_by_id(value_id)
-            .await
-            .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
+                let typed = value
+                    .downcast_ref::<T>()
+                    .ok_or(DataKeyGetError::TypeMismatch {
+                        expected: type_name::<T>(),
+                        actual: registry.item_type_name(),
+                    })?;
 
-        let typed = value
-            .downcast_ref::<T>()
-            .ok_or(DataKeyGetError::TypeMismatch {
-                expected: type_name::<T>(),
-                actual: registry.item_type_name(),
-            })?;
+                Ok(DataKeyRef {
+                    value: ptr::from_ref(typed),
+                    _guards: vec![value],
+                    _registry: None,
+                    marker: PhantomData,
+                })
+            }
+            RegistryCursor::Owned(registry) => {
+                let value = registry
+                    .by_id_erased_async(value_id)
+                    .await
+                    .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
 
-        let value_ptr = ptr::from_ref::<T>(typed);
+                let typed = value
+                    .downcast_ref::<T>()
+                    .ok_or(DataKeyGetError::TypeMismatch {
+                        expected: type_name::<T>(),
+                        actual: registry.item_type_name(),
+                    })?;
+                let value_ptr = ptr::from_ref(typed);
 
-        guards.push(value);
+                // SAFETY: `value` only borrows from `registry`. The returned
+                // DataKeyRef owns that Arc in `_registry`, and `_guards` is
+                // declared before `_registry`, so the borrow is dropped first.
+                let value = unsafe {
+                    std::mem::transmute::<
+                        crate::value::ErasedRegistryRef<'_>,
+                        crate::value::ErasedRegistryRef<'a>,
+                    >(value)
+                };
 
-        Ok(DataKeyRef {
-            _guards: guards,
-            value: value_ptr,
-            marker: PhantomData,
-        })
+                Ok(DataKeyRef {
+                    _guards: vec![value],
+                    _registry: Some(registry),
+                    value: value_ptr,
+                    marker: PhantomData,
+                })
+            }
+        }
     })
 }
 
@@ -110,48 +130,88 @@ where
         return Err(DataKeyGetError::InvalidKey);
     };
 
-    let mut guards = Vec::with_capacity(keys.len());
-    let mut current: *const dyn Registry = root;
+    let mut current = RegistryCursor::Borrowed(root);
 
     for &registry_id in registry_path {
-        // SAFETY: `current` points either to `root` or into storage kept alive
-        // by one of the guards retained in `guards`.
-        let registry = unsafe { &*current };
-
-        let value = registry
-            .get_by_id_blocking(registry_id)
+        let value = current
+            .as_ref()
+            .by_id_erased(registry_id)
             .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
 
         let nested = value
-            .downcast_ref::<BoxedRegistry>()
+            .downcast_ref::<Arc<dyn Registry>>()
             .ok_or(DataKeyGetError::MissingRegistry { id: registry_id })?;
 
-        current = ptr::from_ref::<dyn Registry>(nested.as_ref());
-        guards.push(value);
+        let nested = Arc::clone(nested);
+
+        drop(value);
+
+        current = RegistryCursor::Owned(nested);
     }
 
-    // SAFETY: same invariant as above.
-    let registry = unsafe { &*current };
+    match current {
+        RegistryCursor::Borrowed(registry) => {
+            let value = registry
+                .by_id_erased(value_id)
+                .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
 
-    let value = registry
-        .get_by_id_blocking(value_id)
-        .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
+            let typed = value
+                .downcast_ref::<T>()
+                .ok_or(DataKeyGetError::TypeMismatch {
+                    expected: type_name::<T>(),
+                    actual: registry.item_type_name(),
+                })?;
 
-    let typed = value
-        .downcast_ref::<T>()
-        .ok_or(DataKeyGetError::TypeMismatch {
-            expected: type_name::<T>(),
-            actual: registry.item_type_name(),
-        })?;
+            Ok(DataKeyRef {
+                value: ptr::from_ref(typed),
+                _guards: vec![value],
+                _registry: None,
+                marker: PhantomData,
+            })
+        }
+        RegistryCursor::Owned(registry) => {
+            let value = registry
+                .by_id_erased(value_id)
+                .ok_or(DataKeyGetError::MissingValue { id: value_id })?;
 
-    let value_ptr = ptr::from_ref::<T>(typed);
-    guards.push(value);
+            let typed = value
+                .downcast_ref::<T>()
+                .ok_or(DataKeyGetError::TypeMismatch {
+                    expected: type_name::<T>(),
+                    actual: registry.item_type_name(),
+                })?;
+            let value_ptr = ptr::from_ref(typed);
 
-    Ok(DataKeyRef {
-        _guards: guards,
-        value: value_ptr,
-        marker: PhantomData,
-    })
+            // SAFETY: same invariant as in the async path above.
+            let value = unsafe {
+                std::mem::transmute::<
+                    crate::value::ErasedRegistryRef<'_>,
+                    crate::value::ErasedRegistryRef<'a>,
+                >(value)
+            };
+
+            Ok(DataKeyRef {
+                _guards: vec![value],
+                _registry: Some(registry),
+                value: value_ptr,
+                marker: PhantomData,
+            })
+        }
+    }
+}
+
+enum RegistryCursor<'a> {
+    Borrowed(&'a dyn Registry),
+    Owned(Arc<dyn Registry>),
+}
+
+impl RegistryCursor<'_> {
+    fn as_ref(&self) -> &dyn Registry {
+        match self {
+            Self::Borrowed(registry) => *registry,
+            Self::Owned(registry) => registry.as_ref(),
+        }
+    }
 }
 
 pub struct ArcDataKey<T: Send + Sync + 'static> {
@@ -300,38 +360,38 @@ fn build_keys_blocking(
     };
 
     let mut numeric_keys = Vec::with_capacity(keys.len());
-
-    #[allow(clippy::collection_is_never_read)]
-    let mut guards = Vec::with_capacity(registry_path.len());
-
-    let mut current: *const dyn Registry = registry;
+    let mut current = RegistryCursor::Borrowed(registry);
 
     for identifier in registry_path {
-        // SAFETY: `current` points either to `registry` or into a value kept
-        // alive by a guard retained in `guards`.
-        let registry = unsafe { &*current };
+        let (id, nested) = {
+            let registry = current.as_ref();
 
-        let id = registry
-            .get_id_blocking(identifier)
-            .ok_or_else(|| DataKeyBuildError::MissingRegistry(identifier.clone()))?;
+            let id = registry
+                .get_id(identifier)
+                .ok_or_else(|| DataKeyBuildError::MissingRegistry(identifier.clone()))?;
 
-        let value = registry
-            .get_by_id_blocking(id)
-            .ok_or_else(|| DataKeyBuildError::MissingRegistry(identifier.clone()))?;
+            let value = registry
+                .by_id_erased(id)
+                .ok_or_else(|| DataKeyBuildError::MissingRegistry(identifier.clone()))?;
 
-        let nested = value
-            .downcast_ref::<BoxedRegistry>()
-            .ok_or_else(|| DataKeyBuildError::NotARegistry(identifier.clone()))?;
+            let nested = value
+                .downcast_ref::<Arc<dyn Registry>>()
+                .ok_or_else(|| DataKeyBuildError::NotARegistry(identifier.clone()))?;
+
+            let nested = Arc::clone(nested);
+
+            drop(value);
+
+            (id, nested)
+        };
 
         numeric_keys.push(id);
-        current = ptr::from_ref::<dyn Registry>(nested.as_ref());
-        guards.push(value);
+        current = RegistryCursor::Owned(nested);
     }
 
-    // SAFETY: same invariant as above.
-    let registry = unsafe { &*current };
-    let value_id = registry
-        .get_id_blocking(value_identifier)
+    let value_id = current
+        .as_ref()
+        .get_id(value_identifier)
         .ok_or_else(|| DataKeyBuildError::MissingValue(value_identifier.clone()))?;
 
     numeric_keys.push(value_id);
@@ -339,44 +399,50 @@ fn build_keys_blocking(
 }
 
 fn build_key_path<'a>(
-    current: &'a dyn Registry,
+    root: &'a dyn Registry,
     registry_path: &'a [Identifier],
     value_identifier: &'a Identifier,
     numeric_keys: &'a mut Vec<usize>,
 ) -> BoxFuture<'a, Result<(), DataKeyBuildError>> {
     Box::pin(async move {
-        let Some((identifier, remaining_path)) = registry_path.split_first() else {
-            let value_id = current
-                .get_id(value_identifier)
-                .await
-                .ok_or_else(|| DataKeyBuildError::MissingValue(value_identifier.clone()))?;
+        let mut current = RegistryCursor::Borrowed(root);
 
-            numeric_keys.push(value_id);
-            return Ok(());
-        };
+        for identifier in registry_path {
+            let (id, nested) = {
+                let registry = current.as_ref();
 
-        let id = current
-            .get_id(identifier)
+                let id = registry
+                    .get_id_async(identifier)
+                    .await
+                    .ok_or_else(|| DataKeyBuildError::MissingRegistry(identifier.clone()))?;
+
+                let value = registry
+                    .by_id_erased_async(id)
+                    .await
+                    .ok_or_else(|| DataKeyBuildError::MissingRegistry(identifier.clone()))?;
+
+                let nested = value
+                    .downcast_ref::<Arc<dyn Registry>>()
+                    .ok_or_else(|| DataKeyBuildError::NotARegistry(identifier.clone()))?;
+
+                let nested = Arc::clone(nested);
+
+                drop(value);
+
+                (id, nested)
+            };
+
+            numeric_keys.push(id);
+            current = RegistryCursor::Owned(nested);
+        }
+
+        let value_id = current
+            .as_ref()
+            .get_id_async(value_identifier)
             .await
-            .ok_or_else(|| DataKeyBuildError::MissingRegistry(identifier.clone()))?;
+            .ok_or_else(|| DataKeyBuildError::MissingValue(value_identifier.clone()))?;
 
-        let registry = current
-            .get_by_id(id)
-            .await
-            .ok_or_else(|| DataKeyBuildError::MissingRegistry(identifier.clone()))?;
-
-        let registry = registry
-            .downcast_ref::<BoxedRegistry>()
-            .ok_or_else(|| DataKeyBuildError::NotARegistry(identifier.clone()))?;
-
-        numeric_keys.push(id);
-
-        build_key_path(
-            registry.as_ref(),
-            remaining_path,
-            value_identifier,
-            numeric_keys,
-        )
-        .await
+        numeric_keys.push(value_id);
+        Ok(())
     })
 }

@@ -1,62 +1,9 @@
+use std::any::TypeId;
+
 use pumpkin_util::identifier::Identifier;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum RegistryInsertError {
-    #[error("registry entry `{0}` is already registered")]
-    AlreadyRegistered(Identifier),
-    #[error("registry is immutable")]
-    Immutable,
-}
-
-#[derive(Debug, Error)]
-pub enum RegistryInitError {
-    #[error(
-        "the amount of values ({values}) doesn't match the amount of identifiers ({identifiers})"
-    )]
-    MappingMismatch { values: usize, identifiers: usize },
-
-    #[error("registry entry `{0}` is already registered")]
-    AlreadyRegistered(Identifier),
-}
-
-#[derive(Debug, Error)]
-pub enum RegistryGetError {
-    #[error("registry path cannot be empty")]
-    EmptyPath,
-
-    #[error("registry entry `{0}` was not found")]
-    NotFound(Identifier),
-
-    #[error("registry entry `{0}` is not a nested registry")]
-    ExpectedRegistry(Identifier),
-
-    #[error("registry `{identifier}` has the wrong entry type; expected `{expected}`")]
-    TypeMismatch {
-        identifier: Identifier,
-        expected: &'static str,
-    },
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum RegistryTreeError {
-    #[error("failed to get: {0}")]
-    Get(#[from] RegistryGetError),
-
-    #[error("failed to initialize: {0}")]
-    Init(#[from] RegistryInitError),
-
-    #[error("failed to insert: {0}")]
-    Insert(#[from] RegistryInsertError),
-
-    #[error("failed to build key: {0}")]
-    KeyBuild(#[from] DataKeyBuildError),
-
-    #[error("failed to get: {0}")]
-    KeyGet(#[from] DataKeyGetError),
-}
-
-#[derive(Debug, thiserror::Error)]
 pub enum DataKeyBuildError {
     #[error("a data key must contain at least one identifier")]
     Empty,
@@ -77,14 +24,8 @@ pub enum DataKeyBuildError {
     },
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum DataKeyGetError {
-    #[error("the registry used to build this key was dropped")]
-    RegistryDropped,
-
-    #[error("this key belongs to a different registry tree")]
-    WrongRegistry,
-
     #[error("the data key contains no IDs")]
     InvalidKey,
 
@@ -98,5 +39,21 @@ pub enum DataKeyGetError {
     TypeMismatch {
         expected: &'static str,
         actual: &'static str,
+    },
+}
+
+#[derive(Debug, Error)]
+pub enum BootstrapError {
+    #[error("bootstrap provider for registry {registry} returned the wrong entry type")]
+    TypeMismatch {
+        registry: &'static Identifier,
+        expected: TypeId,
+        actual: TypeId,
+    },
+
+    #[error("duplicate entry `{identifier}` in registry `{registry}`")]
+    DuplicateEntry {
+        registry: Identifier,
+        identifier: Identifier,
     },
 }

@@ -1,199 +1,109 @@
-use crate::error::{RegistryInitError, RegistryInsertError};
+use crate::{
+    BOOTSTRAP, error::BootstrapError, immutable::FrozenRegistry, mutable::ReloadableRegistry,
+    r#static::StaticRegistry,
+};
 use pumpkin_util::identifier::Identifier;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
+use std::marker::PhantomData;
 
-pub struct RegistryBuilder<T: Send + Sync + 'static> {
-    pub(crate) static_entries: &'static [T],
-    pub(crate) entries: Vec<T>,
-    pub(crate) mapping: FxHashMap<Identifier, usize>,
+pub struct RegistryBuilder<T: 'static> {
+    marker: PhantomData<T>,
 }
 
 impl<T: Send + Sync + 'static> RegistryBuilder<T> {
-    pub fn new(
+    /// Build a registry where Pumpkin's internal entries do not need to be copied to the heap.
+    pub fn new_static(
+        name: &Identifier,
         static_entries: &'static [T],
-        static_identifiers: &[Identifier],
-    ) -> Result<Self, RegistryInitError> {
-        if static_entries.len() != static_identifiers.len() {
-            return Err(RegistryInitError::MappingMismatch {
-                values: static_entries.len(),
-                identifiers: static_identifiers.len(),
-            });
+        identifiers: &[Identifier],
+    ) -> Result<StaticRegistry<T>, BootstrapError> {
+        let statics = static_entries.len();
+        assert_eq!(statics, identifiers.len());
+
+        let (added_entries, added_mapping) = BOOTSTRAP.populate::<T>(name)?;
+
+        let total = statics + added_entries.len();
+
+        let mut mapping = FxHashMap::with_capacity_and_hasher(total, FxBuildHasher);
+
+        // Static identifiers always come first.
+        for (id, identifier) in identifiers.iter().cloned().enumerate() {
+            if mapping.insert(identifier.clone(), id).is_some() {
+                return Err(BootstrapError::DuplicateEntry {
+                    registry: name.clone(),
+                    identifier,
+                });
+            }
         }
 
-        let mut builder = Self {
+        // Bootstrap IDs need to be offset by the static entry count.
+        for (identifier, id) in added_mapping {
+            if mapping.insert(identifier.clone(), statics + id).is_some() {
+                return Err(BootstrapError::DuplicateEntry {
+                    registry: name.clone(),
+                    identifier,
+                });
+            }
+        }
+
+        Ok(StaticRegistry::new(
             static_entries,
-            entries: Vec::new(),
-            mapping: FxHashMap::default(),
-        };
-
-        for (index, item) in static_identifiers.iter().enumerate() {
-            let None = builder.mapping.insert(item.clone(), index) else {
-                return Err(RegistryInitError::AlreadyRegistered(item.clone()));
-            };
-        }
-
-        Ok(builder)
+            added_entries.into_boxed_slice(),
+            mapping,
+        ))
     }
 
-    pub fn register(
-        &mut self,
-        identifier: Identifier,
-        value: T,
-    ) -> Result<(), RegistryInsertError> {
-        if self.mapping.contains_key(&identifier) {
-            return Err(RegistryInsertError::AlreadyRegistered(identifier));
-        }
+    /// Build a registry where all data lives on the heap.
+    /// These registries may not be reloaded.
+    pub fn frozen(
+        name: &Identifier,
+        internal_entries: Vec<T>,
+        identifiers: &[Identifier],
+    ) -> Result<FrozenRegistry<T>, BootstrapError> {
+        let internals = internal_entries.len();
+        assert_eq!(internal_entries.len(), identifiers.len());
 
-        let id = self.entries.len();
-        self.entries.push(value);
-        self.mapping
-            .insert(identifier, id + self.static_entries.len());
-        Ok(())
-    }
+        let (added_entries, added_mapping) = BOOTSTRAP.populate::<T>(name)?;
 
-    #[must_use]
-    pub fn get(&self, identifier: &Identifier) -> Option<&T> {
-        self.get_id(identifier).and_then(|id| {
-            if id < self.static_entries.len() {
-                Some(&self.static_entries[id])
-            } else {
-                self.entries.get(id - self.static_entries.len())
+        let total = internals + added_entries.len();
+
+        let mut mapping = FxHashMap::with_capacity_and_hasher(total, FxBuildHasher);
+        let mut entries = Vec::with_capacity(total);
+
+        // Static identifiers always come first.
+        for (id, identifier) in identifiers.iter().cloned().enumerate() {
+            if mapping.insert(identifier.clone(), id).is_some() {
+                return Err(BootstrapError::DuplicateEntry {
+                    registry: name.clone(),
+                    identifier,
+                });
             }
-        })
-    }
-
-    #[must_use]
-    pub fn get_by_id(&self, id: usize) -> Option<&T> {
-        if id < self.static_entries.len() {
-            Some(&self.static_entries[id])
-        } else {
-            self.entries.get(id - self.static_entries.len())
         }
-    }
 
-    #[must_use]
-    pub fn get_id(&self, identifier: &Identifier) -> Option<usize> {
-        self.mapping.get(identifier).copied()
-    }
+        entries.extend(internal_entries);
 
-    #[must_use]
-    pub fn contains(&self, identifier: &Identifier) -> bool {
-        self.mapping.contains_key(identifier)
-    }
-
-    #[must_use]
-    pub const fn len(&self) -> usize {
-        self.entries.len() + self.static_entries.len()
-    }
-
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.entries.is_empty() && self.static_entries.is_empty()
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (&Identifier, &T)> {
-        self.mapping.iter().filter_map(|(identifier, &index)| {
-            self.get_by_id(index).map(|value| (identifier, value))
-        })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn id(value: &'static str) -> Identifier {
-        Identifier::parse_static(value)
-    }
-
-    #[test]
-    fn initialization_rejects_mapping_length_mismatch() {
-        static VALUES: [u32; 1] = [10];
-
-        let Err(error) = RegistryBuilder::new(&VALUES, &[]) else {
-            panic!("expected mapping mismatch");
-        };
-
-        assert!(matches!(
-            error,
-            RegistryInitError::MappingMismatch {
-                values: 1,
-                identifiers: 0
+        // Bootstrap IDs need to be offset by the static entry count.
+        for (identifier, id) in added_mapping {
+            if mapping.insert(identifier.clone(), internals + id).is_some() {
+                return Err(BootstrapError::DuplicateEntry {
+                    registry: name.clone(),
+                    identifier,
+                });
             }
-        ));
+        }
+
+        entries.extend(added_entries);
+
+        Ok(FrozenRegistry::new(entries.into_boxed_slice(), mapping))
     }
 
-    #[test]
-    fn initialization_rejects_duplicate_static_identifiers() {
-        static VALUES: [u32; 2] = [10, 20];
-        let duplicate = id("test:duplicate");
-
-        let Err(error) = RegistryBuilder::new(&VALUES, &[duplicate.clone(), duplicate.clone()])
-        else {
-            panic!("expected duplicate static identifier");
-        };
-
-        assert!(matches!(
-            error,
-            RegistryInitError::AlreadyRegistered(found) if found == duplicate
-        ));
-    }
-
-    #[test]
-    fn static_and_dynamic_entries_have_stable_contiguous_ids() {
-        static VALUES: [u32; 2] = [10, 20];
-        let static_ids = [id("test:static_a"), id("test:static_b")];
-        let first = id("test:first");
-        let second = id("test:second");
-        let mut builder = RegistryBuilder::new(&VALUES, &static_ids).unwrap();
-
-        builder.register(first.clone(), 30).unwrap();
-        builder.register(second.clone(), 40).unwrap();
-
-        assert_eq!(builder.len(), 4);
-        assert!(!builder.is_empty());
-        assert_eq!(builder.get_id(&static_ids[0]), Some(0));
-        assert_eq!(builder.get_id(&static_ids[1]), Some(1));
-        assert_eq!(builder.get_id(&first), Some(2));
-        assert_eq!(builder.get_id(&second), Some(3));
-        assert_eq!(builder.get_by_id(0), Some(&10));
-        assert_eq!(builder.get_by_id(1), Some(&20));
-        assert_eq!(builder.get_by_id(2), Some(&30));
-        assert_eq!(builder.get_by_id(3), Some(&40));
-        assert_eq!(builder.get_by_id(4), None);
-    }
-
-    #[test]
-    fn duplicate_registration_is_atomic() {
-        let identifier = id("test:value");
-        let mut builder = RegistryBuilder::new(&[], &[]).unwrap();
-        builder.register(identifier.clone(), 1u32).unwrap();
-
-        let error = builder.register(identifier.clone(), 2u32).unwrap_err();
-
-        assert!(matches!(
-            error,
-            RegistryInsertError::AlreadyRegistered(found) if found == identifier
-        ));
-        assert_eq!(builder.len(), 1);
-        assert_eq!(builder.get(&identifier), Some(&1));
-        assert_eq!(builder.get_by_id(1), None);
-    }
-
-    #[test]
-    fn iteration_returns_every_identifier_value_pair() {
-        let first = id("test:first");
-        let second = id("test:second");
-        let mut builder = RegistryBuilder::new(&[], &[]).unwrap();
-        builder.register(first.clone(), 11u32).unwrap();
-        builder.register(second.clone(), 22u32).unwrap();
-
-        let mut values = builder
-            .iter()
-            .map(|(identifier, value)| (identifier.clone(), *value))
-            .collect::<Vec<_>>();
-        values.sort_by_key(|(_, value)| *value);
-
-        assert_eq!(values, vec![(first, 11), (second, 22)]);
+    /// Build a reloadable registry.
+    pub fn reloadable(name: &Identifier) -> Result<ReloadableRegistry<T>, BootstrapError> {
+        let (entries, mapping) = BOOTSTRAP.populate::<T>(name)?;
+        Ok(ReloadableRegistry::new(
+            name.clone(),
+            entries.into_boxed_slice(),
+            mapping,
+        ))
     }
 }
