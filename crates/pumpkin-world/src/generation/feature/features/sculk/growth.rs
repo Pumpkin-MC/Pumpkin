@@ -3,6 +3,7 @@
 //! Reference: `net.minecraft.world.level.block.SculkBlock` (mc-26_2).
 
 use pumpkin_data::block_properties::SculkShriekerLikeProperties;
+use pumpkin_data::block_properties::SculkSensorLikeProperties;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::Block;
 use pumpkin_data::BlockId;
@@ -80,18 +81,28 @@ impl GrowthRules {
         } else {
             Block::SCULK_SENSOR.default_state
         };
-        // Apply waterlogging if the position holds water (shrieker only).
-        if level.sculk_is_water_source(pos)
-            && base_state.id.to_block_id() == BlockId::SCULK_SHRIEKER
-        {
-            let mut props = SculkShriekerLikeProperties::from_state_id(
-                base_state.id,
-                &Block::SCULK_SHRIEKER,
-            );
-            props.r#waterlogged = true;
-            return BlockState::from_id(
-                props.to_state_id(&Block::SCULK_SHRIEKER),
-            );
+        // Apply waterlogging if the position holds water.
+        if level.sculk_is_water_source(pos) {
+            let block_id = base_state.id.to_block_id();
+            if block_id == BlockId::SCULK_SHRIEKER {
+                let mut props = SculkShriekerLikeProperties::from_state_id(
+                    base_state.id,
+                    &Block::SCULK_SHRIEKER,
+                );
+                props.r#waterlogged = true;
+                return BlockState::from_id(
+                    props.to_state_id(&Block::SCULK_SHRIEKER),
+                );
+            } else if block_id == BlockId::SCULK_SENSOR {
+                let mut props = SculkSensorLikeProperties::from_state_id(
+                    base_state.id,
+                    &Block::SCULK_SENSOR,
+                );
+                props.r#waterlogged = true;
+                return BlockState::from_id(
+                    props.to_state_id(&Block::SCULK_SENSOR),
+                );
+            }
         }
         base_state
     }

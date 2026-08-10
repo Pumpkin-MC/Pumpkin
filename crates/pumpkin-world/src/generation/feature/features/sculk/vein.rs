@@ -65,7 +65,6 @@ impl VeinRules {
         level: &mut dyn SculkLevel,
         pos: BlockPos,
         replaceable: impl Fn(BlockId) -> bool,
-        is_world_gen: bool,
     ) -> bool {
         let Some(state) = level.sculk_get(pos) else {
             return false;
@@ -99,7 +98,7 @@ impl VeinRules {
                 }
             }
             // Also spread veins from the new sculk (via spreadAll).
-            Self::spread_all(level, support_pos, is_world_gen);
+            Self::spread_all(level, support_pos);
             return true;
         }
         false
@@ -111,14 +110,13 @@ impl VeinRules {
         pos: BlockPos,
         _state: Option<BlockStateId>,
         faces: &[BlockDirection],
-        is_world_gen: bool,
     ) -> bool {
         if faces.is_empty() {
             // No faces — same-space spreader.
-            return Self::spread_all(level, pos, is_world_gen);
+            return Self::spread_all(level, pos);
         }
         // Has faces — regrow.
-        Self::regrow(level, pos, faces, is_world_gen)
+        Self::regrow(level, pos, faces)
     }
 
     /// Vanilla `SculkVeinBlock.regrow`.
@@ -126,10 +124,17 @@ impl VeinRules {
         level: &mut dyn SculkLevel,
         pos: BlockPos,
         faces: &[BlockDirection],
-        _is_world_gen: bool,
     ) -> bool {
         let mut has_any = false;
-        let mut new_state = Block::SCULK_VEIN.default_state.id;
+        // Initialize from the existing state at pos to preserve waterlogged
+        // and already-enabled faces; fall back to a fresh sculk_vein default.
+        let mut new_state = match level.sculk_get(pos) {
+            Some(s) if s.to_block_id() == BlockId::SCULK_VEIN => s,
+            Some(s) if s.to_block_id() == BlockId::WATER => {
+                Self::with_waterlogged(Block::SCULK_VEIN.default_state.id, true)
+            }
+            _ => Block::SCULK_VEIN.default_state.id,
+        };
         for face in faces {
             if Self::can_attach_to(level, pos, *face) {
                 new_state = Self::with_face(new_state, *face, true);
@@ -176,10 +181,14 @@ impl VeinRules {
         for dir in BlockDirection::all() {
             if Self::has_face(new_state, dir) {
                 let neighbour = pos.offset(dir.to_offset());
-                if let Some(ns) = level.sculk_get(neighbour) {
-                    if ns.to_block_id() != BlockId::SCULK {
-                        new_state = Self::with_face(new_state, dir, false);
-                    }
+                // If the neighbour is unavailable (out of bounds) or is not
+                // sculk, clear the face. This prevents veins from hanging
+                // onto non-existent or non-sculk blocks.
+                let is_sculk = level
+                    .sculk_get(neighbour)
+                    .is_some_and(|ns| ns.to_block_id() == BlockId::SCULK);
+                if !is_sculk {
+                    new_state = Self::with_face(new_state, dir, false);
                 }
             }
         }
@@ -196,11 +205,11 @@ impl VeinRules {
     }
 
     /// Vanilla `MultifaceSpreader.spreadAll` — spreads from all faces.
-    pub fn spread_all(level: &mut dyn SculkLevel, pos: BlockPos, is_world_gen: bool) -> bool {
+    pub fn spread_all(level: &mut dyn SculkLevel, pos: BlockPos) -> bool {
         let mut any = false;
         for face in BlockDirection::all() {
             if Self::can_spread_from_face(level, pos, face)
-                && Self::spread_from_face(level, pos, face, is_world_gen)
+                && Self::spread_from_face(level, pos, face)
             {
                 any = true;
             }
@@ -225,7 +234,6 @@ impl VeinRules {
         level: &mut dyn SculkLevel,
         pos: BlockPos,
         from_face: BlockDirection,
-        is_world_gen: bool,
     ) -> bool {
         for spread_type in DEFAULT_SPREAD_ORDER {
             for spread_dir in BlockDirection::all() {
@@ -239,7 +247,6 @@ impl VeinRules {
                         Self::get_state_for_placement(level, target_pos, target_face, old_state)
                     {
                         level.sculk_set(target_pos, placed);
-                        let _ = is_world_gen;
                         return true;
                     }
                 }

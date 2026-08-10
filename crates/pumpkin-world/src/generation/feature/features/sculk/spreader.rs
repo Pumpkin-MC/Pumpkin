@@ -295,7 +295,6 @@ impl ChargeCursor {
                 self.pos,
                 current_state,
                 &faces,
-                config.is_world_generation,
             );
             // In vanilla, the block state may change if canChangeBlockStateOnSpread
             // returns true. For sculk_sensor/sculk this is false, so we skip.
