@@ -110,7 +110,9 @@ impl ClientPacket for CUpdateAdvancements {
             }
         }
 
-        write.write_bool(self.show_advancements)?;
+        if version >= &JavaMinecraftVersion::V_1_21_5 {
+            write.write_bool(self.show_advancements)?;
+        }
 
         Ok(())
     }
