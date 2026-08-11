@@ -535,6 +535,9 @@ impl Server {
 
         if let Some(mut nbt_data) = nbt {
             player.read_nbt(&mut nbt_data).await;
+            // The data file itself proves this is a returning player. Older Bedrock
+            // sessions could persist HasPlayedBefore as false and mask a valid Pos.
+            player.has_played_before.store(true, Ordering::Relaxed);
         }
 
         // Wrap in Arc after data is loaded
