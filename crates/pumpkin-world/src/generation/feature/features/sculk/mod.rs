@@ -140,9 +140,7 @@ pub fn sculk_block_id(level: &dyn SculkLevel, pos: BlockPos) -> BlockId {
         .unwrap_or(BlockId::AIR)
 }
 
-// ---------------------------------------------------------------------------
 // Blanket impl for any type implementing GenerationCache (post-terrain case).
-// ---------------------------------------------------------------------------
 
 use crate::generation::proto_chunk::GenerationCache;
 
@@ -185,9 +183,7 @@ impl<T: GenerationCache> SculkLevel for T {
     }
 }
 
-// ---------------------------------------------------------------------------
 // ProtoChunk wrapper for world-gen (bounds-aware) case.
-// ---------------------------------------------------------------------------
 
 use crate::ProtoChunk;
 
