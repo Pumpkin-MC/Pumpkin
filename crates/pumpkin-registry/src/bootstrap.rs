@@ -1,11 +1,9 @@
 use crate::error::BootstrapError;
+pub use linkme::distributed_slice;
 use pumpkin_util::identifier::Identifier;
 use rayon::iter::{IntoParallelRefIterator as _, ParallelIterator as _};
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::any::TypeId;
-
-mod platform;
-pub use platform::builtin_providers;
 
 pub struct RegistryEntry<T> {
     identifier: Identifier,
@@ -131,19 +129,7 @@ macro_rules! bootstrap_provider {
                 $crate::bootstrap::ErasedVec::from_vec(populate())
             }
 
-            #[used]
-            #[cfg_attr(
-                target_os = "linux",
-                unsafe(link_section = "pumpkin_bootstrap")
-            )]
-            #[cfg_attr(
-                target_os = "windows",
-                unsafe(link_section = ".pumpkin_bootstrap$m")
-            )]
-            #[cfg_attr(
-                target_os = "macos",
-                unsafe(link_section = "__DATA,__pumpkin_boot")
-            )]
+            #[$crate::bootstrap::distributed_slice($crate::bootstrap::PROVIDERS)]
             static $name: $crate::bootstrap::BootstrapProvider =
                 $crate::bootstrap::BootstrapProvider::new(
                     $registry,
@@ -166,19 +152,7 @@ macro_rules! bootstrap_provider {
                 $crate::bootstrap::ErasedVec::from_vec(populate())
             }
 
-            #[used]
-            #[cfg_attr(
-                target_os = "linux",
-                unsafe(link_section = "pumpkin_bootstrap")
-            )]
-            #[cfg_attr(
-                target_os = "windows",
-                unsafe(link_section = ".pumpkin_bootstrap$m")
-            )]
-            #[cfg_attr(
-                target_os = "macos",
-                unsafe(link_section = "__DATA,__pumpkin_boot")
-            )]
+            #[$crate::bootstrap::distributed_slice($crate::bootstrap::PROVIDERS)]
             static $name: $crate::bootstrap::BootstrapProvider =
                 $crate::bootstrap::BootstrapProvider::new(
                     $registry,
@@ -188,15 +162,18 @@ macro_rules! bootstrap_provider {
     };
 }
 
+#[distributed_slice]
+pub static PROVIDERS: [BootstrapProvider];
+
 pub struct BootstrapManager<'a> {
     sources: Vec<&'a [BootstrapProvider]>,
 }
 
 impl<'a> BootstrapManager<'a> {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
-            sources: vec![builtin_providers()],
+            sources: Vec::new(),
         }
     }
 
@@ -205,7 +182,9 @@ impl<'a> BootstrapManager<'a> {
     }
 
     pub fn providers(&self) -> impl Iterator<Item = &BootstrapProvider> {
-        self.sources.iter().flat_map(|source| source.iter())
+        PROVIDERS
+            .iter()
+            .chain(self.sources.iter().flat_map(|source| source.iter()))
     }
 
     pub fn providers_for<'b>(
@@ -223,11 +202,9 @@ impl<'a> BootstrapManager<'a> {
     where
         T: Send + 'static,
     {
-        let builtin = self.sources.first().copied().unwrap_or_default();
+        let builtin_entries = populate_sources::<T>(std::slice::from_ref(&&*PROVIDERS), registry)?;
 
-        let builtin_entries = populate_sources::<T>(std::slice::from_ref(&builtin), registry)?;
-
-        let added_entries = populate_sources::<T>(&self.sources[1..], registry)?;
+        let added_entries = populate_sources::<T>(&self.sources, registry)?;
 
         let capacity = builtin_entries
             .iter()
