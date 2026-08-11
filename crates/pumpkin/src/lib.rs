@@ -703,6 +703,9 @@ fn setup_stdin_console(server: Arc<Server>) {
                         )
                         .await;
                 }
+            } else {
+                info!("Console input closed (EOF), stopping command reader");
+                break;
             }
         }
     });
