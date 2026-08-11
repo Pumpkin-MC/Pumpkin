@@ -1,0 +1,2543 @@
+{
+    "minecraft:deep_ocean": {
+        "id": null,
+        "temperature": 0.5,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -1.8,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 23,
+            "g": 135,
+            "b": 212
+        },
+        "rain": true,
+        "tags": [
+            "deep",
+            "monster",
+            "ocean",
+            "overworld",
+            "spawns_warm_variant_farm_animals",
+            "fast_fishing",
+            "high_seas"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:ocean": {
+        "id": null,
+        "temperature": 0.5,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -1.0,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 23,
+            "g": 135,
+            "b": 212
+        },
+        "rain": true,
+        "tags": [
+            "monster",
+            "ocean",
+            "overworld",
+            "fast_fishing",
+            "high_seas"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:forest_hills": {
+        "id": null,
+        "temperature": 0.7,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.45,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 5,
+            "g": 107,
+            "b": 209
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "hills",
+            "monster",
+            "overworld",
+            "forest",
+            "bee_habitat"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:forest": {
+        "id": null,
+        "temperature": 0.7,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 30,
+            "g": 151,
+            "b": 242
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "forest",
+            "monster",
+            "overworld",
+            "bee_habitat"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:sunflower_plains": {
+        "id": null,
+        "temperature": 0.8,
+        "downfall": 0.4,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.125,
+        "scale": 0.05,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "monster",
+            "mutated",
+            "overworld",
+            "plains",
+            "bee_habitat"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:plains": {
+        "id": null,
+        "temperature": 0.8,
+        "downfall": 0.4,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.125,
+        "scale": 0.05,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 68,
+            "g": 175,
+            "b": 245
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "monster",
+            "overworld",
+            "plains",
+            "bee_habitat"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:desert_hills": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.45,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 26,
+            "g": 122,
+            "b": 161
+        },
+        "rain": false,
+        "tags": [
+            "desert",
+            "hills",
+            "monster",
+            "overworld",
+            "spawns_gold_rabbits",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:desert_mutated": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.225,
+        "scale": 0.25,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 50,
+            "g": 165,
+            "b": 152
+        },
+        "rain": false,
+        "tags": [
+            "desert",
+            "monster",
+            "mutated",
+            "overworld_generation",
+            "spawns_gold_rabbits",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:extreme_hills_plus_trees": {
+        "id": null,
+        "temperature": 0.2,
+        "downfall": 0.3,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 1.0,
+        "scale": 0.5,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 14,
+            "g": 99,
+            "b": 171
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "extreme_hills",
+            "forest",
+            "monster",
+            "mountain",
+            "overworld",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:desert": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.125,
+        "scale": 0.05,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 50,
+            "g": 165,
+            "b": 152
+        },
+        "rain": false,
+        "tags": [
+            "desert",
+            "monster",
+            "overworld",
+            "spawns_gold_rabbits",
+            "spawns_warm_variant_farm_animals",
+            "spawns_warm_variant_frogs"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:extreme_hills_mutated": {
+        "id": null,
+        "temperature": 0.2,
+        "downfall": 0.3,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 1.0,
+        "scale": 0.5,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 14,
+            "g": 99,
+            "b": 171
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "extreme_hills",
+            "monster",
+            "mutated",
+            "overworld",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:stone_beach": {
+        "id": null,
+        "temperature": 0.2,
+        "downfall": 0.3,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.8,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 13,
+            "g": 103,
+            "b": 187
+        },
+        "rain": true,
+        "tags": [
+            "beach",
+            "monster",
+            "overworld",
+            "stone"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:extreme_hills_edge": {
+        "id": null,
+        "temperature": 0.2,
+        "downfall": 0.3,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.8,
+        "scale": 0.4,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 4,
+            "g": 92,
+            "b": 213
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "edge",
+            "extreme_hills",
+            "monster",
+            "mountain",
+            "overworld",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:extreme_hills": {
+        "id": null,
+        "temperature": 0.2,
+        "downfall": 0.3,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 1.0,
+        "scale": 0.5,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 0,
+            "g": 123,
+            "b": 247
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "extreme_hills",
+            "monster",
+            "overworld",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:flower_forest": {
+        "id": null,
+        "temperature": 0.7,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.4,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 32,
+            "g": 163,
+            "b": 204
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "flower_forest",
+            "monster",
+            "mutated",
+            "overworld",
+            "bee_habitat"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:taiga_hills": {
+        "id": null,
+        "temperature": 0.25,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.45,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 35,
+            "g": 101,
+            "b": 131
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "hills",
+            "monster",
+            "overworld",
+            "forest",
+            "taiga",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:taiga_mutated": {
+        "id": null,
+        "temperature": 0.25,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.2,
+        "scale": 0.4,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 30,
+            "g": 107,
+            "b": 130
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "forest",
+            "monster",
+            "mutated",
+            "taiga",
+            "overworld_generation",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:taiga": {
+        "id": null,
+        "temperature": 0.25,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 40,
+            "g": 112,
+            "b": 130
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "forest",
+            "monster",
+            "overworld",
+            "taiga",
+            "has_structure_trail_ruins",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:swampland_mutated": {
+        "id": null,
+        "temperature": 0.8,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -0.1,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 97,
+            "g": 123,
+            "b": 100
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "monster",
+            "mutated",
+            "swamp",
+            "overworld_generation",
+            "spawns_slimes_on_surface",
+            "slime",
+            "swamp_water_huge_mushroom"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:swampland": {
+        "id": null,
+        "temperature": 0.8,
+        "downfall": 0.9,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -0.2,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 97,
+            "g": 123,
+            "b": 100
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "monster",
+            "overworld",
+            "swamp",
+            "spawns_slimes_on_surface",
+            "slime",
+            "swamp_water_huge_mushroom"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:jungle_edge": {
+        "id": null,
+        "temperature": 0.95,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 13,
+            "g": 138,
+            "b": 227
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "edge",
+            "jungle",
+            "monster",
+            "overworld",
+            "spawns_jungle_mobs",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:river": {
+        "id": null,
+        "temperature": 0.5,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -0.5,
+        "scale": 0.0,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 0,
+            "g": 132,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "overworld",
+            "spawns_more_frequent_drowned",
+            "spawns_reduced_water_ambient_mobs",
+            "spawns_river_mobs",
+            "river"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:hell": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 144,
+            "g": 89,
+            "b": 87
+        },
+        "rain": false,
+        "tags": [
+            "nether",
+            "nether_wastes",
+            "spawn_endermen",
+            "spawn_few_piglins",
+            "spawn_ghast",
+            "spawn_magma_cubes",
+            "spawns_nether_mobs",
+            "spawn_zombified_piglin",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:the_end": {
+        "id": null,
+        "temperature": 0.5,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 98,
+            "g": 82,
+            "b": 158
+        },
+        "rain": false,
+        "tags": [
+            "the_end",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:legacy_frozen_ocean": {
+        "id": null,
+        "temperature": 0.0,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -1.0,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "legacy",
+            "frozen",
+            "ocean",
+            "overworld",
+            "spawns_cold_variant_farm_animals",
+            "spawns_polar_bears_on_alternate_blocks",
+            "fast_fishing",
+            "high_seas"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:cold_beach": {
+        "id": null,
+        "temperature": 0.05,
+        "downfall": 0.3,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.0,
+        "scale": 0.025,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 20,
+            "g": 99,
+            "b": 165
+        },
+        "rain": true,
+        "tags": [
+            "beach",
+            "cold",
+            "monster",
+            "overworld",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs",
+            "spawns_snow_foxes",
+            "spawns_white_rabbits"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:frozen_river": {
+        "id": null,
+        "temperature": 0.0,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -0.5,
+        "scale": 0.0,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 24,
+            "g": 83,
+            "b": 144
+        },
+        "rain": true,
+        "tags": [
+            "frozen",
+            "overworld",
+            "river",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs",
+            "spawns_river_mobs",
+            "spawns_snow_foxes",
+            "spawns_white_rabbits"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:ice_mountains": {
+        "id": null,
+        "temperature": 0.0,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.45,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 17,
+            "g": 86,
+            "b": 167
+        },
+        "rain": true,
+        "tags": [
+            "frozen",
+            "ice",
+            "mountain",
+            "overworld",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs",
+            "spawns_snow_foxes",
+            "spawns_white_rabbits"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:ice_plains_spikes": {
+        "id": null,
+        "temperature": 0.0,
+        "downfall": 1.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.425,
+        "scale": 0.45,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "frozen",
+            "ice_plains",
+            "monster",
+            "mutated",
+            "overworld",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs",
+            "spawns_white_rabbits"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:ice_plains": {
+        "id": null,
+        "temperature": 0.0,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.125,
+        "scale": 0.05,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 20,
+            "g": 85,
+            "b": 155
+        },
+        "rain": true,
+        "tags": [
+            "frozen",
+            "ice",
+            "ice_plains",
+            "overworld",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs",
+            "spawns_snow_foxes",
+            "spawns_white_rabbits"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:mushroom_island_shore": {
+        "id": null,
+        "temperature": 0.9,
+        "downfall": 1.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.0,
+        "scale": 0.025,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 129,
+            "g": 129,
+            "b": 147
+        },
+        "rain": true,
+        "tags": [
+            "mooshroom_island",
+            "overworld",
+            "shore",
+            "spawns_without_patrols"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:mushroom_island": {
+        "id": null,
+        "temperature": 0.9,
+        "downfall": 1.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.2,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 138,
+            "g": 137,
+            "b": 151
+        },
+        "rain": true,
+        "tags": [
+            "mooshroom_island",
+            "overworld",
+            "spawns_without_patrols"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:beach": {
+        "id": null,
+        "temperature": 0.8,
+        "downfall": 0.4,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.0,
+        "scale": 0.025,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 21,
+            "g": 124,
+            "b": 171
+        },
+        "rain": true,
+        "tags": [
+            "beach",
+            "monster",
+            "overworld",
+            "warm"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:jungle_hills": {
+        "id": null,
+        "temperature": 0.95,
+        "downfall": 0.9,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.45,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 27,
+            "g": 158,
+            "b": 216
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "hills",
+            "jungle",
+            "monster",
+            "overworld",
+            "spawns_jungle_mobs",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:jungle_mutated": {
+        "id": null,
+        "temperature": 0.95,
+        "downfall": 0.9,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.2,
+        "scale": 0.4,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 27,
+            "g": 158,
+            "b": 216
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "jungle",
+            "monster",
+            "mutated",
+            "overworld_generation",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:jungle": {
+        "id": null,
+        "temperature": 0.95,
+        "downfall": 0.9,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 20,
+            "g": 162,
+            "b": 197
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "has_structure_trail_ruins",
+            "jungle",
+            "monster",
+            "overworld",
+            "rare",
+            "spawns_jungle_mobs",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:jungle_edge_mutated": {
+        "id": null,
+        "temperature": 0.95,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.2,
+        "scale": 0.4,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 13,
+            "g": 138,
+            "b": 227
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "edge",
+            "jungle",
+            "monster",
+            "mutated",
+            "overworld_generation",
+            "spawns_jungle_mobs",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:birch_forest_hills": {
+        "id": null,
+        "temperature": 0.6,
+        "downfall": 0.6,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.45,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 10,
+            "g": 116,
+            "b": 196
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "birch",
+            "forest",
+            "hills",
+            "monster",
+            "overworld",
+            "bee_habitat"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:birch_forest_mutated": {
+        "id": null,
+        "temperature": 0.6,
+        "downfall": 0.6,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.2,
+        "scale": 0.4,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 6,
+            "g": 119,
+            "b": 206
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "birch",
+            "forest",
+            "monster",
+            "mutated",
+            "bee_habitat",
+            "overworld_generation",
+            "has_structure_trail_ruins"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:birch_forest": {
+        "id": null,
+        "temperature": 0.6,
+        "downfall": 0.6,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 6,
+            "g": 119,
+            "b": 206
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "birch",
+            "forest",
+            "monster",
+            "overworld",
+            "bee_habitat"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:birch_forest_hills_mutated": {
+        "id": null,
+        "temperature": 0.7,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.55,
+        "scale": 0.5,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 10,
+            "g": 116,
+            "b": 196
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "birch",
+            "forest",
+            "hills",
+            "monster",
+            "mutated",
+            "overworld_generation"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:roofed_forest_mutated": {
+        "id": null,
+        "temperature": 0.7,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.2,
+        "scale": 0.4,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 59,
+            "g": 108,
+            "b": 209
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "forest",
+            "monster",
+            "mutated",
+            "roofed",
+            "overworld_generation"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:roofed_forest": {
+        "id": null,
+        "temperature": 0.7,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 59,
+            "g": 108,
+            "b": 209
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "forest",
+            "monster",
+            "no_legacy_worldgen",
+            "overworld",
+            "roofed"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:cold_taiga_hills": {
+        "id": null,
+        "temperature": -0.5,
+        "downfall": 0.4,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.45,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 36,
+            "g": 91,
+            "b": 120
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "cold",
+            "forest",
+            "hills",
+            "monster",
+            "overworld",
+            "taiga",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs",
+            "spawns_white_rabbits"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:cold_taiga_mutated": {
+        "id": null,
+        "temperature": -0.5,
+        "downfall": 0.4,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.3,
+        "scale": 0.4,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 32,
+            "g": 94,
+            "b": 131
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "cold",
+            "forest",
+            "monster",
+            "mutated",
+            "taiga",
+            "overworld_generation",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:cold_taiga": {
+        "id": null,
+        "temperature": -0.5,
+        "downfall": 0.4,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.2,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 32,
+            "g": 94,
+            "b": 131
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "cold",
+            "forest",
+            "monster",
+            "overworld",
+            "taiga",
+            "has_structure_trail_ruins",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:mega_taiga_hills": {
+        "id": null,
+        "temperature": 0.3,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.45,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 40,
+            "g": 99,
+            "b": 120
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "forest",
+            "hills",
+            "mega",
+            "monster",
+            "overworld",
+            "taiga",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:redwood_taiga_mutated": {
+        "id": null,
+        "temperature": 0.25,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.2,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 45,
+            "g": 109,
+            "b": 119
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "forest",
+            "mega",
+            "monster",
+            "mutated",
+            "overworld",
+            "taiga",
+            "has_structure_trail_ruins",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:mega_taiga": {
+        "id": null,
+        "temperature": 0.3,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.2,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 45,
+            "g": 109,
+            "b": 119
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "forest",
+            "mega",
+            "monster",
+            "overworld",
+            "rare",
+            "taiga",
+            "has_structure_trail_ruins",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:redwood_taiga_hills_mutated": {
+        "id": null,
+        "temperature": 0.3,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.55,
+        "scale": 0.5,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 40,
+            "g": 99,
+            "b": 120
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "forest",
+            "hills",
+            "mega",
+            "monster",
+            "mutated",
+            "taiga",
+            "overworld_generation",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:extreme_hills_plus_trees_mutated": {
+        "id": null,
+        "temperature": 0.2,
+        "downfall": 0.3,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 1.0,
+        "scale": 0.5,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 14,
+            "g": 99,
+            "b": 171
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "extreme_hills",
+            "forest",
+            "monster",
+            "mutated",
+            "overworld",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:savanna_plateau": {
+        "id": null,
+        "temperature": 1.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 1.5,
+        "scale": 0.025,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 37,
+            "g": 144,
+            "b": 168
+        },
+        "rain": false,
+        "tags": [
+            "animal",
+            "monster",
+            "overworld",
+            "plateau",
+            "savanna",
+            "spawns_savanna_mobs",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:savanna_mutated": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.3625,
+        "scale": 1.225,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": false,
+        "tags": [
+            "animal",
+            "monster",
+            "mutated",
+            "overworld",
+            "savanna",
+            "spawns_savanna_mobs",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:savanna": {
+        "id": null,
+        "temperature": 1.2,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.125,
+        "scale": 0.05,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 44,
+            "g": 139,
+            "b": 156
+        },
+        "rain": false,
+        "tags": [
+            "animal",
+            "monster",
+            "overworld",
+            "savanna",
+            "spawns_savanna_mobs",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:savanna_plateau_mutated": {
+        "id": null,
+        "temperature": 1.0,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 1.05,
+        "scale": 1.2125,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "monster",
+            "mutated",
+            "overworld",
+            "plateau",
+            "savanna",
+            "spawns_savanna_mobs",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:mesa_bryce": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 20,
+            "g": 162,
+            "b": 197
+        },
+        "rain": false,
+        "tags": [
+            "animal",
+            "mesa",
+            "monster",
+            "mutated",
+            "overworld",
+            "spawns_mesa_mobs",
+            "spawns_warm_variant_farm_animals",
+            "surface_mineshaft"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:mesa": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 78,
+            "g": 127,
+            "b": 129
+        },
+        "rain": false,
+        "tags": [
+            "animal",
+            "mesa",
+            "monster",
+            "overworld",
+            "spawns_mesa_mobs",
+            "spawns_warm_variant_farm_animals",
+            "surface_mineshaft"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:mesa_plateau_stone_mutated": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.45,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 85,
+            "g": 128,
+            "b": 158
+        },
+        "rain": false,
+        "tags": [
+            "animal",
+            "mesa",
+            "monster",
+            "mutated",
+            "overworld",
+            "plateau",
+            "spawns_mesa_mobs",
+            "spawns_warm_variant_farm_animals",
+            "surface_mineshaft"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:mesa_plateau_stone": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 1.5,
+        "scale": 0.025,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 85,
+            "g": 128,
+            "b": 158
+        },
+        "rain": false,
+        "tags": [
+            "animal",
+            "mesa",
+            "monster",
+            "overworld",
+            "plateau",
+            "rare",
+            "stone",
+            "spawns_mesa_mobs",
+            "spawns_warm_variant_farm_animals",
+            "surface_mineshaft"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:mesa_plateau_mutated": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.45,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 85,
+            "g": 128,
+            "b": 158
+        },
+        "rain": false,
+        "tags": [
+            "animal",
+            "mesa",
+            "monster",
+            "mutated",
+            "overworld",
+            "plateau",
+            "stone",
+            "spawns_mesa_mobs",
+            "spawns_warm_variant_farm_animals",
+            "surface_mineshaft"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:mesa_plateau": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 1.5,
+        "scale": 0.025,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 85,
+            "g": 128,
+            "b": 158
+        },
+        "rain": false,
+        "tags": [
+            "animal",
+            "mesa",
+            "monster",
+            "overworld",
+            "plateau",
+            "rare",
+            "spawns_mesa_mobs",
+            "spawns_warm_variant_farm_animals",
+            "surface_mineshaft"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:warm_ocean": {
+        "id": null,
+        "temperature": 0.5,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -1.0,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 2,
+            "g": 176,
+            "b": 229
+        },
+        "rain": true,
+        "tags": [
+            "monster",
+            "ocean",
+            "overworld",
+            "warm",
+            "spawns_warm_variant_farm_animals",
+            "spawns_warm_variant_frogs",
+            "fast_fishing",
+            "high_seas"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:deep_warm_ocean": {
+        "id": null,
+        "temperature": 0.5,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -1.8,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 2,
+            "g": 176,
+            "b": 229
+        },
+        "rain": true,
+        "tags": [
+            "deep",
+            "monster",
+            "ocean",
+            "overworld",
+            "warm",
+            "spawns_warm_variant_farm_animals",
+            "fast_fishing",
+            "high_seas"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:lukewarm_ocean": {
+        "id": null,
+        "temperature": 0.5,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -1.0,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 13,
+            "g": 150,
+            "b": 219
+        },
+        "rain": true,
+        "tags": [
+            "lukewarm",
+            "monster",
+            "ocean",
+            "overworld",
+            "spawns_warm_variant_farm_animals",
+            "fast_fishing",
+            "high_seas"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:deep_lukewarm_ocean": {
+        "id": null,
+        "temperature": 0.5,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -1.8,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 13,
+            "g": 150,
+            "b": 219
+        },
+        "rain": true,
+        "tags": [
+            "deep",
+            "lukewarm",
+            "monster",
+            "ocean",
+            "overworld",
+            "spawns_warm_variant_farm_animals",
+            "fast_fishing",
+            "high_seas"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:cold_ocean": {
+        "id": null,
+        "temperature": 0.5,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -1.0,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 32,
+            "g": 128,
+            "b": 201
+        },
+        "rain": true,
+        "tags": [
+            "cold",
+            "monster",
+            "ocean",
+            "overworld",
+            "spawns_cold_variant_farm_animals",
+            "fast_fishing",
+            "high_seas"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:deep_cold_ocean": {
+        "id": null,
+        "temperature": 0.5,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -1.8,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 32,
+            "g": 128,
+            "b": 201
+        },
+        "rain": true,
+        "tags": [
+            "cold",
+            "deep",
+            "monster",
+            "ocean",
+            "overworld",
+            "spawns_cold_variant_farm_animals",
+            "fast_fishing",
+            "high_seas"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:frozen_ocean": {
+        "id": null,
+        "temperature": 0.0,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -1.0,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 37,
+            "g": 112,
+            "b": 181
+        },
+        "rain": true,
+        "tags": [
+            "frozen",
+            "monster",
+            "ocean",
+            "overworld",
+            "spawns_polar_bears_on_alternate_blocks",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs",
+            "spawns_snow_foxes",
+            "spawns_white_rabbits",
+            "fast_fishing",
+            "high_seas"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:deep_frozen_ocean": {
+        "id": null,
+        "temperature": 0.5,
+        "downfall": 0.5,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -1.8,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 37,
+            "g": 112,
+            "b": 181
+        },
+        "rain": true,
+        "tags": [
+            "deep",
+            "frozen",
+            "monster",
+            "ocean",
+            "overworld",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs",
+            "spawns_polar_bears_on_alternate_blocks",
+            "fast_fishing",
+            "high_seas"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:bamboo_jungle_hills": {
+        "id": null,
+        "temperature": 0.95,
+        "downfall": 0.9,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.45,
+        "scale": 0.3,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 27,
+            "g": 158,
+            "b": 216
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "bamboo",
+            "hills",
+            "jungle",
+            "monster",
+            "overworld",
+            "spawns_jungle_mobs",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:bamboo_jungle": {
+        "id": null,
+        "temperature": 0.95,
+        "downfall": 0.9,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 20,
+            "g": 162,
+            "b": 197
+        },
+        "rain": true,
+        "tags": [
+            "animal",
+            "bamboo",
+            "jungle",
+            "monster",
+            "overworld",
+            "spawns_jungle_mobs",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:soulsand_valley": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 144,
+            "g": 89,
+            "b": 87
+        },
+        "rain": false,
+        "tags": [
+            "nether",
+            "soulsand_valley",
+            "spawn_ghast",
+            "spawn_endermen",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:crimson_forest": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 144,
+            "g": 89,
+            "b": 87
+        },
+        "rain": false,
+        "tags": [
+            "nether",
+            "netherwart_forest",
+            "crimson_forest",
+            "spawn_few_zombified_piglins",
+            "spawn_piglin",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:warped_forest": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 144,
+            "g": 89,
+            "b": 87
+        },
+        "rain": false,
+        "tags": [
+            "nether",
+            "netherwart_forest",
+            "warped_forest",
+            "spawn_endermen",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:basalt_deltas": {
+        "id": null,
+        "temperature": 2.0,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 165,
+            "r": 63,
+            "g": 118,
+            "b": 228
+        },
+        "rain": false,
+        "tags": [
+            "nether",
+            "basalt_deltas",
+            "spawn_many_magma_cubes",
+            "spawn_ghast",
+            "spawns_warm_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:jagged_peaks": {
+        "id": null,
+        "temperature": -0.7,
+        "downfall": 0.9,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "mountains",
+            "monster",
+            "overworld",
+            "frozen",
+            "jagged_peaks",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs",
+            "spawns_snow_foxes",
+            "spawns_white_rabbits"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:frozen_peaks": {
+        "id": null,
+        "temperature": -0.7,
+        "downfall": 0.9,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "mountains",
+            "monster",
+            "overworld",
+            "frozen",
+            "frozen_peaks",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs",
+            "spawns_snow_foxes",
+            "spawns_white_rabbits"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:snowy_slopes": {
+        "id": null,
+        "temperature": -0.3,
+        "downfall": 0.9,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "mountains",
+            "monster",
+            "overworld",
+            "frozen",
+            "spawns_cold_variant_frogs",
+            "spawns_snow_foxes",
+            "spawns_white_rabbits",
+            "snowy_slopes",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:grove": {
+        "id": null,
+        "temperature": -0.2,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "mountains",
+            "cold",
+            "monster",
+            "overworld",
+            "grove",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs",
+            "spawns_snow_foxes",
+            "spawns_white_rabbits"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:meadow": {
+        "id": null,
+        "temperature": 0.3,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "mountains",
+            "monster",
+            "overworld",
+            "meadow",
+            "bee_habitat"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:lush_caves": {
+        "id": null,
+        "temperature": 0.9,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": false,
+        "tags": [
+            "caves",
+            "lush_caves",
+            "overworld",
+            "monster",
+            "spawns_tropical_fish_at_any_height"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:dripstone_caves": {
+        "id": null,
+        "temperature": 0.2,
+        "downfall": 0.0,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": false,
+        "tags": [
+            "caves",
+            "overworld",
+            "dripstone_caves",
+            "monster"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:stony_peaks": {
+        "id": null,
+        "temperature": 1.0,
+        "downfall": 0.3,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "mountains",
+            "monster",
+            "overworld",
+            "spawns_cold_variant_farm_animals"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:deep_dark": {
+        "id": null,
+        "temperature": 0.8,
+        "downfall": 0.4,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "caves",
+            "deep_dark",
+            "overworld",
+            "spawns_cold_variant_farm_animals",
+            "spawns_cold_variant_frogs"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:mangrove_swamp": {
+        "id": null,
+        "temperature": 0.8,
+        "downfall": 0.9,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": -0.2,
+        "scale": 0.1,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "mangrove_swamp",
+            "overworld",
+            "monster",
+            "spawns_slimes_on_surface",
+            "spawns_warm_variant_farm_animals",
+            "spawns_warm_variant_frogs",
+            "slime"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:cherry_grove": {
+        "id": null,
+        "temperature": 0.3,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "mountains",
+            "monster",
+            "overworld",
+            "cherry_grove",
+            "bee_habitat"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:pale_garden": {
+        "id": null,
+        "temperature": 0.7,
+        "downfall": 0.8,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "monster",
+            "overworld",
+            "pale_garden"
+        ],
+        "chunkGenData": null
+    },
+    "minecraft:sulfur_caves": {
+        "id": null,
+        "temperature": 0.8,
+        "downfall": 0.4,
+        "redSporeDensity": 0.0,
+        "blueSporeDensity": 0.0,
+        "ashDensity": 0.0,
+        "whiteAshDensity": 0.0,
+        "foliageSnow": 0.0,
+        "depth": 0.1,
+        "scale": 0.2,
+        "mapWaterColor": {
+            "a": 166,
+            "r": 96,
+            "g": 183,
+            "b": 255
+        },
+        "rain": true,
+        "tags": [
+            "caves",
+            "sulfur_caves",
+            "overworld",
+            "monster"
+        ],
+        "chunkGenData": null
+    }
+}

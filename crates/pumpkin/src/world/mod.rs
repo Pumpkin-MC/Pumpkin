@@ -3,9 +3,9 @@ use dashmap::DashMap;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
-use pumpkin_protocol::bedrock::client::EntityProperties;
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemDefinition};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
+use pumpkin_protocol::bedrock::client::{CBiomeDefinitionList, EntityProperties};
 use pumpkin_protocol::bedrock::network_item::{NetworkItemDescriptor, NetworkItemStackDescriptor};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
@@ -2063,6 +2063,8 @@ impl World {
                 },
             })
             .await;
+
+        client.send_game_packet(&CBiomeDefinitionList).await;
 
         client
             .send_game_packet(&CItemRegistry {
