@@ -103,10 +103,10 @@ impl VeinRules {
                     continue;
                 }
                 let vein_pos = support_pos.offset(vein_dir.to_offset());
-                if let Some(vs) = level.sculk_get(vein_pos) {
-                    if vs.to_block_id() == BlockId::SCULK_VEIN {
-                        Self::on_discharged(level, vein_pos);
-                    }
+                if let Some(vs) = level.sculk_get(vein_pos)
+                    && vs.to_block_id() == BlockId::SCULK_VEIN
+                {
+                    Self::on_discharged(level, vein_pos);
                 }
             }
             return true;
@@ -162,10 +162,10 @@ impl VeinRules {
             return false;
         }
         // Preserve waterlogging from the existing block's fluid state.
-        if let Some(existing) = level.sculk_get(pos) {
-            if Self::state_has_water(level, existing, pos) {
-                new_state = Self::with_waterlogged(new_state, true);
-            }
+        if let Some(existing) = level.sculk_get(pos)
+            && Self::state_has_water(level, existing, pos)
+        {
+            new_state = Self::with_waterlogged(new_state, true);
         }
         level.sculk_set(pos, new_state.to_state());
         true
@@ -274,9 +274,7 @@ impl VeinRules {
         // the inner loop (`MultifaceSpreader.getSpreadFromFaceTowardDirection`),
         // placing at most one vein per (face, direction) pair.
         let source_state = level.sculk_get(pos);
-        let source_id = source_state
-            .map(|s| s.to_block_id())
-            .unwrap_or(BlockId::AIR);
+        let source_id = source_state.map_or(BlockId::AIR, BlockStateId::to_block_id);
         let is_vein = source_id == BlockId::SCULK_VEIN;
         let mut any = false;
 
@@ -375,28 +373,27 @@ impl VeinRules {
         if !Self::can_attach_to(level, placement_pos, face) {
             return None;
         }
-        if let Some(old) = old_state {
-            if old.to_block_id() == BlockId::SCULK_VEIN && Self::has_face(old, face) {
-                return None;
-            }
+        if let Some(old) = old_state
+            && old.to_block_id() == BlockId::SCULK_VEIN
+            && Self::has_face(old, face)
+        {
+            return None;
         }
         // Determine base state: if already sculk_vein, extend it;
         // otherwise start from a fresh sculk_vein default state.
-        let mut base = if let Some(s) = old_state {
+        let mut base = old_state.map_or(Block::SCULK_VEIN.default_state.id, |s| {
             if s.to_block_id() == BlockId::SCULK_VEIN {
                 s
             } else {
                 Block::SCULK_VEIN.default_state.id
             }
-        } else {
-            Block::SCULK_VEIN.default_state.id
-        };
+        });
         base = Self::with_face(base, face, true);
         // Vanilla: `oldState.getFluidState().isSourceOfType(Fluids.WATER)`.
-        if let Some(s) = old_state {
-            if Self::old_state_is_water_source(level, s, placement_pos) {
-                base = Self::with_waterlogged(base, true);
-            }
+        if let Some(s) = old_state
+            && Self::old_state_is_water_source(level, s, placement_pos)
+        {
+            base = Self::with_waterlogged(base, true);
         }
         Some(base.to_state())
     }

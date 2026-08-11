@@ -48,7 +48,7 @@ pub struct SpreaderConfig {
 
 impl SculkSpreader {
     /// Returns a snapshot of the configuration for cursor updates.
-    pub fn config(&self) -> SpreaderConfig {
+    pub const fn config(&self) -> SpreaderConfig {
         SpreaderConfig {
             is_world_generation: self.is_world_generation,
             growth_spawn_cost: self.growth_spawn_cost,
@@ -82,14 +82,14 @@ impl SculkSpreader {
     /// Creates a spreader for catalyst-driven (level) spreading.
     /// Mirrors vanilla `SculkSpreader.createLevelSpreader()`.
     #[must_use]
-    pub fn new_level_spreader() -> Self {
+    pub const fn new_level_spreader() -> Self {
         Self::new(false, false, 10, 4, 10, 5)
     }
 
     /// Creates a spreader for world-generation spreading.
     /// Mirrors vanilla `SculkSpreader.createWorldGenSpreader()`.
     #[must_use]
-    pub fn new_world_gen_spreader() -> Self {
+    pub const fn new_world_gen_spreader() -> Self {
         Self::new(true, true, 50, 1, 5, 10)
     }
 
@@ -211,37 +211,34 @@ impl SculkSpreader {
 
             let pos = cursor.pos;
             // Attempt merge with the existing cursor at the same position.
-            match merge_index.get(&pos).copied() {
-                Some(existing_idx) => {
-                    let existing_charge = processed[existing_idx].charge;
-                    // Vanilla: merge when not world-gen and the combined
-                    // charge fits within MAX_CHARGE.
-                    if !config.is_world_generation {
-                        let combined = existing_charge as u32 + cursor.charge as u32;
-                        if combined <= MAX_CHARGE as u32 {
-                            processed[existing_idx].charge = combined as u16;
-                            processed[existing_idx].update_delay = processed[existing_idx]
-                                .update_delay
-                                .min(cursor.update_delay);
-                            continue;
-                        }
-                    }
-                    // Can't merge: keep the new cursor as a separate entry. It
-                    // is intentionally NOT registered in merge_index — the
-                    // existing entry must remain the merge target for future
-                    // lookups — unless it carries less charge than the
-                    // existing cursor, in which case vanilla replaces the
-                    // merge target (SculkSpreader.updateCursors).
-                    processed.push(cursor);
-                    let new_idx = processed.len() - 1;
-                    if processed[new_idx].charge < existing_charge {
-                        merge_index.insert(pos, new_idx);
+            if let Some(existing_idx) = merge_index.get(&pos).copied() {
+                let existing_charge = processed[existing_idx].charge;
+                // Vanilla: merge when not world-gen and the combined
+                // charge fits within MAX_CHARGE.
+                if !config.is_world_generation {
+                    let combined = existing_charge as u32 + cursor.charge as u32;
+                    if combined <= MAX_CHARGE as u32 {
+                        processed[existing_idx].charge = combined as u16;
+                        processed[existing_idx].update_delay = processed[existing_idx]
+                            .update_delay
+                            .min(cursor.update_delay);
+                        continue;
                     }
                 }
-                None => {
-                    merge_index.insert(pos, processed.len());
-                    processed.push(cursor);
+                // Can't merge: keep the new cursor as a separate entry. It
+                // is intentionally NOT registered in merge_index — the
+                // existing entry must remain the merge target for future
+                // lookups — unless it carries less charge than the
+                // existing cursor, in which case vanilla replaces the
+                // merge target (SculkSpreader.updateCursors).
+                processed.push(cursor);
+                let new_idx = processed.len() - 1;
+                if processed[new_idx].charge < existing_charge {
+                    merge_index.insert(pos, new_idx);
                 }
+            } else {
+                merge_index.insert(pos, processed.len());
+                processed.push(cursor);
             }
         }
 
@@ -299,9 +296,7 @@ impl ChargeCursor {
         }
 
         let mut current_state = level.sculk_get(self.pos);
-        let mut current_id = current_state
-            .map(|s| s.to_block_id())
-            .unwrap_or(BlockId::AIR);
+        let mut current_id = current_state.map_or(BlockId::AIR, BlockStateId::to_block_id);
 
         // Attempt vein spreading first. Vanilla dispatches on the block
         // behaviour: sculk behaviour blocks (sculk / sculk vein) use the
@@ -319,9 +314,7 @@ impl ChargeCursor {
             // is false only for sculk).
             if spread && current_id != BlockId::SCULK {
                 current_state = level.sculk_get(self.pos);
-                current_id = current_state
-                    .map(|s| s.to_block_id())
-                    .unwrap_or(BlockId::AIR);
+                current_id = current_state.map_or(BlockId::AIR, BlockStateId::to_block_id);
             }
         }
 
@@ -489,7 +482,11 @@ impl ChargeCursor {
     }
 
     /// Vanilla `Vec3i.closerThan` — strict squared-Euclidean comparison.
-    fn is_close_to_catalyst(pos: BlockPos, origin_pos: BlockPos, no_growth_radius: i32) -> bool {
+    const fn is_close_to_catalyst(
+        pos: BlockPos,
+        origin_pos: BlockPos,
+        no_growth_radius: i32,
+    ) -> bool {
         let dx = (pos.0.x - origin_pos.0.x) as i64;
         let dy = (pos.0.y - origin_pos.0.y) as i64;
         let dz = (pos.0.z - origin_pos.0.z) as i64;
@@ -618,7 +615,7 @@ impl ChargeCursor {
 
     /// Vanilla `SculkBehaviour.updateDecayDelay`: sculk behaviours reset the
     /// delay to 1, `DEFAULT` decrements it (`Math.max(age - 1, 0)`).
-    fn update_decay_delay(current: u8, is_sculk: bool) -> u8 {
+    const fn update_decay_delay(current: u8, is_sculk: bool) -> u8 {
         if is_sculk {
             1
         } else {
@@ -645,7 +642,7 @@ mod tests {
         for off in NON_CORNER_NEIGHBOURS {
             // At least one axis must be zero (not a corner).
             let zeros = (off.x == 0) as u8 + (off.y == 0) as u8 + (off.z == 0) as u8;
-            assert!(zeros >= 1, "corner offset found: {:?}", off);
+            assert!(zeros >= 1, "corner offset found: {off:?}");
             // Not the centre.
             assert!(
                 !(off.x == 0 && off.y == 0 && off.z == 0),

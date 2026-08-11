@@ -136,8 +136,7 @@ pub fn shrieker_state(can_summon: bool) -> &'static BlockState {
 pub fn sculk_block_id(level: &dyn SculkLevel, pos: BlockPos) -> BlockId {
     level
         .sculk_get(pos)
-        .map(|s| s.to_block_id())
-        .unwrap_or(BlockId::AIR)
+        .map_or(BlockId::AIR, BlockStateId::to_block_id)
 }
 
 // Blanket impl for any type implementing GenerationCache (post-terrain case).
@@ -202,11 +201,11 @@ impl<'a> ProtoChunkSculkView<'a> {
     /// [`ProtoChunk`]. Out-of-bounds positions return `None` from reads
     /// and are no-ops on writes, modelling them as solid obstacles for
     /// the spreader.
-    pub fn new(chunk: &'a mut ProtoChunk) -> Self {
+    pub const fn new(chunk: &'a mut ProtoChunk) -> Self {
         Self { chunk }
     }
 
-    fn in_bounds(&self, pos: BlockPos) -> bool {
+    const fn in_bounds(&self, pos: BlockPos) -> bool {
         if pos.0.x >> 4 != self.chunk.x || pos.0.z >> 4 != self.chunk.z {
             return false;
         }
@@ -236,7 +235,7 @@ impl SculkLevel for ProtoChunkSculkView<'_> {
     }
 
     fn sculk_is_air(&self, pos: BlockPos) -> bool {
-        self.sculk_get(pos).map(|s| is_air(s)).unwrap_or(true)
+        self.sculk_get(pos).is_none_or(is_air)
     }
 
     fn sculk_is_water_source(&self, pos: BlockPos) -> bool {
@@ -255,26 +254,24 @@ impl SculkLevel for ProtoChunkSculkView<'_> {
 
     fn sculk_is_face_sturdy(&self, pos: BlockPos, face: BlockDirection) -> bool {
         self.sculk_get(pos)
-            .map(|s| s.to_state().is_side_solid(face))
-            .unwrap_or(false)
+            .is_some_and(|s| s.to_state().is_side_solid(face))
     }
 
     fn sculk_is_full_cube(&self, pos: BlockPos) -> bool {
         self.sculk_get(pos)
-            .map(|s| s.to_state().is_full_cube())
-            .unwrap_or(false)
+            .is_some_and(|s| s.to_state().is_full_cube())
     }
 }
 
 #[cfg(test)]
-pub(crate) mod test_utils {
+pub mod test_utils {
     use super::*;
     use std::collections::HashMap;
 
     /// In-memory [`SculkLevel`] used by the unit tests of the sculk
     /// sub-modules. Mirrors the proto-chunk view: water is detected from the
     /// block state, and missing positions read as air.
-    pub(crate) struct MockSculkLevel {
+    pub struct MockSculkLevel {
         pub(crate) blocks: HashMap<BlockPos, BlockStateId>,
     }
 
@@ -300,9 +297,7 @@ pub(crate) mod test_utils {
         }
 
         fn sculk_is_air(&self, pos: BlockPos) -> bool {
-            self.sculk_get(pos)
-                .map(|s| s.to_state().is_air())
-                .unwrap_or(true)
+            self.sculk_get(pos).is_none_or(|s| s.to_state().is_air())
         }
 
         fn sculk_is_water_source(&self, pos: BlockPos) -> bool {
@@ -317,14 +312,12 @@ pub(crate) mod test_utils {
 
         fn sculk_is_face_sturdy(&self, pos: BlockPos, face: BlockDirection) -> bool {
             self.sculk_get(pos)
-                .map(|s| s.to_state().is_side_solid(face))
-                .unwrap_or(false)
+                .is_some_and(|s| s.to_state().is_side_solid(face))
         }
 
         fn sculk_is_full_cube(&self, pos: BlockPos) -> bool {
             self.sculk_get(pos)
-                .map(|s| s.to_state().is_full_cube())
-                .unwrap_or(false)
+                .is_some_and(|s| s.to_state().is_full_cube())
         }
     }
 }

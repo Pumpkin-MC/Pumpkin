@@ -36,13 +36,13 @@ impl GrowthRules {
         let above_id = above_state.to_block_id();
         // Vanilla: `stateAbove.isAir() || (stateAbove.is(WATER) && the fluid
         // state is water)`.
-        if !above_state.to_state().is_air()
-            && !(above_id == BlockId::WATER && level.sculk_is_water(above))
+        if !(above_state.to_state().is_air()
+            || (above_id == BlockId::WATER && level.sculk_is_water(above)))
         {
             return false;
         }
         // Count nearby growths (sensor + shrieker).
-        let mut growth_count = 0_i32;
+        let mut growth_count = 0i32;
         for dx in -GROWTH_CHECK_RADIUS..=GROWTH_CHECK_RADIUS {
             for dz in -GROWTH_CHECK_RADIUS..=GROWTH_CHECK_RADIUS {
                 for dy in 0..=GROWTH_CHECK_HEIGHT {
