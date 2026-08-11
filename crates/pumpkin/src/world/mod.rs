@@ -541,7 +541,7 @@ impl World {
             };
 
             for recipient in recipients {
-                recipient.try_enqueue_packet_data(packet_data.clone());
+                recipient.try_enqueue_serialized_packet(packet_data.clone());
             }
         }
     }
@@ -566,7 +566,7 @@ impl World {
                     if let Ok(data) =
                         JavaClient::serialize_packet_for_version(packet, java.version.load())
                     {
-                        java.try_enqueue_packet_data(data);
+                        java.try_enqueue_serialized_packet(data);
                     }
                 }
                 ClientPlatform::Bedrock(_) => {

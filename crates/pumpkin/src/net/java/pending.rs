@@ -10,7 +10,7 @@ use pumpkin_protocol::{
         client::config::CConfigDisconnect,
         client::login::CLoginDisconnect,
         packet_decoder::TCPNetworkDecoder,
-        packet_encoder::TCPNetworkEncoder,
+        packet_encoder::{SerializedPacket, TCPNetworkEncoder},
         server::config::{
             SAcknowledgeFinishConfig, SClientInformationConfig, SConfigCookieResponse,
             SConfigResourcePack, SKnownPacks, SPluginMessage,
@@ -141,7 +141,16 @@ impl PendingConnection {
             error!("Failed to write packet: {err:?}");
             return;
         }
-        let payload = Bytes::from(packet_buf);
+        let payload = match SerializedPacket::try_from_bytes(Bytes::from(packet_buf)) {
+            Ok(p) => p,
+            Err(err) => {
+                warn!(
+                    "Failed to serialize packet for client {}: {:?}",
+                    self.id, err
+                );
+                return;
+            }
+        };
         if let Err(err) = self.network_writer.write_packet(payload).await {
             warn!("Failed to send packet to client {}: {}", self.id, err);
         }
