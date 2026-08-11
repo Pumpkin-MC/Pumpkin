@@ -2035,7 +2035,12 @@ impl World {
                 entity_id: VarLong(runtime_id as _),
                 runtime_entity_id: VarULong(runtime_id),
                 player_gamemode: player.gamemode.load(),
-                position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
+                // Bedrock represents the local player at eye height; Pumpkin stores feet position.
+                position: Vector3::new(
+                    position.x as f32,
+                    position.y as f32 + player.get_entity().entity_type.eye_height,
+                    position.z as f32,
+                ),
                 pitch,
                 yaw,
                 level_settings,
