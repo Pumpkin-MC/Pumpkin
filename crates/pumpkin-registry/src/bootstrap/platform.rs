@@ -1,13 +1,24 @@
 #[cfg(target_os = "linux")]
 mod imp {
-    use crate::bootstrap::BootstrapProvider;
+    use std::sync::Arc;
+
+    use crate::{
+        Registry,
+        bootstrap::{BootstrapProvider, ErasedVec},
+    };
 
     #[repr(C, align(8))]
-    struct SectionBoundary(u8);
+    struct Sentinel(u8);
+
+    #[used]
+    #[unsafe(link_section = "pumpkin_bootstrap")]
+    static SENTINEL: BootstrapProvider = BootstrapProvider::new("minecraft:root", || {
+        ErasedVec::from_vec(Vec::<Arc<dyn Registry>>::new())
+    });
 
     unsafe extern "C" {
-        static __start_pumpkin_bootstrap: SectionBoundary;
-        static __stop_pumpkin_bootstrap: SectionBoundary;
+        static __start_pumpkin_bootstrap: Sentinel;
+        static __stop_pumpkin_bootstrap: Sentinel;
     }
 
     #[must_use]
@@ -24,13 +35,11 @@ mod imp {
             //
             // The section remains mapped for the lifetime of the process.
             let start = (&raw const __start_pumpkin_bootstrap).cast::<BootstrapProvider>();
-            let end = (&raw const __stop_pumpkin_bootstrap).cast::<u8>();
+            let end = (&raw const __stop_pumpkin_bootstrap).cast::<BootstrapProvider>();
 
-            let bytes = end.byte_offset_from(start.cast::<u8>()) as usize;
+            let len = end.offset_from(start) as usize;
 
-            debug_assert_eq!(bytes % size_of::<BootstrapProvider>(), 0);
-
-            std::slice::from_raw_parts(start, bytes / size_of::<BootstrapProvider>())
+            std::slice::from_raw_parts(start, len)
         }
     }
 }
