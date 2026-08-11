@@ -1352,7 +1352,7 @@ impl JavaClient {
         swing_arm: SSwingArm,
     ) {
         player.update_last_action_time();
-        let Ok(hand) = Hand::try_from(swing_arm.hand.0) else {
+        let Ok(hand) = Hand::from_packet_id(swing_arm.hand.0) else {
             self.kick(TextComponent::text("Invalid hand")).await;
             return;
         };
@@ -2282,7 +2282,7 @@ impl JavaClient {
             return Err(BlockPlacingError::InvalidBlockFace);
         };
 
-        let Ok(hand) = Hand::try_from(use_item_on.hand.0) else {
+        let Ok(hand) = Hand::from_packet_id(use_item_on.hand.0) else {
             return Err(BlockPlacingError::InvalidHand);
         };
 
@@ -2297,11 +2297,8 @@ impl JavaClient {
         let held_item_empty = held_item.is_empty();
         let off_hand_item_empty = off_hand_item.is_empty();
 
-        let item_id = if matches!(hand, Hand::Left) {
-            held_item.item.id
-        } else {
-            off_hand_item.item.id
-        };
+        let mut item = inventory.get_stack_in_hand(hand).await;
+        let item_id = item.item.id;
         player
             .increment_stat(StatisticCategory::Used, item_id as i32, 1)
             .await;
@@ -2331,12 +2328,7 @@ impl JavaClient {
             }
         }}
 
-        let mut item = if matches!(hand, Hand::Left) {
-            held_item
-        } else {
-            off_hand_item
-        };
-        let equipment_slot = if matches!(hand, Hand::Left) {
+        let equipment_slot = if matches!(hand, Hand::Right) {
             EquipmentSlot::MAIN_HAND
         } else {
             EquipmentSlot::OFF_HAND
@@ -2369,7 +2361,7 @@ impl JavaClient {
             }
         }
 
-        let slot_index = if matches!(hand, Hand::Left) {
+        let slot_index = if matches!(hand, Hand::Right) {
             inventory.get_selected_slot() as usize
         } else {
             PlayerInventory::OFF_HAND_SLOT
