@@ -48,11 +48,13 @@ default = [
     "placed_feature",
     "configured_feature",
     "slot_ranges",
-    "bedrock_creative"
+    "bedrock_creative",
+    "bedrock_biome"
 ]
 
 advancement = []
 bedrock_creative = []
+bedrock_biome = []
 item = []
 packet = []
 jukebox_song = []
