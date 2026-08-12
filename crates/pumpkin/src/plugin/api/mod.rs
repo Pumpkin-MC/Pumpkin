@@ -4,7 +4,7 @@ pub mod gui;
 pub mod tab_list;
 pub mod title;
 
-use std::{pin::Pin, sync::Arc, borrow::Cow};
+use std::{borrow::Cow, pin::Pin, sync::Arc};
 
 pub use context::*;
 pub use events::*;

@@ -760,7 +760,7 @@ impl PluginManager {
             bootstrap.add_providers(providers);
         }
 
-        if let Err(_) = pumpkin_registry::BOOTSTRAP.set(bootstrap) {
+        if pumpkin_registry::BOOTSTRAP.set(bootstrap).is_err() {
             warn!("Bootstrap manager was already loaded!");
         }
 

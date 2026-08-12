@@ -27,14 +27,20 @@ impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
     }
 
     pub async fn reload(&self) -> Result<(), BootstrapError> {
-        let (entries, mapping) = BOOTSTRAP.get().ok_or(BootstrapError::Uninitialized).and_then(|m| m.populate::<T>(&self.name))?;
+        let (entries, mapping) = BOOTSTRAP
+            .get()
+            .ok_or(BootstrapError::Uninitialized)
+            .and_then(|m| m.populate::<T>(&self.name))?;
         let new_inner = FrozenRegistry::new(entries.into_boxed_slice(), mapping);
         *self.inner.write().await = new_inner;
         Ok(())
     }
 
     pub fn blocking_reload(&self) -> Result<(), BootstrapError> {
-        let (entries, mapping) = BOOTSTRAP.get().ok_or(BootstrapError::Uninitialized).and_then(|m| m.populate::<T>(&self.name))?;
+        let (entries, mapping) = BOOTSTRAP
+            .get()
+            .ok_or(BootstrapError::Uninitialized)
+            .and_then(|m| m.populate::<T>(&self.name))?;
         let new_inner = FrozenRegistry::new(entries.into_boxed_slice(), mapping);
         *self.inner.blocking_write() = new_inner;
         Ok(())

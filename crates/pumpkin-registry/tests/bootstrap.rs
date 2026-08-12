@@ -1,6 +1,10 @@
 #![allow(clippy::unwrap_used)]
 
-use pumpkin_registry::{BOOTSTRAP, bootstrap::{BootstrapManager, RegistryEntry}, bootstrap_provider};
+use pumpkin_registry::{
+    BOOTSTRAP,
+    bootstrap::{BootstrapManager, RegistryEntry},
+    bootstrap_provider,
+};
 use pumpkin_util::identifier::Identifier;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -31,14 +35,25 @@ bootstrap_provider! {
 #[test]
 fn discovers_linker_section_providers() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
-    assert_eq!(BOOTSTRAP.get().unwrap().providers_for(&BLOCK_REGISTRY).count(), 3,);
+    assert_eq!(
+        BOOTSTRAP
+            .get()
+            .unwrap()
+            .providers_for(&BLOCK_REGISTRY)
+            .count(),
+        3,
+    );
 }
 
 #[test]
 fn populates_all_linker_section_providers() {
     let _ = BOOTSTRAP.set(BootstrapManager::new());
 
-    let (entries, mapping) = BOOTSTRAP.get().unwrap().populate::<Block>(&BLOCK_REGISTRY).unwrap();
+    let (entries, mapping) = BOOTSTRAP
+        .get()
+        .unwrap()
+        .populate::<Block>(&BLOCK_REGISTRY)
+        .unwrap();
 
     assert_eq!(entries.len(), 4);
 

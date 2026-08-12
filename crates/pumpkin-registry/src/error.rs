@@ -40,7 +40,7 @@ pub enum BootstrapError {
     },
 
     #[error("bootstrap manager isn't initialized")]
-    Uninitialized
+    Uninitialized,
 }
 
 #[derive(Debug, Error)]

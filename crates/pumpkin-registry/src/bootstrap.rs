@@ -3,7 +3,12 @@ pub use linkme::distributed_slice;
 use pumpkin_util::identifier::Identifier;
 use rayon::iter::{IntoParallelRefIterator as _, ParallelIterator as _};
 use rustc_hash::{FxBuildHasher, FxHashMap};
-use std::{any::TypeId, borrow::Cow, ops::Deref, sync::{Arc, Weak}};
+use std::{
+    any::TypeId,
+    borrow::Cow,
+    ops::Deref,
+    sync::{Arc, Weak},
+};
 
 pub struct RegistryEntry<T> {
     identifier: Identifier,
@@ -206,14 +211,18 @@ impl BootstrapManager {
     pub fn providers(&self) -> impl Iterator<Item = ProviderRef> + '_ {
         let builtin = PROVIDERS.iter().map(ProviderRef::Builtin);
 
-        let dynamic = self.sources.iter().filter_map(Weak::upgrade).flat_map(|source| {
-            let len = source.len();
+        let dynamic = self
+            .sources
+            .iter()
+            .filter_map(Weak::upgrade)
+            .flat_map(|source| {
+                let len = source.len();
 
-            (0..len).map(move |index| ProviderRef::Dynamic {
-                source: Arc::clone(&source),
-                index,
-            })
-        });
+                (0..len).map(move |index| ProviderRef::Dynamic {
+                    source: Arc::clone(&source),
+                    index,
+                })
+            });
 
         builtin.chain(dynamic)
     }
@@ -226,51 +235,50 @@ impl BootstrapManager {
             .filter(move |provider| provider.registry() == *registry)
     }
 
-pub fn populate<T>(
-    &self,
-    registry: &Identifier,
-) -> Result<(Vec<T>, FxHashMap<Identifier, usize>), BootstrapError>
-where
-    T: Send + 'static,
-{
-    let sources: Vec<_> = self.sources.iter().filter_map(Weak::upgrade).collect();
+    pub fn populate<T>(
+        &self,
+        registry: &Identifier,
+    ) -> Result<(Vec<T>, FxHashMap<Identifier, usize>), BootstrapError>
+    where
+        T: Send + 'static,
+    {
+        let sources: Vec<_> = self.sources.iter().filter_map(Weak::upgrade).collect();
 
-    let builtin_entries = populate_providers::<T>(&PROVIDERS, registry)?;
+        let builtin_entries = populate_providers::<T>(&PROVIDERS, registry)?;
 
-    let added_entries: Vec<Vec<RegistryEntry<T>>> = sources
-        .par_iter()
-        .flat_map_iter(|source| source.iter())
-        .filter(|provider| provider.registry() == *registry)
-        .map(populate_provider)
-        .collect::<Result<_, _>>()?;
+        let added_entries: Vec<Vec<RegistryEntry<T>>> = sources
+            .par_iter()
+            .flat_map_iter(|source| source.iter())
+            .filter(|provider| provider.registry() == *registry)
+            .map(populate_provider)
+            .collect::<Result<_, _>>()?;
 
-    let capacity = builtin_entries
-        .iter()
-        .chain(&added_entries)
-        .map(Vec::len)
-        .sum();
+        let capacity = builtin_entries
+            .iter()
+            .chain(&added_entries)
+            .map(Vec::len)
+            .sum();
 
-    let mut entries = Vec::with_capacity(capacity);
-    let mut mapping =
-        FxHashMap::with_capacity_and_hasher(capacity, FxBuildHasher);
+        let mut entries = Vec::with_capacity(capacity);
+        let mut mapping = FxHashMap::with_capacity_and_hasher(capacity, FxBuildHasher);
 
-    for source_entries in builtin_entries.into_iter().chain(added_entries) {
-        for entry in source_entries {
-            let id = entries.len();
+        for source_entries in builtin_entries.into_iter().chain(added_entries) {
+            for entry in source_entries {
+                let id = entries.len();
 
-            if mapping.insert(entry.identifier.clone(), id).is_some() {
-                return Err(BootstrapError::DuplicateEntry {
-                    registry: registry.clone(),
-                    identifier: entry.identifier,
-                });
+                if mapping.insert(entry.identifier.clone(), id).is_some() {
+                    return Err(BootstrapError::DuplicateEntry {
+                        registry: registry.clone(),
+                        identifier: entry.identifier,
+                    });
+                }
+
+                entries.push(entry.value);
             }
-
-            entries.push(entry.value);
         }
-    }
 
-    Ok((entries, mapping))
-}
+        Ok((entries, mapping))
+    }
 }
 
 impl Default for BootstrapManager {

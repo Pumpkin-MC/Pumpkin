@@ -309,7 +309,12 @@ impl Server {
         });
 
         let mojang_keys_task = tokio::spawn({
-            let auth_config = server.advanced_config.networking.java.authentication.clone();
+            let auth_config = server
+                .advanced_config
+                .networking
+                .java
+                .authentication
+                .clone();
             let allow_chat = server.basic_config.allow_chat_reports;
             async move {
                 if allow_chat {
