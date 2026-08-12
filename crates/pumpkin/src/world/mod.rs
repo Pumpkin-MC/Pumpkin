@@ -1288,8 +1288,10 @@ impl World {
 
     #[expect(clippy::too_many_lines)]
     pub async fn tick_chunks(self: &Arc<Self>) {
+        let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
+
         let active_chunks = self.active_chunks.load();
-        let tick_data = self.level.get_tick_data(&active_chunks);
+        let tick_data = self.level.get_tick_data(&active_chunks, random_tick_speed);
 
         // ONE JoinSet for all chunk operations
         let mut chunk_tasks = tokio::task::JoinSet::new();
