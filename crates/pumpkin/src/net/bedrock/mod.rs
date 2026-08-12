@@ -368,14 +368,14 @@ impl BedrockClient {
             Ok(()) => {
                 let payload = Bytes::from(packet_buf);
                 let player = self.player.load_full();
-                let cancelled = if let Some(player) = player.as_ref() {
-                    player
-                        .fire_packet_sent_no_obj(P::PACKET_ID, payload.clone())
-                        .await
+                if let Some(player) = player.as_ref() {
+                    let event = player
+                        .fire_packet_sent_event_no_obj(P::PACKET_ID, payload)
+                        .await;
+                    if !event.cancelled {
+                        self.enqueue_packet_data(event.payload).await;
+                    }
                 } else {
-                    false
-                };
-                if !cancelled {
                     self.enqueue_packet_data(payload).await;
                 }
             }
@@ -493,16 +493,17 @@ impl BedrockClient {
             Ok(()) => {
                 let payload = Bytes::from(packet_buf);
                 let player = self.player.load_full();
-                let cancelled = if let Some(player) = player.as_ref() {
-                    player
-                        .fire_packet_sent_no_obj(P::PACKET_ID, payload.clone())
-                        .await
+                let payload = if let Some(player) = player.as_ref() {
+                    let event = player
+                        .fire_packet_sent_event_no_obj(P::PACKET_ID, payload)
+                        .await;
+                    if event.cancelled {
+                        return;
+                    }
+                    event.payload
                 } else {
-                    false
+                    payload
                 };
-                if cancelled {
-                    return;
-                }
                 let (tx, rx) = oneshot::channel();
                 if let Err(err) = self
                     .outgoing_packet_priority_send

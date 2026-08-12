@@ -2385,18 +2385,26 @@ impl Player {
         false
     }
 
-    pub async fn fire_packet_sent_no_obj(self: &Arc<Self>, packet_id: i32, payload: Bytes) -> bool {
-        let server = self.world().server.upgrade();
-        if let Some(server) = server {
-            // This is a dummy object to satisfy the non-optional requirement in WIT
-            // In the future we should make all packets 'static or have a way to represent raw packets in WIT
-            struct RawPacket;
-            let mut event =
-                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
+    pub(crate) async fn fire_packet_sent_event_no_obj(
+        self: &Arc<Self>,
+        packet_id: i32,
+        payload: Bytes,
+    ) -> PacketSentEvent {
+        // This is a dummy object to satisfy the non-optional requirement in WIT
+        // In the future we should make all packets 'static or have a way to represent raw packets in WIT
+        struct RawPacket;
+
+        let mut event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
+        if let Some(server) = self.world().server.upgrade() {
             server.plugin_manager.fire(&server, &mut event).await;
-            return event.cancelled;
         }
-        false
+        event
+    }
+
+    pub async fn fire_packet_sent_no_obj(self: &Arc<Self>, packet_id: i32, payload: Bytes) -> bool {
+        self.fire_packet_sent_event_no_obj(packet_id, payload)
+            .await
+            .cancelled
     }
 
     pub const fn entity_id(&self) -> i32 {

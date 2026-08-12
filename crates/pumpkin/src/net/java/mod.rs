@@ -323,14 +323,14 @@ impl JavaClient {
         let payload = Bytes::from(buf);
 
         let player = self.player.load_full();
-        let cancelled = if let Some(player) = player.as_ref() {
-            player
-                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
-                .await
+        if let Some(player) = player.as_ref() {
+            let event = player
+                .fire_packet_sent_event_no_obj(P::to_id(self.version.load()), payload)
+                .await;
+            if !event.cancelled {
+                self.enqueue_packet_data(event.payload).await;
+            }
         } else {
-            false
-        };
-        if !cancelled {
             self.enqueue_packet_data(payload).await;
         }
     }
@@ -450,15 +450,14 @@ impl JavaClient {
         let payload = Bytes::from(packet_buf);
 
         let player = self.player.load_full();
-        let cancelled = if let Some(player) = player.as_ref() {
-            player
-                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
-                .await
+        if let Some(player) = player.as_ref() {
+            let event = player
+                .fire_packet_sent_event_no_obj(P::to_id(self.version.load()), payload)
+                .await;
+            if !event.cancelled {
+                self.send_packet_now_data(event.payload).await;
+            }
         } else {
-            false
-        };
-
-        if !cancelled {
             self.send_packet_now_data(payload).await;
         }
     }
