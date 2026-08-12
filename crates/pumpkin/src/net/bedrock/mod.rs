@@ -38,7 +38,7 @@ use pumpkin_protocol::{
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
-            resource_pack_response::SResourcePackResponse,
+            resource_pack_response::SResourcePackResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
         },
@@ -715,6 +715,9 @@ impl BedrockClient {
             SPlayerAction::PACKET_ID => {
                 self.handle_player_action(player, server, SPlayerAction::read(reader)?)
                     .await;
+            }
+            SRespawn::PACKET_ID => {
+                self.handle_respawn(player, SRespawn::read(reader)?).await;
             }
             SAnimate::PACKET_ID => {
                 self.handle_animate(player, server, &SAnimate::read(reader)?).await;

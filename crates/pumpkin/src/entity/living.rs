@@ -2813,7 +2813,16 @@ impl EntityBase for LivingEntity {
                 self.hurt_cooldown.fetch_sub(1, Relaxed);
             }
             if self.health.load() <= 0.0 {
-                let time = self.death_time.fetch_add(1, Relaxed);
+                let time = self
+                    .death_time
+                    .fetch_update(Relaxed, Relaxed, |time| Some(time.saturating_add(1)))
+                    .unwrap_or_else(|time| time)
+                    .saturating_add(1);
+                // Players remain part of the world until their client requests a
+                // respawn. Removing one here breaks reconnecting while dead.
+                if self.entity.entity_type == &EntityType::PLAYER {
+                    return;
+                }
                 // Only send death particles once (on the exact tick death_time reaches 20)
                 // and then remove the entity, preventing entity_event spam.
                 if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {

@@ -14,10 +14,11 @@ use pumpkin_inventory::{
     screen_handler::{InventoryPlayer, ScreenHandler},
 };
 use pumpkin_protocol::bedrock::{
-    client::inventory_content::CInventoryContent,
+    client::{inventory_content::CInventoryContent, respawn::CRespawn},
     network_item::{
         ContainerName, FullContainerName, NetworkItemDescriptor, NetworkItemStackDescriptor,
     },
+    respawn::RespawnState,
 };
 use pumpkin_protocol::{
     bedrock::{
@@ -38,6 +39,7 @@ use pumpkin_protocol::{
             player_action::{Action as PlayerAction, SPlayerAction},
             player_auth_input::{InputData, SPlayerAuthInput},
             request_chunk_radius::SRequestChunkRadius,
+            respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             text::SText,
         },
@@ -199,6 +201,11 @@ impl BedrockClient {
         server: &Arc<Server>,
     ) {
         if !player.has_client_loaded() {
+            return;
+        }
+        if player.living_entity.dead.load(Ordering::Relaxed)
+            || player.living_entity.health.load() <= 0.0
+        {
             return;
         }
         let entity = player.get_entity();
@@ -1064,7 +1071,11 @@ impl BedrockClient {
         server: &Server,
         packet: SPlayerAction,
     ) {
-        if !player.has_client_loaded() {
+        if !player.has_client_loaded()
+            || ((player.living_entity.dead.load(Ordering::Relaxed)
+                || player.living_entity.health.load() <= 0.0)
+                && !matches!(packet.action, PlayerAction::Respawn))
+        {
             return;
         }
         player.update_last_action_time();
@@ -1250,9 +1261,37 @@ impl BedrockClient {
             PlayerAction::DropItem => {
                 player.drop_held_item(false).await;
             }
+            PlayerAction::Respawn
+                if player.living_entity.dead.load(Ordering::Relaxed)
+                    || player.living_entity.health.load() <= 0.0 =>
+            {
+                player.world().respawn_player(player, false).await;
+            }
             // TODO
             _ => {}
         }
+    }
+
+    pub async fn handle_respawn(&self, player: &Arc<Player>, packet: SRespawn) {
+        if packet.state != RespawnState::ClientReadyToSpawn
+            || (!player.living_entity.dead.load(Ordering::Relaxed)
+                && player.living_entity.health.load() > 0.0)
+        {
+            return;
+        }
+
+        let entity = player.get_entity();
+        let position = entity.pos.load();
+        self.enqueue_packet(&CRespawn::new(
+            pumpkin_util::math::vector3::Vector3::new(
+                position.x as f32,
+                position.y as f32 + entity.entity_type.eye_height,
+                position.z as f32,
+            ),
+            RespawnState::ReadyToSpawn,
+            VarULong(player.entity_id() as u64),
+        ))
+        .await;
     }
 
     pub async fn handle_chat_command(

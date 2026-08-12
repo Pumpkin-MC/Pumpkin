@@ -17,10 +17,16 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
-use pumpkin_protocol::bedrock::client::AbilityLayer;
 use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{Ability, CUpdateAbilities};
+use pumpkin_protocol::bedrock::client::{
+    AbilityLayer,
+    move_player::CMovePlayer as CBedrockMovePlayer,
+    respawn::CRespawn as CBedrockRespawn,
+    update_attributes::{Attribute as BedrockAttribute, CUpdateAttributes as CBedrockAttributes},
+};
+use pumpkin_protocol::bedrock::respawn::RespawnState;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
@@ -2182,6 +2188,11 @@ impl Player {
                     .await;
                 self.bedrock_spawned.store(true, Ordering::Relaxed);
                 self.set_client_loaded(true);
+                self.send_health().await;
+                if self.living_entity.health.load() <= 0.0 {
+                    self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn)
+                        .await;
+                }
             }
         }
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
@@ -3003,17 +3014,46 @@ impl Player {
                 self.living_entity.entity.set_pos(position);
                 let entity = &self.living_entity.entity;
                 entity.set_rotation(yaw, pitch);
-                *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
-                self.client
-                    .send_packet_now(&CPlayerPosition::new(
-                        teleport_id.into(),
-                        position,
-                        Vector3::new(0.0, 0.0, 0.0),
-                        yaw,
-                        pitch,
-                        // TODO
-                        Vec::new(),
-                    )).await;
+                match self.client.as_ref() {
+                    ClientPlatform::Java(client) => {
+                        *self.awaiting_teleport.lock().await =
+                            Some((teleport_id.into(), position));
+                        client
+                            .send_packet_now(&CPlayerPosition::new(
+                                teleport_id.into(),
+                                position,
+                                Vector3::new(0.0, 0.0, 0.0),
+                                yaw,
+                                pitch,
+                                // TODO
+                                Vec::new(),
+                            ))
+                            .await;
+                    }
+                    ClientPlatform::Bedrock(client) => {
+                        client
+                            .send_game_packet(&CBedrockMovePlayer::new(
+                                VarULong(self.entity_id() as u64),
+                                Vector3::new(
+                                    position.x as f32,
+                                    position.y as f32 + entity.entity_type.eye_height,
+                                    position.z as f32,
+                                ),
+                                pitch,
+                                yaw,
+                                yaw,
+                                CBedrockMovePlayer::MODE_TELEPORT,
+                                false,
+                                VarULong(0),
+                                0,
+                                0,
+                                VarULong(
+                                    self.tick_counter.load(Ordering::Relaxed).max(0) as u64,
+                                ),
+                            ))
+                            .await;
+                    }
+                }
             }
         }}
     }
@@ -3106,18 +3146,77 @@ impl Player {
             return;
         }
 
-        self.client
-            .enqueue_packet_editioned(
-                &CSetHealth::new(
-                    self.living_entity.health.load(),
-                    self.hunger_manager.level.load().into(),
-                    self.hunger_manager.saturation.load(),
-                ),
-                &pumpkin_protocol::bedrock::client::set_health::CSetHealth::new(
-                    self.living_entity.health.load() as i32,
-                ),
-            )
-            .await;
+        match self.client.as_ref() {
+            ClientPlatform::Java(client) => {
+                client
+                    .enqueue_packet(&CSetHealth::new(
+                        self.living_entity.health.load(),
+                        self.hunger_manager.level.load().into(),
+                        self.hunger_manager.saturation.load(),
+                    ))
+                    .await;
+            }
+            ClientPlatform::Bedrock(client) => {
+                let max_health = self.living_entity.get_max_health();
+                let attribute =
+                    |name: &str, current_value, max_value, default_value| BedrockAttribute {
+                        min_value: 0.0,
+                        max_value,
+                        current_value,
+                        default_min_value: 0.0,
+                        default_max_value: max_value,
+                        default_value,
+                        name: name.to_string(),
+                        modifiers_list_size: pumpkin_protocol::codec::var_uint::VarUInt(0),
+                    };
+                client
+                    .enqueue_packet(&CBedrockAttributes {
+                        runtime_id: VarULong(self.entity_id() as u64),
+                        attributes: vec![
+                            attribute(
+                                "minecraft:health",
+                                self.living_entity.health.load(),
+                                max_health,
+                                max_health,
+                            ),
+                            attribute(
+                                "minecraft:player.hunger",
+                                self.hunger_manager.level.load().into(),
+                                20.0,
+                                20.0,
+                            ),
+                            attribute(
+                                "minecraft:player.saturation",
+                                self.hunger_manager.saturation.load(),
+                                20.0,
+                                5.0,
+                            ),
+                        ],
+                        player_tick: VarULong(
+                            self.tick_counter.load(Ordering::Relaxed).max(0) as u64
+                        ),
+                    })
+                    .await;
+            }
+        }
+    }
+
+    async fn send_bedrock_respawn_state(&self, state: RespawnState) {
+        if let ClientPlatform::Bedrock(client) = self.client.as_ref() {
+            let entity = self.get_entity();
+            let position = entity.pos.load();
+            client
+                .send_game_packet(&CBedrockRespawn::new(
+                    Vector3::new(
+                        position.x as f32,
+                        position.y as f32 + entity.entity_type.eye_height,
+                        position.z as f32,
+                    ),
+                    state,
+                    VarULong(self.entity_id() as u64),
+                ))
+                .await;
+        }
     }
 
     pub async fn tick_health(&self) {
@@ -3311,7 +3410,6 @@ impl Player {
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilled,
         )
         .await;
-        self.set_client_loaded(false);
         let block_pos = self.position().to_block_pos();
 
         let keep_inventory = { self.world().level_info.load().game_rules.keep_inventory };
@@ -3329,6 +3427,9 @@ impl Player {
         // Reset air supply & drowning ticks on death
         self.breath_manager.reset(self);
 
+        if matches!(self.client.as_ref(), ClientPlatform::Java(_)) {
+            self.set_client_loaded(false);
+        }
         self.client
             .send_packet_now_editioned(
                 &CCombatDeath::new(self.entity_id().into(), &death_msg),
@@ -3341,6 +3442,9 @@ impl Player {
             )
             .await;
         self.send_health().await;
+
+        self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn)
+            .await;
     }
 
     pub async fn set_gamemode(self: &Arc<Self>, gamemode: GameMode) -> bool {

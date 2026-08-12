@@ -1954,7 +1954,6 @@ impl World {
         let level_info = server.level_info.load();
         let weather = self.weather.lock().await;
         let runtime_id = player.entity_id() as u64;
-
         let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
             let position = player.position();
             let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
@@ -2443,7 +2442,7 @@ impl World {
                     Attribute {
                         min_value: 0.0,
                         max_value: 20.0,
-                        current_value: 20.0,
+                        current_value: player.living_entity.health.load(),
                         default_min_value: 0.0,
                         default_max_value: 20.0,
                         default_value: 20.0,
@@ -2453,7 +2452,7 @@ impl World {
                     Attribute {
                         min_value: 0.0,
                         max_value: 20.0,
-                        current_value: 20.0,
+                        current_value: player.hunger_manager.level.load().into(),
                         default_min_value: 0.0,
                         default_max_value: 20.0,
                         default_value: 20.0,
