@@ -3,7 +3,7 @@ pub use linkme::distributed_slice;
 use pumpkin_util::identifier::Identifier;
 use rayon::iter::{IntoParallelRefIterator as _, ParallelIterator as _};
 use rustc_hash::{FxBuildHasher, FxHashMap};
-use std::any::TypeId;
+use std::{any::TypeId, borrow::Cow, ops::Deref, sync::{Arc, Weak}};
 
 pub struct RegistryEntry<T> {
     identifier: Identifier,
@@ -81,6 +81,7 @@ impl ErasedVec {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct BootstrapProvider {
     registry: &'static str,
     populate: fn() -> ErasedVec,
@@ -165,11 +166,32 @@ macro_rules! bootstrap_provider {
 #[distributed_slice]
 pub static PROVIDERS: [BootstrapProvider];
 
-pub struct BootstrapManager<'a> {
-    sources: Vec<&'a [BootstrapProvider]>,
+pub type ProviderSet = Cow<'static, [BootstrapProvider]>;
+
+pub enum ProviderRef {
+    Builtin(&'static BootstrapProvider),
+    Dynamic {
+        source: Arc<ProviderSet>,
+        index: usize,
+    },
 }
 
-impl<'a> BootstrapManager<'a> {
+impl Deref for ProviderRef {
+    type Target = BootstrapProvider;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Builtin(provider) => provider,
+            Self::Dynamic { source, index } => &source[*index],
+        }
+    }
+}
+
+pub struct BootstrapManager {
+    sources: Vec<Weak<ProviderSet>>,
+}
+
+impl BootstrapManager {
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -177,91 +199,114 @@ impl<'a> BootstrapManager<'a> {
         }
     }
 
-    pub fn add_providers(&mut self, providers: &'a [BootstrapProvider]) {
-        self.sources.push(providers);
+    pub fn add_providers(&mut self, providers: &Arc<ProviderSet>) {
+        self.sources.push(Arc::downgrade(providers));
     }
 
-    pub fn providers(&self) -> impl Iterator<Item = &BootstrapProvider> {
-        PROVIDERS
-            .iter()
-            .chain(self.sources.iter().flat_map(|source| source.iter()))
+    pub fn providers(&self) -> impl Iterator<Item = ProviderRef> + '_ {
+        let builtin = PROVIDERS.iter().map(ProviderRef::Builtin);
+
+        let dynamic = self.sources.iter().filter_map(Weak::upgrade).flat_map(|source| {
+            let len = source.len();
+
+            (0..len).map(move |index| ProviderRef::Dynamic {
+                source: Arc::clone(&source),
+                index,
+            })
+        });
+
+        builtin.chain(dynamic)
     }
 
-    pub fn providers_for<'b>(
-        &'b self,
-        registry: &'b Identifier,
-    ) -> impl Iterator<Item = &'b BootstrapProvider> {
+    pub fn providers_for<'a>(
+        &'a self,
+        registry: &'a Identifier,
+    ) -> impl Iterator<Item = ProviderRef> + 'a {
         self.providers()
             .filter(move |provider| provider.registry() == *registry)
     }
 
-    pub fn populate<T>(
-        &self,
-        registry: &Identifier,
-    ) -> Result<(Vec<T>, FxHashMap<Identifier, usize>), BootstrapError>
-    where
-        T: Send + 'static,
-    {
-        let builtin_entries = populate_sources::<T>(std::slice::from_ref(&&*PROVIDERS), registry)?;
+pub fn populate<T>(
+    &self,
+    registry: &Identifier,
+) -> Result<(Vec<T>, FxHashMap<Identifier, usize>), BootstrapError>
+where
+    T: Send + 'static,
+{
+    let sources: Vec<_> = self.sources.iter().filter_map(Weak::upgrade).collect();
 
-        let added_entries = populate_sources::<T>(&self.sources, registry)?;
+    let builtin_entries = populate_providers::<T>(&PROVIDERS, registry)?;
 
-        let capacity = builtin_entries
-            .iter()
-            .chain(&added_entries)
-            .map(Vec::len)
-            .sum();
+    let added_entries: Vec<Vec<RegistryEntry<T>>> = sources
+        .par_iter()
+        .flat_map_iter(|source| source.iter())
+        .filter(|provider| provider.registry() == *registry)
+        .map(populate_provider)
+        .collect::<Result<_, _>>()?;
 
-        let mut entries = Vec::with_capacity(capacity);
-        let mut mapping = FxHashMap::with_capacity_and_hasher(capacity, FxBuildHasher);
+    let capacity = builtin_entries
+        .iter()
+        .chain(&added_entries)
+        .map(Vec::len)
+        .sum();
 
-        for source_entries in builtin_entries.into_iter().chain(added_entries) {
-            for entry in source_entries {
-                let id = entries.len();
+    let mut entries = Vec::with_capacity(capacity);
+    let mut mapping =
+        FxHashMap::with_capacity_and_hasher(capacity, FxBuildHasher);
 
-                if mapping.insert(entry.identifier.clone(), id).is_some() {
-                    return Err(BootstrapError::DuplicateEntry {
-                        registry: registry.clone(),
-                        identifier: entry.identifier,
-                    });
-                }
+    for source_entries in builtin_entries.into_iter().chain(added_entries) {
+        for entry in source_entries {
+            let id = entries.len();
 
-                entries.push(entry.value);
+            if mapping.insert(entry.identifier.clone(), id).is_some() {
+                return Err(BootstrapError::DuplicateEntry {
+                    registry: registry.clone(),
+                    identifier: entry.identifier,
+                });
             }
-        }
 
-        Ok((entries, mapping))
+            entries.push(entry.value);
+        }
     }
+
+    Ok((entries, mapping))
+}
 }
 
-impl Default for BootstrapManager<'_> {
+impl Default for BootstrapManager {
     fn default() -> Self {
         Self::new()
     }
 }
 
-fn populate_sources<T>(
-    sources: &[&[BootstrapProvider]],
+fn populate_providers<T>(
+    providers: &[BootstrapProvider],
     registry: &Identifier,
 ) -> Result<Vec<Vec<RegistryEntry<T>>>, BootstrapError>
 where
     T: Send + 'static,
 {
-    sources
+    providers
         .par_iter()
-        .flat_map_iter(|source| source.iter())
         .filter(|provider| provider.registry() == *registry)
-        .map(|provider| {
-            let erased = provider.populate();
-            let actual = erased.type_id();
-
-            erased
-                .into_vec::<RegistryEntry<T>>()
-                .map_err(|_| BootstrapError::TypeMismatch {
-                    registry: provider.registry(),
-                    expected: TypeId::of::<RegistryEntry<T>>(),
-                    actual,
-                })
-        })
+        .map(populate_provider)
         .collect()
+}
+
+fn populate_provider<T>(
+    provider: &BootstrapProvider,
+) -> Result<Vec<RegistryEntry<T>>, BootstrapError>
+where
+    T: Send + 'static,
+{
+    let erased = provider.populate();
+    let actual = erased.type_id();
+
+    erased
+        .into_vec::<RegistryEntry<T>>()
+        .map_err(|_| BootstrapError::TypeMismatch {
+            registry: provider.registry(),
+            expected: TypeId::of::<RegistryEntry<T>>(),
+            actual,
+        })
 }

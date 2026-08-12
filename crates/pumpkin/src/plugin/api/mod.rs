@@ -4,10 +4,11 @@ pub mod gui;
 pub mod tab_list;
 pub mod title;
 
-use std::{pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc, borrow::Cow};
 
 pub use context::*;
 pub use events::*;
+use pumpkin_registry::bootstrap::ProviderSet;
 pub use tab_list::*;
 pub use title::*;
 
@@ -54,6 +55,10 @@ pub trait Plugin: Send + Sync + 'static {
     #[expect(unused)]
     fn on_unload(&self, server: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move { Ok(()) })
+    }
+
+    fn registry_providers(&self) -> Arc<ProviderSet> {
+        Arc::new(Cow::Borrowed(&[]))
     }
 
     /// Asynchronous method called when the plugin receives an IPC message.

@@ -2,7 +2,7 @@ use crate::bootstrap::BootstrapManager;
 use pumpkin_util::identifier::Identifier;
 use std::any::{Any, TypeId};
 use std::pin::Pin;
-use std::sync::{Arc, LazyLock, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 mod builder;
 mod immutable;
@@ -20,7 +20,7 @@ pub use crate::mutable::ReloadableRegistry;
 pub use crate::r#static::StaticRegistry;
 pub use builder::RegistryBuilder;
 
-pub static BOOTSTRAP: LazyLock<BootstrapManager> = LazyLock::new(BootstrapManager::new);
+pub static BOOTSTRAP: OnceLock<BootstrapManager> = OnceLock::new();
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 

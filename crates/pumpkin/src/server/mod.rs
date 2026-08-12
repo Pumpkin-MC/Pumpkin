@@ -47,6 +47,7 @@ use rsa::RsaPublicKey;
 use std::collections::HashSet;
 use std::fs;
 use std::net::IpAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
@@ -145,6 +146,7 @@ pub struct Server {
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
     world_info_writer: Arc<dyn WorldInfoWriter>,
+    world_path: PathBuf,
 }
 
 impl Server {
@@ -211,7 +213,6 @@ impl Server {
             }
         };
 
-        let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
 
         let listing = Mutex::new(CachedStatus::new(
@@ -235,21 +236,6 @@ impl Server {
         let white_list = AtomicBool::new(basic_config.white_list);
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
-
-        let mojang_keys_task = tokio::spawn({
-            let auth_config = advanced_config.networking.java.authentication.clone();
-            let allow_chat = basic_config.allow_chat_reports;
-            async move {
-                if allow_chat {
-                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                        error!("Failed to fetch Mojang keys: {e}");
-                        Vec::new()
-                    })
-                } else {
-                    Vec::new()
-                }
-            }
-        });
 
         let dimensions = {
             let mut dimensions = vec![Dimension::OVERWORLD];
@@ -309,19 +295,10 @@ impl Server {
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
+            world_path,
         };
 
         let server = Arc::new(server);
-
-        let gen_pool = Arc::new(
-            rayon::ThreadPoolBuilder::new()
-                .thread_name(|i| format!("Gen-Pool-{i}"))
-                .build()
-                .unwrap_or_else(|err| {
-                    error!("Failed to build generation thread pool: {err}");
-                    std::process::exit(1);
-                }),
-        );
 
         let server_clone = server.clone();
         tokio::spawn(async move {
@@ -331,57 +308,24 @@ impl Server {
                 .await;
         });
 
-        let world_loader = |dim: Dimension| {
-            let path = world_path.clone();
-            let registry = block_registry.clone();
-            let l_info = server.level_info.clone(); // Access from struct
-            let weak = Arc::downgrade(&server);
-            let config = Arc::new(server.advanced_config.world.clone());
-            let pool = gen_pool.clone();
+        let mojang_keys_task = tokio::spawn({
+            let auth_config = server.advanced_config.networking.java.authentication.clone();
+            let allow_chat = server.basic_config.allow_chat_reports;
+            async move {
+                if allow_chat {
+                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
+                        error!("Failed to fetch Mojang keys: {e}");
+                        Vec::new()
+                    })
+                } else {
+                    Vec::new()
+                }
+            }
+        });
 
-            tokio::task::spawn_blocking(move || {
-                info!(
-                    "Loading {}",
-                    TextComponent::text(dim.minecraft_name.to_string())
-                        .color_named(NamedColor::DarkGreen)
-                        .to_pretty_console()
-                );
-                let level = into_level(dim.clone(), &config, path, seed, Some(pool));
-                let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
-                let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
-                level.world_portal.store(Arc::new(Some(portal)));
-                world
-            })
-        };
-
-        // TODO: Move worldgen after plugin load to allow plugin registry initialization
-
-        #[allow(clippy::unwrap_used)]
-        pumpkin_registry::ROOT
-            .set(RegistryBuilder::frozen(&Identifier::vanilla_static("root")).unwrap())
-            .map_err(|_| RootInitError)
-            .unwrap();
-
-        info!("Starting parallel world load...");
-        let mut world_futures = Vec::new();
-        for dim in &server.dimensions {
-            world_futures.push(world_loader(dim.clone()));
-        }
-
-        let (worlds_results, keys) =
-            tokio::join!(futures::future::join_all(world_futures), mojang_keys_task);
-
-        let mut worlds_vec = Vec::new();
-        for world in worlds_results.into_iter().flatten() {
-            worlds_vec.push(world);
-        }
-
-        server.worlds.store(Arc::new(worlds_vec));
-        if let Ok(k) = keys {
+        if let Ok(k) = mojang_keys_task.await {
             server.mojang_public_keys.store(Arc::new(k));
         }
-
-        info!("All worlds loaded successfully.");
 
         if server.advanced_config.networking.bedrock.online_mode {
             server
@@ -402,7 +346,68 @@ impl Server {
                 })
                 .await;
         }
+
         server
+    }
+
+    pub async fn run_world_load(self: Arc<Self>) {
+        let gen_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .thread_name(|i| format!("Gen-Pool-{i}"))
+                .build()
+                .unwrap_or_else(|err| {
+                    error!("Failed to build generation thread pool: {err}");
+                    std::process::exit(1);
+                }),
+        );
+
+        let seed = self.level_info.load().world_gen_settings.seed;
+
+        let world_loader = |dim: Dimension| {
+            let path = self.world_path.clone();
+            let registry = self.block_registry.clone();
+            let l_info = self.level_info.clone(); // Access from struct
+            let weak = Arc::downgrade(&self);
+            let config = Arc::new(self.advanced_config.world.clone());
+            let pool = gen_pool.clone();
+
+            tokio::task::spawn_blocking(move || {
+                info!(
+                    "Loading {}",
+                    TextComponent::text(dim.minecraft_name.to_string())
+                        .color_named(NamedColor::DarkGreen)
+                        .to_pretty_console()
+                );
+                let level = into_level(dim.clone(), &config, path, seed, Some(pool));
+                let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
+                let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
+                level.world_portal.store(Arc::new(Some(portal)));
+                world
+            })
+        };
+
+        #[allow(clippy::unwrap_used)]
+        pumpkin_registry::ROOT
+            .set(RegistryBuilder::frozen(&Identifier::vanilla_static("root")).unwrap())
+            .map_err(|_| RootInitError)
+            .unwrap();
+
+        info!("Starting parallel world load...");
+        let mut world_futures = Vec::new();
+        for dim in &self.dimensions {
+            world_futures.push(world_loader(dim.clone()));
+        }
+
+        let worlds_results = futures::future::join_all(world_futures).await;
+
+        let mut worlds_vec = Vec::new();
+        for world in worlds_results.into_iter().flatten() {
+            worlds_vec.push(world);
+        }
+
+        self.worlds.store(Arc::new(worlds_vec));
+
+        info!("All worlds loaded successfully.");
     }
 
     /// Spawns a task associated with this server. All tasks spawned with this method are awaited

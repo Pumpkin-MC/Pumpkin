@@ -38,6 +38,9 @@ pub enum BootstrapError {
         registry: Identifier,
         identifier: Identifier,
     },
+
+    #[error("bootstrap manager isn't initialized")]
+    Uninitialized
 }
 
 #[derive(Debug, Error)]
