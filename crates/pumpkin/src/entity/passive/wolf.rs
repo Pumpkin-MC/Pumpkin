@@ -143,6 +143,12 @@ impl WolfEntity {
 
         mob_arc
     }
+
+    fn can_attack_entity(&self, target: &dyn EntityBase) -> bool {
+        target
+            .get_living_entity()
+            .is_some_and(|living| self.can_attack(living))
+    }
 }
 
 impl NBTStorage for WolfEntity {
@@ -219,6 +225,7 @@ impl NBTStorage for WolfEntity {
                 .store(anger_end.unwrap_or(-1), Ordering::Relaxed);
             if let Some(uuid) = self.anger_target.load()
                 && let Some(target) = world.get_entity_by_uuid(uuid)
+                && self.can_attack_entity(target.as_ref())
             {
                 self.mob_entity.set_target(Some(target)).await;
             }
@@ -365,7 +372,9 @@ impl Mob for WolfEntity {
                     .store(now + i64::from(anger_ticks), Ordering::Relaxed);
             }
 
-            let persistent_target = anger_target.and_then(|uuid| world.get_entity_by_uuid(uuid));
+            let persistent_target = anger_target
+                .and_then(|uuid| world.get_entity_by_uuid(uuid))
+                .filter(|target| self.can_attack_entity(target.as_ref()));
             if target.is_none()
                 && let Some(persistent_target) = persistent_target.as_ref()
                 && persistent_target
@@ -408,6 +417,9 @@ impl Mob for WolfEntity {
             let Some(source) = source else {
                 return;
             };
+            if !self.can_attack_entity(source) {
+                return;
+            }
             self.mob_entity.set_ordered_to_sit(false);
             self.mob_entity
                 .living_entity
