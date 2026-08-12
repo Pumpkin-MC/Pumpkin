@@ -93,9 +93,9 @@ impl AvoidEntityGoal {
             }
 
             let candidate = BlockPos::new(
-                (mob_pos.x + dx) as i32,
-                (mob_pos.y + dy as f64) as i32,
-                (mob_pos.z + dz) as i32,
+                (mob_pos.x + dx).floor() as i32,
+                (mob_pos.y + dy as f64).floor() as i32,
+                (mob_pos.z + dz).floor() as i32,
             );
 
             let block_at = world.get_block_state(&candidate);
