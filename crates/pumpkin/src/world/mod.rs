@@ -142,7 +142,9 @@ use pumpkin_util::{
 use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
-    CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
+    CURRENT_BEDROCK_MC_VERSION, biome,
+    chunk::{io::Dirtiable, palette::bedrock_water_state},
+    inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
@@ -1387,6 +1389,28 @@ impl World {
                     &CMultiBlockUpdate::new(&updates),
                     recipients_by_version,
                 );
+            }
+
+            let players = self.players.load();
+            let recipients = players.iter().filter(|player| {
+                let center = player.get_entity().chunk_pos.load();
+                let view_distance = get_view_distance(player).get() as i32;
+                is_within_view_distance(chunk_pos, center, view_distance)
+            });
+            for player in recipients {
+                let ClientPlatform::Bedrock(client) = player.client.as_ref() else {
+                    continue;
+                };
+                for (block_pos, block_state_id) in &updates {
+                    let water_state = bedrock_water_state(*block_state_id);
+                    client.try_enqueue_packet(
+                        &pumpkin_protocol::bedrock::client::CUpdateBlock::with_layer(
+                            *block_pos,
+                            u32::from(BlockState::to_be_network_id(water_state)),
+                            1,
+                        ),
+                    );
+                }
             }
         }
     }
