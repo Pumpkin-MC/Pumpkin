@@ -4,7 +4,7 @@ use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
-use crate::entity::{EntityBase, mob::MobEntity, player::Player};
+use crate::entity::{EntityBase, mob::MobEntity};
 use crate::world::World;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
@@ -18,8 +18,9 @@ pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
     reciprocal_chance: i32,
-    target_type: &'static EntityType,
+    target_types: Vec<&'static EntityType>,
     target_predicate: TargetPredicate,
+    only_when_untamed: bool,
 }
 
 impl ActiveTargetGoal {
@@ -49,8 +50,9 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(reciprocal_chance),
-            target_type,
+            target_types: vec![target_type],
             target_predicate,
+            only_when_untamed: false,
         }
     }
 
@@ -70,9 +72,30 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(DEFAULT_RECIPROCAL_CHANCE),
-            target_type,
+            target_types: vec![target_type],
             target_predicate,
+            only_when_untamed: false,
         })
+    }
+
+    pub fn set_target_types(&mut self, target_types: Vec<&'static EntityType>) {
+        self.target_types = target_types;
+    }
+
+    pub const fn set_max_distance(&mut self, max_distance: f64) {
+        self.target_predicate.base_max_distance = max_distance;
+    }
+
+    pub const fn set_only_when_untamed(&mut self, only_when_untamed: bool) {
+        self.only_when_untamed = only_when_untamed;
+    }
+
+    pub fn set_predicate<F, Fut>(&mut self, predicate: F)
+    where
+        F: Fn(Arc<LivingEntity>, Arc<World>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = bool> + Send + 'static,
+    {
+        self.target_predicate.set_predicate(predicate);
     }
 
     pub fn set_target(&mut self, target: Option<Arc<dyn EntityBase>>) {
@@ -93,43 +116,57 @@ impl ActiveTargetGoal {
         let mut search_pos = mob.living_entity.entity.pos.load();
         search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
 
-        if self.target_type == &EntityType::PLAYER {
-            let potential_player = world
-                .get_closest_player(search_pos, follow_range)
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+        let candidates: Vec<Arc<dyn EntityBase>> =
+            if self.target_types.contains(&&EntityType::PLAYER) {
+                world
+                    .get_nearby_players(search_pos, follow_range)
+                    .into_iter()
+                    .map(|player| player as Arc<dyn EntityBase>)
+                    .collect()
+            } else {
+                world
+                    .get_nearby_entities(search_pos, follow_range)
+                    .into_values()
+                    .filter(|entity| self.target_types.contains(&entity.get_entity().entity_type))
+                    .collect()
+            };
 
-            if let Some(potential_entity) = potential_player
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
-                    .await
+        let mut closest: Option<Arc<dyn EntityBase>> = None;
+        let mut closest_distance = f64::INFINITY;
+        for candidate in candidates {
+            if candidate
+                .get_entity()
+                .get_player()
+                .is_some_and(|player| player.is_spectator() || player.is_creative())
             {
-                self.target = Some(potential_entity);
-                return;
+                continue;
             }
-        } else {
-            let potential_entity =
-                world.get_closest_entity(search_pos, follow_range, Some(&[self.target_type]));
-
-            if let Some(potential_entity) = potential_entity
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
-                    .await
+            let Some(living) = candidate.get_living_entity() else {
+                continue;
+            };
+            if !self
+                .target_predicate
+                .test(&world, Some(&mob.living_entity), living)
+                .await
             {
-                self.target = Some(potential_entity);
-                return;
+                continue;
+            }
+            let distance = search_pos.squared_distance_to_vec(&candidate.get_entity().pos.load());
+            if distance < closest_distance {
+                closest_distance = distance;
+                closest = Some(candidate);
             }
         }
-        self.target = None;
+        self.target = closest;
     }
 }
 
 impl Goal for ActiveTargetGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
+            if self.only_when_untamed && mob.is_tame() {
+                return false;
+            }
             if self.reciprocal_chance > 0
                 && mob.get_random().random_range(0..self.reciprocal_chance) != 0
             {

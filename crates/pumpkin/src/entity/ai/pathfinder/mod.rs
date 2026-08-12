@@ -98,6 +98,10 @@ const NODE_REACH_Y: f64 = 1.0;
 const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 
 impl Navigator {
+    pub async fn can_reach(&mut self, entity: &LivingEntity, destination: Vector3<f64>) -> bool {
+        self.compute_path(entity, destination).await.is_some()
+    }
+
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
         self.is_idle.store(false, Ordering::Relaxed);
         self.current_goal = Some(goal);

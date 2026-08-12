@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use super::{Controls, Goal, GoalFuture};
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
@@ -39,18 +40,52 @@ impl AvoidEntityGoal {
         }
     }
 
-    fn find_threat(&self, mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
+    async fn find_threat(&self, mob: &dyn Mob) -> Option<Arc<dyn EntityBase>> {
         let entity = &mob.get_mob_entity().living_entity.entity;
         let pos = entity.pos.load();
         let world = entity.world.load();
 
-        if self.flee_type == &EntityType::PLAYER {
+        let candidates: Vec<Arc<dyn EntityBase>> = if self.flee_type == &EntityType::PLAYER {
             world
-                .get_closest_player(pos, self.flee_distance)
-                .map(|p| p as Arc<dyn EntityBase>)
+                .get_nearby_players(pos, self.flee_distance)
+                .into_iter()
+                .map(|player| player as Arc<dyn EntityBase>)
+                .collect()
         } else {
-            world.get_closest_entity(pos, self.flee_distance, Some(&[self.flee_type]))
+            world
+                .get_nearby_entities(pos, self.flee_distance)
+                .into_values()
+                .filter(|entity| entity.get_entity().entity_type == self.flee_type)
+                .collect()
+        };
+
+        let predicate = TargetPredicate::create_attackable();
+        let mut closest = None;
+        let mut closest_distance = f64::INFINITY;
+        for candidate in candidates {
+            if candidate
+                .get_entity()
+                .get_player()
+                .is_some_and(|player| player.is_spectator() || player.is_creative())
+            {
+                continue;
+            }
+            let Some(living) = candidate.get_living_entity() else {
+                continue;
+            };
+            if !predicate
+                .test(&world, Some(&mob.get_mob_entity().living_entity), living)
+                .await
+            {
+                continue;
+            }
+            let distance = pos.squared_distance_to_vec(&candidate.get_entity().pos.load());
+            if distance < closest_distance {
+                closest_distance = distance;
+                closest = Some(candidate);
+            }
         }
+        closest
     }
 
     /// Generates a random walkable position within a cone pointing away from the threat.
@@ -129,7 +164,7 @@ impl AvoidEntityGoal {
 impl Goal for AvoidEntityGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            let threat = self.find_threat(mob);
+            let threat = self.find_threat(mob).await;
             let Some(target) = threat else {
                 return false;
             };
@@ -139,6 +174,11 @@ impl Goal for AvoidEntityGoal {
             let Some(pos) = flee_pos else {
                 return false;
             };
+
+            let can_reach = mob.get_mob_entity().can_navigate_to(pos).await;
+            if !can_reach {
+                return false;
+            }
 
             self.target = Some(target);
             self.flee_pos = Some(pos);

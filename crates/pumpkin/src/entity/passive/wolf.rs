@@ -1,8 +1,10 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicU8, Ordering},
+    atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering},
 };
 
+use crossbeam::atomic::AtomicCell;
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
@@ -10,6 +12,8 @@ use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
+use rand::RngExt;
+use uuid::Uuid;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
@@ -27,6 +31,9 @@ use crate::entity::{
 pub struct WolfEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
+    tamed: AtomicBool,
+    anger_target: AtomicCell<Option<Uuid>>,
+    anger_end_time: AtomicI64,
 }
 
 impl WolfEntity {
@@ -35,6 +42,9 @@ impl WolfEntity {
         let wolf = Self {
             mob_entity,
             variant: AtomicU8::new(3), // Default to pale
+            tamed: AtomicBool::new(false),
+            anger_target: AtomicCell::new(None),
+            anger_end_time: AtomicI64::new(-1),
         };
         let mob_arc = Arc::new(wolf);
         let mob_weak: Weak<dyn Mob> = {
@@ -76,30 +86,48 @@ impl WolfEntity {
             target_selector.add_goal(1, OwnerHurtByTargetGoal::new());
             target_selector.add_goal(2, OwnerHurtTargetGoal::new());
             target_selector.add_goal(3, Box::new(RevengeGoal::new(true)));
-            target_selector.add_goal(
-                4,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SHEEP, false),
-            );
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
-            );
-            target_selector.add_goal(
-                5,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, false),
-            );
-            target_selector.add_goal(
-                6,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false),
-            );
-            target_selector.add_goal(
-                7,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SKELETON, false),
-            );
+            let mut player_goal =
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true);
+            player_goal.set_max_distance(10.0);
+            let wolf_ref = Arc::downgrade(&mob_arc);
+            player_goal.set_predicate(move |target, world| {
+                let wolf_ref = wolf_ref.clone();
+                async move {
+                    let Some(wolf) = wolf_ref.upgrade() else {
+                        return false;
+                    };
+                    let now = world.level_time.lock().await.world_age;
+                    wolf.anger_end_time.load(Ordering::Relaxed) > now
+                        && wolf.anger_target.load() == Some(target.entity.entity_uuid)
+                }
+            });
+            target_selector.add_goal(4, player_goal);
+
+            for prey_type in [&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX] {
+                let mut prey_goal =
+                    ActiveTargetGoal::with_default(&mob_arc.mob_entity, prey_type, false);
+                prey_goal.set_only_when_untamed(true);
+                target_selector.add_goal(5, prey_goal);
+            }
+
+            let mut turtle_goal =
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false);
+            turtle_goal.set_only_when_untamed(true);
+            turtle_goal.set_predicate(|target, _world| async move {
+                target.entity.age.load(Ordering::Relaxed) < 0 && !target.is_in_water()
+            });
+            target_selector.add_goal(6, turtle_goal);
+
+            let mut skeleton_goal =
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SKELETON, false);
+            skeleton_goal.set_target_types(vec![
+                &EntityType::SKELETON,
+                &EntityType::WITHER_SKELETON,
+                &EntityType::STRAY,
+                &EntityType::BOGGED,
+                &EntityType::PARCHED,
+            ]);
+            target_selector.add_goal(7, skeleton_goal);
         };
 
         mob_arc
@@ -122,6 +150,14 @@ impl NBTStorage for WolfEntity {
                 _ => "minecraft:pale",
             };
             nbt.put_string("variant", variant_str.to_string());
+            nbt.put_bool("Tame", self.tamed.load(Ordering::Relaxed));
+            if let Some(target) = self.anger_target.load() {
+                nbt.put_uuid("angry_at", target);
+            }
+            nbt.put_long(
+                "anger_end_time",
+                self.anger_end_time.load(Ordering::Relaxed),
+            );
         })
     }
 
@@ -145,6 +181,13 @@ impl NBTStorage for WolfEntity {
                 };
                 self.variant.store(variant, Ordering::Relaxed);
             }
+            self.tamed
+                .store(nbt.get_bool("Tame").unwrap_or(false), Ordering::Relaxed);
+            self.anger_target.store(nbt.get_uuid("angry_at"));
+            self.anger_end_time.store(
+                nbt.get_long("anger_end_time").unwrap_or(-1),
+                Ordering::Relaxed,
+            );
         })
     }
 }
@@ -167,6 +210,32 @@ impl Mob for WolfEntity {
             _ => 3,
         };
         self.variant.store(variant, Ordering::Relaxed);
+    }
+
+    fn is_tame(&self) -> bool {
+        self.tamed.load(Ordering::Relaxed)
+    }
+
+    fn on_damage<'a>(
+        &'a self,
+        _damage_type: DamageType,
+        source: Option<&'a dyn EntityBase>,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let Some(source) = source else {
+                return;
+            };
+            let world = self.mob_entity.living_entity.entity.world.load();
+            let now = world.level_time.lock().await.world_age;
+            let anger_ticks = {
+                let mut random = self.get_random();
+                random.random_range(20..40) * 20
+            };
+            self.anger_target
+                .store(Some(source.get_entity().entity_uuid));
+            self.anger_end_time
+                .store(now + i64::from(anger_ticks), Ordering::Relaxed);
+        })
     }
 
     fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
