@@ -5,8 +5,9 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -34,6 +35,14 @@ impl EvokerEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             // Evokers have complex spell AI, but for now basic movement
+            goal_selector.add_goal(
+                2,
+                Box::new(AvoidEntityGoal::new(&EntityType::PLAYER, 8.0, 0.6, 1.0)),
+            );
+            goal_selector.add_goal(
+                3,
+                Box::new(AvoidEntityGoal::new(&EntityType::CREAKING, 8.0, 0.6, 1.0)),
+            );
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 6,
