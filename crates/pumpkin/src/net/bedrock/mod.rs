@@ -311,8 +311,9 @@ impl BedrockClient {
 
         let mut serialize_tasks = Vec::with_capacity(valid_chunks.len());
         for chunk in valid_chunks {
+            let block_actors = player.world().bedrock_chunk_block_actors(&chunk);
             serialize_tasks.push(tokio::task::spawn_blocking(move || {
-                CLevelChunk::encode_chunk(&chunk, bedrock_dimension, cache_enabled)
+                CLevelChunk::encode_chunk(&chunk, bedrock_dimension, cache_enabled, &block_actors)
             }));
         }
 

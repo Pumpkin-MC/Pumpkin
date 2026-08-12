@@ -154,6 +154,7 @@ pub trait InventoryPlayer: Send + Sync {
     fn enqueue_inventory_packet<'a>(
         &'a self,
         packet: &'a CSetContainerContent,
+        window_type: Option<WindowType>,
     ) -> PlayerFuture<'a, ()>;
 
     /// Sends a single slot update packet.

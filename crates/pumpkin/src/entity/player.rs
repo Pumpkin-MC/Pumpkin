@@ -5561,6 +5561,7 @@ impl InventoryPlayer for Player {
     fn enqueue_inventory_packet<'a>(
         &'a self,
         packet: &'a CSetContainerContent,
+        window_type: Option<WindowType>,
     ) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
             match self.client.as_ref() {
@@ -5594,6 +5595,39 @@ impl InventoryPlayer for Player {
                             slots,
                             full_container_name: FullContainerName {
                                 container_name: ContainerName::Inventory,
+                                dynamic_id: None,
+                            },
+                            storage_item: NetworkItemStackDescriptor::default(),
+                        };
+                        bedrock.enqueue_packet(&bedrock_packet).await;
+                    } else if matches!(
+                        window_type,
+                        Some(
+                            WindowType::Generic9x1
+                                | WindowType::Generic9x2
+                                | WindowType::Generic9x3
+                                | WindowType::Generic9x4
+                                | WindowType::Generic9x5
+                                | WindowType::Generic9x6
+                                | WindowType::Generic3x3
+                        )
+                    ) {
+                        // Java container screens append the player's 36 inventory slots to
+                        // the container slots. Bedrock synchronizes those two inventories
+                        // separately and addresses generic block containers as LevelEntity.
+                        let container_slot_count = packet
+                            .slot_data
+                            .len()
+                            .saturating_sub(PlayerInventory::MAIN_SIZE);
+                        let slots = packet.slot_data[..container_slot_count]
+                            .iter()
+                            .map(|stack| NetworkItemStackDescriptor::from(&*stack.0))
+                            .collect();
+                        let bedrock_packet = CInventoryContent {
+                            container_id: VarUInt(window_id),
+                            slots,
+                            full_container_name: FullContainerName {
+                                container_name: ContainerName::LevelEntity,
                                 dynamic_id: None,
                             },
                             storage_item: NetworkItemStackDescriptor::default(),
