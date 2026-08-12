@@ -33,8 +33,7 @@ impl ItemBehaviour for SpearItem {
         player: &'a Player,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            let held = player.inventory().held_item();
-            let stack = held.lock().await.clone();
+            let stack = player.inventory().held_item().await;
 
             player
                 .living_entity
@@ -58,9 +57,10 @@ impl ItemBehaviour for SpearItem {
                 return;
             }
 
-            player.update_equipment_attributes().await;
             let (damage, attack_speed) = Self::attack_attributes(player);
-            let server = player.world().server.upgrade().unwrap();
+            let Some(server) = player.world().server.upgrade() else {
+                return;
+            };
             let attack_delay = f64::from(server.basic_config.tps) / attack_speed;
             let elapsed = f64::from(player.last_attacked_ticks.load(Ordering::Acquire));
             if elapsed + 5.0 < attack_delay {
@@ -232,7 +232,7 @@ impl SpearItem {
         let current_tick = player.get_entity().age.load(Ordering::Relaxed);
         let base_damage = player
             .living_entity
-            .get_attribute_base(&Attributes::ATTACK_DAMAGE);
+            .get_attribute_value(&Attributes::ATTACK_DAMAGE);
         let mut affected = false;
 
         for target in Self::targets_in_range(player).await {

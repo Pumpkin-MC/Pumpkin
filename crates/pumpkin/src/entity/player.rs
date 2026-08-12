@@ -638,6 +638,8 @@ struct SkinMetadata {
 }
 
 impl Player {
+    const EMPTY_HAND_ATTACK_SPEED_MODIFIER: f64 = -2.4;
+
     #[must_use]
     pub fn fetch_skin(properties: &[Property]) -> Option<pumpkin_protocol::bedrock::client::Skin> {
         let textures_prop = properties.iter().find(|p| &*p.name == "textures")?;
@@ -1358,17 +1360,23 @@ impl Player {
         }
     }
 
-    fn equipment_has_changed(previous: &ItemStack, current: &ItemStack) -> bool {
-        !previous.are_equal(current) || !current.are_equal(previous)
+    fn equipment_has_changed(previous: Option<&ItemStack>, current: &ItemStack) -> bool {
+        previous.is_none_or(|previous| !previous.are_equal(current) || !current.are_equal(previous))
+    }
+
+    fn touch_attribute(touched_attributes: &mut Vec<Attributes>, attribute: &Attributes) {
+        if !touched_attributes
+            .iter()
+            .any(|touched| touched.id == attribute.id)
+        {
+            touched_attributes.push(attribute.clone());
+        }
     }
 
     /// Applies attribute modifiers from changed equipment and synchronizes them to clients.
     pub async fn update_equipment_attributes(&self) {
         let mut current_items = HashMap::new();
-        current_items.insert(
-            EquipmentSlot::MAIN_HAND,
-            self.inventory.held_item().await,
-        );
+        current_items.insert(EquipmentSlot::MAIN_HAND, self.inventory.held_item().await);
 
         let equipment_items: Vec<_> = {
             let equipment = self.inventory.entity_equipment.lock().await;
@@ -1387,11 +1395,9 @@ impl Player {
             let mut changes = Vec::new();
 
             for (slot, current) in current_items {
-                let previous = last_items
-                    .get(&slot)
-                    .cloned()
-                    .unwrap_or_else(|| ItemStack::EMPTY.clone());
-                if Self::equipment_has_changed(&previous, &current) {
+                let previous = last_items.get(&slot).cloned();
+                if Self::equipment_has_changed(previous.as_ref(), &current) {
+                    let previous = previous.unwrap_or_else(|| ItemStack::EMPTY.clone());
                     changes.push((slot.clone(), previous, current.clone()));
                     last_items.insert(slot, current);
                 }
@@ -1402,6 +1408,13 @@ impl Player {
 
         let mut touched_attributes = Vec::new();
         for (slot, previous, _) in &changes {
+            if matches!(slot, EquipmentSlot::MainHand(_)) && previous.is_empty() {
+                self.living_entity
+                    .update_attribute(&Attributes::ATTACK_SPEED, |instance| {
+                        instance.remove_modifier("minecraft:base_attack_speed");
+                    });
+                Self::touch_attribute(&mut touched_attributes, &Attributes::ATTACK_SPEED);
+            }
             if let Some(modifiers) = previous.get_data_component::<AttributeModifiersImpl>() {
                 for modifier in modifiers.attribute_modifiers.iter() {
                     if Self::attribute_modifier_applies_to_slot(&modifier.slot, slot) {
@@ -1409,18 +1422,24 @@ impl Player {
                             .update_attribute(modifier.r#type, |instance| {
                                 instance.remove_modifier(modifier.id);
                             });
-                        if !touched_attributes
-                            .iter()
-                            .any(|attribute: &Attributes| attribute.id == modifier.r#type.id)
-                        {
-                            touched_attributes.push(modifier.r#type.clone());
-                        }
+                        Self::touch_attribute(&mut touched_attributes, modifier.r#type);
                     }
                 }
             }
         }
 
         for (slot, _, current) in &changes {
+            if matches!(slot, EquipmentSlot::MainHand(_)) && current.is_empty() {
+                self.living_entity
+                    .update_attribute(&Attributes::ATTACK_SPEED, |instance| {
+                        instance.add_or_replace_modifier(AttributeModifier {
+                            id: "minecraft:base_attack_speed".to_string(),
+                            amount: Self::EMPTY_HAND_ATTACK_SPEED_MODIFIER,
+                            operation: ModifierOperation::Add,
+                        });
+                    });
+                Self::touch_attribute(&mut touched_attributes, &Attributes::ATTACK_SPEED);
+            }
             if let Some(modifiers) = current.get_data_component::<AttributeModifiersImpl>() {
                 for modifier in modifiers.attribute_modifiers.iter() {
                     if Self::attribute_modifier_applies_to_slot(&modifier.slot, slot) {
@@ -1437,12 +1456,7 @@ impl Player {
                                     operation,
                                 });
                             });
-                        if !touched_attributes
-                            .iter()
-                            .any(|attribute: &Attributes| attribute.id == modifier.r#type.id)
-                        {
-                            touched_attributes.push(modifier.r#type.clone());
-                        }
+                        Self::touch_attribute(&mut touched_attributes, modifier.r#type);
                     }
                 }
             }
@@ -6034,6 +6048,11 @@ mod tests {
         let mut current = previous.clone();
         current.set_damage(1);
 
-        assert!(Player::equipment_has_changed(&previous, &current));
+        assert!(Player::equipment_has_changed(Some(&previous), &current));
+    }
+
+    #[test]
+    fn initial_empty_equipment_is_applied() {
+        assert!(Player::equipment_has_changed(None, ItemStack::EMPTY));
     }
 }

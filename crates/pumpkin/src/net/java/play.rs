@@ -2180,8 +2180,7 @@ impl JavaClient {
                         return;
                     }
 
-                    let held = player.inventory().held_item();
-                    let stack = held.lock().await.clone();
+                    let stack = player.inventory().held_item().await;
                     server.item_registry.on_spear_jab(&stack, player).await;
                 }
             },
