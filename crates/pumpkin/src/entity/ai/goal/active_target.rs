@@ -10,6 +10,7 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use rand::RngExt;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 const DEFAULT_RECIPROCAL_CHANCE: i32 = 10;
@@ -24,7 +25,7 @@ pub struct ActiveTargetGoal {
 }
 
 impl ActiveTargetGoal {
-    pub fn new<F, Fut>(
+    pub fn new<F>(
         mob: &MobEntity,
         target_type: &'static EntityType,
         reciprocal_chance: i32,
@@ -33,8 +34,13 @@ impl ActiveTargetGoal {
         predicate: Option<F>,
     ) -> Self
     where
-        F: Fn(Arc<LivingEntity>, Arc<World>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = bool> + Send + 'static,
+        F: for<'a> Fn(
+                &'a LivingEntity,
+                &'a World,
+            ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>>
+            + Send
+            + Sync
+            + 'static,
     {
         let track_target_goal = TrackTargetGoal::new(check_visibility, check_can_navigate);
         let mut target_predicate = TargetPredicate::create_attackable();
@@ -90,10 +96,15 @@ impl ActiveTargetGoal {
         self.only_when_untamed = only_when_untamed;
     }
 
-    pub fn set_predicate<F, Fut>(&mut self, predicate: F)
+    pub fn set_predicate<F>(&mut self, predicate: F)
     where
-        F: Fn(Arc<LivingEntity>, Arc<World>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = bool> + Send + 'static,
+        F: for<'a> Fn(
+                &'a LivingEntity,
+                &'a World,
+            ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>>
+            + Send
+            + Sync
+            + 'static,
     {
         self.target_predicate.set_predicate(predicate);
     }
@@ -116,20 +127,16 @@ impl ActiveTargetGoal {
         let mut search_pos = mob.living_entity.entity.pos.load();
         search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
 
-        let candidates: Vec<Arc<dyn EntityBase>> =
-            if self.target_types.contains(&&EntityType::PLAYER) {
-                world
-                    .get_nearby_players(search_pos, follow_range)
-                    .into_iter()
-                    .map(|player| player as Arc<dyn EntityBase>)
-                    .collect()
-            } else {
-                world
-                    .get_nearby_entities(search_pos, follow_range)
-                    .into_values()
-                    .filter(|entity| self.target_types.contains(&entity.get_entity().entity_type))
-                    .collect()
-            };
+        let search_box = mob
+            .living_entity
+            .entity
+            .bounding_box
+            .load()
+            .expand_all(follow_range);
+        let mut candidates = Vec::new();
+        world.extend_entities_in_box_where(&mut candidates, usize::MAX, search_box, |entity| {
+            self.target_types.contains(&entity.get_entity().entity_type)
+        });
 
         let mut closest: Option<Arc<dyn EntityBase>> = None;
         let mut closest_distance = f64::INFINITY;
@@ -178,7 +185,17 @@ impl Goal for ActiveTargetGoal {
     }
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async { self.track_target_goal.should_continue(mob).await })
+        Box::pin(async {
+            let target = mob.get_mob_entity().target.lock().await.clone();
+            let Some(target) = target else {
+                return false;
+            };
+            let Some(_living_target) = target.get_living_entity() else {
+                return false;
+            };
+
+            self.track_target_goal.should_continue(mob).await
+        })
     }
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {

@@ -2,7 +2,11 @@ use std::sync::Arc;
 
 use super::{Controls, Goal, GoalFuture};
 use crate::entity::ai::target_predicate::TargetPredicate;
-use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
+use crate::entity::{
+    EntityBase,
+    ai::pathfinder::{NavigatorGoal, path::Path},
+    mob::Mob,
+};
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use rand::RngExt;
@@ -19,6 +23,7 @@ pub struct AvoidEntityGoal {
     fast_speed: f64,
     target: Option<Arc<dyn EntityBase>>,
     flee_pos: Option<Vector3<f64>>,
+    path: Option<Path>,
 }
 
 impl AvoidEntityGoal {
@@ -37,6 +42,7 @@ impl AvoidEntityGoal {
             fast_speed,
             target: None,
             flee_pos: None,
+            path: None,
         }
     }
 
@@ -45,21 +51,27 @@ impl AvoidEntityGoal {
         let pos = entity.pos.load();
         let world = entity.world.load();
 
+        let search_box =
+            entity
+                .bounding_box
+                .load()
+                .expand(self.flee_distance, 3.0, self.flee_distance);
         let candidates: Vec<Arc<dyn EntityBase>> = if self.flee_type == &EntityType::PLAYER {
             world
-                .get_nearby_players(pos, self.flee_distance)
+                .get_players_at_box(&search_box)
                 .into_iter()
                 .map(|player| player as Arc<dyn EntityBase>)
                 .collect()
         } else {
             world
-                .get_nearby_entities(pos, self.flee_distance)
-                .into_values()
+                .get_entities_at_box(&search_box)
+                .into_iter()
                 .filter(|entity| entity.get_entity().entity_type == self.flee_type)
                 .collect()
         };
 
-        let predicate = TargetPredicate::create_attackable();
+        let predicate =
+            TargetPredicate::create_attackable().set_base_max_distance(self.flee_distance);
         let mut closest = None;
         let mut closest_distance = f64::INFINITY;
         for candidate in candidates {
@@ -175,13 +187,14 @@ impl Goal for AvoidEntityGoal {
                 return false;
             };
 
-            let can_reach = mob.get_mob_entity().can_navigate_to(pos).await;
-            if !can_reach {
+            let path = mob.get_mob_entity().create_path_to(pos).await;
+            if path.is_none() {
                 return false;
             }
 
             self.target = Some(target);
             self.flee_pos = Some(pos);
+            self.path = path;
             true
         })
     }
@@ -199,14 +212,17 @@ impl Goal for AvoidEntityGoal {
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            if let Some(flee_pos) = self.flee_pos {
+            if let (Some(flee_pos), Some(path)) = (self.flee_pos, self.path.take()) {
                 let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
                 let mut navigator = mob
                     .get_mob_entity()
                     .navigator
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                navigator.set_progress(NavigatorGoal::new(mob_pos, flee_pos, self.slow_speed));
+                navigator.set_progress_with_path(
+                    NavigatorGoal::new(mob_pos, flee_pos, self.slow_speed),
+                    path,
+                );
             }
         })
     }
@@ -240,6 +256,7 @@ impl Goal for AvoidEntityGoal {
         Box::pin(async move {
             self.target = None;
             self.flee_pos = None;
+            self.path = None;
         })
     }
 

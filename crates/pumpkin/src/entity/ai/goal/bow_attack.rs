@@ -110,7 +110,10 @@ impl Goal for BowAttackGoal {
             let Some(target) = target else {
                 return false;
             };
-            if !target.get_entity().is_alive() {
+            if !target
+                .get_living_entity()
+                .is_some_and(crate::entity::living::LivingEntity::is_alive)
+            {
                 return false;
             }
             Self::is_holding_bow(mob).await
@@ -123,7 +126,10 @@ impl Goal for BowAttackGoal {
             let Some(target) = target else {
                 return false;
             };
-            target.get_entity().is_alive() && Self::is_holding_bow(mob).await
+            target
+                .get_living_entity()
+                .is_some_and(crate::entity::living::LivingEntity::is_alive)
+                && Self::is_holding_bow(mob).await
         })
     }
 

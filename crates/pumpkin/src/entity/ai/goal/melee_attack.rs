@@ -1,7 +1,7 @@
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
 use crate::entity::ai::goal::GoalFuture;
-use crate::entity::ai::pathfinder::NavigatorGoal;
+use crate::entity::ai::pathfinder::{NavigatorGoal, path::Path};
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
 use pumpkin_util::math::vector3::Vector3;
@@ -22,6 +22,7 @@ pub struct MeleeAttackGoal {
     attack_interval_ticks: i32,
     last_update_time: i64,
     last_target_position: Option<Vector3<f64>>,
+    path: Option<Path>,
 }
 
 impl MeleeAttackGoal {
@@ -37,6 +38,7 @@ impl MeleeAttackGoal {
             attack_interval_ticks: 20,
             last_update_time: 0,
             last_target_position: None,
+            path: None,
         }
     }
 
@@ -65,13 +67,16 @@ impl Goal for MeleeAttackGoal {
             let Some(target) = target.as_ref() else {
                 return false;
             };
-            if !target.get_entity().is_alive() {
+            if !target
+                .get_living_entity()
+                .is_some_and(crate::entity::living::LivingEntity::is_alive)
+            {
                 return false;
             }
 
             let target_pos = target.get_entity().pos.load();
-            let can_reach = mob.get_mob_entity().can_navigate_to(target_pos).await;
-            can_reach
+            self.path = mob.get_mob_entity().create_path_to(target_pos).await;
+            self.path.is_some()
                 || mob
                     .get_mob_entity()
                     .is_in_attack_range(target.as_ref())
@@ -86,17 +91,24 @@ impl Goal for MeleeAttackGoal {
             let Some(target) = target else {
                 return false;
             };
-            if !target.get_entity().is_alive() {
+            if !target
+                .get_living_entity()
+                .is_some_and(crate::entity::living::LivingEntity::is_alive)
+            {
                 return false;
             }
 
             if !self.pause_when_mob_idle {
-                let is_idle = mob
+                let is_done = mob
                     .get_mob_entity()
                     .navigator
                     .try_lock()
-                    .is_ok_and(|navigator| navigator.is_idle());
-                return !is_idle;
+                    .is_ok_and(|navigator| navigator.is_done());
+                return !is_done
+                    || mob
+                        .get_mob_entity()
+                        .is_in_attack_range(target.as_ref())
+                        .await;
             }
 
             let is_valid_target = !target
@@ -122,13 +134,22 @@ impl Goal for MeleeAttackGoal {
                     .navigator
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let target_pos = target.get_entity().pos.load();
-                navigator.set_progress(NavigatorGoal {
-                    current_progress: mob.get_entity().pos.load(),
-                    destination: target_pos,
-                    speed: self.speed,
-                });
-                self.last_target_position = Some(target_pos);
+                if let Some(path) = self.path.take() {
+                    let target_pos = target.get_entity().pos.load();
+                    navigator.set_progress_with_path(
+                        NavigatorGoal {
+                            current_progress: mob.get_entity().pos.load(),
+                            destination: target_pos,
+                            speed: self.speed,
+                        },
+                        path,
+                    );
+                    self.last_target_position = Some(target_pos);
+                } else {
+                    // Vanilla moveTo(null, speed) clears a stale navigation path when the
+                    // target is already within melee range.
+                    navigator.stop();
+                }
             }
             self.update_countdown_ticks = 0;
             self.cooldown = 0;
@@ -158,6 +179,7 @@ impl Goal for MeleeAttackGoal {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .stop();
+            self.path = None;
             self.last_target_position = None;
         })
     }

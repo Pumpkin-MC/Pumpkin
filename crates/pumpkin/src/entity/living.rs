@@ -33,6 +33,7 @@ use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
+use crate::world::World;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
@@ -1947,6 +1948,70 @@ impl LivingEntity {
 
     pub fn is_part_of_game(&self) -> bool {
         !self.is_spectator() && self.entity.is_alive()
+    }
+
+    #[must_use]
+    pub fn can_be_seen_as_enemy(&self) -> bool {
+        !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_alive()
+    }
+
+    #[must_use]
+    pub fn is_alive(&self) -> bool {
+        !self.dead.load(Ordering::Relaxed) && self.health.load() > 0.0 && self.entity.is_alive()
+    }
+
+    #[must_use]
+    pub fn can_attack_target(&self, target: &Self, world: &World) -> bool {
+        !(target.entity.entity_type == &EntityType::PLAYER
+            && world.level_info.load().difficulty == pumpkin_util::difficulty::Difficulty::Peaceful)
+            && target.can_be_seen_as_enemy()
+    }
+
+    pub async fn visibility_percent(&self, targeter: &Self) -> f64 {
+        let mut visibility = 1.0;
+        if self.entity.is_sneaking() {
+            visibility *= 0.8;
+        }
+        if self.entity.invisible.load(Ordering::Relaxed) {
+            let equipment = self.entity_equipment.lock().await;
+            let covered = [
+                EquipmentSlot::HEAD,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::FEET,
+            ]
+            .into_iter()
+            .filter(|slot| {
+                equipment
+                    .equipment
+                    .get(slot)
+                    .is_some_and(|stack| !stack.is_empty())
+            })
+            .count() as f64
+                / 4.0;
+            visibility *= 0.7 * covered.max(0.1);
+            drop(equipment);
+        }
+
+        let head_item = {
+            let equipment = self.entity_equipment.lock().await;
+            equipment
+                .equipment
+                .get(&EquipmentSlot::HEAD)
+                .map(|stack| stack.item.registry_key)
+        };
+        let target_type = targeter.entity.entity_type.resource_name;
+        let wears_matching_head = matches!(
+            (target_type, head_item),
+            ("skeleton", Some("skeleton_skull"))
+                | ("zombie", Some("zombie_head"))
+                | ("piglin" | "piglin_brute", Some("piglin_head"))
+                | ("creeper", Some("creeper_head"))
+        );
+        if wears_matching_head {
+            visibility *= 0.5;
+        }
+        visibility
     }
 
     pub async fn reset_state(&self) {

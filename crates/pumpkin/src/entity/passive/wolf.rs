@@ -12,6 +12,7 @@ use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::Metadata;
+use pumpkin_util::difficulty::Difficulty;
 use rand::RngExt;
 use uuid::Uuid;
 
@@ -19,12 +20,13 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, beg::BegGoal, breed::BreedGoal,
-        escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, owner_hurt_by_target::OwnerHurtByTargetGoal,
-        owner_hurt_target::OwnerHurtTargetGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
+        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
+        owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
+        revenge::RevengeGoal, sit::SitGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
+    living::LivingEntity,
     mob::{Mob, MobEntity},
 };
 
@@ -32,6 +34,7 @@ pub struct WolfEntity {
     pub mob_entity: MobEntity,
     pub variant: AtomicU8,
     tamed: AtomicBool,
+    owner_uuid: AtomicCell<Option<Uuid>>,
     anger_target: AtomicCell<Option<Uuid>>,
     anger_end_time: AtomicI64,
 }
@@ -43,6 +46,7 @@ impl WolfEntity {
             mob_entity,
             variant: AtomicU8::new(3), // Default to pale
             tamed: AtomicBool::new(false),
+            owner_uuid: AtomicCell::new(None),
             anger_target: AtomicCell::new(None),
             anger_end_time: AtomicI64::new(-1),
         };
@@ -60,9 +64,10 @@ impl WolfEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            // goal_selector.add_goal(2, SitGoal::new(mob_arc.clone()));
+            goal_selector.add_goal(2, SitGoal::new());
             goal_selector.add_goal(4, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
+            goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0));
             goal_selector.add_goal(7, BreedGoal::new(1.0));
             goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(9, BegGoal::new(8.0, &[&Item::BONE]));
@@ -85,36 +90,42 @@ impl WolfEntity {
             // harmless until taming/ownership data is available on the entity.
             target_selector.add_goal(1, OwnerHurtByTargetGoal::new());
             target_selector.add_goal(2, OwnerHurtTargetGoal::new());
-            target_selector.add_goal(3, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(3, Box::new(RevengeGoal::with_alert_others(true)));
             let mut player_goal =
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true);
             player_goal.set_max_distance(10.0);
             let wolf_ref = Arc::downgrade(&mob_arc);
             player_goal.set_predicate(move |target, world| {
                 let wolf_ref = wolf_ref.clone();
-                async move {
+                let target_uuid = target.entity.entity_uuid;
+                Box::pin(async move {
                     let Some(wolf) = wolf_ref.upgrade() else {
                         return false;
                     };
                     let now = world.level_time.lock().await.world_age;
                     wolf.anger_end_time.load(Ordering::Relaxed) > now
-                        && wolf.anger_target.load() == Some(target.entity.entity_uuid)
-                }
+                        && wolf.anger_target.load() == Some(target_uuid)
+                })
             });
             target_selector.add_goal(4, player_goal);
 
-            for prey_type in [&EntityType::SHEEP, &EntityType::RABBIT, &EntityType::FOX] {
-                let mut prey_goal =
-                    ActiveTargetGoal::with_default(&mob_arc.mob_entity, prey_type, false);
-                prey_goal.set_only_when_untamed(true);
-                target_selector.add_goal(5, prey_goal);
-            }
+            let mut prey_goal =
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SHEEP, false);
+            prey_goal.set_target_types(vec![
+                &EntityType::SHEEP,
+                &EntityType::RABBIT,
+                &EntityType::FOX,
+            ]);
+            prey_goal.set_only_when_untamed(true);
+            target_selector.add_goal(5, prey_goal);
 
             let mut turtle_goal =
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false);
             turtle_goal.set_only_when_untamed(true);
-            turtle_goal.set_predicate(|target, _world| async move {
-                target.entity.age.load(Ordering::Relaxed) < 0 && !target.is_in_water()
+            turtle_goal.set_predicate(|target, _world| {
+                let is_baby_on_land =
+                    target.entity.age.load(Ordering::Relaxed) < 0 && !target.is_in_water();
+                Box::pin(async move { is_baby_on_land })
             });
             target_selector.add_goal(6, turtle_goal);
 
@@ -151,6 +162,10 @@ impl NBTStorage for WolfEntity {
             };
             nbt.put_string("variant", variant_str.to_string());
             nbt.put_bool("Tame", self.tamed.load(Ordering::Relaxed));
+            if let Some(owner) = self.owner_uuid.load() {
+                nbt.put_uuid("Owner", owner);
+            }
+            nbt.put_bool("Sitting", self.mob_entity.is_ordered_to_sit());
             if let Some(target) = self.anger_target.load() {
                 nbt.put_uuid("angry_at", target);
             }
@@ -183,11 +198,30 @@ impl NBTStorage for WolfEntity {
             }
             self.tamed
                 .store(nbt.get_bool("Tame").unwrap_or(false), Ordering::Relaxed);
+            let owner = nbt.get_uuid("Owner");
+            self.owner_uuid.store(owner);
+            if owner.is_some() {
+                self.tamed.store(true, Ordering::Relaxed);
+            }
+            self.mob_entity
+                .set_ordered_to_sit(nbt.get_bool("Sitting").unwrap_or(false));
+            if self.tamed.load(Ordering::Relaxed) {
+                self.mob_entity.living_entity.set_max_health(40.0).await;
+            }
             self.anger_target.store(nbt.get_uuid("angry_at"));
-            self.anger_end_time.store(
-                nbt.get_long("anger_end_time").unwrap_or(-1),
-                Ordering::Relaxed,
-            );
+            let world = self.mob_entity.living_entity.entity.world.load();
+            let now = world.level_time.lock().await.world_age;
+            let anger_end = nbt.get_long("anger_end_time").or_else(|| {
+                nbt.get_int("AngerTime")
+                    .map(|remaining| now + i64::from(remaining.max(0)))
+            });
+            self.anger_end_time
+                .store(anger_end.unwrap_or(-1), Ordering::Relaxed);
+            if let Some(uuid) = self.anger_target.load()
+                && let Some(target) = world.get_entity_by_uuid(uuid)
+            {
+                self.mob_entity.set_target(Some(target)).await;
+            }
         })
     }
 }
@@ -216,6 +250,155 @@ impl Mob for WolfEntity {
         self.tamed.load(Ordering::Relaxed)
     }
 
+    fn get_owner_uuid(&self) -> Option<Uuid> {
+        self.owner_uuid.load()
+    }
+
+    fn is_sitting(&self) -> bool {
+        self.mob_entity.is_ordered_to_sit()
+    }
+
+    fn can_attack(&self, target: &crate::entity::living::LivingEntity) -> bool {
+        if self.owner_uuid.load() == Some(target.entity.entity_uuid) {
+            return false;
+        }
+        let world = self.mob_entity.living_entity.entity.world.load();
+        target.entity.entity_type != &EntityType::GHAST
+            && self
+                .mob_entity
+                .living_entity
+                .can_attack_target(target, &world)
+    }
+
+    fn mob_interact<'a>(
+        &'a self,
+        player: &'a Arc<crate::entity::player::Player>,
+        item_stack: &'a mut pumpkin_data::item_stack::ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            let world = self.mob_entity.living_entity.entity.world.load();
+            let now = world.level_time.lock().await.world_age;
+            if !self.is_tame()
+                && item_stack.item.registry_key == "bone"
+                && self.anger_end_time.load(Ordering::Relaxed) <= now
+            {
+                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+                if self.get_random().random_range(0..3) == 0 {
+                    self.tamed.store(true, Ordering::Relaxed);
+                    self.owner_uuid.store(Some(player.gameprofile.id));
+                    self.mob_entity.living_entity.set_max_health(40.0).await;
+                    self.mob_entity.living_entity.set_health(40.0);
+                    self.mob_entity.set_target(None).await;
+                    self.mob_entity.set_ordered_to_sit(true);
+                    self.mob_entity
+                        .navigator
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .stop();
+                    world.send_entity_status(
+                        &self.mob_entity.living_entity.entity,
+                        pumpkin_data::entity::EntityStatus::TamingSucceeded,
+                        None,
+                    );
+                } else {
+                    world.send_entity_status(
+                        &self.mob_entity.living_entity.entity,
+                        pumpkin_data::entity::EntityStatus::TamingFailed,
+                        None,
+                    );
+                }
+                return true;
+            }
+
+            let interacted = self.mob_entity.mob_interact(player, item_stack).await;
+            if !interacted
+                && self.is_tame()
+                && self.owner_uuid.load() == Some(player.gameprofile.id)
+            {
+                self.mob_entity
+                    .set_ordered_to_sit(!self.mob_entity.is_ordered_to_sit());
+                self.mob_entity
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .stop();
+                self.mob_entity.set_target(None).await;
+                return true;
+            }
+            interacted
+        })
+    }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            let world = self.mob_entity.living_entity.entity.world.load();
+            let now = world.level_time.lock().await.world_age;
+            let target = self.mob_entity.target.lock().await.clone();
+            let anger_target = self.anger_target.load();
+
+            let dead_persistent_mob = target.as_ref().is_some_and(|target| {
+                let dead_or_dying = target.get_living_entity().is_some_and(|living| {
+                    living.dead.load(Ordering::Relaxed) || living.health.load() <= 0.0
+                });
+                dead_or_dying
+                    && target.get_mob().is_some()
+                    && anger_target == Some(target.get_entity().entity_uuid)
+            });
+            if dead_persistent_mob {
+                self.mob_entity.set_target(None).await;
+                self.anger_target.store(None);
+                self.anger_end_time.store(-1, Ordering::Relaxed);
+                return;
+            }
+
+            if let Some(target) = target.as_ref() {
+                let new_target = anger_target != Some(target.get_entity().entity_uuid);
+                if new_target {
+                    self.anger_target
+                        .store(Some(target.get_entity().entity_uuid));
+                }
+                let anger_ticks = {
+                    let mut random = self.get_random();
+                    random.random_range(20..40) * 20
+                };
+                self.anger_end_time
+                    .store(now + i64::from(anger_ticks), Ordering::Relaxed);
+            }
+
+            let persistent_target = anger_target.and_then(|uuid| world.get_entity_by_uuid(uuid));
+            if target.is_none()
+                && let Some(persistent_target) = persistent_target.as_ref()
+                && persistent_target
+                    .get_living_entity()
+                    .is_some_and(LivingEntity::is_alive)
+            {
+                self.mob_entity
+                    .set_target(Some(persistent_target.clone()))
+                    .await;
+            }
+            if persistent_target
+                .as_ref()
+                .and_then(|entity| entity.get_player())
+                .is_some_and(|player| {
+                    player.is_spectator()
+                        || player.is_creative()
+                        || world.level_info.load().difficulty == Difficulty::Peaceful
+                })
+            {
+                self.mob_entity.set_target(None).await;
+                self.anger_target.store(None);
+                self.anger_end_time.store(-1, Ordering::Relaxed);
+            }
+            if self.anger_end_time.load(Ordering::Relaxed) <= now {
+                if anger_target.is_some() {
+                    self.mob_entity.set_target(None).await;
+                }
+                self.anger_target.store(None);
+                self.anger_end_time.store(-1, Ordering::Relaxed);
+            }
+        })
+    }
+
     fn on_damage<'a>(
         &'a self,
         _damage_type: DamageType,
@@ -225,6 +408,11 @@ impl Mob for WolfEntity {
             let Some(source) = source else {
                 return;
             };
+            self.mob_entity.set_ordered_to_sit(false);
+            self.mob_entity
+                .living_entity
+                .entity
+                .set_pose(pumpkin_data::entity::EntityPose::Standing);
             let world = self.mob_entity.living_entity.entity.world.load();
             let now = world.level_time.lock().await.world_age;
             let anger_ticks = {

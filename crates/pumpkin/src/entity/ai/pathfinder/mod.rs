@@ -98,14 +98,26 @@ const NODE_REACH_Y: f64 = 1.0;
 const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 
 impl Navigator {
-    pub async fn can_reach(&mut self, entity: &LivingEntity, destination: Vector3<f64>) -> bool {
-        self.compute_path(entity, destination).await.is_some()
-    }
-
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
         self.is_idle.store(false, Ordering::Relaxed);
         self.current_goal = Some(goal);
-        self.current_path = None;
+    }
+
+    pub fn set_progress_with_path(&mut self, goal: NavigatorGoal, path: Path) {
+        self.is_idle.store(false, Ordering::Relaxed);
+        self.current_goal = Some(goal);
+        self.current_path = Some(path);
+        self.ticks_on_current_node = 0;
+        self.last_node_index = 0;
+        self.path_start_pos = None;
+    }
+
+    pub async fn create_path(
+        &mut self,
+        entity: &LivingEntity,
+        destination: Vector3<f64>,
+    ) -> Option<Path> {
+        self.compute_path(entity, destination).await
     }
 
     pub const fn set_speed(&mut self, speed: f64) {
@@ -336,15 +348,16 @@ impl Navigator {
         }
 
         if self.current_path.is_none() {
+            self.is_idle.store(true, Ordering::Relaxed);
             entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-            self.current_goal = Some(goal);
             return;
         }
 
         if let Some(path) = &mut self.current_path {
             if path.is_done() || !path.is_valid() {
+                self.is_idle.store(true, Ordering::Relaxed);
+                self.current_path = None;
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                self.current_goal = Some(goal);
                 return;
             }
 
@@ -357,10 +370,10 @@ impl Navigator {
             }
 
             if self.ticks_on_current_node > 100 {
+                self.is_idle.store(true, Ordering::Relaxed);
                 self.current_path = None;
                 self.ticks_on_current_node = 0;
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                self.current_goal = Some(goal);
                 return;
             }
 
@@ -372,10 +385,10 @@ impl Navigator {
                     let dz = current_pos.z - start_pos.z;
                     let dist_sq = dx * dx + dy * dy + dz * dz;
                     if dist_sq < 2.0 * 2.0 {
+                        self.is_idle.store(true, Ordering::Relaxed);
                         self.current_path = None;
                         self.ticks_on_current_node = 0;
                         entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                        self.current_goal = Some(goal);
                         return;
                     }
                 }
@@ -449,6 +462,7 @@ impl Navigator {
                 self.is_idle.store(true, Ordering::Relaxed);
                 self.current_path = None;
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
+                return;
             }
         }
 
@@ -458,5 +472,10 @@ impl Navigator {
     #[must_use]
     pub fn is_idle(&self) -> bool {
         self.is_idle.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn is_done(&self) -> bool {
+        self.current_path.as_ref().is_none_or(Path::is_done)
     }
 }

@@ -52,7 +52,10 @@ impl Goal for OwnerHurtByTargetGoal {
                 return false;
             };
 
-            if !attacker.get_entity().is_alive() {
+            if !attacker
+                .get_living_entity()
+                .is_some_and(crate::entity::living::LivingEntity::is_alive)
+            {
                 return false;
             }
 
@@ -71,7 +74,10 @@ impl Goal for OwnerHurtByTargetGoal {
             let Some(t) = target.as_ref() else {
                 return false;
             };
-            if !t.get_entity().is_alive() {
+            if !t
+                .get_living_entity()
+                .is_some_and(crate::entity::living::LivingEntity::is_alive)
+            {
                 return false;
             }
             let my_pos = mob.get_entity().pos.load();

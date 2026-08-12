@@ -4000,6 +4000,39 @@ impl World {
             .iter()
             .find(|p| p.get_entity().entity_uuid == id)
             .cloned()
+            .or_else(|| {
+                self.players
+                    .load()
+                    .iter()
+                    .find(|p| p.get_entity().entity_uuid == id)
+                    .map(|p| p.clone() as Arc<dyn EntityBase>)
+            })
+    }
+
+    /// Matches Entity.isAlliedTo for the scoreboard-backed teams currently
+    /// represented by Pumpkin.
+    pub async fn are_allied(&self, first: &dyn EntityBase, second: &dyn EntityBase) -> bool {
+        let scoreboard_name = |entity: &dyn EntityBase| {
+            entity.get_player().map_or_else(
+                || {
+                    entity
+                        .get_mob()
+                        .and_then(crate::entity::mob::Mob::get_owner_uuid)
+                        .and_then(|owner_uuid| self.get_player_by_uuid(owner_uuid))
+                        .map_or_else(
+                            || entity.get_entity().entity_uuid.to_string(),
+                            |owner| owner.gameprofile.name.clone(),
+                        )
+                },
+                |player| player.gameprofile.name.clone(),
+            )
+        };
+        let first_name = scoreboard_name(first);
+        let second_name = scoreboard_name(second);
+        self.scoreboard
+            .lock()
+            .await
+            .are_allied(&first_name, &second_name)
     }
 
     /// Gets a list of players whose location equals the given position in the world.

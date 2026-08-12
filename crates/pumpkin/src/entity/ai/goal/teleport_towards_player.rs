@@ -53,11 +53,10 @@ impl TeleportTowardsPlayerGoal {
 
         let player = world.get_closest_player(pos, follow_range)?;
 
-        if !player.get_entity().is_alive() {
+        let living = player.get_living_entity()?;
+        if !living.is_alive() {
             return None;
         }
-
-        let living = player.get_living_entity()?;
         if !self
             .target_predicate
             .test(
@@ -114,7 +113,10 @@ impl Goal for TeleportTowardsPlayerGoal {
             } else if self.target_player.is_some() {
                 false
             } else if let Some(target) = &self.committed_target {
-                if !target.get_entity().is_alive() {
+                if !target
+                    .get_living_entity()
+                    .is_some_and(crate::entity::living::LivingEntity::is_alive)
+                {
                     return false;
                 }
                 let mob_entity = mob.get_mob_entity();
