@@ -4,7 +4,9 @@ use std::any::type_name;
 use std::sync::Arc;
 
 use pumpkin_registry::{
-    DataKey, Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider,
+    BOOTSTRAP, DataKey, Registry, RegistryBuilder,
+    bootstrap::{BootstrapManager, RegistryEntry},
+    bootstrap_provider,
     error::DataKeyGetError,
 };
 use pumpkin_util::identifier::Identifier;
@@ -84,6 +86,7 @@ fn deeply_nested_root() -> Arc<dyn Registry> {
 
 #[tokio::test]
 async fn data_key_resolves_value() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:two");
 
@@ -92,6 +95,7 @@ async fn data_key_resolves_value() {
 
 #[tokio::test]
 async fn data_key_can_be_reused_after_initial_resolution() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:two");
 
@@ -101,6 +105,7 @@ async fn data_key_can_be_reused_after_initial_resolution() {
 
 #[tokio::test]
 async fn data_key_walks_multiple_nested_registry_levels() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = deeply_nested_root();
     let key = DataKey::<u32>::new("test:branch/test:numbers/test:value");
 
@@ -109,6 +114,7 @@ async fn data_key_walks_multiple_nested_registry_levels() {
 
 #[tokio::test]
 async fn get_reports_missing_registry_identifier() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:missing/test:value");
 
@@ -123,6 +129,7 @@ async fn get_reports_missing_registry_identifier() {
 
 #[tokio::test]
 async fn get_reports_non_registry_path_entry() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = RegistryBuilder::<u32>::frozen(&id("test:non_registry_root"))
         .unwrap()
         .arc_dyn();
@@ -139,6 +146,7 @@ async fn get_reports_non_registry_path_entry() {
 
 #[tokio::test]
 async fn get_reports_missing_value_identifier() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:missing_value");
 
@@ -153,6 +161,7 @@ async fn get_reports_missing_value_identifier() {
 
 #[tokio::test]
 async fn get_reports_value_type_mismatch() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u64>::new("test:numbers/test:one");
 
@@ -166,6 +175,7 @@ async fn get_reports_value_type_mismatch() {
 
 #[test]
 fn blocking_data_key_resolves_value_without_runtime() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:two");
 
@@ -174,6 +184,7 @@ fn blocking_data_key_resolves_value_without_runtime() {
 
 #[test]
 fn blocking_data_key_can_be_reused_after_initial_resolution() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:one");
 
@@ -183,6 +194,7 @@ fn blocking_data_key_can_be_reused_after_initial_resolution() {
 
 #[test]
 fn blocking_get_reports_missing_registry_identifier() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:missing_registry/test:value");
 
@@ -197,6 +209,7 @@ fn blocking_get_reports_missing_registry_identifier() {
 
 #[test]
 fn blocking_get_reports_missing_value_identifier() {
+    let _ = BOOTSTRAP.set(BootstrapManager::new());
     let root = nested_root();
     let key = DataKey::<u32>::new("test:numbers/test:missing_value");
 
