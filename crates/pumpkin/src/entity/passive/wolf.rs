@@ -14,9 +14,11 @@ use pumpkin_protocol::java::client::play::Metadata;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        beg::BegGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
-        follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
+        active_target::ActiveTargetGoal, beg::BegGoal, breed::BreedGoal,
+        escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        melee_attack::MeleeAttackGoal, owner_hurt_by_target::OwnerHurtByTargetGoal,
+        owner_hurt_target::OwnerHurtTargetGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -60,6 +62,44 @@ impl WolfEntity {
             );
             goal_selector.add_goal(10, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(12, Box::new(WanderAroundGoal::new(1.0)));
+        };
+
+        {
+            let mut target_selector = mob_arc
+                .mob_entity
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+            // Matches Wolf.registerGoals target priorities. The owner goals are
+            // harmless until taming/ownership data is available on the entity.
+            target_selector.add_goal(1, OwnerHurtByTargetGoal::new());
+            target_selector.add_goal(2, OwnerHurtTargetGoal::new());
+            target_selector.add_goal(3, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(
+                4,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+            );
+            target_selector.add_goal(
+                5,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SHEEP, false),
+            );
+            target_selector.add_goal(
+                5,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::RABBIT, false),
+            );
+            target_selector.add_goal(
+                5,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::FOX, false),
+            );
+            target_selector.add_goal(
+                6,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, false),
+            );
+            target_selector.add_goal(
+                7,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::SKELETON, false),
+            );
         };
 
         mob_arc
