@@ -588,7 +588,104 @@ impl GenerationSchedule {
         true
     }
 
+    fn recompute_dependency_stages(&mut self) {
+        let mut required: HashMapType<ChunkPos, StagedChunkEnum> = HashMapType::default();
+        let mut worklist: Vec<(ChunkPos, StagedChunkEnum)> = self
+            .chunk_map
+            .iter()
+            .filter(|(_, holder)| holder.target_stage != StagedChunkEnum::None)
+            .map(|(pos, holder)| (*pos, holder.target_stage))
+            .collect();
+
+        while let Some((pos, req)) = worklist.pop() {
+            let entry = required.entry(pos).or_insert(StagedChunkEnum::None);
+            if *entry >= req {
+                continue;
+            }
+            let start = *entry as u8 + 1;
+            *entry = req;
+
+            // Only expand the stages that were not already accounted for.
+            for i in start..=(req as u8) {
+                let stage = StagedChunkEnum::from(i);
+                let radius = stage.get_direct_radius();
+                if radius == 0 {
+                    continue;
+                }
+                let dependencies = stage.get_direct_dependencies();
+                for dx in -radius..=radius {
+                    for dz in -radius..=radius {
+                        if dx == 0 && dz == 0 {
+                            continue;
+                        }
+                        let neighbor = pos.add_raw(dx, dz);
+                        worklist.push((neighbor, dependencies[dx.abs().max(dz.abs()) as usize]));
+                    }
+                }
+            }
+        }
+
+        let mut nodes_to_drop = Vec::new();
+        let mut newly_unused = Vec::new();
+        for (pos, holder) in &mut self.chunk_map {
+            let new_dependency = required.get(pos).copied().unwrap_or(StagedChunkEnum::None);
+            if new_dependency >= holder.dependency_stage {
+                continue;
+            }
+            holder.dependency_stage = new_dependency;
+
+            let effective_target = holder.target_stage.max(new_dependency);
+            for i in (effective_target as usize + 1)..StagedChunkEnum::COUNT {
+                let task = holder.tasks[i];
+                if !task.is_null() {
+                    nodes_to_drop.push((*pos, i, task));
+                }
+            }
+            if effective_target == StagedChunkEnum::None {
+                newly_unused.push(*pos);
+            }
+        }
+        self.unload_chunks.extend(newly_unused);
+
+        for (pos, index, task) in nodes_to_drop {
+            if self
+                .graph
+                .nodes
+                .get(task)
+                .is_some_and(|node| node.in_flight)
+            {
+                continue;
+            }
+            self.waiting_for_chunks.remove(&task);
+            self.drop_node(task);
+            if let Some(holder) = self.chunk_map.get_mut(&pos) {
+                holder.tasks[index] = NodeKey::null();
+            }
+        }
+
+        self.purge_dropped_queue_entries();
+    }
+
+    /// Drop heap entries whose node has been cancelled. They are skipped when popped,
+    /// but a saturated queue is never drained, so without this the heap keeps every
+    /// cancelled task of every chunk the player has flown past and `sort_queue` gets
+    /// slower on each level change.
+    fn purge_dropped_queue_entries(&mut self) {
+        if self.queue.is_empty() {
+            return;
+        }
+        let graph = &self.graph;
+        let tasks: Vec<_> = self
+            .queue
+            .drain()
+            .filter(|task| graph.nodes.contains_key(task.1))
+            .collect();
+        self.queue = BinaryHeap::from(tasks);
+    }
+
     fn garbage_collect_dependencies(&mut self) {
+        self.recompute_dependency_stages();
+
         // Garbage collect stranded dependencies
         let mut stranded = Vec::new();
         for (pos, holder) in &self.chunk_map {
@@ -1091,9 +1188,9 @@ impl GenerationSchedule {
 
             // Process unload queue periodically (every 1 second) to batch writes together
             // and act as a brief memory cache if a player walks back into the chunk.
-            if !self.unload_chunks.is_empty()
-                && self.last_unload.elapsed() >= std::time::Duration::from_secs(1)
-            {
+            // This must run even when the queue is empty: `garbage_collect_dependencies`
+            // is what puts stale dependency holders into the queue in the first place.
+            if self.last_unload.elapsed() >= std::time::Duration::from_secs(1) {
                 self.garbage_collect_dependencies();
                 self.process_unload_queue();
                 self.last_unload = std::time::Instant::now();
