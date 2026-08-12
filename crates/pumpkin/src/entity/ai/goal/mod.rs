@@ -16,6 +16,7 @@ pub mod escape_danger;
 pub mod follow_owner;
 pub mod follow_parent;
 pub mod goal_selector;
+pub mod leap_at_target;
 pub mod look_around;
 pub mod look_at_entity;
 pub mod melee_attack;
