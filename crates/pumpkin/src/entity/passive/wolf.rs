@@ -16,7 +16,8 @@ use crate::entity::{
     ai::goal::{
         beg::BegGoal, breed::BreedGoal, escape_danger::EscapeDangerGoal,
         follow_parent::FollowParentGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
+        wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -49,8 +50,8 @@ impl WolfEntity {
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             // goal_selector.add_goal(2, SitGoal::new(mob_arc.clone()));
             goal_selector.add_goal(4, EscapeDangerGoal::new(1.5));
-            goal_selector.add_goal(5, BreedGoal::new(1.0));
-            // goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0, false));
+            goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
+            goal_selector.add_goal(7, BreedGoal::new(1.0));
             goal_selector.add_goal(8, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(9, BegGoal::new(8.0, &[&Item::BONE]));
             goal_selector.add_goal(
