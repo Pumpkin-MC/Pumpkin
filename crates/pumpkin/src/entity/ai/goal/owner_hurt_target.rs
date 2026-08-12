@@ -1,5 +1,6 @@
 use super::{Controls, Goal, GoalFuture};
 use crate::entity::EntityBase;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
@@ -59,7 +60,17 @@ impl Goal for OwnerHurtTargetGoal {
                 return false;
             }
 
-            if !mob.can_attack_with_owner(target.as_ref(), &*owner) {
+            if !TargetPredicate::create_attackable()
+                .test(
+                    world.as_ref(),
+                    Some(&mob.get_mob_entity().living_entity),
+                    target
+                        .get_living_entity()
+                        .expect("alive owner target must be living"),
+                )
+                .await
+                || !mob.can_attack_with_owner(target.as_ref(), &*owner)
+            {
                 return false;
             }
 
