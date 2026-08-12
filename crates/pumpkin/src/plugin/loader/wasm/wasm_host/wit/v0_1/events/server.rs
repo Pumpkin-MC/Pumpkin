@@ -58,6 +58,13 @@ impl ToFromWasmEvent for PacketReceivedEvent {
         })
     }
 
+    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+        if let Event::PacketReceivedEvent(data) = event {
+            self.packet_id = data.packet_id;
+            self.payload = data.raw_payload.into();
+            self.cancelled = data.cancelled;
+        }
+    }
     fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
         match event {
             Event::PacketReceivedEvent(_) => {
