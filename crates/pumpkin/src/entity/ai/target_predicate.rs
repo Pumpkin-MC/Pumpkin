@@ -1,6 +1,6 @@
 use pumpkin_util::Difficulty;
 
-use crate::entity::living::LivingEntity;
+use crate::entity::{EntityBase, living::LivingEntity};
 use crate::world::World;
 use std::future::Future;
 use std::pin::Pin;
@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 const MIN_DISTANCE: f64 = 2.0;
 
-pub type PredicateFn = dyn Fn(Arc<LivingEntity>, Arc<World>) -> Pin<Box<dyn Future<Output = bool> + Send>>
+pub type PredicateFn = dyn for<'a> Fn(&'a LivingEntity, &'a World) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>>
     + Send
     + Sync;
 
@@ -79,16 +79,17 @@ impl TargetPredicate {
         self
     }
 
-    pub fn set_predicate<F, Fut>(&mut self, predicate: F)
+    pub fn set_predicate<F>(&mut self, predicate: F)
     where
-        F: Fn(Arc<LivingEntity>, Arc<World>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = bool> + Send + 'static,
+        F: for<'a> Fn(
+                &'a LivingEntity,
+                &'a World,
+            ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>>
+            + Send
+            + Sync
+            + 'static,
     {
-        self.predicate = Some(Arc::new(
-            move |living_entity: Arc<LivingEntity>, world: Arc<World>| {
-                Box::pin(predicate(living_entity, world))
-            },
-        ));
+        self.predicate = Some(Arc::new(predicate));
     }
 
     pub async fn test(
@@ -101,12 +102,32 @@ impl TargetPredicate {
             return false;
         }
 
-        if !target.is_part_of_game() {
+        if !target.is_alive() {
             return false;
         }
 
-        if self.attackable
-            && (!target.can_take_damage()
+        let targeter_base =
+            tester.and_then(|tester_ent| world.get_entity_by_uuid(tester_ent.entity.entity_uuid));
+
+        if let Some(tester_ent) = tester
+            && self.attackable
+        {
+            let can_attack = targeter_base
+                .as_deref()
+                .and_then(EntityBase::get_mob)
+                .map_or_else(
+                    || tester_ent.can_attack_target(target, world),
+                    |mob| mob.can_attack(target),
+                );
+            if !can_attack
+                || world
+                    .are_allied(targeter_base.as_deref().unwrap_or(tester_ent), target)
+                    .await
+            {
+                return false;
+            }
+        } else if self.attackable
+            && (!target.can_be_seen_as_enemy()
                 || world.level_info.load().difficulty == Difficulty::Peaceful)
         {
             return false;
@@ -115,8 +136,12 @@ impl TargetPredicate {
         if let Some(tester_ent) = tester
             && self.base_max_distance > 0.0
         {
-            // TODO: use distance_scaling_factor from target
-            let max_dist = self.base_max_distance.max(MIN_DISTANCE);
+            let visibility = if self.use_distance_scaling_factor {
+                target.visibility_percent(tester_ent).await
+            } else {
+                1.0
+            };
+            let max_dist = (self.base_max_distance * visibility).max(MIN_DISTANCE);
             let dist_sq = tester_ent
                 .entity
                 .pos
@@ -145,6 +170,19 @@ impl TargetPredicate {
             return false;
         }
 
+        if let Some(predicate) = &self.predicate
+            && !predicate(target, world).await
+        {
+            return false;
+        }
+
         true
+    }
+
+    pub async fn test_custom_predicate(&self, world: &World, target: &LivingEntity) -> bool {
+        match &self.predicate {
+            Some(predicate) => predicate(target, world).await,
+            None => true,
+        }
     }
 }

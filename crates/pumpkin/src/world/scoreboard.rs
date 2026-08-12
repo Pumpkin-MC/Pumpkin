@@ -41,6 +41,15 @@ impl Scoreboard {
         &self.teams
     }
 
+    /// Returns whether two scoreboard names are on the same vanilla team.
+    #[must_use]
+    pub fn are_allied(&self, first: &str, second: &str) -> bool {
+        self.teams.values().any(|team| {
+            team.players.iter().any(|player| player == first)
+                && team.players.iter().any(|player| player == second)
+        })
+    }
+
     async fn broadcast_editioned<J: ClientPacket, B: BClientPacket>(
         world: &World,
         je_packet: &J,

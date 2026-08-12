@@ -121,7 +121,11 @@ impl Goal for BreedGoal {
                 return false;
             };
 
-            if !mate.get_entity().is_alive() || mate.is_panicking() {
+            if !mate
+                .get_living_entity()
+                .is_some_and(crate::entity::living::LivingEntity::is_alive)
+                || mate.is_panicking()
+            {
                 return false;
             }
 

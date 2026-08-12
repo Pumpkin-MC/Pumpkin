@@ -1,4 +1,8 @@
-use super::{Entity, EntityBase, NBTStorage, ai::pathfinder::Navigator, living::LivingEntity};
+use super::{
+    Entity, EntityBase, NBTStorage,
+    ai::pathfinder::{Navigator, path::Path},
+    living::LivingEntity,
+};
 use crate::entity::EntityBaseFuture;
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
@@ -77,6 +81,7 @@ pub struct MobEntity {
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
+    ordered_to_sit: AtomicU8,
     mob_flags: AtomicU8,
     last_sent_yaw: AtomicU8,
     last_sent_pitch: AtomicU8,
@@ -114,6 +119,7 @@ impl MobEntity {
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
+            ordered_to_sit: AtomicU8::new(0),
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -214,7 +220,15 @@ impl MobEntity {
         self.target.lock().await.clone()
     }
 
-    pub async fn can_navigate_to(&self, destination: Vector3<f64>) -> bool {
+    pub fn is_ordered_to_sit(&self) -> bool {
+        self.ordered_to_sit.load(Relaxed) != 0
+    }
+
+    pub fn set_ordered_to_sit(&self, value: bool) {
+        self.ordered_to_sit.store(value as u8, Relaxed);
+    }
+
+    pub async fn create_path_to(&self, destination: Vector3<f64>) -> Option<Path> {
         let mut navigator = {
             let mut guard = self
                 .navigator
@@ -222,7 +236,9 @@ impl MobEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             std::mem::take(&mut *guard)
         };
-        let result = navigator.can_reach(&self.living_entity, destination).await;
+        let result = navigator
+            .create_path(&self.living_entity, destination)
+            .await;
         *self
             .navigator
             .lock()
@@ -512,6 +528,15 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    /// Vanilla Mob.canAttack. Individual mobs override this for exclusions.
+    fn can_attack(&self, target: &LivingEntity) -> bool {
+        target.entity.entity_type != &pumpkin_data::entity::EntityType::GHAST
+            && self.get_mob_entity().living_entity.can_attack_target(
+                target,
+                &self.get_mob_entity().living_entity.entity.world.load(),
+            )
+    }
+
     fn get_job_site(&self) -> Option<BlockPos> {
         None
     }
@@ -573,8 +598,10 @@ pub trait Mob: EntityBase + Send + Sync {
         amount
     }
 
-    fn can_attack_with_owner(&self, _target: &dyn EntityBase, _owner: &dyn EntityBase) -> bool {
-        true
+    fn can_attack_with_owner(&self, target: &dyn EntityBase, _owner: &dyn EntityBase) -> bool {
+        target
+            .get_living_entity()
+            .is_some_and(|living| self.can_attack(living))
     }
 
     fn get_mob_gravity(&self) -> f64 {

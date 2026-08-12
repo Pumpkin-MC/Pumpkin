@@ -128,7 +128,7 @@ impl Goal for TrackTargetGoal {
                 return false;
             };
 
-            if !target.entity.is_alive() {
+            if !target.is_alive() {
                 return false;
             }
 

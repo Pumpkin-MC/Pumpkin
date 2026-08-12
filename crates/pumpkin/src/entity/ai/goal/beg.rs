@@ -86,7 +86,7 @@ impl Goal for BegGoal {
                 return false;
             };
 
-            if !player.get_entity().is_alive() {
+            if !player.living_entity.is_alive() {
                 return false;
             }
 

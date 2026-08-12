@@ -61,7 +61,7 @@ impl LookAtEntityGoal {
         if target_type == &EntityType::PLAYER {
             target_predicate.set_predicate(move |living_entity, _world| {
                 let mob_weak = mob_weak.clone();
-                async move {
+                Box::pin(async move {
                     if let Some(mob_arc) = mob_weak.upgrade() {
                         let predicate = EntityPredicate::Rides(mob_arc.get_entity());
                         predicate.test(&living_entity.entity).await
@@ -69,7 +69,7 @@ impl LookAtEntityGoal {
                         // MobEntity is destroyed
                         false
                     }
-                }
+                })
             });
         }
         target_predicate
@@ -112,7 +112,10 @@ impl Goal for LookAtEntityGoal {
         Box::pin(async {
             let mob_entity = mob.get_mob_entity();
             if let Some(target) = &self.target {
-                if !target.get_entity().is_alive() {
+                if !target
+                    .get_living_entity()
+                    .is_some_and(crate::entity::living::LivingEntity::is_alive)
+                {
                     return false;
                 }
                 let mob_pos = mob_entity.living_entity.entity.pos.load();
@@ -142,7 +145,9 @@ impl Goal for LookAtEntityGoal {
         Box::pin(async {
             let mob_entity = mob.get_mob_entity();
             if let Some(target) = &self.target
-                && target.get_entity().is_alive()
+                && target
+                    .get_living_entity()
+                    .is_some_and(crate::entity::living::LivingEntity::is_alive)
             {
                 let target_entity = target.get_entity();
                 let target_pos = target_entity.pos.load();

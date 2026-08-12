@@ -83,7 +83,10 @@ impl Goal for FollowParentGoal {
                 return false;
             };
             let parent_entity = parent.get_entity();
-            if !parent_entity.is_alive() {
+            if !parent
+                .get_living_entity()
+                .is_some_and(crate::entity::living::LivingEntity::is_alive)
+            {
                 return false;
             }
             let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();

@@ -142,7 +142,7 @@ impl Goal for FollowOwnerGoal {
                 return false;
             };
 
-            if owner.is_spectator() || !owner.living_entity.entity.is_alive() {
+            if owner.is_spectator() || !owner.living_entity.is_alive() {
                 return false;
             }
 
