@@ -22,10 +22,13 @@ impl CommandExecutor for ReloadExecutor {
             let server = context.server;
 
             // Reload all JSON configurations
-            *server.data.banned_ip_list.write().await = crate::data::banned_ip::BannedIpList::load();
-            *server.data.banned_player_list.write().await = crate::data::banned_player::BannedPlayerList::load();
+            *server.data.banned_ip_list.write().await =
+                crate::data::banned_ip::BannedIpList::load();
+            *server.data.banned_player_list.write().await =
+                crate::data::banned_player::BannedPlayerList::load();
             *server.data.operator_config.write().await = crate::data::op::OperatorConfig::load();
-            *server.data.whitelist_config.write().await = crate::data::whitelist::WhitelistConfig::load();
+            *server.data.whitelist_config.write().await =
+                crate::data::whitelist::WhitelistConfig::load();
 
             context
                 .source
