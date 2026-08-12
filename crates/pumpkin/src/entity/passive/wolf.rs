@@ -277,6 +277,25 @@ impl Mob for WolfEntity {
                 .can_attack_target(target, &world)
     }
 
+    fn can_attack_with_owner(&self, target: &dyn EntityBase, owner: &dyn EntityBase) -> bool {
+        let target_entity = target.get_entity();
+        if target_entity.entity_type == &EntityType::CREEPER
+            || target_entity.entity_type == &EntityType::GHAST
+            || target_entity.entity_type == &EntityType::ARMOR_STAND
+        {
+            return false;
+        }
+        if target_entity.entity_type == &EntityType::WOLF {
+            return target.get_mob().is_none_or(|target_mob| {
+                !target_mob.is_tame() || !target_mob_owner_is(owner, target)
+            }) && self.can_attack_entity(target);
+        }
+        if target.get_mob().is_some_and(Mob::is_tame) {
+            return false;
+        }
+        self.can_attack_entity(target)
+    }
+
     fn mob_interact<'a>(
         &'a self,
         player: &'a Arc<crate::entity::player::Player>,
@@ -417,9 +436,6 @@ impl Mob for WolfEntity {
             let Some(source) = source else {
                 return;
             };
-            if !self.can_attack_entity(source) {
-                return;
-            }
             self.mob_entity.set_ordered_to_sit(false);
             self.mob_entity
                 .living_entity
@@ -462,4 +478,11 @@ impl Mob for WolfEntity {
             );
         })
     }
+}
+
+fn target_mob_owner_is(owner: &dyn EntityBase, target: &dyn EntityBase) -> bool {
+    target
+        .get_mob()
+        .and_then(Mob::get_owner_uuid)
+        .is_some_and(|owner_uuid| owner_uuid == owner.get_entity().entity_uuid)
 }
