@@ -68,8 +68,14 @@ impl Goal for MeleeAttackGoal {
             if !target.get_entity().is_alive() {
                 return false;
             }
-            // TODO: add path when is implemented Navigation
-            true //TODO: modify that because if a path to the target not exists then call mob.is_in_attack_range(target)
+
+            let target_pos = target.get_entity().pos.load();
+            let can_reach = mob.get_mob_entity().can_navigate_to(target_pos).await;
+            can_reach
+                || mob
+                    .get_mob_entity()
+                    .is_in_attack_range(target.as_ref())
+                    .await
         })
     }
 
@@ -172,7 +178,19 @@ impl Goal for MeleeAttackGoal {
             self.update_countdown_ticks = (self.update_countdown_ticks - 1).max(0);
 
             let current_target_pos = target.get_entity().pos.load();
-            let should_update_nav = self.update_countdown_ticks <= 0
+            let has_line_of_sight = mob
+                .get_entity()
+                .world
+                .load()
+                .raycast(
+                    mob.get_entity().get_eye_pos(),
+                    target.get_entity().get_eye_pos(),
+                    async |block_pos, world| world.get_block_state(block_pos).is_solid(),
+                )
+                .await
+                .is_none();
+            let should_update_nav = (self.pause_when_mob_idle || has_line_of_sight)
+                && self.update_countdown_ticks <= 0
                 && (self.last_target_position.is_none_or(|last_pos| {
                     current_target_pos.squared_distance_to_vec(&last_pos) >= 1.0
                 }) || mob.get_random().random_range(0..20) == 0);

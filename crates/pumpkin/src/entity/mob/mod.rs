@@ -214,6 +214,22 @@ impl MobEntity {
         self.target.lock().await.clone()
     }
 
+    pub async fn can_navigate_to(&self, destination: Vector3<f64>) -> bool {
+        let mut navigator = {
+            let mut guard = self
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *guard)
+        };
+        let result = navigator.can_reach(&self.living_entity, destination).await;
+        *self
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
+        result
+    }
+
     fn set_mob_flag(&self, flag: u8, value: bool) {
         let old_b = self.mob_flags.load(Ordering::Relaxed);
 
@@ -591,6 +607,10 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_owner_uuid(&self) -> Option<Uuid> {
         None
+    }
+
+    fn is_tame(&self) -> bool {
+        false
     }
 
     fn is_sitting(&self) -> bool {
