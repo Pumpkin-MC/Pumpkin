@@ -60,13 +60,15 @@ impl Goal for OwnerHurtByTargetGoal {
                 return false;
             }
 
+            let Some(attacker_living) = attacker.get_living_entity() else {
+                return false;
+            };
+
             if !TargetPredicate::create_attackable()
                 .test(
                     world.as_ref(),
                     Some(&mob.get_mob_entity().living_entity),
-                    attacker
-                        .get_living_entity()
-                        .expect("alive owner attacker must be living"),
+                    attacker_living,
                 )
                 .await
                 || !mob.can_attack_with_owner(attacker.as_ref(), &*owner)
