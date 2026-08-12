@@ -38,7 +38,6 @@ static KEY: LazyLock<[u8; 32]> =
 pub struct NetherNetDiscovery {
     socket: Arc<UdpSocket>,
     network_id: u64,
-    advertisement_id: u64,
     candidates: Arc<Mutex<HashMap<ConnectionKey, mpsc::UnboundedSender<RTCIceCandidateInit>>>>,
 }
 
@@ -52,7 +51,6 @@ impl NetherNetDiscovery {
         Ok(Self {
             socket: Arc::new(socket),
             network_id,
-            advertisement_id: rand::random(),
             candidates: Arc::default(),
         })
     }
@@ -111,7 +109,6 @@ impl NetherNetDiscovery {
         let game_mode = server.defaultgamemode.lock().await.gamemode as u8;
         let response = encode_response(
             self.network_id,
-            self.advertisement_id,
             &server.advanced_config.networking.bedrock.motd,
             &server.basic_config.default_level_name,
             game_mode,
@@ -124,7 +121,6 @@ impl NetherNetDiscovery {
         trace!(
             %address,
             network_id = self.network_id,
-            advertisement_id = format_args!("{:016x}", self.advertisement_id),
             version = SERVER_DATA_VERSION,
             players,
             max_players = server.advanced_config.networking.bedrock.max_players,
@@ -280,7 +276,6 @@ fn decode_packet(data: &[u8]) -> Option<Packet> {
 #[allow(clippy::too_many_arguments)]
 fn encode_response(
     network_id: u64,
-    advertisement_id: u64,
     server_name: &str,
     level_name: &str,
     game_mode: u8,
@@ -304,7 +299,9 @@ fn encode_response(
             .to_le_bytes(),
     );
     server_data.extend_from_slice(&[0, u8::from(hardcore), 0, u8::from(!online_mode)]);
-    push_string(&mut server_data, &format!("{advertisement_id:016x}"))?;
+    // Bedrock uses this ID both to deduplicate LAN advertisements and as the recipient for
+    // discovery signaling. It must match the network ID in the response packet header.
+    push_string(&mut server_data, &format!("{network_id:016x}"))?;
     server_data.extend_from_slice(&[2 << 1, 4 << 1]);
 
     let application_data = hex::encode(server_data);
@@ -402,7 +399,6 @@ mod tests {
     fn encodes_current_server_data() {
         let response = encode_response(
             99,
-            0x9bb64bcf14727bdb,
             "Dedicated Server",
             "Creative level",
             1,
@@ -425,7 +421,7 @@ mod tests {
         assert_eq!(
             hex::encode(server_data),
             "0610446564696361746564205365727665720e4372656174697665206c6576656c\
-             02000000000a0000000000000110396262363462636631343732376264620408"
+             02000000000a0000000000000110303030303030303030303030303036330408"
         );
     }
 
