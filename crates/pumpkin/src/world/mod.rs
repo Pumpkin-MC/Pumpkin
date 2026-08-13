@@ -2,10 +2,12 @@ use crate::block::entities::{BlockEntity, block_entity_from_nbt};
 use dashmap::DashMap;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
-use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
+use pumpkin_data::item::{BedrockItem, BedrockItemVersion, JavaToBedrockItemMapping};
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemDefinition};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
-use pumpkin_protocol::bedrock::client::{CBiomeDefinitionList, EntityProperties};
+use pumpkin_protocol::bedrock::client::{
+    CBiomeDefinitionList, EntityProperties, block_actor_data::CBlockActorData,
+};
 use pumpkin_protocol::bedrock::network_item::{NetworkItemDescriptor, NetworkItemStackDescriptor};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
@@ -206,6 +208,31 @@ fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Opti
     }
 
     Some(nbt)
+}
+
+fn bedrock_bed_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
+    let (block, _) = BlockState::from_id_with_block(state_id);
+    if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
+        return None;
+    }
+
+    let color = JavaToBedrockItemMapping::from_java_item_id(block.item_id)?
+        .bedrock_data
+        .try_into()
+        .ok()?;
+    let mut nbt = NbtCompound::new();
+    nbt.put_string("id", "Bed".to_string());
+    nbt.put_int("x", position.0.x);
+    nbt.put_int("y", position.0.y);
+    nbt.put_int("z", position.0.z);
+    nbt.put_byte("color", color);
+    nbt.put_bool("isMovable", true);
+    Some(nbt)
+}
+
+fn bedrock_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
+    bedrock_chest_block_actor(state_id, position)
+        .or_else(|| bedrock_bed_block_actor(state_id, position))
 }
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -1289,6 +1316,12 @@ impl World {
                         be_block_id as u32,
                     ),
                 );
+                if let Some(data) = bedrock_bed_block_actor(block_state_id, block_pos) {
+                    self.broadcast_to_chunk_bedrock(
+                        chunk_pos,
+                        &CBlockActorData::new(block_pos, data),
+                    );
+                }
             } else {
                 let players = self.players.load();
                 let mut java_recipients = Vec::new();
@@ -1311,6 +1344,13 @@ impl World {
                                         be_block_id as u32,
                                     ),
                                 );
+                                if let Some(data) =
+                                    bedrock_bed_block_actor(*block_state_id, *block_pos)
+                                {
+                                    be_client.try_enqueue_packet(&CBlockActorData::new(
+                                        *block_pos, data,
+                                    ));
+                                }
                             }
                         }
                     }
@@ -5442,7 +5482,7 @@ impl World {
                 chunk
                     .section
                     .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
-                    .and_then(|state_id| bedrock_chest_block_actor(state_id, *position))
+                    .and_then(|state_id| bedrock_block_actor(state_id, *position))
             })
             .collect()
     }
@@ -5780,6 +5820,19 @@ impl World {
         Self::broadcast_java_grouped(packet, recipients_by_version);
     }
 
+    fn broadcast_to_chunk_bedrock<P: BClientPacket>(&self, chunk_pos: Vector2<i32>, packet: &P) {
+        let players = self.players.load();
+        for player in players.iter().filter(|player| {
+            let center = player.get_entity().chunk_pos.load();
+            let view_distance = get_view_distance(player).get() as i32;
+            is_within_view_distance(chunk_pos, center, view_distance)
+        }) {
+            if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
+                client.try_enqueue_packet(packet);
+            }
+        }
+    }
+
     pub fn broadcast_to_chunk_editioned_sync<J: ClientPacket, B: BClientPacket>(
         &self,
         chunk_pos: Vector2<i32>,
@@ -5980,7 +6033,7 @@ mod tests {
     };
     use pumpkin_util::math::position::BlockPos;
 
-    use super::{bedrock_block_breaking_rate, bedrock_chest_block_actor};
+    use super::{bedrock_bed_block_actor, bedrock_block_breaking_rate, bedrock_chest_block_actor};
 
     #[test]
     fn bedrock_block_breaking_rate_uses_progress_per_tick() {
@@ -6003,5 +6056,19 @@ mod tests {
         assert_eq!(actor.get_int("pairx"), Some(4));
         assert_eq!(actor.get_int("pairz"), Some(7));
         assert_eq!(actor.get_bool("pairlead"), Some(true));
+    }
+
+    #[test]
+    fn bedrock_bed_block_actor_uses_the_java_bed_color() {
+        let position = BlockPos::new(5, 64, 7);
+        let blue = bedrock_bed_block_actor(Block::BLUE_BED.default_state.id, position).unwrap();
+        let red = bedrock_bed_block_actor(Block::RED_BED.default_state.id, position).unwrap();
+
+        assert_eq!(blue.get_string("id"), Some("Bed"));
+        assert_eq!(blue.get_byte("color"), Some(11));
+        assert_eq!(red.get_byte("color"), Some(14));
+        assert_eq!(blue.get_int("x"), Some(5));
+        assert_eq!(blue.get_bool("isMovable"), Some(true));
+        assert!(bedrock_bed_block_actor(Block::STONE.default_state.id, position).is_none());
     }
 }
