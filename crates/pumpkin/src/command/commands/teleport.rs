@@ -64,8 +64,8 @@ fn resolve_sender_world(
         .expect("Server should have at least one world")
 }
 
-async fn success_key_and_arg<'a>(
-    targets: &'a [Arc<dyn EntityBase>],
+async fn success_key_and_arg(
+    targets: &[Arc<dyn EntityBase>],
     single_key: &'static str,
     multiple_key: &'static str,
 ) -> (&'static str, TextComponent) {
