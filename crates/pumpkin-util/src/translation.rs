@@ -558,10 +558,8 @@ impl FromStr for Locale {
     type Err = ();
 
     #[expect(clippy::too_many_lines)]
+    #[rustfmt::skip]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.eq_ignore_ascii_case("nb_no") {
-            return Ok(Self::NoNo);
-        }
         match s.to_lowercase().as_str() {
             "af_za" => Ok(Self::AfZa),       // Afrikaans (Suid-Afrika)
             "ar_sa" => Ok(Self::ArSa),       // Arabic
@@ -651,7 +649,7 @@ impl FromStr for Locale {
             "nl_be" => Ok(Self::NlBe),       // Dutch, Flemish
             "nl_nl" => Ok(Self::NlNl),       // Dutch
             "nn_no" => Ok(Self::NnNo),       // Norwegian Nynorsk
-            "no_no" => Ok(Self::NoNo),       // Norwegian Bokmål
+            "nb_no" | "no_no" => Ok(Self::NoNo), // Norwegian Bokmål
             "oc_fr" => Ok(Self::OcFr),       // Occitan
             "ovd" => Ok(Self::Ovd),          // Elfdalian
             "pl_pl" => Ok(Self::PlPl),       // Polish
