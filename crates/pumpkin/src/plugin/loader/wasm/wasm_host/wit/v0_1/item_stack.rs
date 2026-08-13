@@ -4,6 +4,8 @@ use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::enchantm
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::item_stack::{
     DataComponentValue as WitDataComponentValue, EnchantmentValue as WitEnchantmentValue,
     Host as ItemStackInterfaceHost, HostItemStack, ItemStack as ItemStackHandle,
+};
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::nbt::{
     NbtEntry as WitNbtEntry, NbtTag as WitNbtTag, NbtTree as WitNbtTree,
 };
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::text::TextComponent as WitTextComponent;
