@@ -2241,6 +2241,13 @@ impl Player {
         }
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
+        // Player.aiStep resets fall distance while flying before the normal
+        // living-entity tick, unless the player is riding another entity.
+        let flying = self.abilities.lock().await.flying;
+        if flying && !self.living_entity.entity.has_vehicle().await {
+            self.living_entity.fall_distance.store(0.0);
+        }
+
         let caller: Arc<dyn EntityBase> = self.clone();
         self.living_entity.tick(&caller, server).await;
         // Vanilla updates pose in PlayerEntity#tick after super.tick().
@@ -3393,17 +3400,6 @@ impl Player {
                     if entity.is_sneaking() {
                         entity.set_sneaking(false).await;
                     }
-                }
-
-                /* Vanilla doesn't reset fallDistance in setGameMode(), instead relies on
-                 * Player.aiStep() resetting when abilities.flying=true and
-                 * Player.causeFallDamage() returning false when abilities.mayfly=true.
-                 * TODO: Reset fall_distance each tick when abilities.flying=true (mirrors Player.aiStep())
-                 * TODO: Add abilities.allow_flying check in LivingEntity::handle_fall_damage() (mirrors Player.causeFallDamage())
-                 * TODO: Once implemented, restrict this reset to Spectator only.
-                 */
-                if matches!(gamemode, GameMode::Creative | GameMode::Spectator) {
-                    self.living_entity.fall_distance.store(0.0);
                 }
 
                 if gamemode != GameMode::Spectator && self.camera_target_id.load().is_some() {
