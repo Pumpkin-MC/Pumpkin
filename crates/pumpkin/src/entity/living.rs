@@ -527,6 +527,7 @@ impl LivingEntity {
         self.entity.entity_id
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn add_effect(&self, effect: Effect) {
         // Apply instant effects immediately before storing
         if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
@@ -625,7 +626,7 @@ impl LivingEntity {
             flag |= 8;
         }
 
-        let packet = CUpdateMobEffect::new(
+        let je_packet = CUpdateMobEffect::new(
             self.entity.entity_id.into(),
             VarInt(i32::from(effect.effect_type.id)),
             effect.amplifier.into(),
@@ -633,7 +634,22 @@ impl LivingEntity {
             flag,
         );
 
-        self.entity.world.load().broadcast_packet_all(&packet);
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect::new(
+            VarULong(self.entity.entity_id as u64),
+            pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
+            VarInt(effect.effect_type.to_bedrock_id()),
+            VarInt(i32::from(effect.amplifier)),
+            effect.show_particles,
+            VarInt(effect.duration),
+            VarULong(0),
+            effect.ambient,
+        );
+
+        let chunk_pos = self.entity.chunk_pos.load();
+        self.entity
+            .world
+            .load()
+            .broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {

@@ -86,6 +86,35 @@ impl Scoreboard {
             .insert(objective.name.to_string(), objective);
     }
 
+    pub async fn set_display_objective(
+        &mut self,
+        world: &World,
+        slot: ScoreboardDisplaySlot,
+        objective_name: &str,
+    ) {
+        let slot_str = match slot {
+            ScoreboardDisplaySlot::List => "list",
+            ScoreboardDisplaySlot::BelowName => "belowname",
+            _ => "sidebar",
+        };
+
+        let display_name = self.objectives.get(objective_name).map_or_else(
+            || objective_name.to_string(),
+            |o| o.display_name.clone().get_text(),
+        );
+
+        let je_display = CDisplayObjective::new(slot, objective_name.to_string());
+        let be_display = BSetDisplayObjective {
+            display_slot: slot_str.to_string(),
+            objective_name: objective_name.to_string(),
+            display_name,
+            criteria_name: "dummy".to_string(),
+            sort_order: VarInt(0),
+        };
+
+        Self::broadcast_editioned(world, &je_display, &be_display).await;
+    }
+
     pub async fn remove_objective(&mut self, world: &World, name: &str) {
         if !self.objectives.contains_key(name) {
             warn!(

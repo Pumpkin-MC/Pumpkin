@@ -110,3 +110,15 @@ pub mod coral;
 pub mod abstract_wall_mounting;
 
 pub mod beacon;
+pub mod brushable_block;
+pub mod cartography_table;
+pub mod creaking_heart;
+pub mod decorated_pot;
+pub mod fletching_table;
+pub mod loom;
+pub mod smithing_table;
+pub mod sniffer_egg;
+pub mod structure_block;
+pub mod trial_spawner;
+pub mod turtle_egg;
+pub mod vault;

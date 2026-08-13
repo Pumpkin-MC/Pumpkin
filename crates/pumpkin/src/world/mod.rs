@@ -466,14 +466,23 @@ impl World {
 
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {
         let chunk_pos = entity.chunk_pos.load();
-        self.broadcast_to_chunk(
-            chunk_pos,
-            &CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id))),
+        let je_packet =
+            CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id)));
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect::new(
+            VarULong(entity.entity_id as u64),
+            pumpkin_protocol::bedrock::client::CMobEffect::EVENT_REMOVE,
+            VarInt(effect_type.to_bedrock_id()),
+            VarInt(0),
+            false,
+            VarInt(0),
+            VarULong(0),
+            false,
         );
+        self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
     }
 
     pub fn send_add_mob_effect(&self, entity: &Entity, effect: &pumpkin_data::potion::Effect) {
-        // TODO: only nearby
+        let chunk_pos = entity.chunk_pos.load();
         let mut flags: i8 = 0;
         if effect.ambient {
             flags |= 0x01;
@@ -485,13 +494,25 @@ impl World {
             flags |= 0x04;
         }
 
-        self.broadcast_packet_all(&CUpdateMobEffect::new(
+        let je_packet = CUpdateMobEffect::new(
             VarInt(entity.entity_id),
             VarInt(i32::from(effect.effect_type.id)),
             VarInt(i32::from(effect.amplifier)),
             VarInt(effect.duration),
             flags,
-        ));
+        );
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect::new(
+            VarULong(entity.entity_id as u64),
+            pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
+            VarInt(effect.effect_type.to_bedrock_id()),
+            VarInt(i32::from(effect.amplifier)),
+            effect.show_particles,
+            VarInt(effect.duration),
+            VarULong(0),
+            effect.ambient,
+        );
+
+        self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
     }
 
     pub fn set_difficulty(&self, difficulty: Difficulty) {
@@ -5291,10 +5312,12 @@ impl World {
 
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let chunk_pos = block_pos.chunk_position();
-        if let Some(chunk_block_entities) = self.block_entities.get(&chunk_pos)
-            && let Some(entity) = chunk_block_entities.get(block_pos)
+        if let Some(entity) = self
+            .block_entities
+            .get(&chunk_pos)
+            .and_then(|m| m.get(block_pos).cloned())
         {
-            return Some(entity.clone());
+            return Some(entity);
         }
 
         let nbt = self

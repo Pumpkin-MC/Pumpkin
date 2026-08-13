@@ -356,6 +356,10 @@ pub fn create_block_entity(
         "creaking_heart" => Some(Arc::new(creaking_heart::CreakingHeartBlockEntity::new(
             position,
         ))),
+        "piston" => Some(Arc::new(piston::PistonBlockEntity::from_nbt(
+            &pumpkin_nbt::compound::NbtCompound::new(),
+            position,
+        ))),
         "brewing_stand" => Some(Arc::new(brewing_stand::BrewingStandBlockEntity::new(
             position,
         ))),
