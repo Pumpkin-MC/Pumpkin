@@ -278,12 +278,23 @@ impl LivingEntity {
         self.livings_flags.store(b, Ordering::Relaxed);
 
         let bedrock_meta = (flag == Self::USING_ITEM_FLAG).then(|| {
+            let index =
+                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM;
+            let mask = 1i64 << index;
+            if value {
+                self.entity.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
+            } else {
+                self.entity
+                    .bedrock_flags
+                    .fetch_and(!mask, Ordering::Relaxed);
+            }
+
             let mut meta = pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
-            meta.set_flag(
+            meta.set(
                 pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS,
-                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM
-                    as u8,
-                value,
+                pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Long(
+                    self.entity.bedrock_flags.load(Ordering::Relaxed),
+                ),
             );
             meta
         });
