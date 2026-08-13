@@ -1,13 +1,16 @@
 use super::BlockEntity;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
+use std::collections::HashSet;
 use std::pin::Pin;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 pub struct VaultBlockEntity {
     pub position: BlockPos,
     pub config: Mutex<Option<NbtCompound>>,
     pub server_data: Mutex<Option<NbtCompound>>,
+    pub rewarded_players: Mutex<HashSet<Uuid>>,
 }
 
 impl BlockEntity for VaultBlockEntity {
@@ -27,6 +30,7 @@ impl BlockEntity for VaultBlockEntity {
             position,
             config: Mutex::new(nbt.get_compound("config").cloned()),
             server_data: Mutex::new(nbt.get_compound("server_data").cloned()),
+            rewarded_players: Mutex::new(HashSet::new()),
         }
     }
 
@@ -66,12 +70,22 @@ impl BlockEntity for VaultBlockEntity {
 
 impl VaultBlockEntity {
     pub const ID: &'static str = "minecraft:vault";
+
     #[must_use]
-    pub const fn new(position: BlockPos) -> Self {
+    pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            config: Mutex::const_new(None),
-            server_data: Mutex::const_new(None),
+            config: Mutex::new(None),
+            server_data: Mutex::new(None),
+            rewarded_players: Mutex::new(HashSet::new()),
         }
+    }
+
+    pub async fn has_rewarded(&self, player_id: &Uuid) -> bool {
+        self.rewarded_players.lock().await.contains(player_id)
+    }
+
+    pub async fn mark_rewarded(&self, player_id: Uuid) {
+        self.rewarded_players.lock().await.insert(player_id);
     }
 }

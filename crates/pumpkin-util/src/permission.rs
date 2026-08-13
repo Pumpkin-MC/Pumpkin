@@ -125,6 +125,27 @@ impl PermissionRegistry {
         self.permissions.get(node)
     }
 
+    /// Overrides the default behaviour of an already-registered permission.
+    ///
+    /// Used to apply per-command permission overrides from the server
+    /// configuration after the built-in permissions have been registered.
+    ///
+    /// # Parameters
+    /// - `node`: The full permission node string to update.
+    /// - `default`: The new default behaviour to apply.
+    ///
+    /// # Returns
+    /// - `true` if the node existed and its default was updated.
+    /// - `false` if no permission with that node is registered.
+    pub fn set_default(&mut self, node: &str, default: PermissionDefault) -> bool {
+        if let Some(permission) = self.permissions.get_mut(node) {
+            permission.default = default;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Checks whether a permission node exists in the registry.
     ///
     /// # Parameters

@@ -3,9 +3,9 @@ use dashmap::DashMap;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
-use pumpkin_protocol::bedrock::client::EntityProperties;
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemDefinition};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
+use pumpkin_protocol::bedrock::client::{CBiomeDefinitionList, EntityProperties};
 use pumpkin_protocol::bedrock::network_item::{NetworkItemDescriptor, NetworkItemStackDescriptor};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
@@ -385,6 +385,15 @@ impl World {
             self.save_entity(entity).await;
         }
 
+        let chunks: Vec<Vector2<i32>> = self
+            .block_entities
+            .iter()
+            .map(|chunk_block_entities| *chunk_block_entities.key())
+            .collect();
+        for chunk_pos in chunks {
+            self.save_block_entities(&chunk_pos).await;
+        }
+
         // Save portal POI to disk
         let save_result = self.portal_poi.lock().await.save_all();
         if let Err(e) = save_result {
@@ -412,6 +421,27 @@ impl World {
         chunk.mark_dirty(true);
     }
 
+    /// Serializes the live block entities of a chunk back into that chunk's block
+    /// entity data. The live map is the source of truth while a chunk is loaded -
+    /// `get_block_entity` takes the saved NBT out of the chunk when it wakes an
+    /// entity up - so this has to run before the chunk is dropped, or everything
+    /// the entity did since it was loaded is lost.
+    async fn save_block_entities(&self, chunk_pos: &Vector2<i32>) {
+        let Some(block_entities) = self
+            .block_entities
+            .get(chunk_pos)
+            .map(|chunk_block_entities| chunk_block_entities.values().cloned().collect::<Vec<_>>())
+        else {
+            return;
+        };
+
+        for block_entity in block_entities {
+            let mut nbt = NbtCompound::new();
+            block_entity.write_internal(&mut nbt).await;
+            self.add_block_entity_nbt(block_entity.get_position(), &nbt);
+        }
+    }
+
     /// Sends an entity status update to all players tracking the specified entity.
     pub fn send_entity_status(
         &self,
@@ -436,14 +466,23 @@ impl World {
 
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {
         let chunk_pos = entity.chunk_pos.load();
-        self.broadcast_to_chunk(
-            chunk_pos,
-            &CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id))),
+        let je_packet =
+            CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id)));
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect::new(
+            VarULong(entity.entity_id as u64),
+            pumpkin_protocol::bedrock::client::CMobEffect::EVENT_REMOVE,
+            VarInt(effect_type.to_bedrock_id()),
+            VarInt(0),
+            false,
+            VarInt(0),
+            VarULong(0),
+            false,
         );
+        self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
     }
 
     pub fn send_add_mob_effect(&self, entity: &Entity, effect: &pumpkin_data::potion::Effect) {
-        // TODO: only nearby
+        let chunk_pos = entity.chunk_pos.load();
         let mut flags: i8 = 0;
         if effect.ambient {
             flags |= 0x01;
@@ -455,13 +494,25 @@ impl World {
             flags |= 0x04;
         }
 
-        self.broadcast_packet_all(&CUpdateMobEffect::new(
+        let je_packet = CUpdateMobEffect::new(
             VarInt(entity.entity_id),
             VarInt(i32::from(effect.effect_type.id)),
             VarInt(i32::from(effect.amplifier)),
             VarInt(effect.duration),
             flags,
-        ));
+        );
+        let be_packet = pumpkin_protocol::bedrock::client::CMobEffect::new(
+            VarULong(entity.entity_id as u64),
+            pumpkin_protocol::bedrock::client::CMobEffect::EVENT_ADD,
+            VarInt(effect.effect_type.to_bedrock_id()),
+            VarInt(i32::from(effect.amplifier)),
+            effect.show_particles,
+            VarInt(effect.duration),
+            VarULong(0),
+            effect.ambient,
+        );
+
+        self.broadcast_to_chunk_editioned_sync(chunk_pos, &je_packet, &be_packet);
     }
 
     pub fn set_difficulty(&self, difficulty: Difficulty) {
@@ -2074,6 +2125,8 @@ impl World {
                 },
             })
             .await;
+
+        client.send_game_packet(&CBiomeDefinitionList).await;
 
         client
             .send_game_packet(&CItemRegistry {
@@ -4429,6 +4482,7 @@ impl World {
         }
 
         for chunk_pos in &chunks_set {
+            self.save_block_entities(chunk_pos).await;
             self.block_entities.remove(chunk_pos);
         }
     }
@@ -5258,10 +5312,12 @@ impl World {
 
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
         let chunk_pos = block_pos.chunk_position();
-        if let Some(chunk_block_entities) = self.block_entities.get(&chunk_pos)
-            && let Some(entity) = chunk_block_entities.get(block_pos)
+        if let Some(entity) = self
+            .block_entities
+            .get(&chunk_pos)
+            .and_then(|m| m.get(block_pos).cloned())
         {
-            return Some(entity.clone());
+            return Some(entity);
         }
 
         let nbt = self

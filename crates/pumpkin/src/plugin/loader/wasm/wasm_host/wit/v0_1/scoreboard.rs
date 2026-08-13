@@ -131,9 +131,12 @@ impl scoreboard::HostScoreboard for PluginHostState {
             }
         };
 
-        world.broadcast_packet_all(
-            &pumpkin_protocol::java::client::play::CDisplayObjective::new(slot, objective_name),
-        );
+        world
+            .scoreboard
+            .lock()
+            .await
+            .set_display_objective(&world, slot, &objective_name)
+            .await;
         Ok(())
     }
 

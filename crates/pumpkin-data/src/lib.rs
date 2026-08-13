@@ -274,6 +274,11 @@ pub mod particle_id_remap;
 #[path = "generated/bedrock_creative.rs"]
 pub mod bedrock_creative;
 
+#[cfg(feature = "bedrock_biome")]
+#[rustfmt::skip]
+#[path = "generated/bedrock_biome.rs"]
+pub mod bedrock_biome;
+
 #[cfg(feature = "tag")]
 #[rustfmt::skip]
 #[path = "generated/tag.rs"]
