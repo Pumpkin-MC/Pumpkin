@@ -4,6 +4,7 @@ mod visibility_evaluator;
 use crate::data::advancement_data::AdvancementManager;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::net::ClientPlatform;
 use indexmap::IndexMap;
 use pumpkin_data::advancement_data::{
     AdvancementNode, AdvancementProgressData, AdvancementRequirement, AdvancementReward, Criteria,
@@ -15,21 +16,19 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::translation::Locale;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::to_string_pretty;
 use std::collections::{HashMap, HashSet};
 use std::fs::{create_dir_all, read, write};
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::{Arc, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::task::spawn_blocking;
 use tracing::{error, warn};
 use uuid::Uuid;
-
-fn bedrock_advancement_title(key: &'static str) -> &'static str {
-    translation::java::get_value(key).unwrap_or(key)
-}
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub struct CriterionProgress(pub Option<SystemTime>);
@@ -465,18 +464,25 @@ impl PlayerAdvancement {
                         );
                         let je_packet = CSystemChatMessage::new(&je_component, false);
 
-                        let be_packet = SText::translation(
-                            translation::bedrock::CHAT_TYPE_ACHIEVEMENT.to_string(),
-                            vec![
-                                player_name.0.to_bedrock_string(),
-                                bedrock_advancement_title(display.title).to_string(),
-                            ],
-                        );
+                        let world = player.world();
+                        world.broadcast_packet_all(&je_packet);
 
-                        player
-                            .world()
-                            .broadcast_editioned(&je_packet, &be_packet)
-                            .await;
+                        let recipients = world.players.load_full();
+                        for recipient in recipients.iter() {
+                            let ClientPlatform::Bedrock(client) = recipient.client.as_ref() else {
+                                continue;
+                            };
+                            let locale = Locale::from_str(&recipient.config.load().locale)
+                                .unwrap_or(Locale::EnUs);
+                            let be_packet = SText::translation(
+                                translation::bedrock::CHAT_TYPE_ACHIEVEMENT.to_string(),
+                                vec![
+                                    player_name.0.to_bedrock_string(),
+                                    display.get_title().0.get_text(locale),
+                                ],
+                            );
+                            client.enqueue_packet(&be_packet).await;
+                        }
                     });
                 }
             }
@@ -578,17 +584,6 @@ mod tests {
         progress.grant_progress("testCriteria2");
         assert!(progress.is_done());
         assert!(progress.has_progress());
-    }
-
-    #[test]
-    fn bedrock_advancement_titles_are_resolved() {
-        let display = Advancement::STORY_FORM_OBSIDIAN.display.unwrap();
-
-        assert_eq!(
-            bedrock_advancement_title(display.title),
-            "Ice Bucket Challenge"
-        );
-        assert_eq!(bedrock_advancement_title("missing.title"), "missing.title");
     }
 
     #[test]

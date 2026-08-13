@@ -15,6 +15,8 @@ use std::{
 use crate::text::{TextComponentBase, TextContent, style::Style};
 
 static VANILLA_EN_US_JSON: &str = include_str!("../../../assets/en_us_java.json");
+static VANILLA_ADVANCEMENT_TITLES_JSON: &str =
+    include_str!("../../../assets/advancement_titles.json");
 static PUMPKIN_EN_US_JSON: &str = include_str!("../../../assets/translations/en_us.json");
 static PUMPKIN_BRB_JSON: &str = include_str!("../../../assets/translations/brb.json");
 static PUMPKIN_DE_DE_JSON: &str = include_str!("../../../assets/translations/de_de.json");
@@ -283,6 +285,8 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
             serde_json::from_str(json).unwrap_or_default()
         };
         let vanilla_en_us = parse_json(VANILLA_EN_US_JSON);
+        let vanilla_advancement_titles: HashMap<String, HashMap<String, String>> =
+            serde_json::from_str(VANILLA_ADVANCEMENT_TITLES_JSON).unwrap_or_default();
         let pumpkin_en_us = parse_json(PUMPKIN_EN_US_JSON);
         let pumpkin_brb = parse_json(PUMPKIN_BRB_JSON);
         let pumpkin_de_de = parse_json(PUMPKIN_DE_DE_JSON);
@@ -311,6 +315,14 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
 
         for (key, value) in vanilla_en_us {
             array[Locale::EnUs as usize].insert(format!("minecraft:{key}"), value);
+        }
+        for (locale, titles) in vanilla_advancement_titles {
+            let Ok(locale) = Locale::from_str(&locale) else {
+                continue;
+            };
+            for (key, value) in titles {
+                array[locale as usize].insert(format!("minecraft:{key}"), value);
+            }
         }
         for (key, value) in pumpkin_en_us {
             array[Locale::EnUs as usize].insert(format!("pumpkin:{key}"), value);
@@ -547,6 +559,9 @@ impl FromStr for Locale {
 
     #[expect(clippy::too_many_lines)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("nb_no") {
+            return Ok(Self::NoNo);
+        }
         match s.to_lowercase().as_str() {
             "af_za" => Ok(Self::AfZa),       // Afrikaans (Suid-Afrika)
             "ar_sa" => Ok(Self::ArSa),       // Arabic
@@ -677,5 +692,19 @@ impl FromStr for Locale {
             "zlm_arab" => Ok(Self::ZlmArab), // Malay (Jawi)
             _ => Ok(Self::EnUs),             // Default to English (US) if not found
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn advancement_titles_use_the_requested_locale() {
+        let key = "minecraft:advancements.story.mine_stone.title";
+
+        assert_eq!(get_translation(key, Locale::DeDe), "Steinzeit");
+        assert_eq!(get_translation(key, Locale::ZhCn), "石器时代");
+        assert_eq!(Locale::from_str("nb_NO"), Ok(Locale::NoNo));
     }
 }
