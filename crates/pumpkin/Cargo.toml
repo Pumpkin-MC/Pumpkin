@@ -93,7 +93,7 @@ tracing-subscriber.workspace = true
 time = { workspace = true, features = ["parsing", "macros", "local-offset"] }
 
 # plugins
-libloading.workspace = true
+native-wit-wasmtime.workspace = true
 rustc-hash.workspace = true
 
 # Task handling
