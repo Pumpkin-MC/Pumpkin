@@ -764,6 +764,8 @@ impl PluginManager {
             warn!("Bootstrap manager was already loaded!");
         }
 
+        info!("Registry bootstrap has been initialized!");
+
         Ok(total_wait_time)
     }
 

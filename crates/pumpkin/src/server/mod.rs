@@ -356,6 +356,8 @@ impl Server {
     }
 
     pub async fn run_world_load(self: Arc<Self>) {
+        self.plugin_manager.wait_for_all_plugins().await;
+
         let gen_pool = Arc::new(
             rayon::ThreadPoolBuilder::new()
                 .thread_name(|i| format!("Gen-Pool-{i}"))
