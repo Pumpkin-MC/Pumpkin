@@ -531,6 +531,11 @@ pub struct Player {
     pub start_mining_time: AtomicI32,
     pub tick_counter: AtomicI32,
     pub mining_pos: Mutex<BlockPos>,
+    pub delayed_mining: AtomicBool,
+    pub delayed_mining_start: AtomicI32,
+    pub delayed_mining_pos: Mutex<BlockPos>,
+    pub mining_generation: AtomicU32,
+    pub delayed_mining_generation: AtomicU32,
     pub last_input: AtomicI8,
     /// A counter for teleport IDs used to track pending teleports.
     pub teleport_id_count: AtomicI32,
@@ -774,6 +779,11 @@ impl Player {
             teleport_id_count: AtomicI32::new(0),
             mining: AtomicBool::new(false),
             mining_pos: Mutex::new(BlockPos::ZERO),
+            delayed_mining: AtomicBool::new(false),
+            delayed_mining_start: AtomicI32::new(0),
+            delayed_mining_pos: Mutex::new(BlockPos::ZERO),
+            mining_generation: AtomicU32::new(0),
+            delayed_mining_generation: AtomicU32::new(0),
             abilities: Mutex::new(abilities),
             stats: Mutex::new(statistics::Statistics::default()),
             gamemode: AtomicCell::new(gamemode),
@@ -2195,7 +2205,80 @@ impl Player {
             self.sleeping_since.store(Some(sleeping_since + 1));
         }
 
-        if self.mining.load(Ordering::Relaxed) {
+        let delayed_mining = self.delayed_mining.swap(false, Ordering::Relaxed);
+        let delayed_generation = self.delayed_mining_generation.load(Ordering::Relaxed);
+        let mining_generation = self.mining_generation.load(Ordering::Relaxed);
+        if delayed_mining && delayed_generation == mining_generation {
+            let pos = *self.delayed_mining_pos.lock().await;
+            let world = self.world();
+            let state = world.get_block_state(&pos);
+            if state.is_air() {
+                let stage = self.current_block_destroy_stage.swap(-1, Ordering::Relaxed);
+                self.current_block_breaking_speed
+                    .store(0, Ordering::Relaxed);
+                if stage >= 0 {
+                    world
+                        .set_block_breaking(
+                            &self.living_entity.entity,
+                            pos,
+                            BlockBreakingProgress::Stop,
+                        )
+                        .await;
+                }
+            } else {
+                let finished = self
+                    .continue_mining(
+                        pos,
+                        &world,
+                        state,
+                        self.delayed_mining_start.load(Ordering::Relaxed),
+                    )
+                    .await;
+                if self.mining_generation.load(Ordering::Relaxed) == delayed_generation && finished
+                {
+                    let stage = self.current_block_destroy_stage.swap(-1, Ordering::Relaxed);
+                    self.current_block_breaking_speed
+                        .store(0, Ordering::Relaxed);
+                    if stage >= 0 {
+                        world
+                            .set_block_breaking(
+                                &self.living_entity.entity,
+                                pos,
+                                BlockBreakingProgress::Stop,
+                            )
+                            .await;
+                    }
+                    let block = Block::from_state_id(state.id);
+                    let block_drop = self.gamemode.load() != GameMode::Creative
+                        && self.can_harvest(state, block).await;
+                    let flags = if block_drop {
+                        pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
+                    } else {
+                        pumpkin_world::world::BlockFlags::SKIP_DROPS
+                            | pumpkin_world::world::BlockFlags::NOTIFY_NEIGHBORS
+                    };
+                    if world
+                        .break_block(&pos, Some(self.clone()), flags)
+                        .await
+                        .is_some()
+                    {
+                        server
+                            .block_registry
+                            .broken(&world, block, self, &pos, server, state)
+                            .await;
+                        self.apply_tool_damage_for_block_break(state).await;
+                        if block_drop {
+                            self.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                        }
+                        let item_id = self.inventory().held_item().await.item.id;
+                        self.increment_stat(StatisticCategory::Used, item_id as i32, 1)
+                            .await;
+                        self.increment_stat(StatisticCategory::Mined, state.id.as_u16() as i32, 1)
+                            .await;
+                    }
+                }
+            }
+        } else if self.mining.load(Ordering::Relaxed) {
             let pos = *self.mining_pos.lock().await;
             let world = self.world();
             let state = world.get_block_state(&pos);

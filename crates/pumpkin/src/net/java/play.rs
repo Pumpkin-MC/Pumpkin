@@ -1943,6 +1943,8 @@ impl JavaClient {
                         return;
                     }
                     let position = player_action.position;
+                    player.mining_generation.fetch_add(1, Ordering::Relaxed);
+                    player.delayed_mining.store(false, Ordering::Relaxed);
                     let entity = &player.get_entity();
                     let world = entity.world.load_full();
                     let (block, state) = world.get_block_and_state(&position);
@@ -2086,6 +2088,8 @@ impl JavaClient {
                         self.update_sequence(player, player_action.sequence.0);
                         return;
                     }
+                    player.mining_generation.fetch_add(1, Ordering::Relaxed);
+                    player.delayed_mining.store(false, Ordering::Relaxed);
                     player.mining.store(false, Ordering::Relaxed);
                     let entity = &player.get_entity();
                     entity
@@ -2100,7 +2104,6 @@ impl JavaClient {
                     self.update_sequence(player, player_action.sequence.0);
                 }
                 Status::FinishedDigging => {
-                    // TODO: do validation
                     let location = player_action.position;
                     if !player.can_interact_with_block_at(&location, 1.0) {
                         warn!(
@@ -2115,12 +2118,54 @@ impl JavaClient {
                     let entity = &player.get_entity();
                     let world = entity.world.load_full();
 
+                    let mining_pos = *player.mining_pos.lock().await;
+                    if !player.mining.load(Ordering::Relaxed) || mining_pos != location {
+                        self.update_sequence(player, player_action.sequence.0);
+                        return;
+                    }
+
+                    let (block, state) = world.get_block_and_state(&location);
+                    if state.is_air() {
+                        let was_mining = player.mining.swap(false, Ordering::Relaxed);
+                        let stage = player
+                            .current_block_destroy_stage
+                            .swap(-1, Ordering::Relaxed);
+                        player
+                            .current_block_breaking_speed
+                            .store(0, Ordering::Relaxed);
+                        if was_mining || stage >= 0 {
+                            world
+                                .set_block_breaking(entity, location, BlockBreakingProgress::Stop)
+                                .await;
+                        }
+                        self.update_sequence(player, player_action.sequence.0);
+                        return;
+                    }
+
+                    let elapsed = player.tick_counter.load(Ordering::Relaxed)
+                        - player.start_mining_time.load(Ordering::Relaxed);
+                    let speed = block::calc_block_breaking(player, state, block).await;
+                    if speed * ((elapsed + 1) as f32) < 0.7 {
+                        player.mining.store(false, Ordering::Relaxed);
+                        *player.delayed_mining_pos.lock().await = location;
+                        player.delayed_mining_start.store(
+                            player.start_mining_time.load(Ordering::Relaxed),
+                            Ordering::Relaxed,
+                        );
+                        player.delayed_mining_generation.store(
+                            player.mining_generation.load(Ordering::Relaxed),
+                            Ordering::Relaxed,
+                        );
+                        player.delayed_mining.store(true, Ordering::Relaxed);
+                        self.update_sequence(player, player_action.sequence.0);
+                        return;
+                    }
+
                     player.mining.store(false, Ordering::Relaxed);
                     world
                         .set_block_breaking(entity, location, BlockBreakingProgress::Stop)
                         .await;
 
-                    let (block, state) = world.get_block_and_state(&location);
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
 
