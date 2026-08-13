@@ -2,7 +2,7 @@ use crate::block::entities::{BlockEntity, block_entity_from_nbt};
 use dashmap::DashMap;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::chunk::Biome;
-use pumpkin_data::item::{BedrockItem, BedrockItemVersion, JavaToBedrockItemMapping};
+use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemDefinition};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::bedrock::client::{
@@ -208,31 +208,6 @@ fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Opti
     }
 
     Some(nbt)
-}
-
-fn bedrock_bed_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
-    let (block, _) = BlockState::from_id_with_block(state_id);
-    if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-        return None;
-    }
-
-    let color = JavaToBedrockItemMapping::from_java_item_id(block.item_id)?
-        .bedrock_data
-        .try_into()
-        .ok()?;
-    let mut nbt = NbtCompound::new();
-    nbt.put_string("id", "Bed".to_string());
-    nbt.put_int("x", position.0.x);
-    nbt.put_int("y", position.0.y);
-    nbt.put_int("z", position.0.z);
-    nbt.put_byte("color", color);
-    nbt.put_bool("isMovable", true);
-    Some(nbt)
-}
-
-fn bedrock_block_actor(state_id: BlockStateId, position: BlockPos) -> Option<NbtCompound> {
-    bedrock_chest_block_actor(state_id, position)
-        .or_else(|| bedrock_bed_block_actor(state_id, position))
 }
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -1316,7 +1291,7 @@ impl World {
                         be_block_id as u32,
                     ),
                 );
-                if let Some(data) = bedrock_bed_block_actor(block_state_id, block_pos) {
+                if let Some(data) = self.bedrock_block_entity_data(block_state_id, block_pos) {
                     self.broadcast_to_chunk_bedrock(
                         chunk_pos,
                         &CBlockActorData::new(block_pos, data),
@@ -1345,7 +1320,7 @@ impl World {
                                     ),
                                 );
                                 if let Some(data) =
-                                    bedrock_bed_block_actor(*block_state_id, *block_pos)
+                                    self.bedrock_block_entity_data(*block_state_id, *block_pos)
                                 {
                                     be_client.try_enqueue_packet(&CBlockActorData::new(
                                         *block_pos, data,
@@ -5457,33 +5432,61 @@ impl World {
         Some(entity)
     }
 
+    fn bedrock_block_entity_data(
+        &self,
+        state_id: BlockStateId,
+        position: BlockPos,
+    ) -> Option<NbtCompound> {
+        self.get_block_entity(&position)?
+            .bedrock_block_actor_data(state_id)
+    }
+
     /// Builds Bedrock block actor tags that are not represented by Java block states alone.
     pub fn bedrock_chunk_block_actors(&self, chunk: &ChunkData) -> Vec<NbtCompound> {
         let chunk_pos = Vector2::new(chunk.x, chunk.z);
-        let live_positions: FxHashSet<_> = self
+        let live_entities: FxHashMap<_, _> = self
             .block_entities
             .get(&chunk_pos)
-            .map(|entities| entities.keys().copied().collect())
+            .map(|entities| {
+                entities
+                    .iter()
+                    .map(|(position, entity)| (*position, entity.clone()))
+                    .collect()
+            })
             .unwrap_or_default();
-
         let pending = chunk
             .pending_block_entities
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        live_positions
+
+        live_entities
             .iter()
-            .chain(
-                pending
-                    .keys()
-                    .filter(|position| !live_positions.contains(position)),
-            )
-            .filter_map(|position| {
+            .filter_map(|(position, entity)| {
                 let relative = position.chunk_relative_position();
                 chunk
                     .section
                     .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
-                    .and_then(|state_id| bedrock_block_actor(state_id, *position))
+                    .and_then(|state_id| {
+                        bedrock_chest_block_actor(state_id, *position)
+                            .or_else(|| entity.bedrock_block_actor_data(state_id))
+                    })
             })
+            .chain(
+                pending
+                    .iter()
+                    .filter(|(position, _)| !live_entities.contains_key(position))
+                    .filter_map(|(position, nbt)| {
+                        let relative = position.chunk_relative_position();
+                        let state_id = chunk.section.get_block_absolute_y(
+                            relative.x as usize,
+                            relative.y,
+                            relative.z as usize,
+                        )?;
+                        bedrock_chest_block_actor(state_id, *position).or_else(|| {
+                            block_entity_from_nbt(nbt)?.bedrock_block_actor_data(state_id)
+                        })
+                    }),
+            )
             .collect()
     }
 
@@ -6033,7 +6036,7 @@ mod tests {
     };
     use pumpkin_util::math::position::BlockPos;
 
-    use super::{bedrock_bed_block_actor, bedrock_block_breaking_rate, bedrock_chest_block_actor};
+    use super::{bedrock_block_breaking_rate, bedrock_chest_block_actor};
 
     #[test]
     fn bedrock_block_breaking_rate_uses_progress_per_tick() {
@@ -6056,19 +6059,5 @@ mod tests {
         assert_eq!(actor.get_int("pairx"), Some(4));
         assert_eq!(actor.get_int("pairz"), Some(7));
         assert_eq!(actor.get_bool("pairlead"), Some(true));
-    }
-
-    #[test]
-    fn bedrock_bed_block_actor_uses_the_java_bed_color() {
-        let position = BlockPos::new(5, 64, 7);
-        let blue = bedrock_bed_block_actor(Block::BLUE_BED.default_state.id, position).unwrap();
-        let red = bedrock_bed_block_actor(Block::RED_BED.default_state.id, position).unwrap();
-
-        assert_eq!(blue.get_string("id"), Some("Bed"));
-        assert_eq!(blue.get_byte("color"), Some(11));
-        assert_eq!(red.get_byte("color"), Some(14));
-        assert_eq!(blue.get_int("x"), Some(5));
-        assert_eq!(blue.get_bool("isMovable"), Some(true));
-        assert!(bedrock_bed_block_actor(Block::STONE.default_state.id, position).is_none());
     }
 }
