@@ -110,6 +110,7 @@ pub struct JavaClient {
     pub last_keep_alive_time: AtomicCell<Instant>,
 
     pub packet_sequence: AtomicI32,
+    pub pending_packet_sequence: AtomicI32,
 }
 
 pub enum OutgoingPacketType {
@@ -120,6 +121,18 @@ pub enum OutgoingPacketType {
 struct OutgoingPacket {
     data: Bytes,
     completion: Option<oneshot::Sender<()>>,
+}
+
+fn finish_packet_sequence(pending: &AtomicI32, ready: &AtomicI32) {
+    let sequence = pending.swap(-1, Ordering::Relaxed);
+    if sequence >= 0 {
+        ready.fetch_max(sequence, Ordering::Relaxed);
+    }
+}
+
+fn take_packet_sequence(ready: &AtomicI32) -> Option<i32> {
+    let sequence = ready.swap(-1, Ordering::Relaxed);
+    (sequence >= 0).then_some(sequence)
 }
 
 impl OutgoingPacket {
@@ -170,6 +183,7 @@ impl JavaClient {
             keep_alive_id: AtomicCell::new(0),
             last_keep_alive_time: AtomicCell::new(Instant::now()),
             packet_sequence: AtomicI32::new(-1),
+            pending_packet_sequence: AtomicI32::new(-1),
         }
     }
 
@@ -214,12 +228,6 @@ impl JavaClient {
                     let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
                     self.enqueue_packet(&packet).await;
 
-                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
-                    if seq != -1 {
-                        self
-                            .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
-                            .await;
-                    }
                 }
 
                 // INCOMING PACKETS
@@ -249,9 +257,21 @@ impl JavaClient {
                             );
                         }
                     }
+                    self.finish_packet_processing();
                 }
             }
         }
+    }
+
+    pub async fn acknowledge_block_changes(&self) {
+        if let Some(sequence) = take_packet_sequence(&self.packet_sequence) {
+            self.send_packet_now(&CAcknowledgeBlockChange::new(sequence.into()))
+                .await;
+        }
+    }
+
+    fn finish_packet_processing(&self) {
+        finish_packet_sequence(&self.pending_packet_sequence, &self.packet_sequence);
     }
 
     pub async fn await_tasks(&self) {
@@ -999,5 +1019,25 @@ impl JavaClient {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{finish_packet_sequence, take_packet_sequence};
+    use std::sync::atomic::{AtomicI32, Ordering};
+
+    #[test]
+    fn block_change_sequence_is_ready_only_after_packet_processing() {
+        let pending = AtomicI32::new(-1);
+        let ready = AtomicI32::new(-1);
+
+        pending.fetch_max(4, Ordering::Relaxed);
+        pending.fetch_max(2, Ordering::Relaxed);
+        assert_eq!(take_packet_sequence(&ready), None);
+
+        finish_packet_sequence(&pending, &ready);
+        assert_eq!(take_packet_sequence(&ready), Some(4));
+        assert_eq!(take_packet_sequence(&ready), None);
     }
 }
