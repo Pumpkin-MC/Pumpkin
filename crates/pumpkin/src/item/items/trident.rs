@@ -11,10 +11,9 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::Inventory;
 
 pub struct TridentItem;
 
@@ -25,25 +24,34 @@ impl ItemMetadata for TridentItem {
 }
 
 impl ItemBehaviour for TridentItem {
-    fn normal_use<'a>(
+    fn normal_use_in_hand<'a>(
         &'a self,
         _item: &'a Item,
+        stack: &'a ItemStack,
+        hand: pumpkin_util::Hand,
         player: &'a Player,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            let inventory = player.inventory();
-            let stack = inventory.held_item().await;
+            let riptide_level = stack.get_enchantment_level(&pumpkin_data::Enchantment::RIPTIDE);
+            if stack
+                .get_max_damage()
+                .is_some_and(|max| stack.get_damage() + 1 >= max)
+                || (riptide_level > 0 && !player.is_in_water_or_rain().await)
+            {
+                return;
+            }
 
             player
                 .living_entity
-                .set_active_hand(pumpkin_util::Hand::Right, stack, 72000)
+                .set_active_hand(hand, stack.clone(), 72000)
                 .await;
         })
     }
 
+    #[allow(clippy::too_many_lines)]
     fn on_stopped_using<'a>(
         &'a self,
-        _stack: &'a ItemStack,
+        stack: &'a ItemStack,
         player: &'a Player,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
@@ -58,7 +66,13 @@ impl ItemBehaviour for TridentItem {
             }
 
             let world = player.world();
-            let stack_guard = player.inventory().held_item().await;
+            if stack
+                .get_max_damage()
+                .is_some_and(|max| stack.get_damage() + 1 >= max)
+            {
+                return;
+            }
+            let stack_guard = stack.clone();
 
             // Check Riptide level
             let mut riptide_level = 0u32;
@@ -72,46 +86,90 @@ impl ItemBehaviour for TridentItem {
                 }
             }
 
+            let hand = (*player.living_entity.active_hand.lock().await)
+                .unwrap_or(pumpkin_util::Hand::Right);
             if riptide_level > 0 {
-                let in_water = world.get_block_state(&player.position().to_block_pos()).id
-                    == pumpkin_data::Block::WATER.default_state.id;
-                if !in_water {
-                    player.living_entity.clear_active_hand().await;
+                if !player.is_in_water_or_rain().await || player.get_entity().has_vehicle().await {
                     return;
                 }
 
-                let f = f64::from(riptide_level);
                 let (yaw, pitch) = player.rotation();
-                let f_yaw = f32::to_radians(yaw);
-                let f_pitch = f32::to_radians(pitch);
+                let look_vec = Vector3::rotation_vector(pitch as f64, yaw as f64);
+                let speed = f64::from(riptide_level.saturating_sub(1)).mul_add(0.75, 1.5);
+                let launch_velocity = look_vec.multiply(speed, speed, speed);
 
-                let vx = f64::from(-f32::sin(f_yaw) * f32::cos(f_pitch));
-                let vy = f64::from(-f32::sin(f_pitch));
-                let vz = f64::from(f32::cos(f_yaw) * f32::cos(f_pitch));
-
-                let sq = (vx * vx + vy * vy + vz * vz).sqrt();
-                if sq > 0.0 {
-                    let mult = (1.0 + f * 0.75) / sq;
-                    player.living_entity.entity.velocity.store(Vector3::new(
-                        vx * mult,
-                        vy * mult,
-                        vz * mult,
-                    ));
+                player.get_entity().add_velocity(launch_velocity);
+                let mut spin_stack = player.inventory().get_stack_in_hand(hand).await;
+                if player.gamemode.load() != GameMode::Creative {
+                    let _ = spin_stack.damage_item(1);
+                    player
+                        .inventory()
+                        .set_stack_in_hand(hand, spin_stack.clone())
+                        .await;
+                    let slot_index = match hand {
+                        pumpkin_util::Hand::Right => {
+                            player.inventory().get_selected_slot() as usize
+                        }
+                        pumpkin_util::Hand::Left => {
+                            pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT
+                        }
+                    };
+                    player.sync_hand_slot(slot_index, spin_stack.clone()).await;
+                }
+                player
+                    .living_entity
+                    .start_auto_spin_attack(20, 8.0, spin_stack, hand)
+                    .await;
+                if player
+                    .get_entity()
+                    .on_ground
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    player.get_entity().move_pos(Vector3::new(0.0, 1.2, 0.0));
                 }
 
-                player.damage_held_item(1).await;
+                let sound = match riptide_level {
+                    1 => Sound::ItemTridentRiptide1,
+                    2 => Sound::ItemTridentRiptide2,
+                    _ => Sound::ItemTridentRiptide3,
+                };
+                world.play_sound(sound, SoundCategory::Players, &player.position());
+
                 player.living_entity.clear_active_hand().await;
                 return;
             }
 
             // Normal throw - spawn thrown trident
+            let mut inventory_stack = player.inventory().get_stack_in_hand(hand).await;
+            if player.gamemode.load() != GameMode::Creative {
+                let _ = inventory_stack.damage_item(1);
+            }
+            let thrown_stack = inventory_stack.split_unless_creative(player.gamemode.load(), 1);
+            if inventory_stack.is_empty() {
+                inventory_stack.clear();
+            }
+            player
+                .inventory()
+                .set_stack_in_hand(hand, inventory_stack.clone())
+                .await;
+            let slot_index = match hand {
+                pumpkin_util::Hand::Right => player.inventory().get_selected_slot() as usize,
+                pumpkin_util::Hand::Left => {
+                    pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT
+                }
+            };
+            player.sync_hand_slot(slot_index, inventory_stack).await;
             let (yaw, pitch) = player.rotation();
             let entity = Entity::new(world.clone(), player.position(), &EntityType::TRIDENT);
             let trident = TridentEntity::new_shot(
                 entity,
                 player.get_entity(),
-                stack_guard.clone(),
-                ArrowPickup::Allowed,
+                thrown_stack,
+                if player.gamemode.load() == GameMode::Creative {
+                    ArrowPickup::CreativeOnly
+                } else {
+                    ArrowPickup::Allowed
+                },
             );
             trident.set_velocity_from_rotation(pitch, yaw, 0.0, 2.5, 1.0);
             world.spawn_entity(Arc::new(trident)).await;
@@ -121,33 +179,6 @@ impl ItemBehaviour for TridentItem {
                 pumpkin_data::sound::SoundCategory::Players,
                 &player.position(),
             );
-
-            if player.gamemode.load() != GameMode::Creative {
-                let inventory = player.inventory();
-                let selected_slot = inventory.get_selected_slot() as usize;
-
-                let main_hand_item = inventory.get_stack(selected_slot).await;
-                if main_hand_item.item.id == Item::TRIDENT.id {
-                    inventory
-                        .set_stack(selected_slot, ItemStack::EMPTY.clone())
-                        .await;
-                    player
-                        .sync_hand_slot(selected_slot, ItemStack::EMPTY.clone())
-                        .await;
-                } else {
-                    let off_hand_slot =
-                        pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT;
-                    let off_hand_item = inventory.get_stack(off_hand_slot).await;
-                    if off_hand_item.item.id == Item::TRIDENT.id {
-                        inventory
-                            .set_stack(off_hand_slot, ItemStack::EMPTY.clone())
-                            .await;
-                        player
-                            .sync_hand_slot(off_hand_slot, ItemStack::EMPTY.clone())
-                            .await;
-                    }
-                }
-            }
 
             player.living_entity.clear_active_hand().await;
         })

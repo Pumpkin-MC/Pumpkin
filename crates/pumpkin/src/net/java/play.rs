@@ -2613,7 +2613,10 @@ impl JavaClient {
             server;
             event;
             'after: {
-                server.item_registry.on_use(&stack_for_use, player).await;
+                    server
+                        .item_registry
+                        .on_use_in_hand(&stack_for_use, hand, player)
+                        .await;
             }
         }}
     }

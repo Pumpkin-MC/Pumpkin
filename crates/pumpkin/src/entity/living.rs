@@ -11,6 +11,7 @@ use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -84,6 +85,11 @@ pub struct LivingEntity {
     pub item_use_time: AtomicI32,
     pub item_in_use: Mutex<Option<ItemStack>>,
     pub active_hand: Mutex<Option<Hand>>,
+    /// Remaining ticks for vanilla's auto-spin attack state.
+    pub auto_spin_attack_ticks: AtomicI32,
+    auto_spin_attack_damage: AtomicCell<f32>,
+    auto_spin_attack_item_stack: Mutex<Option<ItemStack>>,
+    auto_spin_attack_hand: Mutex<Option<Hand>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
@@ -124,8 +130,99 @@ pub struct LivingEntity {
 impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
-    #[expect(dead_code)]
     const USING_RIPTIDE_FLAG: u8 = 4;
+
+    /// Starts vanilla's auto-spin attack state.
+    pub async fn start_auto_spin_attack(
+        &self,
+        activation_ticks: i32,
+        damage: f32,
+        item_stack: ItemStack,
+        hand: Hand,
+    ) {
+        let mut item_stack_state = self.auto_spin_attack_item_stack.lock().await;
+        *item_stack_state = Some(item_stack);
+        *self.auto_spin_attack_hand.lock().await = Some(hand);
+        self.auto_spin_attack_ticks
+            .store(activation_ticks, Ordering::Relaxed);
+        self.auto_spin_attack_damage.store(damage);
+        self.set_living_flag(Self::USING_RIPTIDE_FLAG, true);
+    }
+
+    pub async fn clear_auto_spin_attack(&self) {
+        let mut item_stack_state = self.auto_spin_attack_item_stack.lock().await;
+        self.auto_spin_attack_ticks.store(0, Ordering::Relaxed);
+        self.auto_spin_attack_damage.store(0.0);
+        *item_stack_state = None;
+        *self.auto_spin_attack_hand.lock().await = None;
+        self.set_living_flag(Self::USING_RIPTIDE_FLAG, false);
+    }
+
+    fn decrement_auto_spin_attack(&self) {
+        let remaining = self.auto_spin_attack_ticks.load(Ordering::Relaxed);
+        if remaining > 0 {
+            self.auto_spin_attack_ticks.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    async fn check_auto_spin_attack(&self, caller: &Arc<dyn EntityBase>, old_box: BoundingBox) {
+        if !self.is_auto_spin_attack() {
+            return;
+        }
+
+        let current_box = self.entity.bounding_box.load();
+        let swept_box = BoundingBox::new(
+            Vector3::new(
+                old_box.min.x.min(current_box.min.x),
+                old_box.min.y.min(current_box.min.y),
+                old_box.min.z.min(current_box.min.z),
+            ),
+            Vector3::new(
+                old_box.max.x.max(current_box.max.x),
+                old_box.max.y.max(current_box.max.y),
+                old_box.max.z.max(current_box.max.z),
+            ),
+        );
+        let world = self.entity.world.load();
+        for target in world.get_all_at_box(&swept_box) {
+            if target.get_entity().entity_id == self.entity.entity_id
+                || target.get_living_entity().is_none()
+            {
+                continue;
+            }
+
+            if let Some(player) = caller.get_player() {
+                player.attack(target).await;
+                self.auto_spin_attack_ticks.store(0, Ordering::Relaxed);
+                self.entity
+                    .velocity
+                    .store(self.entity.velocity.load().multiply(-0.2, -0.2, -0.2));
+                break;
+            }
+        }
+
+        if self.entity.horizontal_collision.load(SeqCst) {
+            self.auto_spin_attack_ticks.store(0, Ordering::Relaxed);
+        }
+    }
+
+    #[must_use]
+    pub fn is_auto_spin_attack(&self) -> bool {
+        self.livings_flags.load(Ordering::Relaxed) & Self::USING_RIPTIDE_FLAG != 0
+    }
+
+    #[must_use]
+    pub fn auto_spin_attack_damage(&self) -> f32 {
+        self.auto_spin_attack_damage.load()
+    }
+
+    pub async fn auto_spin_attack_item_stack(&self) -> Option<ItemStack> {
+        self.auto_spin_attack_item_stack.lock().await.clone()
+    }
+
+    pub async fn auto_spin_attack_hand(&self) -> Option<Hand> {
+        *self.auto_spin_attack_hand.lock().await
+    }
 
     const PREVENT_AREA_FALL_DAMAGE_BLOCKS: [&'static Block; 4] = [
         &Block::COBWEB,
@@ -171,6 +268,10 @@ impl LivingEntity {
             item_use_time: AtomicI32::new(0),
             item_in_use: Mutex::new(None),
             active_hand: Mutex::new(None),
+            auto_spin_attack_ticks: AtomicI32::new(0),
+            auto_spin_attack_damage: AtomicCell::new(0.0),
+            auto_spin_attack_item_stack: Mutex::new(None),
+            auto_spin_attack_hand: Mutex::new(None),
             livings_flags: AtomicU8::new(0),
             active_effects: Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
@@ -269,13 +370,21 @@ impl LivingEntity {
 
     fn set_living_flag(&self, flag: u8, value: bool) {
         let index = flag;
-        let mut b = self.livings_flags.load(Ordering::Relaxed);
-        if value {
-            b |= index;
-        } else {
-            b &= !index;
-        }
-        self.livings_flags.store(b, Ordering::Relaxed);
+        let b = loop {
+            let current = self.livings_flags.load(Ordering::Relaxed);
+            let next = if value {
+                current | index
+            } else {
+                current & !index
+            };
+            if self
+                .livings_flags
+                .compare_exchange(current, next, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
+                break next;
+            }
+        };
 
         let bedrock_meta = (flag == Self::USING_ITEM_FLAG).then(|| {
             let mut meta = pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
@@ -1413,6 +1522,7 @@ impl LivingEntity {
             .compare_exchange(false, true, Relaxed, Relaxed)
             .is_ok()
         {
+            self.clear_auto_spin_attack().await;
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
@@ -1967,6 +2077,7 @@ impl LivingEntity {
 
     pub async fn reset_state(&self) {
         self.entity.reset_state().await;
+        self.clear_auto_spin_attack().await;
 
         // Restore to maximum health for this entity type
         let max_health = self.get_max_health();
@@ -2649,10 +2760,16 @@ impl EntityBase for LivingEntity {
             let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
             let in_death_animation =
                 self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
+            let before_travel_box = self.entity.bounding_box.load();
             if is_alive || (in_death_animation && self.entity.entity_type != &EntityType::PLAYER) {
                 self.tick_movement(server, caller).await;
                 // Vanilla-like order: freeze logic runs after movement/collisions.
                 self.entity.tick_frozen(caller.as_ref()).await;
+                self.decrement_auto_spin_attack();
+                self.check_auto_spin_attack(caller, before_travel_box).await;
+                if self.auto_spin_attack_ticks.load(Ordering::Relaxed) <= 0 {
+                    self.clear_auto_spin_attack().await;
+                }
             }
 
             // TODO

@@ -49,6 +49,35 @@ impl ItemRegistry {
         }
     }
 
+    pub async fn on_use_in_hand(
+        &self,
+        stack: &ItemStack,
+        hand: pumpkin_util::Hand,
+        player: &Player,
+    ) {
+        let item = stack.item;
+        let cooldown = stack.get_use_cooldown();
+        let cooldown_group = cooldown
+            .and_then(|c| c.cooldown_group.clone())
+            .unwrap_or_else(|| item.registry_key.to_string());
+
+        if player.is_on_cooldown(&cooldown_group).await {
+            return;
+        }
+
+        if let Some(pumpkin_item) = self.get_pumpkin_item(item.id) {
+            pumpkin_item
+                .normal_use_in_hand(item, stack, hand, player)
+                .await;
+        }
+
+        if let Some(cooldown) = cooldown {
+            player
+                .start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32)
+                .await;
+        }
+    }
+
     pub async fn on_stopped_using(&self, stack: &ItemStack, player: &Player) {
         if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
             behaviour.on_stopped_using(stack, player).await;

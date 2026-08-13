@@ -29,6 +29,17 @@ pub trait ItemBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
+    fn normal_use_in_hand<'a>(
+        &'a self,
+        item: &'a Item,
+        stack: &'a ItemStack,
+        hand: pumpkin_util::Hand,
+        player: &'a Player,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        let _ = (stack, hand);
+        self.normal_use(item, player)
+    }
+
     #[expect(clippy::too_many_arguments)]
     fn use_on_block<'a>(
         &'a self,
