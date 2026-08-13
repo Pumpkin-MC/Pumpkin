@@ -4238,8 +4238,7 @@ impl Player {
     }
 
     pub async fn get_active_effects(&self) -> Vec<Effect> {
-        let effects = self.living_entity.active_effects.lock().await;
-        effects.values().cloned().collect()
+        self.living_entity.get_active_effects().await
     }
 
     pub async fn send_active_effects(&self) {

@@ -13,6 +13,7 @@ use crate::plugin::loader::wasm::wasm_host::{
         common::{EntityPose, Position},
         entity::Host,
         entity_types,
+        status_effect::{StatusEffectInstance, StatusEffectType},
         text::TextComponent,
         uuid::Uuid,
         world::{
@@ -982,6 +983,115 @@ impl HostEntity for PluginHostState {
             },
             face: to_wasm_block_direction(face),
         }))
+    }
+
+    async fn add_effect(
+        &mut self,
+        entity: Resource<Entity>,
+        effect: StatusEffectInstance,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        let Some(living) = entity.get_living_entity() else {
+            return Ok(());
+        };
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect.effect_type);
+        if let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+        {
+            let effect_obj = pumpkin_data::potion::Effect {
+                effect_type: status_effect,
+                duration: effect.duration as i32,
+                amplifier: effect.amplifier,
+                ambient: effect.ambient,
+                show_particles: effect.show_particles,
+                show_icon: effect.show_icon,
+                blend: false,
+            };
+            living.add_effect(effect_obj).await;
+        }
+        Ok(())
+    }
+
+    async fn remove_effect(
+        &mut self,
+        entity: Resource<Entity>,
+        effect: StatusEffectType,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        let Some(living) = entity.get_living_entity() else {
+            return Ok(());
+        };
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+        if let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+        {
+            living.remove_effect(status_effect).await;
+        }
+        Ok(())
+    }
+
+    async fn clear_effects(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        if let Some(living) = entity.get_living_entity() {
+            living.reset_effects_and_attributes().await;
+        }
+        Ok(())
+    }
+
+    async fn has_effect(
+        &mut self,
+        entity: Resource<Entity>,
+        effect: StatusEffectType,
+    ) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &entity)?;
+        let Some(living) = entity.get_living_entity() else {
+            return Ok(false);
+        };
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+        if let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+        {
+            Ok(living.has_effect(status_effect).await)
+        } else {
+            Ok(false)
+        }
+    }
+
+    async fn get_effect(
+        &mut self,
+        entity: Resource<Entity>,
+        effect: StatusEffectType,
+    ) -> wasmtime::Result<Option<StatusEffectInstance>> {
+        let entity = entity_from_resource(self, &entity)?;
+        let Some(living) = entity.get_living_entity() else {
+            return Ok(None);
+        };
+        let effect_type = super::status_effect::from_wasm_status_effect_type(effect);
+        if let Some(status_effect) =
+            pumpkin_data::effect::StatusEffect::from_name(effect_type.to_name())
+            && let Some(eff) = living.get_effect(status_effect).await
+        {
+            return Ok(super::status_effect::to_wasm_status_effect_instance(&eff));
+        }
+        Ok(None)
+    }
+
+    async fn get_active_effects(
+        &mut self,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<Vec<StatusEffectInstance>> {
+        let entity = entity_from_resource(self, &entity)?;
+        let Some(living) = entity.get_living_entity() else {
+            return Ok(Vec::new());
+        };
+        let effects = living.get_active_effects().await;
+        let mut list = Vec::with_capacity(effects.len());
+        for eff in &effects {
+            if let Some(instance) = super::status_effect::to_wasm_status_effect_instance(eff) {
+                list.push(instance);
+            }
+        }
+        Ok(list)
     }
 
     async fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {

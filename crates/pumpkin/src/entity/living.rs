@@ -732,6 +732,12 @@ impl LivingEntity {
         effects.get(&effect).cloned()
     }
 
+    /// Returns every status effect currently applied to this entity.
+    pub async fn get_active_effects(&self) -> Vec<Effect> {
+        let effects = self.active_effects.lock().await;
+        effects.values().cloned().collect()
+    }
+
     pub fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
         let block_pos = self.entity.block_pos.load();
         let block = self.entity.world.load().get_block(&block_pos);
