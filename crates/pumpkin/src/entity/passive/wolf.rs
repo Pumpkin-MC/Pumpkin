@@ -19,8 +19,8 @@ use uuid::Uuid;
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        active_target::ActiveTargetGoal, beg::BegGoal, breed::BreedGoal,
-        escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
+        active_target::ActiveTargetGoal, avoid_entity::AvoidEntityGoal, beg::BegGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_owner::FollowOwnerGoal,
         leap_at_target::LeapAtTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
         owner_hurt_by_target::OwnerHurtByTargetGoal, owner_hurt_target::OwnerHurtTargetGoal,
@@ -65,11 +65,12 @@ impl WolfEntity {
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, SitGoal::new());
-            goal_selector.add_goal(4, EscapeDangerGoal::new(1.5));
+            goal_selector.add_goal(3, EscapeDangerGoal::new(1.5));
             goal_selector.add_goal(4, LeapAtTargetGoal::new(0.4));
             goal_selector.add_goal(5, Box::new(MeleeAttackGoal::new(1.0, true)));
             goal_selector.add_goal(6, FollowOwnerGoal::new(1.0, 10.0, 2.0));
             goal_selector.add_goal(7, BreedGoal::new(1.0));
+            goal_selector.add_goal(3, AvoidEntityGoal::new(&EntityType::LLAMA, 24.0, 1.5, 1.5));
             goal_selector.add_goal(9, BegGoal::new(8.0, &[&Item::BONE]));
             goal_selector.add_goal(
                 10,

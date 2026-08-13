@@ -96,6 +96,10 @@ impl ActiveTargetGoal {
         self.only_when_untamed = only_when_untamed;
     }
 
+    pub const fn set_unseen_memory_ticks(&mut self, ticks: i32) {
+        self.track_target_goal = self.track_target_goal.set_unseen_memory_ticks(ticks);
+    }
+
     pub fn set_predicate<F>(&mut self, predicate: F)
     where
         F: for<'a> Fn(

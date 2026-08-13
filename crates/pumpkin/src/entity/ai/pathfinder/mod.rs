@@ -101,6 +101,10 @@ impl Navigator {
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
         self.is_idle.store(false, Ordering::Relaxed);
         self.current_goal = Some(goal);
+        self.current_path = None;
+        self.ticks_on_current_node = 0;
+        self.last_node_index = 0;
+        self.path_start_pos = None;
     }
 
     pub fn set_progress_with_path(&mut self, goal: NavigatorGoal, path: Path) {

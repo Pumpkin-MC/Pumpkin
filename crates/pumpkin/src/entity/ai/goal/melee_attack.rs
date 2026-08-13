@@ -104,11 +104,7 @@ impl Goal for MeleeAttackGoal {
                     .navigator
                     .try_lock()
                     .is_ok_and(|navigator| navigator.is_done());
-                return !is_done
-                    || mob
-                        .get_mob_entity()
-                        .is_in_attack_range(target.as_ref())
-                        .await;
+                return !is_done;
             }
 
             let is_valid_target = !target

@@ -55,14 +55,16 @@ impl EvokerEntity {
                 .target_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
-                2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
-            );
+            let mut player_goal =
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true);
+            player_goal.set_unseen_memory_ticks(300);
+            target_selector.add_goal(1, player_goal);
+            let mut villager_goal =
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true);
+            villager_goal
+                .set_target_types(vec![&EntityType::VILLAGER, &EntityType::WANDERING_TRADER]);
+            villager_goal.set_unseen_memory_ticks(300);
+            target_selector.add_goal(2, villager_goal);
             target_selector.add_goal(
                 3,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),

@@ -93,6 +93,13 @@ impl Goal for OwnerHurtByTargetGoal {
             {
                 return false;
             }
+            let Some(living) = t.get_living_entity() else {
+                return false;
+            };
+            let world = mob.get_entity().world.load_full();
+            if !mob.can_attack(living) || world.are_allied(mob.get_entity(), t.as_ref()).await {
+                return false;
+            }
             let my_pos = mob.get_entity().pos.load();
             let target_pos = t.get_entity().pos.load();
             my_pos.squared_distance_to_vec(&target_pos) <= FOLLOW_RANGE * FOLLOW_RANGE

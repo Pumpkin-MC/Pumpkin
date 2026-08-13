@@ -28,10 +28,27 @@ impl Goal for SitGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
             let entity = &mob.get_mob_entity().living_entity.entity;
-            mob.is_tame()
-                && mob.get_mob_entity().is_ordered_to_sit()
-                && !entity.touching_water.load(Relaxed)
-                && entity.on_ground.load(Relaxed)
+            let ordered_to_sit = mob.get_mob_entity().is_ordered_to_sit();
+            if !ordered_to_sit && !mob.is_tame() {
+                return false;
+            }
+            if entity.touching_water.load(Relaxed) || !entity.on_ground.load(Relaxed) {
+                return false;
+            }
+
+            let Some(owner_uuid) = mob.get_owner_uuid() else {
+                return true;
+            };
+            let world = entity.world.load_full();
+            let Some(owner) = world.get_player_by_uuid(owner_uuid) else {
+                return true;
+            };
+            let distance_sq = entity
+                .pos
+                .load()
+                .squared_distance_to_vec(&owner.entity.pos.load());
+            let owner_was_hurt = owner.living_entity.last_attacker_id.load(Relaxed) != 0;
+            !(distance_sq < 144.0 && owner_was_hurt) && ordered_to_sit
         })
     }
 

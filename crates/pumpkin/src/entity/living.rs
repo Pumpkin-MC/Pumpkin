@@ -1973,7 +1973,7 @@ impl LivingEntity {
 
     #[must_use]
     pub fn can_be_seen_as_enemy(&self) -> bool {
-        !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_alive()
+        !self.entity.invulnerable.load(Ordering::Relaxed) && !self.is_spectator() && self.is_alive()
     }
 
     #[must_use]
