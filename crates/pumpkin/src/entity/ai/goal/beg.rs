@@ -32,15 +32,12 @@ impl BegGoal {
     }
 
     async fn is_player_holding_attractive(&self, player: &Player) -> bool {
-        let main_hand = player.inventory.held_item();
-        let main_stack = main_hand.lock().await;
+        let main_stack = player.inventory().held_item().await;
         if main_stack.item_count > 0 && self.is_attractive(main_stack.item) {
             return true;
         }
-        drop(main_stack);
 
-        let off_hand = player.inventory.off_hand_item().await;
-        let off_stack = off_hand.lock().await;
+        let off_stack = player.inventory().off_hand_item().await;
         off_stack.item_count > 0 && self.is_attractive(off_stack.item)
     }
 
@@ -120,7 +117,11 @@ impl Goal for BegGoal {
         Box::pin(async {
             if let Some(player) = &self.target {
                 let player_pos = player.get_entity().get_eye_pos();
-                let mut look_control = mob.get_mob_entity().look_control.lock().unwrap();
+                let mut look_control = mob
+                    .get_mob_entity()
+                    .look_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 look_control.look_at_with_range(
                     player_pos.x,
                     player_pos.y,

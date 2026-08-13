@@ -1,7 +1,4 @@
-use std::sync::Arc;
-
 use pumpkin_data::{item_stack::ItemStack, recipes::CookingRecipe};
-use tokio::sync::Mutex;
 
 use crate::block::entities::{BlockEntity, PropertyDelegate};
 pub use pumpkin_world::block::entities::ExperienceContainer;
@@ -23,9 +20,9 @@ pub trait CookingBlockEntityBase:
     /// Calculates XP from tracked recipes and clears the `recipes_used` map
     fn extract_experience_from_recipes(&self) -> i32;
 
-    fn get_input_item(&self) -> impl std::future::Future<Output = Arc<Mutex<ItemStack>>>;
-    fn get_fuel_item(&self) -> impl std::future::Future<Output = Arc<Mutex<ItemStack>>>;
-    fn get_output_item(&self) -> impl std::future::Future<Output = Arc<Mutex<ItemStack>>>;
+    fn get_input_item(&self) -> impl std::future::Future<Output = ItemStack>;
+    fn get_fuel_item(&self) -> impl std::future::Future<Output = ItemStack>;
+    fn get_output_item(&self) -> impl std::future::Future<Output = ItemStack>;
 
     fn set_cooking_time_spent(&self, spent_time: u16);
     fn set_cooking_total_time(&self, total_time: u16);
@@ -61,19 +58,25 @@ macro_rules! impl_cooking_block_entity_base {
                 self.lit_total_time.load(Ordering::Relaxed)
             }
 
-            fn get_input_item(&self) -> impl std::future::Future<Output = Arc<Mutex<ItemStack>>> {
-                let items = self.items.clone();
-                async move { items[0].clone() }
+            fn get_input_item(&self) -> impl std::future::Future<Output = ItemStack> {
+                async move {
+                    let items = self.items.read().await;
+                    items[0].clone()
+                }
             }
 
-            fn get_fuel_item(&self) -> impl std::future::Future<Output = Arc<Mutex<ItemStack>>> {
-                let items = self.items.clone();
-                async move { items[1].clone() }
+            fn get_fuel_item(&self) -> impl std::future::Future<Output = ItemStack> {
+                async move {
+                    let items = self.items.read().await;
+                    items[1].clone()
+                }
             }
 
-            fn get_output_item(&self) -> impl std::future::Future<Output = Arc<Mutex<ItemStack>>> {
-                let items = self.items.clone();
-                async move { items[2].clone() }
+            fn get_output_item(&self) -> impl std::future::Future<Output = ItemStack> {
+                async move {
+                    let items = self.items.read().await;
+                    items[2].clone()
+                }
             }
 
             fn set_cooking_time_spent(&self, spent_time: u16) {
@@ -100,13 +103,19 @@ macro_rules! impl_cooking_block_entity_base {
             fn add_recipe_used(&self, recipe: &pumpkin_data::recipes::CookingRecipe) {
                 // Track recipe usage by recipe ID for XP calculation
                 let recipe_id = recipe.recipe_id.to_string();
-                let mut recipes = self.recipes_used.lock().unwrap();
+                let mut recipes = self
+                    .recipes_used
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 *recipes.entry(recipe_id).or_insert(0) += 1;
             }
 
             fn extract_experience_from_recipes(&self) -> i32 {
                 // Calculate total XP from tracked recipes and clear the map (vanilla behavior)
-                let mut recipes = self.recipes_used.lock().unwrap();
+                let mut recipes = self
+                    .recipes_used
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let mut total_xp: f32 = 0.0;
                 for (recipe_id, count) in recipes.iter() {
                     // Look up the recipe's XP value
@@ -124,12 +133,11 @@ macro_rules! impl_cooking_block_entity_base {
                 max_count: u8,
             ) -> bool {
                 let Some(recipe) = recipe else { return false };
+                let items = self.items.read().await;
 
-                let top_item_stack = self.items[0].lock().await;
-                let is_top_items_empty = top_item_stack.is_empty();
-                drop(top_item_stack);
+                let is_top_items_empty = items[0].is_empty();
+                let side_item_stack = &items[2];
 
-                let side_item_stack = self.items[2].lock().await;
                 if side_item_stack.is_empty() {
                     return !is_top_items_empty;
                 }
@@ -158,7 +166,7 @@ macro_rules! impl_cooking_block_entity_base {
                     .await;
                 if let Some(recipe) = recipe {
                     if can_accept_output {
-                        let mut side_items = self.items[2].lock().await;
+                        let mut items = self.items.write().await;
                         let Some(output_item) = pumpkin_data::item::Item::from_registry_key(
                             recipe
                                 .result
@@ -170,32 +178,25 @@ macro_rules! impl_cooking_block_entity_base {
                         };
                         let output_item_stack = ItemStack::new(recipe.result.count, output_item);
 
-                        if side_items.are_equal(ItemStack::EMPTY) {
-                            drop(side_items);
-                            self.set_stack(2, output_item_stack).await;
-                        } else if side_items.are_items_and_components_equal(&output_item_stack) {
-                            side_items.increment(1);
+                        if items[2].are_equal(ItemStack::EMPTY) {
+                            items[2] = output_item_stack;
+                        } else if items[2].are_items_and_components_equal(&output_item_stack) {
+                            items[2].increment(1);
                         }
 
                         // Track recipe usage for XP calculation (vanilla RecipesUsed format)
                         self.add_recipe_used(recipe);
                     }
 
-                    let bottom_items = self.items[1].lock().await;
-                    let mut top_items = self.items[0].lock().await;
-                    if top_items.item.id == pumpkin_data::item::Item::WET_SPONGE.id
-                        && !bottom_items.is_empty()
-                        && bottom_items.item.id == pumpkin_data::item::Item::BUCKET.id
+                    let mut items = self.items.write().await;
+                    if items[0].item.id == pumpkin_data::item::Item::WET_SPONGE.id
+                        && !items[1].is_empty()
+                        && items[1].item.id == pumpkin_data::item::Item::BUCKET.id
                     {
-                        drop(bottom_items);
-                        self.set_stack(
-                            1,
-                            ItemStack::new(1, &pumpkin_data::item::Item::WATER_BUCKET),
-                        )
-                        .await;
+                        items[1] = ItemStack::new(1, &pumpkin_data::item::Item::WATER_BUCKET);
                     }
 
-                    top_items.decrement(1);
+                    items[0].decrement(1);
                     return true;
                 }
 
@@ -243,9 +244,8 @@ macro_rules! impl_clearable_for_cooking {
         impl pumpkin_world::inventory::Clearable for $struct_name {
             fn clear(&self) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + '_>> {
                 Box::pin(async move {
-                    for slot in self.items.iter() {
-                        *slot.lock().await = ItemStack::EMPTY.clone();
-                    }
+                    let mut items = self.items.write().await;
+                    items.fill_with(|| ItemStack::EMPTY.clone());
                     self.mark_dirty();
                 })
             }
@@ -272,25 +272,24 @@ macro_rules! impl_inventory_for_cooking {
     ($struct_name:ty) => {
         impl pumpkin_world::inventory::Inventory for $struct_name {
             fn size(&self) -> usize {
-                self.items.len()
+                Self::INVENTORY_SIZE
             }
 
             fn is_empty(&self) -> pumpkin_world::inventory::InventoryFuture<'_, bool> {
                 Box::pin(async move {
-                    for slot in self.items.iter() {
-                        if !slot.lock().await.is_empty() {
-                            return false;
-                        }
-                    }
-                    true
+                    let items = self.items.read().await;
+                    items.iter().all(|s| s.is_empty())
                 })
             }
 
             fn get_stack(
                 &self,
                 slot: usize,
-            ) -> pumpkin_world::inventory::InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
-                Box::pin(async move { self.items[slot].clone() })
+            ) -> pumpkin_world::inventory::InventoryFuture<'_, ItemStack> {
+                Box::pin(async move {
+                    let items = self.items.read().await;
+                    items[slot].clone()
+                })
             }
 
             fn remove_stack(
@@ -298,9 +297,8 @@ macro_rules! impl_inventory_for_cooking {
                 slot: usize,
             ) -> pumpkin_world::inventory::InventoryFuture<'_, ItemStack> {
                 Box::pin(async move {
-                    let mut removed = ItemStack::EMPTY.clone();
-                    let mut guard = self.items[slot].lock().await;
-                    std::mem::swap(&mut removed, &mut *guard);
+                    let mut items = self.items.write().await;
+                    let removed = std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone());
                     self.mark_dirty();
                     removed
                 })
@@ -312,8 +310,12 @@ macro_rules! impl_inventory_for_cooking {
                 amount: u8,
             ) -> pumpkin_world::inventory::InventoryFuture<'_, ItemStack> {
                 Box::pin(async move {
-                    let res =
-                        pumpkin_world::inventory::split_stack(&self.items, slot, amount).await;
+                    let mut items = self.items.write().await;
+                    let res = if !items[slot].is_empty() && amount > 0 {
+                        items[slot].split(amount)
+                    } else {
+                        ItemStack::EMPTY.clone()
+                    };
                     self.mark_dirty();
                     res
                 })
@@ -325,14 +327,11 @@ macro_rules! impl_inventory_for_cooking {
                 stack: ItemStack,
             ) -> pumpkin_world::inventory::InventoryFuture<'_, ()> {
                 Box::pin(async move {
-                    let furnace_stack = self.get_stack(slot).await;
-                    let mut furnace_stack = furnace_stack.lock().await;
-
+                    let mut items = self.items.write().await;
                     let is_same_item = !stack.is_empty()
-                        && ItemStack::are_items_and_components_equal(&furnace_stack, &stack);
+                        && ItemStack::are_items_and_components_equal(&items[slot], &stack);
 
-                    *furnace_stack = stack.clone();
-                    drop(furnace_stack);
+                    items[slot] = stack.clone();
 
                     if slot == 0 && !is_same_item {
                         if let Some(recipe) =
@@ -380,26 +379,27 @@ macro_rules! impl_block_entity_for_cooking {
                         self.lit_time_remaining.fetch_sub(1, Ordering::Relaxed);
                     }
 
-                    let top_items = self.items[0].lock().await;
-                    let is_top_items_empty = top_items.is_empty();
+                    let items_guard = self.items.read().await;
+                    let top_item = items_guard[0].clone();
+                    let bottom_item = items_guard[1].clone();
+                    drop(items_guard);
+
+                    let is_top_items_empty = top_item.is_empty();
 
                     let furnace_recipe = pumpkin_data::recipes::get_cooking_recipe_with_ingredient(
-                        top_items.item,
+                        top_item.item,
                         $recipe_kind,
                     );
-                    drop(top_items);
 
                     let can_accept_output = self
                         .can_accept_recipe_output(furnace_recipe, self.get_max_count_per_stack())
                         .await;
 
-                    let bottom_items_is_empty = self.items[1].lock().await.is_empty();
+                    let bottom_items_is_empty = bottom_item.is_empty();
                     if self.is_burning() || !bottom_items_is_empty && !is_top_items_empty {
                         if !self.is_burning() && can_accept_output {
-                            let mut bottom_items = self.items[1].lock().await;
-
                             let base_fuel_ticks =
-                                pumpkin_data::fuels::get_item_burn_ticks(bottom_items.item.id)
+                                pumpkin_data::fuels::get_item_burn_ticks(bottom_item.item.id)
                                     .unwrap_or(0);
 
                             let adjusted_fuel_ticks = if matches!(
@@ -416,18 +416,18 @@ macro_rules! impl_block_entity_for_cooking {
 
                             if self.is_burning() {
                                 is_dirty = true;
-                                if !bottom_items.is_empty() {
-                                    bottom_items.decrement(1);
+                                let mut items_guard = self.items.write().await;
+                                if !items_guard[1].is_empty() {
+                                    items_guard[1].decrement(1);
                                     if let Some(remainder_id) =
                                         pumpkin_data::recipe_remainder::get_recipe_remainder_id(
-                                            bottom_items.item.id,
+                                            items_guard[1].item.id,
                                         )
-                                        && bottom_items.is_empty()
+                                        && items_guard[1].is_empty()
                                         && let Some(remainder_item) =
                                             pumpkin_data::item::Item::from_id(remainder_id)
                                     {
-                                        drop(bottom_items);
-                                        self.set_stack(1, ItemStack::new(1, remainder_item)).await;
+                                        items_guard[1] = ItemStack::new(1, remainder_item);
                                     }
                                 }
                             }
@@ -450,14 +450,16 @@ macro_rules! impl_block_entity_for_cooking {
                             self.set_cooking_time_spent(0);
                         }
                     } else if !self.is_burning() && self.get_cooking_time_spent() > 0 {
-                        self.cooking_time_spent
-                            .try_update(Ordering::Acquire, Ordering::Acquire, |v| {
+                        let _ = self.cooking_time_spent.try_update(
+                            Ordering::Acquire,
+                            Ordering::Acquire,
+                            |v| {
                                 Some(
                                     v.saturating_sub(2)
                                         .min(self.cooking_total_time.load(Ordering::Acquire)),
                                 )
-                            })
-                            .unwrap();
+                            },
+                        );
                     }
 
                     if is_burning != self.is_burning() {
@@ -537,17 +539,17 @@ macro_rules! impl_block_entity_for_cooking {
                     }
                 }
 
-                let furnace = Self {
+                let mut furnace = Self {
                     position,
                     dirty: AtomicBool::new(false),
-                    items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+                    items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
                     cooking_total_time,
                     cooking_time_spent,
                     lit_total_time,
                     lit_time_remaining,
                     recipes_used: std::sync::Mutex::new(recipes_used_map),
                 };
-                furnace.read_data(nbt, &furnace.items);
+                pumpkin_world::inventory::sync_read_items_from_nbt(nbt, furnace.items.get_mut());
 
                 furnace
             }
@@ -565,7 +567,10 @@ macro_rules! impl_block_entity_for_cooking {
                     // Save RecipesUsed in vanilla format (map of recipe ID -> craft count)
                     // Scope the mutex guard so it's dropped before the await
                     {
-                        let recipes = self.recipes_used.lock().unwrap();
+                        let recipes = self
+                            .recipes_used
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
                         if !recipes.is_empty() {
                             let mut recipes_compound = pumpkin_nbt::compound::NbtCompound::new();
                             for (recipe_id, count) in recipes.iter() {
@@ -618,7 +623,9 @@ macro_rules! impl_block_entity_for_cooking {
                     }
                 }
 
-                pumpkin_world::inventory::sync_write_items_to_nbt(&self.items, &mut nbt);
+                if let Ok(guard) = self.items.try_read() {
+                    pumpkin_world::inventory::sync_write_items_to_nbt(&*guard, &mut nbt);
+                }
                 Some(nbt)
             }
 

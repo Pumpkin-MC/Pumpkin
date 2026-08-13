@@ -112,7 +112,8 @@ const fn to_wasm_bedrock_version(
     match version {
         BedrockMinecraftVersion::V_1_21 => pumpkin::plugin::player::BedrockMinecraftVersion::V121,
         BedrockMinecraftVersion::V_1_26_40 => {
-            pumpkin::plugin::player::BedrockMinecraftVersion::V12630
+            // The v0.1 plugin ABI predates 26.40; do not misreport it as 26.30.
+            pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
         }
         BedrockMinecraftVersion::Unknown => {
             pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
@@ -509,11 +510,11 @@ impl DowncastResourceExt<PlayerResource> for Resource<Player> {
             .resource_table
             .get_any_mut(self.rep())
             .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
-            .unwrap()
+            .expect("valid player resource handle")
             .downcast_ref::<PlayerResource>()
             .ok_or("resource type mismatch")
             .map_err(wasmtime::Error::msg)
-            .unwrap()
+            .expect("resource type mismatch")
     }
 
     fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut PlayerResource {
@@ -521,11 +522,11 @@ impl DowncastResourceExt<PlayerResource> for Resource<Player> {
             .resource_table
             .get_any_mut(self.rep())
             .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
-            .unwrap()
+            .expect("valid player resource handle")
             .downcast_mut::<PlayerResource>()
             .ok_or("resource type mismatch")
             .map_err(wasmtime::Error::msg)
-            .unwrap()
+            .expect("resource type mismatch")
     }
 
     fn consume(self, state: &mut PluginHostState) -> PlayerResource {
@@ -533,7 +534,7 @@ impl DowncastResourceExt<PlayerResource> for Resource<Player> {
             .resource_table
             .delete::<PlayerResource>(Resource::new_own(self.rep()))
             .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
-            .unwrap()
+            .expect("invalid player resource handle")
     }
 }
 
@@ -629,10 +630,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
         let player = player_from_resource(self, &player)?;
         let stack = player.inventory().get_stack(slot as usize).await;
-        if stack.lock().await.is_empty() {
+        if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(stack)?))
+            Ok(Some(self.add_item_stack(Arc::new(
+                tokio::sync::Mutex::new(stack),
+            ))?))
         }
     }
 
@@ -644,10 +647,12 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let hand = from_wasm_hand(hand);
         let stack = player.inventory().get_stack_in_hand(hand).await;
-        if stack.lock().await.is_empty() {
+        if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(stack)?))
+            Ok(Some(self.add_item_stack(Arc::new(
+                tokio::sync::Mutex::new(stack),
+            ))?))
         }
     }
 
@@ -2527,7 +2532,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
 
             client
                 .send_game_packet(&CModalFormRequest {
-                    form_id: pumpkin_protocol::codec::var_int::VarInt(form_id as i32),
+                    form_id: pumpkin_protocol::codec::var_uint::VarUInt(form_id),
                     form_data: form_json.to_string(),
                 })
                 .await;

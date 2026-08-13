@@ -83,7 +83,10 @@ impl NbtTag {
         if let Self::Compound(mut compound) = tag {
             // Try to get the wrapped tag, stored by "".
             if Self::is_wrapper_compound(&compound) {
-                compound.child_tags.remove("").unwrap()
+                compound
+                    .child_tags
+                    .remove("")
+                    .unwrap_or(Self::Compound(compound))
             } else {
                 Self::Compound(compound)
             }

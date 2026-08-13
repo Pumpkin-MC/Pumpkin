@@ -7,13 +7,14 @@ use crate::plugin::{
             generated_packets,
             pumpkin::plugin::event::{
                 ClientboundPacket, Event, PacketReceivedEventData, PacketSentEventData,
-                ServerBroadcastEventData, ServerCommandEventData, ServerLoadEventData,
-                ServerLoadType, ServerTickEndEventData, ServerTickStartEventData,
-                ServerboundPacket,
+                ServerBroadcastEventData, ServerCommandEventData, ServerListPingAddress,
+                ServerListPingEventData, ServerLoadEventData, ServerLoadType,
+                ServerTickEndEventData, ServerTickStartEventData, ServerboundPacket,
             },
         },
     },
     server::{
+        list_ping::ServerListPingEvent,
         packet::{PacketReceivedEvent, PacketSentEvent},
         server_broadcast::ServerBroadcastEvent,
         server_command::ServerCommandEvent,
@@ -149,6 +150,51 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
                 sender: consume_text_component(state, &data.sender),
                 cancelled: data.cancelled,
             },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for ServerListPingEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::ServerListPingEvent(ServerListPingEventData {
+            hostname: self.hostname().to_string(),
+            address: ServerListPingAddress {
+                host: self.address().host().to_string(),
+                port: self.address().port(),
+            },
+            motd: self.motd.clone(),
+            max_players: self.max_players,
+            num_players: self.num_players,
+            favicon: self.favicon.clone(),
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::ServerListPingEvent(data) => Self {
+                hostname: data.hostname,
+                address: crate::plugin::api::events::server::list_ping::ServerListPingAddress::new(
+                    data.address.host,
+                    data.address.port,
+                ),
+                motd: data.motd,
+                max_players: data.max_players,
+                num_players: data.num_players,
+                favicon: data.favicon,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+        match event {
+            Event::ServerListPingEvent(data) => {
+                self.motd = data.motd;
+                self.max_players = data.max_players;
+                self.num_players = data.num_players;
+                self.favicon = data.favicon;
+            }
             _ => panic!("unexpected event type"),
         }
     }

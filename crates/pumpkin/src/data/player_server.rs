@@ -61,7 +61,9 @@ impl ServerPlayerData {
         // Save to disk
         tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
             .await
-            .expect("Player data save panicked")?;
+            .unwrap_or(Err(PlayerDataError::Io(std::io::Error::from(
+                std::io::ErrorKind::Other,
+            ))))?;
         Ok(())
     }
 
@@ -90,7 +92,9 @@ impl ServerPlayerData {
                     if let Err(e) =
                         tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
                             .await
-                            .expect("Player data periodic save panicked")
+                            .unwrap_or(Err(PlayerDataError::Io(std::io::Error::from(
+                                std::io::ErrorKind::Other,
+                            ))))
                     {
                         error!(
                             "Failed to save player data for {}: {e}",
@@ -145,7 +149,7 @@ impl ServerPlayerData {
         let uuid = *uuid;
         let result = tokio::task::spawn_blocking(move || storage.load_player_data(&uuid))
             .await
-            .expect("Player data load panicked");
+            .unwrap_or(Ok((false, NbtCompound::new())));
 
         match result {
             Ok((should_load, data)) => {
@@ -195,7 +199,9 @@ impl ServerPlayerData {
         let storage = self.storage.clone();
         tokio::task::spawn_blocking(move || storage.save_player_data(&uuid, nbt))
             .await
-            .expect("Player data extract and save panicked")?;
+            .unwrap_or(Err(PlayerDataError::Io(std::io::Error::from(
+                std::io::ErrorKind::Other,
+            ))))?;
 
         Ok(())
     }

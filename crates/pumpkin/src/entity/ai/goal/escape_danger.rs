@@ -70,7 +70,11 @@ impl Goal for EscapeDangerGoal {
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            let navigator = mob.get_mob_entity().navigator.lock().unwrap();
+            let navigator = mob
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             !navigator.is_idle()
         })
     }
@@ -79,7 +83,11 @@ impl Goal for EscapeDangerGoal {
         Box::pin(async move {
             if let Some(target) = self.target {
                 let pos = mob.get_mob_entity().living_entity.entity.pos.load();
-                let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+                let mut navigator = mob
+                    .get_mob_entity()
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 navigator.set_progress(NavigatorGoal::new(pos, target, self.speed));
             }
         })

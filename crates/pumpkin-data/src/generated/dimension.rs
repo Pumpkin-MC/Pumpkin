@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-use pumpkin_registry::{MutableRegistry, RootRegistryReference, error::RegistryTreeError};
+use pumpkin_registry::{Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider};
 use pumpkin_util::{
     identifier::Identifier,
     math::int_provider::{
@@ -8,9 +8,11 @@ use pumpkin_util::{
         UniformIntProvider, WeightedEntry, WeightedListIntProvider,
     },
 };
+use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct Dimension {
     pub id: u8,
+    pub minecraft_name: &'static str,
     pub fixed_time: Option<i64>,
     pub has_skylight: bool,
     pub has_ceiling: bool,
@@ -27,9 +29,10 @@ pub struct Dimension {
     pub cloud_color: Option<i32>,
     pub timelines: Option<&'static str>,
 }
-const STATIC_ENTRIES: [Dimension; 4usize] = [
-    Dimension {
+impl Dimension {
+    pub const OVERWORLD: Self = Self {
         id: 0u8,
+        minecraft_name: "minecraft:overworld",
         fixed_time: None,
         has_skylight: true,
         has_ceiling: false,
@@ -50,9 +53,10 @@ const STATIC_ENTRIES: [Dimension; 4usize] = [
         fog_color: Some(12638463i32),
         cloud_color: None,
         timelines: Some("#minecraft:in_overworld"),
-    },
-    Dimension {
+    };
+    pub const OVERWORLD_CAVES: Self = Self {
         id: 1u8,
+        minecraft_name: "minecraft:overworld_caves",
         fixed_time: None,
         has_skylight: true,
         has_ceiling: true,
@@ -73,9 +77,10 @@ const STATIC_ENTRIES: [Dimension; 4usize] = [
         fog_color: Some(12638463i32),
         cloud_color: None,
         timelines: Some("#minecraft:in_overworld"),
-    },
-    Dimension {
+    };
+    pub const THE_END: Self = Self {
         id: 2u8,
+        minecraft_name: "minecraft:the_end",
         fixed_time: None,
         has_skylight: true,
         has_ceiling: false,
@@ -91,9 +96,10 @@ const STATIC_ENTRIES: [Dimension; 4usize] = [
         fog_color: Some(1577752i32),
         cloud_color: None,
         timelines: Some("#minecraft:in_end"),
-    },
-    Dimension {
+    };
+    pub const THE_NETHER: Self = Self {
         id: 3u8,
+        minecraft_name: "minecraft:the_nether",
         fixed_time: None,
         has_skylight: false,
         has_ceiling: true,
@@ -109,7 +115,22 @@ const STATIC_ENTRIES: [Dimension; 4usize] = [
         fog_color: None,
         cloud_color: None,
         timelines: Some("#minecraft:in_nether"),
-    },
+    };
+    pub fn from_name(name: &str) -> Option<&'static Self> {
+        match name {
+            "minecraft:overworld" => Some(&Self::OVERWORLD),
+            "minecraft:overworld_caves" => Some(&Self::OVERWORLD_CAVES),
+            "minecraft:the_end" => Some(&Self::THE_END),
+            "minecraft:the_nether" => Some(&Self::THE_NETHER),
+            _ => None,
+        }
+    }
+}
+const STATIC_ENTRIES: [Dimension; 4usize] = [
+    Dimension::OVERWORLD,
+    Dimension::OVERWORLD_CAVES,
+    Dimension::THE_END,
+    Dimension::THE_NETHER,
 ];
 const STATIC_IDENTIFIERS: [Identifier; 4usize] = [
     Identifier::parse_static("minecraft:overworld"),
@@ -117,15 +138,7 @@ const STATIC_IDENTIFIERS: [Identifier; 4usize] = [
     Identifier::parse_static("minecraft:the_end"),
     Identifier::parse_static("minecraft:the_nether"),
 ];
-pub async fn initialize(root: RootRegistryReference) -> Result<(), RegistryTreeError> {
-    let dimensions = MutableRegistry::<Dimension>::new(&STATIC_ENTRIES, &STATIC_IDENTIFIERS)?;
-    root.register(
-        Identifier::vanilla_static("dimension_type"),
-        Box::new(dimensions),
-    )
-    .await?;
-    Ok(())
-}
+bootstrap_provider! { DIMENSION_TYPE_REGISTRY : Arc < dyn Registry > => "minecraft:root" , || { vec ! [RegistryEntry :: new (Identifier :: vanilla_static ("dimension_type") , RegistryBuilder :: < Dimension > :: new_static (& Identifier :: vanilla_static ("dimension_type") , & STATIC_ENTRIES , & STATIC_IDENTIFIERS ,) . unwrap () . arc_dyn () ,)] } }
 impl PartialEq for Dimension {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id

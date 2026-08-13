@@ -54,10 +54,9 @@ impl ScreenHandlerFactory for StonecutterScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate_cross(
+        pumpkin_macros::translate_cross!(
             translation::java::CONTAINER_STONECUTTER,
-            translation::bedrock::CONTAINER_STONECUTTER,
-            &[],
+            translation::bedrock::CONTAINER_STONECUTTER
         )
     }
 }

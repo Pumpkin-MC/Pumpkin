@@ -110,17 +110,15 @@ pub trait BlockEntity: Any + Send + Sync {
         })
     }
     fn get_id(&self) -> u32 {
+        let name = self
+            .resource_location()
+            .split(':')
+            .next_back()
+            .unwrap_or("");
         pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
             .iter()
-            .position(|block_entity_name| {
-                *block_entity_name
-                    == self
-                        .resource_location()
-                        .split(':')
-                        .next_back()
-                        .expect("Resource location should have a name")
-            })
-            .expect("Block entity type should be registered") as u32
+            .position(|block_entity_name| *block_entity_name == name)
+            .unwrap_or(0) as u32
     }
 
     /// Obtain NBT data for sending to the client in `ChunkData`
@@ -167,9 +165,9 @@ pub trait BlockEntity: Any + Send + Sync {
 
 #[must_use]
 pub fn block_entity_from_generic<T: BlockEntity>(nbt: &NbtCompound) -> T {
-    let x = nbt.get_int("x").expect("NBT should have x coordinate");
-    let y = nbt.get_int("y").expect("NBT should have y coordinate");
-    let z = nbt.get_int("z").expect("NBT should have z coordinate");
+    let x = nbt.get_int("x").unwrap_or(0);
+    let y = nbt.get_int("y").unwrap_or(0);
+    let z = nbt.get_int("z").unwrap_or(0);
     T::from_nbt(nbt, BlockPos::new(x, y, z))
 }
 

@@ -44,6 +44,7 @@ mod login;
 mod map_item_data;
 mod merchant_offers;
 mod multi_block_update;
+mod open_book;
 mod open_screen;
 mod open_sign_editor;
 mod particle;
@@ -152,6 +153,7 @@ pub use login::*;
 pub use map_item_data::*;
 pub use merchant_offers::*;
 pub use multi_block_update::*;
+pub use open_book::*;
 pub use open_screen::*;
 pub use open_sign_editor::*;
 pub use particle::*;
@@ -218,6 +220,9 @@ pub use update_mob_effect::*;
 pub use update_objectives::*;
 pub use update_score::*;
 pub use worldevent::*;
+
+mod waypoint;
+pub use waypoint::*;
 
 mod debug_sample;
 pub use debug_sample::*;

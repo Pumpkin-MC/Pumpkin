@@ -10,14 +10,14 @@
 //! Ender chests track when players open and close them to properly
 //! manage the viewer count for animation purposes.
 
-use std::{any::Any, array::from_fn, pin::Pin, sync::Arc};
+use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::{
     block::viewer::ViewerCountTracker,
-    inventory::{Clearable, Inventory, InventoryFuture, split_stack},
+    inventory::{Clearable, Inventory, InventoryFuture},
 };
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 /// A player's ender chest inventory.
 ///
@@ -26,7 +26,7 @@ use tokio::sync::Mutex;
 /// ender chest block.
 pub struct EnderChestInventory {
     /// The 27 item slots in the ender chest.
-    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
+    pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     /// Viewer count tracker for lid animation.
     ///
     /// Tracks how many players have the ender chest open to animate the lid.
@@ -47,7 +47,7 @@ impl EnderChestInventory {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: RwLock::new(std::array::from_fn(|_| ItemStack::EMPTY.clone())),
             tracker: Mutex::new(None),
         }
     }
@@ -75,41 +75,45 @@ impl EnderChestInventory {
 
 impl Inventory for EnderChestInventory {
     fn size(&self) -> usize {
-        self.items.len()
+        Self::INVENTORY_SIZE
     }
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in &self.items {
-                if !slot.lock().await.is_empty() {
-                    return false;
-                }
-            }
-
-            true
+            let items = self.items.read().await;
+            items.iter().all(ItemStack::is_empty)
         })
     }
 
-    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
-        Box::pin(async move { self.items[slot].clone() })
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let items = self.items.read().await;
+            items[slot].clone()
+        })
     }
 
     fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let mut removed = ItemStack::EMPTY.clone();
-            let mut guard = self.items[slot].lock().await;
-            std::mem::swap(&mut removed, &mut *guard);
-            removed
+            let mut items = self.items.write().await;
+            std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone())
         })
     }
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move { split_stack(&self.items, slot, amount).await })
+        Box::pin(async move {
+            let mut items = self.items.write().await;
+            if !items[slot].is_empty() && amount > 0 {
+                items[slot].split(amount)
+            } else {
+                ItemStack::EMPTY.clone()
+            }
+        })
     }
 
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
-            *self.items[slot].lock().await = stack;
+            let mut items = self.items.write().await;
+            items[slot] = stack;
         })
     }
 
@@ -139,9 +143,8 @@ impl Inventory for EnderChestInventory {
 impl Clearable for EnderChestInventory {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for item in &self.items {
-                *item.lock().await = ItemStack::EMPTY.clone();
-            }
+            let mut items = self.items.write().await;
+            items.fill_with(|| ItemStack::EMPTY.clone());
         })
     }
 }

@@ -260,7 +260,7 @@ impl ToTokens for GenerationSettingsStruct {
                 shape: #shape,
                 surface_rule: #rule,
                 default_block: #block,
-            },
+            }
         ));
     }
 }
@@ -470,12 +470,14 @@ pub fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../../assets/chunk_gen_settings.json").unwrap())
             .expect("Failed to parse settings.json");
 
-    let mut variants = TokenStream::new();
+    let mut const_defs = TokenStream::new();
+    let mut static_entries = TokenStream::new();
     let mut identifiers = TokenStream::new();
     let len = json.len();
 
     for (name, settings) in &json {
         let lower_name = name.to_lowercase();
+        let const_name = format_ident!("{}", name.to_shouty_snake_case());
 
         let minecraft_name = if lower_name.contains(':') {
             lower_name.clone()
@@ -483,7 +485,13 @@ pub fn build() -> TokenStream {
             format!("minecraft:{lower_name}")
         };
 
-        settings.to_tokens(&mut variants);
+        const_defs.extend(quote! {
+            pub const #const_name: GenerationSettings = #settings;
+        });
+
+        static_entries.extend(quote! {
+            GenerationSettings::#const_name,
+        });
 
         identifiers.extend(quote! {
             Identifier::parse_static(#minecraft_name),
@@ -501,8 +509,9 @@ pub fn build() -> TokenStream {
         use crate::biome::Biome;
         use pumpkin_util::y_offset::Absolute;
 
-        use pumpkin_registry::{BoxedRegistry, DataKey, DataKeyBuilder, MutableRegistry, Registry, RootRegistryReference};
-        use pumpkin_registry::error::RegistryTreeError;
+        use pumpkin_registry::{
+            Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider,
+        };
         use pumpkin_util::identifier::Identifier;
 
         pub struct GenerationSettings {
@@ -646,23 +655,43 @@ pub fn build() -> TokenStream {
             StoneDepth(StoneDepthMaterialCondition),
         }
 
+        impl GenerationSettings {
+            #const_defs
+
+            #[must_use]
+            pub fn from_dimension(dimension: &Dimension) -> &'static Self {
+                if dimension == &Dimension::OVERWORLD {
+                    &Self::OVERWORLD
+                } else if dimension == &Dimension::THE_NETHER {
+                    &Self::NETHER
+                } else {
+                    &Self::END
+                }
+            }
+        }
+
         const STATIC_ENTRIES: [GenerationSettings; #len] = [
-            #variants
+            #static_entries
         ];
 
         const STATIC_IDENTIFIERS: [Identifier; #len] = [
             #identifiers
         ];
 
-        pub async fn initialize(root: RootRegistryReference) -> Result<(), RegistryTreeError> {
-            let root: Arc<dyn Registry> = root;
-            let worldgen_key = DataKeyBuilder::<MutableRegistry<BoxedRegistry>>::new(Identifier::vanilla_static("worldgen"))
-                .build_arc(&root).await?;
-
-            let gen_settings = MutableRegistry::<GenerationSettings>::new(&STATIC_ENTRIES, &STATIC_IDENTIFIERS)?;
-
-            worldgen_key.get().await?.register(Identifier::vanilla_static("noise_settings"), Box::new(gen_settings)).await?;
-            Ok(())
+        bootstrap_provider! {
+            NOISE_SETTINGS_REGISTRY: Arc<dyn Registry> => "minecraft:worldgen",
+            || {
+                vec![RegistryEntry::new(
+                    Identifier::vanilla_static("noise_settings"),
+                    RegistryBuilder::<GenerationSettings>::new_static(
+                        &Identifier::parse_static("minecraft:worldgen/noise_settings"),
+                        &STATIC_ENTRIES,
+                        &STATIC_IDENTIFIERS,
+                    )
+                    .unwrap()
+                    .arc_dyn(),
+                )]
+            }
         }
     )
 }

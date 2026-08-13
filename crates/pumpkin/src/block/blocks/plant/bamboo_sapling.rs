@@ -28,7 +28,7 @@ impl BlockBehaviour for BambooSaplingBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let lock = args.item_stack.lock().await;
+            let lock = &args.item_stack;
             if lock.get_item() == &Item::BONE_MEAL {
                 let mut props_new = BambooLikeProperties::from_state_id(
                     Block::BAMBOO.default_state.id,

@@ -23,7 +23,9 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
-use pumpkin_registry::RootRegistryOwner;
+use pumpkin_registry::RegistryBuilder;
+use pumpkin_registry::error::RootInitError;
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
@@ -45,6 +47,7 @@ use rsa::RsaPublicKey;
 use std::collections::HashSet;
 use std::fs;
 use std::net::IpAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
@@ -77,9 +80,6 @@ pub struct Server {
 
     /// Plugin manager
     pub plugin_manager: Arc<PluginManager>,
-
-    /// Central registry for the server.
-    pub registries: RootRegistryOwner,
 
     /// Permission manager for the server.
     pub permission_manager: Arc<RwLock<PermissionManager>>,
@@ -146,6 +146,7 @@ pub struct Server {
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
     world_info_writer: Arc<dyn WorldInfoWriter>,
+    world_path: PathBuf,
 }
 
 impl Server {
@@ -156,8 +157,6 @@ impl Server {
         advanced_config: AdvancedConfiguration,
         vanilla_data: VanillaData,
     ) -> Arc<Self> {
-        let registries = RootRegistryOwner::new(&[], &[]).unwrap();
-
         let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher =
@@ -171,38 +170,49 @@ impl Server {
 
         let block_registry = super::block::registry::default_registry();
 
-        let level_info = AnvilLevelInfo.read_world_info(&world_path);
-        if let Err(error) = &level_info {
-            match error {
-                // If it doesn't exist, just make a new one
-                WorldInfoError::InfoNotFound => (),
-                WorldInfoError::UnsupportedDataVersion(_version)
-                | WorldInfoError::UnsupportedLevelVersion(_version) => {
-                    error!("Failed to load world info!");
-                    error!("{error}");
-                    panic!("Unsupported world version! See the logs for more info.");
+        let level_info = match AnvilLevelInfo.read_world_info(&world_path) {
+            Ok(level_info) => {
+                let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
+                if dat_path.exists() {
+                    let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
+                    if let Err(err) = fs::copy(&dat_path, &backup_path) {
+                        warn!("Failed to create backup {LEVEL_DAT_BACKUP_FILE_NAME}: {err}");
+                    }
                 }
-                e => {
-                    panic!("World Error {e}");
+                level_info
+            }
+            Err(WorldInfoError::InfoNotFound) => {
+                warn!(
+                    "No {LEVEL_DAT_FILE_NAME} in {}, creating a new world with seed {}",
+                    world_path.display(),
+                    basic_config.seed.0 as i64
+                );
+                let default_data = LevelData::default(basic_config.seed);
+                if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
+                    error!("Failed to save level.dat: {err}");
                 }
+                default_data
             }
-        } else {
-            let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
-            if dat_path.exists() {
-                let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
-                fs::copy(dat_path, backup_path).unwrap();
+            Err(
+                error @ (WorldInfoError::UnsupportedDataVersion(_)
+                | WorldInfoError::UnsupportedLevelVersion(_)),
+            ) => {
+                error!("Failed to load world info!");
+                error!("{error}");
+                error!("Unsupported world version! See the logs for more info.");
+                std::process::exit(1);
             }
-        }
-        let level_info = level_info.unwrap_or_else(|err| {
-            warn!("Failed to get level_info, using default instead: {err}");
-            let default_data = LevelData::default(basic_config.seed);
-            if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
-                error!("Failed to save level.dat: {err}");
+            Err(error) => {
+                error!("Failed to load the world data in {}!", world_path.display());
+                error!("{error}");
+                error!(
+                    "Refusing to continue: a default world would generate different terrain on top of the existing region files. Restore {LEVEL_DAT_FILE_NAME} from {LEVEL_DAT_BACKUP_FILE_NAME}, which also holds a copy of the world seed, or move the world folder aside to start a new world."
+                );
+                error!("Failed to load the world data! See the logs for more info.");
+                std::process::exit(1);
             }
-            default_data
-        });
+        };
 
-        let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
 
         let listing = Mutex::new(CachedStatus::new(
@@ -227,21 +237,6 @@ impl Server {
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
 
-        let mojang_keys_task = tokio::spawn({
-            let auth_config = advanced_config.networking.java.authentication.clone();
-            let allow_chat = basic_config.allow_chat_reports;
-            async move {
-                if allow_chat {
-                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                        error!("Failed to fetch Mojang keys: {e}");
-                        Vec::new()
-                    })
-                } else {
-                    Vec::new()
-                }
-            }
-        });
-
         let dimensions = {
             let mut dimensions = vec![Dimension::OVERWORLD];
             if basic_config.allow_nether {
@@ -264,7 +259,6 @@ impl Server {
             basic_config,
             advanced_config,
             data: vanilla_data,
-            registries,
             plugin_manager: Arc::new(PluginManager::new()),
             permission_manager: Arc::new(RwLock::new(PermissionManager::new(
                 permission_registry.clone(),
@@ -301,16 +295,10 @@ impl Server {
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
+            world_path,
         };
 
         let server = Arc::new(server);
-
-        let gen_pool = Arc::new(
-            rayon::ThreadPoolBuilder::new()
-                .thread_name(|i| format!("Gen-Pool-{i}"))
-                .build()
-                .expect("Failed to build generation thread pool"),
-        );
 
         let server_clone = server.clone();
         tokio::spawn(async move {
@@ -320,12 +308,74 @@ impl Server {
                 .await;
         });
 
+        let mojang_keys_task = tokio::spawn({
+            let auth_config = server
+                .advanced_config
+                .networking
+                .java
+                .authentication
+                .clone();
+            let allow_chat = server.basic_config.allow_chat_reports;
+            async move {
+                if allow_chat {
+                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
+                        error!("Failed to fetch Mojang keys: {e}");
+                        Vec::new()
+                    })
+                } else {
+                    Vec::new()
+                }
+            }
+        });
+
+        if let Ok(k) = mojang_keys_task.await {
+            server.mojang_public_keys.store(Arc::new(k));
+        }
+
+        if server.advanced_config.networking.bedrock.online_mode {
+            server
+                .bedrock_oidc_keys
+                .get_or_init(|| async {
+                    tokio::task::block_in_place(|| {
+                        let auth = &server.advanced_config.networking.bedrock.authentication;
+                        pumpkin_util::jwt::fetch_oidc_jwks(
+                            auth.url.as_deref(),
+                            auth.connect_timeout,
+                            auth.read_timeout,
+                        )
+                    })
+                    .unwrap_or_else(|error| {
+                        error!("Failed to fetch Bedrock OIDC keys: {error}");
+                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                    })
+                })
+                .await;
+        }
+
+        server
+    }
+
+    pub async fn run_world_load(self: Arc<Self>) {
+        self.plugin_manager.wait_for_all_plugins().await;
+
+        let gen_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .thread_name(|i| format!("Gen-Pool-{i}"))
+                .build()
+                .unwrap_or_else(|err| {
+                    error!("Failed to build generation thread pool: {err}");
+                    std::process::exit(1);
+                }),
+        );
+
+        let seed = self.level_info.load().world_gen_settings.seed;
+
         let world_loader = |dim: Dimension| {
-            let path = world_path.clone();
-            let registry = block_registry.clone();
-            let l_info = server.level_info.clone(); // Access from struct
-            let weak = Arc::downgrade(&server);
-            let config = Arc::new(server.advanced_config.world.clone());
+            let path = self.world_path.clone();
+            let registry = self.block_registry.clone();
+            let l_info = self.level_info.clone(); // Access from struct
+            let weak = Arc::downgrade(&self);
+            let config = Arc::new(self.advanced_config.world.clone());
             let pool = gen_pool.clone();
 
             tokio::task::spawn_blocking(move || {
@@ -343,58 +393,28 @@ impl Server {
             })
         };
 
-        // TODO: Move worldgen after plugin load to allow plugin registry initialization
-
-        server.registries.lock().await;
+        #[allow(clippy::unwrap_used)]
+        pumpkin_registry::ROOT
+            .set(RegistryBuilder::frozen(&Identifier::vanilla_static("root")).unwrap())
+            .map_err(|_| RootInitError)
+            .unwrap();
 
         info!("Starting parallel world load...");
         let mut world_futures = Vec::new();
-        for dim in &server.dimensions {
+        for dim in &self.dimensions {
             world_futures.push(world_loader(dim.clone()));
         }
 
-        let (worlds_results, keys) =
-            tokio::join!(futures::future::join_all(world_futures), mojang_keys_task);
+        let worlds_results = futures::future::join_all(world_futures).await;
 
         let mut worlds_vec = Vec::new();
-        for world_result in worlds_results {
-            worlds_vec.push(world_result.expect("World loading panicked"));
+        for world in worlds_results.into_iter().flatten() {
+            worlds_vec.push(world);
         }
 
-        server.worlds.store(Arc::new(worlds_vec));
-        if let Ok(k) = keys {
-            server.mojang_public_keys.store(Arc::new(k));
-        }
+        self.worlds.store(Arc::new(worlds_vec));
 
         info!("All worlds loaded successfully.");
-
-        if server.advanced_config.networking.bedrock.online_mode {
-            let server_clone = server.clone();
-            tokio::spawn(async move {
-                server_clone
-                    .bedrock_oidc_keys
-                    .get_or_init(|| async {
-                        tokio::task::block_in_place(|| {
-                            let auth = &server_clone
-                                .advanced_config
-                                .networking
-                                .bedrock
-                                .authentication;
-                            pumpkin_util::jwt::fetch_oidc_jwks(
-                                auth.url.as_deref(),
-                                auth.connect_timeout,
-                                auth.read_timeout,
-                            )
-                            .unwrap_or_else(|e| {
-                                error!("Failed to fetch Bedrock OIDC keys: {e}");
-                                (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
-                            })
-                        })
-                    })
-                    .await;
-            });
-        }
-        server
     }
 
     /// Spawns a task associated with this server. All tasks spawned with this method are awaited
@@ -408,17 +428,15 @@ impl Server {
     }
 
     pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
-        self.worlds
-            .load()
+        let worlds = self.worlds.load();
+        worlds
             .iter()
             .find(|w| w.dimension.minecraft_name == dimension.minecraft_name)
             .cloned()
+            .or_else(|| worlds.first().cloned())
             .unwrap_or_else(|| {
-                self.worlds
-                    .load()
-                    .first()
-                    .expect("Default world should exist")
-                    .clone()
+                error!("No default world exists");
+                std::process::exit(1);
             })
     }
 
@@ -469,7 +487,10 @@ impl Server {
             world
         })
         .await
-        .expect("World creation panicked")
+        .unwrap_or_else(|_| {
+            error!("World creation failed");
+            std::process::exit(1);
+        })
     }
 
     /// Adds a new player to the server.
@@ -505,6 +526,8 @@ impl Server {
     ) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
+        let first_world = self.worlds.load().first().cloned()?;
+
         let (world, nbt) =
             if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id).await {
                 if let Some(dimension_key) = data.get_string("Dimension") {
@@ -513,33 +536,15 @@ impl Server {
                         (world, Some(data))
                     } else {
                         warn!("Invalid dimension key in player data: {dimension_key}");
-                        let default_world = self
-                            .worlds
-                            .load()
-                            .first()
-                            .expect("Default world should exist")
-                            .clone();
-                        (default_world, Some(data))
+                        (first_world, Some(data))
                     }
                 } else {
                     // Player data exists but doesn't have a "Dimension" key.
-                    let default_world = self
-                        .worlds
-                        .load()
-                        .first()
-                        .expect("Default world should exist")
-                        .clone();
-                    (default_world, Some(data))
+                    (first_world, Some(data))
                 }
             } else {
                 // No player data found or an error occurred, default to the Overworld.
-                let default_world = self
-                    .worlds
-                    .load()
-                    .first()
-                    .expect("Default world should exist")
-                    .clone();
-                (default_world, None)
+                (first_world, None)
             };
 
         let mut player = Player::new(
@@ -859,7 +864,7 @@ impl Server {
         id
     }
 
-    pub fn get_branding(&self) -> CPluginMessage<'_> {
+    pub const fn get_branding(&self) -> CPluginMessage<'_> {
         self.branding.get_branding()
     }
 
@@ -1040,7 +1045,9 @@ impl Server {
                 .map_or_else(Vec::new, |player| vec![player]),
         };
 
-        let player_type = EntityType::from_name("player").expect("entity type player must exist");
+        let Some(player_type) = EntityType::from_name("player") else {
+            return Vec::new();
+        };
         let type_included = target_selector
             .conditions
             .iter()

@@ -37,7 +37,7 @@ pub(crate) fn to_wit_enchantment(id: &Enchantment) -> WitEnchantment {
 
 pub(crate) fn from_wit_enchantment(id: WitEnchantment) -> &'static Enchantment {
     // Safety: WIT enum is generated in the same order as the internal enum
-    Enchantment::from_id(id as u8).unwrap()
+    Enchantment::from_id(id as u8).expect("valid enchantment ID")
 }
 
 fn push_wit_nbt_tag(tag: NbtTag, tags: &mut Vec<WitNbtTag>) -> u32 {
@@ -420,12 +420,12 @@ impl HostItemStack for PluginHostState {
         for (id, data) in &stack.patch {
             if let Some(data) = data {
                 let mut buf = Vec::new();
-                serialize(*id, data.as_ref(), &mut buf).unwrap();
-
-                components.push(WitDataComponentValue {
-                    component: to_wit_data_component(*id),
-                    value: buf,
-                });
+                if serialize(*id, data.as_ref(), &mut buf).is_ok() {
+                    components.push(WitDataComponentValue {
+                        component: to_wit_data_component(*id),
+                        value: buf,
+                    });
+                }
             }
         }
         Ok(components)

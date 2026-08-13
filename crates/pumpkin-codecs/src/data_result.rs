@@ -26,9 +26,10 @@ macro_rules! impl_apply {
         let result_1 = $self;
         if !(result_1.is_error() $(|| $result.is_error())+) {
             // All n results are successful.
+            #[allow(clippy::expect_used)]
             return DataResult::new_success($f(
-                result_1.into_result().unwrap()
-                $( , $result.into_result().unwrap() )+
+                result_1.into_result().expect("checked is_error")
+                $( , $result.into_result().expect("checked is_error") )+
             ));
         }
         let mut messages: Vec<String> = vec![];
@@ -231,21 +232,25 @@ impl<R> DataResult<R> {
     }
 
     /// Tries to get a complete result from this `DataResult`. If no such result exists, this function panics.
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     pub fn unwrap(self) -> R {
         self.expect("No complete result found for DataResult")
     }
 
     /// Tries to get a complete or partial result from this `DataResult`. If no such result exists, this function panics.
+    #[allow(clippy::unwrap_used, clippy::expect_used)]
     pub fn unwrap_or_partial(self) -> R {
         self.expect_or_partial("No complete or partial result found for DataResult")
     }
 
     /// Tries to get a complete result from this `DataResult`. If no such result exists, this function panics with a custom message.
+    #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     pub fn expect(self, message: &str) -> R {
         self.into_result().unwrap_or_else(|| panic!("{}", message))
     }
 
     /// Tries to get a complete or partial result from this `DataResult`. If no such result exists, this function panics with a custom message.
+    #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
     pub fn expect_or_partial(self, message: &str) -> R {
         self.into_result_or_partial()
             .unwrap_or_else(|| panic!("{}", message))
@@ -614,7 +619,7 @@ macro_rules! assert_success {
             result
         );
         assert_eq!(
-            result.unwrap(),
+            result.into_result().expect("DataResult success"),
             $right,
             "`DataResult` was successful but the value doesn't match"
         );
@@ -632,7 +637,7 @@ macro_rules! assert_encode_success {
             result
         );
         assert_eq!(
-            result.unwrap(),
+            result.into_result().expect("DataResult success"),
             $right,
             "`DataResult` was successful but the value doesn't match"
         );

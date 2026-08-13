@@ -47,7 +47,7 @@ impl Command {
 
         COMMAND_HANDLERS
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(id, Box::new(handler));
 
         self.execute_with_handler_id(id);
@@ -67,7 +67,7 @@ impl CommandNode {
 
         COMMAND_HANDLERS
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(id, Box::new(handler));
 
         self.execute_with_handler_id(id);

@@ -22,6 +22,7 @@ use crate::world::World;
 
 pub struct EmptyBucketItem;
 pub struct FilledBucketItem;
+pub struct MilkBucketItem;
 
 impl ItemMetadata for EmptyBucketItem {
     fn ids() -> Box<[u16]> {
@@ -46,11 +47,11 @@ impl ItemMetadata for FilledBucketItem {
     }
 }
 
-// impl ItemMetadata for MilkBucketItem {
-//     fn ids() -> Box<[u16]> {
-//         [Item::MILK_BUCKET.id].into()
-//     }
-// }
+impl ItemMetadata for MilkBucketItem {
+    fn ids() -> Box<[u16]> {
+        [Item::MILK_BUCKET.id].into()
+    }
+}
 
 fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     let start_pos = player.eye_position();
@@ -83,7 +84,10 @@ fn is_waterlogged(block: &Block, state: BlockStateId) -> bool {
 }
 
 fn set_waterlogged(block: &Block, state: BlockStateId, waterlogged: bool) -> BlockStateId {
-    let original_props = &block.properties(state).unwrap().to_props();
+    let Some(props) = block.properties(state) else {
+        return state;
+    };
+    let original_props = &props.to_props();
     let waterlogged = waterlogged.to_string();
     let props: Vec<(&str, &str)> = original_props
         .iter()
@@ -100,11 +104,13 @@ fn set_waterlogged(block: &Block, state: BlockStateId, waterlogged: bool) -> Blo
 
 async fn give_player_bucket_item(player: &Player, item: &'static Item) {
     if player.gamemode.load() == GameMode::Creative {
-        for i in 0..player.inventory.main_inventory.len() {
-            if player.inventory.main_inventory[i].lock().await.item.id == item.id {
+        let inv = player.inventory.main_inventory.read().await;
+        for stack in inv.iter() {
+            if stack.item.id == item.id {
                 return;
             }
         }
+        drop(inv);
         let mut item_stack = ItemStack::new(1, item);
         player
             .inventory
@@ -112,14 +118,13 @@ async fn give_player_bucket_item(player: &Player, item: &'static Item) {
             .await;
     } else {
         let item_stack = ItemStack::new(1, item);
-        let held_item = player.inventory.held_item();
-        let mut held_stack = held_item.lock().await;
+        let mut held_stack = player.inventory.held_item().await;
 
         if held_stack.item_count == 1 {
-            *held_stack = item_stack;
+            player.inventory.set_held_item(item_stack).await;
         } else {
             held_stack.decrement(1);
-            drop(held_stack);
+            player.inventory.set_held_item(held_stack).await;
             player
                 .inventory
                 .offer_or_drop_stack(item_stack, player)
@@ -395,4 +400,37 @@ impl ItemBehaviour for FilledBucketItem {
     }
 }
 
-//TODO: Implement MilkBucketItem
+impl ItemBehaviour for MilkBucketItem {
+    fn normal_use<'a>(
+        &'a self,
+        _item: &'a Item,
+        player: &'a Player,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            let stack = player.inventory().held_item().await;
+            player
+                .living_entity
+                .set_active_hand(pumpkin_util::Hand::Right, stack, 32)
+                .await;
+        })
+    }
+
+    fn on_stopped_using<'a>(
+        &'a self,
+        _stack: &'a ItemStack,
+        player: &'a Player,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            player.living_entity.reset_effects_and_attributes().await;
+            give_player_bucket_item(player, &Item::BUCKET).await;
+        })
+    }
+
+    fn get_use_duration(&self) -> i32 {
+        32
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}

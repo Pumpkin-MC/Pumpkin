@@ -107,7 +107,9 @@ impl ChunkLoading {
     fn debug_check_error(&self) -> bool {
         let mut temp = ChunkLevel::default();
         for (ticket_pos, levels) in &self.ticket {
-            let level = *levels.iter().min().unwrap();
+            let Some(&level) = levels.iter().min() else {
+                continue;
+            };
             let range = Self::MAX_LEVEL - level - 1;
             for dx in -range..=range {
                 for dy in -range..=range {
@@ -124,7 +126,12 @@ impl ChunkLoading {
         }
         assert_eq!(temp.len(), self.pos_level.len());
         for val in &temp {
-            if val != self.pos_level.get_key_value(val.0).unwrap() {
+            if val
+                != self
+                    .pos_level
+                    .get_key_value(val.0)
+                    .expect("key value exists")
+            {
                 Self::dump_level_debug(
                     &self.high_priority,
                     &self.pos_level,
@@ -134,7 +141,12 @@ impl ChunkLoading {
                     val.0.y + 40,
                 );
             }
-            assert_eq!(val, self.pos_level.get_key_value(val.0).unwrap());
+            assert_eq!(
+                val,
+                self.pos_level
+                    .get_key_value(val.0)
+                    .expect("key value exists")
+            );
         }
         true
     }
@@ -279,7 +291,9 @@ impl ChunkLoading {
 
         for (ticket_pos, levels) in &self.ticket {
             if (ticket_pos.x - pos.x).abs() <= range && (ticket_pos.y - pos.y).abs() <= range {
-                let level = *levels.iter().min().unwrap();
+                let Some(&level) = levels.iter().min() else {
+                    continue;
+                };
                 debug_assert!(level < Self::MAX_LEVEL);
                 let old = self.cache.get(&self.pos_level, *ticket_pos);
                 if old <= level {
@@ -300,13 +314,9 @@ impl ChunkLoading {
     }
     pub fn remove_force_ticket(&mut self, pos: ChunkPos) {
         // debug!("remove force ticket at {pos:?}");
-        let index = self
-            .high_priority
-            .iter()
-            .find_position(|x| **x == pos)
-            .unwrap()
-            .0;
-        self.high_priority.remove(index);
+        if let Some((index, _)) = self.high_priority.iter().find_position(|x| **x == pos) {
+            self.high_priority.remove(index);
+        }
         self.is_priority_dirty = true;
         self.remove_ticket(pos, Self::FULL_CHUNK_LEVEL);
     }

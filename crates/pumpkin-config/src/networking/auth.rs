@@ -11,6 +11,19 @@ pub struct AuthenticationConfig {
     pub enabled: bool,
     /// Optional custom authentication URL.
     pub url: Option<String>,
+    /// Fallback authentication server URLs to use if the primary/official server is down.
+    #[serde(alias = "fallback_urls")]
+    pub fallbacks: Vec<String>,
+    /// Optional custom profile lookup by username URL (template parameter `{username}`).
+    pub profile_by_name_url: Option<String>,
+    /// Optional fallback profile lookup by username URLs.
+    #[serde(alias = "profile_by_name_fallback_urls")]
+    pub profile_by_name_fallbacks: Vec<String>,
+    /// Optional custom profile lookup by UUID URL (template parameter `{uuid}`).
+    pub profile_by_uuid_url: Option<String>,
+    /// Optional fallback profile lookup by UUID URLs.
+    #[serde(alias = "profile_by_uuid_fallback_urls")]
+    pub profile_by_uuid_fallbacks: Vec<String>,
     /// Connection timeout in milliseconds.
     pub connect_timeout: u32,
     /// Read timeout in milliseconds.
@@ -35,6 +48,11 @@ impl Default for AuthenticationConfig {
             player_profile: PlayerProfileConfig::default(),
             textures: TextureConfig::default(),
             url: None,
+            fallbacks: Vec::new(),
+            profile_by_name_url: None,
+            profile_by_name_fallbacks: Vec::new(),
+            profile_by_uuid_url: None,
+            profile_by_uuid_fallbacks: Vec::new(),
             prevent_proxy_connection_auth_url: None,
             services_url: None,
             connect_timeout: 5000,
@@ -113,5 +131,77 @@ impl Default for TextureTypes {
             cape: true,
             elytra: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AuthenticationConfig;
+
+    #[test]
+    fn auth_config_fallbacks_toml_deserialization() {
+        let toml_str = r#"
+enabled = true
+url = "https://primary.auth/hasJoined?username={username}&serverId={server_hash}"
+fallbacks = [
+    "https://fallback1.auth/hasJoined?username={username}&serverId={server_hash}",
+    "https://fallback2.auth/hasJoined?username={username}&serverId={server_hash}"
+]
+"#;
+        let config: AuthenticationConfig =
+            toml::from_str(toml_str).expect("config should deserialize");
+        assert_eq!(
+            config.url.as_deref(),
+            Some("https://primary.auth/hasJoined?username={username}&serverId={server_hash}")
+        );
+        assert_eq!(config.fallbacks.len(), 2);
+        assert_eq!(
+            config.fallbacks[0],
+            "https://fallback1.auth/hasJoined?username={username}&serverId={server_hash}"
+        );
+    }
+
+    #[test]
+    fn auth_config_fallback_urls_alias_toml_deserialization() {
+        let toml_str = r#"
+enabled = true
+fallback_urls = [
+    "https://fallback1.auth/hasJoined?username={username}&serverId={server_hash}"
+]
+"#;
+        let config: AuthenticationConfig =
+            toml::from_str(toml_str).expect("config with alias should deserialize");
+        assert_eq!(config.fallbacks.len(), 1);
+        assert_eq!(
+            config.fallbacks[0],
+            "https://fallback1.auth/hasJoined?username={username}&serverId={server_hash}"
+        );
+    }
+
+    #[test]
+    fn auth_config_profile_urls_toml_deserialization() {
+        let toml_str = r#"
+enabled = true
+profile_by_name_url = "https://custom.auth/users/profiles/minecraft/{username}"
+profile_by_name_fallback_urls = [
+    "https://fallback.auth/users/profiles/minecraft/{username}"
+]
+profile_by_uuid_url = "https://custom.auth/session/minecraft/profile/{uuid}?unsigned=false"
+profile_by_uuid_fallback_urls = [
+    "https://fallback.auth/session/minecraft/profile/{uuid}?unsigned=false"
+]
+"#;
+        let config: AuthenticationConfig =
+            toml::from_str(toml_str).expect("profile config should deserialize");
+        assert_eq!(
+            config.profile_by_name_url.as_deref(),
+            Some("https://custom.auth/users/profiles/minecraft/{username}")
+        );
+        assert_eq!(config.profile_by_name_fallbacks.len(), 1);
+        assert_eq!(
+            config.profile_by_uuid_url.as_deref(),
+            Some("https://custom.auth/session/minecraft/profile/{uuid}?unsigned=false")
+        );
+        assert_eq!(config.profile_by_uuid_fallbacks.len(), 1);
     }
 }

@@ -106,6 +106,8 @@ const DEFAULT_BORDER_WARNING_TIME: f64 = 15.0;
 const DEFAULT_DIFFICULTY: Difficulty = Difficulty::Normal;
 const DEFAULT_LEVEL_NAME: &str = "world";
 const DEFAULT_SPAWN_Y: i32 = 200;
+const DEFAULT_ENABLED_DATA_PACK: &str = "vanilla";
+const DEFAULT_WORLD_VERSION_SERIES: &str = "main";
 
 const fn default_border_damage_per_block() -> f64 {
     DEFAULT_BORDER_DAMAGE_PER_BLOCK
@@ -122,10 +124,13 @@ const fn default_border_warning_blocks() -> f64 {
 const fn default_border_warning_time() -> f64 {
     DEFAULT_BORDER_WARNING_TIME
 }
+fn default_enabled_data_packs() -> Vec<String> {
+    vec![DEFAULT_ENABLED_DATA_PACK.to_string()]
+}
 fn default_data_packs() -> DataPacks {
     DataPacks {
         disabled: vec![],
-        enabled: vec!["vanilla".to_string()],
+        enabled: default_enabled_data_packs(),
     }
 }
 const fn default_difficulty() -> Difficulty {
@@ -140,11 +145,21 @@ const fn default_spawn_y() -> i32 {
 const fn default_level_version() -> i32 {
     MAXIMUM_SUPPORTED_LEVEL_VERSION
 }
+fn default_world_version_name() -> String {
+    CURRENT_MC_VERSION.to_string()
+}
+const fn default_world_version_id() -> i32 {
+    MAXIMUM_SUPPORTED_WORLD_DATA_VERSION
+}
+fn default_world_version_series() -> String {
+    DEFAULT_WORLD_VERSION_SERIES.to_string()
+}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct WorldGenSettings {
     // the numerical seed of the world
     pub seed: i64,
+    #[serde(default)]
     pub dimensions: Dimensions,
 }
 
@@ -198,8 +213,10 @@ pub enum BiomeSource {
 #[serde(rename_all = "PascalCase")]
 pub struct DataPacks {
     // List of disabled data packs.
+    #[serde(default)]
     pub disabled: Vec<String>,
     // List of enabled data packs. By default, this is populated with a single string "vanilla".
+    #[serde(default = "default_enabled_data_packs")]
     pub enabled: Vec<String>,
 }
 
@@ -263,22 +280,26 @@ impl WorldGenSettings {
 #[serde(rename_all = "PascalCase")]
 pub struct WorldVersion {
     // The version name as a string, e.g. "15w32b".
+    #[serde(default = "default_world_version_name")]
     pub name: String,
     // An integer displaying the data version.
+    #[serde(default = "default_world_version_id")]
     pub id: i32,
     // Whether the version is a snapshot or not.
+    #[serde(default)]
     pub snapshot: bool,
     // Developing series. In 1.18 experimental snapshots, it was set to "ccpreview". In others, set to "main".
+    #[serde(default = "default_world_version_series")]
     pub series: String,
 }
 
 impl Default for WorldVersion {
     fn default() -> Self {
         Self {
-            name: CURRENT_MC_VERSION.to_string(),
-            id: MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
+            name: default_world_version_name(),
+            id: default_world_version_id(),
             snapshot: false,
-            series: "main".to_string(),
+            series: default_world_version_series(),
         }
     }
 }
@@ -333,6 +354,10 @@ pub enum WorldInfoError {
     InfoNotFound,
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
+    #[error(
+        "No world seed found: neither level.dat nor data/minecraft/world_gen_settings.dat contains one"
+    )]
+    MissingWorldSeed,
     #[error("Serialization error: {0}")]
     SerializationError(String),
     #[error("Unsupported world data version: {0}")]

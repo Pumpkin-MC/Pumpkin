@@ -29,7 +29,11 @@ impl PolarBearEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut goal_selector = mob_arc
+                .mob_entity
+                .goals_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
@@ -39,7 +43,11 @@ impl PolarBearEntity {
             );
             goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
+            let mut target_selector = mob_arc
+                .mob_entity
+                .target_selector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             // Polar bears are neutral but aggressive towards foxes
             target_selector.add_goal(
                 1,

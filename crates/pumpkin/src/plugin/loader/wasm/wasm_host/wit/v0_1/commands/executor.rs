@@ -30,9 +30,18 @@ impl CommandExecutor for WasmCommandExecutor {
         Box::pin(async move {
             let mut store = self.plugin.store.lock().await;
 
-            let sender_resource = store.data_mut().add_command_sender(sender.clone()).unwrap();
-            let server_resource = store.data_mut().add_server(self.server.clone()).unwrap();
-            let args_resource = store.data_mut().add_consumed_args(args).unwrap();
+            let sender_resource = store
+                .data_mut()
+                .add_command_sender(sender.clone())
+                .expect("valid command sender");
+            let server_resource = store
+                .data_mut()
+                .add_server(self.server.clone())
+                .expect("valid server");
+            let args_resource = store
+                .data_mut()
+                .add_consumed_args(args)
+                .expect("valid consumed args");
 
             match self.plugin.plugin_instance {
                 PluginInstance::V0_1(ref plugin) => {

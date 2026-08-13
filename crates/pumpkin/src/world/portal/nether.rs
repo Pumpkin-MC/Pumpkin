@@ -638,14 +638,11 @@ impl NetherPortal {
                                         .await;
 
                                     if is_ideal {
-                                        if ideal_pos.is_none()
-                                            || dist < ideal_pos.as_ref().unwrap().2
-                                        {
+                                        if ideal_pos.as_ref().is_none_or(|p| dist < p.2) {
                                             ideal_pos = Some((floor_pos, check_axis, dist));
                                         }
                                     } else if ideal_pos.is_none()
-                                        && (acceptable_pos.is_none()
-                                            || dist < acceptable_pos.as_ref().unwrap().2)
+                                        && acceptable_pos.as_ref().is_none_or(|p| dist < p.2)
                                     {
                                         acceptable_pos = Some((floor_pos, check_axis, dist));
                                     }

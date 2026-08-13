@@ -45,10 +45,14 @@ impl CommandExecutor for ListExecutor {
             let mut message = TextComponent::text(message_text);
 
             for (i, metadata) in plugins.iter().enumerate() {
-                let fmt = if i == plugins.len() - 1 {
-                    metadata.name.clone()
+                let version = metadata
+                    .version
+                    .strip_prefix('v')
+                    .unwrap_or(&metadata.version);
+                let line = if i == plugins.len() - 1 {
+                    format!("- {} (v{version})", metadata.name)
                 } else {
-                    format!("{}, ", metadata.name)
+                    format!("- {} (v{version})\n", metadata.name)
                 };
                 let hover_text = format!(
                     "Version: {}\nAuthors: {}\nDescription: {}",
@@ -56,7 +60,7 @@ impl CommandExecutor for ListExecutor {
                     metadata.authors.join(", "),
                     metadata.description
                 );
-                let component = TextComponent::text(fmt)
+                let component = TextComponent::text(line)
                     .color_named(NamedColor::Green)
                     .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
 

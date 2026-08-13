@@ -37,11 +37,7 @@ impl BlockMetadata for CoralFanBlock {
         let mut plants = Vec::new();
         for alive_fan_id in alive_fans {
             plants.push(alive_fan_id);
-            plants.push(
-                get_dead_type(alive_fan_id)
-                    .expect("not a coral fan block")
-                    .id,
-            );
+            plants.push(get_dead_type(alive_fan_id).map_or(BlockId::AIR, |b| b.id));
         }
         plants.into()
     }
@@ -86,20 +82,17 @@ impl BlockBehaviour for CoralFanBlock {
             }
 
             for dir in directions {
-                if dir != Facing::Up
-                    && dir != Facing::Down
-                    && can_place_at(
-                        args.world,
-                        args.position,
-                        dir.to_horizontal_facing().unwrap(),
-                    )
+                if let (Some(h_facing), Some(opp_facing)) = (
+                    dir.to_horizontal_facing(),
+                    dir.opposite().to_horizontal_facing(),
+                ) && can_place_at(args.world, args.position, h_facing)
                 {
                     let Some(wall_block) = get_corresponding_wall_fan_type(args.block.id) else {
                         return BlockStateId::AIR;
                     };
                     let mut coral_wall_fan_props = CoralWallFanLikeProperties::default(wall_block);
                     coral_wall_fan_props.waterlogged = args.replacing.water_source();
-                    coral_wall_fan_props.facing = dir.opposite().to_horizontal_facing().unwrap();
+                    coral_wall_fan_props.facing = opp_facing;
                     return coral_wall_fan_props.to_state_id(wall_block);
                 }
             }
@@ -125,17 +118,21 @@ impl BlockBehaviour for CoralFanBlock {
             if !scan_for_water(args.world, args.position).await && !is_dead_coral(args.block) {
                 let current_state = args.world.get_block_state(args.position);
 
+                let Some(dead_block) = get_dead_type(args.block.id) else {
+                    return;
+                };
+
                 // VANILLA FIX: Explicitly set waterlogged to false when dying
                 let dead_block_state_id = if is_wall_fan(args.block) {
                     let mut props =
                         CoralWallFanLikeProperties::from_state_id(current_state.id, args.block);
                     props.waterlogged = false;
-                    props.to_state_id(get_dead_type(args.block.id).expect("not a coral block"))
+                    props.to_state_id(dead_block)
                 } else {
                     let mut props =
                         CoralFanLikeProperties::from_state_id(current_state.id, args.block);
                     props.waterlogged = false;
-                    props.to_state_id(get_dead_type(args.block.id).expect("not a coral block"))
+                    props.to_state_id(dead_block)
                 };
 
                 args.world

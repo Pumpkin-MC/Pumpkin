@@ -1,104 +1,31 @@
-use std::{
-    io::{self, Error, Write},
-    net::SocketAddr,
-    pin::Pin,
-    task::{Context, Poll},
-};
+use std::io::{Error, Write};
 
 use flate2::{Compression, write::DeflateEncoder};
-use tokio::{io::AsyncWrite, net::UdpSocket};
 
 use crate::{
-    Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, StreamEncryptor, bedrock::SubClient,
-    codec::var_uint::VarUInt, ser::NetworkWriteExt,
+    CompressionLevel, CompressionThreshold,
+    bedrock::{BEDROCK_GAME_PACKET, SubClient},
+    codec::var_uint::VarUInt,
+    ser::NetworkWriteExt,
 };
 
-// raw -> compress -> encrypt
-
-pub enum EncryptionWriter<W: AsyncWrite + Unpin> {
-    Encrypt(Box<StreamEncryptor<W>>),
-    None(W),
-}
-
-impl<W: AsyncWrite + Unpin> EncryptionWriter<W> {
-    #[must_use]
-    pub fn upgrade(self, cipher: Aes128Cfb8Enc) -> Self {
-        match self {
-            Self::None(stream) => Self::Encrypt(Box::new(StreamEncryptor::new(cipher, stream))),
-            Self::Encrypt(_) => panic!("Cannot upgrade a stream that already has a cipher!"),
-        }
-    }
-}
-
-impl<W: AsyncWrite + Unpin> AsyncWrite for EncryptionWriter<W> {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize, io::Error>> {
-        match self.get_mut() {
-            Self::Encrypt(writer) => {
-                let writer = Pin::new(writer);
-                writer.poll_write(cx, buf)
-            }
-            Self::None(writer) => {
-                let writer = Pin::new(writer);
-                writer.poll_write(cx, buf)
-            }
-        }
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        match self.get_mut() {
-            Self::Encrypt(writer) => {
-                let writer = Pin::new(writer);
-                writer.poll_flush(cx)
-            }
-            Self::None(writer) => {
-                let writer = Pin::new(writer);
-                writer.poll_flush(cx)
-            }
-        }
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        match self.get_mut() {
-            Self::Encrypt(writer) => {
-                let writer = Pin::new(writer);
-                writer.poll_shutdown(cx)
-            }
-            Self::None(writer) => {
-                let writer = Pin::new(writer);
-                writer.poll_shutdown(cx)
-            }
-        }
-    }
-}
-
-use crate::bedrock::crypto::BedrockEncryptor;
-
 /// Encoder: Server -> Client
-/// Supports `ZLib` endecoding/compression
-/// Supports Aes256 Encryption
-pub struct UDPNetworkEncoder {
+/// Supports Zlib compression.
+pub struct BedrockBatchEncoder {
     // compression and compression threshold
     compression: Option<(CompressionThreshold, CompressionLevel)>,
-    encryptor: Option<BedrockEncryptor>,
 }
 
-impl Default for UDPNetworkEncoder {
+impl Default for BedrockBatchEncoder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl UDPNetworkEncoder {
+impl BedrockBatchEncoder {
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            compression: None,
-            encryptor: None,
-        }
+        Self { compression: None }
     }
 
     pub const fn set_compression(
@@ -106,21 +33,6 @@ impl UDPNetworkEncoder {
         compression_info: (CompressionThreshold, CompressionLevel),
     ) {
         self.compression = Some(compression_info);
-    }
-
-    pub fn set_encryption(
-        &mut self,
-        key: &[u8; 32],
-    ) -> Result<(), crate::bedrock::packet_decoder::EncryptionAlreadyEnabledError> {
-        if self.encryptor.is_some() {
-            return Err(crate::bedrock::packet_decoder::EncryptionAlreadyEnabledError);
-        }
-        self.encryptor = Some(BedrockEncryptor::new(key));
-        Ok(())
-    }
-
-    pub const fn encryptor_mut(&mut self) -> Option<&mut BedrockEncryptor> {
-        self.encryptor.as_mut()
     }
 
     pub fn write_game_packet(
@@ -152,7 +64,7 @@ impl UDPNetworkEncoder {
 
         // Handle Outer Container
         writer
-            .write_u8(0xfe)
+            .write_u8(BEDROCK_GAME_PACKET)
             .map_err(|e| Error::other(e.to_string()))?; // Bedrock Game Packet Header
 
         let mut data_to_write = Vec::new();
@@ -174,26 +86,17 @@ impl UDPNetworkEncoder {
 
         Ok(())
     }
-
-    pub async fn write_packet(
-        &self,
-        packet_data: &[u8],
-        addr: SocketAddr,
-        socket: &UdpSocket,
-    ) -> Result<(), Error> {
-        socket.send_to(packet_data, addr).await.map(|_| ())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bedrock::packet_decoder::UDPNetworkDecoder;
+    use crate::bedrock::packet_decoder::BedrockBatchDecoder;
     use std::io::Cursor;
 
     #[tokio::test]
     async fn bedrock_compression_cycle() -> Result<(), Box<dyn std::error::Error>> {
-        let mut encoder = UDPNetworkEncoder::new();
+        let mut encoder = BedrockBatchEncoder::new();
         encoder.set_compression((256, 6));
 
         let packet_id = 1;
@@ -208,7 +111,7 @@ mod tests {
             &mut encoded_buf,
         )?;
 
-        let mut decoder = UDPNetworkDecoder::new();
+        let mut decoder = BedrockBatchDecoder::new();
         decoder.set_compression(256);
 
         let decompressed_payload = decoder.get_packet_payload(encoded_buf).await?;

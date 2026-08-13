@@ -64,10 +64,10 @@ impl CoralFeature {
             }
             let wall_coral =
                 Self::get_random_tag_entry_block(tag::Block::MINECRAFT_WALL_CORALS, random);
-            let original_props = &wall_coral
-                .properties(wall_coral.default_state.id)
-                .unwrap()
-                .to_props();
+            let Some(properties) = wall_coral.properties(wall_coral.default_state.id) else {
+                continue;
+            };
+            let original_props = &properties.to_props();
             // Set the right Axis
             let props: Vec<(&str, &str)> = original_props
                 .iter()
@@ -111,7 +111,7 @@ impl CoralFeature {
     ) -> &'static Block {
         let values = tag.1;
         let value = values[random.next_bounded_i32(values.len() as i32) as usize];
-        let id = BlockId::new(value).expect("Invalid block id in tag");
+        let id = BlockId::new(value).unwrap_or(BlockId::AIR);
         id.to_block()
     }
 }

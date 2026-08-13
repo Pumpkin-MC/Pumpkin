@@ -46,7 +46,8 @@ impl JavaClient {
             self.config.store(Arc::new(PlayerConfig {
                 locale: client_information.locale.to_string(),
                 // client_information.view_distance was checked above to be > 0 so compiler should optimize this out.
-                view_distance: NonZeroU8::new(client_information.view_distance as u8).unwrap(),
+                view_distance: NonZeroU8::new(client_information.view_distance as u8)
+                    .unwrap_or(NonZeroU8::MIN),
                 chat_mode,
                 chat_colors: client_information.chat_colors,
                 skin_parts: client_information.skin_parts,
@@ -249,9 +250,9 @@ impl JavaClient {
         {
             self.wait_for_keep_alive.store(false, Ordering::Relaxed);
         } else {
-            self.kick(TextComponent::translate(
+            self.kick(pumpkin_macros::translate_cross!(
                 translation::java::DISCONNECT_TIMEOUT,
-                [],
+                translation::bedrock::DISCONNECT_TIMEOUT
             ))
             .await;
         }

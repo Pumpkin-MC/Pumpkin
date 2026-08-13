@@ -119,6 +119,9 @@ use crate::block::blocks::redstone::sculk_sensor::SculkSensorBlock;
 use crate::block::blocks::redstone::target_block::TargetBlock;
 use crate::block::blocks::redstone::tripwire::TripwireBlock;
 use crate::block::blocks::redstone::tripwire_hook::TripwireHookBlock;
+use crate::block::blocks::sculk::sculk_catalyst::SculkCatalystBlock;
+use crate::block::blocks::sculk::sculk_shrieker::SculkShriekerBlock;
+use crate::block::blocks::sculk::sculk_vein::SculkVeinBlock;
 use crate::block::blocks::shelf::ShelfBlock;
 use crate::block::blocks::signs::SignBlock;
 use crate::block::blocks::slabs::SlabBlock;
@@ -157,7 +160,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use super::BlockIsReplacing;
 use super::blocks::plant::crop::gourds::attached_stem::AttachedStemBlock;
@@ -183,6 +185,7 @@ use crate::block::blocks::jukebox::JukeboxBlock;
 use crate::block::blocks::ladder::LadderBlock;
 use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::lectern::LecternBlock;
+use crate::block::blocks::respawn_anchor::RespawnAnchorBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
 use crate::block::blocks::skull_block::SkullBlock;
 use crate::block::blocks::smoker::SmokerBlock;
@@ -281,6 +284,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(EndPortalBlock);
     manager.register(SpawnerBlock);
     manager.register(EndPortalFrameBlock);
+    manager.register(RespawnAnchorBlock);
     manager.register(CandleBlock);
     manager.register(SeaPickleBlock);
     manager.register(CakeBlock);
@@ -331,6 +335,9 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(LeverBlock);
     manager.register(LightningRodBlock);
     manager.register(SculkSensorBlock);
+    manager.register(SculkVeinBlock);
+    manager.register(SculkCatalystBlock);
+    manager.register(SculkShriekerBlock);
     manager.register(ObserverBlock);
     manager.register(TripwireBlock);
     manager.register(TripwireHookBlock);
@@ -804,7 +811,7 @@ impl BlockRegistry {
         player: &Arc<Player>,
         position: &BlockPos,
         hit: &BlockHitResult<'_>,
-        item_stack: &Arc<Mutex<ItemStack>>,
+        item_stack: &mut ItemStack,
         equipment_slot: &EquipmentSlot,
         server: &Server,
         world: &Arc<World>,

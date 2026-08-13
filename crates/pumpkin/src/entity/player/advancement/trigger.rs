@@ -8,6 +8,7 @@ pub enum AdvancementTrigger {
     PlacedBlock { block_id: String },
     ConsumeItem { item_id: String },
     SleptInBed,
+    FishedItem { item_id: String },
     EnterDimension { dimension: String },
     PlayerKilled,
     DeflectedDamage,
@@ -231,27 +232,6 @@ impl Player {
                 }
 
                 if !self
-                    .has_advancement(Advancement::HUSBANDRY_FISHY_BUSINESS)
-                    .await
-                {
-                    let fishes = [
-                        (&Item::COD, "cod"),
-                        (&Item::SALMON, "salmon"),
-                        (&Item::PUFFERFISH, "pufferfish"),
-                        (&Item::TROPICAL_FISH, "tropical_fish"),
-                    ];
-                    for (item, criterion) in fishes {
-                        if self.has_item_in_inventory(item).await {
-                            self.trigger_advancement_criterion(
-                                Advancement::HUSBANDRY_FISHY_BUSINESS,
-                                criterion,
-                            )
-                            .await;
-                        }
-                    }
-                }
-
-                if !self
                     .has_advancement(Advancement::HUSBANDRY_TACTICAL_FISHING)
                     .await
                 {
@@ -313,9 +293,9 @@ impl Player {
 
                 if !self.has_advancement(Advancement::STORY_ENCHANT_ITEM).await {
                     let mut has_enchanted = false;
-                    for item in &self.inventory().main_inventory {
-                        let lock = item.lock().await;
-                        if !lock.is_empty() && lock.has_enchantments() {
+                    let main_inv = self.inventory().main_inventory.read().await;
+                    for stack in main_inv.iter() {
+                        if !stack.is_empty() && stack.has_enchantments() {
                             has_enchanted = true;
                             break;
                         }
@@ -536,6 +516,29 @@ impl Player {
                         "slept_in_bed",
                     )
                     .await;
+                }
+            }
+            AdvancementTrigger::FishedItem { item_id } => {
+                if !self
+                    .has_advancement(Advancement::HUSBANDRY_FISHY_BUSINESS)
+                    .await
+                {
+                    let fishes = [
+                        ("minecraft:cod", "cod"),
+                        ("minecraft:salmon", "salmon"),
+                        ("minecraft:pufferfish", "pufferfish"),
+                        ("minecraft:tropical_fish", "tropical_fish"),
+                    ];
+                    for (fish, criterion) in fishes {
+                        if item_id == fish {
+                            self.trigger_advancement_criterion(
+                                Advancement::HUSBANDRY_FISHY_BUSINESS,
+                                criterion,
+                            )
+                            .await;
+                            break;
+                        }
+                    }
                 }
             }
             AdvancementTrigger::PlacedBlock { block_id } => {

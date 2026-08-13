@@ -1,96 +1,55 @@
 use crate::{
-    BoxFuture, BoxedRegistry, ImmutableRegistry, Registry,
-    builder::RegistryBuilder,
-    error::{RegistryInitError, RegistryInsertError},
-    value::{ErasedRegistryRef, LockedIterator, RegistryRef},
+    AsyncTypedRegistry, BOOTSTRAP, BoxFuture, Registry, TypedRegistry,
+    error::BootstrapError,
+    immutable::FrozenRegistry,
+    value::{DynIterator, ErasedRegistryRef, LockedIterator},
 };
 use pumpkin_util::identifier::Identifier;
+use rustc_hash::FxHashMap;
 use std::any::{Any, TypeId, type_name};
 use tokio::sync::{RwLock, RwLockReadGuard};
-pub struct MutableRegistry<T: Send + Sync + 'static>(pub(crate) RwLock<RegistryBuilder<T>>);
 
-impl<T: Send + Sync + 'static> MutableRegistry<T> {
-    pub fn new(
-        static_entries: &'static [T],
-        static_identifiers: &[Identifier],
-    ) -> Result<Self, RegistryInitError> {
-        Ok(Self(RwLock::new(RegistryBuilder::new(
-            static_entries,
-            static_identifiers,
-        )?)))
-    }
-
-    pub async fn register(
-        &self,
-        identifier: Identifier,
-        value: T,
-    ) -> Result<(), RegistryInsertError> {
-        self.0.write().await.register(identifier, value)
-    }
-
-    #[must_use]
-    pub async fn get(&self, identifier: &Identifier) -> Option<RegistryRef<'_, T>> {
-        RwLockReadGuard::try_map(self.0.read().await, |registry| registry.get(identifier))
-            .map(RegistryRef::Locked)
-            .ok()
-    }
-
-    #[must_use]
-    pub async fn get_by_id(&self, id: usize) -> Option<RegistryRef<'_, T>> {
-        RwLockReadGuard::try_map(self.0.read().await, |registry| registry.get_by_id(id))
-            .map(RegistryRef::Locked)
-            .ok()
-    }
-
-    #[must_use]
-    pub async fn get_id(&self, identifier: &Identifier) -> Option<usize> {
-        self.0.read().await.get_id(identifier)
-    }
-
-    #[must_use]
-    pub async fn contains(&self, identifier: &Identifier) -> bool {
-        self.0.read().await.contains(identifier)
-    }
-
-    #[must_use]
-    pub async fn len(&self) -> usize {
-        self.0.read().await.len()
-    }
-
-    #[must_use]
-    pub async fn is_empty(&self) -> bool {
-        self.0.read().await.is_empty()
-    }
-
-    #[allow(clippy::iter_not_returning_iterator)] // does clippy know how async works?
-    pub async fn iter(&self) -> impl Iterator<Item = (&Identifier, &T)> {
-        LockedIterator::new(self.0.read().await)
-    }
+pub struct ReloadableRegistry<T: Send + Sync + 'static> {
+    inner: RwLock<FrozenRegistry<T>>,
+    name: Identifier,
 }
 
-impl MutableRegistry<BoxedRegistry> {
-    async fn into_nested_immutable(self) -> ImmutableRegistry<BoxedRegistry> {
-        let RegistryBuilder {
-            static_entries,
-            entries,
-            mapping,
-        } = self.0.into_inner();
-
-        let mut immutable_entries = Vec::with_capacity(entries.len());
-
-        for entry in entries {
-            immutable_entries.push(entry.into_immutable().await);
+impl<T: Send + Sync + 'static> ReloadableRegistry<T> {
+    pub(crate) fn new(
+        name: Identifier,
+        entries: Box<[T]>,
+        mapping: FxHashMap<Identifier, usize>,
+    ) -> Self {
+        Self {
+            inner: RwLock::new(FrozenRegistry::new(entries, mapping)),
+            name,
         }
-
-        ImmutableRegistry::new(
-            static_entries,
-            immutable_entries.into_boxed_slice(),
-            mapping,
-        )
     }
+
+    pub async fn reload(&self) -> Result<(), BootstrapError> {
+        let (entries, mapping) = BOOTSTRAP
+            .get()
+            .ok_or(BootstrapError::Uninitialized)
+            .and_then(|m| m.populate::<T>(&self.name))?;
+        let new_inner = FrozenRegistry::new(entries.into_boxed_slice(), mapping);
+        *self.inner.write().await = new_inner;
+        Ok(())
+    }
+
+    pub fn blocking_reload(&self) -> Result<(), BootstrapError> {
+        let (entries, mapping) = BOOTSTRAP
+            .get()
+            .ok_or(BootstrapError::Uninitialized)
+            .and_then(|m| m.populate::<T>(&self.name))?;
+        let new_inner = FrozenRegistry::new(entries.into_boxed_slice(), mapping);
+        *self.inner.blocking_write() = new_inner;
+        Ok(())
+    }
+
+    // some way to swap out the FrozenRegistry for datapack reloads
 }
 
-impl<T: Send + Sync + 'static> Registry for MutableRegistry<T> {
+impl<T: Send + Sync + 'static> Registry for ReloadableRegistry<T> {
     fn item_type_id(&self) -> TypeId {
         TypeId::of::<T>()
     }
@@ -99,32 +58,55 @@ impl<T: Send + Sync + 'static> Registry for MutableRegistry<T> {
         type_name::<T>()
     }
 
-    fn get_id<'a>(&'a self, identifier: &'a Identifier) -> BoxFuture<'a, Option<usize>> {
-        Box::pin(async move { Self::get_id(self, identifier).await })
+    fn get_id(&self, identifier: &Identifier) -> Option<usize> {
+        self.inner.blocking_read().get_id(identifier)
     }
 
-    fn get_by_id(&self, id: usize) -> BoxFuture<'_, Option<ErasedRegistryRef<'_>>> {
-        Box::pin(async move { Self::get_by_id(self, id).await.map(ErasedRegistryRef::new) })
+    fn get_id_async<'a>(&'a self, identifier: &'a Identifier) -> BoxFuture<'a, Option<usize>> {
+        Box::pin(async move { self.inner.read().await.get_id(identifier) })
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn into_immutable(self: Box<Self>) -> BoxFuture<'static, BoxedRegistry> {
-        Box::pin(async move {
-            let erased: Box<dyn Any + Send> = self;
-
-            match erased.downcast::<MutableRegistry<BoxedRegistry>>() {
-                Ok(registry) => Box::new(registry.into_nested_immutable().await) as BoxedRegistry,
-                Err(erased) => {
-                    let registry = erased
-                        .downcast::<Self>()
-                        .expect("downcast back to MutableRegistry<T> must succeed");
-
-                    Box::new(ImmutableRegistry::from(*registry)) as BoxedRegistry
-                }
-            }
+    fn by_id_erased(&self, id: usize) -> Option<ErasedRegistryRef<'_>> {
+        RwLockReadGuard::try_map(self.inner.blocking_read(), |a| {
+            a.by_id(id).map(|v| v as &dyn Any)
         })
+        .ok()
+        .map(ErasedRegistryRef::Locked)
+    }
+
+    fn by_id_erased_async(&self, id: usize) -> BoxFuture<'_, Option<ErasedRegistryRef<'_>>> {
+        Box::pin(async move {
+            RwLockReadGuard::try_map(self.inner.read().await, |a| {
+                a.by_id(id).map(|v| v as &dyn Any)
+            })
+            .ok()
+            .map(ErasedRegistryRef::Locked)
+        })
+    }
+}
+
+impl<'a, T: Send + Sync + 'static> TypedRegistry<'a> for ReloadableRegistry<T> {
+    type Item = RwLockReadGuard<'a, T>;
+    type IterItem = (&'a Identifier, &'a T);
+    type Iter = DynIterator<'a, Self::IterItem>;
+
+    fn by_id(&'a self, id: usize) -> Option<Self::Item> {
+        RwLockReadGuard::try_map(self.inner.blocking_read(), |a| a.by_id(id)).ok()
+    }
+
+    fn iter(&'a self) -> Self::Iter {
+        DynIterator::new(LockedIterator::new(self.inner.blocking_read()))
+    }
+}
+
+impl<'a, T: Send + Sync + 'static> AsyncTypedRegistry<'a> for ReloadableRegistry<T> {
+    fn by_id(&'a self, id: usize) -> BoxFuture<'a, Option<Self::Item>> {
+        Box::pin(
+            async move { RwLockReadGuard::try_map(self.inner.read().await, |a| a.by_id(id)).ok() },
+        )
+    }
+
+    fn iter(&'a self) -> BoxFuture<'a, Self::Iter> {
+        Box::pin(async move { DynIterator::new(LockedIterator::new(self.inner.read().await)) })
     }
 }

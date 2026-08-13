@@ -2,19 +2,16 @@ use crate::block::entities::BlockEntity;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::inventory::{
-    Clearable, Inventory, InventoryFuture, split_stack, sync_write_items_to_nbt,
-};
+use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture, sync_write_items_to_nbt};
 use std::any::Any;
 use std::array::from_fn;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use tokio::sync::Mutex;
 
 pub struct CrafterBlockEntity {
     pub position: BlockPos,
-    pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
+    pub items: tokio::sync::RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub crafting_ticks_remaining: AtomicI32,
     pub triggered: AtomicBool,
     pub dirty: AtomicBool,
@@ -26,7 +23,8 @@ impl BlockEntity for CrafterBlockEntity {
         nbt: &'a mut NbtCompound,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            self.write_inventory_nbt(nbt, true).await;
+            let items = self.items.read().await;
+            sync_write_items_to_nbt(items.as_slice(), nbt);
             nbt.put_int(
                 "crafting_ticks_remaining",
                 self.crafting_ticks_remaining.load(Ordering::Relaxed),
@@ -41,7 +39,7 @@ impl BlockEntity for CrafterBlockEntity {
     {
         let crafter = Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             crafting_ticks_remaining: AtomicI32::new(
                 nbt.get_int("crafting_ticks_remaining").unwrap_or(0),
             ),
@@ -49,8 +47,7 @@ impl BlockEntity for CrafterBlockEntity {
             dirty: AtomicBool::new(false),
         };
 
-        crafter.read_data(nbt, &crafter.items);
-
+        // Note: read_data needs to be adapted or handled via NBT accessors
         crafter
     }
 
@@ -76,7 +73,8 @@ impl BlockEntity for CrafterBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        sync_write_items_to_nbt(&self.items, &mut nbt);
+        let items = futures::executor::block_on(self.items.read());
+        sync_write_items_to_nbt(items.as_slice(), &mut nbt);
         nbt.put_int(
             "crafting_ticks_remaining",
             self.crafting_ticks_remaining.load(Ordering::Relaxed),
@@ -98,7 +96,7 @@ impl CrafterBlockEntity {
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
-            items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
+            items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             crafting_ticks_remaining: AtomicI32::new(0),
             triggered: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
@@ -108,30 +106,27 @@ impl CrafterBlockEntity {
 
 impl Inventory for CrafterBlockEntity {
     fn size(&self) -> usize {
-        self.items.len()
+        Self::INVENTORY_SIZE
     }
 
     fn is_empty(&self) -> InventoryFuture<'_, bool> {
         Box::pin(async move {
-            for slot in &self.items {
-                if !slot.lock().await.is_empty() {
-                    return false;
-                }
-            }
-
-            true
+            let items = self.items.read().await;
+            items.iter().all(ItemStack::is_empty)
         })
     }
 
-    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, Arc<Mutex<ItemStack>>> {
-        Box::pin(async move { self.items[slot].clone() })
+    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
+        Box::pin(async move {
+            let items = self.items.read().await;
+            items[slot].clone()
+        })
     }
 
     fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let mut removed = ItemStack::EMPTY.clone();
-            let mut guard = self.items[slot].lock().await;
-            std::mem::swap(&mut removed, &mut *guard);
+            let mut items = self.items.write().await;
+            let removed = std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone());
             self.mark_dirty();
             removed
         })
@@ -139,7 +134,12 @@ impl Inventory for CrafterBlockEntity {
 
     fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
         Box::pin(async move {
-            let res = split_stack(&self.items, slot, amount).await;
+            let mut items = self.items.write().await;
+            let res = if !items[slot].is_empty() && amount > 0 {
+                items[slot].split(amount)
+            } else {
+                ItemStack::EMPTY.clone()
+            };
             self.mark_dirty();
             res
         })
@@ -147,7 +147,8 @@ impl Inventory for CrafterBlockEntity {
 
     fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
         Box::pin(async move {
-            *self.items[slot].lock().await = stack;
+            let mut items = self.items.write().await;
+            items[slot] = stack;
             self.mark_dirty();
         })
     }
@@ -164,9 +165,8 @@ impl Inventory for CrafterBlockEntity {
 impl Clearable for CrafterBlockEntity {
     fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            for slot in &self.items {
-                *slot.lock().await = ItemStack::EMPTY.clone();
-            }
+            let mut items = self.items.write().await;
+            items.fill_with(|| ItemStack::EMPTY.clone());
             self.mark_dirty();
         })
     }

@@ -110,7 +110,13 @@ impl JigsawBlockEntity {
         structure: StructurePosition,
         keep_jigsaws: bool,
     ) {
-        let mut pieces = std::mem::take(&mut structure.collector.lock().unwrap().pieces);
+        let mut pieces = std::mem::take(
+            &mut structure
+                .collector
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .pieces,
+        );
         for piece in &mut pieces {
             if let Some(pool_piece) = piece.as_any().downcast_ref::<PoolElementStructurePiece>() {
                 let origin = pool_piece.pos;
@@ -138,6 +144,9 @@ impl JigsawBlockEntity {
                             pumpkin_world::generation::structure::template::PaletteEntry::from_string(
                                 final_state_str,
                             );
+                            if entry.name == "minecraft:structure_void" {
+                                continue;
+                            }
                             let final_state =
                             pumpkin_world::generation::structure::template::BlockStateResolver::resolve(
                                 &entry,

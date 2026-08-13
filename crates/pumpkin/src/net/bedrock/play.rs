@@ -9,7 +9,10 @@ use pumpkin_data::{
     },
     item_stack::ItemStack,
 };
-use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
+use pumpkin_inventory::{
+    player::player_inventory::PlayerInventory,
+    screen_handler::{InventoryPlayer, ScreenHandler},
+};
 use pumpkin_protocol::bedrock::{
     client::inventory_content::CInventoryContent,
     network_item::{
@@ -20,7 +23,7 @@ use pumpkin_protocol::{
     bedrock::{
         client::{
             chunk_radius_update::CChunkRadiusUpdate, container_open::CContainerOpen,
-            player_hotbar::CPlayerHotbar,
+            player_hotbar::CPlayerHotbar, update_block::CUpdateBlock,
         },
         server::{
             animate::{AnimateAction, SAnimate},
@@ -28,6 +31,7 @@ use pumpkin_protocol::{
             command_request::SCommandRequest,
             container_close::SContainerClose,
             emote::SEmote,
+            emote_list::SEmoteList,
             interaction::{Action, SInteraction},
             inventory_transaction::{SInventoryTransaction, TransactionData},
             mob_equipment::SMobEquipment,
@@ -61,10 +65,12 @@ use crate::{
         player_toggle_flight_event::PlayerToggleFlightEvent,
     },
     server::{Server, seasonal_events},
-    world::chunker::{self},
+    world::{BlockBreakingProgress, chunker},
 };
 use pumpkin_data::BlockDirection;
 use tracing::{debug, info};
+
+const MIN_PREDICTED_BREAK_PROGRESS: f32 = 0.65;
 
 fn descriptor_to_stack(desc: &NetworkItemDescriptor, is_creative: bool) -> ItemStack {
     if desc.id.0 == 0 || desc.stack_size == 0 {
@@ -159,7 +165,9 @@ impl BedrockClient {
             .await;
             return;
         }
-        let server = player.world().server.upgrade().unwrap();
+        let Some(server) = player.world().server.upgrade() else {
+            return;
+        };
 
         let view_distance = chunk_radius.clamp(
             2,
@@ -177,7 +185,7 @@ impl BedrockClient {
             let mut new_config = (**current_config).clone();
 
             new_config.view_distance =
-                NonZero::new(view_distance as u8).expect("View distance must be > 0");
+                NonZero::new(view_distance as u8).unwrap_or(NonZero::<u8>::MIN);
             player.config.store(std::sync::Arc::new(new_config));
 
             old_vd
@@ -214,6 +222,10 @@ impl BedrockClient {
             return;
         }
         let entity = player.get_entity();
+        let on_ground = packet.input_data.get(InputData::VerticalCollision as usize)
+            && packet.delta.y < 0.0
+            && !entity.has_vehicle().await;
+        entity.on_ground.store(on_ground, Ordering::Relaxed);
 
         let new_pos = packet
             .position
@@ -232,7 +244,6 @@ impl BedrockClient {
 
         if pos_changed || rot_changed {
             let world = player.world();
-            let on_ground = entity.on_ground.load(std::sync::atomic::Ordering::Relaxed);
 
             if pos_changed {
                 player.get_entity().set_pos(new_pos);
@@ -406,12 +417,14 @@ impl BedrockClient {
         packet: pumpkin_protocol::bedrock::server::player_auth_input::PlayerBlockAction,
     ) {
         use pumpkin_protocol::bedrock::server::player_action::Action as PlayerAction;
-        let action = PlayerAction::try_from(packet.action.0).unwrap();
+        let Ok(action) = PlayerAction::try_from(packet.action.0) else {
+            return;
+        };
         self.handle_player_action(
             player,
             server,
             SPlayerAction {
-                runtime_id: VarInt(0), // Unused
+                runtime_id: VarULong(0), // Unused
                 action,
                 block_pos: packet.block_pos,
                 result_pos: BlockPos::ZERO,
@@ -430,11 +443,11 @@ impl BedrockClient {
         let world = entity.world.load();
 
         let java_animation = match packet.action {
+            AnimateAction::NoAction => None,
             AnimateAction::SwingArm => Some(Animation::SwingMainArm),
             AnimateAction::WakeUp => Some(Animation::LeaveBed),
             AnimateAction::CriticalHit => Some(Animation::CriticalEffect),
             AnimateAction::MagicCriticalHit => Some(Animation::MagicCriticaleffect),
-            AnimateAction::StopSleep => None, // TODO
         };
 
         if let Some(animation) = java_animation {
@@ -454,10 +467,17 @@ impl BedrockClient {
             return;
         }
 
+        tracing::info!(
+            "handle_emote: player={} packet={:?}",
+            player.gameprofile.name,
+            packet
+        );
+
         let entity = &player.living_entity.entity;
         let world = entity.world.load();
 
         let mut broadcast_packet = packet;
+        broadcast_packet.runtime_entity_id = VarULong(entity.entity_id as u64);
         broadcast_packet.flags |= pumpkin_protocol::bedrock::server::emote::EMOTE_FLAG_SERVER_SIDE;
 
         world
@@ -472,17 +492,13 @@ impl BedrockClient {
             .await;
     }
 
-    // pub fn handle_emote_list(
-    //     &self,
-    //     player: &Arc<Player>,
-    //     _server: &Server,
-    //     packet: &SEmoteList,
-    // ) {
-    //     debug!(
-    //         "Player {} sent emote list: {:?}",
-    //         player.gameprofile.name, packet.emote_pieces
-    //     );
-    // }
+    pub fn handle_emote_list(&self, player: &Arc<Player>, _server: &Server, packet: &SEmoteList) {
+        tracing::info!(
+            "handle_emote_list: player={} packet={:?}",
+            player.gameprofile.name,
+            packet
+        );
+    }
 
     #[allow(clippy::too_many_lines, clippy::collapsible_if, clippy::unreachable)]
     pub async fn handle_inventory_action(
@@ -532,8 +548,7 @@ impl BedrockClient {
                                     dynamic_id: None,
                                 },
                                 slot_id,
-                                0,
-                                VarInt(0),
+                                ItemStack::EMPTY,
                             );
                             inventory_updated = true;
                         }
@@ -564,8 +579,6 @@ impl BedrockClient {
                     let is_armor_equipped = player_screen_handler
                         .get_slot(screen_slot)
                         .get_stack()
-                        .await
-                        .lock()
                         .await
                         .are_equal(&item_stack);
 
@@ -607,13 +620,14 @@ impl BedrockClient {
         if inventory_updated {
             self.enqueue_packet(&CInventoryContent {
                 container_id: VarUInt(0),
-                slots: futures::future::join_all(player.inventory().main_inventory.iter().map(
-                    async |s| {
-                        let stack = s.lock().await;
-                        NetworkItemStackDescriptor::from(&*stack)
-                    },
-                ))
-                .await,
+                slots: player
+                    .inventory()
+                    .main_inventory
+                    .read()
+                    .await
+                    .iter()
+                    .map(NetworkItemStackDescriptor::from)
+                    .collect(),
                 full_container_name: FullContainerName {
                     container_name: ContainerName::Inventory,
                     dynamic_id: None,
@@ -641,7 +655,9 @@ impl BedrockClient {
                 };
                 let world = player.world();
                 let block = world.get_block(&data.block_position);
-                let server = world.server.upgrade().expect("Server is gone");
+                let Some(server) = world.server.upgrade() else {
+                    return;
+                };
 
                 if player.gamemode.load() == GameMode::Spectator {
                     // TODO: openMenu ?
@@ -653,11 +669,10 @@ impl BedrockClient {
                     let is_creative = player.gamemode.load() == GameMode::Creative;
                     let client_stack = descriptor_to_stack(&data.item_in_hand, is_creative);
 
-                    let held_item = player.inventory.held_item();
+                    let mut held_item = player.inventory().held_item().await;
                     if !client_stack.is_empty() {
-                        let mut server_stack = held_item.lock().await;
-                        if server_stack.is_empty() || server_stack.item.id != client_stack.item.id {
-                            *server_stack = client_stack.clone();
+                        if held_item.is_empty() || held_item.item.id != client_stack.item.id {
+                            held_item = client_stack.clone();
                         }
                     }
 
@@ -671,7 +686,7 @@ impl BedrockClient {
                                 face: &face,
                                 cursor_pos: &data.click_position,
                             },
-                            &held_item,
+                            &mut held_item,
                             &EquipmentSlot::MAIN_HAND,
                             &server,
                             &world,
@@ -699,7 +714,7 @@ impl BedrockClient {
                             .await;
                     }
 
-                    let mut stack = held_item.lock().await;
+                    let mut stack = held_item;
                     if !stack.is_empty() {
                         server
                             .item_registry
@@ -744,18 +759,19 @@ impl BedrockClient {
                                 }
                             }
                         }
+                        player.inventory().set_held_item(stack).await;
                     }
                 } else if data.action_type.0 == 1 {
                     // Click air / Use item
                     let is_creative = player.gamemode.load() == GameMode::Creative;
                     let client_stack = descriptor_to_stack(&data.item_in_hand, is_creative);
 
-                    let held_item = player.inventory.held_item();
-                    if !client_stack.is_empty() {
-                        let mut server_stack = held_item.lock().await;
-                        if server_stack.is_empty() || server_stack.item.id != client_stack.item.id {
-                            *server_stack = client_stack.clone();
-                        }
+                    let mut held = player.inventory.held_item().await;
+                    if !client_stack.is_empty()
+                        && (held.is_empty() || held.item.id != client_stack.item.id)
+                    {
+                        held = client_stack.clone();
+                        player.inventory.set_held_item(held.clone()).await;
                     }
 
                     let event = PlayerInteractEvent::new(
@@ -765,10 +781,9 @@ impl BedrockClient {
                         None,
                     );
 
-                    let stack_for_use = held_item.lock().await.clone();
+                    let stack_for_use = held.clone();
 
                     {
-                        let mut held = held_item.lock().await;
                         let mut cooldown_active = false;
                         if let Some(cooldown) = held.get_use_cooldown() {
                             let group = cooldown
@@ -811,27 +826,26 @@ impl BedrockClient {
                             }
                             if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
                                 let inventory = player.inventory();
-                                if !inventory
-                                    .is_already_equipped(&held_item, equippable.slot)
-                                    .await
-                                {
+                                let mut equipment_guard = inventory.entity_equipment.lock().await;
+                                let current_equipped = equipment_guard.get(equippable.slot);
+                                if !current_equipped.are_items_and_components_equal(&held) {
                                     player
                                         .enqueue_equipment_change(equippable.slot, &held)
                                         .await;
 
-                                    let binding = {
-                                        let mut equipment = inventory.entity_equipment.lock().await;
-                                        equipment.get_or_insert(equippable.slot)
-                                    };
-                                    let mut equip_item = binding.lock().await;
+                                    let equip_item = equipment_guard
+                                        .equipment
+                                        .entry(equippable.slot.clone())
+                                        .or_insert_with(|| ItemStack::EMPTY.clone());
                                     if equip_item.is_empty() {
                                         *equip_item = held.clone();
                                         held.decrement_unless_creative(player.gamemode.load(), 1);
                                     } else {
-                                        let binding = held.clone();
-                                        *held = equip_item.clone();
-                                        *equip_item = binding;
+                                        let old_held = held.clone();
+                                        held = equip_item.clone();
+                                        *equip_item = old_held;
                                     }
+                                    player.inventory().set_held_item(held.clone()).await;
                                 }
                             }
                         }
@@ -854,14 +868,16 @@ impl BedrockClient {
                     0 | 2 => {
                         let world = player.world();
                         if let Some(target) = world.get_entity_by_id(target_runtime_id) {
-                            let held = player.inventory.held_item();
-                            let mut stack = held.lock().await;
+                            let mut stack = player.inventory().held_item().await;
                             if !target.interact(player, &mut stack).await {
-                                let server = world.server.upgrade().expect("Server is gone");
+                                let Some(server) = world.server.upgrade() else {
+                                    return;
+                                };
                                 server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, target)
                                     .await;
+                                player.inventory().set_held_item(stack).await;
                             }
                         }
                     }
@@ -884,7 +900,9 @@ impl BedrockClient {
             TransactionData::ReleaseItem(_data) => {
                 let item_in_use = player.living_entity.item_in_use.lock().await.clone();
                 if let Some(stack) = item_in_use {
-                    let server = player.world().server.upgrade().expect("Server is gone");
+                    let Some(server) = player.world().server.upgrade() else {
+                        return;
+                    };
                     server.item_registry.on_stopped_using(&stack, player).await;
                 }
                 player.living_entity.clear_active_hand().await;
@@ -993,13 +1011,14 @@ impl BedrockClient {
         // Sync the inventory content to Bedrock client
         self.enqueue_packet(&CInventoryContent {
             container_id: VarUInt(0), // player inventory
-            slots: futures::future::join_all(player.inventory().main_inventory.iter().map(
-                async |s| {
-                    let stack = s.lock().await;
-                    NetworkItemStackDescriptor::from(&*stack)
-                },
-            ))
-            .await,
+            slots: player
+                .inventory()
+                .main_inventory
+                .read()
+                .await
+                .iter()
+                .map(NetworkItemStackDescriptor::from)
+                .collect(),
             full_container_name: FullContainerName {
                 container_name: ContainerName::Inventory,
                 dynamic_id: None,
@@ -1047,8 +1066,11 @@ impl BedrockClient {
                         false,
                     );
 
-                    let be_packet = SText::new(
-                        message, gameprofile.name.clone()
+                    let be_packet = SText::chat_with_xuid(
+                        message,
+                        gameprofile.name.clone(),
+                        packet.xuid.into_owned(),
+                        packet.filtered_message.map(std::borrow::Cow::into_owned),
                     );
 
                     entity.world.load().broadcast_editioned(&je_packet, &be_packet).await;
@@ -1083,6 +1105,12 @@ impl BedrockClient {
                 let world = entity.world.load_full();
                 let (block, state) = world.get_block_and_state(&location);
 
+                if player.mining.load(Ordering::Relaxed)
+                    && *player.mining_pos.lock().await != location
+                {
+                    player.stop_mining().await;
+                }
+
                 if player.gamemode.load() == GameMode::Creative {
                     let new_state = world
                         .break_block(
@@ -1100,6 +1128,7 @@ impl BedrockClient {
                 } else if !state.is_air() {
                     let speed = crate::block::calc_block_breaking(player, state, block).await;
                     if speed >= 1.0 {
+                        player.stop_mining().await;
                         let broken_state = world.get_block_state(&location);
                         let can_harvest = player.can_harvest(broken_state, block).await;
                         let new_state = world
@@ -1120,17 +1149,54 @@ impl BedrockClient {
                             }
                         }
                     } else {
-                        player.mining.store(true, Ordering::Relaxed);
-                        *player.mining_pos.lock().await = location;
-                        let progress = (speed * 10.0) as i32;
-                        world.set_block_breaking(entity, location, progress).await;
-                        player
-                            .current_block_destroy_stage
-                            .store(progress, Ordering::Relaxed);
+                        let mut mining_pos = player.mining_pos.lock().await;
+                        let starts_breaking =
+                            !player.mining.load(Ordering::Relaxed) || *mining_pos != location;
+                        let progress = if starts_breaking {
+                            player.start_mining_time.store(
+                                player.tick_counter.load(Ordering::Relaxed),
+                                Ordering::Relaxed,
+                            );
+                            player.mining.store(true, Ordering::Relaxed);
+                            *mining_pos = location;
+                            (speed * 10.0) as i32
+                        } else {
+                            player.current_block_destroy_stage.load(Ordering::Relaxed)
+                        };
+                        drop(mining_pos);
+                        let old_speed = player
+                            .current_block_breaking_speed
+                            .swap(speed.to_bits(), Ordering::Relaxed);
+                        if starts_breaking {
+                            world
+                                .set_block_breaking(
+                                    entity,
+                                    location,
+                                    BlockBreakingProgress::Start {
+                                        stage: progress,
+                                        speed,
+                                    },
+                                )
+                                .await;
+                            player
+                                .current_block_destroy_stage
+                                .store(progress, Ordering::Relaxed);
+                        } else if old_speed != speed.to_bits() {
+                            world
+                                .set_block_breaking(
+                                    entity,
+                                    location,
+                                    BlockBreakingProgress::Update {
+                                        stage: progress,
+                                        speed: Some(speed),
+                                    },
+                                )
+                                .await;
+                        }
                     }
                 }
             }
-            PlayerAction::PredictDestroyBlock | PlayerAction::StopBreak => {
+            action @ (PlayerAction::PredictDestroyBlock | PlayerAction::StopBreak) => {
                 let location = packet.block_pos;
                 if !player.can_interact_with_block_at(&location, 1.0) {
                     return;
@@ -1139,34 +1205,62 @@ impl BedrockClient {
                 let entity = &player.get_entity();
                 let world = entity.world.load_full();
 
-                player.mining.store(false, Ordering::Relaxed);
-                world.set_block_breaking(entity, location, -1).await;
-
                 let (block, state) = world.get_block_and_state(&location);
-                if player.gamemode.load() != GameMode::Creative {
-                    let block_drop = player.can_harvest(state, block).await;
+                if player.gamemode.load() != GameMode::Creative && !state.is_air() {
+                    let speed = crate::block::calc_block_breaking(player, state, block).await;
+                    let elapsed = player.tick_counter.load(Ordering::Relaxed)
+                        - player.start_mining_time.load(Ordering::Relaxed)
+                        + 1;
+                    let same_block = *player.mining_pos.lock().await == location;
+                    if player.mining.load(Ordering::Relaxed)
+                        && same_block
+                        && speed * elapsed as f32 >= MIN_PREDICTED_BREAK_PROGRESS
+                    {
+                        player.stop_mining().await;
 
-                    let new_state = world
-                        .break_block(
-                            &location,
-                            Some(player.clone()),
-                            if block_drop {
-                                BlockFlags::NOTIFY_NEIGHBORS
-                            } else {
-                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
-                            },
-                        )
-                        .await;
-                    if new_state.is_some() {
-                        server
-                            .block_registry
-                            .broken(&world, block, player, &location, server, state)
+                        let can_harvest = player.can_harvest(state, block).await;
+                        let flags = if can_harvest {
+                            BlockFlags::NOTIFY_NEIGHBORS
+                        } else {
+                            BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                        };
+                        if world
+                            .break_block(&location, Some(player.clone()), flags)
+                            .await
+                            .is_some()
+                        {
+                            server
+                                .block_registry
+                                .broken(&world, block, player, &location, server, state)
+                                .await;
+                            player.apply_tool_damage_for_block_break(state).await;
+                            if can_harvest {
+                                player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                            }
+                        }
+                    } else {
+                        let runtime_id = pumpkin_data::BlockState::to_be_network_id(state.id);
+                        self.enqueue_packet(&CUpdateBlock::new(location, runtime_id as u32))
                             .await;
-                        player.apply_tool_damage_for_block_break(state).await;
-                        if block_drop {
-                            player.add_exhaustion(MINE_BLOCK_EXHAUSTION).await;
+                        if matches!(action, PlayerAction::StopBreak) {
+                            player.stop_mining().await;
+                        } else {
+                            world
+                                .set_block_breaking(
+                                    entity,
+                                    location,
+                                    BlockBreakingProgress::Update {
+                                        stage: player
+                                            .current_block_destroy_stage
+                                            .load(Ordering::Relaxed),
+                                        speed: Some(speed),
+                                    },
+                                )
+                                .await;
                         }
                     }
+                } else if matches!(action, PlayerAction::StopBreak) {
+                    player.stop_mining().await;
                 }
             }
             PlayerAction::CrackBreak => {
@@ -1174,12 +1268,7 @@ impl BedrockClient {
                 // cracking is done fully server-side.
             }
             PlayerAction::AbortBreak => {
-                let location = packet.block_pos;
-                let entity = &player.get_entity();
-                let world = entity.world.load();
-
-                player.mining.store(false, Ordering::Relaxed);
-                world.set_block_breaking(entity, location, -1).await;
+                player.stop_mining().await;
             }
             PlayerAction::DropItem => {
                 player.drop_held_item(false).await;
@@ -1241,8 +1330,11 @@ impl BedrockClient {
         let mut event =
             crate::plugin::api::events::player::bedrock_form_response::BedrockFormResponseEvent::new(
                 player.clone(),
-                packet.form_id.0 as u32,
-                packet.form_data.map(std::borrow::Cow::into_owned),
+                packet.form_id.0,
+                packet
+                    .form_data
+                    .filter(|data| data != "null")
+                    .map(std::borrow::Cow::into_owned),
             );
         server.plugin_manager.fire(server, &mut event).await;
     }
@@ -1266,6 +1358,7 @@ impl BedrockClient {
 
         for request in packet.requests {
             let mut created_item: Option<ItemStack> = None;
+            let mut crafting_inputs_consumed = false;
             let mut updates = Vec::new();
             let mut result = 0u8; // 0 = Success, 1 = Error
 
@@ -1320,16 +1413,6 @@ impl BedrockClient {
                         count,
                         source,
                         destination,
-                    }
-                    | ItemStackRequestAction::PlaceInContainer {
-                        count,
-                        source,
-                        destination,
-                    }
-                    | ItemStackRequestAction::TakeOutContainer {
-                        count,
-                        source,
-                        destination,
                     } => {
                         let mut source_stack =
                             get_slot_stack(&*screen_handler, &source, created_item.as_ref()).await;
@@ -1360,26 +1443,11 @@ impl BedrockClient {
 
                             source_stack.decrement(count);
                             if source.container_name.container_name == ContainerName::CreatedOutput
+                                && let Some(ref mut stack) = created_item
                             {
-                                if let Some(ref mut stack) = created_item {
-                                    stack.decrement(count);
-                                    if stack.is_empty() {
-                                        created_item = None;
-                                    }
-                                }
-                            } else if source.container_name.container_name == ContainerName::Cursor
-                            {
-                                let cursor_is_empty = screen_handler
-                                    .get_behaviour()
-                                    .cursor_stack
-                                    .lock()
-                                    .await
-                                    .is_empty();
-                                if cursor_is_empty && let Some(ref mut stack) = created_item {
-                                    stack.decrement(count);
-                                    if stack.is_empty() {
-                                        created_item = None;
-                                    }
+                                stack.decrement(count);
+                                if stack.is_empty() {
+                                    created_item = None;
                                 }
                             }
                             let source_stack = if source_stack.is_empty() {
@@ -1407,15 +1475,13 @@ impl BedrockClient {
                                 &mut updates,
                                 source.container_name.clone(),
                                 source.slot_id,
-                                source_stack.item_count,
-                                source.stack_id,
+                                &source_stack,
                             );
                             record_update(
                                 &mut updates,
                                 destination.container_name.clone(),
                                 destination.slot_id,
-                                dest_stack.item_count,
-                                destination.stack_id,
+                                &dest_stack,
                             );
                         }
                     }
@@ -1434,15 +1500,13 @@ impl BedrockClient {
                             &mut updates,
                             slot1.container_name.clone(),
                             slot1.slot_id,
-                            stack2.item_count,
-                            slot2.stack_id,
+                            &stack2,
                         );
                         record_update(
                             &mut updates,
                             slot2.container_name.clone(),
                             slot2.slot_id,
-                            stack1.item_count,
-                            slot1.stack_id,
+                            &stack1,
                         );
                     }
                     ItemStackRequestAction::Drop {
@@ -1480,13 +1544,27 @@ impl BedrockClient {
                                 &mut updates,
                                 source.container_name.clone(),
                                 source.slot_id,
-                                source_stack.item_count,
-                                source.stack_id,
+                                &source_stack,
                             );
                         }
                     }
                     ItemStackRequestAction::Destroy { count, source }
                     | ItemStackRequestAction::Consume { count, source } => {
+                        if crafting_inputs_consumed
+                            && source.container_name.container_name == ContainerName::CraftingInput
+                        {
+                            let source_stack =
+                                get_slot_stack(&*screen_handler, &source, created_item.as_ref())
+                                    .await;
+                            record_update(
+                                &mut updates,
+                                source.container_name.clone(),
+                                source.slot_id,
+                                &source_stack,
+                            );
+                            continue;
+                        }
+
                         let mut source_stack =
                             get_slot_stack(&*screen_handler, &source, created_item.as_ref()).await;
                         if source_stack.is_empty() {
@@ -1514,8 +1592,7 @@ impl BedrockClient {
                                 &mut updates,
                                 source.container_name.clone(),
                                 source.slot_id,
-                                source_stack.item_count,
-                                source.stack_id,
+                                &source_stack,
                             );
                         }
                     }
@@ -1533,6 +1610,7 @@ impl BedrockClient {
 
                             let is_player = screen_handler.window_type().is_none();
                             let grid_size = if is_player { 4 } else { 9 };
+                            let bedrock_grid_start = if is_player { 28 } else { 32 };
                             for i in 0..grid_size {
                                 let grid_slot_index = 1 + i;
                                 let grid_slot =
@@ -1548,8 +1626,10 @@ impl BedrockClient {
                             let output_slot = screen_handler.get_behaviour().slots[0].clone();
                             let output_stack = output_slot.get_cloned_stack().await;
 
-                            if output_stack.is_empty() {
-                                tracing::warn!("Client tried to craft, but output slot is empty!");
+                            if output_stack.is_empty()
+                                || repetitions > output_slot.get_max_item_count().await
+                            {
+                                tracing::warn!("Client sent an invalid crafting request");
                                 result = 1;
                                 break;
                             }
@@ -1564,6 +1644,7 @@ impl BedrockClient {
                                     .on_take_item(player.as_ref(), &output_stack)
                                     .await;
                             }
+                            crafting_inputs_consumed = true;
 
                             // Record updates for all grid slots so Bedrock client is notified of consumed ingredients!
                             let is_player = screen_handler.window_type().is_none();
@@ -1579,9 +1660,8 @@ impl BedrockClient {
                                         container_name: ContainerName::CraftingInput,
                                         dynamic_id: None,
                                     },
-                                    i as u8,
-                                    grid_stack.item_count,
-                                    VarInt(0),
+                                    (bedrock_grid_start + i) as u8,
+                                    &grid_stack,
                                 );
                             }
                         }
@@ -1662,13 +1742,14 @@ impl BedrockClient {
         if inventory_updated {
             self.enqueue_packet(&CInventoryContent {
                 container_id: VarUInt(0),
-                slots: futures::future::join_all(player.inventory().main_inventory.iter().map(
-                    async |s| {
-                        let stack = s.lock().await;
-                        NetworkItemStackDescriptor::from(&*stack)
-                    },
-                ))
-                .await,
+                slots: player
+                    .inventory()
+                    .main_inventory
+                    .read()
+                    .await
+                    .iter()
+                    .map(NetworkItemStackDescriptor::from)
+                    .collect(),
                 full_container_name: FullContainerName {
                     container_name: ContainerName::Inventory,
                     dynamic_id: None,
@@ -1709,34 +1790,22 @@ impl BedrockClient {
                 slot_with_stack as usize,
             ) {
                 if slot_with_stack as usize != target_hotbar_slot {
-                    let target_stack = player.inventory.main_inventory[target_hotbar_slot]
-                        .lock()
-                        .await
-                        .clone();
-                    let source_stack = player.inventory.main_inventory[slot_with_stack as usize]
-                        .lock()
-                        .await
-                        .clone();
+                    let target_stack = player.inventory().get_stack(target_hotbar_slot).await;
+                    let source_stack = player.inventory().get_stack(slot_with_stack as usize).await;
                     player
-                        .inventory
+                        .inventory()
                         .set_stack(target_hotbar_slot, source_stack)
                         .await;
                     player
-                        .inventory
+                        .inventory()
                         .set_stack(slot_with_stack as usize, target_stack)
                         .await;
                 }
             } else {
-                let target_stack = player.inventory.main_inventory[target_hotbar_slot]
-                    .lock()
-                    .await
-                    .clone();
-                let source_stack = player.inventory.main_inventory[slot_with_stack as usize]
-                    .lock()
-                    .await
-                    .clone();
+                let target_stack = player.inventory().get_stack(target_hotbar_slot).await;
+                let source_stack = player.inventory().get_stack(slot_with_stack as usize).await;
                 player
-                    .inventory
+                    .inventory()
                     .set_stack(target_hotbar_slot, source_stack)
                     .await;
                 player
@@ -1774,20 +1843,21 @@ impl BedrockClient {
             .await;
 
         // Sync main hand equipment to other players
-        let stack_in_hand = player.inventory().held_item().lock().await.clone();
+        let stack_in_hand = player.inventory().held_item().await;
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack_in_hand)];
         player.living_entity.send_equipment_changes(equipment);
 
         // Sync bedrock inventory updates
         self.enqueue_packet(&CInventoryContent {
             container_id: VarUInt(0),
-            slots: futures::future::join_all(player.inventory().main_inventory.iter().map(
-                async |s| {
-                    let stack = s.lock().await;
-                    NetworkItemStackDescriptor::from(&*stack)
-                },
-            ))
-            .await,
+            slots: player
+                .inventory()
+                .main_inventory
+                .read()
+                .await
+                .iter()
+                .map(NetworkItemStackDescriptor::from)
+                .collect(),
             full_container_name: FullContainerName {
                 container_name: ContainerName::Inventory,
                 dynamic_id: None,
@@ -1829,7 +1899,7 @@ impl BedrockClient {
 
         let inv = player.inventory();
         inv.set_selected_slot(slot);
-        let stack = inv.held_item().lock().await.clone();
+        let stack = inv.held_item().await;
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
         player.living_entity.send_equipment_changes(equipment);
     }
@@ -1871,8 +1941,12 @@ fn map_bedrock_container_slot(
     container_name: ContainerName,
     slot_id: u8,
 ) -> Option<usize> {
-    let container_slots = screen_handler.get_behaviour().container_slots;
     let is_player_screen = screen_handler.window_type().is_none();
+    let container_slots = screen_handler
+        .get_behaviour()
+        .slots
+        .len()
+        .saturating_sub(PlayerInventory::MAIN_SIZE);
 
     match container_name {
         ContainerName::HotBar => {
@@ -2130,22 +2204,26 @@ fn record_update(
     updates: &mut Vec<SlotUpdate>,
     container_name: FullContainerName,
     slot_id: u8,
-    count: u8,
-    stack_id: VarInt,
+    stack: &ItemStack,
 ) {
-    let final_stack_id = if count == 0 { VarInt(0) } else { stack_id };
+    let count = stack.item_count;
+    let stack_id = if stack.is_empty() {
+        VarInt(0)
+    } else {
+        VarInt(stack.uid.get())
+    };
     if let Some(existing) = updates
         .iter_mut()
         .find(|u| u.container_name == container_name && u.slot_id == slot_id)
     {
         existing.count = count;
-        existing.stack_id = final_stack_id;
+        existing.stack_id = stack_id;
     } else {
         updates.push(SlotUpdate {
             container_name,
             slot_id,
             count,
-            stack_id: final_stack_id,
+            stack_id,
         });
     }
 }
@@ -2161,13 +2239,12 @@ async fn get_slot_stack(
         return stack.clone();
     }
     if slot_info.container_name.container_name == ContainerName::Cursor {
-        let cursor_lock = screen_handler.get_behaviour().cursor_stack.lock().await;
-        if cursor_lock.is_empty()
-            && let Some(stack) = created_item
-        {
-            return stack.clone();
-        }
-        return cursor_lock.clone();
+        return screen_handler
+            .get_behaviour()
+            .cursor_stack
+            .lock()
+            .await
+            .clone();
     }
     if let Some(screen_slot) = map_bedrock_container_slot(
         screen_handler,
@@ -2232,5 +2309,60 @@ async fn update_slot_stack(
             .set_stack(new_stack.clone())
             .await;
         screen_handler.set_received_stack(screen_slot, new_stack);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::item::Item;
+    use pumpkin_inventory::{
+        build_equipment_slots, crafting::crafting_screen_handler::CraftingTableScreenHandler,
+        entity_equipment::EntityEquipment,
+    };
+    use tokio::sync::Mutex;
+
+    #[tokio::test]
+    async fn crafting_table_maps_bedrock_player_inventory_after_its_ten_slots() {
+        let inventory = Arc::new(PlayerInventory::new(
+            Arc::new(Mutex::new(EntityEquipment::new())),
+            Arc::new(build_equipment_slots()),
+        ));
+        let handler = CraftingTableScreenHandler::new(1, &inventory, None).await;
+
+        assert_eq!(
+            map_bedrock_container_slot(&handler, ContainerName::Inventory, 26),
+            Some(27)
+        );
+        assert_eq!(
+            map_bedrock_container_slot(&handler, ContainerName::HotBar, 0),
+            Some(37)
+        );
+        assert_eq!(
+            map_bedrock_container_slot(&handler, ContainerName::CraftingInput, 32),
+            Some(1)
+        );
+        assert_eq!(
+            map_bedrock_container_slot(&handler, ContainerName::CraftingInput, 40),
+            Some(9)
+        );
+    }
+
+    #[test]
+    fn item_stack_response_uses_the_authoritative_stack_id() {
+        let stack = ItemStack::new(3, &Item::SPRUCE_DOOR);
+        let container = FullContainerName {
+            container_name: ContainerName::Cursor,
+            dynamic_id: None,
+        };
+        let mut updates = Vec::new();
+
+        record_update(&mut updates, container.clone(), 0, &stack);
+        assert_eq!(updates[0].count, 3);
+        assert_eq!(updates[0].stack_id, VarInt(stack.uid.get()));
+
+        record_update(&mut updates, container, 0, ItemStack::EMPTY);
+        assert_eq!(updates[0].count, 0);
+        assert_eq!(updates[0].stack_id, VarInt(0));
     }
 }

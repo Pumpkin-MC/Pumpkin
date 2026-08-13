@@ -1,5 +1,7 @@
+#![deny(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 // Not warn event sending macros
-#![allow(unused_labels)]
+#![allow(unused_labels, deprecated)]
 
 #[macro_use]
 extern crate pumpkin_macros;
@@ -7,7 +9,11 @@ extern crate pumpkin_macros;
 use crate::crash::CrashReport;
 use crate::data::VanillaData;
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
-use crate::net::bedrock::BedrockClient;
+use crate::net::bedrock::{
+    BedrockClient,
+    nethernet::{NetherNetListener, load_or_create_identity_key},
+    status::StatusResponder,
+};
 use crate::net::java::JavaClient;
 use crate::net::java::pending::PendingConnection;
 use crate::net::{ClientPlatform, DisconnectReason, PacketHandlerResult};
@@ -22,14 +28,14 @@ use rustyline::Editor;
 use rustyline::history::FileHistory;
 use rustyline::{Config, error::ReadlineError};
 use std::collections::HashMap;
-use std::io::{Cursor, ErrorKind, IsTerminal, stdin};
+use std::io::{ErrorKind, IsTerminal, stdin};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
-use tokio::net::{TcpListener, UdpSocket};
+use tokio::net::TcpListener;
 use tokio::select;
 use tokio::sync::Mutex;
 use tokio::time::sleep;
@@ -91,10 +97,13 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let file_logger: Option<GzipRollingLogger> = if advanced_config.logging.file.is_empty() {
             None
         } else {
-            Some(
-                GzipRollingLogger::new(level, advanced_config.logging.file.clone())
-                    .expect("Failed to initialize file logger."),
-            )
+            match GzipRollingLogger::new(level, advanced_config.logging.file.clone()) {
+                Ok(logger) => Some(logger),
+                Err(err) => {
+                    error!("Failed to initialize file logger: {err}");
+                    None
+                }
+            }
         };
 
         let (logger, rl): (
@@ -207,7 +216,8 @@ fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
 pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub tcp_listener: Option<TcpListener>,
-    pub udp_socket: Option<Arc<UdpSocket>>,
+    pub bedrock_status: Option<StatusResponder>,
+    pub nethernet_listener: Option<NetherNetListener>,
 }
 
 impl PumpkinServer {
@@ -260,9 +270,9 @@ impl PumpkinServer {
                 },
             };
             // In the event the user puts 0 for their port, this will allow us to know what port it is running on
-            let addr = listener
-                .local_addr()
-                .expect("Unable to get the address of the server!");
+            let addr = listener.local_addr().unwrap_or_else(|_| {
+                std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
+            });
 
             if server.advanced_config.networking.query.enabled {
                 info!("Query protocol is enabled. Starting...");
@@ -295,21 +305,74 @@ impl PumpkinServer {
             });
         };
 
-        let udp_socket = if server.advanced_config.networking.bedrock.enabled {
-            Some(Arc::new(
-                UdpSocket::bind(server.advanced_config.networking.bedrock.address)
-                    .await
-                    .expect("Failed to bind UDP Socket"),
-            ))
-        } else {
-            None
-        };
+        let nethernet_listener = Self::bind_nethernet(&server).await;
+        let bedrock_status = Self::bind_bedrock_status(&server, nethernet_listener.is_some()).await;
 
         Self {
             server,
             tcp_listener,
-            udp_socket,
+            bedrock_status,
+            nethernet_listener,
         }
+    }
+
+    async fn bind_nethernet(server: &Arc<Server>) -> Option<NetherNetListener> {
+        let config = &server.advanced_config.networking.bedrock;
+        if !config.enabled || !config.nethernet.enabled {
+            return None;
+        }
+        let identity_key = match load_or_create_identity_key(&config.nethernet.identity_key) {
+            Ok(key) => key,
+            Err(err) => {
+                error!("Failed to load or create the Bedrock NetherNet identity key: {err}");
+                return None;
+            }
+        };
+        let _ = server.bedrock_private_key.set(identity_key.clone());
+        let oidc_verifier = if config.online_mode && config.authentication.enabled {
+            let Some((issuer, keys)) = server.bedrock_oidc_keys.get() else {
+                error!("Bedrock OIDC keys should be initialized before binding NetherNet");
+                return None;
+            };
+            Some(Arc::new((issuer.clone(), keys.clone())))
+        } else {
+            None
+        };
+        match NetherNetListener::bind(
+            config.nethernet.address,
+            identity_key,
+            oidc_verifier,
+            config.nethernet.stun_servers.clone(),
+        )
+        .await
+        {
+            Ok(l) => Some(l),
+            Err(err) => {
+                error!("Failed to bind Bedrock NetherNet signaling endpoint: {err}");
+                None
+            }
+        }
+    }
+
+    async fn bind_bedrock_status(server: &Server, enabled: bool) -> Option<StatusResponder> {
+        if !enabled {
+            return None;
+        }
+        let responder = match StatusResponder::bind(
+            server.advanced_config.networking.bedrock.nethernet.address,
+        )
+        .await
+        {
+            Ok(r) => r,
+            Err(err) => {
+                error!("Failed to bind Bedrock server-list status: {err}");
+                return None;
+            }
+        };
+        if let Ok((ipv4, ipv6)) = responder.local_addrs() {
+            info!("Bedrock server-list status is listening on {ipv4} (IPv4) and {ipv6} (IPv6)");
+        }
+        Some(responder)
     }
 
     pub async fn init_plugins(&self) -> std::time::Duration {
@@ -434,8 +497,6 @@ impl PumpkinServer {
         tasks: &Arc<TaskTracker>,
         bedrock_clients: &Arc<Mutex<HashMap<SocketAddr, Arc<BedrockClient>>>>,
     ) -> bool {
-        let mut udp_buf = [0; 1496]; // Buffer for UDP receive
-
         select! {
             // Branch for TCP connections (Java Edition)
             tcp_result = resolve_some(self.tcp_listener.as_ref(), tokio::net::TcpListener::accept) => {
@@ -508,99 +569,45 @@ impl PumpkinServer {
                 }
             },
 
-            // Branch for UDP packets (Bedrock Edition)
-            udp_result = resolve_some(self.udp_socket.as_ref(), |sock: &Arc<UdpSocket>| sock.recv_from(&mut udp_buf)) => {
-                match udp_result {
-                    Ok((len, client_addr)) => {
-                        if len > 0 {
-                            let Some(socket) = self.udp_socket.clone() else {
-                                error!("UDP socket disappeared during receive");
-                                return true;
-                            };
+            // Remote server-list status remains a RakNet unconnected ping/pong even
+            // when the game connection itself is negotiated over NetherNet.
+            status_result = resolve_some(
+                self.bedrock_status.as_ref(),
+                |status: &StatusResponder| status.receive(&self.server),
+            ) => {
+                if let Err(error) = status_result {
+                    debug!("Bedrock status packet failed: {error}");
+                }
+            },
 
-                            let id = udp_buf[0];
-                            let is_online = id & pumpkin_protocol::bedrock::RAKNET_VALID != 0;
+            // Branch for Bedrock NetherNet connections negotiated over HTTP/WebRTC.
+            nethernet_result = resolve_some(self.nethernet_listener.as_ref(), NetherNetListener::accept) => {
+                if let Some((session, client_addr)) = nethernet_result {
+                    *master_client_id_counter += 1;
+                    let be_clients = bedrock_clients.clone();
+                    let client = Arc::new(BedrockClient::new(
+                        session.clone(),
+                        client_addr,
+                        be_clients,
+                    ));
+                    client.start_outgoing_packet_task();
+                    bedrock_clients.lock().await.insert(client_addr, client.clone());
 
-                            if is_online {
-                                let be_clients = bedrock_clients.clone();
-                                let mut clients_guard = bedrock_clients.lock().await;
-
-                                if clients_guard
-                                    .get(&client_addr)
-                                    .is_some_and(|client| client.is_closed())
-                                {
-                                    clients_guard.remove(&client_addr);
-                                }
-
-                                let mut is_new = false;
-                                let client = clients_guard.entry(client_addr).or_insert_with(|| {
-                                    is_new = true;
-                                    *master_client_id_counter += 1;
-
-                                    let new_client = Arc::new(BedrockClient::new(
-                                        socket,
-                                        client_addr,
-                                        be_clients
-                                    ));
-
-                                    new_client.start_outgoing_packet_task();
-                                    new_client
-                                }).clone();
-
-                                if is_new {
-                                    let server_clone = self.server.clone();
-                                    let client_clone = client.clone();
-                                    tasks.spawn(async move {
-                                        let login_result = client_clone.handle_login_sequence(&server_clone).await;
-
-                                         match login_result {
-                                            PacketHandlerResult::Stop => {
-                                                client_clone.close().await;
-                                                client_clone.await_tasks().await;
-                                            }
-                                            PacketHandlerResult::ReadyToPlay(profile, config) => {
-                                                if let Some((player, _world)) = server_clone
-                                                    .add_player(Arc::new(ClientPlatform::Bedrock(client_clone.clone())), profile, Some(config))
-                                                    .await
-                                                {
-                                                    client_clone.set_player(player.clone());
-
-                                                    client_clone.progress_player_packets(&player, &server_clone).await;
-
-                                                    client_clone.close().await;
-                                                    client_clone.await_tasks().await;
-                                                    player.remove().await;
-                                                    server_clone.remove_player(&player).await;
-                                                    if let Err(e) = server_clone.player_data_storage
-                                                        .handle_player_leave(&player)
-                                                        .await {
-                                                            error!("Failed to save player data on disconnect: {e}");
-                                                        }
-                                                }
-                                            }
-                                        }
-                                    });
-                                }
-
-                                let packet_bytes = udp_buf[..len].to_vec();
-                                let server = self.server.clone();
-
-                                tasks.spawn(async move {
-                                    client.process_packet(&server, packet_bytes.into()).await;
-                                });
-                            } else if let Some(sock) = self.udp_socket.as_ref() {
-                                let _ = BedrockClient::handle_offline_packet(
-                                    &self.server,
-                                    id,
-                                    &mut Cursor::new(&udp_buf[1..len]),
-                                    client_addr,
-                                    sock,
-                                    bedrock_clients,
-                                ).await;
+                    let packet_client = client.clone();
+                    let packet_server = self.server.clone();
+                    tasks.spawn(async move {
+                        while let Some(packet) = session.recv().await {
+                            packet_client
+                                .process_nethernet_packet(&packet_server, packet)
+                                .await;
+                            if packet_client.is_closed() {
+                                break;
                             }
                         }
-                    }
-                    Err(e) => error!("UDP socket error: {e}"),
+                        packet_client.close().await;
+                    });
+
+                    self.spawn_bedrock_client_task(client, tasks);
                 }
             },
 
@@ -610,6 +617,43 @@ impl PumpkinServer {
             }
         }
         true
+    }
+
+    fn spawn_bedrock_client_task(&self, client: Arc<BedrockClient>, tasks: &Arc<TaskTracker>) {
+        let server = self.server.clone();
+        tasks.spawn(async move {
+            let login_result = client.handle_login_sequence(&server).await;
+            match login_result {
+                PacketHandlerResult::Stop => {
+                    client.close().await;
+                    client.await_tasks().await;
+                }
+                PacketHandlerResult::ReadyToPlay(profile, config) => {
+                    if let Some((player, _world)) = server
+                        .add_player(
+                            Arc::new(ClientPlatform::Bedrock(client.clone())),
+                            profile,
+                            Some(config),
+                        )
+                        .await
+                    {
+                        client.set_player(player.clone());
+                        client.progress_player_packets(&player, &server).await;
+                        client.close().await;
+                        client.await_tasks().await;
+                        player.remove().await;
+                        server.remove_player(&player).await;
+                        if let Err(error) = server
+                            .player_data_storage
+                            .handle_player_leave(&player)
+                            .await
+                        {
+                            error!("Failed to save player data on disconnect: {error}");
+                        }
+                    }
+                }
+            }
+        });
     }
 }
 
@@ -630,8 +674,7 @@ fn setup_stdin_console(server: Arc<Server>) {
             if line.is_empty() || line.as_bytes()[line.len() - 1] != b'\n' {
                 warn!("Console command was not terminated with a newline");
             }
-            rt.block_on(tx.send(line.trim().to_string()))
-                .expect("Failed to send command to server");
+            let _ = rt.block_on(tx.send(line.trim().to_string()));
         }
     });
     tokio::spawn(async move {

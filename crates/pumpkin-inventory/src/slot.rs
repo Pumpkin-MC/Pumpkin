@@ -24,7 +24,6 @@ use std::{
         Arc,
         atomic::{AtomicU8, Ordering},
     },
-    time::Duration,
 };
 
 use crate::screen_handler::InventoryPlayer;
@@ -33,7 +32,6 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::inventory::Inventory;
-use tokio::{sync::Mutex, time::timeout};
 
 /// Type alias for async slot operations.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -101,37 +99,21 @@ pub trait Slot: Send + Sync {
     }
 
     /// Gets the stack in this slot.
-    fn get_stack(&self) -> BoxFuture<'_, Arc<Mutex<ItemStack>>> {
+    fn get_stack(&self) -> BoxFuture<'_, ItemStack> {
         // Default implementation logic:
         Box::pin(async move { self.get_inventory().get_stack(self.get_index()).await })
     }
 
     /// Gets a copy of the stack in this slot.
-    ///
-    /// Acquires a lock and returns a clone of the stack.
     fn get_cloned_stack(&self) -> BoxFuture<'_, ItemStack> {
         // Default implementation logic:
-        Box::pin(async move {
-            let stack = self.get_stack().await;
-            let lock = timeout(Duration::from_secs(5), stack.lock())
-                .await
-                .expect("Timed out while trying to acquire lock");
-
-            lock.clone()
-        })
+        Box::pin(async move { self.get_stack().await })
     }
 
     /// Checks if this slot has a non-empty stack.
     fn has_stack(&self) -> BoxFuture<'_, bool> {
         // Default implementation logic:
-        Box::pin(async move {
-            let inv = self.get_inventory();
-            !inv.get_stack(self.get_index())
-                .await
-                .lock()
-                .await
-                .is_empty()
-        })
+        Box::pin(async move { !self.get_stack().await.is_empty() })
     }
 
     /// Sets the stack in this slot.
@@ -295,22 +277,18 @@ pub trait Slot: Send + Sync {
         // Default implementation logic:
         Box::pin(async move {
             if !stack.is_empty() && self.can_insert(&stack).await {
-                let stack_mutex = self.get_stack().await;
-                let mut stack_self = stack_mutex.lock().await;
+                let mut stack_self = self.get_stack().await;
                 let min_count = count
                     .min(stack.item_count)
                     .min(self.get_max_item_count_for_stack(&stack).await - stack_self.item_count);
 
                 if min_count != 0 {
                     if stack_self.is_empty() {
-                        drop(stack_self);
                         self.set_stack(stack.split(min_count)).await;
                     } else if stack.are_items_and_components_equal(&stack_self) {
                         stack.decrement(min_count);
                         stack_self.increment(min_count);
-                        let cloned_stack = stack_self.clone();
-                        drop(stack_self);
-                        self.set_stack(cloned_stack).await;
+                        self.set_stack(stack_self).await;
                     }
                 }
             }

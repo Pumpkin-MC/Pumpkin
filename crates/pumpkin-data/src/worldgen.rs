@@ -1,9 +1,21 @@
-use pumpkin_registry::{BoxedRegistry, MutableRegistry, Registry, RootRegistryReference, error::{RegistryInsertError, RegistryTreeError}};
+use pumpkin_registry::{
+    Registry, RegistryBuilder,
+    bootstrap::RegistryEntry,
+    bootstrap_provider,
+};
 use pumpkin_util::identifier::Identifier;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
-pub async fn initialize(root: RootRegistryReference) -> Result<(), RegistryTreeError> {
-    let worldgen = MutableRegistry::<BoxedRegistry>::new(&[], &[])?;
-    root.register(Identifier::vanilla_static("worldgen"), Box::new(worldgen)).await?;
-    Ok(())
+bootstrap_provider! {
+    WORLDGEN_REGISTRY: Arc<dyn Registry> => "minecraft:root",
+    || {
+        vec![RegistryEntry::new(
+            Identifier::vanilla_static("worldgen"),
+            RegistryBuilder::<Arc<dyn Registry>>::frozen(
+                &Identifier::vanilla_static("worldgen"),
+            )
+            .unwrap()
+            .arc_dyn(),
+        )]
+    }
 }

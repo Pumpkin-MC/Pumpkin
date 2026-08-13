@@ -39,7 +39,10 @@ impl LevelChannel {
         pos: Vec<ChunkPos>,
     ) {
         // debug!("set new level and priority");
-        let mut value = self.value.lock().unwrap();
+        let mut value = self
+            .value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         value.1 = Some(pos);
         if let Some(old) = &mut value.0 {
             for (pos, change) in new_value.0 {
@@ -73,7 +76,10 @@ impl LevelChannel {
         ),
     ) {
         // debug!("set new level");
-        let mut value = self.value.lock().unwrap();
+        let mut value = self
+            .value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(old) = &mut value.0 {
             for (pos, change) in new_value.0 {
                 match old.0.entry(pos) {
@@ -100,24 +106,36 @@ impl LevelChannel {
     }
     pub fn set_priority(&self, pos: Vec<ChunkPos>) {
         // debug!("set new priority");
-        self.value.lock().unwrap().1 = Some(pos);
+        self.value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .1 = Some(pos);
         self.notify.notify_one();
     }
     pub fn get(&self) -> (Option<LevelChange>, Option<Vec<ChunkPos>>) {
-        let mut lock = self.value.lock().unwrap();
+        let mut lock = self
+            .value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut ret = (None, None);
         swap(&mut ret, &mut *lock);
         ret
     }
     pub fn wait_and_get(&self, level: &Arc<Level>) -> (Option<LevelChange>, Option<Vec<ChunkPos>>) {
-        let mut lock = self.value.lock().unwrap();
+        let mut lock = self
+            .value
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         while lock.0.is_none()
             && lock.1.is_none()
             && !level.should_unload.load(SeqCst)
             && !level.should_save.load(SeqCst)
             && !level.shut_down_chunk_system.load(SeqCst)
         {
-            lock = self.notify.wait(lock).unwrap();
+            lock = self
+                .notify
+                .wait(lock)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
         }
         let mut ret = (None, None);
         swap(&mut ret, &mut *lock);

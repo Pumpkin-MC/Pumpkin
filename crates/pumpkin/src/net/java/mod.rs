@@ -16,7 +16,7 @@ use pumpkin_protocol::java::server::play::{
     SClickSlot, SClientCommand, SClientInformationPlay, SClientTickEnd, SCloseContainer,
     SCommandSuggestion, SConfirmTeleport, SContainerButtonClick,
     SCookieResponse as SPCookieResponse, SCustomPayload, SDebugSampleSubscription,
-    SDebugSubscriptionRequest, SInteract, SJigsawGenerate, SMoveVehicle, SPaddleBoat,
+    SDebugSubscriptionRequest, SEditBook, SInteract, SJigsawGenerate, SMoveVehicle, SPaddleBoat,
     SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
     SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
     SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings, SRecipeBookSeenRecipe, SRenameItem,
@@ -178,7 +178,12 @@ impl JavaClient {
     }
 
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
-        let Some(mut network_reader) = self.network_reader.lock().unwrap().take() else {
+        let Some(mut network_reader) = self
+            .network_reader
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        else {
             return;
         };
 
@@ -193,7 +198,7 @@ impl JavaClient {
                 _ = keep_alive_interval.tick() => {
                     // If the client never responded to the LAST keep-alive, they timed out.
                     if self.wait_for_keep_alive.load(Ordering::Relaxed) {
-                        self.kick(TextComponent::translate(translation::java::DISCONNECT_TIMEOUT, [])).await;
+                        self.kick(pumpkin_macros::translate_cross!(translation::java::DISCONNECT_TIMEOUT, translation::bedrock::DISCONNECT_TIMEOUT)).await;
                         break;
                     }
 
@@ -532,16 +537,19 @@ impl JavaClient {
     pub fn start_outgoing_packet_task(&mut self) {
         const MAX_BATCH_SIZE: usize = 64;
 
-        let mut packet_receiver = self
-            .outgoing_packet_queue_recv
-            .take()
-            .expect("This was set in the new fn");
-        let mut priority_packet_receiver = self
-            .outgoing_packet_priority_recv
-            .take()
-            .expect("This was set in the new fn");
+        let Some(mut packet_receiver) = self.outgoing_packet_queue_recv.take() else {
+            return;
+        };
+        let Some(mut priority_packet_receiver) = self.outgoing_packet_priority_recv.take() else {
+            return;
+        };
         let close_token = self.close_token.clone();
-        let Some(mut writer) = self.network_writer.lock().unwrap().take() else {
+        let Some(mut writer) = self
+            .network_writer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        else {
             return;
         };
         let id = self.id;
@@ -885,6 +893,10 @@ impl JavaClient {
             }
             id if id == SUpdateSign::to_id(version) => {
                 self.handle_sign_update(player, SUpdateSign::read(&mut payload, &version)?)
+                    .await;
+            }
+            id if id == SEditBook::to_id(version) => {
+                self.handle_edit_book(player, SEditBook::read(&mut payload, &version)?)
                     .await;
             }
             id if id == SUseItemOn::to_id(version) => {

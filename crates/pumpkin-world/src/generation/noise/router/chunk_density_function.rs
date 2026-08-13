@@ -5,7 +5,7 @@ use super::{
     chunk_noise_router::{ChunkNoiseFunctionComponent, MutableChunkNoiseFunctionComponentImpl},
     density_function::{IndexToNoisePos, NoiseFunctionComponentRange},
 };
-use pumpkin_util::math::{lerp, lerp3, vector3::Vector3};
+use pumpkin_util::math::{lerp, lerp2, lerp3, vector3::Vector3};
 
 use crate::generation::{biome_coords, positions::chunk_pos};
 
@@ -369,10 +369,46 @@ impl MutableChunkNoiseFunctionComponentImpl for DensityInterpolator {
         sample_options: &mut ChunkNoiseFunctionSampleOptions,
     ) {
         if sample_options.populating_caches {
+            let mut cached_xy_delta: Option<(f64, f64)> = None;
+            let mut cached_a = 0.0;
+            let mut cached_b = 0.0;
+
             array.iter_mut().enumerate().for_each(|(index, value)| {
                 let pos = mapper.at(index, Some(sample_options));
-                let result = self.sample(component_stack, &pos, sample_options);
-                *value = result;
+
+                let SampleAction::CellCaches(WrapperData {
+                    x_delta,
+                    y_delta,
+                    z_delta,
+                    ..
+                }) = &sample_options.action
+                else {
+                    *value = self.sample(component_stack, &pos, sample_options);
+                    return;
+                };
+                let (x_delta, y_delta, z_delta) = (*x_delta, *y_delta, *z_delta);
+
+                if cached_xy_delta != Some((x_delta, y_delta)) {
+                    cached_a = lerp2(
+                        x_delta,
+                        y_delta,
+                        self.first_pass[0],
+                        self.first_pass[4],
+                        self.first_pass[2],
+                        self.first_pass[6],
+                    );
+                    cached_b = lerp2(
+                        x_delta,
+                        y_delta,
+                        self.first_pass[1],
+                        self.first_pass[5],
+                        self.first_pass[3],
+                        self.first_pass[7],
+                    );
+                    cached_xy_delta = Some((x_delta, y_delta));
+                }
+
+                *value = lerp(z_delta, cached_a, cached_b);
             });
         } else {
             ChunkNoiseFunctionComponent::fill_from_stack(
@@ -719,19 +755,6 @@ impl CellCache {
             ),
             min_value,
             max_value,
-        }
-    }
-
-    /// Clones this instance, creating a new struct taking ownership of the cache and replacing the
-    /// original with a dummy
-    fn take_cache_clone(&mut self) -> Self {
-        let mut cache: Box<[f64]> = Box::new([]);
-        mem::swap(&mut cache, &mut self.cache);
-        Self {
-            input_index: self.input_index,
-            cache,
-            min_value: self.min_value,
-            max_value: self.max_value,
         }
     }
 }

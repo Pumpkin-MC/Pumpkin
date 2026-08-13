@@ -3,12 +3,15 @@ use std::io::{Error, Read};
 use pumpkin_macros::packet;
 use pumpkin_util::math::position::BlockPos;
 
-use crate::{codec::var_int::VarInt, serial::PacketRead};
+use crate::{
+    codec::{var_int::VarInt, var_ulong::VarULong},
+    serial::PacketRead,
+};
 
 #[derive(Debug, PacketRead)]
 #[packet(36)]
 pub struct SPlayerAction {
-    pub runtime_id: VarInt,
+    pub runtime_id: VarULong,
     pub action: Action,
     pub block_pos: BlockPos,
     pub result_pos: BlockPos,
@@ -18,6 +21,7 @@ pub struct SPlayerAction {
 #[derive(Debug)]
 #[repr(i32)]
 pub enum Action {
+    Unknown = -1,
     StartBreak = 0,
     AbortBreak = 1,
     StopBreak = 2,
@@ -56,6 +60,9 @@ pub enum Action {
     StartFlying = 34,
     StopFlying = 35,
     ClientAckServerData = 36,
+    StartUsingItem = 37,
+    InternalUpdate = 38,
+    Count = 39,
 }
 
 impl TryFrom<i32> for Action {
@@ -63,6 +70,7 @@ impl TryFrom<i32> for Action {
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
+            -1 => Ok(Self::Unknown),
             0 => Ok(Self::StartBreak),
             1 => Ok(Self::AbortBreak),
             2 => Ok(Self::StopBreak),
@@ -100,6 +108,9 @@ impl TryFrom<i32> for Action {
             34 => Ok(Self::StartFlying),
             35 => Ok(Self::StopFlying),
             36 => Ok(Self::ClientAckServerData),
+            37 => Ok(Self::StartUsingItem),
+            38 => Ok(Self::InternalUpdate),
+            39 => Ok(Self::Count),
             _ => Err(format!("Invalid action ID: {value}")),
         }
     }

@@ -139,6 +139,20 @@ impl TextComponentBase {
                     compound.put_list("with", list);
                 }
             }
+            TextContent::PlayerSprite {
+                type_name,
+                profile,
+                hat,
+            } => {
+                let full_type = if type_name.contains(':') {
+                    type_name.to_string()
+                } else {
+                    format!("minecraft:{type_name}")
+                };
+                compound.put_string("type", full_type);
+                compound.put_compound("player", profile.0.clone());
+                compound.put_byte("hat", i8::from(*hat));
+            }
         }
 
         if let Some(ref color) = self.style.color {
@@ -238,30 +252,26 @@ impl TextComponentBase {
                 }
                 HoverEvent::ShowItem { id, count } => {
                     hover_tag.put_string("action", "show_item".to_string());
-                    let mut item_tag = pumpkin_nbt::NbtCompound::new();
-                    item_tag.put_string("id", id.to_string());
+                    hover_tag.put_string("id", id.to_string());
                     if let Some(cnt) = count {
-                        item_tag.put_int("count", *cnt);
+                        hover_tag.put_int("count", *cnt);
                     }
-                    hover_tag.put_compound("item", item_tag);
                 }
                 HoverEvent::ShowEntity { id, uuid, name } => {
                     hover_tag.put_string("action", "show_entity".to_string());
-                    let mut entity_tag = pumpkin_nbt::NbtCompound::new();
-                    entity_tag.put_string("id", id.to_string());
-                    entity_tag.put_string("uuid", uuid.to_string());
+                    hover_tag.put_string("id", id.to_string());
+                    hover_tag.put_string("uuid", uuid.to_string());
                     if let Some(n) = name {
                         if n.len() == 1 {
-                            entity_tag.put_compound("name", n[0].to_nbt_compound());
+                            hover_tag.put_compound("name", n[0].to_nbt_compound());
                         } else {
                             let list = n
                                 .iter()
                                 .map(|e| pumpkin_nbt::tag::NbtTag::Compound(e.to_nbt_compound()))
                                 .collect();
-                            entity_tag.put_list("name", list);
+                            hover_tag.put_list("name", list);
                         }
                     }
-                    hover_tag.put_compound("entity", entity_tag);
                 }
             }
             compound.put_compound("hover_event", hover_tag);
@@ -304,6 +314,10 @@ impl TextComponentBase {
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
             TextContent::Custom { key, with, .. } => translation_to_pretty(key, Locale::EnUs, with),
+            TextContent::PlayerSprite { ref profile, .. } => profile
+                .0
+                .get_string("name")
+                .map_or_else(|| "player_sprite".to_string(), ToString::to_string),
         };
         let style = self.style;
         let color = style.color;
@@ -355,6 +369,11 @@ impl TextComponentBase {
             TextContent::Keybind { keybind } => text.push_str(keybind),
             TextContent::Custom { key, .. } => {
                 let _ = write!(text, "%{key}");
+            }
+            TextContent::PlayerSprite { profile, .. } => {
+                if let Some(name) = profile.0.get_string("name") {
+                    text.push_str(name);
+                }
             }
         }
 
@@ -416,6 +435,11 @@ impl TextComponentBase {
             TextContent::Custom { key, with, .. } => {
                 text.push_str(&get_translation_text(key.clone(), locale, with.clone()));
             }
+            TextContent::PlayerSprite { profile, .. } => {
+                if let Some(name) = profile.0.get_string("name") {
+                    text.push_str(name);
+                }
+            }
         }
 
         // 3. Recursively append extra components
@@ -454,6 +478,11 @@ impl TextComponentBase {
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
             TextContent::Custom { key, with, .. } => get_translation_text(key, locale, with),
+            TextContent::PlayerSprite { profile, .. } => profile
+                .0
+                .get_string("name")
+                .map(ToString::to_string)
+                .unwrap_or_default(),
         };
 
         // Recursively append the text of all child components
@@ -634,6 +663,10 @@ impl TextComponent {
     ///
     /// # Returns
     /// A new `TextComponent` that will be translated on the client.
+    #[deprecated(
+        since = "0.1.0",
+        note = "Use the `pumpkin_macros::translate_java!` macro instead for compile-time translation key and parameter checking."
+    )]
     #[must_use]
     pub fn translate<K: Into<Cow<'static, str>>, W: Into<Vec<Self>>>(key: K, with: W) -> Self {
         Self(TextComponentBase {
@@ -656,6 +689,10 @@ impl TextComponent {
     ///
     /// # Returns
     /// A new `TextComponent` that will be translated natively on both clients.
+    #[deprecated(
+        since = "0.1.0",
+        note = "Use the `pumpkin_macros::translate_cross!` macro instead for compile-time translation key and parameter checking."
+    )]
     #[must_use]
     pub fn translate_cross<
         K1: Into<Cow<'static, str>>,
@@ -804,6 +841,20 @@ impl TextComponent {
 }
 
 impl TextComponent {
+    /// Creates a player sprite component.
+    #[must_use]
+    pub fn player_sprite(profile: pumpkin_nbt::NbtCompound, hat: bool) -> Self {
+        Self(TextComponentBase {
+            content: Box::new(TextContent::PlayerSprite {
+                type_name: Cow::Borrowed("minecraft:player_sprite"),
+                profile: ProfileNbt(profile),
+                hat,
+            }),
+            style: Box::default(),
+            extra: vec![],
+        })
+    }
+
     /// Encodes this component into a byte array using NBT serialization.
     ///
     /// # Returns
@@ -980,6 +1031,7 @@ impl TextComponent {
     ///
     /// # Returns
     /// The new component.
+    #[allow(deprecated)]
     #[must_use]
     pub fn wrap_in_square_brackets(self) -> Self {
         Self::translate("chat.square_brackets", [self])
@@ -1162,6 +1214,17 @@ impl TextComponent {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProfileNbt(pub pumpkin_nbt::NbtCompound);
+
+impl Eq for ProfileNbt {}
+
+impl std::hash::Hash for ProfileNbt {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.to_string().hash(state);
+    }
+}
+
 /// The content type of the text component.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(untagged)]
@@ -1207,15 +1270,24 @@ pub enum TextContent {
         /// Substitution parameters for the translation.
         with: Vec<TextComponentBase>,
     },
+    /// A player sprite object component.
+    #[serde(skip)]
+    PlayerSprite {
+        type_name: Cow<'static, str>,
+        profile: ProfileNbt,
+        hat: bool,
+    },
 }
 
 /// Tests for the text component implementations.
 #[cfg(test)]
 mod test {
-    use crate::text::{TextComponent, color::NamedColor};
+    use crate::text::{TextComponent, color::NamedColor, hover::HoverEvent};
+    use std::borrow::Cow;
 
     #[test]
     fn serialize_text_component() {
+        #[allow(deprecated)]
         let msg_comp = TextComponent::translate(
             "multiplayer.player.joined",
             [TextComponent::text("NAME".to_string())],
@@ -1231,5 +1303,56 @@ mod test {
         );
         let decoded = pumpkin_nbt::Nbt::read_unnamed(&mut reader).unwrap();
         assert_eq!(decoded, expected_compound.into());
+    }
+
+    /// The client expects the hover event payload to be inlined next to `action`.
+    /// Nesting it under `item`/`entity` makes the component fail to decode and
+    /// kicks the player off the server.
+    #[test]
+    fn hover_event_payload_is_inlined() {
+        let show_item = TextComponent::text("sword")
+            .hover_event(HoverEvent::ShowItem {
+                id: Cow::Borrowed("minecraft:diamond_sword"),
+                count: Some(1),
+            })
+            .0
+            .to_nbt_compound();
+        let hover = show_item.get_compound("hover_event").unwrap();
+        assert_eq!(hover.get_string("action"), Some("show_item"));
+        assert_eq!(hover.get_string("id"), Some("minecraft:diamond_sword"));
+        assert_eq!(hover.get_int("count"), Some(1));
+        assert!(hover.get_compound("item").is_none());
+
+        let show_entity = TextComponent::text("pig")
+            .hover_event(HoverEvent::show_entity(
+                "6ba1a740-9a3b-4b7c-8f2c-8f5a5c1a0a11",
+                "minecraft:pig",
+                None,
+            ))
+            .0
+            .to_nbt_compound();
+        let hover = show_entity.get_compound("hover_event").unwrap();
+        assert_eq!(hover.get_string("action"), Some("show_entity"));
+        assert_eq!(hover.get_string("id"), Some("minecraft:pig"));
+        assert_eq!(
+            hover.get_string("uuid"),
+            Some("6ba1a740-9a3b-4b7c-8f2c-8f5a5c1a0a11")
+        );
+        assert!(hover.get_compound("entity").is_none());
+    }
+
+    /// `count` is optional for the client, so it must stay out of the payload
+    /// when it was never set.
+    #[test]
+    fn hover_show_item_omits_unset_count() {
+        let compound = TextComponent::text("sword")
+            .hover_event(HoverEvent::ShowItem {
+                id: Cow::Borrowed("minecraft:diamond_sword"),
+                count: None,
+            })
+            .0
+            .to_nbt_compound();
+        let hover = compound.get_compound("hover_event").unwrap();
+        assert!(hover.get_int("count").is_none());
     }
 }

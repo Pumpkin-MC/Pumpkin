@@ -168,12 +168,20 @@ impl MobEntity {
     }
 
     pub async fn clear_ai_goals(&self, mob: &dyn Mob) {
-        let running_goals = self.goals_selector.lock().unwrap().clear();
+        let running_goals = self
+            .goals_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         for mut goal in running_goals {
             goal.goal.stop(mob).await;
         }
 
-        let running_target_goals = self.target_selector.lock().unwrap().clear();
+        let running_target_goals = self
+            .target_selector
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         for mut goal in running_target_goals {
             goal.goal.stop(mob).await;
         }
@@ -182,7 +190,7 @@ impl MobEntity {
     pub fn add_goal<G: crate::entity::ai::goal::Goal + 'static>(&self, priority: u8, goal: G) {
         self.goals_selector
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .add_goal(priority, Box::new(goal));
     }
 
@@ -193,7 +201,7 @@ impl MobEntity {
     ) {
         self.target_selector
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .add_goal(priority, Box::new(goal));
     }
 
@@ -500,6 +508,20 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        None
+    }
+
+    fn is_saddled(&self) -> bool {
+        false
+    }
+
+    fn can_be_saddled(&self) -> bool {
+        false
+    }
+
+    fn set_saddled(&self, _saddled: bool) {}
+
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
@@ -597,10 +619,18 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn mob_set_variant_name(&self, _name: &str) {}
+
+    fn get_sheep(&self) -> Option<&crate::entity::passive::sheep::SheepEntity> {
+        None
+    }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
+    }
+
+    fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {
+        Mob::get_item_steerable(self)
     }
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
@@ -629,6 +659,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_set_variant_name(name);
     }
 
+    #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
         caller: &'a Arc<dyn EntityBase>,
@@ -666,11 +697,17 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             // 1. "Take" selectors out of the mutexes
             let mut target_selector = {
-                let mut guard = mob_entity.target_selector.lock().unwrap();
+                let mut guard = mob_entity
+                    .target_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 std::mem::take(&mut *guard)
             };
             let mut goals_selector = {
-                let mut guard = mob_entity.goals_selector.lock().unwrap();
+                let mut guard = mob_entity
+                    .goals_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 std::mem::take(&mut *guard)
             };
 
@@ -685,30 +722,48 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             // 3. "Put back" selectors
             {
-                *mob_entity.target_selector.lock().unwrap() = target_selector;
-                *mob_entity.goals_selector.lock().unwrap() = goals_selector;
+                *mob_entity
+                    .target_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = target_selector;
+                *mob_entity
+                    .goals_selector
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = goals_selector;
             };
 
             // 4. Repeat for Navigator
             let mut navigator = {
-                let mut guard = mob_entity.navigator.lock().unwrap();
+                let mut guard = mob_entity
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 std::mem::take(&mut *guard)
             };
 
             navigator.tick(&mob_entity.living_entity).await;
 
             {
-                *mob_entity.navigator.lock().unwrap() = navigator;
+                *mob_entity
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
             };
 
             // Controllers are synchronous, so we can just use normal blocks
             {
-                let mut look_control = mob_entity.look_control.lock().unwrap();
+                let mut look_control = mob_entity
+                    .look_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 look_control.tick(self);
             };
 
             {
-                let mut move_control = mob_entity.move_control.lock().unwrap();
+                let mut move_control = mob_entity
+                    .move_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 move_control.tick(self);
             };
 
@@ -892,7 +947,11 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
     fn is_navigation<'a>(&'a self) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
         Box::pin(async {
-            let navigator = self.get_mob_entity().navigator.lock().unwrap();
+            let navigator = self
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             !navigator.is_idle()
         })
     }

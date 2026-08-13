@@ -879,7 +879,9 @@ impl HostEntity for PluginHostState {
         priority: u8,
         goal_id: u32,
     ) -> wasmtime::Result<()> {
-        let plugin = self.plugin.as_ref().unwrap().upgrade().unwrap();
+        let Some(plugin) = self.plugin.as_ref().and_then(std::sync::Weak::upgrade) else {
+            return Err(wasmtime::Error::msg("Plugin not active"));
+        };
         let entity = entity_from_resource(self, &entity)?;
         if let Some(mob) = entity.get_mob() {
             let mob_entity = mob.get_mob_entity();
@@ -1007,9 +1009,15 @@ impl Goal for CustomWasmGoal {
             {
                 match self.plugin.plugin_instance {
                     PluginInstance::V0_1(ref plugin) => {
-                        let server = store.data_mut().server.clone().unwrap();
-                        let server_res = store.data_mut().add_server(server).unwrap();
-                        let entity_res = store.data_mut().add_entity(entity_arc).unwrap();
+                        let Some(server) = store.data_mut().server.clone() else {
+                            return false;
+                        };
+                        let Ok(server_res) = store.data_mut().add_server(server) else {
+                            return false;
+                        };
+                        let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
+                            return false;
+                        };
                         plugin
                             .call_handle_ai_goal_can_start(
                                 &mut *store,
@@ -1038,9 +1046,15 @@ impl Goal for CustomWasmGoal {
             {
                 match self.plugin.plugin_instance {
                     PluginInstance::V0_1(ref plugin) => {
-                        let server = store.data_mut().server.clone().unwrap();
-                        let server_res = store.data_mut().add_server(server).unwrap();
-                        let entity_res = store.data_mut().add_entity(entity_arc).unwrap();
+                        let Some(server) = store.data_mut().server.clone() else {
+                            return false;
+                        };
+                        let Ok(server_res) = store.data_mut().add_server(server) else {
+                            return false;
+                        };
+                        let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
+                            return false;
+                        };
                         plugin
                             .call_handle_ai_goal_should_continue(
                                 &mut *store,
@@ -1069,9 +1083,15 @@ impl Goal for CustomWasmGoal {
             {
                 match self.plugin.plugin_instance {
                     PluginInstance::V0_1(ref plugin) => {
-                        let server = store.data_mut().server.clone().unwrap();
-                        let server_res = store.data_mut().add_server(server).unwrap();
-                        let entity_res = store.data_mut().add_entity(entity_arc).unwrap();
+                        let Some(server) = store.data_mut().server.clone() else {
+                            return;
+                        };
+                        let Ok(server_res) = store.data_mut().add_server(server) else {
+                            return;
+                        };
+                        let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
+                            return;
+                        };
                         let _ = plugin
                             .call_handle_ai_goal_start(
                                 &mut *store,
@@ -1097,9 +1117,15 @@ impl Goal for CustomWasmGoal {
             {
                 match self.plugin.plugin_instance {
                     PluginInstance::V0_1(ref plugin) => {
-                        let server = store.data_mut().server.clone().unwrap();
-                        let server_res = store.data_mut().add_server(server).unwrap();
-                        let entity_res = store.data_mut().add_entity(entity_arc).unwrap();
+                        let Some(server) = store.data_mut().server.clone() else {
+                            return;
+                        };
+                        let Ok(server_res) = store.data_mut().add_server(server) else {
+                            return;
+                        };
+                        let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
+                            return;
+                        };
                         let _ = plugin
                             .call_handle_ai_goal_tick(
                                 &mut *store,
@@ -1125,9 +1151,15 @@ impl Goal for CustomWasmGoal {
             {
                 match self.plugin.plugin_instance {
                     PluginInstance::V0_1(ref plugin) => {
-                        let server = store.data_mut().server.clone().unwrap();
-                        let server_res = store.data_mut().add_server(server).unwrap();
-                        let entity_res = store.data_mut().add_entity(entity_arc).unwrap();
+                        let Some(server) = store.data_mut().server.clone() else {
+                            return;
+                        };
+                        let Ok(server_res) = store.data_mut().add_server(server) else {
+                            return;
+                        };
+                        let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
+                            return;
+                        };
                         let _ = plugin
                             .call_handle_ai_goal_stop(
                                 &mut *store,

@@ -87,9 +87,7 @@ impl CakeBlock {
                     .await;
                 BlockActionResult::Consume
             }
-            _ => {
-                panic!("invalid bite index");
-            }
+            _ => BlockActionResult::Pass,
         }
     }
 }
@@ -115,9 +113,7 @@ impl BlockBehaviour for CakeBlock {
         Box::pin(async move {
             let state_id = args.world.get_block_state_id(args.position);
             let properties = CakeLikeProperties::from_state_id(state_id, args.block);
-            let item_lock = args.item_stack.lock().await;
-            let item = item_lock.item;
-            drop(item_lock);
+            let item = args.item_stack.item;
             match item.id {
                 id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id) => {
                     if properties.bites != 0 {
@@ -132,9 +128,7 @@ impl BlockBehaviour for CakeBlock {
                     }
 
                     if args.player.gamemode.load() != GameMode::Creative {
-                        let held_item = args.player.inventory.held_item();
-                        let mut held_item_guard = held_item.lock().await;
-                        held_item_guard.decrement(1);
+                        args.item_stack.decrement(1);
                     }
                     args.world
                         .set_block_state(

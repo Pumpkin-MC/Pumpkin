@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::{math::vector2::Vector2, text::TextComponent};
 
 use crate::command::{
@@ -15,8 +16,6 @@ use crate::command::{
 const NAMES: [&str; 1] = ["worldborder"];
 
 const DESCRIPTION: &str = "Worldborder command.";
-
-const NOTHING_CHANGED_EXCEPTION: &str = "commands.worldborder.set.failed.nochange";
 
 const fn distance_consumer() -> BoundedNumArgumentConsumer<f64> {
     BoundedNumArgumentConsumer::new().min(0.0).name("distance")
@@ -59,10 +58,10 @@ impl CommandExecutor for GetExecutor {
 
             let diameter = border.new_diameter.round() as i32;
             sender
-                .send_message(TextComponent::translate_cross(
-                    "commands.worldborder.get",
-                    "commands.worldborder.get",
-                    [TextComponent::text(diameter.to_string())],
+                .send_message(pumpkin_macros::translate_cross!(
+                    translation::java::COMMANDS_WORLDBORDER_GET,
+                    translation::bedrock::COMMANDS_WORLDBORDER_GET_SUCCESS,
+                    TextComponent::text(diameter.to_string())
                 ))
                 .await;
 
@@ -96,22 +95,24 @@ impl CommandExecutor for SetExecutor {
             };
 
             if (distance - border.new_diameter).abs() < f64::EPSILON {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    NOTHING_CHANGED_EXCEPTION,
-                    NOTHING_CHANGED_EXCEPTION,
-                    [],
-                )));
+                return Err(CommandError::CommandFailed(
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_WORLDBORDER_SET_FAILED_NOCHANGE,
+                        translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS
+                    ),
+                ));
             }
 
+            let d = border.new_diameter;
             sender
-                .send_message(TextComponent::translate_cross(
-                    "commands.worldborder.set.immediate",
-                    "commands.worldborder.set.immediate",
-                    [TextComponent::text(format!("{distance:.1}"))],
+                .send_message(pumpkin_macros::translate_cross!(
+                    translation::java::COMMANDS_WORLDBORDER_SET_IMMEDIATE,
+                    translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS,
+                    TextComponent::text(format!("{distance:.1}")),
+                    TextComponent::text(format!("{d:.1}"))
                 ))
                 .await;
 
-            let d = border.new_diameter;
             border.set_diameter(world, distance, None);
 
             Ok((distance - d) as i32)
@@ -149,37 +150,37 @@ impl CommandExecutor for SetTimeExecutor {
                 ))));
             };
 
+            let old_dist = format!("{:.1}", border.new_diameter);
             match distance.total_cmp(&border.new_diameter) {
                 std::cmp::Ordering::Equal => {
-                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                        NOTHING_CHANGED_EXCEPTION,
-                        NOTHING_CHANGED_EXCEPTION,
-                        [],
-                    )));
+                    return Err(CommandError::CommandFailed(
+                        pumpkin_macros::translate_cross!(
+                            translation::java::COMMANDS_WORLDBORDER_SET_FAILED_NOCHANGE,
+                            translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS
+                        ),
+                    ));
                 }
                 std::cmp::Ordering::Less => {
                     let dist = format!("{distance:.1}");
                     sender
-                        .send_message(TextComponent::translate_cross(
-                            "commands.worldborder.set.shrink",
-                            "commands.worldborder.set.shrink",
-                            [
-                                TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
-                            ],
+                        .send_message(pumpkin_macros::translate_cross!(
+                            translation::java::COMMANDS_WORLDBORDER_SET_SHRINK,
+                            translation::bedrock::COMMANDS_WORLDBORDER_SETSLOWLY_SHRINK_SUCCESS,
+                            TextComponent::text(dist),
+                            TextComponent::text(old_dist),
+                            TextComponent::text(time.to_string())
                         ))
                         .await;
                 }
                 std::cmp::Ordering::Greater => {
                     let dist = format!("{distance:.1}");
                     sender
-                        .send_message(TextComponent::translate_cross(
-                            "commands.worldborder.set.grow",
-                            "commands.worldborder.set.grow",
-                            [
-                                TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
-                            ],
+                        .send_message(pumpkin_macros::translate_cross!(
+                            translation::java::COMMANDS_WORLDBORDER_SET_GROW,
+                            translation::bedrock::COMMANDS_WORLDBORDER_SETSLOWLY_GROW_SUCCESS,
+                            TextComponent::text(dist),
+                            TextComponent::text(old_dist),
+                            TextComponent::text(time.to_string())
                         ))
                         .await;
                 }
@@ -218,21 +219,24 @@ impl CommandExecutor for AddExecutor {
             };
 
             if distance_add == 0.0 {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    NOTHING_CHANGED_EXCEPTION,
-                    NOTHING_CHANGED_EXCEPTION,
-                    [],
-                )));
+                return Err(CommandError::CommandFailed(
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_WORLDBORDER_SET_FAILED_NOCHANGE,
+                        translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS
+                    ),
+                ));
             }
 
             let distance = border.new_diameter + distance_add;
 
             let dist = format!("{distance:.1}");
+            let old_dist = format!("{:.1}", border.new_diameter);
             sender
-                .send_message(TextComponent::translate_cross(
-                    "commands.worldborder.set.immediate",
-                    "commands.worldborder.set.immediate",
-                    [TextComponent::text(dist)],
+                .send_message(pumpkin_macros::translate_cross!(
+                    translation::java::COMMANDS_WORLDBORDER_SET_IMMEDIATE,
+                    translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS,
+                    TextComponent::text(dist),
+                    TextComponent::text(old_dist)
                 ))
                 .await;
             border.set_diameter(world, distance, None);
@@ -273,6 +277,7 @@ impl CommandExecutor for AddTimeExecutor {
 
             let distance = distance_add + border.new_diameter;
 
+            let old_dist = format!("{:.1}", border.new_diameter);
             match distance.total_cmp(&border.new_diameter) {
                 std::cmp::Ordering::Equal => {
                     return Err(CommandError::CommandFailed(TextComponent::text(format!(
@@ -283,26 +288,24 @@ impl CommandExecutor for AddTimeExecutor {
                 std::cmp::Ordering::Less => {
                     let dist = format!("{distance:.1}");
                     sender
-                        .send_message(TextComponent::translate_cross(
-                            "commands.worldborder.set.shrink",
-                            "commands.worldborder.set.shrink",
-                            [
-                                TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
-                            ],
+                        .send_message(pumpkin_macros::translate_cross!(
+                            translation::java::COMMANDS_WORLDBORDER_SET_SHRINK,
+                            translation::bedrock::COMMANDS_WORLDBORDER_SETSLOWLY_SHRINK_SUCCESS,
+                            TextComponent::text(dist),
+                            TextComponent::text(old_dist),
+                            TextComponent::text(time.to_string())
                         ))
                         .await;
                 }
                 std::cmp::Ordering::Greater => {
                     let dist = format!("{distance:.1}");
                     sender
-                        .send_message(TextComponent::translate_cross(
-                            "commands.worldborder.set.grow",
-                            "commands.worldborder.set.grow",
-                            [
-                                TextComponent::text(dist),
-                                TextComponent::text(time.to_string()),
-                            ],
+                        .send_message(pumpkin_macros::translate_cross!(
+                            translation::java::COMMANDS_WORLDBORDER_SET_GROW,
+                            translation::bedrock::COMMANDS_WORLDBORDER_SETSLOWLY_GROW_SUCCESS,
+                            TextComponent::text(dist),
+                            TextComponent::text(old_dist),
+                            TextComponent::text(time.to_string())
                         ))
                         .await;
                 }
@@ -335,13 +338,11 @@ impl CommandExecutor for CenterExecutor {
             let Vector2 { x, y } = Position2DArgumentConsumer.find_arg_default_name(args)?;
 
             sender
-                .send_message(TextComponent::translate_cross(
-                    "commands.worldborder.center.success",
-                    "commands.worldborder.center.success",
-                    [
-                        TextComponent::text(format!("{x:.2}")),
-                        TextComponent::text(format!("{y:.2}")),
-                    ],
+                .send_message(pumpkin_macros::translate_cross!(
+                    translation::java::COMMANDS_WORLDBORDER_CENTER_SUCCESS,
+                    translation::bedrock::COMMANDS_WORLDBORDER_CENTER_SUCCESS,
+                    TextComponent::text(format!("{x:.2}")),
+                    TextComponent::text(format!("{y:.2}"))
                 ))
                 .await;
             border.set_center(world, x, y);
@@ -376,19 +377,22 @@ impl CommandExecutor for DamageAmountExecutor {
             };
 
             if (damage_per_block - border.damage_per_block).abs() < f32::EPSILON {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.worldborder.damage.amount.failed",
-                    "commands.worldborder.damage.amount.failed",
-                    [],
-                )));
+                return Err(CommandError::CommandFailed(
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_FAILED,
+                        translation::bedrock::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_SUCCESS
+                    ),
+                ));
             }
 
             let damage = format!("{damage_per_block:.2}");
+            let old_damage = format!("{:.2}", border.damage_per_block);
             sender
-                .send_message(TextComponent::translate_cross(
-                    "commands.worldborder.damage.amount.success",
-                    "commands.worldborder.damage.amount.success",
-                    [TextComponent::text(damage)],
+                .send_message(pumpkin_macros::translate_cross!(
+                    translation::java::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_SUCCESS,
+                    translation::bedrock::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_SUCCESS,
+                    TextComponent::text(damage),
+                    TextComponent::text(old_damage)
                 ))
                 .await;
             border.damage_per_block = damage_per_block;
@@ -422,19 +426,22 @@ impl CommandExecutor for DamageBufferExecutor {
             };
 
             if (buffer - border.buffer).abs() < f32::EPSILON {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.worldborder.damage.amount.failed",
-                    "commands.worldborder.damage.amount.failed",
-                    [],
-                )));
+                return Err(CommandError::CommandFailed(
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_FAILED,
+                        translation::bedrock::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_SUCCESS
+                    ),
+                ));
             }
 
             let buf = format!("{buffer:.2}");
+            let old_buf = format!("{:.2}", border.buffer);
             sender
-                .send_message(TextComponent::translate_cross(
-                    "commands.worldborder.damage.buffer.success",
-                    "commands.worldborder.damage.buffer.success",
-                    [TextComponent::text(buf)],
+                .send_message(pumpkin_macros::translate_cross!(
+                    translation::java::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_SUCCESS,
+                    translation::bedrock::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_SUCCESS,
+                    TextComponent::text(buf),
+                    TextComponent::text(old_buf)
                 ))
                 .await;
             border.buffer = buffer;
@@ -468,18 +475,20 @@ impl CommandExecutor for WarningDistanceExecutor {
             };
 
             if distance == border.warning_blocks {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.worldborder.warning.distance.failed",
-                    "commands.worldborder.warning.distance.failed",
-                    [],
-                )));
+                return Err(CommandError::CommandFailed(
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_WORLDBORDER_WARNING_DISTANCE_FAILED,
+                        translation::bedrock::COMMANDS_WORLDBORDER_WARNING_DISTANCE_SUCCESS
+                    ),
+                ));
             }
 
             sender
-                .send_message(TextComponent::translate_cross(
-                    "commands.worldborder.warning.distance.success",
-                    "commands.worldborder.warning.distance.success",
-                    [TextComponent::text(distance.to_string())],
+                .send_message(pumpkin_macros::translate_cross!(
+                    translation::java::COMMANDS_WORLDBORDER_WARNING_DISTANCE_SUCCESS,
+                    translation::bedrock::COMMANDS_WORLDBORDER_WARNING_DISTANCE_SUCCESS,
+                    TextComponent::text(distance.to_string()),
+                    TextComponent::text(border.warning_blocks.to_string())
                 ))
                 .await;
             border.set_warning_distance(world, distance);
@@ -513,18 +522,20 @@ impl CommandExecutor for WarningTimeExecutor {
             };
 
             if time == border.warning_time {
-                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                    "commands.worldborder.warning.time.failed",
-                    "commands.worldborder.warning.time.failed",
-                    [],
-                )));
+                return Err(CommandError::CommandFailed(
+                    pumpkin_macros::translate_cross!(
+                        translation::java::COMMANDS_WORLDBORDER_WARNING_TIME_FAILED,
+                        translation::bedrock::COMMANDS_WORLDBORDER_WARNING_TIME_SUCCESS
+                    ),
+                ));
             }
 
             sender
-                .send_message(TextComponent::translate_cross(
-                    "commands.worldborder.warning.time.success",
-                    "commands.worldborder.warning.time.success",
-                    [TextComponent::text(time.to_string())],
+                .send_message(pumpkin_macros::translate_cross!(
+                    translation::java::COMMANDS_WORLDBORDER_WARNING_TIME_SUCCESS,
+                    translation::bedrock::COMMANDS_WORLDBORDER_WARNING_TIME_SUCCESS,
+                    TextComponent::text(time.to_string()),
+                    TextComponent::text(border.warning_time.to_string())
                 ))
                 .await;
             border.set_warning_delay(world, time);

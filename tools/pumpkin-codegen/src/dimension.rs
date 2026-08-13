@@ -1,8 +1,9 @@
 use std::{collections::BTreeMap, fs};
 
 use crate::placed_feature::value_to_int_provider;
+use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
-use quote::{quote};
+use quote::{format_ident, quote};
 use serde::Deserialize;
 
 /// Parses a CSS-style hex color string (e.g. `"#78a7ff"`) into a signed 32-bit integer.
@@ -57,12 +58,20 @@ pub fn build() -> TokenStream {
     .expect("Failed to parse dimension.json");
 
     let mut variants = TokenStream::new();
+    let mut static_entries = TokenStream::new();
     let mut identifiers = TokenStream::new();
+    let mut name_to_type = TokenStream::new();
     let len = dimensions.len();
 
     // Iterate with index to generate a unique numeric ID
     for (id, (name, dim)) in dimensions.into_iter().enumerate() {
         let id = id as u8; // Overworld=0, Nether=1, End=2 (usually)
+        let format_name = format_ident!(
+            "{}",
+            name.strip_prefix("minecraft:")
+                .unwrap_or(&name)
+                .to_shouty_snake_case()
+        );
 
         // convert optional hex colors from attributes into ints
         let sky_color = dim
@@ -142,8 +151,9 @@ pub fn build() -> TokenStream {
         };
 
         variants.extend(quote! {
-            Dimension {
+            pub const #format_name: Self = Self {
                 id: #id,
+                minecraft_name: #minecraft_name,
                 fixed_time: #fixed_time,
                 has_skylight: #has_skylight,
                 has_ceiling: #has_ceiling,
@@ -159,11 +169,19 @@ pub fn build() -> TokenStream {
                 fog_color: #fog_color_literal,
                 cloud_color: #cloud_color_literal,
                 timelines: #timelines_literal,
-            },
+            };
+        });
+
+        static_entries.extend(quote! {
+            Dimension::#format_name,
         });
 
         identifiers.extend(quote! {
             Identifier::parse_static(#minecraft_name),
+        });
+
+        name_to_type.extend(quote! {
+            #minecraft_name => Some(&Self::#format_name),
         });
     }
 
@@ -173,11 +191,15 @@ pub fn build() -> TokenStream {
             IntProvider, NormalIntProvider, TrapezoidIntProvider, UniformIntProvider, WeightedEntry,
             WeightedListIntProvider,
         }};
-        use pumpkin_registry::{MutableRegistry, RootRegistryReference, error::RegistryTreeError};
+        use std::sync::Arc;
+        use pumpkin_registry::{
+            Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider,
+        };
 
         #[derive(Debug, Clone)]
         pub struct Dimension {
             pub id: u8,
+            pub minecraft_name: &'static str,
             pub fixed_time: Option<i64>,
             pub has_skylight: bool,
             pub has_ceiling: bool,
@@ -195,18 +217,39 @@ pub fn build() -> TokenStream {
             pub timelines: Option<&'static str>,
         }
 
-        const STATIC_ENTRIES: [Dimension; #len] = [
+        impl Dimension {
             #variants
+
+            pub fn from_name(name: &str) -> Option<&'static Self> {
+                match name {
+                    #name_to_type
+                    _ => None,
+                }
+            }
+        }
+
+        const STATIC_ENTRIES: [Dimension; #len] = [
+            #static_entries
         ];
 
         const STATIC_IDENTIFIERS: [Identifier; #len] = [
             #identifiers
         ];
 
-        pub async fn initialize(root: RootRegistryReference) -> Result<(), RegistryTreeError> {
-            let dimensions = MutableRegistry::<Dimension>::new(&STATIC_ENTRIES, &STATIC_IDENTIFIERS)?;
-            root.register(Identifier::vanilla_static("dimension_type"), Box::new(dimensions)).await?;
-            Ok(())
+        bootstrap_provider! {
+            DIMENSION_TYPE_REGISTRY: Arc<dyn Registry> => "minecraft:root",
+            || {
+                vec![RegistryEntry::new(
+                    Identifier::vanilla_static("dimension_type"),
+                    RegistryBuilder::<Dimension>::new_static(
+                        &Identifier::vanilla_static("dimension_type"),
+                        &STATIC_ENTRIES,
+                        &STATIC_IDENTIFIERS,
+                    )
+                    .unwrap()
+                    .arc_dyn(),
+                )]
+            }
         }
 
         impl PartialEq for Dimension {

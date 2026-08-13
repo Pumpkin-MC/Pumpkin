@@ -39,6 +39,16 @@ impl SText<'_> {
 impl SText<'static> {
     #[must_use]
     pub fn new(message: String, source_name: String) -> Self {
+        Self::chat_with_xuid(message, source_name, String::new(), None)
+    }
+
+    #[must_use]
+    pub fn chat_with_xuid(
+        message: String,
+        source_name: String,
+        xuid: String,
+        filtered_message: Option<String>,
+    ) -> Self {
         Self {
             needs_translation: false,
             r#type: TextPacketType::Chat,
@@ -49,9 +59,9 @@ impl SText<'static> {
                 message
             }),
             parameters: Vec::new(),
-            xuid: Cow::Borrowed(""),
+            xuid: Cow::Owned(xuid),
             platform_chat_id: Cow::Borrowed(""),
-            filtered_message: None,
+            filtered_message: filtered_message.map(Cow::Owned),
         }
     }
 

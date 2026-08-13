@@ -100,7 +100,11 @@ impl FollowOwnerGoal {
                 world.clone(),
             );
 
-            let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+            let mut navigator = mob
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             navigator.stop();
             return;
         }
@@ -147,7 +151,11 @@ impl Goal for FollowOwnerGoal {
                 return false;
             }
 
-            let navigator = mob.get_mob_entity().navigator.lock().unwrap();
+            let navigator = mob
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             !navigator.is_idle()
         })
     }
@@ -170,7 +178,10 @@ impl Goal for FollowOwnerGoal {
             if !should_teleport {
                 let mob_entity = mob.get_mob_entity();
                 let owner_eye_pos = owner.living_entity.entity.get_eye_pos();
-                let mut look_control = mob_entity.look_control.lock().unwrap();
+                let mut look_control = mob_entity
+                    .look_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 look_control.look_at_with_range(
                     owner_eye_pos.x,
                     owner_eye_pos.y,
@@ -190,7 +201,11 @@ impl Goal for FollowOwnerGoal {
                 } else {
                     let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
                     let owner_pos = owner.living_entity.entity.pos.load();
-                    let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+                    let mut navigator = mob
+                        .get_mob_entity()
+                        .navigator
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     navigator.set_progress(NavigatorGoal::new(mob_pos, owner_pos, self.speed));
                 }
             }
@@ -200,7 +215,11 @@ impl Goal for FollowOwnerGoal {
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             self.owner = None;
-            let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+            let mut navigator = mob
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             navigator.stop();
         })
     }

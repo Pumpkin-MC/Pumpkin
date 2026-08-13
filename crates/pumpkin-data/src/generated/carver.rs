@@ -1,6 +1,6 @@
 /* This file is generated. Do not edit manually. */
 use pumpkin_util::math::float_provider::{
-    ClampedNormalFloatProvider, ConstantFloatProvider, FloatProvider, NormalFloatProvider,
+    FloatProvider, NormalFloatProvider,
     TrapezoidFloatProvider, UniformFloatProvider,
 };
 use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
@@ -63,7 +63,6 @@ pub struct CarverConfig {
     pub replaceable: crate::tag::Tag,
     pub additional: CarverAdditionalConfig,
 }
-use super::*;
 pub const CANYON: CarverConfig = CarverConfig {
     probability: 0.01f32,
     y: HeightProvider::Uniform(UniformHeightProvider {

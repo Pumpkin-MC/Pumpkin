@@ -139,7 +139,11 @@ impl Goal for BreedGoal {
         Box::pin(async {
             self.mate = None;
             self.timer = 0;
-            let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
+            let mut navigator = mob
+                .get_mob_entity()
+                .navigator
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             navigator.stop();
         })
     }
@@ -154,7 +158,10 @@ impl Goal for BreedGoal {
             let mate_pos = mate.get_entity().pos.load();
 
             {
-                let mut look_control = mob_entity.look_control.lock().unwrap();
+                let mut look_control = mob_entity
+                    .look_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 look_control.look_at_entity(mob, mate);
             };
 
@@ -162,7 +169,10 @@ impl Goal for BreedGoal {
             let dist_sq = my_pos.squared_distance_to_vec(&mate_pos);
 
             {
-                let mut navigator = mob_entity.navigator.lock().unwrap();
+                let mut navigator = mob_entity
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 navigator.set_progress(NavigatorGoal::new(my_pos, mate_pos, self.speed));
             };
 

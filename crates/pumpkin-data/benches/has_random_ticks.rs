@@ -1,3 +1,11 @@
+#![allow(
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo,
+    clippy::print_stdout
+)]
+
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};

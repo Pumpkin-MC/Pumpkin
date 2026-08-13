@@ -15,7 +15,7 @@ impl BlockBehaviour for FlowerPotBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let item = args.item_stack.lock().await.item;
+            let item = args.item_stack.item;
             //Place the flower inside the pot
             let potted_block_id = get_potted_item(item.id);
             if args.block.eq(&Block::FLOWER_POT) {

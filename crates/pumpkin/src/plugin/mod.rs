@@ -1,6 +1,7 @@
 use futures::future::join_all;
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
 use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
+use pumpkin_registry::bootstrap::{BootstrapManager, ProviderSet};
 use std::{
     any::Any,
     collections::{HashMap, HashSet},
@@ -193,6 +194,7 @@ struct LoadedPlugin {
     instance: Option<Arc<dyn Plugin>>,
     loader: Arc<dyn PluginLoader>,
     loader_data: Option<Box<dyn Any + Send + Sync>>,
+    registry_providers: Option<Arc<ProviderSet>>,
     is_active: bool,
     context: Arc<Context>,
     path: PathBuf,
@@ -483,12 +485,13 @@ impl PluginManager {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
             })
-        } else {
-            let mut rl = DefaultEditor::new().expect("Failed to create rustyline editor");
+        } else if let Ok(mut rl) = DefaultEditor::new() {
             rl.readline(&prompt).is_ok_and(|line| {
                 let input = line.trim().to_lowercase();
                 input == "y" || input == "yes"
             })
+        } else {
+            false
         };
 
         if let Some((wrapper, rl)) = rl_taken {
@@ -529,6 +532,7 @@ impl PluginManager {
             instance: None, // Will be set after successful initialization
             loader: loader.clone(),
             loader_data: Some(loader_data),
+            registry_providers: None,
             is_active: false, // Will be set to true after successful initialization
             context: context.clone(),
             path,
@@ -552,8 +556,11 @@ impl PluginManager {
                 Ok(()) => {
                     // Update plugin state to loaded
                     {
+                        let registry_providers = instance.registry_providers();
+
                         let mut plugins = self_ref_clone.plugins.write().await;
                         if let Some(plugin) = plugins.get_mut(plugin_index) {
+                            plugin.registry_providers = Some(registry_providers);
                             plugin.instance = Some(instance);
                             plugin.is_active = true;
                         }
@@ -743,6 +750,21 @@ impl PluginManager {
                 }
             }
         }
+
+        let mut bootstrap = BootstrapManager::new();
+        for loaded_plugin in &*self.plugins.read().await {
+            let Some(providers) = &loaded_plugin.registry_providers else {
+                continue;
+            };
+
+            bootstrap.add_providers(providers);
+        }
+
+        if pumpkin_registry::BOOTSTRAP.set(bootstrap).is_err() {
+            warn!("Bootstrap manager was already loaded!");
+        }
+
+        info!("Registry bootstrap has been initialized!");
 
         Ok(total_wait_time)
     }
@@ -1029,6 +1051,28 @@ impl PluginManager {
             if !handler.is_blocking() {
                 handler.handle_dyn(server, event).await;
             }
+        }
+    }
+
+    pub async fn send_message(
+        &self,
+        sender: &str,
+        recipient: &str,
+        message: &[u8],
+    ) -> Result<Result<Vec<u8>, String>, ()> {
+        if sender == recipient {
+            return Err(());
+        }
+
+        let plugins = self.plugins.read().await;
+        let target_plugin = &plugins
+            .iter()
+            .find(|p| p.metadata.name == recipient)
+            .ok_or(())?;
+        if let Some(instance) = &target_plugin.instance {
+            Ok(instance.on_ipc_message(sender, message).await)
+        } else {
+            Err(())
         }
     }
 }

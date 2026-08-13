@@ -135,8 +135,7 @@ async fn enchant_target(
         return Err(commands_enchant_failed());
     };
 
-    let lock = player.inventory.held_item();
-    let mut item = lock.lock().await;
+    let mut item = player.inventory().held_item().await;
 
     if item.is_empty() {
         let msg = TextComponent::translate_cross(
@@ -168,6 +167,13 @@ async fn enchant_target(
     }
 
     item.enchant(enchantment, level);
+    let inventory = player.inventory();
+    inventory.set_held_item(item.clone()).await;
+
+    player
+        .sync_hand_slot(inventory.get_selected_slot() as usize, item)
+        .await;
+
     Ok(())
 }
 

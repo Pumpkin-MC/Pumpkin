@@ -86,10 +86,8 @@ pub fn place_template(
     for block in &template.blocks {
         let palette_entry = &template.palette[block.state as usize];
 
-        // Structure blocks are data markers and structure void preserves the existing block.
-        if palette_entry.name == "minecraft:structure_void"
-            || palette_entry.name == "minecraft:structure_block"
-        {
+        // Structure blocks are data markers.
+        if palette_entry.name == "minecraft:structure_block" {
             continue;
         }
 
@@ -105,6 +103,12 @@ pub fn place_template(
                 .unwrap_or("minecraft:air");
             placed_entry = PaletteEntry::from_string(final_state);
             block_entity_nbt = None;
+        }
+
+        // Structure void preserves the existing block, both from the palette itself and from a
+        // jigsaw final state.
+        if placed_entry.name == "minecraft:structure_void" {
+            continue;
         }
 
         // Resolve block state with rotation applied to directional properties
@@ -311,5 +315,61 @@ pub(crate) fn get_block_entity_id(block_name: &str) -> Option<&'static str> {
         | "minecraft:warped_sign" => Some("minecraft:sign"),
         "minecraft:hanging_sign" => Some("minecraft:hanging_sign"),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::Block;
+
+    struct CollectingPlacer(Vec<BlockStateId>);
+
+    impl BlockPlacer for CollectingPlacer {
+        fn get_block_state(&self, _pos: &Vector3<i32>) -> BlockStateId {
+            Block::AIR.default_state.id
+        }
+
+        fn set_block_state(&mut self, _pos: &Vector3<i32>, state: &BlockState) {
+            self.0.push(state.id);
+        }
+
+        fn add_block_entity(&mut self, _nbt: NbtCompound) {}
+    }
+
+    #[test]
+    fn structure_void_is_never_placed() {
+        let mut placed_templates = 0;
+
+        for name in all_template_names() {
+            let Some(template) = get_template(name) else {
+                continue;
+            };
+
+            let mut placer = CollectingPlacer(Vec::new());
+            place_template(
+                &mut placer,
+                &template,
+                Vector3::new(0, 0, 0),
+                (0, 0),
+                Rotation::None,
+                false,
+                false,
+                &[],
+                None,
+            );
+
+            for state_id in &placer.0 {
+                assert_ne!(
+                    state_id.to_block_id(),
+                    Block::STRUCTURE_VOID.id,
+                    "{name} placed a structure void"
+                );
+            }
+
+            placed_templates += 1;
+        }
+
+        assert!(placed_templates > 0);
     }
 }
