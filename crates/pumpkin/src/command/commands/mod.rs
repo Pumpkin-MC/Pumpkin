@@ -52,6 +52,7 @@ mod plugins;
 mod pumpkin;
 mod random;
 mod recipe;
+mod r#return;
 mod ride;
 mod rotate;
 mod saveall;
@@ -192,6 +193,7 @@ pub async fn default_dispatcher(
     random::register(&mut dispatcher, registry);
     list::register(&mut dispatcher, registry);
     loot::register(&mut dispatcher, registry);
+    r#return::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     saveall::register(&mut dispatcher, registry);
     saveoff::register(&mut dispatcher, registry);
