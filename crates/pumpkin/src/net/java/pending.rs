@@ -26,13 +26,17 @@ use tokio::{
         TcpStream,
         tcp::{OwnedReadHalf, OwnedWriteHalf},
     },
+    time::timeout,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::{
     entity::player::ChatMode,
-    net::{EncryptionError, GameProfile, PacketHandlerResult, PlayerConfig, can_not_join},
+    net::{
+        EncryptionError, GameProfile, PacketHandlerResult, PlayerConfig, can_not_join,
+        login_idle_timeout,
+    },
     server::Server,
 };
 
@@ -133,6 +137,33 @@ impl PendingConnection {
         }
     }
 
+    /// Like [`Self::get_packet`], but gives up when the client stays silent for
+    /// `idle_timeout`.
+    ///
+    /// The timer covers the wait for a single packet, so it resets every time
+    /// one arrives: a client that is slow but still talking (downloading a
+    /// large resource pack, for instance) is never disconnected. `None`
+    /// disables the timeout entirely.
+    async fn get_packet_before_idle(
+        &mut self,
+        idle_timeout: Option<std::time::Duration>,
+    ) -> Option<RawPacket> {
+        let Some(idle_timeout) = idle_timeout else {
+            return self.get_packet().await;
+        };
+
+        let Ok(packet) = timeout(idle_timeout, self.get_packet()).await else {
+            debug!(
+                "Client id {} sent nothing for {idle_timeout:?} during login; disconnecting",
+                self.id
+            );
+            self.close();
+            return None;
+        };
+
+        packet
+    }
+
     pub async fn send_packet_now<P: ClientPacket>(&mut self, packet: &P) {
         let mut packet_buf = Vec::new();
         if let Err(err) =
@@ -167,7 +198,8 @@ impl PendingConnection {
     }
 
     pub async fn handle_login_sequence(&mut self, server: &Arc<Server>) -> PacketHandlerResult {
-        while let Some(packet) = self.get_packet().await {
+        let idle_timeout = login_idle_timeout(server);
+        while let Some(packet) = self.get_packet_before_idle(idle_timeout).await {
             match self.handle_packet(server, &packet).await {
                 Ok(result) => {
                     if let Some(result) = result {

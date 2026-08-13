@@ -50,6 +50,7 @@ use tokio::{
     sync::mpsc::{Receiver, Sender},
     sync::{Mutex, RwLock, oneshot},
     task::JoinHandle,
+    time::timeout,
 };
 
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -58,7 +59,7 @@ pub mod login;
 use self::nethernet::NetherNetSession;
 use crate::{
     entity::player::Player,
-    net::{DisconnectReason, PacketHandlerResult},
+    net::{DisconnectReason, PacketHandlerResult, login_idle_timeout},
     plugin::api::events::world::chunk_send::ChunkSend,
     server::Server,
 };
@@ -169,6 +170,30 @@ impl BedrockClient {
             () = self.await_close_interrupt() => None,
             packet = recv.recv() => packet,
         }
+    }
+
+    /// Like [`Self::get_packet`], but gives up when the client stays silent for
+    /// `idle_timeout`.
+    ///
+    /// The timer covers the wait for a single packet, so it resets every time
+    /// one arrives: a client that is slow but still talking (downloading a
+    /// large resource pack, for instance) is never disconnected. `None`
+    /// disables the timeout entirely.
+    async fn get_packet_before_idle(
+        self: &Arc<Self>,
+        idle_timeout: Option<std::time::Duration>,
+    ) -> Option<RawPacket> {
+        let Some(idle_timeout) = idle_timeout else {
+            return self.get_packet().await;
+        };
+
+        let Ok(packet) = timeout(idle_timeout, self.get_packet()).await else {
+            debug!("Bedrock client sent nothing for {idle_timeout:?} during login; disconnecting");
+            self.close().await;
+            return None;
+        };
+
+        packet
     }
 
     pub fn start_outgoing_packet_task(self: &Arc<Self>) {
@@ -585,7 +610,8 @@ impl BedrockClient {
         self: &Arc<Self>,
         server: &Arc<Server>,
     ) -> PacketHandlerResult {
-        while let Some(packet) = self.get_packet().await {
+        let idle_timeout = login_idle_timeout(server);
+        while let Some(packet) = self.get_packet_before_idle(idle_timeout).await {
             let payload = &mut Cursor::new(&packet.payload);
             match packet.id {
                 SRequestNetworkSettings::PACKET_ID => {

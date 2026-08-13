@@ -34,6 +34,16 @@ mod proxy;
 pub mod query;
 pub mod rcon;
 
+/// How long a client may stay silent during the login sequence before it is
+/// disconnected, or `None` when the operator disabled the timeout.
+#[must_use]
+pub const fn login_idle_timeout(server: &Server) -> Option<std::time::Duration> {
+    match server.advanced_config.networking.login_idle_timeout {
+        0 => None,
+        secs => Some(std::time::Duration::from_secs(secs)),
+    }
+}
+
 #[derive(Deserialize, Debug)]
 pub struct GameProfile {
     pub id: Uuid,
