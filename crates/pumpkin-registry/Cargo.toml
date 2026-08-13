@@ -12,6 +12,7 @@ tokio.workspace = true
 rayon.workspace = true
 thiserror.workspace = true
 rustc-hash.workspace = true
+linkme.workspace = true
 
 [dev-dependencies]
 # Validate correctness

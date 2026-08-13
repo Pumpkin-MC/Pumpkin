@@ -20,7 +20,10 @@ impl<T: Send + Sync + 'static> RegistryBuilder<T> {
         let statics = static_entries.len();
         assert_eq!(statics, identifiers.len());
 
-        let (added_entries, added_mapping) = BOOTSTRAP.populate::<T>(name)?;
+        let (added_entries, added_mapping) = BOOTSTRAP
+            .get()
+            .ok_or(BootstrapError::Uninitialized)
+            .and_then(|m| m.populate::<T>(name))?;
 
         let total = statics + added_entries.len();
 
@@ -56,13 +59,19 @@ impl<T: Send + Sync + 'static> RegistryBuilder<T> {
     /// Build a registry where all data lives on the heap.
     /// These registries may not be reloaded.
     pub fn frozen(name: &Identifier) -> Result<FrozenRegistry<T>, BootstrapError> {
-        let (entries, mapping) = BOOTSTRAP.populate::<T>(name)?;
+        let (entries, mapping) = BOOTSTRAP
+            .get()
+            .ok_or(BootstrapError::Uninitialized)
+            .and_then(|m| m.populate::<T>(name))?;
         Ok(FrozenRegistry::new(entries.into_boxed_slice(), mapping))
     }
 
     /// Build a reloadable registry.
     pub fn reloadable(name: &Identifier) -> Result<ReloadableRegistry<T>, BootstrapError> {
-        let (entries, mapping) = BOOTSTRAP.populate::<T>(name)?;
+        let (entries, mapping) = BOOTSTRAP
+            .get()
+            .ok_or(BootstrapError::Uninitialized)
+            .and_then(|m| m.populate::<T>(name))?;
         Ok(ReloadableRegistry::new(
             name.clone(),
             entries.into_boxed_slice(),
