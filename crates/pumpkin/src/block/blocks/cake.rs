@@ -40,11 +40,20 @@ impl CakeBlock {
                 if hunger_level >= 20 {
                     return BlockActionResult::Pass;
                 }
-                player.hunger_manager.level.store(20.min(hunger_level + 2));
-                player
-                    .hunger_manager
-                    .saturation
-                    .store(player.hunger_manager.saturation.load() + 0.4);
+                let Some(new_level) =
+                    crate::entity::hunger::HungerManager::fire_food_level_change_event(
+                        player,
+                        20.min(hunger_level + 2),
+                        Some("minecraft:cake".to_string()),
+                    )
+                    .await
+                else {
+                    return BlockActionResult::Pass;
+                };
+                player.hunger_manager.level.store(new_level);
+                player.hunger_manager.saturation.store(
+                    (player.hunger_manager.saturation.load() + 0.4).min(f32::from(new_level)),
+                );
                 player.send_health().await;
             }
             GameMode::Creative | GameMode::Spectator => {}

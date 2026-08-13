@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use super::{NBTStorage, NBTStorageInit, player::Player};
 use crate::entity::NbtFuture;
+use crate::plugin::api::events::entity::food_level_change::FoodLevelChangeEvent;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
 use pumpkin_nbt::compound::NbtCompound;
@@ -30,6 +31,26 @@ impl Default for HungerManager {
 }
 
 impl HungerManager {
+    pub(crate) async fn fire_food_level_change_event(
+        player: &Player,
+        food_level: u8,
+        item_name: Option<String>,
+    ) -> Option<u8> {
+        let food_level = food_level.min(MAX_FOOD);
+        let Some(server) = player.world().server.upgrade() else {
+            return Some(food_level);
+        };
+
+        let mut event =
+            FoodLevelChangeEvent::new(player.entity_id(), i32::from(food_level), item_name);
+        server.plugin_manager.fire(&server, &mut event).await;
+        if event.cancelled {
+            return None;
+        }
+
+        Some(event.food_level.clamp(0, i32::from(MAX_FOOD)) as u8)
+    }
+
     pub async fn tick(&self, player: &Arc<Player>) {
         let mut level = self.level.load();
         let mut saturation = self.saturation.load();
@@ -51,7 +72,12 @@ impl HungerManager {
             if saturation > 0.0 {
                 saturation = (saturation - 1.0).max(0.0);
             } else if difficulty != Difficulty::Peaceful {
-                level = level.saturating_sub(1);
+                let target_level = level.saturating_sub(1);
+                if let Some(new_level) =
+                    Self::fire_food_level_change_event(player.as_ref(), target_level, None).await
+                {
+                    level = new_level;
+                }
             }
             needs_sync = true;
         }
@@ -119,8 +145,20 @@ impl HungerManager {
 
         let current_level = self.level.load();
         let current_sat = self.saturation.load();
+        let item_name = player
+            .living_entity
+            .item_in_use
+            .lock()
+            .await
+            .as_ref()
+            .map(|item| format!("minecraft:{}", item.item.registry_key));
 
-        let new_level = (current_level + food).min(MAX_FOOD);
+        let target_level = (current_level + food).min(MAX_FOOD);
+        let Some(new_level) =
+            Self::fire_food_level_change_event(player, target_level, item_name).await
+        else {
+            return;
+        };
 
         let new_sat = (current_sat + added_saturation).min(f32::from(new_level));
 

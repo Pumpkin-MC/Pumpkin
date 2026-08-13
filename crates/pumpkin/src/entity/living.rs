@@ -1787,8 +1787,22 @@ impl LivingEntity {
             {
                 // Add hunger and saturation
                 let hunger = amplifier + 1;
-                player.hunger_manager.add_hunger(hunger);
-                player.hunger_manager.add_saturation(hunger as f32 * 2.0);
+                let current_level = player.hunger_manager.level.load();
+                if let Some(new_level) =
+                    crate::entity::hunger::HungerManager::fire_food_level_change_event(
+                        player,
+                        current_level.saturating_add(hunger).min(20),
+                        None,
+                    )
+                    .await
+                {
+                    player.hunger_manager.level.store(new_level);
+                    player.hunger_manager.saturation.store(
+                        (player.hunger_manager.saturation.load() + hunger as f32 * 2.0)
+                            .min(f32::from(new_level)),
+                    );
+                    player.send_health().await;
+                }
             }
         }
     }

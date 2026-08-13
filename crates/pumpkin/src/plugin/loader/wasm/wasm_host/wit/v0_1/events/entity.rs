@@ -5,6 +5,7 @@ use crate::plugin::{
         entity_death::{EntityDeathEvent, PlayerDeathEvent},
         entity_regain_health::EntityRegainHealthEvent,
         entity_spawn::EntitySpawnEvent,
+        food_level_change::FoodLevelChangeEvent,
     },
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -15,7 +16,8 @@ use crate::plugin::{
             },
             pumpkin::plugin::event::{
                 EntityCombustEventData, EntityDamageEventData, EntityDeathEventData,
-                EntityRegainHealthEventData, EntitySpawnEventData, Event, PlayerDeathEventData,
+                EntityRegainHealthEventData, EntitySpawnEventData, Event, FoodLevelChangeEventData,
+                PlayerDeathEventData,
             },
         },
     },
@@ -166,6 +168,29 @@ impl ToFromWasmEvent for EntityRegainHealthEvent {
             Event::EntityRegainHealthEvent(data) => Self {
                 entity_id: data.entity_id,
                 amount: data.amount,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for FoodLevelChangeEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::FoodLevelChangeEvent(FoodLevelChangeEventData {
+            entity_id: self.entity_id,
+            food_level: self.food_level,
+            item_name: self.item_name.clone(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::FoodLevelChangeEvent(data) => Self {
+                entity_id: data.entity_id,
+                food_level: data.food_level,
+                item_name: data.item_name,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

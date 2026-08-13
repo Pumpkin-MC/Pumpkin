@@ -253,6 +253,7 @@ async fn register_entity_event(
         entity_death::{EntityDeathEvent, PlayerDeathEvent},
         entity_regain_health::EntityRegainHealthEvent,
         entity_spawn::EntitySpawnEvent,
+        food_level_change::FoodLevelChangeEvent,
     };
 
     match event_type {
@@ -273,6 +274,10 @@ async fn register_entity_event(
         }
         EventType::EntityRegainHealthEvent => {
             register_typed_event::<EntityRegainHealthEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::FoodLevelChangeEvent => {
+            register_typed_event::<FoodLevelChangeEvent>(resource, handler, priority, blocking)
                 .await;
         }
         _ => {
@@ -571,7 +576,8 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::PlayerDeathEvent
             | EventType::EntitySpawnEvent
             | EventType::EntityCombustEvent
-            | EventType::EntityRegainHealthEvent) => {
+            | EventType::EntityRegainHealthEvent
+            | EventType::FoodLevelChangeEvent) => {
                 register_entity_event(resource, &handler, priority, blocking, event_type).await;
             }
             event_type @ (EventType::BlockRedstoneEvent

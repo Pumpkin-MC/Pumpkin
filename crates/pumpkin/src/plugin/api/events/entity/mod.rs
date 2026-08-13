@@ -11,6 +11,7 @@ pub mod entity_spawn;
 pub mod entity_tame;
 pub mod entity_target;
 pub mod entity_teleport;
+pub mod food_level_change;
 
 pub use entity_air_change::*;
 pub use entity_breed::*;
@@ -25,3 +26,4 @@ pub use entity_spawn::*;
 pub use entity_tame::*;
 pub use entity_target::*;
 pub use entity_teleport::*;
+pub use food_level_change::*;
