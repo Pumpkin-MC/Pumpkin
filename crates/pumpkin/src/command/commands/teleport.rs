@@ -117,7 +117,7 @@ impl CommandExecutor for EntitiesToEntityExecutor {
             sender
                 .send_message(TextComponent::translate_cross(
                     key,
-                    key,
+                    translation::bedrock::COMMANDS_TP_SUCCESSVICTIM,
                     [target_arg, destination.get_display_name().await],
                 ))
                 .await;
@@ -167,7 +167,7 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
             sender
                 .send_message(TextComponent::translate_cross(
                     key,
-                    key,
+                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
                     [
                         target_arg,
                         TextComponent::text(pos.x.to_string()),
@@ -223,7 +223,7 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
             sender
                 .send_message(TextComponent::translate_cross(
                     key,
-                    key,
+                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
                     [
                         target_arg,
                         TextComponent::text(pos.x.to_string()),
@@ -279,7 +279,7 @@ impl CommandExecutor for EntitiesToPosWithRotationExecutor {
             sender
                 .send_message(TextComponent::translate_cross(
                     key,
-                    key,
+                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
                     [
                         target_arg,
                         TextComponent::text(pos.x.to_string()),
@@ -333,7 +333,7 @@ impl CommandExecutor for EntitiesToPosExecutor {
             sender
                 .send_message(TextComponent::translate_cross(
                     key,
-                    key,
+                    translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
                     [
                         target_arg,
                         TextComponent::text(pos.x.to_string()),
@@ -382,7 +382,7 @@ impl CommandExecutor for SelfToEntityExecutor {
                     sender
                         .send_message(TextComponent::translate_cross(
                             translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_SINGLE,
-                            translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_SINGLE,
+                            translation::bedrock::COMMANDS_TP_SUCCESSVICTIM,
                             [
                                 player.get_display_name().await,
                                 destination.get_display_name().await,
@@ -431,7 +431,7 @@ impl CommandExecutor for SelfToPosExecutor {
                     sender
                         .send_message(TextComponent::translate_cross(
                             translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
-                            translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
+                            translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
                             [
                                 player.get_display_name().await,
                                 TextComponent::text(pos.x.to_string()),
