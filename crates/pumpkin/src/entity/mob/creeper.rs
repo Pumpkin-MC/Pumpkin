@@ -163,6 +163,28 @@ impl Mob for CreeperEntity {
         &self.mob_entity
     }
 
+    fn mob_on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a crate::entity::lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.charged.store(true, Ordering::Relaxed);
+            self.mob_entity.living_entity.entity.send_meta_data(
+                &[Metadata::new(
+                    TrackedData::CHARGED,
+                    MetaDataType::BOOLEAN,
+                    true,
+                )],
+                None,
+            );
+            self.mob_entity
+                .living_entity
+                .on_lightning_strike(caller, lightning)
+                .await;
+        })
+    }
+
     fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.mob_entity.living_entity.entity;

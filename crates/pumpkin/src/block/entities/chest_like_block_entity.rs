@@ -372,6 +372,12 @@ macro_rules! impl_chest_helper_methods {
                     0.5,
                     pumpkin_util::random::RandomImpl::next_f32(&mut rng) * 0.1 + 0.9,
                 );
+                let bedrock_sound = match sound {
+                    pumpkin_data::sound::Sound::BlockChestOpen => "chest.open",
+                    pumpkin_data::sound::Sound::BlockChestClose => "chest.closed",
+                    _ => return,
+                };
+                world.play_bedrock_level_sound(bedrock_sound, &position, 0);
             }
         }
     };

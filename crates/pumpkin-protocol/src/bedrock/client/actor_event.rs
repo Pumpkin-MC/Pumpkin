@@ -8,7 +8,7 @@ use crate::codec::var_int::VarInt;
 
 #[derive(Debug, PacketWrite)]
 #[packet(27)]
-pub struct SActorEvent {
+pub struct CActorEvent {
     pub entity_runtime_id: VarULong,
     pub event_type: ActorEventType,
     pub event_data: VarInt,
@@ -39,6 +39,8 @@ pub enum ActorEventType {
     StartOfferFlower = 19,
     StopOfferFlower = 20,
     LoveHearts = 21,
+    TrustingFailed = 40,
+    TrustingSucceeded = 41,
     VillagerAngry = 22,
     VillagerHappy = 23,
     WitchHatMagic = 24,

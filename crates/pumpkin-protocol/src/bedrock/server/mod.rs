@@ -1,4 +1,3 @@
-pub mod actor_event;
 pub mod animate;
 pub mod block_pick_request;
 pub mod client_cache_blob_status;
@@ -22,11 +21,11 @@ pub mod request_ability;
 pub mod request_chunk_radius;
 pub mod request_network_settings;
 pub mod resource_pack_response;
+pub mod respawn;
 pub mod set_local_player_as_initialized;
 pub mod set_player_inventory_options;
 pub mod text;
 
-pub use actor_event::*;
 pub use animate::*;
 pub use block_pick_request::*;
 pub use client_cache_blob_status::*;
@@ -50,6 +49,7 @@ pub use request_ability::*;
 pub use request_chunk_radius::*;
 pub use request_network_settings::*;
 pub use resource_pack_response::*;
+pub use respawn::*;
 pub use set_local_player_as_initialized::*;
 pub use set_player_inventory_options::*;
 pub use text::*;

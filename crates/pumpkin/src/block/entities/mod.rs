@@ -126,6 +126,11 @@ pub trait BlockEntity: Any + Send + Sync {
         None
     }
 
+    /// Obtain block actor NBT for fields Bedrock does not include in its block state.
+    fn bedrock_block_actor_data(&self, _state_id: BlockStateId) -> Option<NbtCompound> {
+        None
+    }
+
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
     }

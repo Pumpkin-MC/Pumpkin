@@ -37,6 +37,7 @@ impl ItemBehaviour for FireChargeItem {
         _server: &'a Server,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
+            let world = player.world();
             Ignition::ignite_block(
                 |world: Arc<World>, pos: BlockPos, new_state_id: BlockStateId| async move {
                     world
@@ -45,9 +46,9 @@ impl ItemBehaviour for FireChargeItem {
 
                     world.play_block_sound(Sound::ItemFirechargeUse, SoundCategory::Blocks, pos);
                 },
-                player,
+                &world,
                 location,
-                face,
+                location.offset(face.to_offset()),
                 block,
             )
             .await;

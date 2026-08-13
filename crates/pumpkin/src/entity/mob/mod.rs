@@ -623,10 +623,33 @@ pub trait Mob: EntityBase + Send + Sync {
     fn get_sheep(&self) -> Option<&crate::entity::passive::sheep::SheepEntity> {
         None
     }
+
+    fn mob_on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a crate::entity::lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_mob_entity()
+                .living_entity
+                .on_lightning_strike(caller, lightning)
+                .await;
+        })
+    }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
+    }
+
+    fn on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a crate::entity::lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.mob_on_lightning_strike(caller, lightning).await;
+        })
     }
 
     fn get_item_steerable(&self) -> Option<&dyn crate::entity::item_steerable::ItemSteerable> {

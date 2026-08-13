@@ -60,15 +60,12 @@ impl CommandExecutor for ObjectivesAddExecutor {
                 return Err(DUPLICATE_OBJECTIVE_ERROR.create_without_context());
             }
 
-            let obj_name_static = Box::leak(objective_name.to_string().into_boxed_str());
-            let criterion_static = Box::leak(criterion.to_string().into_boxed_str());
-
             let new_objective = ScoreboardObjective::new(
-                obj_name_static,
+                objective_name,
                 display_name.clone(),
                 RenderType::Integer,
                 None,
-                criterion_static,
+                criterion,
             );
 
             scoreboard.add_objective(world, new_objective).await;
@@ -128,8 +125,8 @@ impl CommandExecutor for PlayersEnableExecutor {
                     let number_format = current_score.and_then(|s| s.number_format.clone());
 
                     let updated_score = ScoreboardScore {
-                        entity_name: Box::leak(player_name.clone().into_boxed_str()),
-                        objective_name: Box::leak(objective_name.to_string().into_boxed_str()),
+                        entity_name: player_name.clone(),
+                        objective_name: objective_name.to_string(),
                         value: VarInt(value),
                         display_name,
                         number_format,

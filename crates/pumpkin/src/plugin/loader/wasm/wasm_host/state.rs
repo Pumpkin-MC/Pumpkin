@@ -45,7 +45,15 @@ pub type EntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type WorldResource = WasmResource<Arc<World>>;
 pub type ChunkResource = WasmResource<(Arc<World>, Weak<pumpkin_world::chunk::ChunkData>)>;
 pub type WorldBorderResource = WasmResource<Arc<World>>;
-pub type ScoreboardResource = WasmResource<Arc<World>>;
+
+#[derive(Clone)]
+pub enum ScoreboardProvider {
+    World(Arc<World>),
+    Player(Arc<Player>),
+}
+
+pub type ScoreboardResource = WasmResource<ScoreboardProvider>;
+pub type BedrockScoreboardResource = WasmResource<Arc<Player>>;
 pub type GuiResource = WasmResource<Arc<Mutex<PluginGui>>>;
 pub type BossBarResource = WasmResource<
     Arc<Mutex<crate::plugin::loader::wasm::wasm_host::wit::v0_1::boss_bar::PluginBossBar>>,
@@ -176,9 +184,19 @@ impl PluginHostState {
 
     pub fn add_scoreboard<T>(
         &mut self,
-        provider: Arc<World>,
+        provider: ScoreboardProvider,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(ScoreboardResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_bedrock_scoreboard<T>(
+        &mut self,
+        provider: Arc<Player>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(BedrockScoreboardResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

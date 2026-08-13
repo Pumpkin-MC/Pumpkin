@@ -4,41 +4,40 @@ use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 use std::sync::Arc;
 
 pub struct BegGoal {
-    beg_distance_sq: f64,
-    attractive_items: &'static [&'static Item],
-    timer: i32,
-    target: Option<Arc<Player>>,
+    look_distance_sq: f64,
+    look_time: i32,
+    player: Option<Arc<Player>>,
 }
 
 impl BegGoal {
     #[must_use]
-    pub fn new(beg_distance: f32, attractive_items: &'static [&'static Item]) -> Box<Self> {
+    pub fn new(look_distance: f32) -> Box<Self> {
         Box::new(Self {
-            beg_distance_sq: (beg_distance * beg_distance) as f64,
-            attractive_items,
-            timer: 0,
-            target: None,
+            look_distance_sq: f64::from(look_distance) * f64::from(look_distance),
+            look_time: 0,
+            player: None,
         })
     }
 
-    fn is_attractive(&self, item: &Item) -> bool {
-        self.attractive_items.iter().any(|i| i.id == item.id)
+    fn is_interesting_item(item: &Item) -> bool {
+        item.id == Item::BONE.id || item.has_tag(&tag::Item::MINECRAFT_WOLF_FOOD)
     }
 
-    async fn is_player_holding_attractive(&self, player: &Player) -> bool {
+    async fn player_holding_interesting(&self, player: &Player) -> bool {
         let main_stack = player.inventory().held_item().await;
-        if main_stack.item_count > 0 && self.is_attractive(main_stack.item) {
+        if main_stack.item_count > 0 && Self::is_interesting_item(main_stack.item) {
             return true;
         }
 
         let off_stack = player.inventory().off_hand_item().await;
-        off_stack.item_count > 0 && self.is_attractive(off_stack.item)
+        off_stack.item_count > 0 && Self::is_interesting_item(off_stack.item)
     }
 
     fn distance_sq(mob: &dyn Mob, player: &Player) -> f64 {
@@ -47,12 +46,12 @@ impl BegGoal {
         mob_pos.squared_distance_to_vec(&player_pos)
     }
 
-    fn set_begging(mob: &dyn Mob, begging: bool) {
+    fn set_is_interested(mob: &dyn Mob, value: bool) {
         mob.get_mob_entity().living_entity.entity.send_meta_data(
             &[Metadata::new(
                 TrackedData::INTERESTED_ID,
                 MetaDataType::BOOLEAN,
-                begging,
+                value,
             )],
             None,
         );
@@ -61,28 +60,28 @@ impl BegGoal {
 
 impl Goal for BegGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
+        Box::pin(async move {
             let entity = &mob.get_mob_entity().living_entity.entity;
             let world = entity.world.load_full();
             let pos = entity.pos.load();
-            let radius = self.beg_distance_sq.sqrt();
+            let radius = self.look_distance_sq.sqrt();
 
             let Some(player) = world.get_closest_player(pos, radius) else {
                 return false;
             };
 
-            if !self.is_player_holding_attractive(&player).await {
+            if !self.player_holding_interesting(&player).await {
                 return false;
             }
 
-            self.target = Some(player);
+            self.player = Some(player);
             true
         })
     }
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            let Some(player) = &self.target else {
+        Box::pin(async move {
+            let Some(player) = &self.player else {
                 return false;
             };
 
@@ -90,32 +89,32 @@ impl Goal for BegGoal {
                 return false;
             }
 
-            if Self::distance_sq(mob, player) > self.beg_distance_sq {
+            if Self::distance_sq(mob, player) > self.look_distance_sq {
                 return false;
             }
 
-            self.timer > 0 && self.is_player_holding_attractive(player).await
+            self.look_time > 0 && self.player_holding_interesting(player).await
         })
     }
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            Self::set_begging(mob, true);
+        Box::pin(async move {
+            Self::set_is_interested(mob, true);
             let ticks = 40 + mob.get_random().random_range(0..40);
-            self.timer = self.get_tick_count(ticks);
+            self.look_time = self.get_tick_count(ticks);
         })
     }
 
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            Self::set_begging(mob, false);
-            self.target = None;
+        Box::pin(async move {
+            Self::set_is_interested(mob, false);
+            self.player = None;
         })
     }
 
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            if let Some(player) = &self.target {
+        Box::pin(async move {
+            if let Some(player) = &self.player {
                 let player_pos = player.get_entity().get_eye_pos();
                 let mut look_control = mob
                     .get_mob_entity()
@@ -130,7 +129,7 @@ impl Goal for BegGoal {
                     mob.get_max_look_pitch_change(),
                 );
             }
-            self.timer -= 1;
+            self.look_time -= 1;
         })
     }
 

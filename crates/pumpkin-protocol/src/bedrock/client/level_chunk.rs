@@ -2,6 +2,7 @@ use std::io::{Error, Write};
 use xxhash_rust::xxh64::xxh64;
 
 use pumpkin_macros::packet;
+use pumpkin_nbt::{Nbt, compound::NbtCompound};
 use pumpkin_world::chunk::{ChunkData, palette::NetworkPalette};
 
 use crate::{
@@ -20,16 +21,26 @@ pub struct CLevelChunk<'a> {
     // https://gist.github.com/Tomcc/a96af509e275b1af483b25c543cfbf37
     // https://github.com/Mojang/bedrock-protocol-docs/blob/main/additional_docs/SubChunk%20Request%20System%20v1.18.10.md
     pub chunk: &'a ChunkData,
+    pub block_actors: &'a [NbtCompound],
 }
 
 pub type ChunkBlob = (u64, Vec<u8>);
 pub type EncodedChunk = (Vec<u8>, Vec<ChunkBlob>);
+
+fn encode_block_actors(block_actors: &[NbtCompound]) -> Result<Vec<u8>, Error> {
+    let mut encoded = Vec::new();
+    for block_actor in block_actors {
+        encoded.write_all(&Nbt::from(block_actor.clone()).write_bedrock())?;
+    }
+    Ok(encoded)
+}
 
 impl CLevelChunk<'_> {
     pub fn encode_chunk(
         chunk: &ChunkData,
         dimension: i32,
         cache_enabled: bool,
+        block_actors: &[NbtCompound],
     ) -> Result<EncodedChunk, Error> {
         let mut writer = Vec::new();
 
@@ -115,6 +126,8 @@ impl CLevelChunk<'_> {
             }
         }
 
+        let block_actor_bytes = encode_block_actors(block_actors)?;
+
         if cache_enabled {
             for subchunk_buf in subchunk_bytes_list {
                 let hash = xxh64(&subchunk_buf, 0);
@@ -128,9 +141,16 @@ impl CLevelChunk<'_> {
                 writer.write_all(&hash.to_le_bytes())?;
             }
 
-            // Chunk data payload when cache_enabled: only border block count byte (0).
-            VarUInt(1).write(&mut writer)?;
+            // Palette data is cached, but the per-chunk border and block actor data is not.
+            VarUInt(u32::try_from(1 + block_actor_bytes.len()).map_err(|_| {
+                Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Bedrock block actor payload exceeds the packet size limit",
+                )
+            })?)
+            .write(&mut writer)?;
             writer.write_all(&[0])?;
+            writer.write_all(&block_actor_bytes)?;
         } else {
             VarUInt(0).write(&mut writer)?;
 
@@ -140,6 +160,7 @@ impl CLevelChunk<'_> {
             }
             chunk_data.write_all(&biome_buf)?;
             chunk_data.write_all(&[0])?;
+            chunk_data.write_all(&block_actor_bytes)?;
 
             VarUInt(chunk_data.len() as u32).write(&mut writer)?;
             writer.write_all(&chunk_data)?;
@@ -151,19 +172,26 @@ impl CLevelChunk<'_> {
 
 impl PacketWrite for CLevelChunk<'_> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        let (encoded, _) = Self::encode_chunk(self.chunk, self.dimension, self.cache_enabled)?;
+        let (encoded, _) = Self::encode_chunk(
+            self.chunk,
+            self.dimension,
+            self.cache_enabled,
+            self.block_actors,
+        )?;
         writer.write_all(&encoded)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
     use std::sync::{
         Mutex,
         atomic::{AtomicBool, AtomicU64},
     };
 
     use pumpkin_data::chunk::ChunkStatus;
+    use pumpkin_nbt::{Nbt, compound::NbtCompound, deserializer::NbtReadHelperBedrock};
     use pumpkin_world::{
         chunk::{ChunkData, ChunkHeightmaps, ChunkLight, ChunkSections},
         tick::scheduler::ChunkTickScheduler,
@@ -185,9 +213,8 @@ mod tests {
         panic!("VarUInt is too long");
     }
 
-    #[test]
-    fn biomes_follow_subchunks_without_subchunk_headers() {
-        let chunk = ChunkData {
+    fn empty_chunk() -> ChunkData {
+        ChunkData {
             section: ChunkSections::new(24, -64),
             heightmap: Mutex::new(ChunkHeightmaps::default()),
             x: 0,
@@ -201,12 +228,18 @@ mod tests {
             blending_data: None,
             dirty: AtomicBool::new(false),
             inhabited_time: AtomicU64::new(0),
-        };
+        }
+    }
+
+    #[test]
+    fn biomes_follow_subchunks_without_subchunk_headers() {
+        let chunk = empty_chunk();
         let mut encoded = Vec::new();
         CLevelChunk {
             dimension: 0,
             cache_enabled: false,
             chunk: &chunk,
+            block_actors: &[],
         }
         .write(&mut encoded)
         .unwrap();
@@ -239,5 +272,33 @@ mod tests {
         }
         assert_eq!(raw[raw_offset], 0); // Border block count.
         assert_eq!(raw_offset + 1, raw.len());
+    }
+
+    #[test]
+    fn block_actor_nbt_follows_the_chunk_border_data() {
+        let chunk = empty_chunk();
+        let mut block_actor = NbtCompound::new();
+        block_actor.put_string("id", "Chest".to_string());
+        block_actor.put_int("x", 1);
+        block_actor.put_int("y", 64);
+        block_actor.put_int("z", 2);
+
+        let (encoded, _) = CLevelChunk::encode_chunk(&chunk, 0, true, &[block_actor]).unwrap();
+        let mut offset = 0;
+        for _ in 0..3 {
+            read_var_uint(&encoded, &mut offset);
+        }
+        read_var_uint(&encoded, &mut offset);
+        offset += 2;
+        let blob_count = read_var_uint(&encoded, &mut offset) as usize;
+        offset += blob_count * size_of::<u64>();
+        let raw_len = read_var_uint(&encoded, &mut offset) as usize;
+        let raw = &encoded[offset..offset + raw_len];
+
+        assert_eq!(raw[0], 0);
+        let mut reader = NbtReadHelperBedrock::new(Cursor::new(&raw[1..]));
+        let parsed = Nbt::read(&mut reader).unwrap();
+        assert_eq!(parsed.get_string("id"), Some("Chest"));
+        assert_eq!(parsed.get_int("x"), Some(1));
     }
 }

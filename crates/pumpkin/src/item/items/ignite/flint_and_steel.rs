@@ -60,9 +60,9 @@ impl ItemBehaviour for FlintAndSteelItem {
                         .set_block_state(&pos, new_state_id, BlockFlags::NOTIFY_ALL)
                         .await;
                 },
-                player,
+                &world,
                 location,
-                face,
+                location.offset(face.to_offset()),
                 block,
             )
             .await;

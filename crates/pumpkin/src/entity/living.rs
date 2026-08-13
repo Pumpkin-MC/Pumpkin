@@ -6,8 +6,8 @@ use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_protocol::bedrock::client::actor_event::{ActorEventType, CActorEvent};
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
-use pumpkin_protocol::bedrock::server::actor_event::{ActorEventType, SActorEvent};
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
@@ -1327,7 +1327,12 @@ impl LivingEntity {
         fall_distance: f32,
         damage_per_distance: f32,
     ) {
-        if self.is_immune_to_fall_damage() {
+        let may_fly = if let Some(player) = caller.get_player() {
+            player.abilities.lock().await.allow_flying
+        } else {
+            false
+        };
+        if may_fly || self.is_immune_to_fall_damage() {
             return;
         }
 
@@ -2101,7 +2106,7 @@ impl NBTStorage for LivingEntity {
             };
             // Persist current absorption amount
             nbt.put("AbsorptionAmount", NbtTag::Float(self.absorption.load()));
-            nbt.put("fall_distance", NbtTag::Float(fall_distance));
+            nbt.put("FallDistance", NbtTag::Float(fall_distance));
             {
                 let effects = self.active_effects.lock().await;
                 if !effects.is_empty() {
@@ -2133,7 +2138,10 @@ impl NBTStorage for LivingEntity {
 
             // Load fall distance, but if this entity is currently marked dead ensure we don't restore
             // a lethal fall distance that would immediately re-kill on spawn.
-            let fd = nbt.get_float("fall_distance").unwrap_or(0.0);
+            let fd = nbt
+                .get_float("FallDistance")
+                .or_else(|| nbt.get_float("fall_distance"))
+                .unwrap_or(0.0);
             if self.dead.load(Relaxed) {
                 self.fall_distance.store(0.0);
             } else {
@@ -2477,7 +2485,7 @@ impl EntityBase for LivingEntity {
                     (src.z - tgt.z).atan2(src.x - tgt.x).to_degrees() as f32
                         - self.entity.yaw.load()
                 });
-                let hurt_event = SActorEvent {
+                let hurt_event = CActorEvent {
                     entity_runtime_id: VarULong(entity_id as u64),
                     event_type: ActorEventType::Hurt,
                     event_data: VarInt(0),
@@ -2829,7 +2837,16 @@ impl EntityBase for LivingEntity {
                 self.hurt_cooldown.fetch_sub(1, Relaxed);
             }
             if self.health.load() <= 0.0 {
-                let time = self.death_time.fetch_add(1, Relaxed);
+                let time = self
+                    .death_time
+                    .fetch_update(Relaxed, Relaxed, |time| Some(time.saturating_add(1)))
+                    .unwrap_or_else(|time| time)
+                    .saturating_add(1);
+                // Players remain part of the world until their client requests a
+                // respawn. Removing one here breaks reconnecting while dead.
+                if self.entity.entity_type == &EntityType::PLAYER {
+                    return;
+                }
                 // Only send death particles once (on the exact tick death_time reaches 20)
                 // and then remove the entity, preventing entity_event spam.
                 if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {

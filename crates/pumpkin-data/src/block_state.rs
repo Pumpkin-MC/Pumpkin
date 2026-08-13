@@ -1,5 +1,4 @@
-use pumpkin_util::math::boundingbox::BoundingBox;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 
 use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
 use crate::{Block, BlockDirection, BlockId};
@@ -178,11 +177,39 @@ impl BlockState {
             .map(|&id| COLLISION_SHAPES[id as usize])
     }
 
+    /// Returns block-local collision shapes with vanilla's coordinate-derived offset applied.
+    pub fn get_block_collision_shapes_at(
+        &self,
+        pos: &BlockPos,
+    ) -> impl Iterator<Item = BoundingBox> + '_ {
+        let offset = Block::from_state_id(self.id).shape_offset_delta(pos);
+        self.get_block_collision_shapes()
+            .map(move |shape| shape.shift(offset))
+    }
+
     pub fn get_block_outline_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
         let base_shapes = self
             .outline_shapes
             .iter()
             .map(|&id| COLLISION_SHAPES[id as usize]);
+
+        let water_shape = self
+            .is_waterlogged()
+            .then(|| BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 0.875, 1.0)));
+
+        base_shapes.chain(water_shape)
+    }
+
+    /// Returns block-local outline shapes with vanilla's coordinate-derived offset applied.
+    pub fn get_block_outline_shapes_at(
+        &self,
+        pos: &BlockPos,
+    ) -> impl Iterator<Item = BoundingBox> + '_ {
+        let offset = Block::from_state_id(self.id).shape_offset_delta(pos);
+        let base_shapes = self
+            .outline_shapes
+            .iter()
+            .map(move |&id| COLLISION_SHAPES[id as usize].shift(offset));
 
         let water_shape = self
             .is_waterlogged()
@@ -281,3 +308,61 @@ const WEST_SIDE_SOLID: u8 = 1 << 4;
 const EAST_SIDE_SOLID: u8 = 1 << 5;
 const DOWN_CENTER_SOLID: u8 = 1 << 6;
 const UP_CENTER_SOLID: u8 = 1 << 7;
+
+#[cfg(test)]
+mod tests {
+    use crate::{Block, BlockStateId, block_state_remap::remap_block_state_for_version};
+    use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!((actual - expected).abs() < 1.0e-6, "{actual} != {expected}");
+    }
+
+    #[test]
+    fn bamboo_collision_shape_uses_its_world_position() {
+        let state = Block::BAMBOO.default_state;
+        let origin_shape = state
+            .get_block_collision_shapes_at(&BlockPos::new(0, 64, 0))
+            .next()
+            .unwrap();
+        let shifted_shape = state
+            .get_block_collision_shapes_at(&BlockPos::new(-18, 64, -7))
+            .next()
+            .unwrap();
+
+        assert_close(origin_shape.min.x, 0.15625);
+        assert_close(origin_shape.max.x, 0.34375);
+        assert_close(shifted_shape.min.x, 0.65625);
+        assert_close(shifted_shape.max.x, 0.84375);
+        assert_close(shifted_shape.min.z, 0.65625);
+        assert_close(shifted_shape.max.z, 0.84375);
+    }
+
+    #[test]
+    fn supported_client_versions_keep_offset_collisions_mapped() {
+        let versions = [
+            JavaMinecraftVersion::V_1_20_5,
+            JavaMinecraftVersion::V_1_21,
+            JavaMinecraftVersion::V_1_21_2,
+            JavaMinecraftVersion::V_1_21_4,
+            JavaMinecraftVersion::V_1_21_5,
+            JavaMinecraftVersion::V_1_21_6,
+            JavaMinecraftVersion::V_1_21_7,
+            JavaMinecraftVersion::V_1_21_9,
+            JavaMinecraftVersion::V_1_21_11,
+            JavaMinecraftVersion::V_26_1,
+            JavaMinecraftVersion::V_26_2,
+        ];
+
+        for version in versions {
+            for block in [Block::BAMBOO, Block::POINTED_DRIPSTONE] {
+                assert_ne!(
+                    remap_block_state_for_version(block.default_state.id.as_u16(), version),
+                    BlockStateId::AIR.as_u16(),
+                    "{} mapped to air for {version}",
+                    block.name
+                );
+            }
+        }
+    }
+}

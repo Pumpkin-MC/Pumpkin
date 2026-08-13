@@ -122,7 +122,7 @@ impl CommandExecutor for TeamAddExecutor {
                 players: vec![],
             };
 
-            scoreboard.add_team(world, new_team);
+            scoreboard.add_team(world, new_team).await;
 
             context
                 .source
@@ -158,7 +158,7 @@ impl CommandExecutor for TeamRemoveExecutor {
 
             let team_display_name = team.display_name.clone();
 
-            scoreboard.remove_team(world, team_name);
+            scoreboard.remove_team(world, team_name).await;
 
             context
                 .source
@@ -200,7 +200,9 @@ impl CommandExecutor for TeamEmptyExecutor {
             }
 
             for player in &players_to_remove {
-                scoreboard.remove_player_from_team(world, team_name, player);
+                scoreboard
+                    .remove_player_from_team(world, team_name, player)
+                    .await;
             }
 
             context
@@ -262,7 +264,9 @@ impl CommandExecutor for TeamJoinExecutor {
 
             let count = entity_names.len();
             for name in &entity_names {
-                scoreboard.add_player_to_team(world, team_name, name.clone());
+                scoreboard
+                    .add_player_to_team(world, team_name, name.clone())
+                    .await;
             }
 
             let msg = if count == 1 {
@@ -327,7 +331,9 @@ impl CommandExecutor for TeamLeaveExecutor {
                     }
                 }
                 if let Some(team_name) = found_team {
-                    scoreboard.remove_player_from_team(world, &team_name, name);
+                    scoreboard
+                        .remove_player_from_team(world, &team_name, name)
+                        .await;
                     removed_count += 1;
                 }
             }
@@ -474,7 +480,7 @@ impl CommandExecutor for TeamModifyColorResetExecutor {
 
             team.color = NamedColor::White;
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -519,7 +525,7 @@ impl CommandExecutor for TeamModifyColorExecutor {
 
             team.color = new_color;
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -565,7 +571,7 @@ impl CommandExecutor for TeamModifyDisplayNameExecutor {
 
             team.display_name = new_display_name.clone();
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -607,7 +613,7 @@ impl CommandExecutor for TeamModifyPrefixExecutor {
             let new_prefix = TextComponent::text(new_prefix_str.to_string());
             team.player_prefix = new_prefix.clone();
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -649,7 +655,7 @@ impl CommandExecutor for TeamModifySuffixExecutor {
             let new_suffix = TextComponent::text(new_suffix_str.to_string());
             team.player_suffix = new_suffix.clone();
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -703,7 +709,7 @@ impl CommandExecutor for TeamModifyFriendlyFireExecutor {
             }
 
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             let key = if value {
                 translation::java::COMMANDS_TEAM_OPTION_FRIENDLYFIRE_ENABLED
@@ -761,7 +767,7 @@ impl CommandExecutor for TeamModifySeeFriendlyInvisiblesExecutor {
             }
 
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             let key = if value {
                 translation::java::COMMANDS_TEAM_OPTION_SEEFRIENDLYINVISIBLES_ENABLED
@@ -829,7 +835,7 @@ impl CommandExecutor for TeamModifyNametagVisibilityExecutor {
             };
 
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source
@@ -931,7 +937,7 @@ impl CommandExecutor for TeamModifyCollisionRuleExecutor {
             };
 
             let team_display_name = team.display_name.clone();
-            scoreboard.update_team(world, team);
+            scoreboard.update_team(world, team).await;
 
             context
                 .source

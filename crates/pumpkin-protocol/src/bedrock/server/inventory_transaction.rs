@@ -125,7 +125,7 @@ pub struct NormalTransactionData;
 #[derive(Debug, PacketRead)]
 pub struct MismatchTransactionData;
 
-#[derive(Debug)]
+#[derive(Debug, PacketRead)]
 pub struct UseItemTransactionData {
     pub action_type: VarInt,
     pub trigger_type: u8,
@@ -140,25 +140,7 @@ pub struct UseItemTransactionData {
     pub client_cooldown_state: u8,
 }
 
-impl PacketRead for UseItemTransactionData {
-    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        Ok(Self {
-            action_type: VarInt::read(buf)?,
-            trigger_type: u8::read(buf)?,
-            block_position: BlockPos::read(buf)?,
-            block_face: i32::from(u8::read(buf)?),
-            hot_bar_slot: VarInt::read(buf)?,
-            item_in_hand: NetworkItemDescriptor::read(buf)?,
-            player_position: Vector3::read(buf)?,
-            click_position: Vector3::read(buf)?,
-            block_runtime_id: VarUInt::read(buf)?,
-            client_prediction: u8::read(buf)?,
-            client_cooldown_state: u8::read(buf)?,
-        })
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, PacketRead)]
 pub struct UseItemOnEntityTransactionData {
     pub target_entity_runtime_id: VarULong,
     pub action_type: VarInt,
@@ -168,36 +150,12 @@ pub struct UseItemOnEntityTransactionData {
     pub click_position: Vector3<f32>,
 }
 
-impl PacketRead for UseItemOnEntityTransactionData {
-    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        Ok(Self {
-            target_entity_runtime_id: VarULong::read(buf)?,
-            action_type: VarInt::read(buf)?,
-            hot_bar_slot: VarInt::read(buf)?,
-            item_in_hand: NetworkItemDescriptor::read(buf)?,
-            player_position: Vector3::read(buf)?,
-            click_position: Vector3::read(buf)?,
-        })
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, PacketRead)]
 pub struct ReleaseItemTransactionData {
     pub action_type: VarInt,
     pub hot_bar_slot: VarInt,
     pub item_in_hand: NetworkItemDescriptor,
     pub head_position: Vector3<f32>,
-}
-
-impl PacketRead for ReleaseItemTransactionData {
-    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        Ok(Self {
-            action_type: VarInt::read(buf)?,
-            hot_bar_slot: VarInt::read(buf)?,
-            item_in_hand: NetworkItemDescriptor::read(buf)?,
-            head_position: Vector3::read(buf)?,
-        })
-    }
 }
 
 #[derive(Debug)]

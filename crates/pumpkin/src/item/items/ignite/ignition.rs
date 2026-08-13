@@ -1,34 +1,32 @@
 use crate::block::blocks::fire::FireBlockBase;
 use crate::block::blocks::fire::fire::FireBlock;
-use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection, BlockStateId, tag};
+use pumpkin_data::{Block, BlockStateId, tag};
 use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
 pub struct Ignition;
 
 impl Ignition {
+    /// Lights `block` at `location` itself if it can be lit (campfires, candles, candle
+    /// cakes), otherwise places a fire block at `fire_pos`.
     pub async fn ignite_block<F, Fut>(
         ignite_logic: F,
-        player: &Player,
+        world: &Arc<World>,
         location: BlockPos,
-        face: BlockDirection,
+        fire_pos: BlockPos,
         block: &Block,
     ) -> bool
     where
         F: FnOnce(Arc<World>, BlockPos, BlockStateId) -> Fut,
         Fut: Future<Output = ()>,
     {
-        let world = player.world();
-        let pos = location.offset(face.to_offset());
-
         if world.get_fluid(&location).name != Fluid::EMPTY.name {
             return false;
         }
-        let fire_block = FireBlockBase::get_fire_type(&world, &pos);
+        let fire_block = FireBlockBase::get_fire_type(world, &fire_pos);
 
         let state_id = world.get_block_state_id(&location);
 
@@ -37,9 +35,9 @@ impl Ignition {
             return true;
         }
 
-        let state_id = FireBlock.get_state_for_position(&world, &fire_block, &pos);
-        if FireBlockBase::can_place_at(&world, &pos) {
-            ignite_logic(world.clone(), pos, state_id).await;
+        let state_id = FireBlock.get_state_for_position(world, &fire_block, &fire_pos);
+        if FireBlockBase::can_place_at(world, &fire_pos) {
+            ignite_logic(world.clone(), fire_pos, state_id).await;
             return true;
         }
 

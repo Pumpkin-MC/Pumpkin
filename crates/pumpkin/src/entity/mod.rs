@@ -91,9 +91,12 @@ pub mod effect;
 pub mod experience_orb;
 pub mod falling;
 pub mod hunger;
+pub mod interaction;
 pub mod item;
 pub mod item_steerable;
+pub mod lightning;
 pub mod living;
+pub mod marker;
 pub mod mob;
 pub mod passive;
 pub mod player;
@@ -102,6 +105,8 @@ pub mod projectile_deflection;
 pub mod tnt;
 pub mod r#type;
 pub mod vehicle;
+
+pub use lightning::LightningBoltEntity;
 
 mod combat;
 pub mod predicate;
@@ -250,6 +255,28 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
             caller
                 .damage_with_context(caller, amount, damage_type, None, None, None)
                 .await
+        })
+    }
+
+    fn on_lightning_strike<'a>(
+        &'a self,
+        caller: &'a dyn EntityBase,
+        lightning: &'a lightning::LightningBoltEntity,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            if self.get_living_entity().is_some() {
+                self.set_on_fire_for(8.0);
+                let cause = lightning.get_cause().await;
+                self.damage_with_context(
+                    caller,
+                    5.0,
+                    DamageType::LIGHTNING_BOLT,
+                    None,
+                    Some(lightning),
+                    cause.as_deref().map(|p| p as &dyn EntityBase),
+                )
+                .await;
+            }
         })
     }
 
@@ -3008,7 +3035,7 @@ impl Entity {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
                     let (block, state) = world.get_block_and_state(&pos);
-                    let block_outlines = state.get_block_outline_shapes();
+                    let block_outlines = state.get_block_outline_shapes_at(&pos);
 
                     if state.outline_shapes.is_empty() {
                         world
@@ -3208,6 +3235,11 @@ impl Entity {
     pub async fn has_vehicle(&self) -> bool {
         let vehicle = self.vehicle.lock().await;
         vehicle.is_some()
+    }
+
+    pub async fn is_leashed(&self) -> bool {
+        let leashed_to = self.leashed_to.lock().await;
+        leashed_to.is_some()
     }
 
     pub async fn add_passenger(

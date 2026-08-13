@@ -588,7 +588,7 @@ fn collect_overloads_from_attached(
     }
 }
 
-fn ensure_enum_value(enum_values: &mut Vec<String>, value: &str) -> usize {
+fn ensure_enum_value(enum_values: &mut Vec<String>, value: &str) -> u32 {
     enum_values
         .iter()
         .position(|v| v == value)
@@ -596,6 +596,8 @@ fn ensure_enum_value(enum_values: &mut Vec<String>, value: &str) -> usize {
             enum_values.push(value.to_string());
             enum_values.len() - 1
         })
+        .try_into()
+        .unwrap()
 }
 
 fn ensure_command_enum(
@@ -608,7 +610,7 @@ fn ensure_command_enum(
         return pos;
     }
 
-    let value_indices: Vec<usize> = values
+    let value_indices: Vec<u32> = values
         .iter()
         .map(|val| ensure_enum_value(enum_values, val))
         .collect();
