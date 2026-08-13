@@ -95,6 +95,7 @@ use pumpkin_protocol::{
     bedrock::{
         client::{
             add_player::CAddPlayer,
+            block_event::CBlockEvent as CBedrockBlockEvent,
             common::BuildPlatform,
             creative_content::{CCreativeContent, CreativeCategory, Entry, Group},
             gamerules_changed::GameRules,
@@ -586,7 +587,7 @@ impl World {
                 continue;
             }
             let chunk_pos = event.pos.chunk_position();
-            self.broadcast_to_chunk(
+            self.broadcast_to_chunk_editioned_sync(
                 chunk_pos,
                 &CBlockEvent::new(
                     event.pos,
@@ -594,6 +595,7 @@ impl World {
                     event.data,
                     VarInt(block.id.as_u16() as i32),
                 ),
+                &CBedrockBlockEvent::new(event.pos, i32::from(event.r#type), i32::from(event.data)),
             );
         }
     }
