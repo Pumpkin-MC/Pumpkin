@@ -4,10 +4,6 @@ metadata:
   name: pumpkin
   displayName: Pumpkin
   description: Development workspace for the Pumpkin Minecraft server
-  tags:
-    - Rust
-    - Minecraft
-    - Pumpkin
 
 attributes:
   controller.devfile.io/storage-type: per-workspace
@@ -17,86 +13,17 @@ components:
     container:
       image: quay.io/devfile/universal-developer-image:ubi9-latest
       mountSources: true
-      memoryRequest: 2Gi
-      memoryLimit: 60Gi
-      cpuRequest: "1"
-      cpuLimit: "20"
+
+      cpuRequest: "2"
+      memoryRequest: 4Gi
+      memoryLimit: 16Gi
+
       env:
-        - name: CARGO_HOME
-          value: /home/user/.cargo
-        - name: RUSTUP_HOME
-          value: /home/user/.rustup
-        - name: PATH
-          value: /home/user/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: RUST_BACKTRACE
           value: "1"
+
       endpoints:
         - name: minecraft
           targetPort: 25565
           exposure: internal
           protocol: tcp
-
-commands:
-  - id: install-rust
-    exec:
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: |
-        set -eu
-
-        if ! command -v rustup >/dev/null 2>&1; then
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs             | sh -s -- -y --profile minimal --default-toolchain none
-        fi
-
-        rustup toolchain install stable           --profile minimal           --component rust-analyzer           --component rust-src           --component rustfmt           --component clippy
-
-        rustup default stable
-        rustc --version
-        cargo --version
-
-  - id: cargo-check
-    exec:
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: cargo check --workspace --all-targets
-      group:
-        kind: build
-        isDefault: true
-
-  - id: cargo-clippy
-    exec:
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: cargo clippy --workspace --all-targets --all-features
-      group:
-        kind: build
-
-  - id: cargo-test
-    exec:
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: cargo test --workspace
-      group:
-        kind: test
-        isDefault: true
-
-  - id: run-pumpkin
-    exec:
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: cargo run --package pumpkin
-      group:
-        kind: run
-        isDefault: true
-
-  - id: run-pumpkin-release
-    exec:
-      component: tools
-      workingDir: ${PROJECT_SOURCE}
-      commandLine: cargo run --release --package pumpkin
-      group:
-        kind: run
-
-events:
-  postStart:
-    - install-rust
