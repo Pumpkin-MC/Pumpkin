@@ -78,4 +78,44 @@ impl<T: Send + Sync + 'static> RegistryBuilder<T> {
             mapping,
         ))
     }
+
+    #[must_use]
+    pub fn empty_reloadable(name: &Identifier) -> ReloadableRegistry<T> {
+        ReloadableRegistry::new(name.clone(), Box::default(), FxHashMap::default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RegistryBuilder;
+    use crate::AsyncTypedRegistry;
+    use pumpkin_util::identifier::Identifier;
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct Entry(usize);
+
+    #[tokio::test]
+    async fn empty_reloadable_starts_empty_and_can_be_populated() {
+        let registry_name = Identifier::parse_static("test:empty");
+        let entry_name = Identifier::parse_static("test:entry");
+        let registry = RegistryBuilder::<Entry>::empty_reloadable(&registry_name);
+
+        assert!(
+            AsyncTypedRegistry::get(&registry, &entry_name)
+                .await
+                .is_none()
+        );
+
+        registry
+            .replace_entries([(entry_name.clone(), Entry(1))])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            *AsyncTypedRegistry::get(&registry, &entry_name)
+                .await
+                .unwrap(),
+            Entry(1),
+        );
+    }
 }
