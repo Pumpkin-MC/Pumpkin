@@ -464,6 +464,14 @@ impl ChunkGenerator for FlatGenerator {
         self.seed
     }
 
+    fn sea_level(&self) -> i32 {
+        self.surface_y()
+    }
+
+    fn global_structure_cache(&self) -> Option<&GlobalStructureCache> {
+        Some(&self.global_structure_cache)
+    }
+
     fn step_to_biomes(&self, chunk: &mut ProtoChunk) {
         self.step_to_biomes(chunk);
     }

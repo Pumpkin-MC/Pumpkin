@@ -32,6 +32,7 @@ use pumpkin_protocol::bedrock::client::{
 use pumpkin_protocol::bedrock::respawn::RespawnState;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_registry::{DataKey, ROOT};
 use pumpkin_util::translation::Locale;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
@@ -5383,7 +5384,13 @@ impl NBTStorage for Player {
             ) {
                 let dim = nbt
                     .get_string("SpawnDimension")
-                    .and_then(|s| Dimension::from_name(s).cloned())
+                    .and_then(|name| {
+                        let root = ROOT.get()?;
+                        DataKey::<Dimension>::owned(format!("minecraft:dimension_type/{name}"))
+                            .get_blocking(root)
+                            .ok()
+                            .map(|dimension| dimension.clone())
+                    })
                     .unwrap_or_else(|| self.world().dimension.clone());
                 let force = nbt.get_bool("SpawnForced").unwrap_or(false);
                 *self.respawn_point.lock().await = Some(RespawnPoint {

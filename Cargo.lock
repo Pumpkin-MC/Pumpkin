@@ -3423,13 +3423,13 @@ version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "crc-fast",
  "criterion",
- "linkme",
  "phf",
  "pumpkin-nbt",
  "pumpkin-registry",
  "pumpkin-util",
  "rand",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

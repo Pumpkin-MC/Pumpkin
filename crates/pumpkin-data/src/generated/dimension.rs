@@ -116,15 +116,6 @@ impl Dimension {
         cloud_color: None,
         timelines: Some("#minecraft:in_nether"),
     };
-    pub fn from_name(name: &str) -> Option<&'static Self> {
-        match name {
-            "minecraft:overworld" => Some(&Self::OVERWORLD),
-            "minecraft:overworld_caves" => Some(&Self::OVERWORLD_CAVES),
-            "minecraft:the_end" => Some(&Self::THE_END),
-            "minecraft:the_nether" => Some(&Self::THE_NETHER),
-            _ => None,
-        }
-    }
 }
 const STATIC_ENTRIES: [Dimension; 4usize] = [
     Dimension::OVERWORLD,

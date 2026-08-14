@@ -85,6 +85,7 @@ mod version;
 mod villager;
 mod wit;
 mod world_event;
+mod world_preset;
 
 /// Output directory where all generated Rust source files are written.
 pub const OUT_DIR: &str = "../../crates/pumpkin-data/src/generated";
@@ -121,6 +122,7 @@ pub fn main() {
         (entity_pose::build, "entity_pose.rs"),
         (scoreboard_slot::build, "scoreboard_slot.rs"),
         (world_event::build, "world_event.rs"),
+        (world_preset::build, "world_preset.rs"),
         (entity_type::build, "entity_type.rs"),
         (statistic::build, "statistic.rs"),
         (noise_parameter::build, "noise_parameter.rs"),

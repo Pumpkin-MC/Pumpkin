@@ -601,8 +601,12 @@ impl VanillaGenerator {
                 chunk.start_block_z(),
             );
 
-        for (i, set) in StructureSet::ALL.iter().enumerate() {
-            let allowed_biomes = &self.structure_allowed_biomes[&i];
+        let structure_sets = self.structure_sets();
+        for (_, value) in structure_sets.iter_erased() {
+            let Some(set) = value.downcast_ref::<StructureSet>() else {
+                continue;
+            };
+            let allowed_biomes = ProtoChunk::get_allowed_biomes(set);
 
             if !should_generate_structure(
                 &set.placement,
@@ -611,7 +615,7 @@ impl VanillaGenerator {
                 chunk.z,
                 global_cache,
                 chunk,
-                allowed_biomes,
+                &allowed_biomes,
             ) {
                 continue;
             }
@@ -749,7 +753,12 @@ impl VanillaGenerator {
         // and out of the (cached) structure-start computation below.
         let chunk_min_y = chunk.bottom_y() as i32;
 
-        for (set_index, set) in StructureSet::ALL.iter().enumerate() {
+        let structure_sets = self.structure_sets();
+        for (_, value) in structure_sets.iter_erased() {
+            let Some(set) = value.downcast_ref::<StructureSet>() else {
+                continue;
+            };
+            let allowed_biomes = ProtoChunk::get_allowed_biomes(set);
             let mut candidate_chunks = Vec::new();
 
             match &set.placement.placement_type {
@@ -795,7 +804,7 @@ impl VanillaGenerator {
                     candidate_chunk_z,
                     global_cache,
                     chunk,
-                    &self.structure_allowed_biomes[&set_index],
+                    &allowed_biomes,
                 ) {
                     continue;
                 }

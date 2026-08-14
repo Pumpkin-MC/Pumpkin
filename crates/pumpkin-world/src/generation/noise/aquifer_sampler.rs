@@ -889,7 +889,7 @@ mod random_positions_and_hypot {
     use std::sync::LazyLock;
 
     use pumpkin_data::{
-        BlockStateId, chunk_gen_settings::GenerationSettings, dimension::Dimension,
+        BlockStateId, chunk_gen_settings::GenerationSettings,
         noise_router::OVERWORLD_BASE_NOISE_ROUTER,
     };
     use pumpkin_util::math::vector3::Vector3;
@@ -932,7 +932,7 @@ mod random_positions_and_hypot {
     ) {
         const CHUNK_WIDTH: usize = 16;
 
-        let surface_config = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
+        let surface_config = &GenerationSettings::OVERWORLD;
         let shape = &surface_config.shape;
         let chunk_x = 7;
         let chunk_z = 4;
@@ -991,7 +991,7 @@ mod random_positions_and_hypot {
     }
 
     fn create_carver_aquifer() -> CarverAquiferSampler<'static> {
-        let settings = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
+        let settings = &GenerationSettings::OVERWORLD;
         CarverAquiferSampler::new(7, 4, &PROTO_ROUTER, &RANDOM_CONFIG, settings)
     }
 

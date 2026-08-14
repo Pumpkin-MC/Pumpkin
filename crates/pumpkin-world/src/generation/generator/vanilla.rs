@@ -3,12 +3,11 @@ use pumpkin_data::{
     BlockState,
     chunk_gen_settings::GenerationSettings,
     dimension::Dimension,
-    structures::{StructurePlacementCalculator, StructureSet},
+    structures::StructurePlacementCalculator,
 };
-use pumpkin_registry::{DataKey, DataKeyRef, ROOT};
+use pumpkin_registry::{DataKey, DataKeyRef, Registry, ROOT};
 use pumpkin_util::world_seed::Seed;
-use rustc_hash::FxHashMap;
-use std::ops::Deref;
+use std::{ops::Deref, sync::Arc};
 
 use super::{ChunkGenerator, ChunkGeneratorDecode, NoiseGeneratorConfig};
 use crate::{
@@ -49,7 +48,6 @@ pub struct VanillaGenerator {
     pub default_block: &'static BlockState,
     pub global_structure_cache: GlobalStructureCache,
     pub structure_calculator: StructurePlacementCalculator,
-    pub structure_allowed_biomes: FxHashMap<usize, Vec<u16>>,
     legacy_settings: Option<&'static GenerationSettings>,
 }
 
@@ -68,11 +66,6 @@ impl VanillaGenerator {
         let base_router = ProtoNoiseRouters::generate(settings.base_router, &random_config);
         let biome_mixer_seed = crate::biome::hash_seed(seed.0);
 
-        let mut structure_allowed_biomes = FxHashMap::default();
-        for (i, set) in StructureSet::ALL.iter().enumerate() {
-            structure_allowed_biomes.insert(i, ProtoChunk::get_allowed_biomes(set));
-        }
-
         Self {
             random_config,
             base_router,
@@ -84,7 +77,6 @@ impl VanillaGenerator {
             default_block,
             global_structure_cache: GlobalStructureCache::new(),
             structure_calculator: StructurePlacementCalculator::new(seed.0 as i64),
-            structure_allowed_biomes,
             legacy_settings,
         }
     }
@@ -122,6 +114,20 @@ impl VanillaGenerator {
             biome_source,
             None,
         ))
+    }
+
+    #[must_use]
+    #[allow(clippy::expect_used)]
+    pub(crate) fn structure_sets(&self) -> DataKeyRef<'static, Arc<dyn Registry>> {
+        static STRUCTURE_SETS: DataKey<Arc<dyn Registry>> =
+            DataKey::new("minecraft:worldgen/minecraft:structure_set");
+
+        let root = ROOT
+            .get()
+            .expect("VanillaGenerator decoded only after the root registry is initialized");
+        STRUCTURE_SETS
+            .get_blocking(root)
+            .expect("Structure set registry must exist for vanilla world generation")
     }
 
     #[must_use]
@@ -198,13 +204,13 @@ impl ChunkGenerator for VanillaGenerator {
         self.random_config.seed
     }
 
-    fn generation_bounds(&self) -> (u16, i8) {
+    fn generation_bounds(&self) -> (i32, i32) {
         let dimension = self.dimension();
         let shape = self.settings().shape.trim_height(
             dimension.min_y as i8,
             (dimension.min_y + dimension.height) as u16,
         );
-        (shape.height, shape.min_y)
+        (shape.height.into(), shape.min_y.into())
     }
 
     fn default_block(&self) -> &'static BlockState {
@@ -213,6 +219,14 @@ impl ChunkGenerator for VanillaGenerator {
 
     fn biome_mixer_seed(&self) -> i64 {
         self.biome_mixer_seed
+    }
+
+    fn sea_level(&self) -> i32 {
+        self.settings().sea_level
+    }
+
+    fn global_structure_cache(&self) -> Option<&GlobalStructureCache> {
+        Some(&self.global_structure_cache)
     }
 
     fn step_to_biomes(&self, chunk: &mut ProtoChunk) {

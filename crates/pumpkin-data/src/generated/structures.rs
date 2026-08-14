@@ -1,7 +1,12 @@
 /* This file is generated. Do not edit manually. */
+use pumpkin_registry::{Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider};
+use pumpkin_util::identifier::Identifier;
+use pumpkin_util::math::floor_div;
 use pumpkin_util::random::{
-    RandomGenerator, RandomImpl,
+    RandomGenerator, RandomImpl, get_carver_seed, get_region_seed, legacy_rand::LegacyRand,
+    xoroshiro128::Xoroshiro,
 };
+use std::sync::Arc;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum StructureKeys {
     PillagerOutpost,
@@ -1277,30 +1282,27 @@ impl StructureSet {
         Self::VILLAGES,
         Self::WOODLAND_MANSIONS,
     ];
-    #[must_use]
-    pub fn get(name: &str) -> Option<&'static Self> {
-        match name {
-            "ancient_cities" => Some(&Self::ANCIENT_CITIES),
-            "buried_treasures" => Some(&Self::BURIED_TREASURES),
-            "desert_pyramids" => Some(&Self::DESERT_PYRAMIDS),
-            "end_cities" => Some(&Self::END_CITIES),
-            "igloos" => Some(&Self::IGLOOS),
-            "jungle_temples" => Some(&Self::JUNGLE_TEMPLES),
-            "mineshafts" => Some(&Self::MINESHAFTS),
-            "nether_complexes" => Some(&Self::NETHER_COMPLEXES),
-            "nether_fossils" => Some(&Self::NETHER_FOSSILS),
-            "ocean_monuments" => Some(&Self::OCEAN_MONUMENTS),
-            "ocean_ruins" => Some(&Self::OCEAN_RUINS),
-            "pillager_outposts" => Some(&Self::PILLAGER_OUTPOSTS),
-            "ruined_portals" => Some(&Self::RUINED_PORTALS),
-            "shipwrecks" => Some(&Self::SHIPWRECKS),
-            "strongholds" => Some(&Self::STRONGHOLDS),
-            "swamp_huts" => Some(&Self::SWAMP_HUTS),
-            "trail_ruins" => Some(&Self::TRAIL_RUINS),
-            "trial_chambers" => Some(&Self::TRIAL_CHAMBERS),
-            "villages" => Some(&Self::VILLAGES),
-            "woodland_mansions" => Some(&Self::WOODLAND_MANSIONS),
-            _ => None,
-        }
-    }
 }
+const STRUCTURE_SET_IDENTIFIERS: [Identifier; 20usize] = [
+    Identifier::parse_static("minecraft:ancient_cities"),
+    Identifier::parse_static("minecraft:buried_treasures"),
+    Identifier::parse_static("minecraft:desert_pyramids"),
+    Identifier::parse_static("minecraft:end_cities"),
+    Identifier::parse_static("minecraft:igloos"),
+    Identifier::parse_static("minecraft:jungle_temples"),
+    Identifier::parse_static("minecraft:mineshafts"),
+    Identifier::parse_static("minecraft:nether_complexes"),
+    Identifier::parse_static("minecraft:nether_fossils"),
+    Identifier::parse_static("minecraft:ocean_monuments"),
+    Identifier::parse_static("minecraft:ocean_ruins"),
+    Identifier::parse_static("minecraft:pillager_outposts"),
+    Identifier::parse_static("minecraft:ruined_portals"),
+    Identifier::parse_static("minecraft:shipwrecks"),
+    Identifier::parse_static("minecraft:strongholds"),
+    Identifier::parse_static("minecraft:swamp_huts"),
+    Identifier::parse_static("minecraft:trail_ruins"),
+    Identifier::parse_static("minecraft:trial_chambers"),
+    Identifier::parse_static("minecraft:villages"),
+    Identifier::parse_static("minecraft:woodland_mansions"),
+];
+bootstrap_provider! { STRUCTURE_SET_REGISTRY : Arc < dyn Registry > => "minecraft:worldgen" , || { vec ! [RegistryEntry :: new (Identifier :: vanilla_static ("structure_set") , RegistryBuilder :: < StructureSet > :: new_static (& Identifier :: parse_static ("minecraft:worldgen/structure_set") , StructureSet :: ALL , & STRUCTURE_SET_IDENTIFIERS ,) . unwrap () . arc_dyn () ,)] } }

@@ -56,7 +56,6 @@ use explosion::Explosion;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
@@ -337,13 +336,12 @@ impl World {
         block_registry: Arc<BlockRegistry>,
         server: Weak<Server>,
     ) -> Self {
-        // TODO
-        let generation_settings = GenerationSettings::from_dimension(&dimension);
-
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
         let dragon_fight = (dimension.minecraft_name == Dimension::THE_END.minecraft_name)
             .then(|| Mutex::new(dragon_fight::DragonFight::new()));
+        let sea_level = level.world_gen.sea_level();
+        let min_y = i32::from(level.world_gen.generation_bounds().1);
         Self {
             uuid: Uuid::new_v4(),
             level,
@@ -356,8 +354,8 @@ impl World {
             dimension,
             weather: Mutex::new(Weather::new()),
             block_registry,
-            sea_level: generation_settings.sea_level,
-            min_y: i32::from(generation_settings.shape.min_y),
+            sea_level,
+            min_y,
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
             portal_poi: Mutex::new(portal_poi),

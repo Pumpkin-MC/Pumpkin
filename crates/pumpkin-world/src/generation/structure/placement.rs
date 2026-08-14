@@ -3,6 +3,7 @@ use pumpkin_data::structures::{
     SpreadType, StructurePlacement, StructurePlacementCalculator, StructurePlacementType,
     StructureSet,
 };
+use pumpkin_registry::{DataKey, ROOT};
 use pumpkin_util::{
     math::floor_div,
     random::{
@@ -201,12 +202,15 @@ pub fn should_generate_structure(
         placement.salt,
         placement.frequency.unwrap_or(1.0),
     ) && !placement.exclusion_zone.as_ref().is_some_and(|zone| {
-        let set_name = zone
-            .other_set
-            .strip_prefix("minecraft:")
-            .unwrap_or(zone.other_set);
-        StructureSet::get(set_name).is_some_and(|set| {
-            let allowed_biomes = ProtoChunk::get_allowed_biomes(set);
+        let Some(root) = ROOT.get() else {
+            return false;
+        };
+        let key = DataKey::<StructureSet>::owned(format!(
+            "minecraft:worldgen/minecraft:structure_set/{}",
+            zone.other_set
+        ));
+        key.get_blocking(root).ok().is_some_and(|set| {
+            let allowed_biomes = ProtoChunk::get_allowed_biomes(&*set);
             (chunk_x - zone.chunk_count..=chunk_x + zone.chunk_count).any(|x| {
                 (chunk_z - zone.chunk_count..=chunk_z + zone.chunk_count).any(|z| {
                     should_generate_structure(

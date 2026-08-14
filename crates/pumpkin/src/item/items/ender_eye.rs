@@ -15,6 +15,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::structures::StructureSet;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_registry::{DataKey, ROOT};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::generation::generator::structure_finder::find_nearest_structure;
@@ -150,9 +151,14 @@ fn find_stronghold(world: &Arc<World>, origin: BlockPos) -> Option<BlockPos> {
     let generator = &level.world_gen;
     let seed = level.seed.0;
 
-    let global_cache = generator.global_structure_cache()?;
+    let global_cache = generator.as_ref().global_structure_cache()?;
 
-    let strongholds = StructureSet::get("strongholds")?;
+    let root = ROOT.get()?;
+    let strongholds = DataKey::<StructureSet>::new(
+        "minecraft:worldgen/minecraft:structure_set/minecraft:strongholds",
+    )
+    .get_blocking(root)
+    .ok()?;
 
     find_nearest_structure(
         origin,

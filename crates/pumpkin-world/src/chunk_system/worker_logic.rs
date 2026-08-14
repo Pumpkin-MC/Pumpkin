@@ -9,7 +9,6 @@ use crate::level::Level;
 use crossfire::compat::AsyncRx;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
@@ -235,7 +234,6 @@ pub fn run_generation(
     mut cache: Cache,
     stage: StagedChunkEnum,
     level: &Level,
-    _settings: &GenerationSettings,
 ) -> RecvChunk {
     let portal = level.world_portal.load_full();
     let portal_ref = portal.as_deref().expect("Portal should be initialized");
@@ -279,15 +277,13 @@ pub fn generation_work(
     send: &crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
     level: &Arc<Level>,
 ) {
-    let settings = GenerationSettings::from_dimension(level.world_gen.dimension());
-
     loop {
         let Ok((pos, cache, stage)) = recv.recv() else {
             debug!("generation channel closed, exiting");
             break;
         };
 
-        let result = run_generation(pos, cache, stage, level, settings);
+        let result = run_generation(pos, cache, stage, level);
         if send.send((pos, result)).is_err() {
             break;
         }

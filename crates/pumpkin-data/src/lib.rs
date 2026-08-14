@@ -203,6 +203,11 @@ pub mod entity {
 #[path = "generated/world_event.rs"]
 mod world_event;
 
+#[cfg(feature = "world_preset")]
+#[rustfmt::skip]
+#[path = "generated/world_preset.rs"]
+pub mod world_preset;
+
 #[cfg(feature = "message_type")]
 #[rustfmt::skip]
 #[path = "generated/message_type.rs"]

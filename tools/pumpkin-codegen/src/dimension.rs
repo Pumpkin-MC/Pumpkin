@@ -60,7 +60,6 @@ pub fn build() -> TokenStream {
     let mut variants = TokenStream::new();
     let mut static_entries = TokenStream::new();
     let mut identifiers = TokenStream::new();
-    let mut name_to_type = TokenStream::new();
     let len = dimensions.len();
 
     // Iterate with index to generate a unique numeric ID
@@ -179,10 +178,6 @@ pub fn build() -> TokenStream {
         identifiers.extend(quote! {
             Identifier::parse_static(#minecraft_name),
         });
-
-        name_to_type.extend(quote! {
-            #minecraft_name => Some(&Self::#format_name),
-        });
     }
 
     quote!(
@@ -219,13 +214,6 @@ pub fn build() -> TokenStream {
 
         impl Dimension {
             #variants
-
-            pub fn from_name(name: &str) -> Option<&'static Self> {
-                match name {
-                    #name_to_type
-                    _ => None,
-                }
-            }
         }
 
         const STATIC_ENTRIES: [Dimension; #len] = [

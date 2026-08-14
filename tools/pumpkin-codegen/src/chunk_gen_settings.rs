@@ -511,7 +511,6 @@ pub fn build() -> TokenStream {
     }
 
     quote!(
-        use crate::dimension::Dimension;
         use crate::chunk::DoublePerlinNoiseParameters;
         use crate::BlockState;
 
@@ -670,17 +669,6 @@ pub fn build() -> TokenStream {
 
         impl GenerationSettings {
             #const_defs
-
-            #[must_use]
-            pub fn from_dimension(dimension: &Dimension) -> &'static Self {
-                if dimension == &Dimension::OVERWORLD {
-                    &Self::OVERWORLD
-                } else if dimension == &Dimension::THE_NETHER {
-                    &Self::NETHER
-                } else {
-                    &Self::END
-                }
-            }
         }
 
         const STATIC_ENTRIES: [GenerationSettings; #len] = [

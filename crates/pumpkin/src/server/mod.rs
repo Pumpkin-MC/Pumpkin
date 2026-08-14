@@ -23,8 +23,8 @@ use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
-use pumpkin_registry::RegistryBuilder;
 use pumpkin_registry::error::RootInitError;
+use pumpkin_registry::{DataKey, ROOT, RegistryBuilder};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
@@ -545,24 +545,31 @@ impl Server {
 
         let first_world = self.worlds.load().first().cloned()?;
 
-        let (world, nbt) =
-            if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id).await {
-                if let Some(dimension_key) = data.get_string("Dimension") {
-                    if let Some(dimension) = Dimension::from_name(dimension_key) {
-                        let world = self.get_world_from_dimension(dimension);
-                        (world, Some(data))
-                    } else {
-                        warn!("Invalid dimension key in player data: {dimension_key}");
-                        (first_world, Some(data))
-                    }
+        let (world, nbt) = if let Ok(Some(data)) =
+            self.player_data_storage.load_data(&profile.id).await
+        {
+            if let Some(dimension_key) = data.get_string("Dimension") {
+                let dimension = ROOT.get().and_then(|root| {
+                    DataKey::<Dimension>::owned(format!("minecraft:dimension_type/{dimension_key}"))
+                        .get_blocking(root)
+                        .ok()
+                        .map(|dimension| dimension)
+                });
+                if let Some(dimension) = dimension {
+                    let world = self.get_world_from_dimension(&dimension);
+                    (world, Some(data))
                 } else {
-                    // Player data exists but doesn't have a "Dimension" key.
+                    warn!("Invalid dimension key in player data: {dimension_key}");
                     (first_world, Some(data))
                 }
             } else {
-                // No player data found or an error occurred, default to the Overworld.
-                (first_world, None)
-            };
+                // Player data exists but doesn't have a "Dimension" key.
+                (first_world, Some(data))
+            }
+        } else {
+            // No player data found or an error occurred, default to the Overworld.
+            (first_world, None)
+        };
 
         let mut player = Player::new(
             client,

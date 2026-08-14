@@ -7,15 +7,20 @@ use pumpkin_registry::{Registry, RegistryBuilder, bootstrap::RegistryEntry, boot
 use pumpkin_util::{identifier::Identifier, world_seed::Seed};
 
 use super::{flat::FlatGenerator, vanilla::VanillaGenerator};
-use crate::{ProtoChunk, chunk_system::generation_cache::Cache, world::WorldPortalExt};
+use crate::{
+    ProtoChunk,
+    chunk_system::generation_cache::Cache,
+    generation::structure::placement::GlobalStructureCache,
+    world::WorldPortalExt,
+};
 
 pub trait ChunkGenerator: Send + Sync {
     fn dimension(&self) -> &Dimension;
 
     fn seed(&self) -> u64;
 
-    fn generation_bounds(&self) -> (u16, i8) {
-        (self.dimension().height as u16, self.dimension().min_y as i8)
+    fn generation_bounds(&self) -> (i32, i32) {
+        (self.dimension().height, self.dimension().min_y)
     }
 
     fn default_block(&self) -> &'static BlockState {
@@ -24,6 +29,12 @@ pub trait ChunkGenerator: Send + Sync {
 
     fn biome_mixer_seed(&self) -> i64 {
         crate::biome::hash_seed(self.seed())
+    }
+
+    fn sea_level(&self) -> i32;
+
+    fn global_structure_cache(&self) -> Option<&GlobalStructureCache> {
+        None
     }
 
     fn step_to_biomes(&self, chunk: &mut ProtoChunk);

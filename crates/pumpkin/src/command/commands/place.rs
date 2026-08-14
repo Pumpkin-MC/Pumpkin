@@ -1,4 +1,3 @@
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::placed_feature::PlacedFeature as PlacedFeatureKey;
 use pumpkin_data::structures::{Structure, StructureKeys, StructureType};
 use pumpkin_data::translation;
@@ -201,14 +200,13 @@ impl CommandExecutor for PlaceJigsawExecutor {
                 let seed = hash_block_pos(block_pos.0.x, block_pos.0.y, block_pos.0.z) as u64;
                 let random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
                 let world_gen = &context.world().level.world_gen;
-                let settings = GenerationSettings::from_dimension(world_gen.dimension());
                 let mut structure_context = StructureGeneratorContext {
                     seed: seed as i64,
                     chunk_x: 0,
                     chunk_z: 0,
                     random,
-                    sea_level: settings.sea_level,
-                    min_y: world_gen.dimension().min_y,
+                    sea_level: world_gen.sea_level(),
+                    min_y: i32::from(world_gen.generation_bounds().1),
                     height_sampler: None,
                     structure_key: None,
                 };
@@ -300,7 +298,6 @@ impl CommandExecutor for PlaceStructureExecutor {
 
             let (_piece_count, placer) = {
                 let world_gen = context.world().level.world_gen.clone();
-                let settings = GenerationSettings::from_dimension(world_gen.dimension());
 
                 if structure.structure_type == StructureType::Jigsaw {
                     let pool = structure.start_pool.ok_or_else(|| {
@@ -320,8 +317,8 @@ impl CommandExecutor for PlaceStructureExecutor {
                             chunk_x: block_pos.0.x >> 4,
                             chunk_z: block_pos.0.z >> 4,
                             random,
-                            sea_level: settings.sea_level,
-                            min_y: world_gen.dimension().min_y,
+                            sea_level: world_gen.sea_level(),
+                            min_y: i32::from(world_gen.generation_bounds().1),
                             height_sampler: None,
                             structure_key: Some(key),
                         },
@@ -369,8 +366,8 @@ impl CommandExecutor for PlaceStructureExecutor {
                                 chunk_x: block_pos.0.x >> 4,
                                 chunk_z: block_pos.0.z >> 4,
                                 random,
-                                sea_level: settings.sea_level,
-                                min_y: world_gen.dimension().min_y,
+                                sea_level: world_gen.sea_level(),
+                                min_y: i32::from(world_gen.generation_bounds().1),
                                 height_sampler: None,
                                 structure_key: Some(key),
                             },
@@ -431,7 +428,7 @@ impl CommandExecutor for PlaceStructureExecutor {
 
                         for cx in start_cx..=end_cx {
                             for cz in start_cz..=end_cz {
-                                let mut chunk = ProtoChunk::new(cx, cz, &world_gen);
+                                let mut chunk = ProtoChunk::new(cx, cz, world_gen.as_ref());
                                 let chunk_min_y = chunk.bottom_y() as i32;
                                 let chunk_height = chunk.height() as i32;
                                 let surface_y = ground_y(block_pos.0.y, chunk_min_y, chunk_height);
@@ -572,7 +569,7 @@ impl CommandExecutor for PlaceFeatureExecutor {
             let world_gen = context.world().level.world_gen.clone();
             let cx = block_pos.0.x >> 4;
             let cz = block_pos.0.z >> 4;
-            let mut chunk = ProtoChunk::new(cx, cz, &world_gen);
+            let mut chunk = ProtoChunk::new(cx, cz, world_gen.as_ref());
             let generation_bottom_y = chunk.generation_bottom_y();
             let generation_height = chunk.generation_height();
             let chunk_min_y = chunk.bottom_y() as i32;

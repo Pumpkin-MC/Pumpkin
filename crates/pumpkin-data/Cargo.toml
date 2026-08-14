@@ -28,6 +28,7 @@ default = [
     "dimension",
     "enchantment",
     "world",
+    "world_preset",
     "scoreboard",
     "damage",
     "fluid",
@@ -82,6 +83,7 @@ entity = ["entity_pose", "entity_status", "entity_type", "spawn_egg"]
 dimension = []
 enchantment = []
 world = ["world_event", "message_type"]
+world_preset = []
 scoreboard = []
 damage = []
 fluid = []
@@ -122,13 +124,13 @@ phf = { workspace = true, features = ["macros"] }
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-registry.workspace = true
-linkme.workspace = true
 serde = {workspace = true, features = ["rc"]}
 crc-fast.workspace = true
 rand.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
+serde_json.workspace = true
 
 [[bench]]
 name = "has_random_ticks"

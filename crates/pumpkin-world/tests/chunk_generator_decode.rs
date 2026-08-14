@@ -37,6 +37,10 @@ impl ChunkGenerator for NoiseGenerator {
         self.seed
     }
 
+    fn sea_level(&self) -> i32 {
+        63
+    }
+
     fn step_to_biomes(&self, _chunk: &mut ProtoChunk) {}
 
     fn step_to_structure_start(
@@ -99,6 +103,10 @@ impl ChunkGenerator for FlatGenerator {
 
     fn seed(&self) -> u64 {
         self.seed
+    }
+
+    fn sea_level(&self) -> i32 {
+        63
     }
 
     fn step_to_biomes(&self, _chunk: &mut ProtoChunk) {}
