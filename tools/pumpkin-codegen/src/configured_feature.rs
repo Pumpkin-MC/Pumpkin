@@ -1709,4 +1709,3 @@ fn value_to_placement_modifier_cf(v: &Value) -> TokenStream {
         _ => quote! { PlacementModifier::Biome(BiomePlacementModifier) },
     }
 }
-

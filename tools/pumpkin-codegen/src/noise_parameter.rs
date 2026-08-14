@@ -98,4 +98,3 @@ pub fn build() -> TokenStream {
         }
     }
 }
-

@@ -1334,12 +1334,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 
 [[package]]
-<<<<<<< HEAD
-name = "diff"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
-=======
 name = "derive_arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1349,7 +1343,12 @@ dependencies = [
  "quote",
  "syn 2.0.119",
 ]
->>>>>>> 19f95f77 (feat: initial datapack support)
+
+[[package]]
+name = "diff"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
 
 [[package]]
 name = "digest"
@@ -3427,7 +3426,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-datapack"
-version = "0.1.0-dev+26.2"
+version = "0.1.0-dev+26.2-26.40"
 dependencies = [
  "futures",
  "pumpkin-data",
@@ -3436,7 +3435,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
  "zip",
@@ -6361,7 +6360,7 @@ dependencies = [
  "flate2",
  "indexmap",
  "memchr",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
  "zopfli",
 ]
 

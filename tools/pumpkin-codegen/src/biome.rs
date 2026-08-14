@@ -605,4 +605,3 @@ pub fn build() -> TokenStream {
         pub const NETHER_BIOME_SOURCE: BiomeTree = #nether_tree;
     }
 }
-

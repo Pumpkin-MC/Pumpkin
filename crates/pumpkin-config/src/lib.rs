@@ -14,8 +14,10 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::path::PathBuf;
 use std::{fs, num::NonZeroU8, path::Path};
 
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
+/// Datapack loading configuration options.
 pub mod datapack;
+/// Fun and experimental configuration options.
 pub mod fun;
 /// Server logging configuration options.
 pub mod logging;

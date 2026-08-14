@@ -171,17 +171,14 @@ fn load_recipes(entries: &mut Vec<(String, String, Vec<u8>)>) {
         eprintln!("Warning: Could not read recipes file");
         return;
     };
-    let Ok(recipes): Result<BTreeMap<String, serde_json::Value>, _> =
-        serde_json::from_str(&data)
+    let Ok(recipes): Result<BTreeMap<String, serde_json::Value>, _> = serde_json::from_str(&data)
     else {
         eprintln!("Warning: Could not parse recipes file");
         return;
     };
 
     for (recipe_id, recipe_value) in &recipes {
-        let path = recipe_id
-            .strip_prefix("minecraft:")
-            .unwrap_or(recipe_id);
+        let path = recipe_id.strip_prefix("minecraft:").unwrap_or(recipe_id);
         let bytes = serde_json::to_vec(recipe_value).unwrap_or_default();
         entries.push((
             "minecraft".to_string(),
@@ -205,9 +202,7 @@ fn load_advancements(entries: &mut Vec<(String, String, Vec<u8>)>) {
     };
 
     for (adv_id, adv_value) in &advancements {
-        let path = adv_id
-            .strip_prefix("minecraft:")
-            .unwrap_or(adv_id);
+        let path = adv_id.strip_prefix("minecraft:").unwrap_or(adv_id);
         let bytes = serde_json::to_vec(adv_value).unwrap_or_default();
         entries.push((
             "minecraft".to_string(),
@@ -222,11 +217,7 @@ fn load_loot_tables(entries: &mut Vec<(String, String, Vec<u8>)>) {
     collect_loot_files(loot_dir, loot_dir, entries);
 }
 
-fn collect_loot_files(
-    base: &Path,
-    dir: &Path,
-    entries: &mut Vec<(String, String, Vec<u8>)>,
-) {
+fn collect_loot_files(base: &Path, dir: &Path, entries: &mut Vec<(String, String, Vec<u8>)>) {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return;
     };

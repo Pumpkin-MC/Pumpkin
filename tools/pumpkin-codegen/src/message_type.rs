@@ -52,4 +52,3 @@ pub fn build() -> TokenStream {
         #variants
     }
 }
-

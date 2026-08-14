@@ -276,4 +276,3 @@ fn value_to_y_offset(v: &Value) -> TokenStream {
         quote! { YOffset::Absolute(Absolute { absolute: 0 }) }
     }
 }
-
