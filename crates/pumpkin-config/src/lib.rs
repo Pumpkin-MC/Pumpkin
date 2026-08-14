@@ -13,14 +13,9 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::path::PathBuf;
 use std::{fs, num::NonZeroU8, path::Path};
-<<<<<<< HEAD:crates/pumpkin-config/src/lib.rs
-use tracing::{debug, error, warn};
 
-/// Fun and experimental configuration options.
-=======
 use tracing::{debug, warn};
 pub mod datapack;
->>>>>>> 19f95f77 (feat: initial datapack support):pumpkin-config/src/lib.rs
 pub mod fun;
 /// Server logging configuration options.
 pub mod logging;
