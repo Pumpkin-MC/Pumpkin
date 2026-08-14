@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::panic)]
 
 use pumpkin_data::{
     chunk_gen_settings::GenerationSettings, dimension::Dimension, structures::StructureSet,
@@ -118,25 +118,43 @@ fn structure_set_registry_contains_vanilla_data() {
     let set = key.get_blocking(root.as_ref()).unwrap();
 
     assert_eq!(set.placement.salt, StructureSet::STRONGHOLDS.placement.salt);
-    assert_eq!(set.structures.len(), StructureSet::STRONGHOLDS.structures.len());
+    assert_eq!(
+        set.structures.len(),
+        StructureSet::STRONGHOLDS.structures.len()
+    );
 }
 
 #[test]
 fn world_preset_registry_contains_vanilla_presets() {
     let root = root();
 
-    for name in [
-        "normal",
-        "flat",
-        "large_biomes",
-        "amplified",
-        "single_biome_surface",
+    for (name, generator_settings) in [
+        ("normal", None),
+        (
+            "flat",
+            Some(("minecraft:overworld", &["generator", "settings"][..])),
+        ),
+        ("large_biomes", None),
+        ("amplified", None),
+        (
+            "single_biome_surface",
+            Some(("minecraft:overworld", &["generator", "biome_source"][..])),
+        ),
     ] {
         let key = DataKey::<WorldPreset>::owned(format!(
             "minecraft:worldgen/minecraft:world_preset/minecraft:{name}"
         ));
         let preset = key.get_blocking(root.as_ref()).unwrap();
         assert_eq!(preset.dimensions.len(), 3);
+
+        match (preset.generator_settings.as_ref(), generator_settings) {
+            (None, None) => {}
+            (Some(actual), Some((world, path))) => {
+                assert_eq!(actual.world, Identifier::parse(world).unwrap());
+                assert_eq!(actual.path, path);
+            }
+            _ => panic!("unexpected generator-settings metadata for {name}"),
+        }
     }
 }
 

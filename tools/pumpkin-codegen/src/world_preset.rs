@@ -10,20 +10,29 @@ struct WorldPresetFile {
     dimensions: BTreeMap<String, serde_json::Value>,
 }
 
-const PRESETS: [(&str, &str); 5] = [
-    ("default", "minecraft:normal"),
-    ("super_flat", "minecraft:flat"),
-    ("large_biomes", "minecraft:large_biomes"),
-    ("amplified", "minecraft:amplified"),
-    ("single_biome", "minecraft:single_biome_surface"),
+const PRESETS: [(&str, &str, Option<(&str, &[&str])>); 5] = [
+    ("default", "minecraft:normal", None),
+    (
+        "super_flat",
+        "minecraft:flat",
+        Some(("minecraft:overworld", &["generator", "settings"])),
+    ),
+    ("large_biomes", "minecraft:large_biomes", None),
+    ("amplified", "minecraft:amplified", None),
+    (
+        "single_biome",
+        "minecraft:single_biome_surface",
+        Some(("minecraft:overworld", &["generator", "biome_source"])),
+    ),
 ];
 
 pub fn build() -> TokenStream {
     let mut preset_consts = TokenStream::new();
+    let mut generator_settings_statics = TokenStream::new();
     let mut static_entries = TokenStream::new();
     let mut identifiers = TokenStream::new();
 
-    for (file_name, preset_name) in PRESETS {
+    for (file_name, preset_name, generator_settings) in PRESETS {
         let path = format!("../../assets/world_preset/{file_name}.json");
         let preset: WorldPresetFile = serde_json::from_str(
             &fs::read_to_string(&path)
@@ -39,6 +48,22 @@ pub fn build() -> TokenStream {
                 .to_shouty_snake_case()
         );
         let dimensions_name = format_ident!("{const_name}_DIMENSIONS");
+        let generator_settings = generator_settings.map_or_else(
+            || quote! { None },
+            |(world, path)| {
+                let path_name = format_ident!("{const_name}_GENERATOR_SETTINGS_PATH");
+                let config_name = format_ident!("{const_name}_GENERATOR_SETTINGS");
+                let path_len = path.len();
+                generator_settings_statics.extend(quote! {
+                    static #path_name: [&str; #path_len] = [#(#path),*];
+                    static #config_name: GeneratorSettingsConfig = GeneratorSettingsConfig {
+                        world: Identifier::parse_static(#world),
+                        path: &#path_name,
+                    };
+                });
+                quote! { Some(&#config_name) }
+            },
+        );
 
         let dimensions = preset.dimensions.iter().map(|(name, stem)| {
             let stem = serde_json::to_string(stem).expect("Failed to serialize dimension stem");
@@ -58,6 +83,7 @@ pub fn build() -> TokenStream {
 
             pub const #const_name: WorldPreset = WorldPreset {
                 dimensions: &Self::#dimensions_name,
+                generator_settings: #generator_settings,
             };
         });
 
@@ -88,9 +114,21 @@ pub fn build() -> TokenStream {
         }
 
         #[derive(Debug)]
+        pub struct GeneratorSettingsConfig {
+            /// World whose saved dimension stem is modified by `generator-settings`.
+            pub world: Identifier,
+            /// Path within that dimension stem to the object receiving the overrides.
+            pub path: &'static [&'static str],
+        }
+
+        #[derive(Debug)]
         pub struct WorldPreset {
             pub dimensions: &'static [WorldPresetDimension],
+            /// Location modified by `generator-settings`, if supported.
+            pub generator_settings: Option<&'static GeneratorSettingsConfig>,
         }
+
+        #generator_settings_statics
 
         impl WorldPreset {
             #preset_consts

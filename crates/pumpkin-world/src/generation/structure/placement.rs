@@ -210,7 +210,7 @@ pub fn should_generate_structure(
             zone.other_set
         ));
         key.get_blocking(root).ok().is_some_and(|set| {
-            let allowed_biomes = ProtoChunk::get_allowed_biomes(&*set);
+            let allowed_biomes = ProtoChunk::get_allowed_biomes(&set);
             (chunk_x - zone.chunk_count..=chunk_x + zone.chunk_count).any(|x| {
                 (chunk_z - zone.chunk_count..=chunk_z + zone.chunk_count).any(|z| {
                     should_generate_structure(

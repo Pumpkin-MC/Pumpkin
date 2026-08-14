@@ -1,11 +1,9 @@
 use pumpkin_codecs::DataResult;
 use pumpkin_data::{
-    BlockState,
-    chunk_gen_settings::GenerationSettings,
-    dimension::Dimension,
+    BlockState, chunk_gen_settings::GenerationSettings, dimension::Dimension,
     structures::StructurePlacementCalculator,
 };
-use pumpkin_registry::{DataKey, DataKeyRef, Registry, ROOT};
+use pumpkin_registry::{DataKey, DataKeyRef, ROOT, Registry};
 use pumpkin_util::world_seed::Seed;
 use std::{ops::Deref, sync::Arc};
 
@@ -118,7 +116,7 @@ impl VanillaGenerator {
 
     #[must_use]
     #[allow(clippy::expect_used)]
-    pub(crate) fn structure_sets(&self) -> DataKeyRef<'static, Arc<dyn Registry>> {
+    pub(crate) fn structure_sets() -> DataKeyRef<'static, Arc<dyn Registry>> {
         static STRUCTURE_SETS: DataKey<Arc<dyn Registry>> =
             DataKey::new("minecraft:worldgen/minecraft:structure_set");
 

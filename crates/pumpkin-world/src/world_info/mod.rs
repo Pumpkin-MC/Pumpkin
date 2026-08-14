@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::CURRENT_MC_VERSION;
-use pumpkin_data::game_rules::GameRuleRegistry;
-use pumpkin_util::{Difficulty, serde_enum_as_integer, world_seed::Seed};
+use pumpkin_data::{game_rules::GameRuleRegistry, world_preset::WorldPreset};
+use pumpkin_util::{Difficulty, identifier::Identifier, serde_enum_as_integer, world_seed::Seed};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 
 pub mod anvil;
@@ -170,43 +171,17 @@ impl Default for WorldGenSettings {
     }
 }
 
-pub type Dimensions = HashMap<String, Dimension>;
+pub type Dimensions = HashMap<Identifier, SavedDimensionStem>;
+
+/// Registry-independent representation of a saved dimension stem.
+///
+/// The generator payload is intentionally opaque here. Its schema is owned by
+/// the registered `ChunkGeneratorType` selected by its `type` field.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct Dimension {
-    pub generator: Generator,
+pub struct SavedDimensionStem {
     #[serde(rename = "type")]
-    pub dimension_type: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct Generator {
-    #[serde(default)]
-    pub settings: Option<GeneratorSettings>,
-    #[serde(default)]
-    pub biome_source: Option<BiomeSource>,
-    #[serde(rename = "type")]
-    pub generator_type: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum GeneratorSettings {
-    Reference(String),
-    Compound(serde_json::Value),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum BiomeSource {
-    WithPreset {
-        preset: String,
-        #[serde(rename = "type")]
-        biome_type: String,
-    },
-    Simple {
-        #[serde(rename = "type")]
-        biome_type: String,
-    },
+    pub dimension_type: Identifier,
+    pub generator: serde_json::Value,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -221,58 +196,77 @@ pub struct DataPacks {
 }
 
 impl WorldGenSettings {
+    pub fn from_preset(seed: Seed, preset: &WorldPreset) -> Result<Self, WorldInfoError> {
+        let mut dimensions = Dimensions::with_capacity(preset.dimensions.len());
+        for preset_dimension in preset.dimensions {
+            let stem = serde_json::from_str::<SavedDimensionStem>(preset_dimension.stem)
+                .map_err(|error| WorldInfoError::DeserializationError(error.to_string()))?;
+            dimensions.insert(preset_dimension.identifier.clone(), stem);
+        }
+
+        Ok(Self {
+            seed: seed.0 as i64,
+            dimensions,
+        })
+    }
+
+    pub fn apply_generator_settings(
+        &mut self,
+        preset: &WorldPreset,
+        settings: serde_json::Value,
+    ) -> Result<(), WorldInfoError> {
+        let config = preset.generator_settings.ok_or_else(|| {
+            WorldInfoError::DeserializationError(
+                "Selected world preset does not support generator-settings".to_string(),
+            )
+        })?;
+        let stem = self.dimensions.get_mut(&config.world).ok_or_else(|| {
+            WorldInfoError::DeserializationError(format!(
+                "World preset does not define {}",
+                config.world
+            ))
+        })?;
+        let Value::Object(overrides) = settings else {
+            return Err(WorldInfoError::DeserializationError(
+                "generator-settings must be a JSON object".to_string(),
+            ));
+        };
+
+        let mut stem_value = serde_json::to_value(&*stem)
+            .map_err(|error| WorldInfoError::SerializationError(error.to_string()))?;
+        let mut target = &mut stem_value;
+        for key in config.path {
+            target = target.get_mut(*key).ok_or_else(|| {
+                WorldInfoError::DeserializationError(format!(
+                    "generator-settings path {} does not exist for {}",
+                    config.path.join("."),
+                    config.world
+                ))
+            })?;
+        }
+        let target = target.as_object_mut().ok_or_else(|| {
+            WorldInfoError::DeserializationError(format!(
+                "generator-settings path {} for {} is not an object",
+                config.path.join("."),
+                config.world
+            ))
+        })?;
+
+        for (key, value) in overrides {
+            target.insert(key, value);
+        }
+
+        *stem = serde_json::from_value(stem_value)
+            .map_err(|error| WorldInfoError::DeserializationError(error.to_string()))?;
+        Ok(())
+    }
+
     #[must_use]
     pub fn new(seed: Seed) -> Self {
-        // TODO: Adjust according to enabled worlds
-        let mut dimensions = Dimensions::new();
-        dimensions.insert(
-            "minecraft:overworld".to_string(),
-            Dimension {
-                generator: Generator {
-                    settings: Some(GeneratorSettings::Reference(
-                        "minecraft:overworld".to_string(),
-                    )),
-                    biome_source: Some(BiomeSource::WithPreset {
-                        preset: "minecraft:overworld".to_string(),
-                        biome_type: "minecraft:multi_noise".to_string(),
-                    }),
-                    generator_type: "minecraft:noise".to_string(),
-                },
-                dimension_type: "minecraft:overworld".to_string(),
-            },
-        );
-        dimensions.insert(
-            "minecraft:the_nether".to_string(),
-            Dimension {
-                generator: Generator {
-                    settings: Some(GeneratorSettings::Reference("minecraft:nether".to_string())),
-                    biome_source: Some(BiomeSource::WithPreset {
-                        preset: "minecraft:nether".to_string(),
-                        biome_type: "minecraft:multi_noise".to_string(),
-                    }),
-                    generator_type: "minecraft:noise".to_string(),
-                },
-                dimension_type: "minecraft:the_nether".to_string(),
-            },
-        );
-        dimensions.insert(
-            "minecraft:the_end".to_string(),
-            Dimension {
-                generator: Generator {
-                    settings: Some(GeneratorSettings::Reference("minecraft:end".to_string())),
-                    biome_source: Some(BiomeSource::Simple {
-                        biome_type: "minecraft:the_end".to_string(),
-                    }),
-                    generator_type: "minecraft:noise".to_string(),
-                },
-                dimension_type: "minecraft:the_end".to_string(),
-            },
-        );
-
-        Self {
-            dimensions,
+        Self::from_preset(seed, &WorldPreset::NORMAL).unwrap_or_else(|_| Self {
             seed: seed.0 as i64,
-        }
+            dimensions: Dimensions::new(),
+        })
     }
 }
 
@@ -372,5 +366,66 @@ impl From<std::io::Error> for WorldInfoError {
             std::io::ErrorKind::NotFound => Self::InfoNotFound,
             value => Self::IoError(value),
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::WorldGenSettings;
+    use pumpkin_data::world_preset::WorldPreset;
+    use pumpkin_util::{identifier::Identifier, world_seed::Seed};
+
+    #[test]
+    fn flat_generator_settings_modify_settings_object() {
+        let mut settings = WorldGenSettings::from_preset(Seed(1), &WorldPreset::FLAT).unwrap();
+        settings
+            .apply_generator_settings(
+                &WorldPreset::FLAT,
+                serde_json::json!({ "biome": "minecraft:desert" }),
+            )
+            .unwrap();
+
+        let generator = &settings
+            .dimensions
+            .get(&Identifier::vanilla_static("overworld"))
+            .unwrap()
+            .generator;
+        assert_eq!(generator["settings"]["biome"], "minecraft:desert");
+        assert_eq!(generator["settings"]["layers"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn single_biome_generator_settings_modify_biome_source() {
+        let mut settings =
+            WorldGenSettings::from_preset(Seed(1), &WorldPreset::SINGLE_BIOME_SURFACE).unwrap();
+        settings
+            .apply_generator_settings(
+                &WorldPreset::SINGLE_BIOME_SURFACE,
+                serde_json::json!({ "biome": "minecraft:desert" }),
+            )
+            .unwrap();
+
+        let generator = &settings
+            .dimensions
+            .get(&Identifier::vanilla_static("overworld"))
+            .unwrap()
+            .generator;
+        assert_eq!(generator["biome_source"]["type"], "minecraft:fixed");
+        assert_eq!(generator["biome_source"]["biome"], "minecraft:desert");
+        assert_eq!(generator["settings"], "minecraft:overworld");
+    }
+
+    #[test]
+    fn unsupported_preset_rejects_generator_settings() {
+        let mut settings = WorldGenSettings::from_preset(Seed(1), &WorldPreset::NORMAL).unwrap();
+        assert!(
+            settings
+                .apply_generator_settings(
+                    &WorldPreset::NORMAL,
+                    serde_json::json!({ "biome": "minecraft:desert" }),
+                )
+                .is_err()
+        );
     }
 }

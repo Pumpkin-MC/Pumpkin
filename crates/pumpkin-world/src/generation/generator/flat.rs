@@ -8,10 +8,6 @@ use pumpkin_data::{
     structures::{StructurePlacementCalculator, StructureSet},
 };
 
-use pumpkin_registry::{DataKey, ROOT};
-use pumpkin_util::random::xoroshiro128::Xoroshiro;
-use pumpkin_util::random::{RandomGenerator, RandomImpl as _, get_carver_seed};
-
 use super::{ChunkGenerator, ChunkGeneratorDecode};
 use crate::generation::positions::chunk_pos;
 use crate::generation::structure::placement::should_generate_structure;
@@ -29,6 +25,10 @@ use crate::{
     },
     world::WorldPortalExt,
 };
+use pumpkin_codecs::MapLike as _;
+use pumpkin_registry::{DataKey, ROOT};
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomGenerator, RandomImpl as _, get_carver_seed};
 
 #[derive(Clone, Debug)]
 pub struct FlatLayer {
@@ -57,30 +57,37 @@ impl Decode for FlatLayer {
 
 impl Decode for FlatGeneratorConfig {
     fn decode<O: DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
-        ops.get_map(&input).flat_map(|map| {
-            String::decode_field::<O>("biome", &map, ops).apply_5(
-                |biome, features, lakes, layers, structure_overrides| {
-                    (
-                        Self {
-                            biome,
-                            features,
-                            lakes,
-                            layers,
-                            structure_overrides,
-                        },
-                        ops.empty(),
-                    )
+        ops.get_map(&input).flat_map(|generator| {
+            generator.get_str("settings").cloned().map_or_else(
+                || DataResult::new_error("Missing flat generator settings"),
+                |settings| {
+                    ops.get_map(&settings).flat_map(|map| {
+                        String::decode_field::<O>("biome", &map, ops).apply_5(
+                            |biome, features, lakes, layers, structure_overrides| {
+                                (
+                                    Self {
+                                        biome,
+                                        features,
+                                        lakes,
+                                        layers,
+                                        structure_overrides,
+                                    },
+                                    ops.empty(),
+                                )
+                            },
+                            bool::decode_defaulted_field::<O>("features", &map, ops, false, false),
+                            bool::decode_defaulted_field::<O>("lakes", &map, ops, false, false),
+                            Vec::<FlatLayer>::decode_field::<O>("layers", &map, ops),
+                            Vec::<String>::decode_defaulted_field::<O>(
+                                "structure_overrides",
+                                &map,
+                                ops,
+                                Vec::new(),
+                                false,
+                            ),
+                        )
+                    })
                 },
-                bool::decode_defaulted_field::<O>("features", &map, ops, false, false),
-                bool::decode_defaulted_field::<O>("lakes", &map, ops, false, false),
-                Vec::<FlatLayer>::decode_field::<O>("layers", &map, ops),
-                Vec::<String>::decode_defaulted_field::<O>(
-                    "structure_overrides",
-                    &map,
-                    ops,
-                    Vec::new(),
-                    false,
-                ),
             )
         })
     }

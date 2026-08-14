@@ -8,9 +8,29 @@ pub struct WorldPresetDimension {
     pub stem: &'static str,
 }
 #[derive(Debug)]
+pub struct GeneratorSettingsConfig {
+    /// World whose saved dimension stem is modified by `generator-settings`.
+    pub world: Identifier,
+    /// Path within that dimension stem to the object receiving the overrides.
+    pub path: &'static [&'static str],
+}
+#[derive(Debug)]
 pub struct WorldPreset {
     pub dimensions: &'static [WorldPresetDimension],
+    /// Location modified by `generator-settings`, if supported.
+    pub generator_settings: Option<&'static GeneratorSettingsConfig>,
 }
+static FLAT_GENERATOR_SETTINGS_PATH: [&str; 2] = ["generator", "settings"];
+static FLAT_GENERATOR_SETTINGS: GeneratorSettingsConfig = GeneratorSettingsConfig {
+    world: Identifier::parse_static("minecraft:overworld"),
+    path: &FLAT_GENERATOR_SETTINGS_PATH,
+};
+static SINGLE_BIOME_SURFACE_GENERATOR_SETTINGS_PATH: [&str; 2] =
+    ["generator", "biome_source"];
+static SINGLE_BIOME_SURFACE_GENERATOR_SETTINGS: GeneratorSettingsConfig = GeneratorSettingsConfig {
+    world: Identifier::parse_static("minecraft:overworld"),
+    path: &SINGLE_BIOME_SURFACE_GENERATOR_SETTINGS_PATH,
+};
 impl WorldPreset {
     const NORMAL_DIMENSIONS: [WorldPresetDimension; 3usize] = [
         WorldPresetDimension {
@@ -28,6 +48,7 @@ impl WorldPreset {
     ];
     pub const NORMAL: WorldPreset = WorldPreset {
         dimensions: &Self::NORMAL_DIMENSIONS,
+        generator_settings: None,
     };
     const FLAT_DIMENSIONS: [WorldPresetDimension; 3usize] = [
         WorldPresetDimension {
@@ -45,6 +66,7 @@ impl WorldPreset {
     ];
     pub const FLAT: WorldPreset = WorldPreset {
         dimensions: &Self::FLAT_DIMENSIONS,
+        generator_settings: Some(&FLAT_GENERATOR_SETTINGS),
     };
     const LARGE_BIOMES_DIMENSIONS: [WorldPresetDimension; 3usize] = [
         WorldPresetDimension {
@@ -62,6 +84,7 @@ impl WorldPreset {
     ];
     pub const LARGE_BIOMES: WorldPreset = WorldPreset {
         dimensions: &Self::LARGE_BIOMES_DIMENSIONS,
+        generator_settings: None,
     };
     const AMPLIFIED_DIMENSIONS: [WorldPresetDimension; 3usize] = [
         WorldPresetDimension {
@@ -79,6 +102,7 @@ impl WorldPreset {
     ];
     pub const AMPLIFIED: WorldPreset = WorldPreset {
         dimensions: &Self::AMPLIFIED_DIMENSIONS,
+        generator_settings: None,
     };
     const SINGLE_BIOME_SURFACE_DIMENSIONS: [WorldPresetDimension; 3usize] = [
         WorldPresetDimension {
@@ -96,6 +120,7 @@ impl WorldPreset {
     ];
     pub const SINGLE_BIOME_SURFACE: WorldPreset = WorldPreset {
         dimensions: &Self::SINGLE_BIOME_SURFACE_DIMENSIONS,
+        generator_settings: Some(&SINGLE_BIOME_SURFACE_GENERATOR_SETTINGS),
     };
 }
 const STATIC_ENTRIES: [WorldPreset; 5usize] = [

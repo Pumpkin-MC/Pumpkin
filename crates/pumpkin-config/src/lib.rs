@@ -179,6 +179,12 @@ pub struct BasicConfiguration {
     pub allow_nether: bool,
     /// Whether the End dimension is enabled.
     pub allow_end: bool,
+    /// World preset used when creating a new world.
+    pub world_preset: String,
+    /// JSON generator settings applied to the selected preset's Overworld generator.
+    ///
+    /// An empty string keeps the generator settings from the preset unchanged.
+    pub generator_settings: String,
     /// Whether the server is in hardcore mode.
     pub hardcore: bool,
     /// The server's ticks per second.
@@ -211,6 +217,8 @@ impl Default for BasicConfiguration {
             op_permission_level: PermissionLvl::Four,
             allow_nether: true,
             allow_end: true,
+            world_preset: "minecraft:normal".to_string(),
+            generator_settings: String::new(),
             hardcore: false,
             tps: 20.0,
             default_gamemode: GameMode::Survival,

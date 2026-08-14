@@ -601,7 +601,7 @@ impl VanillaGenerator {
                 chunk.start_block_z(),
             );
 
-        let structure_sets = self.structure_sets();
+        let structure_sets = Self::structure_sets();
         for (_, value) in structure_sets.iter_erased() {
             let Some(set) = value.downcast_ref::<StructureSet>() else {
                 continue;
@@ -753,7 +753,7 @@ impl VanillaGenerator {
         // and out of the (cached) structure-start computation below.
         let chunk_min_y = chunk.bottom_y() as i32;
 
-        let structure_sets = self.structure_sets();
+        let structure_sets = Self::structure_sets();
         for (_, value) in structure_sets.iter_erased() {
             let Some(set) = value.downcast_ref::<StructureSet>() else {
                 continue;

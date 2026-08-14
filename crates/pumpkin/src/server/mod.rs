@@ -20,15 +20,18 @@ use crate::{
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
+use pumpkin_codecs::{Decode, json_ops::JsonOps};
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::{dimension::Dimension, world_preset::WorldPreset};
+use pumpkin_nbt::nbt_ops::NbtOps;
 use pumpkin_registry::error::RootInitError;
 use pumpkin_registry::{DataKey, ROOT, RegistryBuilder};
-use pumpkin_util::identifier::Identifier;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
-use pumpkin_world::dimension::into_level;
+use pumpkin_util::{identifier::Identifier, world_seed::Seed};
+use pumpkin_world::generation::dimension_stem::DimensionStem;
+use pumpkin_world::generation::generator::ChunkGenerator;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
@@ -41,7 +44,9 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
-use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
+use pumpkin_world::world_info::{
+    LevelData, WorldGenSettings, WorldInfoError, WorldInfoReader, WorldInfoWriter,
+};
 use rand::seq::{IndexedRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
@@ -104,8 +109,6 @@ pub struct Server {
     pub item_registry: Arc<ItemRegistry>,
     /// Manages multiple worlds within the server.
     pub worlds: ArcSwap<Vec<Arc<World>>>,
-    /// All the dimensions that exist on the server.
-    pub dimensions: Vec<Dimension>,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
     pub recipe_manager: Arc<recipe::RecipeManager>,
@@ -147,6 +150,7 @@ pub struct Server {
     pub level_info: Arc<ArcSwap<LevelData>>,
     world_info_writer: Arc<dyn WorldInfoWriter>,
     world_path: PathBuf,
+    new_world: bool,
 }
 
 impl Server {
@@ -176,7 +180,7 @@ impl Server {
 
         let block_registry = super::block::registry::default_registry();
 
-        let level_info = match AnvilLevelInfo.read_world_info(&world_path) {
+        let (level_info, new_world) = match AnvilLevelInfo.read_world_info(&world_path) {
             Ok(level_info) => {
                 let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
                 if dat_path.exists() {
@@ -185,7 +189,7 @@ impl Server {
                         warn!("Failed to create backup {LEVEL_DAT_BACKUP_FILE_NAME}: {err}");
                     }
                 }
-                level_info
+                (level_info, false)
             }
             Err(WorldInfoError::InfoNotFound) => {
                 warn!(
@@ -193,11 +197,7 @@ impl Server {
                     world_path.display(),
                     basic_config.seed.0 as i64
                 );
-                let default_data = LevelData::default(basic_config.seed);
-                if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
-                    error!("Failed to save level.dat: {err}");
-                }
-                default_data
+                (LevelData::default(basic_config.seed), true)
             }
             Err(
                 error @ (WorldInfoError::UnsupportedDataVersion(_)
@@ -243,24 +243,6 @@ impl Server {
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
 
-        let dimensions = {
-            let mut dimensions = vec![Dimension::OVERWORLD];
-            if basic_config.allow_nether {
-                dimensions.push(Dimension::THE_NETHER);
-            }
-            if basic_config.allow_end {
-                dimensions.push(Dimension::THE_END);
-            }
-            dimensions
-        };
-        info!(
-            "Enabled dimensions: {:?}",
-            dimensions
-                .iter()
-                .map(|d| d.minecraft_name)
-                .collect::<Vec<_>>()
-        );
-
         let server = Self {
             basic_config,
             advanced_config,
@@ -274,7 +256,6 @@ impl Server {
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
-            dimensions,
             command_dispatcher,
             block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
@@ -302,6 +283,7 @@ impl Server {
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
             world_path,
+            new_world,
         };
 
         let server = Arc::new(server);
@@ -361,8 +343,66 @@ impl Server {
         server
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn run_world_load(self: Arc<Self>) {
         self.plugin_manager.wait_for_all_plugins().await;
+
+        #[allow(clippy::unwrap_used)]
+        ROOT.set(RegistryBuilder::frozen(&Identifier::vanilla_static("root")).unwrap())
+            .map_err(|_| RootInitError)
+            .unwrap();
+        let root = ROOT.get().unwrap_or_else(|| {
+            error!("Root registry was not initialized");
+            std::process::exit(1);
+        });
+
+        if self.new_world {
+            let preset_id =
+                Identifier::parse(&self.basic_config.world_preset).unwrap_or_else(|error| {
+                    error!(
+                        "Invalid world preset {}: {error}",
+                        self.basic_config.world_preset
+                    );
+                    std::process::exit(1);
+                });
+            let preset_key = DataKey::<WorldPreset>::owned(format!(
+                "minecraft:worldgen/minecraft:world_preset/{preset_id}"
+            ));
+            let preset = preset_key.get_blocking(root).unwrap_or_else(|error| {
+                error!("Failed to resolve world preset {preset_id}: {error}");
+                std::process::exit(1);
+            });
+            let mut settings = WorldGenSettings::from_preset(self.basic_config.seed, &preset)
+                .unwrap_or_else(|error| {
+                    error!("Failed to materialize world preset {preset_id}: {error}");
+                    std::process::exit(1);
+                });
+
+            let generator_settings = self.basic_config.generator_settings.trim();
+            if !generator_settings.is_empty() {
+                let generator_settings =
+                    serde_json::from_str(generator_settings).unwrap_or_else(|error| {
+                        error!("Invalid generator settings JSON: {error}");
+                        std::process::exit(1);
+                    });
+                settings
+                    .apply_generator_settings(&preset, generator_settings)
+                    .unwrap_or_else(|error| {
+                        error!("Failed to apply generator settings: {error}");
+                        std::process::exit(1);
+                    });
+            }
+            let mut level_data = (*self.level_info.load_full()).clone();
+            level_data.world_gen_settings = settings;
+            if let Err(error) = self
+                .world_info_writer
+                .write_world_info(&level_data, &self.world_path)
+            {
+                error!("Failed to save new world preset data: {error}");
+                std::process::exit(1);
+            }
+            self.level_info.store(Arc::new(level_data));
+        }
 
         let gen_pool = Arc::new(
             rayon::ThreadPoolBuilder::new()
@@ -374,41 +414,79 @@ impl Server {
                 }),
         );
 
-        let seed = self.level_info.load().world_gen_settings.seed;
+        let world_gen_settings = self.level_info.load().world_gen_settings.clone();
+        let seed = Seed(world_gen_settings.seed as u64);
 
-        let world_loader = |dim: Dimension| {
+        info!("Starting parallel world load...");
+        let mut world_futures = Vec::with_capacity(world_gen_settings.dimensions.len());
+        for (world_key, saved_dimension) in world_gen_settings.dimensions {
+            let input = serde_json::to_value(saved_dimension).unwrap_or_else(|error| {
+                error!("Failed to encode saved dimension {world_key}: {error}");
+                std::process::exit(1);
+            });
+            let stem = DimensionStem::parse(input, &JsonOps)
+                .into_result()
+                .unwrap_or_else(|| {
+                    error!("Failed to decode dimension stem for {world_key}");
+                    std::process::exit(1);
+                });
+            let dimension = stem
+                .dimension_type
+                .get_blocking(root)
+                .unwrap_or_else(|error| {
+                    error!("Failed to resolve dimension type for {world_key}: {error}");
+                    std::process::exit(1);
+                })
+                .clone();
+            let generator_type = stem
+                .generator
+                .generator_type
+                .get_blocking(root)
+                .unwrap_or_else(|error| {
+                    error!("Failed to resolve generator type for {world_key}: {error}");
+                    std::process::exit(1);
+                });
+            let generator: Arc<dyn ChunkGenerator> = Arc::from(
+                generator_type
+                    .decode(stem.generator.input, &NbtOps, seed, dimension.clone())
+                    .into_result()
+                    .unwrap_or_else(|| {
+                        error!("Failed to decode chunk generator for {world_key}");
+                        std::process::exit(1);
+                    }),
+            );
+
             let path = self.world_path.clone();
             let registry = self.block_registry.clone();
-            let l_info = self.level_info.clone(); // Access from struct
+            let l_info = self.level_info.clone();
             let weak = Arc::downgrade(&self);
             let config = Arc::new(self.advanced_config.world.clone());
             let pool = gen_pool.clone();
-
-            tokio::task::spawn_blocking(move || {
+            world_futures.push(tokio::task::spawn_blocking(move || {
                 info!(
                     "Loading {}",
-                    TextComponent::text(dim.minecraft_name.to_string())
+                    TextComponent::text(world_key.to_string())
                         .color_named(NamedColor::DarkGreen)
                         .to_pretty_console()
                 );
-                let level = into_level(dim.clone(), &config, path, seed, Some(pool));
-                let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
+                let level = pumpkin_world::dimension::into_level(
+                    world_key,
+                    generator,
+                    &config,
+                    path,
+                    Some(pool),
+                );
+                let world = Arc::new(World::load(
+                    level.clone(),
+                    l_info,
+                    dimension,
+                    registry,
+                    weak,
+                ));
                 let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
                 level.world_portal.store(Arc::new(Some(portal)));
                 world
-            })
-        };
-
-        #[allow(clippy::unwrap_used)]
-        pumpkin_registry::ROOT
-            .set(RegistryBuilder::frozen(&Identifier::vanilla_static("root")).unwrap())
-            .map_err(|_| RootInitError)
-            .unwrap();
-
-        info!("Starting parallel world load...");
-        let mut world_futures = Vec::new();
-        for dim in &self.dimensions {
-            world_futures.push(world_loader(dim.clone()));
+            }));
         }
 
         let worlds_results = futures::future::join_all(world_futures).await;
@@ -443,11 +521,11 @@ impl Server {
         self.tasks.spawn_on(task, &self.runtime)
     }
 
-    pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
+    pub fn get_world_by_key(&self, key: &Identifier) -> Arc<World> {
         let worlds = self.worlds.load();
         worlds
             .iter()
-            .find(|w| w.dimension.minecraft_name == dimension.minecraft_name)
+            .find(|world| world.level.world_key == *key)
             .cloned()
             .or_else(|| worlds.first().cloned())
             .unwrap_or_else(|| {
@@ -456,6 +534,7 @@ impl Server {
             })
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
         {
             let worlds = self.worlds.load();
@@ -471,22 +550,87 @@ impl Server {
         let server = self.clone();
         let name_clone = name.clone();
         tokio::task::spawn_blocking(move || {
-            let world_path = server.basic_config.get_world_path().join(name_clone);
+            let world_path = server.basic_config.get_world_path();
             let registry = server.block_registry.clone();
             let l_info = server.level_info.clone();
             let weak = Arc::downgrade(&server);
             let config = Arc::new(server.advanced_config.world.clone());
-            let seed = server.level_info.load().world_gen_settings.seed;
+            let root = ROOT.get().unwrap_or_else(|| {
+                error!("Root registry is not initialized");
+                std::process::exit(1);
+            });
+            let world_gen_settings = server.level_info.load().world_gen_settings.clone();
+            let dimension_type =
+                Identifier::parse(dimension.minecraft_name).unwrap_or_else(|error| {
+                    error!(
+                        "Invalid dimension type {}: {error}",
+                        dimension.minecraft_name
+                    );
+                    std::process::exit(1);
+                });
+            let saved_dimension = world_gen_settings
+                .dimensions
+                .values()
+                .find(|saved| saved.dimension_type == dimension_type)
+                .cloned()
+                .unwrap_or_else(|| {
+                    error!(
+                        "No saved generator configuration exists for {}",
+                        dimension.minecraft_name
+                    );
+                    std::process::exit(1);
+                });
+            let input = serde_json::to_value(saved_dimension).unwrap_or_else(|error| {
+                error!("Failed to encode saved dimension configuration: {error}");
+                std::process::exit(1);
+            });
+            let stem = DimensionStem::parse(input, &JsonOps)
+                .into_result()
+                .unwrap_or_else(|| {
+                    error!("Failed to decode saved dimension configuration");
+                    std::process::exit(1);
+                });
+            let resolved_dimension = stem
+                .dimension_type
+                .get_blocking(root)
+                .unwrap_or_else(|error| {
+                    error!("Failed to resolve dimension type: {error}");
+                    std::process::exit(1);
+                })
+                .clone();
+            let generator_type = stem
+                .generator
+                .generator_type
+                .get_blocking(root)
+                .unwrap_or_else(|error| {
+                    error!("Failed to resolve generator type: {error}");
+                    std::process::exit(1);
+                });
+            let generator: Arc<dyn ChunkGenerator> = Arc::from(
+                generator_type
+                    .decode(
+                        stem.generator.input,
+                        &NbtOps,
+                        Seed(world_gen_settings.seed as u64),
+                        resolved_dimension.clone(),
+                    )
+                    .into_result()
+                    .unwrap_or_else(|| {
+                        error!("Failed to decode chunk generator");
+                        std::process::exit(1);
+                    }),
+            );
+            let world_key = Identifier::pumpkin(name_clone).unwrap_or_else(|error| {
+                error!("Invalid world name: {error}");
+                std::process::exit(1);
+            });
 
             // TODO: gen_pool should be reused
             let level = pumpkin_world::dimension::into_level(
-                dimension.clone(),
-                &config,
-                world_path,
-                seed,
-                None,
+                world_key, generator, &config, world_path, None,
             );
-            let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
+            let world: World =
+                World::load(level.clone(), l_info, resolved_dimension, registry, weak);
             let world = Arc::new(world);
             let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
             level.world_portal.store(Arc::new(Some(portal)));
@@ -543,33 +687,31 @@ impl Server {
     ) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
-        let first_world = self.worlds.load().first().cloned()?;
+        let worlds = self.worlds.load();
+        let first_world = worlds
+            .iter()
+            .find(|world| world.world_key() == &Identifier::vanilla_static("overworld"))
+            .cloned()
+            .or_else(|| worlds.first().cloned())?;
 
-        let (world, nbt) = if let Ok(Some(data)) =
-            self.player_data_storage.load_data(&profile.id).await
-        {
-            if let Some(dimension_key) = data.get_string("Dimension") {
-                let dimension = ROOT.get().and_then(|root| {
-                    DataKey::<Dimension>::owned(format!("minecraft:dimension_type/{dimension_key}"))
-                        .get_blocking(root)
-                        .ok()
-                        .map(|dimension| dimension)
-                });
-                if let Some(dimension) = dimension {
-                    let world = self.get_world_from_dimension(&dimension);
-                    (world, Some(data))
+        let (world, nbt) =
+            if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id).await {
+                if let Some(dimension_key) = data.get_string("Dimension") {
+                    match Identifier::parse(dimension_key) {
+                        Ok(world_key) => (self.get_world_by_key(&world_key), Some(data)),
+                        Err(error) => {
+                            warn!("Invalid world key in player data {dimension_key}: {error}");
+                            (first_world, Some(data))
+                        }
+                    }
                 } else {
-                    warn!("Invalid dimension key in player data: {dimension_key}");
+                    // Player data exists but doesn't have a "Dimension" key.
                     (first_world, Some(data))
                 }
             } else {
-                // Player data exists but doesn't have a "Dimension" key.
-                (first_world, Some(data))
-            }
-        } else {
-            // No player data found or an error occurred, default to the Overworld.
-            (first_world, None)
-        };
+                // No player data found or an error occurred, default to the Overworld.
+                (first_world, None)
+            };
 
         let mut player = Player::new(
             client,

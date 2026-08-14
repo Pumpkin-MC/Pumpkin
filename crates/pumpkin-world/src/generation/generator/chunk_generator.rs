@@ -8,10 +8,8 @@ use pumpkin_util::{identifier::Identifier, world_seed::Seed};
 
 use super::{flat::FlatGenerator, vanilla::VanillaGenerator};
 use crate::{
-    ProtoChunk,
-    chunk_system::generation_cache::Cache,
-    generation::structure::placement::GlobalStructureCache,
-    world::WorldPortalExt,
+    ProtoChunk, chunk_system::generation_cache::Cache,
+    generation::structure::placement::GlobalStructureCache, world::WorldPortalExt,
 };
 
 pub trait ChunkGenerator: Send + Sync {

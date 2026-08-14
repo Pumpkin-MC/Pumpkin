@@ -12,10 +12,10 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{
     Axis, BlockProperties, HorizontalAxis, NetherPortalLikeProperties,
 };
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::GameMode;
+use pumpkin_util::identifier::Identifier;
 
 #[pumpkin_block("minecraft:nether_portal")]
 pub struct NetherPortalBlock;
@@ -70,12 +70,13 @@ impl BlockBehaviour for NetherPortalBlock {
 
     fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let target_world =
-                if args.world.dimension.minecraft_name == Dimension::THE_NETHER.minecraft_name {
-                    args.server.get_world_from_dimension(&Dimension::OVERWORLD)
-                } else {
-                    args.server.get_world_from_dimension(&Dimension::THE_NETHER)
-                };
+            let overworld = Identifier::vanilla_static("overworld");
+            let nether = Identifier::vanilla_static("the_nether");
+            let target_world = if args.world.world_key() == &nether {
+                args.server.get_world_by_key(&overworld)
+            } else {
+                args.server.get_world_by_key(&nether)
+            };
 
             if Arc::ptr_eq(&target_world, args.world) {
                 return;

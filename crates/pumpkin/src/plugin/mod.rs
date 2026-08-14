@@ -634,6 +634,15 @@ impl PluginManager {
 
         if !path.exists() {
             std::fs::create_dir(path)?;
+
+            if pumpkin_registry::BOOTSTRAP
+                .set(BootstrapManager::new())
+                .is_err()
+            {
+                warn!("Bootstrap manager was already loaded!");
+            }
+
+            info!("Registry bootstrap has been initialized!");
             return Ok(std::time::Duration::ZERO);
         }
 

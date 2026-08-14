@@ -131,6 +131,7 @@ use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_util::{
     Difficulty,
+    identifier::Identifier,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
 };
 use pumpkin_util::{
@@ -338,7 +339,7 @@ impl World {
     ) -> Self {
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
-        let dragon_fight = (dimension.minecraft_name == Dimension::THE_END.minecraft_name)
+        let dragon_fight = (level.world_key == Identifier::vanilla_static("the_end"))
             .then(|| Mutex::new(dragon_fight::DragonFight::new()));
         let sea_level = level.world_gen.sea_level();
         let min_y = i32::from(level.world_gen.generation_bounds().1);
@@ -411,6 +412,11 @@ impl World {
 
     /// Get the world folder name (e.g., `world`, `world_nether`, `world_the_end`).
     /// Falls back to "world" if the name cannot be determined.
+    #[must_use]
+    pub fn world_key(&self) -> &Identifier {
+        &self.level.world_key
+    }
+
     pub fn get_world_name(&self) -> &str {
         self.level
             .level_folder
@@ -1958,7 +1964,7 @@ impl World {
 
     pub async fn set_raining(&self, raining: bool) {
         if let Some(server) = self.server.upgrade() {
-            let world_arc = server.get_world_from_dimension(&self.dimension);
+            let world_arc = server.get_world_by_key(self.world_key());
             let mut event =
                 crate::plugin::api::events::world::weather_change::WeatherChangeEvent::new(
                     world_arc, raining,
@@ -1981,7 +1987,7 @@ impl World {
 
     pub async fn set_thundering(&self, thundering: bool) {
         if let Some(server) = self.server.upgrade() {
-            let world_arc = server.get_world_from_dimension(&self.dimension);
+            let world_arc = server.get_world_by_key(self.world_key());
             let mut event =
                 crate::plugin::api::events::world::weather_change::ThunderChangeEvent::new(
                     world_arc, thundering,
@@ -2818,9 +2824,10 @@ impl World {
         server: &Arc<Server>,
     ) {
         let dimensions: Vec<ResourceLocation> = server
-            .dimensions
+            .worlds
+            .load()
             .iter()
-            .map(|d| ResourceLocation::from(d.minecraft_name))
+            .map(|world| world.world_key().to_string())
             .collect();
 
         // This code follows the vanilla packet order
