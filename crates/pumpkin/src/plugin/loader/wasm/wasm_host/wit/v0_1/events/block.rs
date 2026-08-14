@@ -2,9 +2,20 @@ use pumpkin_data::BlockStateId;
 
 use crate::plugin::{
     block::{
-        block_break::BlockBreakEvent, block_burn::BlockBurnEvent,
-        block_can_build::BlockCanBuildEvent, block_grow::BlockGrowEvent,
-        block_place::BlockPlaceEvent, block_redstone::BlockRedstoneEvent,
+        block_break::BlockBreakEvent,
+        block_burn::BlockBurnEvent,
+        block_can_build::BlockCanBuildEvent,
+        block_dispense::BlockDispenseEvent,
+        block_explode::BlockExplodeEvent,
+        block_grow::BlockGrowEvent,
+        block_physics::BlockPhysicsEvent,
+        block_piston::{BlockPistonExtendEvent, BlockPistonRetractEvent},
+        block_place::BlockPlaceEvent,
+        block_redstone::BlockRedstoneEvent,
+        note_play::NotePlayEvent,
+        sign_change::SignChangeEvent,
+        sponge_absorb::SpongeAbsorbEvent,
+        tnt_prime::TNTPrimeEvent,
     },
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -15,9 +26,11 @@ use crate::plugin::{
             },
             pumpkin::plugin::event::{
                 BlockBreakEventData, BlockBurnEventData, BlockCanBuildEventData,
-                BlockDamageEventData, BlockFadeEventData, BlockFormEventData, BlockFromToEventData,
-                BlockGrowEventData, BlockIgniteEventData, BlockPlaceEventData,
-                BlockRedstoneEventData, Event,
+                BlockDamageEventData, BlockDispenseEventData, BlockExplodeEventData,
+                BlockFadeEventData, BlockFormEventData, BlockFromToEventData, BlockGrowEventData,
+                BlockIgniteEventData, BlockPhysicsEventData, BlockPistonExtendEventData,
+                BlockPistonRetractEventData, BlockPlaceEventData, BlockRedstoneEventData, Event,
+                NotePlayEventData, SignChangeEventData, SpongeAbsorbEventData, TntPrimeEventData,
             },
         },
     },
@@ -305,6 +318,200 @@ impl ToFromWasmEvent for crate::plugin::api::events::block::block_fade::BlockFad
             Event::BlockFadeEvent(data) => Self {
                 block_pos: from_wasm_block_position(data.block_pos),
                 block: &pumpkin_data::Block::ICE,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for BlockDispenseEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::BlockDispenseEvent(BlockDispenseEventData {
+            block_pos: to_wasm_block_position(self.block_pos),
+            item_name: self.item_name.clone(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockDispenseEvent(data) => Self {
+                block_pos: from_wasm_block_position(data.block_pos),
+                item_name: data.item_name,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for BlockExplodeEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::BlockExplodeEvent(BlockExplodeEventData {
+            block_pos: to_wasm_block_position(self.block_pos),
+            yield_rate: self.yield_rate,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockExplodeEvent(data) => Self {
+                block_pos: from_wasm_block_position(data.block_pos),
+                yield_rate: data.yield_rate,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for BlockPhysicsEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::BlockPhysicsEvent(BlockPhysicsEventData {
+            block_pos: to_wasm_block_position(self.block_pos),
+            changed_pos: to_wasm_block_position(self.changed_pos),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockPhysicsEvent(data) => Self {
+                block_pos: from_wasm_block_position(data.block_pos),
+                changed_pos: from_wasm_block_position(data.changed_pos),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for BlockPistonExtendEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::BlockPistonExtendEvent(BlockPistonExtendEventData {
+            block_pos: to_wasm_block_position(self.block_pos),
+            direction: self.direction.clone(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockPistonExtendEvent(data) => Self {
+                block_pos: from_wasm_block_position(data.block_pos),
+                direction: data.direction,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for BlockPistonRetractEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::BlockPistonRetractEvent(BlockPistonRetractEventData {
+            block_pos: to_wasm_block_position(self.block_pos),
+            direction: self.direction.clone(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockPistonRetractEvent(data) => Self {
+                block_pos: from_wasm_block_position(data.block_pos),
+                direction: data.direction,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for NotePlayEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::NotePlayEvent(NotePlayEventData {
+            block_pos: to_wasm_block_position(self.block_pos),
+            instrument: self.instrument.clone(),
+            note: self.note,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::NotePlayEvent(data) => Self {
+                block_pos: from_wasm_block_position(data.block_pos),
+                instrument: data.instrument,
+                note: data.note,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for SignChangeEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+        Event::SignChangeEvent(SignChangeEventData {
+            player,
+            block_pos: to_wasm_block_position(self.block_pos),
+            lines: self.lines.clone(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::SignChangeEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                block_pos: from_wasm_block_position(data.block_pos),
+                lines: data.lines,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for SpongeAbsorbEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::SpongeAbsorbEvent(SpongeAbsorbEventData {
+            block_pos: to_wasm_block_position(self.block_pos),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::SpongeAbsorbEvent(data) => Self {
+                block_pos: from_wasm_block_position(data.block_pos),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for TNTPrimeEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::TntPrimeEvent(TntPrimeEventData {
+            block_pos: to_wasm_block_position(self.block_pos),
+            prime_reason: self.prime_reason.clone(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::TntPrimeEvent(data) => Self {
+                block_pos: from_wasm_block_position(data.block_pos),
+                prime_reason: data.prime_reason,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

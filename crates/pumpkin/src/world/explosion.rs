@@ -291,6 +291,22 @@ impl Explosion {
 
     /// Returns the removed block count
     pub async fn explode(&self, world: &Arc<World>) -> u32 {
+        let center_pos = BlockPos::floored(self.pos.x, self.pos.y, self.pos.z);
+        let mut event = crate::plugin::api::events::block::block_explode::BlockExplodeEvent::new(
+            center_pos,
+            if self.power > 0.0 {
+                1.0 / self.power
+            } else {
+                1.0
+            },
+        );
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return 0;
+        }
+
         let blocks = self.get_blocks_to_destroy(world);
         self.damage_entities(world).await;
         for (pos, (block, state)) in &blocks {

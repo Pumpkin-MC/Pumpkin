@@ -168,6 +168,18 @@ impl BlockBehaviour for PistonBlock {
 
             // Extend Piston
             if r#type == 0 {
+                let mut event =
+                    crate::plugin::api::events::block::block_piston::BlockPistonExtendEvent::new(
+                        *pos,
+                        format!("{dir:?}"),
+                    );
+                if let Some(server) = world.server.upgrade() {
+                    server.plugin_manager.fire(&server, &mut event).await;
+                }
+                if event.cancelled {
+                    return false;
+                }
+
                 if !move_piston(world, dir, pos, true, sticky).await {
                     return false;
                 }
@@ -191,6 +203,18 @@ impl BlockBehaviour for PistonBlock {
                 return true;
             }
             // Reduce Piston
+
+            let mut event =
+                crate::plugin::api::events::block::block_piston::BlockPistonRetractEvent::new(
+                    *pos,
+                    format!("{dir:?}"),
+                );
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.cancelled {
+                return false;
+            }
 
             let extended_pos = pos.offset(dir.to_offset());
 

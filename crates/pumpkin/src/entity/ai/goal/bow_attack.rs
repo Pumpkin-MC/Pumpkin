@@ -70,6 +70,19 @@ impl BowAttackGoal {
         let entity = mob.get_entity();
         let world = entity.world.load();
 
+        let mut event =
+            crate::plugin::api::events::entity::entity_shoot_bow::EntityShootBowEvent::new(
+                entity.entity_id,
+                "minecraft:bow".to_string(),
+                1.0,
+            );
+        if let Some(server) = world.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+        if event.cancelled {
+            return;
+        }
+
         let arrow_entity = Entity::new(world.clone(), entity.pos.load(), &EntityType::ARROW);
         let projectile = ItemStack::new(1, &Item::ARROW);
         let arrow = ArrowEntity::new_shot(arrow_entity, entity, &projectile, ArrowPickup::Allowed);

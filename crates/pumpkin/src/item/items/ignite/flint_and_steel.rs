@@ -15,6 +15,8 @@ use std::sync::Arc;
 
 use crate::item::items::ignite::ignition::Ignition;
 
+use crate::plugin::api::events::world::portal_create::{PortalCreateEvent, PortalType};
+
 pub struct FlintAndSteelItem;
 
 impl ItemMetadata for FlintAndSteelItem {
@@ -49,7 +51,12 @@ impl ItemBehaviour for FlintAndSteelItem {
                     .plugin_manager
                     .fire(&server_ref, &mut event)
                     .await;
-                if event.cancelled {
+                let mut portal_event = PortalCreateEvent::new(location, PortalType::Nether);
+                server_ref
+                    .plugin_manager
+                    .fire(&server_ref, &mut portal_event)
+                    .await;
+                if event.cancelled || portal_event.cancelled {
                     return;
                 }
             }

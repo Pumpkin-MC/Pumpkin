@@ -22,6 +22,16 @@ impl JavaClient {
 
         let mut item_in_hand = inventory.get_stack_in_hand(hand).await;
 
+        let mut consume_event =
+            crate::plugin::api::events::player::player_item_consume::PlayerItemConsumeEvent::new(
+                player.clone(),
+                item_in_hand.item.registry_key.to_string(),
+            );
+        server.plugin_manager.fire(server, &mut consume_event).await;
+        if consume_event.cancelled {
+            return;
+        }
+
         let (item_id, _item) = (item_in_hand.item.id, item_in_hand.item);
         player
             .increment_stat(StatisticCategory::Used, item_id as i32, 1)

@@ -345,8 +345,20 @@ impl ItemEntity {
         let age = self.item_age.fetch_add(1, Ordering::Relaxed) + 1;
 
         if age >= 6000 {
-            entity.remove().await;
-            return false;
+            let mut despawn_event =
+                crate::plugin::api::events::entity::item_despawn::ItemDespawnEvent::new(
+                    entity.entity_id,
+                );
+            if let Some(server) = entity.world.load().server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire(&server, &mut despawn_event)
+                    .await;
+            }
+            if !despawn_event.cancelled {
+                entity.remove().await;
+                return false;
+            }
         }
 
         let n = if entity
