@@ -5921,7 +5921,11 @@ impl World {
         Self::broadcast_java_grouped(packet, recipients_by_version);
     }
 
-    fn broadcast_to_chunk_bedrock<P: BClientPacket>(&self, chunk_pos: Vector2<i32>, packet: &P) {
+    pub fn broadcast_to_chunk_bedrock<P: BClientPacket>(
+        &self,
+        chunk_pos: Vector2<i32>,
+        packet: &P,
+    ) {
         let players = self.players.load();
         for player in players.iter().filter(|player| {
             let center = player.get_entity().chunk_pos.load();
