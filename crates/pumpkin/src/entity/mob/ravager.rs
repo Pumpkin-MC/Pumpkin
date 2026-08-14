@@ -1,4 +1,4 @@
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Weak, atomic::Ordering};
 
 use pumpkin_data::entity::EntityType;
 
@@ -7,7 +7,7 @@ use crate::entity::{
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        revenge::RevengeGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -53,10 +53,30 @@ impl RavagerEntity {
             );
             target_selector.add_goal(
                 2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
+                Box::new(RevengeGoal::new(true)),
             );
             target_selector.add_goal(
                 3,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+            );
+            target_selector.add_goal(
+                4,
+                Box::new(ActiveTargetGoal::new_types(
+                    &mob_arc.mob_entity,
+                    &[&EntityType::VILLAGER, &EntityType::WANDERING_TRADER],
+                    10,
+                    true,
+                    false,
+                    Some(
+                        |target: Arc<crate::entity::living::LivingEntity>,
+                         _world: Arc<crate::world::World>| async move {
+                            target.entity.age.load(Ordering::Relaxed) >= 0
+                        },
+                    ),
+                )),
+            );
+            target_selector.add_goal(
+                4,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
             );
         };

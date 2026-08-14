@@ -55,6 +55,38 @@ impl ActiveTargetGoal {
         }
     }
 
+    pub fn new_types<F, Fut>(
+        mob: &MobEntity,
+        target_types: &'static [&'static EntityType],
+        reciprocal_chance: i32,
+        check_visibility: bool,
+        check_can_navigate: bool,
+        predicate: Option<F>,
+    ) -> Self
+    where
+        F: Fn(Arc<LivingEntity>, Arc<World>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = bool> + Send + 'static,
+    {
+        let track_target_goal = TrackTargetGoal::new(check_visibility, check_can_navigate);
+        let mut target_predicate = TargetPredicate::create_attackable();
+        target_predicate.base_max_distance = mob
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
+
+        if let Some(predicate) = predicate {
+            target_predicate.set_predicate(predicate);
+        }
+
+        Self {
+            track_target_goal,
+            target: None,
+            reciprocal_chance: to_goal_ticks(reciprocal_chance),
+            target_type: None,
+            target_types: Some(target_types),
+            target_predicate,
+        }
+    }
+
     #[must_use]
     pub fn with_default(
         mob: &MobEntity,
