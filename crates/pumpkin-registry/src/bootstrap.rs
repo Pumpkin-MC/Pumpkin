@@ -1,5 +1,5 @@
 use crate::error::BootstrapError;
-pub use linkme::distributed_slice;
+pub use linkme::{self as __linkme, distributed_slice};
 use pumpkin_util::identifier::Identifier;
 use rayon::iter::{IntoParallelRefIterator as _, ParallelIterator as _};
 use rustc_hash::{FxBuildHasher, FxHashMap};
@@ -136,6 +136,7 @@ macro_rules! bootstrap_provider {
             }
 
             #[$crate::bootstrap::distributed_slice($crate::bootstrap::PROVIDERS)]
+            #[linkme(crate = $crate::bootstrap::__linkme)]
             static $name: $crate::bootstrap::BootstrapProvider =
                 $crate::bootstrap::BootstrapProvider::new(
                     $registry,
@@ -159,6 +160,7 @@ macro_rules! bootstrap_provider {
             }
 
             #[$crate::bootstrap::distributed_slice($crate::bootstrap::PROVIDERS)]
+            #[linkme(crate = $crate::bootstrap::__linkme)]
             static $name: $crate::bootstrap::BootstrapProvider =
                 $crate::bootstrap::BootstrapProvider::new(
                     $registry,
