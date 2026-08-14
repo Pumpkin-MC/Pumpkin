@@ -421,17 +421,11 @@ impl Server {
         for world in &worlds_vec {
             let mut world_init_event =
                 crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
-            self
-                .plugin_manager
-                .fire(&self, &mut world_init_event)
-                .await;
+            self.plugin_manager.fire(&self, &mut world_init_event).await;
 
             let mut world_load_event =
                 crate::plugin::api::events::world::world_load::WorldLoadEvent::new(world.clone());
-            self
-                .plugin_manager
-                .fire(&self, &mut world_load_event)
-                .await;
+            self.plugin_manager.fire(&self, &mut world_load_event).await;
         }
 
         self.worlds.store(Arc::new(worlds_vec));
