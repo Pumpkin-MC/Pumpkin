@@ -11,6 +11,7 @@ members = [
     "crates/pumpkin-nbt",
     "crates/pumpkin-plugin-api",
     "crates/pumpkin-protocol",
+    "crates/pumpkin-registry",
     "crates/pumpkin-util",
     "crates/pumpkin-world",
     "tools/pumpkin-codegen",
@@ -132,6 +133,7 @@ bytes = { version = "1.12", default-features = false, features = ["std"] }
 # Concurrency/Parallelism and Synchronization
 futures = { version = "0.3", default-features = false, features = ["executor"] }
 rayon = { version = "1.12", default-features = false }
+linkme = { version = "0.3", default-features = false }
 crossbeam = { version = "0.8", default-features = false, features = ["std"] }
 
 uuid = { version = "1.24", default-features = false, features = ["serde", "v3", "v4", "std"] }
@@ -178,6 +180,7 @@ pumpkin-inventory = { path = "crates/pumpkin-inventory", default-features = fals
 pumpkin-macros = { path = "crates/pumpkin-macros", default-features = false }
 pumpkin-nbt = { path = "crates/pumpkin-nbt", default-features = false }
 pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
+pumpkin-registry = { path = "crates/pumpkin-registry", default-features = false }
 pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
 pumpkin-world = { path = "crates/pumpkin-world", default-features = false }
 pumpkin-datapack = { path = "pumpkin-datapack", default-features = false }

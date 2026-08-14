@@ -1,0 +1,22 @@
+[package]
+name = "pumpkin-registry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+[dependencies]
+pumpkin-util.workspace = true
+tokio.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+rustc-hash.workspace = true
+linkme.workspace = true
+
+[dev-dependencies]
+# Validate correctness
+tokio = {workspace = true, features = ["macros", "rt-multi-thread"]}
+
+[lints]
+workspace = true
