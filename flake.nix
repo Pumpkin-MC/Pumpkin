@@ -36,7 +36,7 @@
         let
           naersk' = pkgs.callPackage naersk { };
 
-          manifest = (lib.importTOML ./pumpkin/Cargo.toml).package;
+          manifest = (lib.importTOML ./crates/pumpkin/Cargo.toml).package;
           workspace-manifest = (lib.importTOML ./Cargo.toml).workspace.package;
         in
         {
@@ -48,25 +48,7 @@
 
             src = lib.fileset.toSource {
               root = ./.;
-              fileset = lib.fileset.unions [
-                ./Cargo.lock
-                ./Cargo.toml
-
-                ./assets
-                ./pumpkin
-                ./pumpkin-api-macros
-                ./pumpkin-codecs
-                ./pumpkin-config
-                ./pumpkin-data
-                ./pumpkin-inventory
-                ./pumpkin-macros
-                ./pumpkin-nbt
-                ./pumpkin-plugin-api
-                ./pumpkin-plugin-wit
-                ./pumpkin-protocol
-                ./pumpkin-util
-                ./pumpkin-world
-              ];
+              fileset = lib.fileset.gitTracked ./.;
             };
           };
 

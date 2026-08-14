@@ -1,0 +1,41 @@
+[package]
+name = "pumpkin-nbt-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1.3", features = ["derive"] }
+
+[package.metadata.cargo-machete]
+ignored = ["arbitrary"]
+
+[dependencies.pumpkin-nbt]
+path = ".."
+
+[[bin]]
+name = "deserialize_java"
+path = "fuzz_targets/deserialize_java.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "deserialize_bedrock"
+path = "fuzz_targets/deserialize_bedrock.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decompress_gzip"
+path = "fuzz_targets/decompress_gzip.rs"
+test = false
+doc = false
+bench = false
