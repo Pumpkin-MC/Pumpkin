@@ -1376,8 +1376,8 @@ impl LivingEntity {
                         format!("death.attack.{}.player", damage_type.message_id)
                     };
                     TextComponent::translate_cross(
-                        key.clone(),    // Java
-                        key.clone(),    // Bedrock
+                        key.clone(), // Java
+                        key.clone(), // Bedrock
                         [
                             dyn_self.get_display_name().await,
                             cause.get_display_name().await,
