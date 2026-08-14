@@ -16,7 +16,7 @@ impl BlockBehaviour for NetherrackBlock {
 
         if above_block.is_full_cube()
             || above_block.is_liquid()
-            || args.world.is_loaded(&args.position.up())
+            || !args.world.is_loaded(&args.position.up())
         {
             return false;
         }
