@@ -40,6 +40,10 @@ impl WanderAroundGoal {
 impl Goal for WanderAroundGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
+            if mob.get_mob_entity().is_schooling_follower() {
+                return false;
+            }
+
             if mob.get_random().random_range(0..self.chance) != 0 {
                 return false;
             }

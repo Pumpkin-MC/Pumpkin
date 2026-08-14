@@ -76,6 +76,13 @@ pub struct MobEntity {
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
+    /// Vanilla `AbstractSchoolingFish.leader != null && leader.isAlive()` state.
+    /// Only schooling-fish goals mutate this flag; other mobs leave it false.
+    pub schooling_follower: AtomicBool,
+    /// Vanilla `Mob.noActionTime`, used by the random despawn check.
+    pub no_action_time: AtomicI32,
+    /// Vanilla `Entity.tickCount`, used by species-specific despawn rules.
+    pub tick_count: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
     mob_flags: AtomicU8,
     last_sent_yaw: AtomicU8,
@@ -113,6 +120,9 @@ impl MobEntity {
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
+            schooling_follower: AtomicBool::new(false),
+            no_action_time: AtomicI32::new(0),
+            tick_count: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
@@ -235,6 +245,14 @@ impl MobEntity {
 
     pub fn is_in_love(&self) -> bool {
         self.love_ticks.load(Relaxed) > 0
+    }
+
+    pub fn is_schooling_follower(&self) -> bool {
+        self.schooling_follower.load(Relaxed)
+    }
+
+    pub fn set_schooling_follower(&self, value: bool) {
+        self.schooling_follower.store(value, Relaxed);
     }
 
     pub fn set_love_ticks(&self, ticks: i32, breeder: Option<Uuid>) {
