@@ -3691,6 +3691,18 @@ impl World {
                 )
             };
 
+        let mut spawn_loc_event = crate::plugin::api::events::player::player_spawn_location::PlayerSpawnLocationEvent::new(
+            player.clone(),
+            position,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire(&server, &mut spawn_loc_event)
+                .await;
+        }
+        let position = spawn_loc_event.spawn_pos;
+
         // Candidate destination world for a cross-dimension respawn.
         let candidate_world = if respawn_dimension == self.dimension {
             None
@@ -6120,6 +6132,39 @@ impl World {
             crate::plugin::api::events::raid::raid_stop::RaidStopEvent::new(reason);
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire(&server, &mut raid_event).await;
+        }
+    }
+
+    pub async fn async_structure_generate(
+        &self,
+        world_name: String,
+        structure_name: String,
+        pos: BlockPos,
+    ) {
+        let mut event = crate::plugin::api::events::world::async_structure_generate::AsyncStructureGenerateEvent::new(
+            world_name,
+            structure_name,
+            pos,
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
+        }
+    }
+
+    pub async fn async_structure_spawn(
+        &self,
+        world_name: String,
+        structure_name: String,
+        pos: BlockPos,
+    ) {
+        let mut event =
+            crate::plugin::api::events::world::async_structure_spawn::AsyncStructureSpawnEvent::new(
+                world_name,
+                structure_name,
+                pos,
+            );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire(&server, &mut event).await;
         }
     }
 }

@@ -4861,6 +4861,21 @@ impl Player {
             }
         }}
 
+        let mut interact_event =
+            crate::plugin::api::events::inventory::inventory_interact::InventoryInteractEvent::new(
+                self.clone(),
+            );
+        if let Some(server) = self.world().server.upgrade() {
+            server
+                .plugin_manager
+                .fire(&server, &mut interact_event)
+                .await;
+        }
+        if interact_event.cancelled {
+            screen_handler.cancel().await;
+            return;
+        }
+
         if slot == 0
             && let Some(ref stack) = clicked_item
             && !stack.is_empty()
@@ -4870,12 +4885,93 @@ impl Player {
                     self.clone(),
                     stack.item.registry_key.to_string(),
                 );
+            let mut prep_craft =
+                crate::plugin::api::events::inventory::prepare_item_craft::PrepareItemCraftEvent::new(
+                    self.clone(),
+                    stack.item.registry_key.to_string(),
+                );
             if let Some(server) = self.world().server.upgrade() {
                 server.plugin_manager.fire(&server, &mut craft_event).await;
+                server.plugin_manager.fire(&server, &mut prep_craft).await;
             }
-            if craft_event.cancelled {
+            if craft_event.cancelled || prep_craft.cancelled {
                 screen_handler.cancel().await;
                 return;
+            }
+        }
+
+        if screen_handler.window_type() == Some(WindowType::Smithing)
+            && slot == 3
+            && let Some(ref stack) = clicked_item
+            && !stack.is_empty()
+        {
+            let mut smith_event =
+                crate::plugin::api::events::inventory::smith_item::SmithItemEvent::new(
+                    self.clone(),
+                    stack.item.registry_key.to_string(),
+                );
+            let mut prep_smith =
+                crate::plugin::api::events::inventory::prepare_smithing::PrepareSmithingEvent::new(
+                    self.clone(),
+                    Some(stack.item.registry_key.to_string()),
+                );
+            if let Some(server) = self.world().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut smith_event).await;
+                server.plugin_manager.fire(&server, &mut prep_smith).await;
+            }
+            if smith_event.cancelled {
+                screen_handler.cancel().await;
+                return;
+            }
+        }
+
+        if (screen_handler.window_type() == Some(WindowType::Furnace)
+            || screen_handler.window_type() == Some(WindowType::BlastFurnace)
+            || screen_handler.window_type() == Some(WindowType::Smoker))
+            && slot == 2
+            && let Some(ref stack) = clicked_item
+            && !stack.is_empty()
+        {
+            let mut extract_event =
+                crate::plugin::api::events::inventory::furnace_extract::FurnaceExtractEvent::new(
+                    self.clone(),
+                    pumpkin_util::math::position::BlockPos::new(0, 0, 0),
+                    stack.item.registry_key.to_string(),
+                    stack.item_count as u32,
+                    0.0,
+                );
+            if let Some(server) = self.world().server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire(&server, &mut extract_event)
+                    .await;
+            }
+        }
+
+        if screen_handler.window_type() == Some(WindowType::Grindstone)
+            && let Some(ref stack) = clicked_item
+        {
+            let mut prep_grindstone =
+                crate::plugin::api::events::inventory::prepare_grindstone::PrepareGrindstoneEvent::new(
+                    self.clone(),
+                    if stack.is_empty() { None } else { Some(stack.item.registry_key.to_string()) },
+                );
+            if let Some(server) = self.world().server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire(&server, &mut prep_grindstone)
+                    .await;
+            }
+        }
+
+        if let Some(ref stack) = clicked_item {
+            let mut prep_result =
+                crate::plugin::api::events::inventory::prepare_inventory_result::PrepareInventoryResultEvent::new(
+                    self.clone(),
+                    if stack.is_empty() { None } else { Some(stack.item.registry_key.to_string()) },
+                );
+            if let Some(server) = self.world().server.upgrade() {
+                server.plugin_manager.fire(&server, &mut prep_result).await;
             }
         }
 

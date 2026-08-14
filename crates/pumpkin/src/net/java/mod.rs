@@ -949,6 +949,7 @@ impl JavaClient {
             }
             id if id == SRecipeBookChangeSettings::to_id(version) => {
                 self.handle_recipe_book_change_settings(
+                    server,
                     player,
                     SRecipeBookChangeSettings::read(&mut payload, &version)?,
                 )
@@ -956,6 +957,7 @@ impl JavaClient {
             }
             id if id == SRecipeBookSeenRecipe::to_id(version) => {
                 self.handle_recipe_book_seen_recipe(
+                    server,
                     player,
                     SRecipeBookSeenRecipe::read(&mut payload, &version)?,
                 )
