@@ -88,6 +88,7 @@ pub mod dragon_egg;
 pub mod falling;
 pub mod grass_block;
 pub mod infested;
+pub mod netherrack;
 pub mod powder_snow;
 pub mod rooted_dirt;
 pub mod snow;
