@@ -278,7 +278,7 @@ fn flat_generator_config_decodes_structure_overrides() {
         ]
     });
 
-    let config = FlatGeneratorConfig::parse(settings, &JsonOps)
+    let config = FlatGeneratorConfig::parse(json!({ "settings": settings }), &JsonOps)
         .into_result()
         .unwrap();
     assert_eq!(config.biome, "minecraft:plains");

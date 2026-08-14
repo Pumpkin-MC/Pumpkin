@@ -397,6 +397,7 @@ mod tests {
 
     #[test]
     fn pillager_outposts_respect_the_village_exclusion_zone() {
+        crate::init_test_registries();
         let seed = 0;
         let calculator = StructurePlacementCalculator::new(seed);
         let cache = GlobalStructureCache::new();

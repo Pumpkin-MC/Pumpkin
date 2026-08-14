@@ -26,6 +26,21 @@ pub const CURRENT_MC_VERSION: &str = "26.2";
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.40";
 pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 2168;
 
+#[cfg(test)]
+pub(crate) fn init_test_registries() {
+    use pumpkin_registry::{
+        BOOTSTRAP, ROOT, Registry, RegistryBuilder, bootstrap::BootstrapManager,
+    };
+    use pumpkin_util::identifier::Identifier;
+    use std::sync::Arc;
+
+    BOOTSTRAP.get_or_init(BootstrapManager::new);
+    ROOT.get_or_init(|| {
+        RegistryBuilder::<Arc<dyn Registry>>::frozen(&Identifier::vanilla_static("root"))
+            .expect("test root registry must initialize")
+    });
+}
+
 #[macro_export]
 macro_rules! global_path {
     ($path:expr) => {{

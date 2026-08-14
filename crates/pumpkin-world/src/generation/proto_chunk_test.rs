@@ -12,6 +12,7 @@ mod test {
         use pumpkin_config::lighting::LightingEngineConfig;
         use pumpkin_data::structures::StructureKeys;
 
+        crate::init_test_registries();
         let seed = Seed(1_782_124_772_053_846_960);
         let generator = VanillaGenerator::new(seed, Dimension::OVERWORLD);
 
@@ -41,6 +42,7 @@ mod test {
         use pumpkin_config::lighting::LightingEngineConfig;
         use pumpkin_util::math::vector3::Vector3;
 
+        crate::init_test_registries();
         let seed = Seed(1779920288596261407);
         let (cx, cz) = (67i32, 63i32);
         let generator = VanillaGenerator::new(seed, Dimension::OVERWORLD);
