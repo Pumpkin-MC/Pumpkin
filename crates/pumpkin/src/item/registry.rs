@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -11,6 +12,10 @@ use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use super::{ItemBehaviour, ItemMetadata};
+
+pub(crate) const fn should_try_block_placement(result: &BlockActionResult) -> bool {
+    matches!(result, BlockActionResult::Pass)
+}
 
 #[derive(Default)]
 pub struct ItemRegistry {
@@ -74,7 +79,7 @@ impl ItemRegistry {
         cursor_pos: Vector3<f32>,
         block: &Block,
         server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let cooldown = stack.get_use_cooldown().cloned();
         let cooldown_group = cooldown
             .as_ref()
@@ -82,21 +87,25 @@ impl ItemRegistry {
             .unwrap_or_else(|| stack.item.registry_key.to_string());
 
         if player.is_on_cooldown(&cooldown_group).await {
-            return;
+            return BlockActionResult::Pass;
         }
 
         let pumpkin_item = self.get_pumpkin_item(stack.item.id);
-        if let Some(pumpkin_item) = pumpkin_item {
+        let result = if let Some(pumpkin_item) = pumpkin_item {
             pumpkin_item
                 .use_on_block(stack, player, location, face, cursor_pos, block, server)
-                .await;
-        }
+                .await
+        } else {
+            BlockActionResult::Pass
+        };
 
         if let Some(cooldown) = cooldown {
             player
                 .start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32)
                 .await;
         }
+
+        result
     }
 
     pub async fn use_on_entity(
@@ -138,5 +147,26 @@ impl ItemRegistry {
     #[must_use]
     pub fn get_pumpkin_item(&self, item: u16) -> Option<&Arc<dyn ItemBehaviour>> {
         self.items.get(&item)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_try_block_placement;
+    use crate::block::registry::BlockActionResult;
+
+    #[test]
+    fn block_placement_only_follows_pass() {
+        assert!(should_try_block_placement(&BlockActionResult::Pass));
+
+        for result in [
+            BlockActionResult::Success,
+            BlockActionResult::SuccessServer,
+            BlockActionResult::Consume,
+            BlockActionResult::Fail,
+            BlockActionResult::PassToDefaultBlockAction,
+        ] {
+            assert!(!should_try_block_placement(&result));
+        }
     }
 }

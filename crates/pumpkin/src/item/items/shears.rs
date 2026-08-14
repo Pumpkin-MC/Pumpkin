@@ -3,6 +3,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::item::ItemEntity;
@@ -62,20 +63,24 @@ impl ItemBehaviour for ShearsItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
             let state_id = world.get_block_state_id(&location);
 
             if handle_growing_plant(player, &location, block, state_id).await {
-                return;
+                return BlockActionResult::Success;
             }
 
             if handle_beehive(player, &location, block, state_id).await {
-                return;
+                return BlockActionResult::Success;
             }
 
-            handle_pumpkin(player, &location, block).await;
+            if handle_pumpkin(player, &location, block).await {
+                BlockActionResult::Success
+            } else {
+                BlockActionResult::Pass
+            }
         })
     }
 
@@ -218,29 +223,32 @@ async fn handle_beehive(
     false
 }
 
-async fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) {
-    if block.id == Block::PUMPKIN.id {
-        let world = player.world();
-        let carved_state = Block::CARVED_PUMPKIN.default_state.id;
-        world
-            .set_block_state(location, carved_state, BlockFlags::NOTIFY_ALL)
-            .await;
-        world.play_sound(
-            Sound::BlockPumpkinCarve,
-            SoundCategory::Blocks,
-            &location.to_f64(),
-        );
-
-        let drop_pos = Vector3::new(
-            f64::from(location.0.x) + 0.5,
-            f64::from(location.0.y) + 0.5,
-            f64::from(location.0.z) + 0.5,
-        );
-        let item_entity = Arc::new(ItemEntity::new(
-            Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
-            ItemStack::new(4, &Item::PUMPKIN_SEEDS),
-        ));
-        world.spawn_entity(item_entity).await;
-        player.damage_held_item(1).await;
+async fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) -> bool {
+    if block.id != Block::PUMPKIN.id {
+        return false;
     }
+
+    let world = player.world();
+    let carved_state = Block::CARVED_PUMPKIN.default_state.id;
+    world
+        .set_block_state(location, carved_state, BlockFlags::NOTIFY_ALL)
+        .await;
+    world.play_sound(
+        Sound::BlockPumpkinCarve,
+        SoundCategory::Blocks,
+        &location.to_f64(),
+    );
+
+    let drop_pos = Vector3::new(
+        f64::from(location.0.x) + 0.5,
+        f64::from(location.0.y) + 0.5,
+        f64::from(location.0.z) + 0.5,
+    );
+    let item_entity = Arc::new(ItemEntity::new(
+        Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+        ItemStack::new(4, &Item::PUMPKIN_SEEDS),
+    ));
+    world.spawn_entity(item_entity).await;
+    player.damage_held_item(1).await;
+    true
 }

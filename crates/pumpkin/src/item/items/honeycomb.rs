@@ -40,10 +40,14 @@ impl ItemBehaviour for HoneyCombItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
-            try_wax_block(&world, location, block).await;
+            if try_wax_block(&world, location, block).await {
+                BlockActionResult::Success
+            } else {
+                BlockActionResult::Pass
+            }
         })
     }
 

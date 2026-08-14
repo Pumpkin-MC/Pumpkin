@@ -2,6 +2,7 @@ use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -32,7 +33,7 @@ impl ItemBehaviour for BoneMealItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
             let state_id = world.get_block_state_id(&location);
@@ -81,7 +82,7 @@ impl ItemBehaviour for BoneMealItem {
                     &location.to_f64(),
                 );
                 item.decrement_unless_creative(player.gamemode.load(), 1);
-                return;
+                return BlockActionResult::Success;
             }
 
             // Compute sapling stage progression without holding Box<dyn BlockProperties> across await
@@ -111,7 +112,7 @@ impl ItemBehaviour for BoneMealItem {
                     &location.to_f64(),
                 );
                 item.decrement_unless_creative(player.gamemode.load(), 1);
-                return;
+                return BlockActionResult::Success;
             }
 
             // Handle Grass Block / Moss Block bone-mealing
@@ -162,7 +163,10 @@ impl ItemBehaviour for BoneMealItem {
                     &location.to_f64(),
                 );
                 item.decrement_unless_creative(player.gamemode.load(), 1);
+                return BlockActionResult::Success;
             }
+
+            BlockActionResult::Pass
         })
     }
 

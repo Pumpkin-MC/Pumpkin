@@ -6,6 +6,7 @@ use std::any::Any;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -39,8 +40,8 @@ pub trait ItemBehaviour: Send + Sync {
         _cursor_pos: Vector3<f32>,
         _block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {})
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
+        Box::pin(async { BlockActionResult::Pass })
     }
 
     fn use_on_entity<'a>(

@@ -3,6 +3,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
@@ -104,7 +105,7 @@ impl ItemBehaviour for BrushItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
             let is_sand = block == &Block::SUSPICIOUS_SAND;
@@ -183,6 +184,7 @@ impl ItemBehaviour for BrushItem {
                 .living_entity
                 .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION)
                 .await;
+            BlockActionResult::Success
         })
     }
 

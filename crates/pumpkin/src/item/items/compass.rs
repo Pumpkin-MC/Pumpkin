@@ -2,6 +2,7 @@ use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -32,7 +33,7 @@ impl ItemBehaviour for CompassItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             if block.id == Block::LODESTONE.id && item.item.id == Item::COMPASS.id {
                 let world = player.world();
@@ -61,6 +62,9 @@ impl ItemBehaviour for CompassItem {
                     .inventory
                     .offer_or_drop_stack(lodestone_compass, player)
                     .await;
+                BlockActionResult::Success
+            } else {
+                BlockActionResult::Pass
             }
         })
     }

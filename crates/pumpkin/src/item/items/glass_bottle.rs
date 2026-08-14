@@ -2,6 +2,7 @@ use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -31,7 +32,7 @@ impl ItemBehaviour for GlassBottleItem {
         _cursor_pos: Vector3<f32>,
         block: &'a Block,
         _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = BlockActionResult> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
 
@@ -97,6 +98,9 @@ impl ItemBehaviour for GlassBottleItem {
                     .inventory
                     .offer_or_drop_stack(water_bottle, player)
                     .await;
+                BlockActionResult::Success
+            } else {
+                BlockActionResult::Pass
             }
         })
     }
