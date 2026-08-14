@@ -204,13 +204,13 @@ impl ChunkGenerator for VanillaGenerator {
         self.random_config.seed
     }
 
-    fn generation_bounds(&self) -> (i32, i32) {
+    fn generation_bounds(&self) -> (u16, i8) {
         let dimension = self.dimension();
         let shape = self.settings().shape.trim_height(
             dimension.min_y as i8,
             (dimension.min_y + dimension.height) as u16,
         );
-        (shape.height.into(), shape.min_y.into())
+        (shape.height, shape.min_y)
     }
 
     fn default_block(&self) -> &'static BlockState {

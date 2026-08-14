@@ -19,8 +19,8 @@ pub trait ChunkGenerator: Send + Sync {
 
     fn seed(&self) -> u64;
 
-    fn generation_bounds(&self) -> (i32, i32) {
-        (self.dimension().height, self.dimension().min_y)
+    fn generation_bounds(&self) -> (u16, i8) {
+        (self.dimension().height as u16, self.dimension().min_y as i8)
     }
 
     fn default_block(&self) -> &'static BlockState {
