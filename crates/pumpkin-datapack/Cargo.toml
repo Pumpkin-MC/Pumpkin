@@ -10,6 +10,7 @@ description = "Minecraft datapack loading and management for Pumpkin"
 pumpkin-data.workspace = true
 pumpkin-protocol.workspace = true
 pumpkin-util.workspace = true
+pumpkin-registry.workspace = true
 
 serde.workspace = true
 serde_json.workspace = true
