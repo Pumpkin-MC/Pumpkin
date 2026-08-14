@@ -2,12 +2,13 @@ use crate::{BoxFuture, Registry, error::DataKeyGetError, value::DataKeyRef};
 use pumpkin_util::identifier::Identifier;
 use std::{
     any::type_name,
+    borrow::Cow,
     marker::PhantomData,
     sync::{Arc, OnceLock},
 };
 
 pub struct DataKey<T: Send + Sync + 'static> {
-    path: &'static str,
+    path: Cow<'static, str>,
     ids: OnceLock<Box<[usize]>>,
     marker: PhantomData<fn() -> T>,
 }
@@ -17,7 +18,16 @@ impl<T: Send + Sync + 'static> DataKey<T> {
     pub const fn new(path: &'static str) -> Self {
         // Ideally const-validate the path here.
         Self {
-            path,
+            path: Cow::Borrowed(path),
+            ids: OnceLock::new(),
+            marker: PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub fn owned(path: String) -> Self {
+        Self {
+            path: Cow::Owned(path),
             ids: OnceLock::new(),
             marker: PhantomData,
         }
@@ -30,7 +40,7 @@ impl<T: Send + Sync + 'static> DataKey<T> {
         let ids = if let Some(ids) = self.ids.get() {
             ids
         } else {
-            let ids = resolve_key_path(root, self.path).await?;
+            let ids = resolve_key_path(root, self.path.as_ref()).await?;
             // Another caller may have resolved it concurrently.
             let _ = self.ids.set(ids);
             // Either ours or the concurrently initialized value.
@@ -48,7 +58,7 @@ impl<T: Send + Sync + 'static> DataKey<T> {
         let ids = if let Some(ids) = self.ids.get() {
             ids
         } else {
-            let ids = resolve_key_path_blocking(root, self.path)?;
+            let ids = resolve_key_path_blocking(root, self.path.as_ref())?;
             // Another caller may have resolved it concurrently.
             let _ = self.ids.set(ids);
             // Either ours or the concurrently initialized value.
@@ -74,18 +84,18 @@ impl RegistryCursor<'_> {
     }
 }
 
-struct PathComponents {
-    remaining: &'static str,
+struct PathComponents<'a> {
+    remaining: &'a str,
 }
 
-impl PathComponents {
-    const fn new(path: &'static str) -> Self {
+impl<'a> PathComponents<'a> {
+    const fn new(path: &'a str) -> Self {
         Self { remaining: path }
     }
 }
 
-impl Iterator for PathComponents {
-    type Item = Identifier;
+impl Iterator for PathComponents<'_> {
+    type Item = Result<Identifier, ()>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.remaining.is_empty() {
@@ -99,13 +109,13 @@ impl Iterator for PathComponents {
 
         self.remaining = rest;
 
-        Some(Identifier::parse_static(current))
+        Some(Identifier::parse(current).map_err(|_| ()))
     }
 }
 
 fn resolve_key_path<'a>(
     root: &'a dyn Registry,
-    path: &'static str,
+    path: &'a str,
 ) -> BoxFuture<'a, Result<Box<[usize]>, DataKeyGetError>> {
     Box::pin(async move {
         let mut identifiers = PathComponents::new(path).peekable();
@@ -113,6 +123,7 @@ fn resolve_key_path<'a>(
         let mut current = RegistryCursor::Borrowed(root);
 
         while let Some(identifier) = identifiers.next() {
+            let identifier = identifier.map_err(|()| DataKeyGetError::InvalidKey)?;
             let registry = current.as_ref();
 
             let id = registry
@@ -246,13 +257,14 @@ where
 
 fn resolve_key_path_blocking(
     root: &dyn Registry,
-    path: &'static str,
+    path: &str,
 ) -> Result<Box<[usize]>, DataKeyGetError> {
     let mut identifiers = PathComponents::new(path).peekable();
     let mut ids = Vec::new();
     let mut current = RegistryCursor::Borrowed(root);
 
     while let Some(identifier) = identifiers.next() {
+        let identifier = identifier.map_err(|()| DataKeyGetError::InvalidKey)?;
         let registry = current.as_ref();
 
         let id = registry
