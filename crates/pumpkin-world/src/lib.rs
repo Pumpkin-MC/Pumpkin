@@ -62,21 +62,15 @@ pub fn bench_create_and_populate_noise(
     _terrain_cache: &TerrainCache,
     _default_block: &'static BlockState,
 ) {
-    use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+    use crate::generation::generator::VanillaGenerator;
     use crate::generation::noise::router::surface_height_sampler::{
         SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
     };
     use crate::generation::proto_chunk::StandardChunkFluidLevelSampler;
     use pumpkin_util::world_seed::Seed;
 
-    let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
-        Seed(random_config.seed),
-        Dimension::OVERWORLD,
-    )));
-    let WorldGenerator::Noise(generator) = &world_gen else {
-        unreachable!()
-    };
-    let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+    let generator = VanillaGenerator::new(Seed(random_config.seed), Dimension::OVERWORLD);
+    let mut chunk = ProtoChunk::new(0, 0, &generator);
 
     // Create noise sampler and other required components
     let settings = generator.settings();
@@ -129,8 +123,8 @@ pub fn bench_create_and_populate_noise(
         &surface_config,
     );
 
-    chunk.populate_noise(
-        generator,
+    generator.populate_noise(
+        &mut chunk,
         &mut noise_sampler,
         &generator.random_config.ore_random_deriver,
         &mut surface_height_estimate_sampler,
@@ -144,21 +138,15 @@ pub fn bench_create_and_populate_biome(
     _terrain_cache: &TerrainCache,
     _default_block: &'static BlockState,
 ) {
-    use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+    use crate::generation::generator::VanillaGenerator;
     use crate::generation::noise::router::multi_noise_sampler::{
         MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
     };
     use crate::generation::{biome_coords, positions::chunk_pos};
     use pumpkin_util::world_seed::Seed;
 
-    let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
-        Seed(random_config.seed),
-        Dimension::OVERWORLD,
-    )));
-    let WorldGenerator::Noise(generator) = &world_gen else {
-        unreachable!()
-    };
-    let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+    let generator = VanillaGenerator::new(Seed(random_config.seed), Dimension::OVERWORLD);
+    let mut chunk = ProtoChunk::new(0, 0, &generator);
 
     // Create multi-noise sampler
     let start_x = chunk_pos::start_block_x(0);
@@ -176,7 +164,7 @@ pub fn bench_create_and_populate_biome(
     let mut multi_noise_sampler =
         MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
 
-    chunk.populate_biomes(generator, &mut multi_noise_sampler);
+    generator.populate_biomes(&mut chunk, &mut multi_noise_sampler);
 }
 
 pub fn bench_create_and_populate_noise_with_surface(
@@ -186,7 +174,7 @@ pub fn bench_create_and_populate_noise_with_surface(
     _terrain_cache: &TerrainCache,
     _default_block: &'static BlockState,
 ) {
-    use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+    use crate::generation::generator::VanillaGenerator;
     use crate::generation::noise::router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
         surface_height_sampler::{
@@ -196,14 +184,8 @@ pub fn bench_create_and_populate_noise_with_surface(
     use crate::generation::proto_chunk::StandardChunkFluidLevelSampler;
     use pumpkin_util::world_seed::Seed;
 
-    let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
-        Seed(random_config.seed),
-        Dimension::OVERWORLD,
-    )));
-    let WorldGenerator::Noise(generator) = &world_gen else {
-        unreachable!()
-    };
-    let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+    let generator = VanillaGenerator::new(Seed(random_config.seed), Dimension::OVERWORLD);
+    let mut chunk = ProtoChunk::new(0, 0, &generator);
 
     // Create all required components
     let settings = generator.settings();
@@ -264,12 +246,12 @@ pub fn bench_create_and_populate_noise_with_surface(
         &surface_config,
     );
 
-    chunk.populate_biomes(generator, &mut multi_noise_sampler);
-    chunk.populate_noise(
-        generator,
+    generator.populate_biomes(&mut chunk, &mut multi_noise_sampler);
+    generator.populate_noise(
+        &mut chunk,
         &mut noise_sampler,
         &generator.random_config.ore_random_deriver,
         &mut surface_height_estimate_sampler,
     );
-    chunk.build_surface(generator, &mut surface_height_estimate_sampler);
+    generator.build_surface(&mut chunk, &mut surface_height_estimate_sampler);
 }

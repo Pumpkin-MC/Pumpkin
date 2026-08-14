@@ -5,7 +5,7 @@ use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_world::chunk_system::{StagedChunkEnum, generate_single_chunk};
-use pumpkin_world::generation::get_world_gen;
+use pumpkin_world::generation::{generator::ChunkGenerator, get_world_gen};
 use pumpkin_world::world::WorldPortalExt;
 use std::hint::black_box;
 use std::sync::Arc;
@@ -65,7 +65,7 @@ fn bench_concurrent_chunk_generation(c: &mut Criterion) {
         .build()
         .expect("Failed to build rayon thread pool");
 
-    let world_gen = Arc::new(get_world_gen(
+    let world_gen: Arc<dyn ChunkGenerator> = Arc::from(get_world_gen(
         SEED,
         Dimension::OVERWORLD,
         false,
@@ -98,7 +98,7 @@ fn bench_concurrent_chunk_generation(c: &mut Criterion) {
                                 black_box(generate_single_chunk(
                                     &Dimension::OVERWORLD,
                                     0,
-                                    &wg,
+                                    wg.as_ref(),
                                     br.as_ref(),
                                     cx,
                                     cz,

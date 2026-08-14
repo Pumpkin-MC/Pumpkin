@@ -5,6 +5,7 @@ pub mod blender;
 mod block_predicate;
 mod block_state_provider;
 pub mod carver;
+pub mod dimension_stem;
 pub mod feature;
 pub mod generator;
 pub mod height_limit;
@@ -17,7 +18,7 @@ pub mod rule;
 pub mod structure;
 mod surface;
 
-use generator::{GeneratorInit, VanillaGenerator};
+use generator::{ChunkGenerator, VanillaGenerator};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::{
     random::xoroshiro128::{Xoroshiro, XoroshiroSplitter},
@@ -29,17 +30,18 @@ pub fn get_world_gen(
     seed: Seed,
     dimension: Dimension,
     is_flat: bool,
-    flat_layers: Vec<generator::FlatLayer>,
+    flat_layers: Vec<generator::flat::FlatLayer>,
     flat_biome: String,
-) -> Box<generator::WorldGenerator> {
+) -> Box<dyn ChunkGenerator> {
     if is_flat {
-        Box::new(generator::WorldGenerator::Flat(Box::new(
-            generator::flat::FlatGenerator::new(seed, dimension, flat_layers, flat_biome),
-        )))
+        Box::new(generator::flat::FlatGenerator::new(
+            seed,
+            dimension,
+            flat_layers,
+            flat_biome,
+        ))
     } else {
-        Box::new(generator::WorldGenerator::Noise(Box::new(
-            VanillaGenerator::new(seed, dimension),
-        )))
+        Box::new(VanillaGenerator::new(seed, dimension))
     }
 }
 

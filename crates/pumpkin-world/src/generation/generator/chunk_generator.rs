@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
 use pumpkin_codecs::{DataResult, Decode, DynamicOps};
 use pumpkin_data::{Block, BlockState, dimension::Dimension};
 use pumpkin_nbt::{nbt_ops::NbtOps, tag::NbtTag};
-use pumpkin_util::world_seed::Seed;
+use pumpkin_registry::{Registry, RegistryBuilder, bootstrap::RegistryEntry, bootstrap_provider};
+use pumpkin_util::{identifier::Identifier, world_seed::Seed};
 
+use super::{flat::FlatGenerator, vanilla::VanillaGenerator};
 use crate::{ProtoChunk, chunk_system::generation_cache::Cache, world::WorldPortalExt};
 
 pub trait ChunkGenerator: Send + Sync {
@@ -37,6 +41,10 @@ pub trait ChunkGenerator: Send + Sync {
         chunk_index: usize,
         block_registry: &dyn WorldPortalExt,
     );
+
+    fn rebuild_structure_starts(&self, chunk: &mut ProtoChunk);
+
+    fn rebuild_structure_references(&self, chunk: &mut ProtoChunk);
 
     fn step_to_noise(&self, chunk: &mut ProtoChunk);
 
@@ -99,4 +107,27 @@ where
     T::Config::parse(input, &NbtOps)
         .flat_map(|config| T::from_config(seed, dimension, config))
         .map(|generator| Box::new(generator) as Box<dyn ChunkGenerator>)
+}
+
+bootstrap_provider! {
+    CHUNK_GENERATOR_TYPES: ChunkGeneratorType => "minecraft:worldgen/chunk_generator_type" => {
+        "minecraft:noise" => ChunkGeneratorType::new::<VanillaGenerator>(),
+        "minecraft:flat" => ChunkGeneratorType::new::<FlatGenerator>(),
+    }
+}
+
+bootstrap_provider! {
+    CHUNK_GENERATOR_TYPE_REGISTRY: Arc<dyn Registry> => "minecraft:worldgen",
+    || {
+        let Ok(registry) = RegistryBuilder::<ChunkGeneratorType>::frozen(
+            &Identifier::parse_static("minecraft:worldgen/chunk_generator_type"),
+        ) else {
+            return Vec::new();
+        };
+
+        vec![RegistryEntry::new(
+            Identifier::vanilla_static("chunk_generator_type"),
+            registry.arc_dyn(),
+        )]
+    }
 }

@@ -1,8 +1,48 @@
-use pumpkin_data::{Block, chunk::Biome, structures::{Structure, StructureKeys, StructurePlacementType, StructureSet, WeightedEntry}};
-use pumpkin_util::{math::{block_box::BlockBox, position::BlockPos, vector3::Vector3}, random::{RandomGenerator, RandomImpl as _, get_carver_seed, get_decorator_seed, xoroshiro128::{Xoroshiro, XoroshiroSplitter}}};
+use pumpkin_data::{
+    Block,
+    chunk::Biome,
+    structures::{Structure, StructureKeys, StructurePlacementType, StructureSet, WeightedEntry},
+};
+use pumpkin_util::{
+    math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
+    random::{
+        RandomGenerator, RandomImpl as _, get_carver_seed, get_decorator_seed,
+        xoroshiro128::{Xoroshiro, XoroshiroSplitter},
+    },
+};
 
-use crate::{GlobalRandomConfig, ProtoChunk, biome::BiomeSupplier as _, chunk_system::StagedChunkEnum, generation::{biome_coords, blender::{Blender, BlenderImpl as _}, feature::placed_features::PLACED_FEATURES, generator::VanillaGenerator, noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK, aquifer_sampler::FluidLevel, router::{multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions}, surface_height_sampler::{SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions}}}, positions::chunk_pos, proto_chunk::{GenerationCache, StandardChunkFluidLevelSampler}, section_coords, structure::{lazily_generate_structure, placement::{GlobalStructureCache, should_generate_structure}, structures::{StructureGeneratorContext, StructureInstance, create_chunk_random}, try_generate_structure}, surface::{MaterialRuleContext, estimate_surface_height, rule::try_apply_material_rule}}, world::WorldPortalExt};
-
+use crate::{
+    GlobalRandomConfig, ProtoChunk,
+    biome::BiomeSupplier as _,
+    chunk_system::StagedChunkEnum,
+    generation::{
+        biome_coords,
+        blender::{Blender, BlenderImpl as _},
+        feature::placed_features::PLACED_FEATURES,
+        generator::VanillaGenerator,
+        noise::{
+            CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK,
+            aquifer_sampler::FluidLevel,
+            router::{
+                multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+                surface_height_sampler::{
+                    SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
+                },
+            },
+        },
+        positions::chunk_pos,
+        proto_chunk::{GenerationCache, StandardChunkFluidLevelSampler},
+        section_coords,
+        structure::{
+            lazily_generate_structure,
+            placement::{GlobalStructureCache, should_generate_structure},
+            structures::{StructureGeneratorContext, StructureInstance, create_chunk_random},
+            try_generate_structure,
+        },
+        surface::{MaterialRuleContext, estimate_surface_height, rule::try_apply_material_rule},
+    },
+    world::WorldPortalExt,
+};
 
 impl VanillaGenerator {
     pub fn step_to_biomes(&self, chunk: &mut ProtoChunk) {
@@ -73,7 +113,7 @@ impl VanillaGenerator {
 
             let collector = match instance {
                 StructureInstance::Start(pos) => &pos.collector,
-                StructureInstance::Reference(collector) => &collector,
+                StructureInstance::Reference(collector) => collector,
             };
 
             let collector = collector
@@ -231,7 +271,7 @@ impl VanillaGenerator {
     }
 
     pub fn populate_biomes(
-        &self, 
+        &self,
         chunk: &mut ProtoChunk,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
@@ -239,7 +279,8 @@ impl VanillaGenerator {
         let biome_supplier = blender.get_biome_supplier(self.biome_source.as_ref());
         let min_y = chunk.bottom_y();
         let bottom_section = section_coords::block_to_section(min_y as i32);
-        let top_section = section_coords::block_to_section(min_y as i32 + chunk.height() as i32 - 1);
+        let top_section =
+            section_coords::block_to_section(min_y as i32 + chunk.height() as i32 - 1);
 
         let start_block_x = chunk.start_block_x();
         let start_block_z = chunk.start_block_z();
@@ -276,7 +317,7 @@ impl VanillaGenerator {
 
     #[expect(clippy::similar_names)]
     pub fn populate_noise(
-        &self, 
+        &self,
         chunk: &mut ProtoChunk,
         noise_sampler: &mut ChunkNoiseGenerator,
         ore_random_deriver: &XoroshiroSplitter,
@@ -341,7 +382,7 @@ impl VanillaGenerator {
     }
     #[expect(clippy::too_many_lines)]
     pub fn build_surface(
-        &self, 
+        &self,
         chunk: &mut ProtoChunk,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) {
@@ -468,7 +509,7 @@ impl VanillaGenerator {
             }
         }
     }
-    
+
     pub fn generate_features_and_structure<T: GenerationCache>(
         cache: &mut T,
         block_registry: &dyn WorldPortalExt,
@@ -544,10 +585,7 @@ impl VanillaGenerator {
         cache.get_center_chunk_mut().stage = StagedChunkEnum::Features;
     }
 
-    pub fn set_structure_starts(
-        &self,
-        chunk: &mut ProtoChunk,
-    ) {
+    pub fn set_structure_starts(&self, chunk: &mut ProtoChunk) {
         debug_assert_eq!(chunk.stage, StagedChunkEnum::Biomes);
         let random_config = &self.random_config;
         let settings = self.settings();
@@ -639,8 +677,7 @@ impl VanillaGenerator {
     ) -> bool {
         if entry.structure == StructureKeys::Monument {
             let config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
-            let mut sampler =
-                MultiNoiseSampler::generate(&self.base_router.multi_noise, &config);
+            let mut sampler = MultiNoiseSampler::generate(&self.base_router.multi_noise, &config);
             let center_x = chunk_pos::get_center_x(chunk.x);
             let center_z = chunk_pos::get_center_z(chunk.z);
             let start_y = height_sampler.estimate_ocean_floor_height(center_x, center_z);
@@ -672,7 +709,8 @@ impl VanillaGenerator {
             });
 
         if let Some(pos) = position {
-            chunk.structure_starts
+            chunk
+                .structure_starts
                 .insert(entry.structure, StructureInstance::Start(pos));
             return true;
         }
@@ -680,10 +718,7 @@ impl VanillaGenerator {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub fn set_structure_references(
-        &self,
-        chunk: &mut ProtoChunk,
-    ) {
+    pub fn set_structure_references(&self, chunk: &mut ProtoChunk) {
         debug_assert_eq!(chunk.stage, StagedChunkEnum::StructureStart);
         let random_config = &self.random_config;
         let settings = self.settings();
@@ -818,7 +853,8 @@ impl VanillaGenerator {
         }
 
         for (key, pos) in references {
-            chunk.structure_starts
+            chunk
+                .structure_starts
                 .entry(key)
                 .or_insert_with(|| StructureInstance::Reference(pos));
         }

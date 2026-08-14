@@ -1,7 +1,7 @@
 use crate::chunk::format::linear::LinearV2File;
 use crate::chunk::format::pump::PumpFile;
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
-use crate::generation::generator::WorldGenerator;
+use crate::generation::generator::ChunkGenerator;
 use crate::lighting::DynamicLightEngine;
 use crate::{
     chunk::{
@@ -65,9 +65,9 @@ pub type EntitySaver = LevelFileIO<
 ///
 /// - **Chunk Loading:** Efficiently loads chunks from disk.
 /// - **Chunk Caching:** Stores accessed chunks in memory for faster access.
-/// - **Chunk Generation:** Generates new chunks on-demand using a specified `WorldGenerator`.
+/// - **Chunk Generation:** Generates new chunks on-demand using a registered `ChunkGenerator`.
 ///
-/// For more details on world generation, refer to the `WorldGenerator` module.
+/// World generation is dispatched through the `ChunkGenerator` trait.
 pub struct Level {
     pub seed: Seed,
     pub world_portal: ArcSwap<Option<Arc<dyn WorldPortalExt>>>,
@@ -89,7 +89,7 @@ pub struct Level {
     pub chunk_saver: Arc<ChunkSaver>,
     entity_saver: Arc<EntitySaver>,
 
-    pub world_gen: Arc<WorldGenerator>,
+    pub world_gen: Arc<dyn ChunkGenerator>,
 
     /// Handles runtime lighting updates
     pub light_engine: DynamicLightEngine,
@@ -213,14 +213,15 @@ impl Level {
                             .get("height")
                             .and_then(serde_json::Value::as_i64)
                             .unwrap_or(1) as i32;
-                        flat_layers.push(crate::generation::generator::FlatLayer { block, height });
+                        flat_layers
+                            .push(crate::generation::generator::flat::FlatLayer { block, height });
                     }
                 }
             }
         }
 
         let seed = Seed(seed as u64);
-        let world_gen: Arc<WorldGenerator> = Arc::from(get_world_gen(
+        let world_gen: Arc<dyn ChunkGenerator> = Arc::from(get_world_gen(
             seed,
             dimension,
             is_flat,

@@ -64,7 +64,7 @@ fn bench_chunk_deserialization(c: &mut Criterion) {
     let chunk = generate_single_chunk(
         &dimension,
         0,
-        &world_gen,
+        world_gen.as_ref(),
         &BlockRegistry,
         0,
         0,

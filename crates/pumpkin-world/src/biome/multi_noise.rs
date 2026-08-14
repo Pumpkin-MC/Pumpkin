@@ -39,7 +39,7 @@ mod test {
 
     #[test]
     fn sample_value() {
-        use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+        use crate::generation::generator::VanillaGenerator;
         use crate::generation::noise::router::multi_noise_sampler::{
             MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
         };
@@ -54,16 +54,9 @@ mod test {
         let chunk_x = 0;
         let chunk_z = 0;
 
-        let generator = Box::new(VanillaGenerator::new(
-            Seed(seed as u64),
-            Dimension::OVERWORLD,
-        ));
-        let world_gen = WorldGenerator::Noise(generator);
-        let WorldGenerator::Noise(generator) = &world_gen else {
-            unreachable!()
-        };
+        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
 
-        let _chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+        let _chunk = ProtoChunk::new(chunk_x, chunk_z, &generator);
 
         let start_x = chunk_pos::start_block_x(chunk_x);
         let start_z = chunk_pos::start_block_z(chunk_z);
@@ -89,7 +82,7 @@ mod test {
 
     // #[test]
     // fn sample_multinoise_biome() {
-    //     use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+    //     use crate::generation::generator::VanillaGenerator;
     //     use pumpkin_util::world_seed::Seed;
 
     //     let expected_data: Vec<(i32, i32, i32, u8)> =

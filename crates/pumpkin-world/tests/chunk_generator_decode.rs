@@ -13,9 +13,12 @@ use pumpkin_util::identifier::Identifier;
 use pumpkin_world::{
     ProtoChunk,
     chunk_system::generation_cache::Cache,
-    generation::generator::{
-        ChunkGenerator, ChunkGeneratorDecode, ChunkGeneratorType, VanillaGenerator,
-        flat::{FlatGenerator as RuntimeFlatGenerator, FlatGeneratorConfig},
+    generation::{
+        dimension_stem::DimensionStem,
+        generator::{
+            ChunkGenerator, ChunkGeneratorDecode, ChunkGeneratorType, VanillaGenerator,
+            flat::{FlatGenerator as RuntimeFlatGenerator, FlatGeneratorConfig},
+        },
     },
     world::WorldPortalExt,
 };
@@ -51,6 +54,10 @@ impl ChunkGenerator for NoiseGenerator {
         _block_registry: &dyn WorldPortalExt,
     ) {
     }
+
+    fn rebuild_structure_starts(&self, _chunk: &mut ProtoChunk) {}
+
+    fn rebuild_structure_references(&self, _chunk: &mut ProtoChunk) {}
 
     fn step_to_noise(&self, _chunk: &mut ProtoChunk) {}
 
@@ -112,6 +119,10 @@ impl ChunkGenerator for FlatGenerator {
     ) {
     }
 
+    fn rebuild_structure_starts(&self, _chunk: &mut ProtoChunk) {}
+
+    fn rebuild_structure_references(&self, _chunk: &mut ProtoChunk) {}
+
     fn step_to_noise(&self, _chunk: &mut ProtoChunk) {}
 
     fn step_to_surface(&self, _chunk: &mut ProtoChunk) {}
@@ -146,6 +157,74 @@ fn init_registries() {
     ROOT.get_or_init(|| {
         RegistryBuilder::<Arc<dyn Registry>>::frozen(&Identifier::vanilla_static("root")).unwrap()
     });
+}
+
+#[test]
+fn builtin_generator_type_resolves_from_registry() {
+    init_registries();
+
+    let root = ROOT.get().unwrap();
+    let generator_type = DataKey::<ChunkGeneratorType>::new(
+        "minecraft:worldgen/minecraft:chunk_generator_type/minecraft:noise",
+    )
+    .get_blocking(root)
+    .unwrap();
+
+    let generator = generator_type
+        .decode(
+            json!({
+                "settings": "minecraft:overworld",
+                "biome_source": {
+                    "type": "minecraft:multi_noise",
+                    "preset": "minecraft:overworld"
+                }
+            }),
+            &JsonOps,
+            Seed(1234),
+            Dimension::OVERWORLD,
+        )
+        .into_result()
+        .unwrap();
+
+    assert_eq!(generator.seed(), 1234);
+}
+
+#[test]
+fn dimension_stem_resolves_registry_backed_generator() {
+    init_registries();
+
+    let stem = DimensionStem::parse(
+        json!({
+            "type": "minecraft:overworld",
+            "generator": {
+                "type": "minecraft:noise",
+                "settings": "minecraft:amplified",
+                "biome_source": {
+                    "type": "minecraft:multi_noise",
+                    "preset": "minecraft:overworld"
+                }
+            }
+        }),
+        &JsonOps,
+    )
+    .into_result()
+    .unwrap();
+
+    let root = ROOT.get().unwrap();
+    let dimension = stem.dimension_type.get_blocking(root).unwrap();
+    let generator_type = stem.generator.generator_type.get_blocking(root).unwrap();
+    let generator = generator_type
+        .decode(
+            stem.generator.input,
+            &NbtOps,
+            Seed(1234),
+            (*dimension).clone(),
+        )
+        .into_result()
+        .unwrap();
+
+    assert_eq!(generator.seed(), 1234);
+    assert_eq!(generator.dimension().minecraft_name, "minecraft:overworld");
 }
 
 #[test]

@@ -1,7 +1,6 @@
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use crate::ProtoChunk;
 use crate::chunk::ChunkHeightmapType;
-use crate::generation::generator;
 use crate::generation::generator::ChunkGenerator;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
@@ -351,7 +350,7 @@ impl Cache {
     pub fn advance_all(
         &mut self,
         stage: StagedChunkEnum,
-        generator: &generator::WorldGenerator,
+        generator: &dyn ChunkGenerator,
         block_registry: &dyn WorldPortalExt,
         lighting_config: &LightingEngineConfig,
     ) {
@@ -364,7 +363,7 @@ impl Cache {
         &mut self,
         index: usize,
         stage: StagedChunkEnum,
-        generator: &generator::WorldGenerator,
+        generator: &dyn ChunkGenerator,
         block_registry: &dyn WorldPortalExt,
         _lighting_config: &LightingEngineConfig,
     ) {
@@ -375,30 +374,15 @@ impl Cache {
         }
         match stage {
             StagedChunkEnum::Empty => panic!("empty stage"),
-            StagedChunkEnum::StructureStart => match generator {
-                generator::WorldGenerator::Noise(noise_gen) => {
-                    noise_gen.step_to_structure_start(self, index, block_registry);
-                }
-                generator::WorldGenerator::Flat(flat_gen) => {
-                    flat_gen.step_to_structure_start(self, index, block_registry);
-                }
-            },
-            StagedChunkEnum::StructureReferences => match generator {
-                generator::WorldGenerator::Noise(noise_gen) => {
-                    noise_gen.step_to_structure_references(self, index, block_registry);
-                }
-                generator::WorldGenerator::Flat(flat_gen) => {
-                    flat_gen.step_to_structure_references(self, index, block_registry);
-                }
-            },
-            StagedChunkEnum::Biomes => match generator {
-                generator::WorldGenerator::Noise(noise_gen) => {
-                    noise_gen.step_to_biomes(self.chunks[index].get_proto_chunk_mut());
-                }
-                generator::WorldGenerator::Flat(flat_gen) => {
-                    flat_gen.step_to_biomes(self.chunks[index].get_proto_chunk_mut());
-                }
-            },
+            StagedChunkEnum::StructureStart => {
+                generator.step_to_structure_start(self, index, block_registry);
+            }
+            StagedChunkEnum::StructureReferences => {
+                generator.step_to_structure_references(self, index, block_registry);
+            }
+            StagedChunkEnum::Biomes => {
+                generator.step_to_biomes(self.chunks[index].get_proto_chunk_mut());
+            }
             _ => {}
         }
     }
@@ -415,7 +399,7 @@ impl Cache {
     pub fn advance(
         &mut self,
         stage: StagedChunkEnum,
-        generator: &generator::WorldGenerator,
+        generator: &dyn ChunkGenerator,
         block_registry: &dyn WorldPortalExt,
         lighting_config: &LightingEngineConfig,
     ) {
@@ -427,62 +411,27 @@ impl Cache {
         }
         match stage {
             StagedChunkEnum::Empty => panic!("empty stage"),
-            StagedChunkEnum::StructureStart => match generator {
-                generator::WorldGenerator::Noise(noise_gen) => {
-                    noise_gen.step_to_structure_start(self, mid, block_registry);
-                }
-                generator::WorldGenerator::Flat(flat_gen) => {
-                    flat_gen.step_to_structure_start(self, mid, block_registry);
-                }
-            },
-            StagedChunkEnum::StructureReferences => match generator {
-                generator::WorldGenerator::Noise(noise_gen) => {
-                    noise_gen.step_to_structure_references(self, mid, block_registry);
-                }
-                generator::WorldGenerator::Flat(flat_gen) => {
-                    flat_gen.step_to_structure_references(self, mid, block_registry);
-                }
-            },
-            StagedChunkEnum::Biomes => match generator {
-                generator::WorldGenerator::Noise(noise_gen) => {
-                    noise_gen.step_to_biomes(self.chunks[mid].get_proto_chunk_mut());
-                }
-                generator::WorldGenerator::Flat(flat_gen) => {
-                    flat_gen.step_to_biomes(self.chunks[mid].get_proto_chunk_mut());
-                }
-            },
-            StagedChunkEnum::Noise => match generator {
-                generator::WorldGenerator::Noise(noise_gen) => {
-                    noise_gen.step_to_noise(self.chunks[mid].get_proto_chunk_mut());
-                }
-                generator::WorldGenerator::Flat(flat_gen) => {
-                    flat_gen.step_to_noise(self.chunks[mid].get_proto_chunk_mut());
-                }
-            },
-            StagedChunkEnum::Surface => match generator {
-                generator::WorldGenerator::Noise(noise_gen) => {
-                    noise_gen.step_to_surface(self.chunks[mid].get_proto_chunk_mut());
-                }
-                generator::WorldGenerator::Flat(flat_gen) => {
-                    flat_gen.step_to_surface(self.chunks[mid].get_proto_chunk_mut());
-                }
-            },
-            StagedChunkEnum::Carvers => match generator {
-                generator::WorldGenerator::Noise(noise_gen) => {
-                    noise_gen.step_to_carvers(self.chunks[mid].get_proto_chunk_mut());
-                }
-                generator::WorldGenerator::Flat(flat_gen) => {
-                    flat_gen.step_to_carvers(self.chunks[mid].get_proto_chunk_mut());
-                }
-            },
-            StagedChunkEnum::Features => match generator {
-                generator::WorldGenerator::Noise(noise_gen) => {
-                    noise_gen.step_to_features(self, mid, block_registry);
-                }
-                generator::WorldGenerator::Flat(flat_gen) => {
-                    flat_gen.step_to_features(self, mid, block_registry);
-                }
-            },
+            StagedChunkEnum::StructureStart => {
+                generator.step_to_structure_start(self, mid, block_registry);
+            }
+            StagedChunkEnum::StructureReferences => {
+                generator.step_to_structure_references(self, mid, block_registry);
+            }
+            StagedChunkEnum::Biomes => {
+                generator.step_to_biomes(self.chunks[mid].get_proto_chunk_mut());
+            }
+            StagedChunkEnum::Noise => {
+                generator.step_to_noise(self.chunks[mid].get_proto_chunk_mut());
+            }
+            StagedChunkEnum::Surface => {
+                generator.step_to_surface(self.chunks[mid].get_proto_chunk_mut());
+            }
+            StagedChunkEnum::Carvers => {
+                generator.step_to_carvers(self.chunks[mid].get_proto_chunk_mut());
+            }
+            StagedChunkEnum::Features => {
+                generator.step_to_features(self, mid, block_registry);
+            }
             StagedChunkEnum::Lighting => {
                 let mut engine = crate::lighting::LightEngine::new();
                 engine.initialize_light(self, lighting_config);

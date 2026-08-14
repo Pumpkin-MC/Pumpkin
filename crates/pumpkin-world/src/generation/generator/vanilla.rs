@@ -10,7 +10,7 @@ use pumpkin_util::world_seed::Seed;
 use rustc_hash::FxHashMap;
 use std::ops::Deref;
 
-use super::{ChunkGenerator, ChunkGeneratorDecode, GeneratorInit, NoiseGeneratorConfig};
+use super::{ChunkGenerator, ChunkGeneratorDecode, NoiseGeneratorConfig};
 use crate::{
     ProtoChunk,
     biome::BiomeSupplier,
@@ -140,10 +140,9 @@ impl VanillaGenerator {
             .expect("VanillaGenerator noise settings were resolved during construction");
         GenerationSettingsRef::Registry(settings)
     }
-}
 
-impl GeneratorInit for VanillaGenerator {
-    fn new(seed: Seed, dimension: Dimension) -> Self {
+    #[must_use]
+    pub fn new(seed: Seed, dimension: Dimension) -> Self {
         let (name, settings, biome_source): (
             &'static str,
             &'static GenerationSettings,
@@ -226,8 +225,7 @@ impl ChunkGenerator for VanillaGenerator {
         chunk_index: usize,
         _block_registry: &dyn WorldPortalExt,
     ) {
-        let chunk = cache.chunks[chunk_index]
-            .get_proto_chunk_mut();
+        let chunk = cache.chunks[chunk_index].get_proto_chunk_mut();
         self.set_structure_starts(chunk);
     }
 
@@ -237,8 +235,15 @@ impl ChunkGenerator for VanillaGenerator {
         chunk_index: usize,
         _block_registry: &dyn WorldPortalExt,
     ) {
-        let chunk = cache.chunks[chunk_index]
-            .get_proto_chunk_mut();
+        let chunk = cache.chunks[chunk_index].get_proto_chunk_mut();
+        self.set_structure_references(chunk);
+    }
+
+    fn rebuild_structure_starts(&self, chunk: &mut ProtoChunk) {
+        self.set_structure_starts(chunk);
+    }
+
+    fn rebuild_structure_references(&self, chunk: &mut ProtoChunk) {
         self.set_structure_references(chunk);
     }
 

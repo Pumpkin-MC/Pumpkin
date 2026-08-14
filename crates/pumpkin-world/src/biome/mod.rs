@@ -69,7 +69,7 @@ mod test {
 
     #[test]
     fn biome_desert() {
-        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+        use crate::generation::generator::VanillaGenerator;
         use pumpkin_util::world_seed::Seed;
         let seed = 13579;
         let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
@@ -82,7 +82,7 @@ mod test {
 
     #[test]
     fn wide_area_surface() {
-        use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+        use crate::generation::generator::VanillaGenerator;
         use crate::generation::noise::router::multi_noise_sampler::{
             MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
         };
@@ -99,19 +99,13 @@ mod test {
             read_data_from_file!("../../../../assets/tests/biome_no_blend_no_beard_0.json");
 
         let seed = 0;
-        let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
-            Seed(seed as u64),
-            Dimension::OVERWORLD,
-        )));
-        let WorldGenerator::Noise(generator) = &world_gen else {
-            unreachable!()
-        };
+        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
 
         for data in expected_data {
             let chunk_x = data.x;
             let chunk_z = data.z;
 
-            let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+            let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &generator);
 
             // Create MultiNoiseSampler for populate_biomes
 
@@ -129,7 +123,7 @@ mod test {
                 &multi_noise_config,
             );
 
-            chunk.populate_biomes(generator, &mut multi_noise_sampler);
+            generator.populate_biomes(&mut chunk, &mut multi_noise_sampler);
 
             for (biome_x, biome_y, biome_z, biome_id) in data.data {
                 let calculated_biome = chunk.get_biome(biome_x, biome_y, biome_z);

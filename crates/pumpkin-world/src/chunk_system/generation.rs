@@ -1,7 +1,6 @@
 use pumpkin_data::dimension::Dimension;
 
 use crate::ProtoChunk;
-use crate::generation::generator::WorldGenerator;
 use crate::world::WorldPortalExt;
 use pumpkin_config::lighting::LightingEngineConfig;
 
@@ -10,7 +9,7 @@ use super::{Cache, Chunk, StagedChunkEnum};
 pub fn generate_single_chunk(
     dimension: &Dimension,
     biome_mixer_seed: i64,
-    generator: &WorldGenerator,
+    generator: &dyn crate::generation::generator::ChunkGenerator,
     block_registry: &dyn WorldPortalExt,
     chunk_x: i32,
     chunk_z: i32,
@@ -32,7 +31,7 @@ pub fn generate_single_chunk(
 pub fn generate_single_chunk_with_radius(
     _dimension: &Dimension,
     _biome_mixer_seed: i64,
-    generator: &WorldGenerator,
+    generator: &dyn crate::generation::generator::ChunkGenerator,
     block_registry: &dyn WorldPortalExt,
     chunk_x: i32,
     chunk_z: i32,
@@ -172,7 +171,7 @@ mod tests {
             let chunk = generate_single_chunk(
                 &dimension,
                 biome_mixer_seed,
-                &world_gen,
+                world_gen.as_ref(),
                 block_registry.as_ref(),
                 0,
                 0,
@@ -207,7 +206,7 @@ mod tests {
         let chunk = generate_single_chunk(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             0,
             0,
@@ -245,7 +244,7 @@ mod tests {
         let chunk = generate_single_chunk(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             31,
             -12,
@@ -298,7 +297,7 @@ mod tests {
         let chunk = generate_single_chunk_with_radius(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             73,
             -82,
@@ -350,7 +349,7 @@ mod tests {
         let chunk = generate_single_chunk_with_radius(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             -306,
             -275,
@@ -404,7 +403,7 @@ mod tests {
         let chunk = generate_single_chunk(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             73,
             -82,
@@ -422,7 +421,7 @@ mod tests {
         let cage_chunk = generate_single_chunk(
             &dimension,
             biome_mixer_seed,
-            &world_gen,
+            world_gen.as_ref(),
             block_registry.as_ref(),
             73,
             -84,

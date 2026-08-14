@@ -616,7 +616,7 @@ mod tests {
 
             for chunk_x in bounds.min.x.div_euclid(16)..=bounds.max.x.div_euclid(16) {
                 for chunk_z in bounds.min.z.div_euclid(16)..=bounds.max.z.div_euclid(16) {
-                    let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+                    let mut chunk = ProtoChunk::new(chunk_x, chunk_z, world_gen.as_ref());
                     let chunk_box = BlockBox::new(
                         start_block_x(chunk_x),
                         chunk.bottom_y() as i32,

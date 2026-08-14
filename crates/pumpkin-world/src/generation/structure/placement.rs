@@ -403,7 +403,7 @@ mod tests {
             Vec::new(),
             String::new(),
         );
-        let chunk = ProtoChunk::new(0, 0, &generator);
+        let chunk = ProtoChunk::new(0, 0, generator.as_ref());
         let outposts = &StructureSet::PILLAGER_OUTPOSTS;
         let villages = &StructureSet::VILLAGES;
         let excluded = (-1002, -595);

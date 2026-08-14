@@ -9,13 +9,15 @@ use pumpkin_data::{
 };
 
 use pumpkin_registry::{DataKey, ROOT};
-use pumpkin_util::random::{RandomGenerator, RandomImpl as _, get_carver_seed};
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomGenerator, RandomImpl as _, get_carver_seed};
 
-use super::{ChunkGenerator, ChunkGeneratorDecode, FlatLayer};
+use super::{ChunkGenerator, ChunkGeneratorDecode};
 use crate::generation::positions::chunk_pos;
 use crate::generation::structure::placement::should_generate_structure;
-use crate::generation::structure::structures::{StructureGeneratorContext, StructureInstance, create_chunk_random};
+use crate::generation::structure::structures::{
+    StructureGeneratorContext, StructureInstance, create_chunk_random,
+};
 use crate::generation::structure::{generate_structure_position, try_generate_structure};
 use crate::{
     ProtoChunk,
@@ -27,6 +29,12 @@ use crate::{
     },
     world::WorldPortalExt,
 };
+
+#[derive(Clone, Debug)]
+pub struct FlatLayer {
+    pub block: String,
+    pub height: i32,
+}
 
 pub struct FlatGeneratorConfig {
     pub biome: String,
@@ -193,11 +201,8 @@ impl FlatGenerator {
     pub const fn step_to_carvers(&self, chunk: &mut ProtoChunk) {
         chunk.stage = StagedChunkEnum::Carvers;
     }
-    
-    pub fn set_flat_structure_starts(
-        &self,
-        chunk: &mut ProtoChunk,
-    ) {
+
+    pub fn set_flat_structure_starts(&self, chunk: &mut ProtoChunk) {
         debug_assert_eq!(chunk.stage, StagedChunkEnum::Biomes);
 
         let global_cache = &self.global_structure_cache;
@@ -267,7 +272,8 @@ impl FlatGenerator {
                 );
 
                 if let Some(position) = position {
-                    chunk.structure_starts
+                    chunk
+                        .structure_starts
                         .insert(entry.structure, StructureInstance::Start(position));
                     break;
                 }
@@ -281,10 +287,7 @@ impl FlatGenerator {
     }
 
     #[expect(clippy::too_many_lines)]
-    pub fn set_flat_structure_references(
-        &self,
-        chunk: &mut ProtoChunk,
-    ) {
+    pub fn set_flat_structure_references(&self, chunk: &mut ProtoChunk) {
         debug_assert_eq!(chunk.stage, StagedChunkEnum::StructureStart);
 
         let global_cache = &self.global_structure_cache;
@@ -296,10 +299,7 @@ impl FlatGenerator {
         let seed = self.seed as i64;
         let chunk_min_y = chunk.bottom_y() as i32;
         let flat_biome = pumpkin_data::chunk::Biome::from_name(
-            self
-                .biome
-                .strip_prefix("minecraft:")
-                .unwrap_or(&self.biome),
+            self.biome.strip_prefix("minecraft:").unwrap_or(&self.biome),
         )
         .unwrap_or(&pumpkin_data::chunk::Biome::PLAINS);
 
@@ -420,15 +420,14 @@ impl FlatGenerator {
         }
 
         for (key, collector) in references {
-            chunk.structure_starts
+            chunk
+                .structure_starts
                 .entry(key)
                 .or_insert_with(|| StructureInstance::Reference(collector));
         }
 
         chunk.stage = StagedChunkEnum::StructureReferences;
     }
-
-
 }
 
 impl ChunkGeneratorDecode for FlatGenerator {
@@ -475,8 +474,7 @@ impl ChunkGenerator for FlatGenerator {
         chunk_index: usize,
         _block_registry: &dyn WorldPortalExt,
     ) {
-        let chunk = cache.chunks[chunk_index]
-            .get_proto_chunk_mut();
+        let chunk = cache.chunks[chunk_index].get_proto_chunk_mut();
         self.set_flat_structure_starts(chunk);
     }
 
@@ -486,8 +484,15 @@ impl ChunkGenerator for FlatGenerator {
         chunk_index: usize,
         _block_registry: &dyn WorldPortalExt,
     ) {
-        let chunk = cache.chunks[chunk_index]
-            .get_proto_chunk_mut();
+        let chunk = cache.chunks[chunk_index].get_proto_chunk_mut();
+        self.set_flat_structure_references(chunk);
+    }
+
+    fn rebuild_structure_starts(&self, chunk: &mut ProtoChunk) {
+        self.set_flat_structure_starts(chunk);
+    }
+
+    fn rebuild_structure_references(&self, chunk: &mut ProtoChunk) {
         self.set_flat_structure_references(chunk);
     }
 

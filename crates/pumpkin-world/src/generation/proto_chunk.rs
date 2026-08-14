@@ -3,9 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 use pumpkin_data::fluid::{Fluid, FluidState};
-use pumpkin_data::structures::{
-    Structure, StructureKeys, StructureSet,
-};
+use pumpkin_data::structures::{Structure, StructureKeys, StructureSet};
 use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::{Block, BlockState, block_properties::blocks_movement, chunk::Biome};
 use pumpkin_data::{BlockId, BlockStateId, tag};
@@ -18,7 +16,7 @@ use rustc_hash::FxHashMap;
 
 use super::{
     GlobalRandomConfig, biome_coords,
-    noise::router:: proto_noise_router::DoublePerlinNoiseBuilder,
+    noise::router::proto_noise_router::DoublePerlinNoiseBuilder,
     positions::chunk_pos::{start_block_x, start_block_z},
     surface::terrain::SurfaceTerrainBuilder,
 };
@@ -26,9 +24,9 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::StagedChunkEnum;
 use crate::generation::height_limit::HeightLimitView;
+use crate::generation::noise::CHUNK_DIM;
 use crate::generation::noise::aquifer_sampler::{FluidLevel, FluidLevelSamplerImpl};
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
-use crate::generation::noise::CHUNK_DIM;
 use crate::generation::section_coords::section_to_block;
 use crate::generation::structure::structures::StructureInstance;
 use crate::{
@@ -161,8 +159,7 @@ impl ProtoChunk {
     }
 
     #[must_use]
-    pub fn new(x: i32, z: i32, generator: &super::generator::WorldGenerator) -> Self {
-        let generator = generator.as_generator();
+    pub fn new(x: i32, z: i32, generator: &dyn super::generator::ChunkGenerator) -> Self {
         let dimension = generator.dimension();
         let height = dimension.height as u16;
         let bottom_y = dimension.min_y as i8;
@@ -218,7 +215,7 @@ impl ProtoChunk {
     #[must_use]
     pub fn from_chunk_data(
         chunk_data: &ChunkData,
-        generator: &super::generator::WorldGenerator,
+        generator: &dyn super::generator::ChunkGenerator,
     ) -> Self {
         let mut proto_chunk = Self::new(chunk_data.x, chunk_data.z, generator);
 
@@ -312,16 +309,14 @@ impl ProtoChunk {
 
         let saved_stage = StagedChunkEnum::from(chunk_data.status);
         proto_chunk.stage = saved_stage;
-        if let super::generator::WorldGenerator::Noise(generator) = generator
-            && (StagedChunkEnum::StructureStart..StagedChunkEnum::Features).contains(&saved_stage)
-        {
+        if (StagedChunkEnum::StructureStart..StagedChunkEnum::Features).contains(&saved_stage) {
             // Structure starts and references are currently transient proto-chunk data.
             // Rebuild them when resuming a partially generated chunk so structures that
             // cross chunk boundaries are not truncated at the unload boundary.
             proto_chunk.stage = StagedChunkEnum::Biomes;
-            proto_chunk.set_structure_starts(generator);
+            generator.rebuild_structure_starts(&mut proto_chunk);
             if saved_stage >= StagedChunkEnum::StructureReferences {
-                proto_chunk.set_structure_references(generator);
+                generator.rebuild_structure_references(&mut proto_chunk);
             }
             proto_chunk.stage = saved_stage;
         }
@@ -710,18 +705,22 @@ impl ProtoChunk {
         allowed_biomes
     }
 
+    #[must_use]
     pub const fn start_cell_x(&self, horizontal_cell_block_count: i32) -> i32 {
         self.start_block_x() / horizontal_cell_block_count
     }
 
+    #[must_use]
     pub const fn start_cell_z(&self, horizontal_cell_block_count: i32) -> i32 {
         self.start_block_z() / horizontal_cell_block_count
     }
 
+    #[must_use]
     pub const fn start_block_x(&self) -> i32 {
         start_block_x(self.x)
     }
 
+    #[must_use]
     pub const fn start_block_z(&self) -> i32 {
         start_block_z(self.z)
     }

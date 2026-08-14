@@ -109,7 +109,8 @@ pub async fn io_read_work(
                             );
 
                             // Create ProtoChunk using the async method
-                            let mut proto = ProtoChunk::from_chunk_data(&chunk, &level.world_gen);
+                            let mut proto =
+                                ProtoChunk::from_chunk_data(&chunk, level.world_gen.as_ref());
 
                             // Clear all lighting data
                             let section_count = proto.light.sky_light.len();
@@ -141,7 +142,7 @@ pub async fn io_read_work(
                     } else {
                         // Standard ProtoChunk handling for non-full chunks
                         let val = RecvChunk::IO(Chunk::Proto(Box::new(
-                            ProtoChunk::from_chunk_data(&chunk, &level.world_gen),
+                            ProtoChunk::from_chunk_data(&chunk, level.world_gen.as_ref()),
                         )));
                         if send.send((pos, val)).is_err() {
                             break;
@@ -155,7 +156,7 @@ pub async fn io_read_work(
                             RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::new(
                                 pos.x,
                                 pos.y,
-                                &level.world_gen,
+                                level.world_gen.as_ref(),
                             )))),
                         ))
                         .is_err()
@@ -240,7 +241,12 @@ pub fn run_generation(
     let portal_ref = portal.as_deref().expect("Portal should be initialized");
     // Run generation with panic catching
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        cache.advance(stage, &level.world_gen, portal_ref, &level.lighting_config);
+        cache.advance(
+            stage,
+            level.world_gen.as_ref(),
+            portal_ref,
+            &level.lighting_config,
+        );
         cache // Return cache on success
     }));
 
