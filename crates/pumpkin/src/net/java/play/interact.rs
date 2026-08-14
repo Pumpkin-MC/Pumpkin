@@ -86,6 +86,22 @@ impl JavaClient {
                             player.attack(event.target).await;
                         }
                         ActionType::Interact | ActionType::InteractAt => {
+                            if event.action == ActionType::InteractAt
+                                && let Some(pos) = interact.target_position
+                            {
+                                let mut at_event = crate::plugin::api::events::player::player_interact_at_entity::PlayerInteractAtEntityEvent::new(
+                                    player.clone(),
+                                    entity_id.0,
+                                    pos.x,
+                                    pos.y,
+                                    pos.z,
+                                    u8::from(interact.hand.map_or(0, |h| h.0) != 0),
+                                );
+                                server.plugin_manager.fire(server, &mut at_event).await;
+                                if at_event.cancelled {
+                                    return;
+                                }
+                            }
                             let mut stack = player.inventory().held_item().await;
                             let target_entity = event.target.get_entity();
                             if target_entity.entity_type.resource_name == "zombie_villager"

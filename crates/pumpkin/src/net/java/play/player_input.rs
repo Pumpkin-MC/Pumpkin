@@ -8,6 +8,16 @@ impl JavaClient {
         input: SPlayerInput,
         server: &Arc<Server>,
     ) {
+        let mut input_event =
+            crate::plugin::api::events::player::player_input::PlayerInputEvent::new(
+                player.clone(),
+                format!("{:b}", input.input),
+            );
+        server.plugin_manager.fire(server, &mut input_event).await;
+        if input_event.cancelled {
+            return;
+        }
+
         player.last_input.store(input.input, Ordering::Relaxed);
 
         let sneak = input.input & SPlayerInput::SNEAK != 0;

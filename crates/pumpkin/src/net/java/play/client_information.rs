@@ -20,12 +20,13 @@ impl JavaClient {
                 return;
             }
 
-            let (update_settings, update_watched, main_hand_changed) = {
+            let (update_settings, update_watched, main_hand_changed, locale_changed) = {
                 // 1. Load current snapshot
                 let current_config = player.config.load();
 
                 // 2. Calculate if settings changed before we overwrite
                 let main_hand_changed = current_config.main_hand != main_hand;
+                let locale_changed = current_config.locale != client_information.locale;
                 let update_settings =
                     main_hand_changed || current_config.skin_parts != client_information.skin_parts;
 
@@ -62,7 +63,12 @@ impl JavaClient {
                 // 4. Atomically swap the new config into the player
                 player.config.store(std::sync::Arc::new(new_config));
 
-                (update_settings, update_watched, main_hand_changed)
+                (
+                    update_settings,
+                    update_watched,
+                    main_hand_changed,
+                    locale_changed,
+                )
             };
 
             if update_watched {
@@ -71,6 +77,15 @@ impl JavaClient {
 
             if main_hand_changed {
                 let mut event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
+                server.plugin_manager.fire(server, &mut event).await;
+            }
+
+            if locale_changed {
+                let mut event = crate::plugin::api::events::player::player_locale_change::PlayerLocaleChangeEvent {
+                    player: player.clone(),
+                    new_locale: client_information.locale.to_string(),
+                    cancelled: false,
+                };
                 server.plugin_manager.fire(server, &mut event).await;
             }
 

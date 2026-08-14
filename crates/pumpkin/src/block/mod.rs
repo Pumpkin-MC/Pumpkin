@@ -466,8 +466,23 @@ pub async fn drop_loot(
     params: LootContextParameters,
 ) {
     if let Some(loot_table) = &block.loot_table {
-        for stack in loot_table.get_loot(params) {
-            world.drop_stack(pos, stack).await;
+        let items = loot_table.get_loot(params);
+        if !items.is_empty() {
+            let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
+                block_pos: *pos,
+                world: world.clone(),
+                player: None,
+                items,
+                cancelled: false,
+            };
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if !event.cancelled {
+                for stack in event.items {
+                    world.drop_stack(pos, stack).await;
+                }
+            }
         }
     }
 
@@ -476,7 +491,17 @@ pub async fn drop_loot(
         let amount = experience.experience.get(&mut random);
         // TODO: Silk touch gives no exp
         if amount > 0 {
-            ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;
+            let mut event = crate::plugin::block::block_exp::BlockExpEvent {
+                block_pos: *pos,
+                world: world.clone(),
+                exp: amount,
+            };
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire(&server, &mut event).await;
+            }
+            if event.exp > 0 {
+                ExperienceOrbEntity::spawn(world, pos.to_f64(), event.exp as u32).await;
+            }
         }
     }
 }

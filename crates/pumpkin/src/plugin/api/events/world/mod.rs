@@ -1,3 +1,5 @@
+pub mod async_structure_generate;
+pub mod async_structure_spawn;
 pub mod chunk_load;
 pub mod chunk_populate;
 pub mod chunk_save;
@@ -17,6 +19,8 @@ pub mod world_init;
 pub mod world_load;
 pub mod world_save;
 
+pub use async_structure_generate::*;
+pub use async_structure_spawn::*;
 pub use chunk_load::*;
 pub use chunk_populate::*;
 pub use chunk_save::*;
