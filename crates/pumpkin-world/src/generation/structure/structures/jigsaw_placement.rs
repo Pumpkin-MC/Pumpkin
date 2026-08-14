@@ -183,15 +183,11 @@ impl JigsawPlacement {
 
         let center_y = bottom_y + local_anchor_position.y;
 
-        let global_bounding_box = BlockBox::new(
-            center_x - max_distance_from_center.horizontal,
-            (center_y - max_distance_from_center.vertical)
-                .max(context.min_y + dimension_padding.bottom),
-            center_z - max_distance_from_center.horizontal,
-            center_x + max_distance_from_center.horizontal + 1,
-            (center_y + max_distance_from_center.vertical + 1)
-                .min(context.min_y + 320 - dimension_padding.top),
-            center_z + max_distance_from_center.horizontal + 1,
+        let global_bounding_box = jigsaw_search_bounds(
+            Vector3::new(center_x, center_y, center_z),
+            max_distance_from_center,
+            context.min_y,
+            dimension_padding,
         );
 
         let mut jigsaw_blocks = Vec::new();
@@ -226,9 +222,6 @@ impl JigsawPlacement {
 
         let mut collector = super::StructurePiecesCollector::new();
         let mut pieces = Vec::new();
-        // The expansion hack enlarges free space for children without changing
-        // the template bounds stored on the resulting structure piece.
-        let mut piece_collision_boxes = Vec::new();
         let mut piece_projections = Vec::new();
         let mut collision_spaces = vec![CollisionSpace {
             bounds: global_bounding_box,
@@ -236,7 +229,6 @@ impl JigsawPlacement {
         }];
 
         pieces.push(first_piece);
-        piece_collision_boxes.push(box_);
         piece_projections.push(element.projection);
 
         if max_depth > 0 {
@@ -265,7 +257,6 @@ impl JigsawPlacement {
                 source_jigsaws.sort_by_key(|j| std::cmp::Reverse(j.selection_priority));
 
                 let source_box = pieces[source_piece_idx].piece.bounding_box;
-                let source_collision_box = piece_collision_boxes[source_piece_idx];
                 let source_projection = piece_projections[source_piece_idx];
                 let source_rigid = source_projection == JigsawProjection::Rigid;
                 let mut interior_collision_space = None;
@@ -434,21 +425,18 @@ impl JigsawPlacement {
                                         target_collision_box.min.y + max_y_offset;
                                 }
 
-                                let collision_space = if source_collision_box.contains(
-                                    target_jigsaw_pos.0.x,
-                                    target_jigsaw_pos.0.y,
-                                    target_jigsaw_pos.0.z,
-                                ) {
-                                    *interior_collision_space.get_or_insert_with(|| {
-                                        collision_spaces.push(CollisionSpace {
-                                            bounds: source_collision_box,
-                                            occupied: Vec::new(),
-                                        });
-                                        collision_spaces.len() - 1
-                                    })
-                                } else {
-                                    state.collision_space
-                                };
+                                let collision_space =
+                                    if is_inside_source_box(&source_box, &target_jigsaw_pos) {
+                                        *interior_collision_space.get_or_insert_with(|| {
+                                            collision_spaces.push(CollisionSpace {
+                                                bounds: source_box,
+                                                occupied: Vec::new(),
+                                            });
+                                            collision_spaces.len() - 1
+                                        })
+                                    } else {
+                                        state.collision_space
+                                    };
                                 let space = &collision_spaces[collision_space];
                                 let can_place = is_box_inside(&space.bounds, &target_collision_box)
                                     && !space
@@ -500,7 +488,6 @@ impl JigsawPlacement {
 
                                     let target_piece_idx = pieces.len();
                                     pieces.push(target_piece);
-                                    piece_collision_boxes.push(target_collision_box);
                                     piece_projections.push(target_projection);
 
                                     let junction_y = if source_rigid {
@@ -569,6 +556,26 @@ impl JigsawPlacement {
             collector: Arc::new(std::sync::Mutex::new(collector)),
         })
     }
+}
+
+fn jigsaw_search_bounds(
+    center: Vector3<i32>,
+    max_distance: &MaxDistance,
+    min_y: i32,
+    dimension_padding: &DimensionPadding,
+) -> BlockBox {
+    BlockBox::new(
+        center.x - max_distance.horizontal,
+        (center.y - max_distance.vertical).max(min_y + dimension_padding.bottom),
+        center.z - max_distance.horizontal,
+        center.x + max_distance.horizontal,
+        (center.y + max_distance.vertical + 1).min(min_y + 320 - dimension_padding.top),
+        center.z + max_distance.horizontal,
+    )
+}
+
+fn is_inside_source_box(source_box: &BlockBox, target_pos: &BlockPos) -> bool {
+    source_box.contains(target_pos.0.x, target_pos.0.y, target_pos.0.z)
 }
 
 // Helper to determine the max Y height of a pool for the expansion hack
@@ -770,5 +777,39 @@ const fn rotate_direction(
             BlockDirection::East => BlockDirection::North,
             _ => dir,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DimensionPadding, MaxDistance, is_inside_source_box, jigsaw_search_bounds};
+    use pumpkin_util::math::{block_box::BlockBox, position::BlockPos, vector3::Vector3};
+
+    #[test]
+    fn horizontal_search_bounds_include_the_exact_limit() {
+        let bounds = jigsaw_search_bounds(
+            Vector3::new(10, 20, -10),
+            &MaxDistance {
+                horizontal: 80,
+                vertical: 40,
+            },
+            -64,
+            &DimensionPadding::ZERO,
+        );
+
+        assert_eq!(bounds.min.x, -70);
+        assert_eq!(bounds.max.x, 90);
+        assert_eq!(bounds.min.z, -90);
+        assert_eq!(bounds.max.z, 70);
+    }
+
+    #[test]
+    fn expanded_collision_area_is_not_source_interior() {
+        let source_box = BlockBox::new(0, 0, 0, 4, 4, 4);
+        let expanded_box = BlockBox::new(0, 0, 0, 4, 8, 4);
+        let target = BlockPos::new(2, 6, 2);
+
+        assert!(expanded_box.contains(target.0.x, target.0.y, target.0.z));
+        assert!(!is_inside_source_box(&source_box, &target));
     }
 }
