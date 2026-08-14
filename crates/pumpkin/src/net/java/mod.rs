@@ -323,14 +323,14 @@ impl JavaClient {
         let payload = Bytes::from(buf);
 
         let player = self.player.load_full();
-        let cancelled = if let Some(player) = player.as_ref() {
-            player
-                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
-                .await
+        if let Some(player) = player.as_ref() {
+            let event = player
+                .fire_packet_sent_event_no_obj(P::to_id(self.version.load()), payload)
+                .await;
+            if !event.cancelled {
+                self.enqueue_packet_data(event.payload).await;
+            }
         } else {
-            false
-        };
-        if !cancelled {
             self.enqueue_packet_data(payload).await;
         }
     }
@@ -450,15 +450,14 @@ impl JavaClient {
         let payload = Bytes::from(packet_buf);
 
         let player = self.player.load_full();
-        let cancelled = if let Some(player) = player.as_ref() {
-            player
-                .fire_packet_sent_no_obj(P::to_id(self.version.load()), payload.clone())
-                .await
+        if let Some(player) = player.as_ref() {
+            let event = player
+                .fire_packet_sent_event_no_obj(P::to_id(self.version.load()), payload)
+                .await;
+            if !event.cancelled {
+                self.send_packet_now_data(event.payload).await;
+            }
         } else {
-            false
-        };
-
-        if !cancelled {
             self.send_packet_now_data(payload).await;
         }
     }
@@ -645,7 +644,6 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
-        let mut payload = &packet.payload[..];
         let version = self.version.load();
 
         let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
@@ -658,7 +656,9 @@ impl JavaClient {
             return Ok(());
         }
 
-        match packet.id {
+        let mut payload = &event.payload[..];
+
+        match event.packet_id {
             id if id == SConfirmTeleport::to_id(version) => {
                 self.handle_confirm_teleport(
                     player,
@@ -996,7 +996,7 @@ impl JavaClient {
                 .await;
             }
             _ => {
-                warn!("Failed to handle player packet id {}", packet.id);
+                warn!("Failed to handle player packet id {}", event.packet_id);
             }
         }
         Ok(())

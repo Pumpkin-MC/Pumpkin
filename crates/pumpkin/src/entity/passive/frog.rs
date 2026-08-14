@@ -1,10 +1,14 @@
 use std::sync::{
     Arc, Weak,
-    atomic::{AtomicU8, Ordering},
+    atomic::{AtomicI32, Ordering},
 };
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::sound::Sound;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -12,19 +16,69 @@ use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
+    ageable::{AgeableData, AgeableMob},
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
+    passive::animal::Animal,
+    player::Player,
 };
 
-/// Represents a Frog, a passive mob that can eat small slimes and magma cubes.
+pub const FROG_FOOD: &[&Item] = &[&Item::SLIME_BALL];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(i32)]
+pub enum FrogVariant {
+    Cold = 0,
+    #[default]
+    Temperate = 1,
+    Warm = 2,
+}
+
+impl FrogVariant {
+    #[must_use]
+    pub const fn from_id(id: i32) -> Self {
+        match id {
+            0 => Self::Cold,
+            2 => Self::Warm,
+            _ => Self::Temperate,
+        }
+    }
+
+    #[must_use]
+    pub const fn id(self) -> i32 {
+        self as i32
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Cold => "minecraft:cold",
+            Self::Temperate => "minecraft:temperate",
+            Self::Warm => "minecraft:warm",
+        }
+    }
+
+    #[must_use]
+    pub fn from_name(s: &str) -> Self {
+        match s {
+            "minecraft:cold" | "cold" => Self::Cold,
+            "minecraft:warm" | "warm" => Self::Warm,
+            _ => Self::Temperate,
+        }
+    }
+}
+
+/// Represents a Frog, an amphibious mob that can eat small slimes and magma cubes.
 ///
 /// Wiki: <https://minecraft.wiki/w/Frog>
 pub struct FrogEntity {
     pub mob_entity: MobEntity,
-    pub variant: AtomicU8,
+    pub ageable_data: AgeableData,
+    pub variant: AtomicI32,
+    pub tongue_target_id: AtomicI32,
 }
 
 impl FrogEntity {
@@ -32,7 +86,9 @@ impl FrogEntity {
         let mob_entity = MobEntity::new(entity);
         let frog = Self {
             mob_entity,
-            variant: AtomicU8::new(1), // Default to temperate
+            ageable_data: AgeableData::default(),
+            variant: AtomicI32::new(FrogVariant::Temperate.id()),
+            tongue_target_id: AtomicI32::new(-1),
         };
         let mob_arc = Arc::new(frog);
         let mob_weak: Weak<dyn Mob> = {
@@ -48,41 +104,67 @@ impl FrogEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(1, Box::new(TemptGoal::new(1.0, FROG_FOOD)));
+            goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                2,
+                3,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(3, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(4, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn get_variant(&self) -> FrogVariant {
+        FrogVariant::from_id(self.variant.load(Ordering::Relaxed))
+    }
+
+    pub fn set_variant(&self, variant: FrogVariant) {
+        self.variant.store(variant.id(), Ordering::Relaxed);
+        let entity = self.get_entity();
+        entity.send_meta_data(
+            &[Metadata::new(
+                TrackedData::VARIANT,
+                MetaDataType::FROG_VARIANT,
+                VarInt(variant.id()),
+            )],
+            None,
+        );
+    }
+}
+
+impl AgeableMob for FrogEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
+impl Animal for FrogEntity {
+    fn is_food(&self, item_stack: &ItemStack) -> bool {
+        item_stack.item.has_tag(&tag::Item::MINECRAFT_FROG_FOOD)
+            || FROG_FOOD.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 
 impl NBTStorage for FrogEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
+        Box::pin(async move {
             self.mob_entity.living_entity.write_nbt(nbt).await;
-            let variant_str = match self.variant.load(Ordering::Relaxed) {
-                0 => "minecraft:cold",
-                2 => "minecraft:warm",
-                _ => "minecraft:temperate",
-            };
-            nbt.put_string("variant", variant_str.to_string());
+            self.write_ageable_nbt(nbt);
+            self.write_animal_nbt(nbt);
+            nbt.put_string("variant", self.get_variant().as_str().to_string());
         })
     }
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
+        Box::pin(async move {
             self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.read_ageable_nbt(nbt);
+            self.read_animal_nbt(nbt);
             if let Some(variant_str) = nbt.get_string("variant") {
-                let variant = match variant_str {
-                    "minecraft:cold" | "cold" => 0,
-                    "minecraft:warm" | "warm" => 2,
-                    _ => 1,
-                };
-                self.variant.store(variant, Ordering::Relaxed);
+                self.set_variant(FrogVariant::from_name(variant_str));
             }
         })
     }
@@ -94,12 +176,13 @@ impl Mob for FrogEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        let variant = match name {
-            "minecraft:cold" | "cold" => 0,
-            "minecraft:warm" | "warm" => 2,
-            _ => 1,
-        };
-        self.variant.store(variant, Ordering::Relaxed);
+        self.set_variant(FrogVariant::from_name(name));
+    }
+
+    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.ageable_ai_step();
+        })
     }
 
     fn mob_init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
@@ -120,10 +203,21 @@ impl Mob for FrogEntity {
                 &[Metadata::new(
                     TrackedData::VARIANT,
                     MetaDataType::FROG_VARIANT,
-                    VarInt(self.variant.load(Ordering::Relaxed) as i32),
+                    VarInt(self.get_variant().id()),
                 )],
                 None,
             );
+        })
+    }
+
+    fn mob_interact<'a>(
+        &'a self,
+        player: &'a Arc<Player>,
+        item_stack: &'a mut ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            self.animal_interact(player, item_stack, Sound::EntityFrogAmbient)
+                .await
         })
     }
 }

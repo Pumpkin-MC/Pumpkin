@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties};
-use pumpkin_data::item::Item;
 use pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_BAMBOO;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::{self};
@@ -13,11 +12,9 @@ use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 
-use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, CanPlaceAtArgs, blocks::plant::PlantBlockBase};
 use crate::block::{
     GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, RandomTickArgs,
-    UseWithItemArgs,
 };
 use crate::world::World;
 
@@ -25,6 +22,27 @@ use crate::world::World;
 pub struct BambooBlock;
 
 impl BlockBehaviour for BambooBlock {
+    fn is_valid_bonemeal_target(&self, args: crate::block::BonemealArgs<'_>) -> bool {
+        let above = count_bamboo_above(args.world, args.position);
+        let below = count_bamboo_below(args.world, args.position);
+        let top = args.position.up_height(above as i32);
+        let props = BambooLikeProperties::from_state_id(
+            args.world.get_block_state_id(&top),
+            &Block::BAMBOO,
+        );
+        above + below + 1 < 16
+            && props.stage == 0
+            && args.world.is_in_height_limit(top.up().0.y)
+            && args.world.is_loaded(&top.up())
+            && args.world.get_block_state(&top.up()).is_air()
+    }
+
+    fn perform_bonemeal<'a>(&'a self, args: crate::block::BonemealArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            bone_meal(Arc::clone(args.world), args.position).await;
+        })
+    }
+
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let (block_below, state_id_below) =
@@ -57,20 +75,6 @@ impl BlockBehaviour for BambooBlock {
                 return props.to_state_id(&Block::BAMBOO);
             }
             Block::AIR.default_state.id
-        })
-    }
-
-    fn use_with_item<'a>(
-        &'a self,
-        args: UseWithItemArgs<'a>,
-    ) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            let lock = &args.item_stack;
-            if lock.get_item() == &Item::BONE_MEAL {
-                bone_meal(Arc::clone(args.world), args.position).await;
-                return BlockActionResult::Success;
-            }
-            BlockActionResult::Pass
         })
     }
 
@@ -245,7 +249,10 @@ async fn bone_meal(world: Arc<World>, position: &BlockPos) {
         let next_pos = position.up_height(bamboo_above as i32);
         let next_state = world.get_block_state(&next_pos);
 
-        if current_total_height >= 16 || !world.get_block_state(&next_pos.up()).is_air() {
+        if current_total_height >= 16
+            || !world.is_in_height_limit(next_pos.up().0.y)
+            || !world.get_block_state(&next_pos.up()).is_air()
+        {
             return;
         }
 

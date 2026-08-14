@@ -997,16 +997,16 @@ pub struct CustomWasmGoal {
     pub goal_id: u32,
 }
 
+fn current_mob_entity(mob: &dyn Mob) -> Option<Arc<dyn crate::entity::EntityBase>> {
+    let entity = mob.get_entity();
+    entity.world.load().get_entity_by_id(entity.entity_id)
+}
+
 impl Goal for CustomWasmGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
             let mut store = self.plugin.store.lock().await;
-            if let Some(entity_arc) = mob
-                .get_entity()
-                .world
-                .load()
-                .get_entity_by_id(mob.get_entity().entity_id)
-            {
+            if let Some(entity_arc) = current_mob_entity(mob) {
                 match self.plugin.plugin_instance {
                     PluginInstance::V0_1(ref plugin) => {
                         let Some(server) = store.data_mut().server.clone() else {
@@ -1038,12 +1038,7 @@ impl Goal for CustomWasmGoal {
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
             let mut store = self.plugin.store.lock().await;
-            if let Some(entity_arc) = mob
-                .get_entity()
-                .world
-                .load()
-                .get_entity_by_id(mob.get_entity().entity_id)
-            {
+            if let Some(entity_arc) = current_mob_entity(mob) {
                 match self.plugin.plugin_instance {
                     PluginInstance::V0_1(ref plugin) => {
                         let Some(server) = store.data_mut().server.clone() else {
@@ -1075,12 +1070,7 @@ impl Goal for CustomWasmGoal {
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             let mut store = self.plugin.store.lock().await;
-            if let Some(entity_arc) = mob
-                .get_entity()
-                .world
-                .load()
-                .get_entity_by_id(mob.get_entity().entity_id)
-            {
+            if let Some(entity_arc) = current_mob_entity(mob) {
                 match self.plugin.plugin_instance {
                     PluginInstance::V0_1(ref plugin) => {
                         let Some(server) = store.data_mut().server.clone() else {
@@ -1109,12 +1099,7 @@ impl Goal for CustomWasmGoal {
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             let mut store = self.plugin.store.lock().await;
-            if let Some(entity_arc) = mob
-                .get_entity()
-                .world
-                .load()
-                .get_entity_by_id(mob.get_entity().entity_id)
-            {
+            if let Some(entity_arc) = current_mob_entity(mob) {
                 match self.plugin.plugin_instance {
                     PluginInstance::V0_1(ref plugin) => {
                         let Some(server) = store.data_mut().server.clone() else {
@@ -1143,12 +1128,7 @@ impl Goal for CustomWasmGoal {
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             let mut store = self.plugin.store.lock().await;
-            if let Some(entity_arc) = mob
-                .get_entity()
-                .world
-                .load()
-                .get_entity_by_id(mob.get_entity().entity_id)
-            {
+            if let Some(entity_arc) = current_mob_entity(mob) {
                 match self.plugin.plugin_instance {
                     PluginInstance::V0_1(ref plugin) => {
                         let Some(server) = store.data_mut().server.clone() else {

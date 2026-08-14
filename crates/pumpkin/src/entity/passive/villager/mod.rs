@@ -18,7 +18,7 @@ use pumpkin_inventory::screen_handler::{
     BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::client::actor_event::ActorEventType;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};

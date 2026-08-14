@@ -159,8 +159,14 @@ impl Server {
     ) -> Arc<Self> {
         let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
         // First register the default commands. After that, plugins can put in their own.
-        let command_dispatcher =
-            RwLock::new(default_dispatcher(&permission_registry, &basic_config).await);
+        let command_dispatcher = RwLock::new(
+            default_dispatcher(
+                &permission_registry,
+                &basic_config,
+                &advanced_config.commands,
+            )
+            .await,
+        );
 
         crate::command::set_broadcast_console_to_ops(
             advanced_config.commands.broadcast_console_to_ops,
@@ -412,6 +418,22 @@ impl Server {
             worlds_vec.push(world);
         }
 
+        for world in &worlds_vec {
+            let mut world_init_event =
+                crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
+            self
+                .plugin_manager
+                .fire(&self, &mut world_init_event)
+                .await;
+
+            let mut world_load_event =
+                crate::plugin::api::events::world::world_load::WorldLoadEvent::new(world.clone());
+            self
+                .plugin_manager
+                .fire(&self, &mut world_load_event)
+                .await;
+        }
+
         self.worlds.store(Arc::new(worlds_vec));
 
         info!("All worlds loaded successfully.");
@@ -443,11 +465,12 @@ impl Server {
     pub async fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
         {
             let worlds = self.worlds.load();
-            if let Some(world) = worlds
+            let world = worlds
                 .iter()
                 .find(|w| w.get_world_name() == name && w.dimension == dimension)
-            {
-                return world.clone();
+                .cloned();
+            if let Some(world) = world {
+                return world;
             }
         }
 
@@ -558,6 +581,9 @@ impl Server {
 
         if let Some(mut nbt_data) = nbt {
             player.read_nbt(&mut nbt_data).await;
+            // The data file itself proves this is a returning player. Older Bedrock
+            // sessions could persist HasPlayedBefore as false and mask a valid Pos.
+            player.has_played_before.store(true, Ordering::Relaxed);
         }
 
         // Wrap in Arc after data is loaded
@@ -1223,5 +1249,50 @@ impl Server {
                 entities.into_iter().take(limit).collect()
             }
         }
+    }
+
+    pub async fn execute_remote_command(self: &Arc<Self>, command: String) {
+        let mut remote_event = crate::plugin::api::events::server::remote_server_command::RemoteServerCommandEvent::new(
+            command,
+        );
+        self.plugin_manager.fire(self, &mut remote_event).await;
+    }
+
+    pub async fn register_service(self: &Arc<Self>, service_name: String) {
+        let mut service_event =
+            crate::plugin::api::events::server::service_register::ServiceRegisterEvent::new(
+                service_name,
+            );
+        self.plugin_manager.fire(self, &mut service_event).await;
+    }
+
+    pub async fn unregister_service(self: &Arc<Self>, service_name: String) {
+        let mut service_event =
+            crate::plugin::api::events::server::service_unregister::ServiceUnregisterEvent::new(
+                service_name,
+            );
+        self.plugin_manager.fire(self, &mut service_event).await;
+    }
+
+    pub async fn tab_complete(self: &Arc<Self>, buffer: String, completions: Vec<String>) {
+        let mut tab_event = crate::plugin::api::events::server::tab_complete::TabCompleteEvent::new(
+            buffer,
+            completions,
+        );
+        self.plugin_manager.fire(self, &mut tab_event).await;
+    }
+
+    pub async fn enable_plugin(self: &Arc<Self>, plugin_name: String) {
+        let mut enable_event =
+            crate::plugin::api::events::server::plugin_enable::PluginEnableEvent::new(plugin_name);
+        self.plugin_manager.fire(self, &mut enable_event).await;
+    }
+
+    pub async fn disable_plugin(self: &Arc<Self>, plugin_name: String) {
+        let mut disable_event =
+            crate::plugin::api::events::server::plugin_disable::PluginDisableEvent::new(
+                plugin_name,
+            );
+        self.plugin_manager.fire(self, &mut disable_event).await;
     }
 }

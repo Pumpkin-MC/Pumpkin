@@ -25,7 +25,8 @@ use tokio::sync::Mutex;
 
 use crate::block::{
     BlockFuture, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs, GetRedstonePowerArgs,
-    NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs, RandomTickArgs,
+    NormalUseArgs, OnPlaceArgs, OnSyncedBlockEventArgs, PlacedArgs, PlayerPlacedArgs,
+    RandomTickArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -124,6 +125,19 @@ async fn placed_chest_impl<E: BlockEntity + 'static>(
             )
             .await;
     }
+}
+
+fn player_placed_chest_impl(args: &PlayerPlacedArgs<'_>) {
+    let position = pumpkin_util::math::vector3::Vector3::new(
+        args.position.0.x as f64 + 0.5,
+        args.position.0.y as f64 + 0.5,
+        args.position.0.z as f64 + 0.5,
+    );
+    args.world.play_bedrock_level_sound(
+        "place",
+        &position,
+        i32::from(pumpkin_data::BlockState::to_be_network_id(args.state_id)),
+    );
 }
 
 async fn get_chest_comparator_output(args: GetComparatorOutputArgs<'_>) -> Option<u8> {
@@ -279,6 +293,10 @@ impl BlockBehaviour for ChestBlock {
         Box::pin(placed_chest_impl(args, ChestBlockEntity::new))
     }
 
+    fn player_placed<'a>(&'a self, args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move { player_placed_chest_impl(&args) })
+    }
+
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(normal_use_chest_impl(args))
     }
@@ -313,6 +331,10 @@ impl BlockBehaviour for CopperChestBlock {
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(placed_chest_impl(args, ChestBlockEntity::new))
+    }
+
+    fn player_placed<'a>(&'a self, args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move { player_placed_chest_impl(&args) })
     }
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
@@ -509,6 +531,10 @@ impl BlockBehaviour for TrappedChestBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         use crate::block::entities::trapped_chest::TrappedChestBlockEntity;
         Box::pin(placed_chest_impl(args, TrappedChestBlockEntity::new))
+    }
+
+    fn player_placed<'a>(&'a self, args: PlayerPlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move { player_placed_chest_impl(&args) })
     }
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {

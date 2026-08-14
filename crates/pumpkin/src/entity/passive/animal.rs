@@ -5,7 +5,7 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 
 use crate::entity::{EntityBaseFuture, mob::Mob, player::Player};
-use pumpkin_protocol::bedrock::server::actor_event::ActorEventType;
+use pumpkin_protocol::bedrock::client::actor_event::ActorEventType;
 use pumpkin_util::math::vector3::Vector3;
 
 pub trait Animal: Mob {

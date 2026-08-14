@@ -688,8 +688,12 @@ impl DragonFight {
             .collect();
 
         for uid in &to_remove {
-            if let Some(p) = players.iter().find(|p| &p.gameprofile.id == uid) {
-                p.remove_bossbar(self.bossbar_uuid).await;
+            let player = players
+                .iter()
+                .find(|player| &player.gameprofile.id == uid)
+                .cloned();
+            if let Some(player) = player {
+                player.remove_bossbar(self.bossbar_uuid).await;
             }
             self.bossbar_players.retain(|u| u != uid);
         }

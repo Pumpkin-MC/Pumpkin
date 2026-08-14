@@ -69,8 +69,8 @@ impl CommandExecutor for SimpleTriggerExecutor {
             let new_value = current_value + 1;
 
             let updated_score = ScoreboardScore {
-                entity_name: Box::leak(player_name.clone().into_boxed_str()),
-                objective_name: Box::leak(objective_name.to_string().into_boxed_str()),
+                entity_name: player_name.clone(),
+                objective_name: objective_name.to_string(),
                 value: VarInt(new_value),
                 display_name: None,
                 number_format: None,
@@ -139,8 +139,8 @@ impl CommandExecutor for AddTriggerExecutor {
             let new_value = current_value + value;
 
             let updated_score = ScoreboardScore {
-                entity_name: Box::leak(player_name.clone().into_boxed_str()),
-                objective_name: Box::leak(objective_name.to_string().into_boxed_str()),
+                entity_name: player_name.clone(),
+                objective_name: objective_name.to_string(),
                 value: VarInt(new_value),
                 display_name: None,
                 number_format: None,
@@ -204,8 +204,8 @@ impl CommandExecutor for SetTriggerExecutor {
             }
 
             let updated_score = ScoreboardScore {
-                entity_name: Box::leak(player_name.clone().into_boxed_str()),
-                objective_name: Box::leak(objective_name.to_string().into_boxed_str()),
+                entity_name: player_name.clone(),
+                objective_name: objective_name.to_string(),
                 value: VarInt(value),
                 display_name: None,
                 number_format: None,
