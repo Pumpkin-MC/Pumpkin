@@ -213,13 +213,6 @@ impl JavaClient {
                     self.last_keep_alive_time.store(Instant::now());
                     let packet = pumpkin_protocol::java::client::play::CKeepAlive::new(keep_alive_id);
                     self.enqueue_packet(&packet).await;
-
-                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
-                    if seq != -1 {
-                        self
-                            .send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
-                            .await;
-                    }
                 }
 
                 // INCOMING PACKETS
@@ -248,6 +241,15 @@ impl JavaClient {
                                 e
                             );
                         }
+                    }
+
+                    // ServerGamePacketListenerImpl acknowledges the sequence at the end of the
+                    // packet that carried it. Until we do, the client keeps predicting the block
+                    // it interacted with and drops our updates for that position
+                    let seq = self.packet_sequence.swap(-1, Ordering::Relaxed);
+                    if seq != -1 {
+                        self.send_packet_now(&CAcknowledgeBlockChange::new(seq.into()))
+                            .await;
                     }
                 }
             }
