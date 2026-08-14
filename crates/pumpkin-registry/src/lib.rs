@@ -18,11 +18,15 @@ pub use crate::immutable::FrozenRegistry;
 pub use crate::key::DataKey;
 pub use crate::mutable::ReloadableRegistry;
 pub use crate::r#static::StaticRegistry;
+pub use crate::value::{DataKeyRef, ErasedRegistryRef};
 pub use builder::RegistryBuilder;
 
 pub static BOOTSTRAP: OnceLock<BootstrapManager> = OnceLock::new();
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+pub type ErasedRegistryIterator<'a> =
+    Box<dyn Iterator<Item = (Identifier, ErasedRegistryRef<'a>)> + 'a>;
 
 pub trait Registry: Any + Send + Sync {
     fn arc_dyn(self) -> Arc<dyn Registry>
@@ -38,7 +42,10 @@ pub trait Registry: Any + Send + Sync {
     fn by_id_erased(&self, id: usize) -> Option<value::ErasedRegistryRef<'_>>;
 
     /// Async type-erased lookup used when walking registry trees.
-    fn by_id_erased_async(&self, id: usize) -> BoxFuture<'_, Option<value::ErasedRegistryRef<'_>>>;
+    fn by_id_erased_async(&self, id: usize) -> BoxFuture<'_, Option<ErasedRegistryRef<'_>>>;
+
+    /// Type-erased iteration over this registry.
+    fn iter_erased(&self) -> ErasedRegistryIterator<'_>;
 
     /// Blocking identifier lookup used while building a data key.
     fn get_id(&self, identifier: &Identifier) -> Option<usize>;
