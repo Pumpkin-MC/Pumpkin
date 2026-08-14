@@ -507,13 +507,14 @@ pub fn build() -> TokenStream {
 
         impl ParameterRange {
             pub fn calc_distance(&self, noise: i64) -> i64 {
-                if noise > self.max {
+                let distance = if noise > self.max {
                     noise - self.max
                 } else if noise < self.min {
                     self.min - noise
                 } else {
                     0
-                }
+                };
+                distance * distance
             }
         }
 
@@ -596,6 +597,20 @@ pub fn build() -> TokenStream {
                 params[4].calc_distance(p[4]) +
                 params[5].calc_distance(p[5]) +
                 params[6].calc_distance(p[6])
+            }
+        }
+
+        #[cfg(test)]
+        mod tests {
+            use super::ParameterRange;
+
+            #[test]
+            fn parameter_distance_is_squared_outside_range() {
+                let range = ParameterRange { min: 0, max: 10 };
+
+                assert_eq!(range.calc_distance(5), 0);
+                assert_eq!(range.calc_distance(13), 9);
+                assert_eq!(range.calc_distance(-3), 9);
             }
         }
 
