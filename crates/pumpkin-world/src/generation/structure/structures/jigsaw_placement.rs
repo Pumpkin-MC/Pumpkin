@@ -574,7 +574,7 @@ fn jigsaw_search_bounds(
     )
 }
 
-fn is_inside_source_box(source_box: &BlockBox, target_pos: &BlockPos) -> bool {
+const fn is_inside_source_box(source_box: &BlockBox, target_pos: &BlockPos) -> bool {
     source_box.contains(target_pos.0.x, target_pos.0.y, target_pos.0.z)
 }
 
