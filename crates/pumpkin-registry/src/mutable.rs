@@ -1,5 +1,5 @@
 use crate::{
-    AsyncTypedRegistry, BOOTSTRAP, BoxFuture, Registry, TypedRegistry,
+    AsyncTypedRegistry, BOOTSTRAP, BoxFuture, ErasedRegistryIterator, Registry, TypedRegistry,
     error::BootstrapError,
     immutable::FrozenRegistry,
     value::{DynIterator, ErasedRegistryRef, LockedIterator},
@@ -82,6 +82,17 @@ impl<T: Send + Sync + 'static> Registry for ReloadableRegistry<T> {
             .ok()
             .map(ErasedRegistryRef::Locked)
         })
+    }
+
+    fn iter_erased(&self) -> ErasedRegistryIterator<'_> {
+        let iterator =
+            LockedIterator::new(self.inner.blocking_read()).map(|(identifier, value)| {
+                (
+                    identifier.clone(),
+                    ErasedRegistryRef::Borrowed(value as &dyn Any),
+                )
+            });
+        Box::new(iterator)
     }
 }
 
