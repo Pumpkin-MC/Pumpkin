@@ -105,16 +105,26 @@ impl EvokerEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             target_selector.add_goal(
-                1,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
-            );
-            target_selector.add_goal(
                 2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
+                ActiveTargetGoal::with_default_and_memory(
+                    &mob_arc.mob_entity,
+                    &EntityType::PLAYER,
+                    true,
+                    300,
+                ),
             );
             target_selector.add_goal(
                 3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
+                ActiveTargetGoal::with_default_types_and_memory(
+                    &mob_arc.mob_entity,
+                    &[&EntityType::VILLAGER, &EntityType::WANDERING_TRADER],
+                    false,
+                    300,
+                ),
+            );
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, false),
             );
         };
 

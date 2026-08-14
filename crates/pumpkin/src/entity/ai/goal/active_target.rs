@@ -18,7 +18,8 @@ pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
     reciprocal_chance: i32,
-    target_type: &'static EntityType,
+    target_type: Option<&'static EntityType>,
+    target_types: Option<&'static [&'static EntityType]>,
     target_predicate: TargetPredicate,
 }
 
@@ -60,7 +61,18 @@ impl ActiveTargetGoal {
         target_type: &'static EntityType,
         check_visibility: bool,
     ) -> Box<Self> {
+        Self::with_default_and_memory(mob, target_type, check_visibility, 60)
+    }
+
+    #[must_use]
+    pub fn with_default_and_memory(
+        mob: &MobEntity,
+        target_type: &'static EntityType,
+        check_visibility: bool,
+        unseen_memory_ticks: i32,
+    ) -> Box<Self> {
         let track_target_goal = TrackTargetGoal::with_default(check_visibility);
+        let track_target_goal = track_target_goal.set_unseen_memory_ticks(unseen_memory_ticks);
         let mut target_predicate = TargetPredicate::create_attackable();
         target_predicate.base_max_distance = mob
             .living_entity
@@ -70,7 +82,41 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(DEFAULT_RECIPROCAL_CHANCE),
-            target_type,
+            target_type: Some(target_type),
+            target_types: None,
+            target_predicate,
+        })
+    }
+
+    #[must_use]
+    pub fn with_default_types(
+        mob: &MobEntity,
+        target_types: &'static [&'static EntityType],
+        check_visibility: bool,
+    ) -> Box<Self> {
+        Self::with_default_types_and_memory(mob, target_types, check_visibility, 60)
+    }
+
+    #[must_use]
+    pub fn with_default_types_and_memory(
+        mob: &MobEntity,
+        target_types: &'static [&'static EntityType],
+        check_visibility: bool,
+        unseen_memory_ticks: i32,
+    ) -> Box<Self> {
+        let track_target_goal = TrackTargetGoal::with_default(check_visibility);
+        let track_target_goal = track_target_goal.set_unseen_memory_ticks(unseen_memory_ticks);
+        let mut target_predicate = TargetPredicate::create_attackable();
+        target_predicate.base_max_distance = mob
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
+
+        Box::new(Self {
+            track_target_goal,
+            target: None,
+            reciprocal_chance: to_goal_ticks(DEFAULT_RECIPROCAL_CHANCE),
+            target_type: None,
+            target_types: Some(target_types),
             target_predicate,
         })
     }
@@ -93,7 +139,7 @@ impl ActiveTargetGoal {
         let mut search_pos = mob.living_entity.entity.pos.load();
         search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
 
-        if self.target_type == &EntityType::PLAYER {
+        if self.target_type == Some(&EntityType::PLAYER) && self.target_types.is_none() {
             let potential_player = world
                 .get_closest_player(search_pos, follow_range)
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
@@ -109,8 +155,10 @@ impl ActiveTargetGoal {
                 return;
             }
         } else {
-            let potential_entity =
-                world.get_closest_entity(search_pos, follow_range, Some(&[self.target_type]));
+            let target_types = self
+                .target_types
+                .or_else(|| self.target_type.map(std::slice::from_ref));
+            let potential_entity = world.get_closest_entity(search_pos, follow_range, target_types);
 
             if let Some(potential_entity) = potential_entity
                 && let Some(living) = potential_entity.get_living_entity()
