@@ -51,10 +51,15 @@ impl ItemBehaviour for BoneMealItem {
                             }
                             id if id == Block::TORCHFLOWER_CROP.id => 1,
                             id if id == Block::PITCHER_CROP.id => 4,
+                            id if id == Block::COCOA.id => 2,
                             _ => 7,
                         };
                         (current_age < max_age).then(|| {
-                            let bonus = (rand::random::<u32>() % 4 + 2) as u8;
+                            let bonus = if block.id == Block::COCOA.id {
+                                1 // Don't want to skip over middle growth age for Cocoa pods.
+                            } else {
+                                (rand::random::<u32>() % 4 + 2) as u8
+                            };
                             let new_age = (current_age + bonus).min(max_age).to_string();
                             let new_props: Vec<(&str, &str)> = prop_map
                                 .iter()
