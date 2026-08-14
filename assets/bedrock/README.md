@@ -23,6 +23,12 @@ This directory contains a number of different data files used to help support co
     - downloaded from [Kaooot/bedrock-network-data](https://github.com/Kaooot/bedrock-network-data/blob/master/release/1.26.40/biome_definitions.nbt)
     - Contains the gzip-compressed vanilla biome registry extracted from Bedrock Dedicated Server 1.26.40.
     - Validated and converted by `pumpkin-codegen` into the static `BiomeDefinitionList` wire payload used during Bedrock world initialization.
+- `advancement_titles.json`
+    - derived from the Minecraft Java Edition language files in [misode/mcmeta](https://github.com/misode/mcmeta/tree/26.2-assets/assets/minecraft/lang), pinned to the `26.2-assets` tag. mcmeta provides a version-controlled history of assets obtained through Mojang's public API.
+    - Contains only `advancements.*.title` entries for the locales advertised by Bedrock Dedicated Server 1.26.40.8 in `resource_packs/vanilla/texts/languages.json`; `en_US` remains in `assets/en_us_java.json` and is not duplicated.
+    - Bedrock's `nb_NO` locale uses Java's `no_no.json` language asset and is stored under `nb_no` so it matches the locale reported by Bedrock clients.
+    - To update it, use the matching `<version>-assets` tag, take the locale list from the matching BDS `resource_packs/vanilla/texts/languages.json`, retain only keys beginning with `advancements.` and ending with `.title`, map Java `no_no` to Bedrock `nb_no`, and sort both locale and translation keys.
+    - Bedrock does not contain Java's `advancements.*` translation keys. Pumpkin uses this table to resolve only the advancement title per recipient while leaving the surrounding `chat.type.achievement` message client-localized.
 - `player_geometry.json`
     - adapted from [GeyserMC/Geyser](https://github.com/GeyserMC/Geyser/blob/master/core/src/main/resources/bedrock/geometries/geo.json) (MIT License)
     - Provides valid standard wide and slim Bedrock player geometry for Java Edition player skins.
