@@ -14,7 +14,10 @@ impl BlockBehaviour for NetherrackBlock {
     fn is_valid_bonemeal_target(&self, args: crate::block::BonemealArgs<'_>) -> bool {
         let above_block = args.world.get_block_state(&args.position.up());
 
-        if above_block.is_full_cube() || above_block.is_liquid() {
+        if above_block.is_full_cube()
+            || above_block.is_liquid()
+            || args.world.is_loaded(&args.position.up())
+        {
             return false;
         }
 
