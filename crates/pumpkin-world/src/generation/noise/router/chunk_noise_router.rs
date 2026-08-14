@@ -1,0 +1,578 @@
+use pumpkin_data::noise_router::WrapperType;
+use pumpkin_util::math::vector3::Vector3;
+
+use crate::generation::biome_coords;
+
+use super::{
+    chunk_density_function::{
+        Cache2D, CacheOnce, CellCache, ChunkNoiseFunctionBuilderOptions,
+        ChunkNoiseFunctionSampleOptions, ChunkSpecificNoiseFunctionComponent, DensityInterpolator,
+        FlatCache, SampleAction,
+    },
+    density_function::{
+        IndexToNoisePos, NoiseFunctionComponentRange, PassThrough,
+        StaticIndependentChunkNoiseFunctionComponentImpl,
+    },
+    proto_noise_router::{
+        DependentProtoNoiseFunctionComponent, IndependentProtoNoiseFunctionComponent,
+        ProtoNoiseFunctionComponent, ProtoNoiseRouter,
+    },
+};
+
+pub trait StaticChunkNoiseFunctionComponentImpl {
+    fn sample(
+        &self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) -> f64;
+
+    fn fill(
+        &self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        array: &mut [f64],
+        mapper: &impl IndexToNoisePos,
+        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+    ) {
+        array.iter_mut().enumerate().for_each(|(index, value)| {
+            let pos = mapper.at(index, Some(sample_options));
+            *value = self.sample(component_stack, &pos, sample_options);
+        });
+    }
+}
+
+pub trait MutableChunkNoiseFunctionComponentImpl {
+    fn sample(
+        &mut self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) -> f64;
+
+    fn fill(
+        &mut self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        array: &mut [f64],
+        mapper: &impl IndexToNoisePos,
+        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+    ) {
+        array.iter_mut().enumerate().for_each(|(index, value)| {
+            let pos = mapper.at(index, Some(sample_options));
+            *value = self.sample(component_stack, &pos, sample_options);
+        });
+    }
+}
+
+pub enum ChunkNoiseFunctionComponent<'a> {
+    Independent(&'a IndependentProtoNoiseFunctionComponent),
+    Dependent(&'a DependentProtoNoiseFunctionComponent),
+    Chunk(ChunkSpecificNoiseFunctionComponent),
+    PassThrough(PassThrough),
+}
+
+impl NoiseFunctionComponentRange for ChunkNoiseFunctionComponent<'_> {
+    #[inline]
+    fn min(&self) -> f64 {
+        match self {
+            Self::Independent(independent) => independent.min(),
+            Self::Dependent(dependent) => dependent.min(),
+            Self::Chunk(chunk) => chunk.min(),
+            Self::PassThrough(pass_through) => pass_through.min(),
+        }
+    }
+
+    #[inline]
+    fn max(&self) -> f64 {
+        match self {
+            Self::Independent(independent) => independent.max(),
+            Self::Dependent(dependent) => dependent.max(),
+            Self::Chunk(chunk) => chunk.max(),
+            Self::PassThrough(pass_through) => pass_through.max(),
+        }
+    }
+}
+
+impl MutableChunkNoiseFunctionComponentImpl for ChunkNoiseFunctionComponent<'_> {
+    #[inline]
+    fn sample(
+        &mut self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) -> f64 {
+        match self {
+            Self::Independent(independent) => independent.sample(pos),
+            Self::Dependent(dependent) => dependent.sample(component_stack, pos, sample_options),
+            Self::Chunk(chunk) => chunk.sample(component_stack, pos, sample_options),
+            Self::PassThrough(pass_through) => ChunkNoiseFunctionComponent::sample_from_stack(
+                &mut component_stack[..=pass_through.input_index()],
+                pos,
+                sample_options,
+            ),
+        }
+    }
+
+    #[inline]
+    fn fill(
+        &mut self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        array: &mut [f64],
+        mapper: &impl IndexToNoisePos,
+        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+    ) {
+        match self {
+            Self::Independent(independent) => independent.fill(array, mapper),
+            Self::Dependent(dependent) => {
+                dependent.fill(component_stack, array, mapper, sample_options);
+            }
+            Self::Chunk(chunk) => chunk.fill(component_stack, array, mapper, sample_options),
+            Self::PassThrough(pass_through) => ChunkNoiseFunctionComponent::fill_from_stack(
+                &mut component_stack[..=pass_through.input_index()],
+                array,
+                mapper,
+                sample_options,
+            ),
+        }
+    }
+}
+
+impl ChunkNoiseFunctionComponent<'_> {
+    #[inline]
+    pub fn sample_from_stack(
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) -> f64 {
+        let Some((top_component, component_stack)) = component_stack.split_last_mut() else {
+            return 0.0;
+        };
+        if !sample_options.populating_caches
+            && let ChunkNoiseFunctionComponent::Chunk(
+                ChunkSpecificNoiseFunctionComponent::DensityInterpolator(interp),
+            ) = top_component
+        {
+            return interp.result;
+        }
+        top_component.sample(component_stack, pos, sample_options)
+    }
+
+    pub fn fill_from_stack(
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        array: &mut [f64],
+        mapper: &impl IndexToNoisePos,
+        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+    ) {
+        if let Some((top_component, component_stack)) = component_stack.split_last_mut() {
+            top_component.fill(component_stack, array, mapper, sample_options);
+        }
+    }
+}
+
+pub struct ChunkNoiseDensityFunction<'a> {
+    pub(crate) component_stack: &'a mut [ChunkNoiseFunctionComponent<'a>],
+}
+
+impl ChunkNoiseDensityFunction<'_> {
+    #[inline]
+    pub fn sample(
+        &mut self,
+        pos: &Vector3<i32>,
+        sample_options: &ChunkNoiseFunctionSampleOptions,
+    ) -> f64 {
+        ChunkNoiseFunctionComponent::sample_from_stack(self.component_stack, pos, sample_options)
+    }
+
+    #[inline]
+    fn fill(
+        &mut self,
+        array: &mut [f64],
+        mapper: &impl IndexToNoisePos,
+        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+    ) {
+        ChunkNoiseFunctionComponent::fill_from_stack(
+            self.component_stack,
+            array,
+            mapper,
+            sample_options,
+        );
+    }
+}
+
+macro_rules! sample_function {
+    ($name:ident) => {
+        #[inline]
+        pub fn $name(
+            &mut self,
+            pos: &Vector3<i32>,
+            sample_options: &ChunkNoiseFunctionSampleOptions,
+        ) -> f64 {
+            ChunkNoiseFunctionComponent::sample_from_stack(
+                &mut self.component_stack[..=self.$name],
+                pos,
+                sample_options,
+            )
+        }
+    };
+}
+
+pub struct ChunkNoiseRouter<'a> {
+    barrier_noise: usize,
+    fluid_level_floodedness_noise: usize,
+    fluid_level_spread_noise: usize,
+    lava_noise: usize,
+    erosion: usize,
+    depth: usize,
+    final_density: usize,
+    vein_toggle: usize,
+    vein_ridged: usize,
+    vein_gap: usize,
+    component_stack: Box<[ChunkNoiseFunctionComponent<'a>]>,
+    interpolator_indices: Box<[usize]>,
+    cell_indices: Box<[usize]>,
+}
+
+impl ChunkNoiseRouter<'_> {
+    sample_function!(barrier_noise);
+    sample_function!(fluid_level_floodedness_noise);
+    sample_function!(fluid_level_spread_noise);
+    sample_function!(lava_noise);
+    sample_function!(erosion);
+    sample_function!(depth);
+    sample_function!(final_density);
+    sample_function!(vein_toggle);
+    sample_function!(vein_ridged);
+    sample_function!(vein_gap);
+}
+
+impl<'a> ChunkNoiseRouter<'a> {
+    #[must_use]
+    #[expect(clippy::too_many_lines)]
+    pub fn generate(
+        base: &'a ProtoNoiseRouter,
+        build_options: &ChunkNoiseFunctionBuilderOptions,
+    ) -> Self {
+        let mut component_stack =
+            Vec::<ChunkNoiseFunctionComponent>::with_capacity(base.full_component_stack.len());
+        let mut cell_cache_indices = Vec::new();
+        let mut interpolator_indices = Vec::new();
+
+        for (component_index, base_component) in base.full_component_stack.iter().enumerate() {
+            let chunk_component = match base_component {
+                ProtoNoiseFunctionComponent::Dependent(dependent) => {
+                    ChunkNoiseFunctionComponent::Dependent(dependent)
+                }
+                ProtoNoiseFunctionComponent::Independent(independent) => {
+                    ChunkNoiseFunctionComponent::Independent(independent)
+                }
+                ProtoNoiseFunctionComponent::PassThrough(pass_through) => {
+                    ChunkNoiseFunctionComponent::PassThrough(pass_through.clone())
+                }
+                ProtoNoiseFunctionComponent::Beardifier(_) => {
+                    ChunkNoiseFunctionComponent::Chunk(
+                        ChunkSpecificNoiseFunctionComponent::Beardifier(
+                            crate::generation::noise::router::density_function::beardifier::Beardifier::new(
+                                build_options.beardifier_structures.clone(),
+                                build_options.beardifier_junctions.clone(),
+                                build_options.affected_box,
+                            ),
+                        ),
+                    )
+                }
+                ProtoNoiseFunctionComponent::Wrapper(wrapper) => {
+                    let min_value = component_stack[wrapper.input_index].min();
+                    let max_value = component_stack[wrapper.input_index].max();
+
+                    match wrapper.wrapper_type {
+                        WrapperType::Interpolated => {
+                            interpolator_indices.push(component_index);
+                            ChunkNoiseFunctionComponent::Chunk(
+                                ChunkSpecificNoiseFunctionComponent::DensityInterpolator(
+                                    DensityInterpolator::new(
+                                        wrapper.input_index,
+                                        min_value,
+                                        max_value,
+                                        build_options,
+                                    ),
+                                ),
+                            )
+                        }
+                        WrapperType::CellCache => {
+                            cell_cache_indices.push(component_index);
+                            ChunkNoiseFunctionComponent::Chunk(
+                                ChunkSpecificNoiseFunctionComponent::CellCache(CellCache::new(
+                                    wrapper.input_index,
+                                    min_value,
+                                    max_value,
+                                    build_options,
+                                )),
+                            )
+                        }
+                        WrapperType::CacheOnce => ChunkNoiseFunctionComponent::Chunk(
+                            ChunkSpecificNoiseFunctionComponent::CacheOnce(CacheOnce::new(
+                                wrapper.input_index,
+                                min_value,
+                                max_value,
+                            )),
+                        ),
+                        WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(
+                            ChunkSpecificNoiseFunctionComponent::Cache2D(Cache2D::new(
+                                wrapper.input_index,
+                                min_value,
+                                max_value,
+                            )),
+                        ),
+                        WrapperType::CacheFlat => {
+                            let mut flat_cache = FlatCache::new(
+                                wrapper.input_index,
+                                min_value,
+                                max_value,
+                                build_options.start_biome_x,
+                                build_options.start_biome_z,
+                                build_options.horizontal_biome_end,
+                            );
+                            let sample_options = ChunkNoiseFunctionSampleOptions::new(
+                                false,
+                                SampleAction::SkipCellCaches,
+                                0,
+                                0,
+                                0,
+                            );
+
+                            for biome_x_position in 0..=build_options.horizontal_biome_end {
+                                let absolute_biome_x_position =
+                                    build_options.start_biome_x + biome_x_position as i32;
+                                let block_x_position =
+                                    biome_coords::to_block(absolute_biome_x_position);
+
+                                for biome_z_position in 0..=build_options.horizontal_biome_end {
+                                    let absolute_biome_z_position =
+                                        build_options.start_biome_z + biome_z_position as i32;
+                                    let block_z_position =
+                                        biome_coords::to_block(absolute_biome_z_position);
+
+                                    let pos = Vector3::new(block_x_position, 0, block_z_position);
+
+                                    //NOTE: Due to our stack invariant, what is on the stack is a
+                                    // valid density function
+                                    let sample = ChunkNoiseFunctionComponent::sample_from_stack(
+                                        &mut component_stack[..=wrapper.input_index],
+                                        &pos,
+                                        &sample_options,
+                                    );
+
+                                    let cache_index = flat_cache
+                                        .xz_to_index_const(biome_x_position, biome_z_position);
+                                    flat_cache.cache[cache_index] = sample;
+                                }
+                            }
+
+                            ChunkNoiseFunctionComponent::Chunk(
+                                ChunkSpecificNoiseFunctionComponent::FlatCache(flat_cache),
+                            )
+                        }
+                    }
+                }
+            };
+            component_stack.push(chunk_component);
+        }
+
+        Self {
+            barrier_noise: base.barrier_noise,
+            fluid_level_floodedness_noise: base.fluid_level_floodedness_noise,
+            fluid_level_spread_noise: base.fluid_level_spread_noise,
+            lava_noise: base.lava_noise,
+            erosion: base.erosion,
+            depth: base.depth,
+            final_density: base.final_density,
+            vein_toggle: base.vein_toggle,
+            vein_ridged: base.vein_ridged,
+            vein_gap: base.vein_gap,
+            component_stack: component_stack.into_boxed_slice(),
+            interpolator_indices: interpolator_indices.into_boxed_slice(),
+            cell_indices: cell_cache_indices.into_boxed_slice(),
+        }
+    }
+
+    pub fn fill_cell_caches(
+        &mut self,
+        mapper: &impl IndexToNoisePos,
+        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+    ) {
+        let indices = &self.cell_indices;
+        let components = &mut self.component_stack;
+        for cell_cache_index in indices {
+            let (component_stack, component) = components.split_at_mut(*cell_cache_index);
+
+            let Some(ChunkNoiseFunctionComponent::Chunk(chunk)) = component.first_mut() else {
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
+            };
+            let ChunkSpecificNoiseFunctionComponent::CellCache(cell_cache) = chunk else {
+                tracing::error!("Expected ChunkSpecificNoiseFunctionComponent::CellCache");
+                continue;
+            };
+
+            ChunkNoiseFunctionComponent::fill_from_stack(
+                &mut component_stack[..=cell_cache.input_index],
+                &mut cell_cache.cache,
+                mapper,
+                sample_options,
+            );
+        }
+    }
+
+    pub fn fill_interpolator_buffers(
+        &mut self,
+        start: bool,
+        cell_z: usize,
+        mapper: &impl IndexToNoisePos,
+        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+    ) {
+        let indices = &self.interpolator_indices;
+        let components = &mut self.component_stack;
+        for interpolator_index in indices {
+            let (component_stack, component) = components.split_at_mut(*interpolator_index);
+
+            let Some(ChunkNoiseFunctionComponent::Chunk(chunk)) = component.first_mut() else {
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
+            };
+            let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
+                chunk
+            else {
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
+            };
+
+            let start_index = density_interpolator.yz_to_buf_index(0, cell_z);
+            let buf = if start {
+                &mut density_interpolator.start_buffer
+                    [start_index..=start_index + density_interpolator.vertical_cell_count]
+            } else {
+                &mut density_interpolator.end_buffer
+                    [start_index..=start_index + density_interpolator.vertical_cell_count]
+            };
+
+            ChunkNoiseFunctionComponent::fill_from_stack(
+                &mut component_stack[..=density_interpolator.input_index],
+                buf,
+                mapper,
+                sample_options,
+            );
+        }
+    }
+
+    pub fn interpolate_x(&mut self, delta: f64) {
+        let indices = &self.interpolator_indices;
+        let components = &mut self.component_stack;
+        for interpolator_index in indices {
+            let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
+            else {
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
+            };
+
+            let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
+                chunk
+            else {
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
+            };
+
+            density_interpolator.interpolate_x(delta);
+        }
+    }
+
+    pub fn interpolate_y(&mut self, delta: f64) {
+        let indices = &self.interpolator_indices;
+        let components = &mut self.component_stack;
+        for interpolator_index in indices {
+            let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
+            else {
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
+            };
+
+            let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
+                chunk
+            else {
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
+            };
+
+            density_interpolator.interpolate_y(delta);
+        }
+    }
+
+    pub fn interpolate_z(&mut self, delta: f64) {
+        let indices = &self.interpolator_indices;
+        let components = &mut self.component_stack;
+        for interpolator_index in indices {
+            let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
+            else {
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
+            };
+            let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
+                chunk
+            else {
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
+            };
+
+            density_interpolator.interpolate_z(delta);
+        }
+    }
+
+    pub fn on_sampled_cell_corners(&mut self, cell_y_position: usize, cell_z_position: usize) {
+        let indices = &self.interpolator_indices;
+        let components = &mut self.component_stack;
+        for interpolator_index in indices {
+            let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
+            else {
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
+            };
+            let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
+                chunk
+            else {
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
+            };
+
+            density_interpolator.on_sampled_cell_corners(cell_y_position, cell_z_position);
+        }
+    }
+
+    pub fn swap_buffers(&mut self) {
+        let indices = &self.interpolator_indices;
+        let components = &mut self.component_stack;
+        for interpolator_index in indices {
+            let ChunkNoiseFunctionComponent::Chunk(chunk) = &mut components[*interpolator_index]
+            else {
+                tracing::error!("Expected ChunkNoiseFunctionComponent::Chunk");
+                continue;
+            };
+            let ChunkSpecificNoiseFunctionComponent::DensityInterpolator(density_interpolator) =
+                chunk
+            else {
+                tracing::error!(
+                    "Expected ChunkSpecificNoiseFunctionComponent::DensityInterpolator"
+                );
+                continue;
+            };
+
+            density_interpolator.swap_buffers();
+        }
+    }
+}
