@@ -85,12 +85,13 @@ impl<T: Send + Sync + 'static> Registry for ReloadableRegistry<T> {
     }
 
     fn iter_erased(&self) -> ErasedRegistryIterator<'_> {
-        let iterator = LockedIterator::new(self.inner.blocking_read()).map(|(identifier, value)| {
-            (
-                identifier.clone(),
-                ErasedRegistryRef::Borrowed(value as &dyn Any),
-            )
-        });
+        let iterator =
+            LockedIterator::new(self.inner.blocking_read()).map(|(identifier, value)| {
+                (
+                    identifier.clone(),
+                    ErasedRegistryRef::Borrowed(value as &dyn Any),
+                )
+            });
         Box::new(iterator)
     }
 }
