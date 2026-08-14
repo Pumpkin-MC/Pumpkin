@@ -55,6 +55,7 @@ impl WorldPortalExt for BlockRegistry {
     }
 }
 
+#[allow(clippy::unnecessary_box_returns)]
 fn make_world_gen() -> Box<WorldGenerator> {
     get_world_gen(SEED, Dimension::OVERWORLD, false, Vec::new(), String::new())
 }

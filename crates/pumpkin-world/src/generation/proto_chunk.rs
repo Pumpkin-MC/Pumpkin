@@ -43,12 +43,12 @@ use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuil
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
 use crate::generation::noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK};
 use crate::generation::section_coords::section_to_block;
-use crate::generation::structure::lazily_generate_structure;
 use crate::generation::structure::placement::should_generate_structure;
 use crate::generation::structure::structures::{
     StructureGeneratorContext, StructureInstance, create_chunk_random,
 };
 use crate::generation::structure::try_generate_structure;
+use crate::generation::structure::{generate_structure_position, lazily_generate_structure};
 use crate::generation::surface::rule::try_apply_material_rule;
 use crate::{
     chunk::CHUNK_AREA,
@@ -57,6 +57,7 @@ use crate::{
 };
 use pumpkin_data::tag::get_tag_ids;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_registry::ROOT;
 
 use crate::generation::structure::template::BlockPlacer;
 use crate::tick::{ScheduledTick, TickPriority};
@@ -1100,6 +1101,29 @@ impl ProtoChunk {
         }
     }
 
+    pub fn generate_structures_only<T: GenerationCache>(
+        cache: &mut T,
+        block_registry: &dyn WorldPortalExt,
+        world_seed: i64,
+    ) {
+        let (center_x, center_z, min_y) = {
+            let chunk = cache.get_center_chunk();
+            (chunk.x, chunk.z, chunk.bottom_y() as i32)
+        };
+
+        let start_block_x = chunk_pos::start_block_x(center_x);
+        let start_block_z = chunk_pos::start_block_z(center_z);
+        let population_seed =
+            Xoroshiro::get_population_seed(world_seed as u64, start_block_x, start_block_z);
+
+        for step in 0..11 {
+            Self::generate_structure_step(cache, block_registry, step, population_seed, world_seed);
+        }
+
+        let _ = min_y;
+        cache.get_center_chunk_mut().stage = StagedChunkEnum::Features;
+    }
+
     pub fn generate_features_and_structure<T: GenerationCache>(
         cache: &mut T,
         block_registry: &dyn WorldPortalExt,
@@ -1280,6 +1304,237 @@ impl ProtoChunk {
             }
         }
         allowed_biomes
+    }
+
+    pub fn set_flat_structure_starts(&mut self, generator: &super::generator::flat::FlatGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
+
+        let global_cache = &generator.global_structure_cache;
+        let calculator = &generator.structure_calculator;
+        let mut height_sampler =
+            super::generator::flat::FlatHeightSampler::new(generator.surface_y());
+
+        let Some(root) = ROOT.get() else {
+            self.stage = StagedChunkEnum::StructureStart;
+            return;
+        };
+
+        for (key, allowed_biomes) in generator
+            .structure_overrides
+            .iter()
+            .zip(&generator.structure_allowed_biomes)
+        {
+            let Ok(set) = key.get_blocking(root) else {
+                continue;
+            };
+
+            if !should_generate_structure(
+                &set.placement,
+                calculator,
+                self.x,
+                self.z,
+                global_cache,
+                self,
+                allowed_biomes,
+            ) {
+                continue;
+            }
+
+            let mut candidates = set.structures.to_vec();
+            let mut total_weight: u32 = candidates.iter().map(|entry| entry.weight).sum();
+            let carver_seed = get_carver_seed(generator.seed, self.x, self.z);
+            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed));
+
+            while !candidates.is_empty() {
+                let mut roll = random.next_bounded_i32(total_weight as i32);
+                let mut selected_idx = 0;
+
+                for (candidate_idx, entry) in candidates.iter().enumerate() {
+                    roll -= entry.weight as i32;
+                    if roll < 0 {
+                        selected_idx = candidate_idx;
+                        break;
+                    }
+                }
+
+                let entry = &candidates[selected_idx];
+                let structure = Structure::get(&entry.structure);
+                let position = global_cache.get_or_compute_structure_start(
+                    entry.structure,
+                    self.x,
+                    self.z,
+                    || {
+                        try_generate_structure(
+                            &entry.structure,
+                            structure,
+                            generator.seed as i64,
+                            self,
+                            generator.surface_y(),
+                            Some(&mut height_sampler),
+                        )
+                    },
+                );
+
+                if let Some(position) = position {
+                    self.structure_starts
+                        .insert(entry.structure, StructureInstance::Start(position));
+                    break;
+                }
+
+                let failed = candidates.remove(selected_idx);
+                total_weight -= failed.weight;
+            }
+        }
+
+        self.stage = StagedChunkEnum::StructureStart;
+    }
+
+    #[expect(clippy::too_many_lines)]
+    pub fn set_flat_structure_references(
+        &mut self,
+        generator: &super::generator::flat::FlatGenerator,
+    ) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
+
+        let global_cache = &generator.global_structure_cache;
+        let calculator = &generator.structure_calculator;
+        let start_x = chunk_pos::start_block_x(self.x);
+        let start_z = chunk_pos::start_block_z(self.z);
+        let end_x = start_x + 15;
+        let end_z = start_z + 15;
+        let seed = generator.seed as i64;
+        let chunk_min_y = self.bottom_y() as i32;
+        let flat_biome = pumpkin_data::chunk::Biome::from_name(
+            generator
+                .biome
+                .strip_prefix("minecraft:")
+                .unwrap_or(&generator.biome),
+        )
+        .unwrap_or(&pumpkin_data::chunk::Biome::PLAINS);
+
+        let mut references = Vec::new();
+        let mut height_sampler =
+            super::generator::flat::FlatHeightSampler::new(generator.surface_y());
+
+        let Some(root) = ROOT.get() else {
+            self.stage = StagedChunkEnum::StructureReferences;
+            return;
+        };
+
+        for (key, allowed_biomes) in generator
+            .structure_overrides
+            .iter()
+            .zip(&generator.structure_allowed_biomes)
+        {
+            let Ok(set) = key.get_blocking(root) else {
+                continue;
+            };
+            let mut candidate_chunks = Vec::new();
+
+            match &set.placement.placement_type {
+                StructurePlacementType::RandomSpread(spread) => {
+                    let region_x = pumpkin_util::math::floor_div(self.x, spread.spacing);
+                    let region_z = pumpkin_util::math::floor_div(self.z, spread.spacing);
+
+                    for rx in (region_x - 1)..=(region_x + 1) {
+                        for rz in (region_z - 1)..=(region_z + 1) {
+                            candidate_chunks.push(
+                                crate::generation::structure::placement::get_structure_chunk_in_region(
+                                    spread,
+                                    seed,
+                                    rx,
+                                    rz,
+                                    set.placement.salt,
+                                ),
+                            );
+                        }
+                    }
+                }
+                StructurePlacementType::ConcentricRings(rings) => {
+                    let allowed_biomes = Self::get_allowed_biomes(&set);
+                    let strongholds = global_cache.get_or_calculate_strongholds(
+                        seed,
+                        rings,
+                        self,
+                        &allowed_biomes,
+                    );
+                    for &(cx, cz) in strongholds {
+                        if (cx - self.x).abs() <= 8 && (cz - self.z).abs() <= 8 {
+                            candidate_chunks.push((cx, cz));
+                        }
+                    }
+                }
+            }
+
+            for (candidate_chunk_x, candidate_chunk_z) in candidate_chunks {
+                if !should_generate_structure(
+                    &set.placement,
+                    calculator,
+                    candidate_chunk_x,
+                    candidate_chunk_z,
+                    global_cache,
+                    self,
+                    allowed_biomes,
+                ) {
+                    continue;
+                }
+
+                for entry in set.structures {
+                    let structure = Structure::get(&entry.structure);
+                    let start_data = global_cache.get_or_compute_structure_start(
+                        entry.structure,
+                        candidate_chunk_x,
+                        candidate_chunk_z,
+                        || {
+                            let context = StructureGeneratorContext {
+                                seed,
+                                chunk_x: candidate_chunk_x,
+                                chunk_z: candidate_chunk_z,
+                                random: create_chunk_random(
+                                    seed,
+                                    candidate_chunk_x,
+                                    candidate_chunk_z,
+                                ),
+                                sea_level: generator.surface_y(),
+                                min_y: chunk_min_y,
+                                height_sampler: Some(&mut height_sampler),
+                                structure_key: Some(entry.structure),
+                            };
+
+                            let position =
+                                generate_structure_position(&entry.structure, structure, context)?;
+                            let allowed = get_tag_ids(
+                                RegistryKey::WorldgenBiome,
+                                structure
+                                    .biomes
+                                    .strip_prefix('#')
+                                    .unwrap_or(structure.biomes),
+                            )?;
+                            allowed
+                                .contains(&(flat_biome.id as u16))
+                                .then_some(position)
+                        },
+                    );
+
+                    if let Some(start_data) = start_data
+                        && start_data
+                            .get_bounding_box()
+                            .intersects_raw_xz(start_x, start_z, end_x, end_z)
+                    {
+                        references.push((entry.structure, start_data.collector.clone()));
+                        break;
+                    }
+                }
+            }
+        }
+
+        for (key, collector) in references {
+            self.structure_starts
+                .entry(key)
+                .or_insert_with(|| StructureInstance::Reference(collector));
+        }
+
+        self.stage = StagedChunkEnum::StructureReferences;
     }
 
     pub fn set_structure_starts(&mut self, generator: &super::generator::VanillaGenerator) {

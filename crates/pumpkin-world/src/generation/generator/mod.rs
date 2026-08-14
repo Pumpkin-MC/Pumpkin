@@ -9,7 +9,10 @@ use super::noise::router::proto_noise_router::ProtoNoiseRouters;
 use crate::generation::proto_chunk::TerrainCache;
 use crate::generation::{GlobalRandomConfig, Seed};
 
+pub mod chunk_generator;
 pub mod structure_finder;
+
+pub use chunk_generator::{ChunkGenerator, ChunkGeneratorDecode, ChunkGeneratorType};
 
 pub trait GeneratorInit {
     fn new(seed: Seed, dimension: Dimension) -> Self;
@@ -28,7 +31,7 @@ pub struct FlatLayer {
 
 pub enum WorldGenerator {
     Noise(Box<VanillaGenerator>),
-    Flat(flat::FlatGenerator),
+    Flat(Box<flat::FlatGenerator>),
 }
 
 impl WorldGenerator {
